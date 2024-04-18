@@ -1,2 +1,19 @@
-@import 'scss/base/variables';
-@import 'scss/global';
+// Utils
+@import 'scss/utils/variables';
+@import 'scss/utils/media-quries';
+@import 'scss/utils/functions';
+@import 'scss/utils/helpers';
+@import 'scss/utils/mixins';
+
+// Base
+@import 'scss/base/global';
+
+// Vendors
+
+// Layout
+@import 'scss/layout/topNav';
+@import 'scss/layout/leftNav';
+
+// Components
+
+// Pages

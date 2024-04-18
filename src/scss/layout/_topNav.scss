@@ -1,0 +1,36 @@
+.top-nav {
+    display: flex;
+    align-items: center;
+    padding: 7px 15px;
+    background-color: $sec-black;
+    border-bottom: 1px solid #585d62;
+    position: fixed;
+    width: calc(100% - 200px);
+    top: 0;
+    left: 200px;
+
+    @include mobile {
+        background-color: $prim-black;
+        left: 0;
+        width: 100%;
+    }
+
+    p {
+        margin-bottom: 0;
+    }
+
+    .log-wrapper {
+        width: 250px;
+
+        img {
+            max-width: 150px;
+        }
+    }
+
+    .searc-wrapper {}
+
+    .profile-wrapper {
+        text-align: right;
+        width: 100%;
+    }
+}

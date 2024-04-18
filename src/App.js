@@ -1,9 +1,17 @@
 
+import { HashRouter } from 'react-router-dom';
+import TopNav from "./layout/TopNav";
+import LeftNav from "./layout/LeftNav";
+
 function App() {
   return (
-    <div className="container">
-    <h1>test</h1>
-
+    <div className="man-section">
+      <TopNav />
+      <div className="layout">
+        <HashRouter>
+          <LeftNav />
+        </HashRouter>
+      </div>
     </div>
   );
 }

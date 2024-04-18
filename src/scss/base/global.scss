@@ -1,0 +1,33 @@
+body {
+    font-family: "IBM Plex Sans", sans-serif;
+    background-color: $prim-black;
+    color: $prim-white;
+    padding: 0;
+    margin: 0;
+}
+
+.contanier {
+    .contanier {
+        margin-bottom: 0;
+    }
+}
+
+.layout {
+    display: flex;
+    height: 100vh;
+
+    @include mobile {
+        display: block;
+
+    }
+
+    .layout-body {
+        padding: 20px 15px 15px 15px;
+        margin-top: 40px;
+        width: 100%;
+
+        @include mobile {
+            margin-top: 98px;
+        }
+    }
+}

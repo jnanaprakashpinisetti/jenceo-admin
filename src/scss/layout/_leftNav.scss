@@ -3,19 +3,64 @@ nav {
     padding: 20px 0 20px 0;
     background-color: $sec-black;
     margin-left: 0;
+    transition: all .6s;
 
-    // margin-top: 52px;
+    .slide {
+        display: block;
+        text-align: right;
+        padding-right: 2px;
+        cursor: auto;
+        margin-bottom: 20px;
+        width: 100%;
+        border: none;
+        background-color: transparent;
+
+        img {
+            cursor: pointer;
+            padding: 5px 10px;
+            background-color: $prim-black;
+
+            &:hover {
+                opacity: .8;
+            }
+        }
+    }
+
+
+    &.toggle {
+        max-width: 60px !important;
+        transition: all .6s;
+
+        .navbar-brand {
+            img {
+                max-width: 30px;
+                margin-left: 10px;
+            }
+        }
+
+        .nav-link {
+            font-size: 0;
+            transition: all .6s;
+        }
+
+        .slide {
+            img {
+                transform: rotate(180deg);
+            }
+        }
+    }
+
     @include mobile {
         position: fixed !important;
         left: 0;
         top: 45px;
         overflow: auto;
         width: 100%;
-        // margin-top: 40px;
     }
 
     &.navbar-expand-sm {
-        @include desktop {
+        @media (min-width:768px) {
+
             display: block;
             width: 100%;
             max-width: 200px;
@@ -32,13 +77,17 @@ nav {
     }
 
     .navbar-brand {
+        background-color: transparent;
+        border: none;
+        text-align: center;
         @include desktop {
             display: block;
             width: 100%;
-            margin-bottom: 30px;
+            margin-bottom: 20px;
             margin-right: 0;
             border-bottom: 1px solid #585d62;
             padding-top: 0;
+            text-align: left;
         }
 
         img {
@@ -71,18 +120,13 @@ nav {
             margin-right: 10px;
         }
 
-        // &:hover {
-        //     background-color: #2a2d30;
-        // }
-        // &.active {
-        //     background-color: #2a2d30;
-        // }
     }
 
     .nav-link {
         display: flex;
         color: $sec-white;
         padding-left: 20px !important;
+        transition: all .6s;
 
         &.active {
             background-color: #2a2d30;

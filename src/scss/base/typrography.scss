@@ -1,0 +1,32 @@
+h1 {
+    @include mobile {
+        
+    }
+}
+h2 {
+    color: $blue;
+    margin-bottom: 20px;
+    @include mobile {
+
+    }
+}
+h3 {
+    @include mobile {
+
+    }
+}
+h4 {
+    @include mobile {
+
+    }
+}
+h5 {
+    @include mobile {
+
+    }
+}
+h6 {
+    @include mobile {
+
+    }
+}

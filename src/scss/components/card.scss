@@ -1,0 +1,23 @@
+.card-wrapper {
+    display: flex;
+    justify-content: space-between;
+    flex-wrap: wrap;
+
+    a {
+        text-decoration: none;
+    }
+}
+
+.card {
+    background-color: $sec-black;
+    color: $sec-white;
+    width: 250px;
+    * {
+
+        text-decoration: none;
+    }
+
+    .card-header {
+        border-bottom: 0;
+    }
+}

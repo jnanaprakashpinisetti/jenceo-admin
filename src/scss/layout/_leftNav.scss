@@ -4,6 +4,12 @@ nav {
     background-color: $sec-black;
     margin-left: 0;
     transition: all .6s;
+    z-index: 9;
+
+    @include mobile {
+        padding-bottom: 0;
+        margin-bottom: 0;
+    }
 
     .slide {
         display: block;
@@ -14,6 +20,10 @@ nav {
         width: 100%;
         border: none;
         background-color: transparent;
+
+        @include mobile {
+            display: none;
+        }
 
         img {
             cursor: pointer;
@@ -26,26 +36,34 @@ nav {
         }
     }
 
+    @include mobile {
+        .hide.show {
+            display: none;
+        }
+    }
 
     &.toggle {
-        max-width: 60px !important;
-        transition: all .6s;
 
-        .navbar-brand {
-            img {
-                max-width: 30px;
-                margin-left: 10px;
-            }
-        }
-
-        .nav-link {
-            font-size: 0;
+        @include desktop {
+            max-width: 60px !important;
             transition: all .6s;
-        }
 
-        .slide {
-            img {
-                transform: rotate(180deg);
+            .navbar-brand {
+                img {
+                    max-width: 30px;
+                    margin-left: 10px;
+                }
+            }
+
+            .nav-link {
+                font-size: 0;
+                transition: all .6s;
+            }
+
+            .slide {
+                img {
+                    transform: rotate(180deg);
+                }
             }
         }
     }
@@ -72,14 +90,28 @@ nav {
 
             @include mobile {
                 margin-top: 5px;
+                background-color: #161829;
+
             }
         }
+    }
+
+    .brand {
+        width: 120px;
+        height: 35px;
+        z-index: 2;
+        display: block;
+        position: absolute;
+        top: 10px;
+        left: 0;
+        opacity: .5;
     }
 
     .navbar-brand {
         background-color: transparent;
         border: none;
         text-align: center;
+
         @include desktop {
             display: block;
             width: 100%;
@@ -103,6 +135,11 @@ nav {
     .navbar-toggler {
         @include mobile {
             margin-right: 15px;
+            border: none;
+
+            img {
+                max-width: 20px;
+            }
         }
 
         &:focus {

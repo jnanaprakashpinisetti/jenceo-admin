@@ -1,0 +1,12 @@
+table {
+    border: 1px solid $sec-black;
+
+    th {
+        background-color: #0D1D2C !important;
+        color: $sec-white !important;
+    }
+
+    td {
+        color: $sec-white !important;
+    }
+}

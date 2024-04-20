@@ -1,8 +1,10 @@
-import React, { useState } from 'react';
-import { Routes, Route, NavLink, } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { Routes, Route, NavLink, Link, } from 'react-router-dom';
 
 import logo from "../assets/jencio-logo.svg";
 import logoicon from "../assets/jenceo-icon.svg";
+import toggle from "../assets/toggle.svg";
+import close from "../assets/close.svg";
 
 
 import arrow from "../assets/arrow.svg";
@@ -42,24 +44,36 @@ import Dues from '../pages/Dues';
 export default function LeftNav() {
 
     const [isActive, setIsActive] = useState(false);
+    const [isShow, setIsShow] = useState(false);
 
     const toggleClass = () => {
         setIsActive(!isActive); // Toggle the state
     };
+    const toggleShow = (e) => {
+        setIsShow(!isShow); // Toggle the state
+    };
+
+    useEffect(() => {
+        const link = document.querySelectorAll(".nav-item");
+        link.forEach((e) => {
+            e.addEventListener("click", toggleShow)
+        });
+    }, [])
 
     return (
         <>
             {/* <div className='left-nav'> */}
             <nav className={isActive ? 'navbar navbar-expand-sm toggle' : 'navbar navbar-expand-sm'}>
-                <button className="navbar-brand" href="#"> <img src={isActive ? logoicon : logo} alt="JenCeo Logo" /></button>
+                <button className="navbar-brand">   <img src={isActive ? logoicon : logo} alt="JenCeo Logo" /> </button>
 
                 <button className='slide'> <img src={arrow} alt="arrow" onClick={toggleClass} /> </button>
+                <hr />
 
-                <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#collapsibleNavbar">
-                    <span class="navbar-toggler-icon"></span>
+                <button className="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#collapsibleNavbar" onClick={toggleShow}>
+                    <img src={isShow ? close : toggle} alt="toggle button" />
                 </button>
-                <div class="collapse navbar-collapse" id="collapsibleNavbar">
-                    <ul class="navbar-nav">
+                <div className={isShow ? 'collapse navbar-collapse  show' : 'collapse navbar-collapse hide'} id="collapsibleNavbar">
+                    <ul className="navbar-nav">
                         <li className="nav-item">
                             <NavLink to='/' className="nav-link" title='Dash Board'> <img src={home} alt="" /> Dash Board</NavLink>
                         </li>

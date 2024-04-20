@@ -1,9 +1,11 @@
-import React from 'react';
-import { Router, Routes, Route, Link, NavLink, browserHistory, IndexRoute } from 'react-router-dom';
+import React, { useState } from 'react';
+import { Routes, Route, NavLink, } from 'react-router-dom';
 
 import logo from "../assets/jencio-logo.svg";
+import logoicon from "../assets/jenceo-icon.svg";
 
 
+import arrow from "../assets/arrow.svg";
 import home from "../assets/home.svg";
 import employee from "../assets/employee.svg";
 import sellers from "../assets/sellers.svg";
@@ -39,11 +41,19 @@ import Dues from '../pages/Dues';
 
 export default function LeftNav() {
 
+    const [isActive, setIsActive] = useState(false);
+
+    const toggleClass = () => {
+        setIsActive(!isActive); // Toggle the state
+    };
+
     return (
         <>
             {/* <div className='left-nav'> */}
-            <nav class="navbar navbar-expand-sm">
-                <a className="navbar-brand" href="#"> <img src={logo} alt="" /></a>
+            <nav className={isActive ? 'navbar navbar-expand-sm toggle' : 'navbar navbar-expand-sm'}>
+                <button className="navbar-brand" href="#"> <img src={isActive ? logoicon : logo} alt="JenCeo Logo" /></button>
+
+                <button className='slide'> <img src={arrow} alt="arrow" onClick={toggleClass} /> </button>
 
                 <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#collapsibleNavbar">
                     <span class="navbar-toggler-icon"></span>
@@ -51,48 +61,48 @@ export default function LeftNav() {
                 <div class="collapse navbar-collapse" id="collapsibleNavbar">
                     <ul class="navbar-nav">
                         <li className="nav-item">
-                            <NavLink to='/' className="nav-link"> <img src={home} alt="" /> Dash Board</NavLink>
+                            <NavLink to='/' className="nav-link" title='Dash Board'> <img src={home} alt="" /> Dash Board</NavLink>
                         </li>
                         <li className="nav-item">
-                            <NavLink to='Employees' className="nav-link"> <img src={employee} alt="" /> Employees</NavLink>
+                            <NavLink to='Employees' className="nav-link" title='Employees'> <img src={employee} alt="" /> Employees</NavLink>
                         </li>
                         <li className="nav-item">
-                            <NavLink to='Sellers' className="nav-link"> <img src={sellers} alt="" /> Sellers</NavLink>
+                            <NavLink to='Sellers' className="nav-link" title='Sellers'> <img src={sellers} alt="" /> Sellers</NavLink>
                         </li>
                         <li className="nav-item">
-                            <NavLink to='Shops' className="nav-link"> <img src={shop} alt="" /> Shops</NavLink>
-                        </li>
-                        <hr />
-                        <li className="nav-item">
-                            <NavLink to='Investments' className="nav-link"> <img src={invest} alt="" /> Investments</NavLink>
-                        </li>
-                        <li className="nav-item">
-                            <NavLink to='Orders' className="nav-link"> <img src={purchase} alt="" /> Orders</NavLink>
-                        </li>
-                        <li className="nav-item">
-                            <NavLink to='Reports' className="nav-link"> <img src={sales} alt="" /> Reports</NavLink>
-                        </li>
-                        <li className="nav-item">
-                            <NavLink to='Dues' className="nav-link"> <img src={balance} alt="" /> Dues</NavLink>
-                        </li>
-                        <li className="nav-item">
-                            <NavLink to='Expenses' className="nav-link"> <img src={expences} alt="" /> Expenses</NavLink>
+                            <NavLink to='Shops' className="nav-link" title='Shops'> <img src={shop} alt="" /> Shops</NavLink>
                         </li>
                         <hr />
                         <li className="nav-item">
-                            <NavLink to='Task' className="nav-link"> <img src={task} alt="" /> Task</NavLink>
+                            <NavLink to='Investments' className="nav-link" title='Investments'> <img src={invest} alt="" /> Investments</NavLink>
                         </li>
                         <li className="nav-item">
-                            <NavLink to='Admin' className="nav-link"> <img src={admin} alt="" /> Admin</NavLink>
+                            <NavLink to='Orders' className="nav-link" title='Orders'> <img src={purchase} alt="" /> Orders</NavLink>
                         </li>
                         <li className="nav-item">
-                            <NavLink to='HR' className="nav-link"> <img src={hr} alt="" /> HR</NavLink>
+                            <NavLink to='Reports' className="nav-link" title='Reports'> <img src={sales} alt="" /> Reports</NavLink>
                         </li>
                         <li className="nav-item">
-                            <NavLink to='Accounts' className="nav-link"> <img src={accounts} alt="" /> Accounts</NavLink>
+                            <NavLink to='Dues' className="nav-link" title='Dues'> <img src={balance} alt="" /> Dues</NavLink>
                         </li>
                         <li className="nav-item">
-                            <NavLink to='Operations' className="nav-link"> <img src={operations} alt="" /> Operations</NavLink>
+                            <NavLink to='Expenses' className="nav-link" title='Expenses'> <img src={expences} alt="" /> Expenses</NavLink>
+                        </li>
+                        <hr />
+                        <li className="nav-item">
+                            <NavLink to='Task' className="nav-link" title='Task'> <img src={task} alt="" /> Task</NavLink>
+                        </li>
+                        <li className="nav-item">
+                            <NavLink to='Admin' className="nav-link" title='Admin'> <img src={admin} alt="" /> Admin</NavLink>
+                        </li>
+                        <li className="nav-item">
+                            <NavLink to='HR' className="nav-link" title='HR'> <img src={hr} alt="" /> HR</NavLink>
+                        </li>
+                        <li className="nav-item">
+                            <NavLink to='Accounts' className="nav-link" title='Accounts'> <img src={accounts} alt="" /> Accounts</NavLink>
+                        </li>
+                        <li className="nav-item">
+                            <NavLink to='Operations' className="nav-link" title='Operations'> <img src={operations} alt="" /> Operations</NavLink>
                         </li>
                     </ul>
                 </div>

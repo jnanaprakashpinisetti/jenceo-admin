@@ -1,0 +1,6 @@
+.modal {
+    color: $sec-black;
+    &.show {
+        display: block;
+    }
+}

@@ -1,31 +1,29 @@
-export default function InvestModal(props) {
+import React from 'react'
 
-    return (
-
-        <>
-            <div className={props.modalClass} id="investModal">
+export default function ThankyouModal(props) {
+  return (
+    <>
+    <div className={props.modalClass}>
                 <div className="modal-dialog">
                     <div className="modal-content">
 
                         <div className="modal-header">
-                            <h4 className="modal-title">Do you want to Save Details ?</h4>
+                            <h2 className="modal-title">Thank You</h2>
                             <button type="button" className="btn-close" data-bs-dismiss="modal" onClick={props.cancleFun}></button>
                         </div>
 
                         <div className="modal-body">
-                            <p>Name: <strong> {props.name} </strong></p>
-                            <p>Amount: <strong>{props.amount}</strong></p>
-                            <p>Date: <strong>{props.date}</strong></p>
+                            <h4>Your Data hasbeen saved</h4>
                         </div>
 
                         <div className="modal-footer">
                             <button type="button" className="btn btn-danger" data-bs-dismiss="modal" onClick={props.cancleFun}>Cancle</button>
-                            <button type="button" className="btn btn-primary" data-bs-dismiss="modal" onClick={props.saveFun}>Save</button>
                         </div>
 
                     </div>
                 </div>
             </div>
-        </>
-    )
+      
+    </>
+  )
 }

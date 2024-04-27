@@ -1,10 +1,11 @@
 import React, { useState } from "react";
 import InvestModal from "./InvestModal";
+import ThankyouModal from "./ThankyouModal";
 
 export default function InvestForm() {
 
-
-    const [formData, setFormData] = useState({
+    // Form Empty Data
+    const emptyFormData = {
         investor: "",
         invest_date: "",
         invest_amount: "",
@@ -12,52 +13,58 @@ export default function InvestForm() {
         invest_reference: "",
         invest_purpose: "",
         invest_comments: "",
+    }
 
-    });
+    const [formData, setFormData] = useState(emptyFormData);
 
     const { investor, invest_date, invest_amount, invest_to, invest_reference, invest_purpose, invest_comments } = formData;
 
 
     const chandHandler = (e) => {
         setFormData({ ...formData, [e.target.name]: [e.target.value] });
-
-
     }
     const blurHandler = (e) => {
         const changeCls = e.target.parentNode.classList;
-
         if (e.target.value === "") {
             changeCls.add("error")
-        }else {
+        } else {
             changeCls.remove("error")
         }
 
     }
 
     const [showModal, setShowModal] = useState(false);
+    const [showThankModal, setShowThankModal] = useState(false)
+    const addModalClass = "modal show";
 
+
+    // Form Submit
     const submitForm = e => {
         e.preventDefault();
         console.log(formData);
-
         setShowModal(!showModal)
+    }
 
-        e.target.reset();
-        setFormData({
-            investor: "",
-            invest_date: "",
-            invest_amount: "",
-            invest_to: "",
-            invest_reference: "",
-            invest_purpose: "",
-            invest_comments: "",
+    // To Remove Invest modal form the dom
+    const closeModal = () => {
+        setShowModal(false);
+        document.getElementById("investor").focus();
+    }
 
-        });
+    // Save Data to Database function
+    // todo: Database funcanality still in progress
 
-        blurHandler();
+    const saveFuncation = (e) => {
+        e.preventDefault();
+        setFormData(emptyFormData);
+        setShowThankModal(!showThankModal);
+        setShowModal(false);
+    }
 
-
-
+    // close Thank modal
+    const closeThankyou = (e) => {
+        e.preventDefault();
+        setShowThankModal(!showThankModal)
     }
 
 
@@ -136,7 +143,21 @@ export default function InvestForm() {
                 </div>
             </form>
 
-            <InvestModal name={formData.investor} date={formData.invest_date} amount={formData.invest_amount} style={{display:"block"}}/>
+            {showModal &&
+                <InvestModal
+                    modalClass={addModalClass}
+                    cancleFun={closeModal}
+                    saveFun={saveFuncation}
+                    name={formData.investor}
+                    amount={formData.invest_amount}
+                    date={formData.invest_date}
+                />}
+
+            {showThankModal &&
+                <ThankyouModal
+                    modalClass={addModalClass}
+                    cancleFun={closeThankyou}
+                />}
         </div>
     )
 }

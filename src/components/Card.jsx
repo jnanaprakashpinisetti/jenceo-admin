@@ -1,25 +1,36 @@
 import React from 'react';
 import invest from '../assets/invest-blue.svg';
 
-export default function Card(props) {
+export default function Card({
+  icon,
+  iconALt,
+  title,
+  amount,
+  title1,
+  amount1,
+  title2,
+  amount2,
+  title3,
+  amount3
+}) {
   return (
     <div className='card'>
       <div className="card-header">
-        <h6><img src={props.icon} alt={props.iconALt} /> {props.title}</h6>
-        <h3>{props.amount}</h3>
+        <h6><img src={icon} alt={iconALt} /> {title}</h6>
+        <h3>{amount}</h3>
       </div>
       <div className="card-footer">
         <div>
-          <span>{props.title1}</span>
-          <p> {props.amount1} </p>
+          <span>{title1}</span>
+          <p> {amount1} </p>
         </div>
         <div>
-          <span>{props.title2}</span>
-          <p> {props.amount2} </p>
+          <span>{title2}</span>
+          <p> {amount2} </p>
         </div>
         <div>
-          <span>{props.title3}</span>
-          <p> {props.amount3} </p>
+          <span>{title3}</span>
+          <p> {amount3} </p>
         </div>
       </div>
 

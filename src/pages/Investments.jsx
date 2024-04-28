@@ -9,10 +9,11 @@ export default function Investments() {
       <div className="container-fluid investments">
         <div className="row">
           <div className="col-md-3">
+          <h4>Add Investment Details</h4>
             <InvestForm />
           </div>
-          <div className="col-md-6">
-          <div className="card-wrapper">
+          <div className="col-md-2">
+          <h4>Individual Details</h4>
             <Card
               amount={"Suresh"}
               title1={"Jan"}
@@ -40,7 +41,10 @@ export default function Investments() {
               title3={"Mar"}
               amount3={1000}
             />
-          </div>
+            </div>
+            <div className="col-md-7">
+              <h4>All Investment Details</h4>
+
           <TableInvestment/>
           </div>
         </div>

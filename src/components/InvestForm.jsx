@@ -17,6 +17,9 @@ export default function InvestForm() {
 
     const [formData, setFormData] = useState(emptyFormData);
 
+    // max date validation is today
+    const today = new Date().toISOString().split('T')[0];
+
     const { investor, invest_date, invest_amount, invest_to, invest_reference, invest_purpose, invest_comments } = formData;
 
 
@@ -27,10 +30,10 @@ export default function InvestForm() {
         const changeCls = e.target.parentNode.classList;
         if (e.target.value === "") {
             changeCls.add("error")
-        } else if (e.target.name === "invest_amount" && e.target.value <=0) {
+        } else if (e.target.name === "invest_amount" && e.target.value <= 0) {
             changeCls.add("error");
-        }
-        else {
+
+        } else {
             changeCls.remove("error")
         }
 
@@ -41,10 +44,9 @@ export default function InvestForm() {
     const addModalClass = "modal show";
 
 
-    // Form Submit
+    // Form Submit and show confirmation modal
     const submitForm = e => {
         e.preventDefault();
-        console.log(formData);
         setShowModal(!showModal)
     }
 
@@ -91,7 +93,7 @@ export default function InvestForm() {
                     <div className="col">
                         {/* Investment Date */}
                         <label htmlFor="invest_date" className="form-label"><span className="star">*</span>Investment Date:</label>
-                        <input type="date" className="form-control" id="invest_date" name="invest_date" required value={invest_date} onChange={chandHandler} onBlur={blurHandler} />
+                        <input type="date" className="form-control" id="invest_date" name="invest_date" required value={invest_date} min="2023-12-01" max={today} onChange={chandHandler} onBlur={blurHandler} />
                         <p className="error-msg">Select Date</p>
                     </div>
                 </div>

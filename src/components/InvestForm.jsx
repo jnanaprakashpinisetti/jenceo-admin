@@ -27,7 +27,10 @@ export default function InvestForm() {
         const changeCls = e.target.parentNode.classList;
         if (e.target.value === "") {
             changeCls.add("error")
-        } else {
+        } else if (e.target.name === "invest_amount" && e.target.value <=0) {
+            changeCls.add("error");
+        }
+        else {
             changeCls.remove("error")
         }
 
@@ -98,7 +101,7 @@ export default function InvestForm() {
                         {/* Investment Amount */}
                         <label htmlFor="invest_amount" className="form-label"><span className="star">*</span>Amount:</label>
                         <input type="number" min={0} className="form-control " id="invest_amount" name="invest_amount" required value={invest_amount} onChange={chandHandler} onBlur={blurHandler} />
-                        <p className="error-msg">Enter Amount</p>
+                        <p className="error-msg">Enter Valid Amount</p>
                     </div>
                     <div className="col">
                         {/* Invest to which bank */}

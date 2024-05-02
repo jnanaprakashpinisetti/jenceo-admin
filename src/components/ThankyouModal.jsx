@@ -1,15 +1,15 @@
 import React from 'react'
 
-export default function ThankyouModal(props) {
+export default function ThankyouModal({cancleFun,modalClass}) {
   return (
     <>
-    <div className={props.modalClass}>
+    <div className={modalClass}>
                 <div className="modal-dialog">
                     <div className="modal-content">
 
                         <div className="modal-header">
                             <h2 className="modal-title">Thank You</h2>
-                            <button type="button" className="btn-close" data-bs-dismiss="modal" onClick={props.cancleFun}></button>
+                            <button type="button" className="btn-close" data-bs-dismiss="modal" onClick={cancleFun}></button>
                         </div>
 
                         <div className="modal-body">
@@ -17,7 +17,7 @@ export default function ThankyouModal(props) {
                         </div>
 
                         <div className="modal-footer">
-                            <button type="button" className="btn btn-danger" data-bs-dismiss="modal" onClick={props.cancleFun}>Cancle</button>
+                            <button type="button" className="btn btn-primary" data-bs-dismiss="modal" onClick={cancleFun}>Ok</button>
                         </div>
 
                     </div>

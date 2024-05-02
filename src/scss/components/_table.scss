@@ -9,4 +9,13 @@ table {
     td {
         color: $sec-white !important;
     }
+
+    tr {
+        &:nth-child(even) {
+            td {
+                background-color: #1f2124;
+            }
+        }
+
+    }
 }

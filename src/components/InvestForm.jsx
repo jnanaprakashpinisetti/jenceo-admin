@@ -2,6 +2,8 @@ import React, { useState } from "react";
 import InvestModal from "./InvestModal";
 import ThankyouModal from "./ThankyouModal";
 
+import firebaseDB from '../firebase';
+
 export default function InvestForm() {
 
     // Form Empty Data
@@ -59,11 +61,18 @@ export default function InvestForm() {
     // Save Data to Database function
     // todo: Database funcanality still in progress
 
-    const saveFuncation = (e) => {
+    const saveFuncation = async (e) => {
         e.preventDefault();
-        setFormData(emptyFormData);
+        await firebaseDB.child("Investments").push(formData, 
+        err => {
+            if(err) {
+                alert("Error")
+            }
+        }
+        );
         setShowThankModal(!showThankModal);
         setShowModal(false);
+        setFormData(emptyFormData);
     }
 
     // close Thank modal

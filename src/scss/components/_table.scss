@@ -1,15 +1,6 @@
 table {
     border: 1px solid $sec-black;
 
-    th {
-        background-color: #0D1D2C !important;
-        color: $sec-white !important;
-    }
-
-    td {
-        color: $sec-white !important;
-    }
-
     tr {
         &:nth-child(even) {
             td {
@@ -17,5 +8,48 @@ table {
             }
         }
 
+        th {
+            background-color: #0D1D2C !important;
+            color: $sec-white !important;
+        }
+
+        td {
+            color: $sec-white !important;
+        }
+
     }
+
+    .sno {
+        max-width: 25px;
+        text-align: center;
+    }
+
+    .date {
+        max-width: 50px;
+
+    }
+
+    .name {
+        max-width: 30px;
+    }
+
+    .amount {}
+
+    .action {
+        cursor: pointer;
+        max-width: 35px;
+        text-align: center;
+
+        img {
+            transition: all .6s;
+        }
+
+        &:hover {
+            img {
+                scale: 1.2;
+                transition: all .6s;
+            }
+        }
+    }
+
 }

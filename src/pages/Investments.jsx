@@ -2,8 +2,10 @@ import React, { useState, useEffect } from 'react';
 import InvestForm from '../components/InvestForm';
 import Card from '../components/Card';
 import TableInvestment from '../components/TableInvestment';
+
 import editIcon from '../assets/eidt.svg';
 import deleteIcon from '../assets/delete.svg';
+import viewIcon from '../assets/view.svg';
 
 import firebaseDB from '../firebase';
 
@@ -13,12 +15,18 @@ export default function Investments() {
   const [getInvestData, setGetInvestData] = useState({});
 
   // displaying data in UI
+  
   useEffect(() => {
     firebaseDB.child("Investments").on("value", details => {
       setGetInvestData(details.val());
-      console.log(details.val())
+      console.log(details.val());
     })
   }, [])
+
+ // Delete data from UI
+  const deleteHandler = item => {
+    firebaseDB.child(`Investments/${item}`).remove();
+  }
 
   return (
     <div className="layout-body">
@@ -77,29 +85,31 @@ export default function Investments() {
                   <th className='name'>Name</th>
                   <th className='date'>Date</th>
                   <th className='amount'>Amount</th>
-                  <th>Comments</th>
-                  <th className='action'>Edit</th>
                   <th className='action'>Delete</th>
+                  <th className='action'>Edit</th>
+                  <th className='action'>View</th>
                 </tr>
               </thead>
               <tbody>
-                {Object.keys(getInvestData).map((item, index) =>
-                  <tr key={index}>
-                    <td className='sno'> {index + 1}</td>
-                    <td className='name'>{getInvestData[item].investor}</td>
-                    <td className='date'>{getInvestData[item].invest_date}</td>
-                    <td className='amount'>{getInvestData[item].invest_amount}</td>
-                    <td>{getInvestData[item].invest_comments}</td>
-                    <td className='action' title='Edit'><img src={editIcon} alt="edit Icon" /></td>
-                    <td className='action' title='Delete'><img src={deleteIcon} alt="Delete Icon" /></td>
-                  </tr>
-                )}
+                {getInvestData &&
+
+                  Object.keys(getInvestData).map((item, index) =>
+                    <tr key={index}>
+                      <td className='sno'> {index + 1}</td>
+                      <td className='name'>{getInvestData[item].investor}</td>
+                      <td className='date'>{getInvestData[item].invest_date}</td>
+                      <td className='amount'>{getInvestData[item].invest_amount}</td>
+                      <td className='action' title='Delete' onClick={() => deleteHandler(item)}><img src={deleteIcon} alt="Delete Icon" /></td>
+                      <td className='action' title='Edit'><img src={editIcon} alt="edit Icon" /></td>
+                      <td className='action' title='View Details'><img src={viewIcon} alt="View Icon" /></td>
+                    </tr>
+                  )}
                 <tr>
                   <td colSpan={3}>Total</td>
                   <td colSpan={4}><strong></strong></td>
                 </tr>
               </tbody>
-              
+
             </table>
 
 

@@ -76,7 +76,10 @@ form {
             background-color: #286397;
         }
     }
-
+    // calander icon color changeing
+    ::-webkit-calendar-picker-indicator {
+        filter: invert(.6);
+    }
 
 
 }

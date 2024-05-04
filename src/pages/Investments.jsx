@@ -25,7 +25,13 @@ export default function Investments() {
 
  // Delete data from UI
   const deleteHandler = item => {
-    firebaseDB.child(`Investments/${item}`).remove();
+    firebaseDB.child(`Investments/${item}`).remove(
+      error => {
+        if(error) {
+          alert("Error")
+        }
+      }
+    );
   }
 
   return (

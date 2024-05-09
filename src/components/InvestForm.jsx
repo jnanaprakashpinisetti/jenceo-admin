@@ -43,7 +43,6 @@ export default function InvestForm() {
 
     const [showModal, setShowModal] = useState(false);
     const [showThankModal, setShowThankModal] = useState(false)
-    const addModalClass = "modal show";
 
 
     // Form Submit and show confirmation modal
@@ -159,7 +158,6 @@ export default function InvestForm() {
 
             {showModal &&
                 <InvestModal
-                    modalClass={addModalClass}
                     cancleFun={closeModal}
                     saveFun={saveFuncation}
                     name={formData.investor}
@@ -169,7 +167,6 @@ export default function InvestForm() {
 
             {showThankModal &&
                 <ThankyouModal
-                    modalClass={addModalClass}
                     cancleFun={closeThankyou}
                 />}
         </div>

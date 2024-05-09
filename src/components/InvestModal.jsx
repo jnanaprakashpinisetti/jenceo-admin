@@ -1,5 +1,4 @@
-export default function InvestModal({ 
-    modalClass,
+export default function InvestModal({
     cancleFun,
     name,
     amount,
@@ -10,7 +9,7 @@ export default function InvestModal({
     return (
 
         <>
-            <div className={modalClass} id="investModal">
+            <div className="modal" id="investModal">
                 <div className="modal-dialog">
                     <div className="modal-content">
 

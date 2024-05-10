@@ -3,7 +3,7 @@ import React from 'react'
 export default function ThankyouModal({cancleFun,modalClass}) {
   return (
     <>
-    <div className={modalClass}>
+    <div className="modal" onClick={cancleFun}>
                 <div className="modal-dialog">
                     <div className="modal-content">
 

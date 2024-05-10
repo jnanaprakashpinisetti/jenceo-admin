@@ -43,7 +43,6 @@ export default function InvestForm() {
 
     const [showModal, setShowModal] = useState(false);
     const [showThankModal, setShowThankModal] = useState(false)
-    const addModalClass = "modal show";
 
 
     // Form Submit and show confirmation modal
@@ -63,12 +62,12 @@ export default function InvestForm() {
 
     const saveFuncation = async (e) => {
         e.preventDefault();
-        await firebaseDB.child("Investments").push(formData, 
-        err => {
-            if(err) {
-                alert("Error")
+        await firebaseDB.child("Investments").push(formData,
+            err => {
+                if (err) {
+                    alert("Error")
+                }
             }
-        }
         );
         setShowThankModal(!showThankModal);
         setShowModal(false);
@@ -159,17 +158,16 @@ export default function InvestForm() {
 
             {showModal &&
                 <InvestModal
-                    modalClass={addModalClass}
                     cancleFun={closeModal}
-                    saveFun={saveFuncation}
+                    actionFun={saveFuncation}
                     name={formData.investor}
                     amount={formData.invest_amount}
                     date={formData.invest_date}
+                    actionText ="Save"
                 />}
 
             {showThankModal &&
                 <ThankyouModal
-                    modalClass={addModalClass}
                     cancleFun={closeThankyou}
                 />}
         </div>

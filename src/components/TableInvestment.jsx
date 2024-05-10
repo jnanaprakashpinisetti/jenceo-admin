@@ -4,16 +4,12 @@ import deleteIcon from '../assets/delete.svg';
 import viewIcon from '../assets/view.svg';
 
 import firebaseDB from '../firebase';
+import InvestModal from './InvestModal';
 
-export default function TableInvestment({
-    sno,
-    investor,
-    invest_date,
-    invest_amount,
-    invest_comments
-}) {
+export default function TableInvestment() {
 
     const [getInvestData, setGetInvestData] = useState({});
+    const [showModal, setshowModal] = useState(false)
 
     // displaying data in UI
 
@@ -29,12 +25,16 @@ export default function TableInvestment({
     }
 
     // Delete data from UI
-
     const deleteHandler = item => {
         // Retrieve the item's data before deleting it
         firebaseDB.child(`Investments/${item}`).once('value', snapshot => {
             const deletedItemData = snapshot.val();
-            console.log(deletedItemData.invest_amount);
+            alert(` You are deleting Below Data
+            Name: ${deletedItemData.investor}
+            Amount: ${deletedItemData.invest_amount}
+            Date: ${deletedItemData.invest_date}
+            `
+            );
 
             // Remove the item from the database
             firebaseDB.child(`Investments/${item}`).remove(error => {
@@ -45,6 +45,14 @@ export default function TableInvestment({
             });
         });
     };
+
+    const showDeletModal = () => {
+        setshowModal(!showModal)
+    }
+
+    const closeModal = () => {
+        setshowModal(!showModal)
+    }
     return (
         <>
             <table className="table table-dark table-hover">
@@ -68,6 +76,7 @@ export default function TableInvestment({
                                 <td className='date'>{getInvestData[item].invest_date}</td>
                                 <td className='amount'>{getInvestData[item].invest_amount}</td>
                                 <td className='action' title='Delete' onClick={() => deleteHandler(item)}><img src={deleteIcon} alt="Delete Icon" /></td>
+                                {/* <td className='action' title='Delete' onClick={showDeletModal}><img src={deleteIcon} alt="Delete Icon" /></td> */}
                                 <td className='action' title='Edit'><img src={editIcon} alt="edit Icon" /></td>
                                 <td className='action' title='View Details' onClick={() => viewData(item)}><img src={viewIcon} alt="View Icon" /></td>
                             </tr>
@@ -79,6 +88,16 @@ export default function TableInvestment({
                 </tbody>
 
             </table>
+
+            {showModal && <InvestModal
+                cancleFun={closeModal}
+                name
+                amount
+                date
+                actionText="Delete"
+                actionFun={deleteHandler}
+
+            />}
 
         </>
     )

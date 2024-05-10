@@ -3,7 +3,9 @@ export default function InvestModal({
     name,
     amount,
     date,
-    saveFun }) {
+    actionText,
+    actionFun
+ }) {
 
 
     return (
@@ -26,7 +28,7 @@ export default function InvestModal({
 
                         <div className="modal-footer">
                             <button type="button" className="btn btn-danger" data-bs-dismiss="modal" onClick={cancleFun}>Cancle</button>
-                            <button type="button" className="btn btn-primary" data-bs-dismiss="modal" onClick={saveFun}>Save</button>
+                            <button type="button" className="btn btn-primary" data-bs-dismiss="modal" onClick={actionFun}>{actionText}</button>
                         </div>
 
                     </div>

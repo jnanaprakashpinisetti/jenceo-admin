@@ -62,12 +62,12 @@ export default function InvestForm() {
 
     const saveFuncation = async (e) => {
         e.preventDefault();
-        await firebaseDB.child("Investments").push(formData, 
-        err => {
-            if(err) {
-                alert("Error")
+        await firebaseDB.child("Investments").push(formData,
+            err => {
+                if (err) {
+                    alert("Error")
+                }
             }
-        }
         );
         setShowThankModal(!showThankModal);
         setShowModal(false);
@@ -159,10 +159,11 @@ export default function InvestForm() {
             {showModal &&
                 <InvestModal
                     cancleFun={closeModal}
-                    saveFun={saveFuncation}
+                    actionFun={saveFuncation}
                     name={formData.investor}
                     amount={formData.invest_amount}
                     date={formData.invest_date}
+                    actionText ="Save"
                 />}
 
             {showThankModal &&

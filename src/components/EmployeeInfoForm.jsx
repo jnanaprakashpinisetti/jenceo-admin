@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 
 
 import BasicInfo from './employeeInfoForm/BasicInfo';
@@ -13,7 +13,17 @@ import EmergencyContact3 from './employeeInfoForm/EmergencyContact3';
 import BankAccountDetails from './employeeInfoForm/BankAccountDetails';
 
 
+
 export default function EmployeeInfoForm() {
+    const [permanentAddress, setPermanentAddress] = useState(false);
+    const [peresentAddress, setPeresentAddress] = useState(false);
+    const [personalInformation, setPersonalInformation] = useState(false);
+    const [qualificationSkills, setQualificationSkills] = useState(false);
+    const [healthDetails, setHealthDetails] = useState(false);
+    const [emergencyContact1, setEmergencyContact1] = useState(false);
+    const [emergencyContact2, setEmergencyContact2] = useState(false);
+    const [emergencyContact3, setEmergencyContact3] = useState(false);
+    const [bankAccountDetails, setBankAccountDetails] = useState(false);
 
 
     return (
@@ -21,15 +31,15 @@ export default function EmployeeInfoForm() {
             <form name="employeeInfoForm" id="employeeInfoForm"  >
                 <div className="row">
                     <BasicInfo />
-                    <PermanentAddress />
-                    <PeresentAddress />
-                    <PersonalInformation />
-                    <QualificationSkills />
-                    <HealthDetails />
-                    <EmergencyContact1 />
-                    <EmergencyContact2 />
-                    <EmergencyContact3 />
-                    <BankAccountDetails />
+                    {permanentAddress && <PermanentAddress />}
+                    {peresentAddress && <PeresentAddress />}
+                    {personalInformation && <PersonalInformation />}
+                    {qualificationSkills && <QualificationSkills />}
+                    {healthDetails && <HealthDetails />}
+                    {emergencyContact1 && <EmergencyContact1 />}
+                    {emergencyContact2 && <EmergencyContact2 />}
+                    {emergencyContact3 && <EmergencyContact3 />}
+                    {bankAccountDetails && <BankAccountDetails />}
                 </div>
             </form>
         </div>

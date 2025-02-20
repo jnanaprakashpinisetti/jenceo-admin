@@ -84,6 +84,11 @@ export default function BankAccountDetails() {
                 />
             </div>
 
+            <div className="row">
+                <label for="employeeImg">Choose Employee Photo</label>
+                <input type="file" id="employeeImg" name="employeeImg" accept="image/png, image/jpeg, imgage/jpg" />
+            </div>
+
             <Button
                 btnType="submit"
                 btnID="accountNextBtn"

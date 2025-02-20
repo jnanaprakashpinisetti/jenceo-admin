@@ -32,10 +32,12 @@ form {
         .form-control,
         .form-select {
             border-color: $error;
+
             &:focus {
                 border-color: $error;
-                
+
             }
+
             &:focus-visible {
                 border-color: $error;
 
@@ -70,16 +72,69 @@ form {
         border-radius: 30px;
         padding: 3px 25px;
         float: right;
+        margin-bottom: 15px;
+        margin-left: 15px;
 
         &:hover {
             color: $prim-white;
             background-color: #286397;
         }
+        &.btn-success {
+            background-color: gold; 
+            color: $prim-black;  
+            border-color: transparent;                  
+        }
     }
+
     // calander icon color changeing
     ::-webkit-calendar-picker-indicator {
         filter: invert(.6);
     }
 
+    .form-check-input {
+        background-color: transparent;
+
+        &[type=radio] {
+
+            &:checked {
+                background-color: #EFF0F4;
+                border-color: transparent;
+            }
+        }
+
+
+
+        &[type=checkbox] {
+            border-radius: 0;
+
+
+        }
+
+
+        &:focus {
+            box-shadow: none;
+        }
+    }
+
+    .checkBox {
+        width: auto;
+    }
+
+    .checkBoxWrapper {
+        padding-left: 15px;
+    }
+
+
+}
+
+#permanentAddress,
+#peresentAddress,
+#personalInformation,
+#qualificationSkills,
+#healthDetails,
+#emergencyContact1,
+#emergencyContact2,
+#emergencyContact3 {
+    // display: none;
 
 }

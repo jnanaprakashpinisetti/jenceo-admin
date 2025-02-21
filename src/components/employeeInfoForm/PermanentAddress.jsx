@@ -90,12 +90,14 @@ export default function PermanentAddress() {
                 btnID="permanentAddressNextBtn"
                 btnClass="btn primery"
                 btnText="Next"
+                 // clickHandler = {}
             />
             <Button
                 btnType="button"
                 btnID="permanentAddressPreBtn"
                 btnClass="btn primery"
                 btnText="Previous"
+                 // clickHandler = {}
             />
 
         </div>

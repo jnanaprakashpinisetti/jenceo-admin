@@ -94,6 +94,7 @@ export default function HealthDetails() {
                 btnID="healthNextBtn"
                 btnClass="btn primery"
                 btnText="Next"
+                 // clickHandler = {}
             />
 
             <Button
@@ -101,6 +102,7 @@ export default function HealthDetails() {
                 btnID="healthPreBtn"
                 btnClass="btn primery"
                 btnText="Previous"
+                 // clickHandler = {}
             />
 
         </div>

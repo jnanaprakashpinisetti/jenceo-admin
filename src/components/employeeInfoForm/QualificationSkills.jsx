@@ -94,6 +94,7 @@ export default function QualificationSkills() {
                 btnID="qualificationNextBtn"
                 btnClass="btn primery"
                 btnText="Next"
+                 // clickHandler = {}
             />
             
             <Button
@@ -101,6 +102,7 @@ export default function QualificationSkills() {
                 btnID="qualificationPreBtn"
                 btnClass="btn primery"
                 btnText="Previous"
+                 // clickHandler = {}
             />
 
 

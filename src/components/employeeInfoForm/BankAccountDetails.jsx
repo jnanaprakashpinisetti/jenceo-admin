@@ -94,6 +94,7 @@ export default function BankAccountDetails() {
                 btnID="accountNextBtn"
                 btnClass="btn btn-success"
                 btnText="Save"
+                 // clickHandler = {}
             />
 
             <Button
@@ -101,6 +102,7 @@ export default function BankAccountDetails() {
                 btnID="accountPreBtn"
                 btnClass="btn primery"
                 btnText="Previous"
+                 // clickHandler = {}
             />
 
 

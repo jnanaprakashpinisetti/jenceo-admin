@@ -111,6 +111,7 @@ export default function EmergencyContact3() {
                 btnID="contact3NextBtn"
                 btnClass="btn primery"
                 btnText="Next"
+                 // clickHandler = {}
             />
 
             <Button
@@ -118,6 +119,7 @@ export default function EmergencyContact3() {
                 btnID="contact3PreBtn"
                 btnClass="btn primery"
                 btnText="Previous"
+                 // clickHandler = {}
             />
 
 

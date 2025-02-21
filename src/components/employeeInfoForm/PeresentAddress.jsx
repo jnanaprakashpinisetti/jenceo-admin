@@ -89,12 +89,14 @@ export default function PeresentAddress() {
                 btnID="presentAddressNextBtn"
                 btnClass="btn primery"
                 btnText="Next"
+                 // clickHandler = {}
             />
             <Button
                 btnType="button"
                 btnID="presentAddressPreBtn"
                 btnClass="btn primery"
                 btnText="Previous"
+                 // clickHandler = {}
             />
 
         </div>

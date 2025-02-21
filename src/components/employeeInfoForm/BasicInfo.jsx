@@ -5,6 +5,20 @@ import InputDate from '../formElements/InputDate';
 import Button from '../formElements/Button';
 
 export default function BasicInfo() {
+
+    let date = new Date();
+    let years = date.getFullYear();
+    let month = String(date.getMonth() + 1).padStart(2, '0');
+    let day = String(date.getDate()).padStart(2, '0');
+
+    let minYear = `${years - 18}-${month}-${day}`;
+    let maxYear = `${years - 50}-${month}-${day}`;
+
+
+    function basicInfoNext() {
+        let empFirstName = document.getElementById("empFirstName").value;
+
+    }
     return (
         <div id="empBasicInfo">
             {/* Basic Info Section */}
@@ -79,8 +93,8 @@ export default function BasicInfo() {
                     inputName="empDob"
                     required="required"
                     // value ="emp"
-                    minDate="1965-01-01"
-                    maxDate="2007-01-01"
+                    minDate={maxYear}
+                    maxDate={minYear}
                 // changeHandler ="emp"
                 // blurHandler ="emp"
                 />
@@ -125,8 +139,6 @@ export default function BasicInfo() {
                     inputName="empMob1"
                     // inputVal=""
                     required="required"
-                    min='10'
-                    max='10'
                 // eventHandler = ""
                 />
                 <InputText
@@ -138,8 +150,6 @@ export default function BasicInfo() {
                     inputName="empMob2"
                     // inputVal=""
                     required={false}
-                    min='10'
-                    max='10'
                 // eventHandler = ""
                 />
             </div>
@@ -180,6 +190,7 @@ export default function BasicInfo() {
                 btnID="basicInfoBtn"
                 btnClass="btn primery"
                 btnText="Next"
+            // clickHandler = {}
             />
 
         </div>

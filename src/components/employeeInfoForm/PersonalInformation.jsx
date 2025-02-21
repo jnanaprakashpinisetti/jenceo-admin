@@ -124,6 +124,7 @@ export default function PersonalInformation() {
         btnID="personalAddressNextBtn"
         btnClass="btn primery"
         btnText="Next"
+         // clickHandler = {}
       />
 
       <Button
@@ -131,6 +132,7 @@ export default function PersonalInformation() {
         btnID="personalAddressPreBtn"
         btnClass="btn primery"
         btnText="Previous"
+         // clickHandler = {}
       />
 
     </div>

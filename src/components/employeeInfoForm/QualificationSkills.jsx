@@ -7,6 +7,8 @@ import Button from '../formElements/Button';
 export default function QualificationSkills() {
     return (
         <div id='qualificationSkills'>
+            <h4>Qualification & Skills Details</h4>
+            <hr></hr>
             <div className="row">
                 {/* Qualification */}
                 <InputText
@@ -94,15 +96,15 @@ export default function QualificationSkills() {
                 btnID="qualificationNextBtn"
                 btnClass="btn primery"
                 btnText="Next"
-                 // clickHandler = {}
+            // clickHandler = {}
             />
-            
+
             <Button
                 btnType="button"
                 btnID="qualificationPreBtn"
                 btnClass="btn primery"
                 btnText="Previous"
-                 // clickHandler = {}
+            // clickHandler = {}
             />
 
 

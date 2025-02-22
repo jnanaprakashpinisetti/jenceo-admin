@@ -5,6 +5,8 @@ import Button from '../formElements/Button';
 export default function EmergencyContact1() {
     return (
         <div id='emergencyContact1'>
+            <h4>Emergency Contact-1</h4>
+            <hr></hr>
             <div className="row">
                 <InputText
                     htmlFor="contact1"
@@ -111,7 +113,7 @@ export default function EmergencyContact1() {
                 btnID="contact1NextBtn"
                 btnClass="btn primery"
                 btnText="Next"
-                 // clickHandler = {}
+            // clickHandler = {}
             />
 
             <Button
@@ -119,9 +121,9 @@ export default function EmergencyContact1() {
                 btnID="contact1PreBtn"
                 btnClass="btn primery"
                 btnText="Previous"
-                 // clickHandler = {}
+            // clickHandler = {}
             />
-    
+
 
 
         </div>

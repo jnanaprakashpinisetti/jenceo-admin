@@ -6,6 +6,8 @@ import CheckBox from '../formElements/CheckBox';
 export default function HealthDetails() {
     return (
         <div id='healthDetails'>
+            <h4>Health Details</h4>
+            <hr></hr>
             <div className='checkBoxWrapper'>
                 <div className="row">
                     <CheckBox
@@ -94,7 +96,7 @@ export default function HealthDetails() {
                 btnID="healthNextBtn"
                 btnClass="btn primery"
                 btnText="Next"
-                 // clickHandler = {}
+            // clickHandler = {}
             />
 
             <Button
@@ -102,7 +104,7 @@ export default function HealthDetails() {
                 btnID="healthPreBtn"
                 btnClass="btn primery"
                 btnText="Previous"
-                 // clickHandler = {}
+            // clickHandler = {}
             />
 
         </div>

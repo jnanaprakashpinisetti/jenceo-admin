@@ -5,6 +5,8 @@ import Button from '../formElements/Button';
 export default function PeresentAddress() {
     return (
         <div id="peresentAddress">
+            <h4>Peresent Address</h4>
+            <hr></hr>
             <div className="row">
                 <InputText
                     htmlFor="empCrntDNo"
@@ -89,14 +91,14 @@ export default function PeresentAddress() {
                 btnID="presentAddressNextBtn"
                 btnClass="btn primery"
                 btnText="Next"
-                 // clickHandler = {}
+            // clickHandler = {}
             />
             <Button
                 btnType="button"
                 btnID="presentAddressPreBtn"
                 btnClass="btn primery"
                 btnText="Previous"
-                 // clickHandler = {}
+            // clickHandler = {}
             />
 
         </div>

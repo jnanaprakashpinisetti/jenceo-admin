@@ -5,6 +5,8 @@ import Button from '../formElements/Button';
 export default function BankAccountDetails() {
     return (
         <div id='bankAccountDetails'>
+            <h4>Bank Account Details</h4>
+            <hr></hr>
             <div className="row">
                 <InputText
                     htmlFor="accountNo"
@@ -94,7 +96,7 @@ export default function BankAccountDetails() {
                 btnID="accountNextBtn"
                 btnClass="btn btn-success"
                 btnText="Save"
-                 // clickHandler = {}
+            // clickHandler = {}
             />
 
             <Button
@@ -102,7 +104,7 @@ export default function BankAccountDetails() {
                 btnID="accountPreBtn"
                 btnClass="btn primery"
                 btnText="Previous"
-                 // clickHandler = {}
+            // clickHandler = {}
             />
 
 

@@ -7,6 +7,8 @@ import Button from '../formElements/Button';
 export default function PersonalInformation() {
   return (
     <div id="personalInformation">
+         <h4>Personal Information</h4>
+         <hr></hr>
       {/* Personal Information start */}
       <div className="row">
         <label className='form-label'>

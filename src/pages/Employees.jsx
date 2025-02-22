@@ -7,8 +7,7 @@ export default function Employees() {
       <div className="container-fulid">
         <div className="row">
           <div className="col-md-3">
-            <h4>Employee Basic Info</h4>
-            <EmployeeInfoForm/>
+            <EmployeeInfoForm />
           </div>
           <div className="col-md-9">Emp</div>
 

@@ -5,6 +5,9 @@ import Button from '../formElements/Button';
 export default function PermanentAddress() {
     return (
         <div id="permanentAddress">
+            <h4>Permanent Address</h4>
+            <hr></hr>
+
             {/****** Permanent Address starts ******/}
             <div className="row">
                 <InputText
@@ -90,14 +93,14 @@ export default function PermanentAddress() {
                 btnID="permanentAddressNextBtn"
                 btnClass="btn primery"
                 btnText="Next"
-                 // clickHandler = {}
+            // clickHandler = {}
             />
             <Button
                 btnType="button"
                 btnID="permanentAddressPreBtn"
                 btnClass="btn primery"
                 btnText="Previous"
-                 // clickHandler = {}
+            // clickHandler = {}
             />
 
         </div>

@@ -21,6 +21,8 @@ export default function BasicInfo() {
     }
     return (
         <div id="empBasicInfo">
+            <h4>Employee Basic Infomation</h4>
+            <hr></hr>
             {/* Basic Info Section */}
             <div className="row">
                 {/*** First Name ***/}
@@ -190,7 +192,7 @@ export default function BasicInfo() {
                 btnID="basicInfoBtn"
                 btnClass="btn primery"
                 btnText="Next"
-            // clickHandler = {}
+                // clickHandler={}
             />
 
         </div>

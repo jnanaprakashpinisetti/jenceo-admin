@@ -5,27 +5,29 @@ import Button from '../formElements/Button';
 export default function EmergencyContact2() {
     return (
         <div id='emergencyContact2'>
+            <h4>Emergency Contact-2</h4>
+            <hr></hr>
             <div className="row">
                 <InputText
                     htmlFor="contact2"
-                   // star="*"
+                    // star="*"
                     labelName=" Contact-2"
                     type="text"
                     idName="contact2"
                     inputName="contact2"
-                    // inputVal=""
-                    // required="required"
+                // inputVal=""
+                // required="required"
                 // eventHandler = ""
                 />
                 <InputText
                     htmlFor="contact2Relation"
-                     // star="*"
+                    // star="*"
                     labelName="Relation"
                     type="text"
                     idName="contact2Relation"
                     inputName="contact2Relation"
-                    // inputVal=""
-                    // required="required"
+                // inputVal=""
+                // required="required"
                 // eventHandler = ""
                 />
             </div>
@@ -33,25 +35,25 @@ export default function EmergencyContact2() {
             <div className="row">
                 <InputText
                     htmlFor="contact2DNo"
-                     // star="*"
+                    // star="*"
                     labelName=" D.No / Street"
                     type="text"
                     idName="contact2DNo"
                     inputName="contact2DNo"
-                    // inputVal=""
-                    // required="required"
+                // inputVal=""
+                // required="required"
                 // eventHandler = ""
                 />
 
                 <InputText
                     htmlFor="contact2Village"
-                     // star="*"
+                    // star="*"
                     labelName=" Village / Town"
                     type="text"
                     idName="contact2Village"
                     inputName="contact2Village"
-                    // inputVal=""
-                    // required="required"
+                // inputVal=""
+                // required="required"
                 // eventHandler = ""
                 />
             </div>
@@ -59,25 +61,25 @@ export default function EmergencyContact2() {
             <div className="row">
                 <InputText
                     htmlFor="contact2Mandal"
-                     // star="*"
+                    // star="*"
                     labelName=" Mandal"
                     type="text"
                     idName="contact2Mandal"
                     inputName="contact2Mandal"
-                    // inputVal=""
-                    // required="required"
+                // inputVal=""
+                // required="required"
                 // eventHandler = ""
                 />
 
                 <InputText
                     htmlFor="contact2State"
-                     // star="*"
+                    // star="*"
                     labelName="State"
                     type="text"
                     idName="contact2State"
                     inputName="contact2State"
-                    // inputVal=""
-                    // required="required"
+                // inputVal=""
+                // required="required"
                 // eventHandler = ""
                 />
             </div>
@@ -85,24 +87,24 @@ export default function EmergencyContact2() {
             <div className="row">
                 <InputText
                     htmlFor="contact2Mobile1"
-                     // star="*"
+                    // star="*"
                     labelName="Mobile-1"
                     type="number"
                     idName="contact2Mobile1"
                     inputName="contact2Mobile1"
-                    // inputVal=""
-                    // required="required"
+                // inputVal=""
+                // required="required"
                 // eventHandler = ""
                 />
                 <InputText
                     htmlFor="contact2Mobile2"
-                     // star="*"
+                    // star="*"
                     labelName="Mobile-2"
                     type="number"
                     idName="contact2Mobile2"
                     inputName="contact2Mobile2"
-                    // inputVal=""
-                    // required="required"
+                // inputVal=""
+                // required="required"
                 // eventHandler = ""
                 />
             </div>
@@ -111,7 +113,7 @@ export default function EmergencyContact2() {
                 btnID="contact2NextBtn"
                 btnClass="btn primery"
                 btnText="Next"
-                 // clickHandler = {}
+            // clickHandler = {}
             />
 
             <Button
@@ -119,7 +121,7 @@ export default function EmergencyContact2() {
                 btnID="contact2PreBtn"
                 btnClass="btn primery"
                 btnText="Previous"
-                 // clickHandler = {}
+            // clickHandler = {}
             />
 
 

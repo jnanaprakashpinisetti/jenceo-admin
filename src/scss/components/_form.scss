@@ -84,6 +84,10 @@ form {
             color: $prim-black;  
             border-color: transparent;                  
         }
+        &:focus-visible {
+            background-color: #085caa;
+
+        }
     }
 
     // calander icon color changeing

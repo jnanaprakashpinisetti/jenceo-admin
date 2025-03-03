@@ -1,15 +1,45 @@
-import React, { useState } from 'react'
-
 export default function InputText(props) {
+    const {
+        htmlFor,
+        star,
+        labelName,
+        type,
+        idName,
+        inputName,
+        inputVal,
+        eventHandler,
+        required,
+        min,
+        max,
+        maxLength,
+        useref,
+        errorMgsId,
+        errorUseref,
+        errorMsg,
+    } = props;
 
     return (
         <div className="col">
-            <label htmlFor={props.htmlFor} className='form-label'>
-                <span className='star'> {props.star} </span>
-                {props.labelName}
+            <label htmlFor={htmlFor} className="form-label">
+                <span className="star">{star}</span>
+                {labelName}
             </label>
-            <input type={props.type} className="form-control" id={props.idName} name={props.inputName} value={props.inputVal} onBlur={props.eventHandler} required={props.required} min={props.min} max={props.max} ref={props.useref}/>
-            <p className='error-msg' id={props.errorMgsId} ref={props.errorUseref}> {props.errorMsg}</p>
+            <input
+                type={type}
+                className="form-control"
+                id={idName}
+                name={inputName}
+                value={inputVal}
+                onBlur={eventHandler}
+                required={required}
+                min={min}
+                max={max}
+                maxLength={maxLength}
+                ref={useref}
+            />
+            <p className="error-msg" id={errorMgsId} ref={errorUseref}>
+                {errorMsg}
+            </p>
         </div>
-    )
+    );
 }

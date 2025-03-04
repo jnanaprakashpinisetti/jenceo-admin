@@ -1,12 +1,22 @@
-import React from 'react'
+import React from 'react';
 import InputText from '../formElements/InputText';
 import Button from '../formElements/Button';
 
-export default function EmergencyContact1() {
+export default function EmergencyContact1({ onEmergencyContact1Next, onEmergencyContact1Previous }) {
+
+    // Event handlers for the Next and Previous buttons
+    const emergencyContact1Next = () => {
+        onEmergencyContact1Next();  // Calling the parent function passed via props
+    }
+
+    const emergencyContact1Previous = () => {
+        onEmergencyContact1Previous();  // Calling the parent function passed via props
+    }
+
     return (
         <div id='emergencyContact1'>
-            <h4>Emergency Contact-1</h4>
-            <hr></hr>
+            <h4>7. Emergency Contact-1</h4>
+            <hr />
             <div className="row">
                 <InputText
                     htmlFor="contact1"
@@ -15,9 +25,7 @@ export default function EmergencyContact1() {
                     type="text"
                     idName="contact1"
                     inputName="contact1"
-                    // inputVal=""
                     required="required"
-                // eventHandler = ""
                 />
                 <InputText
                     htmlFor="contact1Relation"
@@ -26,9 +34,7 @@ export default function EmergencyContact1() {
                     type="text"
                     idName="contact1Relation"
                     inputName="contact1Relation"
-                    // inputVal=""
                     required="required"
-                // eventHandler = ""
                 />
             </div>
 
@@ -40,11 +46,8 @@ export default function EmergencyContact1() {
                     type="text"
                     idName="contact1DNo"
                     inputName="contact1DNo"
-                    // inputVal=""
                     required="required"
-                // eventHandler = ""
                 />
-
                 <InputText
                     htmlFor="contact1Village"
                     star="*"
@@ -52,9 +55,7 @@ export default function EmergencyContact1() {
                     type="text"
                     idName="contact1Village"
                     inputName="contact1Village"
-                    // inputVal=""
                     required="required"
-                // eventHandler = ""
                 />
             </div>
 
@@ -66,11 +67,8 @@ export default function EmergencyContact1() {
                     type="text"
                     idName="contact1Mandal"
                     inputName="contact1Mandal"
-                    // inputVal=""
                     required="required"
-                // eventHandler = ""
                 />
-
                 <InputText
                     htmlFor="contact1State"
                     star="*"
@@ -78,9 +76,7 @@ export default function EmergencyContact1() {
                     type="text"
                     idName="contact1State"
                     inputName="contact1State"
-                    // inputVal=""
                     required="required"
-                // eventHandler = ""
                 />
             </div>
 
@@ -92,9 +88,7 @@ export default function EmergencyContact1() {
                     type="number"
                     idName="contact1Mobile1"
                     inputName="contact1Mobile1"
-                    // inputVal=""
                     required="required"
-                // eventHandler = ""
                 />
                 <InputText
                     htmlFor="contact1Mobile2"
@@ -103,17 +97,16 @@ export default function EmergencyContact1() {
                     type="number"
                     idName="contact1Mobile2"
                     inputName="contact1Mobile2"
-                    // inputVal=""
                     required="required"
-                // eventHandler = ""
                 />
             </div>
+
             <Button
                 btnType="button"
                 btnID="contact1NextBtn"
                 btnClass="btn primery"
                 btnText="Next"
-            // clickHandler = {}
+                clickHandler={emergencyContact1Next}  // Passing the handler to the button
             />
 
             <Button
@@ -121,11 +114,8 @@ export default function EmergencyContact1() {
                 btnID="contact1PreBtn"
                 btnClass="btn primery"
                 btnText="Previous"
-            // clickHandler = {}
+                clickHandler={emergencyContact1Previous}  // Passing the handler to the button
             />
-
-
-
         </div>
-    )
+    );
 }

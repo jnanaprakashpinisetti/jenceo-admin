@@ -1,11 +1,108 @@
-import React from 'react';
+import React, { useRef } from 'react';
 import InputText from '../formElements/InputText';
 import Button from '../formElements/Button';
+import { useReducer } from 'react';
 
-export default function PeresentAddress() {
+export default function PeresentAddress({ onPresentAddressNext, onPresentAddressPrevious }) {
+
+    let empCrntDNo = useReducer(null)
+    let empVillage = useRef(null)
+    let empCrntStreet = useRef(null)
+    let empCrntMandal = useRef(null)
+    let empCrntDistrict = useRef(null)
+    let empCrntState = useRef(null)
+
+
+
+    let validatePresentDnO = () => {
+        if (empCrntDNo.current.value === "") {
+            empCrntDNo.current.parentNode.classList.add("error")
+        } else {
+            empCrntDNo.current.parentNode.classList.remove("error")
+        }
+    }
+
+    let validateEmpPersentVillage = () => {
+        if (empVillage.current.value === "") {
+            empVillage.current.parentNode.classList.add("error")
+        } else {
+            empVillage.current.parentNode.classList.remove("error")
+        }
+    }
+    let validateEmpPersentStreetName = () => {
+        if (empCrntStreet.current.value === "") {
+            empCrntStreet.current.parentNode.classList.add("error")
+        } else {
+            empCrntStreet.current.parentNode.classList.remove("error")
+        }
+    }
+    let validateEmpPersentMandal = () => {
+        if (empCrntMandal.current.value === "") {
+            empCrntMandal.current.parentNode.classList.add("error")
+        } else {
+            empCrntMandal.current.parentNode.classList.remove("error")
+        }
+    }
+    let validateEmpPersentDistrict = () => {
+        if (empCrntDistrict.current.value === "") {
+            empCrntDistrict.current.parentNode.classList.add("error")
+        } else {
+            empCrntDistrict.current.parentNode.classList.remove("error")
+        }
+    }
+    let validateEmpPersentState = () => {
+        if (empCrntState.current.value === "") {
+            empCrntState.current.parentNode.classList.add("error")
+        } else {
+            empCrntState.current.parentNode.classList.remove("error")
+        }
+    }
+
+    // On CLick of Present address Next Btn
+    let presentAddressNext = () => {
+        validatePresentDnO()
+        validateEmpPersentVillage()
+        validateEmpPersentStreetName()
+        validateEmpPersentMandal()
+        validateEmpPersentDistrict()
+        validateEmpPersentState()
+
+        const isValidateempCrntDNo = empCrntDNo.current.value !== "";
+        const isValidateempVillage = empVillage.current.value !== "";
+        const isValidateempCrntStreet = empCrntStreet.current.value !== "";
+        const isValidateempCrntMandal = empCrntMandal.current.value !== "";
+        const isValidateempCrntDistrict = empCrntDistrict.current.value !== "";
+        const isValidateempCrntState = empCrntState.current.value !== "";
+
+        if (
+            isValidateempCrntDNo &&
+            isValidateempVillage &&
+            isValidateempCrntStreet &&
+            isValidateempCrntMandal &&
+            isValidateempCrntDistrict &&
+            isValidateempCrntState
+
+        ) {
+            onPresentAddressNext()
+            console.log("sucess")
+
+        } else {
+            console.log("error");
+
+        }
+
+    }
+
+    let presentAddressPrevious = () => {
+        onPresentAddressPrevious()
+
+    }
+
+
+
     return (
         <div id="peresentAddress">
-            <h4>Peresent Address</h4>
+            <h4>3. Peresent Address</h4>
             <hr></hr>
             <div className="row">
                 <InputText
@@ -17,7 +114,9 @@ export default function PeresentAddress() {
                     inputName="empCrntDNo"
                     // inputVal=""
                     required="required"
-                // eventHandler = ""
+                    eventHandler={validatePresentDnO}
+                    useref={empCrntDNo}
+                    errorMsg="Enter D.No"
                 />
 
                 <InputText
@@ -29,7 +128,9 @@ export default function PeresentAddress() {
                     inputName="empVillage"
                     // inputVal=""
                     required="required"
-                // eventHandler = ""
+                    eventHandler={validateEmpPersentVillage}
+                    useref={empVillage}
+                    errorMsg="Enter Village / Town"
                 />
 
             </div>
@@ -44,7 +145,10 @@ export default function PeresentAddress() {
                     inputName="empCrntStreet"
                     // inputVal=""
                     required="required"
-                // eventHandler = ""
+                    eventHandler={validateEmpPersentStreetName}
+                    useref={empCrntStreet}
+                    errorMsg="Enter Street Name"
+
                 />
 
                 <InputText
@@ -56,7 +160,9 @@ export default function PeresentAddress() {
                     inputName="empCrntMandal"
                     // inputVal=""
                     required="required"
-                // eventHandler = ""
+                    eventHandler={validateEmpPersentMandal}
+                    useref={empCrntMandal}
+                    errorMsg="Enter Mandal"
                 />
 
             </div>
@@ -71,7 +177,9 @@ export default function PeresentAddress() {
                     inputName="empCrntDistrict"
                     // inputVal=""
                     required="required"
-                // eventHandler = ""
+                    eventHandler={validateEmpPersentDistrict}
+                    useref={empCrntDistrict}
+                    errorMsg="Enter District"
                 />
 
                 <InputText
@@ -83,7 +191,9 @@ export default function PeresentAddress() {
                     inputName="empCrntState"
                     // inputVal=""
                     required="required"
-                // eventHandler = ""
+                    eventHandler={validateEmpPersentState}
+                    useref={empCrntState}
+                    errorMsg="Enter State"
                 />
             </div>
             <Button
@@ -91,14 +201,14 @@ export default function PeresentAddress() {
                 btnID="presentAddressNextBtn"
                 btnClass="btn primery"
                 btnText="Next"
-            // clickHandler = {}
+                clickHandler={presentAddressNext}
             />
             <Button
                 btnType="button"
                 btnID="presentAddressPreBtn"
                 btnClass="btn primery"
                 btnText="Previous"
-            // clickHandler = {}
+                clickHandler={presentAddressPrevious}
             />
 
         </div>

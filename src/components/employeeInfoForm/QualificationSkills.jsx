@@ -4,10 +4,20 @@ import InputText from '../formElements/InputText';
 import Button from '../formElements/Button';
 
 
-export default function QualificationSkills() {
+export default function QualificationSkills({ onQualificationNext, onQualificationPrevious }) {
+
+    let qualificationNext = () => {
+        onQualificationNext()
+
+    }
+    let qualificationPrevious = () => {
+        onQualificationPrevious()
+
+    }
+
     return (
         <div id='qualificationSkills'>
-            <h4>Qualification & Skills Details</h4>
+            <h4>5. Qualification & Skills Details</h4>
             <hr></hr>
             <div className="row">
                 {/* Qualification */}
@@ -96,7 +106,7 @@ export default function QualificationSkills() {
                 btnID="qualificationNextBtn"
                 btnClass="btn primery"
                 btnText="Next"
-            // clickHandler = {}
+                clickHandler={qualificationNext}
             />
 
             <Button
@@ -104,7 +114,7 @@ export default function QualificationSkills() {
                 btnID="qualificationPreBtn"
                 btnClass="btn primery"
                 btnText="Previous"
-            // clickHandler = {}
+                clickHandler={qualificationPrevious}
             />
 
 

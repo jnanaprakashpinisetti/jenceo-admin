@@ -4,7 +4,7 @@ import InputRadio from '../formElements/InputRadio';
 import InputDate from '../formElements/InputDate';
 import Button from '../formElements/Button';
 
-export default function BasicInfo() {
+export default function BasicInfo({ onBasicInfoNext }) {
     let date = new Date();
     let years = date.getFullYear();
     let month = String(date.getMonth() + 1).padStart(2, '0');
@@ -195,7 +195,7 @@ export default function BasicInfo() {
             isLocalIdValid
         ) {
             console.log("All fields are valid. Proceeding to the next step...");
-            // Add logic to proceed to the next step
+            onBasicInfoNext(); // Call the onNext function passed from the parent
         } else {
             console.log("Please fix the errors before proceeding.");
         }
@@ -203,7 +203,7 @@ export default function BasicInfo() {
 
     return (
         <div id="empBasicInfo">
-            <h4>Employee Basic Information</h4>
+            <h4>1. Basic Information</h4>
             <hr />
             {/* Basic Info Section */}
             <div className="row">
@@ -291,12 +291,13 @@ export default function BasicInfo() {
                     htmlFor="empYears"
                     star="*"
                     labelName="Years"
-                    type="number"
+                    type="tel"
                     idName="empYears"
                     inputName="empYears"
                     required="required"
                     min='18'
                     max='50'
+                    maxLength='2'
                     eventHandler={validateYears}
                     errorMsg="Enter Years"
                     useref={empYears}
@@ -326,7 +327,7 @@ export default function BasicInfo() {
                     htmlFor="empMob1"
                     star="*"
                     labelName="Mobile No-1"
-                    type="number"
+                    type="tel"
                     idName="empMob1"
                     inputName="empMob1"
                     required="required"
@@ -335,11 +336,12 @@ export default function BasicInfo() {
                     errorMsg="Enter Mobile No"
                     errorMgsId="empBobile1Erro"
                     errorUseref={empBobile1Erro}
+                    maxLength="10"
                 />
                 <InputText
                     htmlFor="empMob2"
                     labelName="Mobile No-2"
-                    type="number"
+                    type="tel"
                     idName="empMob2"
                     inputName="empMob2"
                     required={false}
@@ -348,6 +350,7 @@ export default function BasicInfo() {
                     errorMsg="Mobile No should be 10 digits"
                     errorMgsId="empBobile1Erro"
                     errorUseref={empBobile2Erro}
+                    maxLength="10"
                 />
             </div>
 
@@ -356,7 +359,7 @@ export default function BasicInfo() {
                     htmlFor="empAadhar"
                     star="*"
                     labelName="Aadhar No"
-                    type="number"
+                    type="tel"
                     idName="empAadhar"
                     inputName="empAadhar"
                     required="required"
@@ -367,6 +370,7 @@ export default function BasicInfo() {
                     errorMsg="Enter Aadhar No"
                     errorMgsId="aadharError"
                     errorUseref={empAadharNoErro}
+                    maxLength="12"
                 />
 
                 <InputText

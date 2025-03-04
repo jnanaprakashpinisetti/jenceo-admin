@@ -133,6 +133,9 @@ form {
         height: 100px;
         border: 1px solid $sec-white;
     }
+    .form-label {
+        white-space: nowrap;
+    }
 
 
 }

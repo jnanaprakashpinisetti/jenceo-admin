@@ -1,11 +1,118 @@
-import React from 'react'
+import React, { useRef } from 'react'
 import InputText from '../formElements/InputText';
 import Button from '../formElements/Button';
+import { useReducer } from 'react';
 
-export default function PermanentAddress() {
+export default function PermanentAddress({ onPermanentAddressNext, onPermanentAddressPrevious }) {
+
+    let empPerDNo = useRef(null);
+    let empVillage = useReducer(null)
+    let empPerStreet = useReducer(null)
+    let empPerMandal = useReducer(null)
+    let empPerDistrict = useReducer(null)
+    let empPerState = useReducer(null)
+
+
+    // Validate Door No
+    let validateEmpPerDno = () => {
+        if (empPerDNo.current.value === "") {
+            empPerDNo.current.parentNode.classList.add("error")
+            return false
+        } else {
+            empPerDNo.current.parentNode.classList.remove("error")
+            return true
+        }
+    }
+
+    // Validate Village / Town
+    let validateEmpPerVillage = () => {
+        if (empVillage.current.value === "") {
+            empVillage.current.parentNode.classList.add("error")
+            return false
+        } else {
+            empVillage.current.parentNode.classList.remove("error")
+            return true
+        }
+    }
+
+    // Validate Street
+    let validateEmpPerStreetName = () => {
+        if (empPerStreet.current.value === "") {
+            empPerStreet.current.parentNode.classList.add("error")
+            return false
+        } else {
+            empPerStreet.current.parentNode.classList.remove("error")
+            return true
+        }
+    }
+    // Validate Street
+    let validateEmpPerMandal = () => {
+        if (empPerMandal.current.value === "") {
+            empPerMandal.current.parentNode.classList.add("error")
+            return false
+        } else {
+            empPerMandal.current.parentNode.classList.remove("error")
+            return true
+        }
+    }
+
+    // Validate District
+    let validateEmpPerDistrict = () => {
+        if (empPerDistrict.current.value === "") {
+            empPerDistrict.current.parentNode.classList.add("error")
+        } else {
+            empPerDistrict.current.parentNode.classList.remove("error")
+        }
+    }
+    // Validate District
+    let validateEmpPerState = () => {
+        if (empPerState.current.value === "") {
+            empPerState.current.parentNode.classList.add("error")
+        } else {
+            empPerState.current.parentNode.classList.remove("error")
+        }
+    }
+
+
+
+
+    let permanentAddressNext = () => {
+        validateEmpPerDno()
+        validateEmpPerVillage()
+        validateEmpPerStreetName()
+        validateEmpPerMandal()
+        validateEmpPerDistrict()
+        validateEmpPerState()
+
+        const isValidateEmpPerDno = empPerDNo.current.value !== "";
+        const isValidateEmpPerVillage = empVillage.current.value !== "";
+        const isValidateEmpPerStreetName = empPerStreet.current.value !== "";
+        const isValidateEmpPerMandal = empPerMandal.current.value !== "";
+        const isValidateEmpPerDistrict = empPerDistrict.current.value !== "";
+        const isValidateEmpPerState = empPerState.current.value !== "";
+
+        if (
+            isValidateEmpPerDno &&
+            isValidateEmpPerVillage &&
+            isValidateEmpPerStreetName &&
+            isValidateEmpPerMandal &&
+            isValidateEmpPerDistrict &&
+            isValidateEmpPerState) {
+            console.log("all fields valide");
+            onPermanentAddressNext()
+
+
+        } else {
+            console.log("erro")
+        }
+    }
+
+    let permanentAddressPrevious = () => {
+        onPermanentAddressPrevious()
+    }
     return (
         <div id="permanentAddress">
-            <h4>Permanent Address</h4>
+            <h4>2. Permanent Address</h4>
             <hr></hr>
 
             {/****** Permanent Address starts ******/}
@@ -19,7 +126,9 @@ export default function PermanentAddress() {
                     inputName="empPerDNo"
                     // inputVal=""
                     required="required"
-                // eventHandler = ""
+                    eventHandler={validateEmpPerDno}
+                    useref={empPerDNo}
+                    errorMsg="Enter D.No"
                 />
 
                 <InputText
@@ -31,7 +140,9 @@ export default function PermanentAddress() {
                     inputName="empVillage"
                     // inputVal=""
                     required="required"
-                // eventHandler = ""
+                    eventHandler={validateEmpPerVillage}
+                    useref={empVillage}
+                    errorMsg="Enter Village / Yown"
                 />
 
             </div>
@@ -46,7 +157,9 @@ export default function PermanentAddress() {
                     inputName="empPerStreet"
                     // inputVal=""
                     required="required"
-                // eventHandler = ""
+                    eventHandler={validateEmpPerStreetName}
+                    useref={empPerStreet}
+                    errorMsg="Enter Street Name"
                 />
 
                 <InputText
@@ -58,7 +171,9 @@ export default function PermanentAddress() {
                     inputName="empPerMandal"
                     // inputVal=""
                     required="required"
-                // eventHandler = ""
+                    eventHandler={validateEmpPerMandal}
+                    useref={empPerMandal}
+                    errorMsg="Enter Mandal"
                 />
 
             </div>
@@ -73,7 +188,9 @@ export default function PermanentAddress() {
                     inputName="empPerDistrict"
                     // inputVal=""
                     required="required"
-                // eventHandler = ""
+                    eventHandler={validateEmpPerDistrict}
+                    useref={empPerDistrict}
+                    errorMsg="Enter District"
                 />
 
                 <InputText
@@ -85,7 +202,9 @@ export default function PermanentAddress() {
                     inputName="empPerState"
                     // inputVal=""
                     required="required"
-                // eventHandler = ""
+                    eventHandler={validateEmpPerState}
+                    useref={empPerState}
+                    errorMsg="Enter State"
                 />
             </div>
             <Button
@@ -93,14 +212,14 @@ export default function PermanentAddress() {
                 btnID="permanentAddressNextBtn"
                 btnClass="btn primery"
                 btnText="Next"
-            // clickHandler = {}
+                clickHandler={permanentAddressNext}
             />
             <Button
                 btnType="button"
                 btnID="permanentAddressPreBtn"
                 btnClass="btn primery"
                 btnText="Previous"
-            // clickHandler = {}
+                clickHandler={permanentAddressPrevious}
             />
 
         </div>

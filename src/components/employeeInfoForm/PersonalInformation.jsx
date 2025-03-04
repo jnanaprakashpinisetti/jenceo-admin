@@ -4,11 +4,21 @@ import InputRadio from '../formElements/InputRadio';
 import InputDate from '../formElements/InputDate';
 import Button from '../formElements/Button';
 
-export default function PersonalInformation() {
+export default function PersonalInformation({ onPermanentAddressNext, onPermanentAddressPrevious }) {
+
+  let personalInformationNext = () => {
+    onPermanentAddressNext()
+
+  }
+  let personalInformationPrevious = () => {
+    onPermanentAddressPrevious()
+
+  }
+
   return (
     <div id="personalInformation">
-         <h4>Personal Information</h4>
-         <hr></hr>
+      <h4>4. Personal Information</h4>
+      <hr></hr>
       {/* Personal Information start */}
       <div className="row">
         <label className='form-label'>
@@ -126,7 +136,7 @@ export default function PersonalInformation() {
         btnID="personalAddressNextBtn"
         btnClass="btn primery"
         btnText="Next"
-         // clickHandler = {}
+        clickHandler={personalInformationNext}
       />
 
       <Button
@@ -134,7 +144,7 @@ export default function PersonalInformation() {
         btnID="personalAddressPreBtn"
         btnClass="btn primery"
         btnText="Previous"
-         // clickHandler = {}
+        clickHandler={personalInformationPrevious}
       />
 
     </div>

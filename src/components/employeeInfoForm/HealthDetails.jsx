@@ -3,10 +3,18 @@ import InputText from '../formElements/InputText';
 import Button from '../formElements/Button';
 import CheckBox from '../formElements/CheckBox';
 
-export default function HealthDetails() {
+export default function HealthDetails({ onHealthDetailsNext, onHealthDetailsPrevious }) {
+
+    let healthDetailsNext = () => {
+        onHealthDetailsNext()
+    }
+    let healthDetailsPrevious = () => {
+        onHealthDetailsPrevious()
+    }
+
     return (
         <div id='healthDetails'>
-            <h4>Health Details</h4>
+            <h4>6. Health Details</h4>
             <hr></hr>
             <div className='checkBoxWrapper'>
                 <div className="row">
@@ -96,7 +104,7 @@ export default function HealthDetails() {
                 btnID="healthNextBtn"
                 btnClass="btn primery"
                 btnText="Next"
-            // clickHandler = {}
+                clickHandler={healthDetailsNext}
             />
 
             <Button
@@ -104,7 +112,7 @@ export default function HealthDetails() {
                 btnID="healthPreBtn"
                 btnClass="btn primery"
                 btnText="Previous"
-            // clickHandler = {}
+                clickHandler={healthDetailsPrevious}
             />
 
         </div>

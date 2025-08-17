@@ -47,6 +47,19 @@ const QualificationSkills = ({ formData, errors, handleChange, handleBlur, nextS
           />
           {errors.primarySkill && <div className="invalid-feedback">{errors.primarySkill}</div>}
         </div>
+
+        <div className="col-md-6">
+          <label htmlFor="primarySkill" className="form-label">Secondary Skill</label>
+          <input 
+            type="text" 
+            className={`form-control`}
+            id="secondarySkill" 
+            name="secondarySkill" 
+            value={formData.secondarySkill} 
+            onChange={handleChange}
+            onBlur={handleBlur}
+          />
+        </div>
         
         <div className="col-12">
           <label className="form-label">Work Experience<span className="star">*</span></label>

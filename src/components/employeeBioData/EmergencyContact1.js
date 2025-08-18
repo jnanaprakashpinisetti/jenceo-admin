@@ -56,7 +56,7 @@ const EmergencyContact1 = ({ formData, errors, handleChange, handleBlur, nextSte
         </div>
         
         <div className="col-md-6">
-          <label htmlFor="emergencyContact1.mandal" className="form-label">Mandal</label>
+          <label htmlFor="emergencyContact1.mandal" className="form-label">Mandal / District</label>
           <input 
             type="text" 
             className="form-control" 
@@ -81,6 +81,8 @@ const EmergencyContact1 = ({ formData, errors, handleChange, handleBlur, nextSte
         
         <div className="col-md-6">
           <label htmlFor="emergencyContact1.mobile1" className="form-label">Mobile-1<span className="star">*</span></label>
+          <div className="input-group">
+            <span className="input-group-text">+91</span>
           <input 
             type="tel" 
             className={`form-control ${errors.emergencyContact1?.mobile1 ? 'is-invalid' : ''}`}
@@ -97,9 +99,12 @@ const EmergencyContact1 = ({ formData, errors, handleChange, handleBlur, nextSte
           />
           {errors.emergencyContact1?.mobile1 && <div className="invalid-feedback">{errors.emergencyContact1.mobile1}</div>}
         </div>
+        </div>
         
         <div className="col-md-6">
           <label htmlFor="emergencyContact1.mobile2" className="form-label">Mobile-2</label>
+          <div className="input-group">
+            <span className="input-group-text">+91</span>
           <input 
             type="tel" 
             className={`form-control ${errors.emergencyContact1?.mobile2 ? 'is-invalid' : ''}`}
@@ -115,6 +120,7 @@ const EmergencyContact1 = ({ formData, errors, handleChange, handleBlur, nextSte
             maxLength={10}
           />
           {errors.emergencyContact1?.mobile2 && <div className="invalid-feedback">{errors.emergencyContact1.mobile2}</div>}
+        </div>
         </div>
         
         <div className="col-12 mt-4">

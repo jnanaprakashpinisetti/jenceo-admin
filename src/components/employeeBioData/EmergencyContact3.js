@@ -54,7 +54,7 @@ const EmergencyContact3 = ({ formData, handleChange, handleBlur, nextStep, prevS
         </div>
         
         <div className="col-md-6">
-          <label htmlFor="emergencyContact3.mandal" className="form-label">Mandal</label>
+          <label htmlFor="emergencyContact3.mandal" className="form-label">Mandal / District</label>
           <input 
             type="text" 
             className="form-control" 
@@ -79,6 +79,8 @@ const EmergencyContact3 = ({ formData, handleChange, handleBlur, nextStep, prevS
         
         <div className="col-md-6">
           <label htmlFor="emergencyContact3.mobile1" className="form-label">Mobile-1</label>
+          <div className="input-group">
+            <span className="input-group-text">+91</span>
           <input 
             type="tel" 
             className="form-control" 
@@ -94,9 +96,12 @@ const EmergencyContact3 = ({ formData, handleChange, handleBlur, nextStep, prevS
             maxLength={10}
           />
         </div>
+        </div>
         
         <div className="col-md-6">
           <label htmlFor="emergencyContact3.mobile2" className="form-label">Mobile-2</label>
+          <div className="input-group">
+            <span className="input-group-text">+91</span>
           <input 
             type="tel" 
             className="form-control" 
@@ -111,6 +116,7 @@ const EmergencyContact3 = ({ formData, handleChange, handleBlur, nextStep, prevS
             onBlur={handleBlur}
             maxLength={10}
           />
+        </div>
         </div>
         
         <div className="col-12 mt-4">

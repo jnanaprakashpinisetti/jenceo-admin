@@ -18,6 +18,8 @@ const MultiStepForm = () => {
 
   const [formData, setFormData] = useState({
     // Basic Information
+    idNo: "",
+    date: "",
     firstName: "",
     lastName: "",
     gender: "",
@@ -159,6 +161,9 @@ const MultiStepForm = () => {
 
     switch (step) {
       case 1:
+        if (formData.idNo.trim().length<7) newErrors.idNo = "Enter Valid ID No";
+        if (!formData.idNo.trim()) newErrors.idNo = "Enter ID No";
+        if (!formData.date) newErrors.date = "Enter Date of Joining";
         if (!formData.firstName.trim())
           newErrors.firstName = "First Name is required";
         if (!formData.lastName.trim())

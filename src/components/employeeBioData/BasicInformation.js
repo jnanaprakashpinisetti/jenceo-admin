@@ -99,6 +99,8 @@ const BasicInformation = ({ formData, errors, handleChange, handleBlur, nextStep
         
         <div className="col-md-6">
           <label htmlFor="mobileNo1" className="form-label">Mobile No-1<span className="star">*</span></label>
+          <div className="input-group">
+            <span className="input-group-text">+91</span>
           <input 
             type="tel" 
             className={`form-control ${errors.mobileNo1 ? 'is-invalid' : ''}`}
@@ -111,9 +113,12 @@ const BasicInformation = ({ formData, errors, handleChange, handleBlur, nextStep
           />
           {errors.mobileNo1 && <div className="invalid-feedback">{errors.mobileNo1}</div>}
         </div>
+        </div>
         
         <div className="col-md-6">
           <label htmlFor="mobileNo2" className="form-label">Mobile No-2</label>
+          <div className="input-group">
+            <span className="input-group-text">+91</span>
           <input 
             type="tel" 
             className={`form-control ${errors.mobileNo2 ? 'is-invalid' : ''}`}
@@ -125,6 +130,7 @@ const BasicInformation = ({ formData, errors, handleChange, handleBlur, nextStep
             maxLength={10}
           />
           {errors.mobileNo2 && <div className="invalid-feedback">{errors.mobileNo2}</div>}
+        </div>
         </div>
         
         <div className="col-md-6">

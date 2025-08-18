@@ -64,8 +64,8 @@ const MultiStepForm = () => {
     qualification: "",
     schoolCollege: "",
     primarySkill: "",
-    secondarySkill: "",
-    workExperience: [],
+    workExperince: "",
+    workingSkills: [],
     motherTongue: "",
     languages: "",
 
@@ -242,8 +242,8 @@ const MultiStepForm = () => {
           newErrors.qualification = "Qualification is required";
         if (!formData.primarySkill)
           newErrors.primarySkill = "Primary Skill is required";
-        if (formData.workExperience.length === 0)
-          newErrors.workExperience = "At least one work experience is required";
+        if (formData.workingSkills.length === 0)
+          newErrors.workingSkills = "At least one work experience is required";
         if (!formData.motherTongue)
           newErrors.motherTongue = "Mother Tongue is required";
         if (!formData.languages) newErrors.languages = "Languages are required";
@@ -353,7 +353,7 @@ const MultiStepForm = () => {
     }
 
     if (type === "checkbox") {
-      if (name === "workExperience" || name === "healthIssues") {
+      if (name === "workingSkills" || name === "healthIssues") {
         setFormData((prev) => ({
           ...prev,
           [name]: checked

@@ -1,5 +1,5 @@
 const QualificationSkills = ({ formData, errors, handleChange, handleBlur, nextStep, prevStep }) => {
-  const workExperienceOptions = [
+  const workingSkillsOptions = [
     'Cook', 'Baby Care Cook', 'House Made', 
     'Nursing', 'Elder Care', 'Patient Care', 'Others'
   ];
@@ -49,13 +49,13 @@ const QualificationSkills = ({ formData, errors, handleChange, handleBlur, nextS
         </div>
 
         <div className="col-md-6">
-          <label htmlFor="primarySkill" className="form-label">Secondary Skill</label>
+          <label htmlFor="primarySkill" className="form-label">Work Experince</label>
           <input 
             type="text" 
             className={`form-control`}
-            id="secondarySkill" 
-            name="secondarySkill" 
-            value={formData.secondarySkill} 
+            id="workExperince" 
+            name="workExperince" 
+            value={formData.workExperince} 
             onChange={handleChange}
             onBlur={handleBlur}
           />
@@ -63,16 +63,16 @@ const QualificationSkills = ({ formData, errors, handleChange, handleBlur, nextS
         
         <div className="col-12">
           <label className="form-label">Work Experience<span className="star">*</span></label>
-          <div className={`d-flex flex-wrap gap-3 ${errors.workExperience ? 'is-invalid' : ''}`}>
-            {workExperienceOptions.map(option => (
+          <div className={`d-flex flex-wrap gap-3 ${errors.workingSkills ? 'is-invalid' : ''}`}>
+            {workingSkillsOptions.map(option => (
               <div className="form-check" key={option}>
                 <input
                   className="form-check-input"
                   type="checkbox"
-                  name="workExperience"
+                  name="workingSkills"
                   id={`work-${option}`}
                   value={option}
-                  checked={formData.workExperience.includes(option)}
+                  checked={formData.workingSkills.includes(option)}
                   onChange={handleChange}
                   onBlur={handleBlur}
                 />
@@ -82,7 +82,7 @@ const QualificationSkills = ({ formData, errors, handleChange, handleBlur, nextS
               </div>
             ))}
           </div>
-          {errors.workExperience && <div className="invalid-feedback d-block">{errors.workExperience}</div>}
+          {errors.workingSkills && <div className="invalid-feedback d-block">{errors.workingSkills}</div>}
         </div>
         
         <div className="col-md-6">

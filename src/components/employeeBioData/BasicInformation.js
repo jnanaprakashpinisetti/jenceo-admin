@@ -9,6 +9,37 @@ const BasicInformation = ({ formData, errors, handleChange, handleBlur, nextStep
       <h3 className="mb-4">Basic Information</h3>
       <div className="row g-3">
         <div className="col-md-6">
+          <label htmlFor="idNo" className="form-label">ID Number<span className="star">*</span></label>
+          <input 
+            type="text" 
+            className={`form-control ${errors.idNo ? 'is-invalid' : ''}`}
+            id="idNo" 
+            name="idNo" 
+            value={formData.idNo} 
+            onChange={handleChange}
+            onBlur={handleBlur}
+            maxLength={7}
+          />
+          {errors.idNo && <div className="invalid-feedback">{errors.idNo}</div>}
+        </div>
+
+        <div className="col-md-6">
+          <label htmlFor="date" className="form-label">Date Of Joining<span className="star">*</span></label>
+          <input
+            type="date"
+            className={`form-control ${errors.date ? 'is-invalid' : ''}`}
+            id="date"
+            name="date"
+            value={formData.date}
+            onChange={handleChange}
+            onBlur={handleBlur}
+            min={new Date(Date.now() - 20 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]}
+            max={new Date().toISOString().split('T')[0]}
+          />
+          {errors.date && <div className="invalid-feedback">{errors.date}</div>}
+        </div>
+
+        <div className="col-md-6">
           <label htmlFor="firstName" className="form-label">First Name<span className="star">*</span></label>
           <input 
             type="text" 

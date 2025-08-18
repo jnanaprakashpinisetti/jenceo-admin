@@ -61,12 +61,14 @@ const MultiStepForm = () => {
     qualification: '',
     schoolCollege: '',
     primarySkill: '',
+    secondarySkill: '',
     workExperience: [],
     motherTongue: '',
     languages: '',
     
     // Health Details
     healthIssues: [],
+    otherIssues: '',
     
     // Emergency Contacts
     emergencyContact1: {

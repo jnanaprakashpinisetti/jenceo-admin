@@ -6,7 +6,7 @@ const BankDetails = ({ formData, handleChange, handleBlur, handleFileChange, pre
         <div className="col-md-6">
           <label htmlFor="accountNo" className="form-label">Account No</label>
           <input 
-            type="text" 
+            type="number" 
             className="form-control" 
             id="accountNo" 
             name="accountNo" 
@@ -65,6 +65,7 @@ const BankDetails = ({ formData, handleChange, handleBlur, handleFileChange, pre
             value={formData.phonePayNo} 
             onChange={handleChange}
             onBlur={handleBlur}
+            maxLength={10}
           />
         </div>
         
@@ -91,6 +92,7 @@ const BankDetails = ({ formData, handleChange, handleBlur, handleFileChange, pre
             value={formData.googlePayNo} 
             onChange={handleChange}
             onBlur={handleBlur}
+            maxLength={10}
           />
         </div>
         
@@ -105,6 +107,49 @@ const BankDetails = ({ formData, handleChange, handleBlur, handleFileChange, pre
             onChange={handleChange}
             onBlur={handleBlur}
           />
+        </div>
+        <div className="col-md-6">
+          <label htmlFor="basicSalary" className="form-label">Basic salary<span className="star">*</span></label>
+          <input 
+            type="text" 
+            className={`form-control ${errors.basicSalary ? 'is-invalid' : ''}`}
+            id="basicSalary" 
+            name="basicSalary" 
+            value={formData.basicSalary} 
+            onChange={handleChange}
+            onBlur={handleBlur}
+            maxLength={5}
+          />
+           {errors.basicSalary && <div className="invalid-feedback">{errors.basicSalary}</div>}
+        </div>
+        <div className="col-md-6">
+          <label htmlFor="pageNo" className="form-label">Page No<span className="star">*</span></label>
+          <input 
+            type="text" 
+            className={`form-control ${errors.pageNo ? 'is-invalid' : ''}`}
+            id="pageNo" 
+            name="pageNo" 
+            value={formData.pageNo} 
+            onChange={handleChange}
+            onBlur={handleBlur}
+          />
+           {errors.pageNo && <div className="invalid-feedback">{errors.pageNo}</div>}
+        </div>
+
+        <div className="col-12">
+          <label htmlFor="aboutEmployeee" className="form-label">About Employee</label>
+          <textarea
+          className="form-control"
+          id="aboutEmployeee" 
+          name="aboutEmployeee" 
+          value={formData.aboutEmployeee} 
+          onChange={handleChange}
+          onBlur={handleBlur}
+          rows="4" 
+          cols="50"
+          >
+            
+          </textarea>
         </div>
         
         <div className="col-12">
@@ -123,12 +168,13 @@ const BankDetails = ({ formData, handleChange, handleBlur, handleFileChange, pre
         </div>
         
         <div className="col-12 mt-4">
+        <button type="button" className="btn btn-success float-end" onClick={handleSubmit}>
+            <i className="bi bi-save"></i> Save
+          </button>
           <button type="button" className="btn btn-secondary me-2" onClick={prevStep}>
             <i className="bi bi-arrow-left"></i> Previous
           </button>
-          <button type="button" className="btn btn-success float-end" onClick={handleSubmit}>
-            <i className="bi bi-save"></i> Save
-          </button>
+         
         </div>
       </div>
     </div>

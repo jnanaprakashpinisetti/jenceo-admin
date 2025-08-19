@@ -1,5 +1,6 @@
 import React from 'react';
 import EmployeeBioDataForm from '../components/EmployeeBioDataForm'
+import DisplayEmployee from '../components/DisplayEmployee'
 
 export default function Employees() {
   return (
@@ -9,7 +10,9 @@ export default function Employees() {
           <div className="col-md-5">
             <EmployeeBioDataForm />
           </div>
-          <div className="col-md-7">Emp Bio Data</div>
+          <div className="col-md-7">
+            <DisplayEmployee />
+          </div>
 
 
         </div>

@@ -1,10 +1,9 @@
 import React from 'react'
 
-export default function Sellers() {
+export default function EmployeeAggrementTel() {
   return (
     <div className="layout-body">
-        Sellers
-      
+       Worker Aggrement Tel
     </div>
   )
 }

@@ -10,8 +10,6 @@ import close from "../assets/close.svg";
 import arrow from "../assets/arrow.svg";
 import home from "../assets/home.svg";
 import employee from "../assets/employee.svg";
-import sellers from "../assets/sellers.svg";
-import shop from "../assets/shops.svg";
 import invest from "../assets/invest.svg";
 import purchase from "../assets/purchase.svg";
 import sales from "../assets/sales.svg";
@@ -24,10 +22,17 @@ import accounts from "../assets/accounts.svg";
 import operations from "../assets/Operations.svg";
 
 
-import Employees from '../pages/Employees';
 import Dashboard from '../pages/Dashboard';
-import Sellers from '../pages/Sellers';
-import Shops from '../pages/Shops';
+// Employee Data
+import Employees from '../pages/Employees';
+import EmployeeAggrementEng from '../pages/WorkerAggrementEng';
+import EmployeeAggrementTel from '../pages/WorkerAggrementTel';
+import EmployeeOfferEng from '../pages/WorkerOfferEng';
+import EmployeeOfferTel from '../pages/WorkerOfferTel';
+import EmployeeBioData from '../pages/WorkerBioData';
+import ExistingEmployees from '../pages/ExistingWorker';
+
+
 import Investments from '../pages/Investments';
 import Orders from '../pages/Orders';
 import Reports from '../pages/Reports';
@@ -78,15 +83,28 @@ export default function LeftNav() {
                             <NavLink to='/' className="nav-link" title='Dash Board'> <img src={home} alt="" /> Dash Board</NavLink>
                         </li>
                         <li className="nav-item">
-                            <NavLink to='Employees' className="nav-link" title='Employees'> <img src={employee} alt="" /> Employees</NavLink>
+                            <NavLink to='Employees' className="nav-link" title='Employees'> <img src={employee} alt="" />Worker Data </NavLink>
                         </li>
                         <li className="nav-item">
-                            <NavLink to='Sellers' className="nav-link" title='Sellers'> <img src={sellers} alt="" /> Sellers</NavLink>
+                            <NavLink to='EmployeeAggrementEng' className="nav-link" title='Employee Aggrement English'> <img src={employee} alt="" />Worker Agg Eng</NavLink>
                         </li>
                         <li className="nav-item">
-                            <NavLink to='Shops' className="nav-link" title='Shops'> <img src={shop} alt="" /> Shops</NavLink>
+                            <NavLink to='EmployeeAggrementTel' className="nav-link" title='Employee Aggrement Telugu'> <img src={employee} alt="" />Worker Agg Tel</NavLink>
+                        </li>
+                        <li className="nav-item">
+                            <NavLink to='EmployeeOfferEng' className="nav-link" title='Employee Offter English'> <img src={employee} alt="" />Worker Offer Eng</NavLink>
+                        </li>
+                        <li className="nav-item">
+                            <NavLink to='EmployeeOfferTel' className="nav-link" title='Employee Offter Telugu'> <img src={employee} alt="" />Worker Offer Tel</NavLink>
+                        </li>
+                        <li className="nav-item">
+                            <NavLink to='EmployeeBioData' className="nav-link" title='Employee Bio Data'> <img src={employee} alt="" />Worker Bio Data</NavLink>
+                        </li>
+                        <li className="nav-item">
+                            <NavLink to='ExistingEmployees' className="nav-link" title='Existing Employees'> <img src={employee} alt="" />Exist Worker</NavLink>
                         </li>
                         <hr />
+
                         <li className="nav-item">
                             <NavLink to='Investments' className="nav-link" title='Investments'> <img src={invest} alt="" /> Investments</NavLink>
                         </li>
@@ -127,8 +145,14 @@ export default function LeftNav() {
             <Routes>
                 <Route path="/" element={<Dashboard />} />
                 <Route path="Employees" element={<Employees />} />
-                <Route path="Sellers" element={<Sellers />} />
-                <Route path="Shops" element={<Shops />} />
+                <Route path="EmployeeAggrementEng" element={<EmployeeAggrementEng />} />
+                <Route path="EmployeeAggrementTel" element={<EmployeeAggrementTel />} />
+                <Route path="EmployeeOfferEng" element={<EmployeeOfferEng />} />
+                <Route path="EmployeeOfferTel" element={<EmployeeOfferTel />} />
+                <Route path="EmployeeBioData" element={<EmployeeBioData />} />
+                <Route path="ExistingEmployees" element={<ExistingEmployees />} />
+
+
                 <Route path="Investments" element={<Investments />} />
                 <Route path="Orders" element={<Orders />} />
                 <Route path="Reports" element={<Reports />} />

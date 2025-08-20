@@ -1,7 +1,61 @@
+import React, { useState, useEffect } from 'react';
+
 const PresentAddress = ({ formData, errors, handleChange, handleBlur, nextStep, prevStep }) => {
+  const [sameAsPermanent, setSameAsPermanent] = useState(false);
+
+  // Effect to handle checkbox state changes
+  useEffect(() => {
+    if (sameAsPermanent) {
+      // Copy permanent address data to present address
+      const addressFields = [
+        'Address', 'Street', 'Landmark', 'Village', 
+        'Mandal', 'District', 'State', 'Pincode'
+      ];
+      
+      addressFields.forEach(field => {
+        const permanentField = `permanent${field}`;
+        const presentField = `present${field}`;
+        
+        if (formData[permanentField]) {
+          // Create a synthetic event to update the form data
+          const syntheticEvent = {
+            target: {
+              name: presentField,
+              value: formData[permanentField]
+            }
+          };
+          handleChange(syntheticEvent);
+        }
+      });
+    }
+  }, [sameAsPermanent, formData, handleChange]);
+
+  const handleCheckboxChange = (e) => {
+    setSameAsPermanent(e.target.checked);
+  };
+
   return (
     <div>
       <h3 className="mb-4">Present Address</h3>
+      
+      {/* Same as Permanent Address Checkbox */}
+      <div className="row mb-4">
+        <div className="col-12">
+          <div className="form-check">
+            <input
+              className="form-check-input"
+              type="checkbox"
+              id="sameAsPermanent"
+              checked={sameAsPermanent}
+              onChange={handleCheckboxChange}
+            />
+            <label className="form-check-label" htmlFor="sameAsPermanent">
+              Same as Permanent Address
+            </label>
+          </div>
+        </div>
+      </div>
+      
       <div className="row g-3">
         <div className="col-6">
           <label htmlFor="presentAddress" className="form-label">Address / D.No<span className="star">*</span></label>
@@ -13,6 +67,7 @@ const PresentAddress = ({ formData, errors, handleChange, handleBlur, nextStep, 
             value={formData.presentAddress} 
             onChange={handleChange}
             onBlur={handleBlur}
+            disabled={sameAsPermanent}
           />
           {errors.presentAddress && <div className="invalid-feedback">{errors.presentAddress}</div>}
         </div>
@@ -27,6 +82,7 @@ const PresentAddress = ({ formData, errors, handleChange, handleBlur, nextStep, 
             value={formData.presentStreet} 
             onChange={handleChange}
             onBlur={handleBlur}
+            disabled={sameAsPermanent}
           />
           {errors.presentStreet && <div className="invalid-feedback">{errors.presentStreet}</div>}
         </div>
@@ -40,6 +96,7 @@ const PresentAddress = ({ formData, errors, handleChange, handleBlur, nextStep, 
             name="presentLandmark" 
             value={formData.presentLandmark} 
             onChange={handleChange}
+            disabled={sameAsPermanent}
           />
         </div>
         
@@ -53,6 +110,7 @@ const PresentAddress = ({ formData, errors, handleChange, handleBlur, nextStep, 
             value={formData.presentVillage} 
             onChange={handleChange}
             onBlur={handleBlur}
+            disabled={sameAsPermanent}
           />
           {errors.presentVillage && <div className="invalid-feedback">{errors.presentVillage}</div>}
         </div>
@@ -67,6 +125,7 @@ const PresentAddress = ({ formData, errors, handleChange, handleBlur, nextStep, 
             value={formData.presentMandal} 
             onChange={handleChange}
             onBlur={handleBlur}
+            disabled={sameAsPermanent}
           />
           {errors.presentMandal && <div className="invalid-feedback">{errors.presentMandal}</div>}
         </div>
@@ -81,6 +140,7 @@ const PresentAddress = ({ formData, errors, handleChange, handleBlur, nextStep, 
             value={formData.presentDistrict} 
             onChange={handleChange}
             onBlur={handleBlur}
+            disabled={sameAsPermanent}
           />
           {errors.presentDistrict && <div className="invalid-feedback">{errors.presentDistrict}</div>}
         </div>
@@ -95,6 +155,7 @@ const PresentAddress = ({ formData, errors, handleChange, handleBlur, nextStep, 
             value={formData.presentState} 
             onChange={handleChange}
             onBlur={handleBlur}
+            disabled={sameAsPermanent}
           />
           {errors.presentState && <div className="invalid-feedback">{errors.presentState}</div>}
         </div>
@@ -114,18 +175,18 @@ const PresentAddress = ({ formData, errors, handleChange, handleBlur, nextStep, 
             }}
             onBlur={handleBlur}
             maxLength={6}
+            disabled={sameAsPermanent}
           />
           {errors.presentPincode && <div className="invalid-feedback">{errors.presentPincode}</div>}
         </div>
         
         <div className="col-12 mt-4">
-                    <button type="button" className="btn btn-primary float-end" onClick={nextStep}>
+          <button type="button" className="btn btn-primary float-end" onClick={nextStep}>
             Next <i className="bi bi-arrow-right"></i>
           </button>
           <button type="button" className="btn btn-secondary me-2" onClick={prevStep}>
             <i className="bi bi-arrow-left"></i> Previous
           </button>
-
         </div>
       </div>
     </div>

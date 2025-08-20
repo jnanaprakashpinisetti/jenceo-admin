@@ -1,4 +1,39 @@
-const BankDetails = ({ formData, handleChange, handleBlur, handleFileChange, prevStep, handleSubmit, errors }) => {
+import React, { useState } from 'react';
+
+const BankDetails = ({ formData, handleChange, handleBlur, handleFileChange, prevStep, handleSubmit, errors,   isSubmitting  }) => {
+  const [imagePreview, setImagePreview] = useState(null);
+
+ // Handle file input change
+  const handleImageChange = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      // Validate file type
+      const validTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif'];
+      if (!validTypes.includes(file.type)) {
+        alert('Please select a valid image file (JPEG, PNG, GIF)');
+        e.target.value = '';
+        return;
+      }
+      
+      // Validate file size (max 2MB)
+      if (file.size > 2 * 1024 * 1024) {
+        alert('Image size should be less than 2MB');
+        e.target.value = '';
+        return;
+      }
+      
+      // Create preview
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        setImagePreview(e.target.result);
+      };
+      reader.readAsDataURL(file);
+      
+      // Call the parent handler
+      handleFileChange(e);
+    }
+  };
+
   return (
     <div className="bank-details-form">
       <h3 className="mb-4">Bank Account Details</h3>
@@ -6,10 +41,10 @@ const BankDetails = ({ formData, handleChange, handleBlur, handleFileChange, pre
         {/* Account Number */}
         <div className="col-md-6">
           <label htmlFor="accountNo" className="form-label">
-            Account No<span className="text-danger">*</span>
+            Account No
           </label>
           <input 
-            type="text"  // Changed from number to text to avoid scientific notation for long numbers
+            type="text"
             className={`form-control ${errors.accountNo ? 'is-invalid' : ''}`}
             id="accountNo" 
             name="accountNo" 
@@ -25,7 +60,7 @@ const BankDetails = ({ formData, handleChange, handleBlur, handleFileChange, pre
         {/* Bank Name */}
         <div className="col-md-6">
           <label htmlFor="bankName" className="form-label">
-            Bank Name<span className="text-danger">*</span>
+            Bank Name
           </label>
           <input 
             type="text" 
@@ -43,7 +78,7 @@ const BankDetails = ({ formData, handleChange, handleBlur, handleFileChange, pre
         {/* Branch Name */}
         <div className="col-md-6">
           <label htmlFor="branchName" className="form-label">
-            Branch Name<span className="text-danger">*</span>
+            Branch Name
           </label>
           <input 
             type="text" 
@@ -61,7 +96,7 @@ const BankDetails = ({ formData, handleChange, handleBlur, handleFileChange, pre
         {/* IFSC Code */}
         <div className="col-md-6">
           <label htmlFor="ifscCode" className="form-label">
-            IFSC Code<span className="text-danger">*</span>
+            IFSC Code
           </label>
           <input 
             type="text" 
@@ -127,13 +162,13 @@ const BankDetails = ({ formData, handleChange, handleBlur, handleFileChange, pre
               type="text" 
               className={`form-control ${errors.googlePayNo ? 'is-invalid' : ''}`}
               id="googlePayNo" 
-              name="googlePayNo" 
-              value={formData.googlePayNo} 
-              onChange={handleChange}
-              onBlur={handleBlur}
-              maxLength={10}
-              placeholder="Enter Google Pay number"
-            />
+            name="googlePayNo" 
+            value={formData.googlePayNo} 
+            onChange={handleChange}
+            onBlur={handleBlur}
+            maxLength={10}
+            placeholder="Enter Google Pay number"
+          />
           </div>
           {errors.googlePayNo && <div className="invalid-feedback">{errors.googlePayNo}</div>}
         </div>
@@ -165,14 +200,15 @@ const BankDetails = ({ formData, handleChange, handleBlur, handleFileChange, pre
           <div className="input-group">
             <span className="input-group-text">₹</span>
             <input 
-              type="number" 
+              type="text" 
               className={`form-control ${errors.basicSalary ? 'is-invalid' : ''}`}
               id="basicSalary" 
               name="basicSalary" 
               value={formData.basicSalary} 
               onChange={handleChange}
               onBlur={handleBlur}
-              min="0"
+              min="10000"
+              maxLength={5}
               step="0.01"
               placeholder="Enter basic salary"
             />
@@ -227,15 +263,15 @@ const BankDetails = ({ formData, handleChange, handleBlur, handleFileChange, pre
             className={`form-control ${errors.employeePhoto ? 'is-invalid' : ''}`}
             id="employeePhoto" 
             name="employeePhoto" 
-            onChange={handleFileChange}
+            onChange={handleImageChange}
             onBlur={handleBlur}
             accept=".jpg,.jpeg,.png,.gif"
           />
           {errors.employeePhoto && <div className="invalid-feedback">{errors.employeePhoto}</div>}
-          {formData.employeePhotoPreview && (
+          {imagePreview && (
             <div className="mt-2">
               <img 
-                src={formData.employeePhotoPreview} 
+                src={imagePreview} 
                 alt="Preview" 
                 className="img-thumbnail" 
                 style={{ maxWidth: '150px', maxHeight: '150px' }}
@@ -245,12 +281,24 @@ const BankDetails = ({ formData, handleChange, handleBlur, handleFileChange, pre
         </div>
         
         {/* Form Navigation */}
-        <div className="col-12 mt-4 ">
-                 <button type="button" className="btn btn-success" onClick={handleSubmit}>
-            Save Details
+<div className="col-12 mt-4">
+          <button 
+            type="button" 
+            className="btn btn-success me-2" 
+            onClick={handleSubmit}
+            disabled={isSubmitting} // Added disabled attribute
+          >
+            {isSubmitting ? (
+              <>
+                <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                Saving...
+              </>
+            ) : (
+              'Save Details'
+            )}
           </button>
           <button type="button" className="btn btn-secondary" onClick={prevStep}>
-             Previous
+            Previous
           </button>
         </div>
       </div>

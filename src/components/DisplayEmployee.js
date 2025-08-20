@@ -169,21 +169,21 @@ export default function DisplayEmployee() {
                                             title="View"
                                             onClick={() => handleView(employee)}
                                         >
-                                            <img src={viewIcon} alt="view Icon" style={{ opacity: 0.6, width: '20px', height: '20px' }} />
+                                            <img src={viewIcon} alt="view Icon" style={{ opacity: 0.6, width: '18px', height: '18px' }} />
                                         </button>
                                         <button
                                             className="btn btn-sm me-2"
                                             title="Edit"
                                             onClick={() => handleEdit(employee)}
                                         >
-                                            <img src={editIcon} alt="edit Icon" style={{ width: '20px', height: '20px' }} />
+                                            <img src={editIcon} alt="edit Icon" style={{ width: '15px', height: '15px' }} />
                                         </button>
                                         <button
                                             className="btn btn-sm"
                                             title="Delete"
                                             onClick={() => handleDelete(employee.id)}
                                         >
-                                            <img src={deleteIcon} alt="delete Icon" style={{ width: '20px', height: '20px' }} />
+                                            <img src={deleteIcon} alt="delete Icon" style={{ width: '14px', height: '14px' }} />
                                         </button>
                                     </div>
                                 </td>

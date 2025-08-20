@@ -1,12 +1,50 @@
 .modal {
-    display: block;;
+    display: block;
+    ;
     color: $sec-black;
-    background-color:#1e1e1eba;
+    background-color: #1e1e1eba;
+
     &.show {
         display: block;
     }
 
     .hide {
         display: none;
+    }
+}
+
+.modal-card-header {
+    padding: 5px 10px;
+    margin-bottom: 10px;
+    border-radius: 5px;
+}
+
+.viewEmployee {
+    .status {
+        display: none;
+    }
+
+    .form-control {
+        border: none;
+        background-color: transparent;
+        padding: 0;
+    }
+
+    .form-select {
+        background-color: transparent;
+        border: none;
+    }
+
+}
+
+.bio-info {
+    display: flex;
+    margin-bottom: 15px;
+    align-items: center;
+
+    label {
+        margin-bottom: 0;
+        min-width: 40%;
+        margin-left: 10px;
     }
 }

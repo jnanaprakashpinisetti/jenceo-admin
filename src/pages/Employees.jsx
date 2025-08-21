@@ -7,10 +7,10 @@ export default function Employees() {
     <div className="layout-body">
       <div className="container-fulid">
         <div className="row">
-          <div className="col-md-5">
+          <div className="col-md-4">
             <EmployeeBioDataForm />
           </div>
-          <div className="col-md-7">
+          <div className="col-md-8">
             <DisplayEmployee />
           </div>
 

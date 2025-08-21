@@ -25,10 +25,7 @@ import operations from "../assets/Operations.svg";
 import Dashboard from '../pages/Dashboard';
 // Employee Data
 import Employees from '../pages/Employees';
-import EmployeeAggrementEng from '../pages/WorkerAggrementEng';
-import EmployeeAggrementTel from '../pages/WorkerAggrementTel';
-import EmployeeOfferEng from '../pages/WorkerOfferEng';
-import EmployeeOfferTel from '../pages/WorkerOfferTel';
+import EmployeeAggrement from '../pages/WorkerAggrement';
 import EmployeeBioData from '../pages/WorkerBioData';
 import ExistingEmployees from '../pages/ExistingWorker';
 
@@ -86,17 +83,9 @@ export default function LeftNav() {
                             <NavLink to='Employees' className="nav-link" title='Employees'> <img src={employee} alt="" />Worker Data </NavLink>
                         </li>
                         <li className="nav-item">
-                            <NavLink to='EmployeeAggrementEng' className="nav-link" title='Employee Aggrement English'> <img src={employee} alt="" />Worker Agg Eng</NavLink>
+                            <NavLink to='EmployeeAggrement' className="nav-link" title='Employee Aggrement English'> <img src={employee} alt="" />Worker Aggremnt</NavLink>
                         </li>
-                        <li className="nav-item">
-                            <NavLink to='EmployeeAggrementTel' className="nav-link" title='Employee Aggrement Telugu'> <img src={employee} alt="" />Worker Agg Tel</NavLink>
-                        </li>
-                        <li className="nav-item">
-                            <NavLink to='EmployeeOfferEng' className="nav-link" title='Employee Offter English'> <img src={employee} alt="" />Worker Offer Eng</NavLink>
-                        </li>
-                        <li className="nav-item">
-                            <NavLink to='EmployeeOfferTel' className="nav-link" title='Employee Offter Telugu'> <img src={employee} alt="" />Worker Offer Tel</NavLink>
-                        </li>
+                        
                         <li className="nav-item">
                             <NavLink to='EmployeeBioData' className="nav-link" title='Employee Bio Data'> <img src={employee} alt="" />Worker Bio Data</NavLink>
                         </li>
@@ -145,10 +134,7 @@ export default function LeftNav() {
             <Routes>
                 <Route path="/" element={<Dashboard />} />
                 <Route path="Employees" element={<Employees />} />
-                <Route path="EmployeeAggrementEng" element={<EmployeeAggrementEng />} />
-                <Route path="EmployeeAggrementTel" element={<EmployeeAggrementTel />} />
-                <Route path="EmployeeOfferEng" element={<EmployeeOfferEng />} />
-                <Route path="EmployeeOfferTel" element={<EmployeeOfferTel />} />
+                <Route path="EmployeeAggrement" element={<EmployeeAggrement />} />
                 <Route path="EmployeeBioData" element={<EmployeeBioData />} />
                 <Route path="ExistingEmployees" element={<ExistingEmployees />} />
 

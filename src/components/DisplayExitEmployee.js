@@ -13,6 +13,11 @@ export default function DisplayEmployee() {
     const [selectedEmployee, setSelectedEmployee] = useState(null);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [isEditMode, setIsEditMode] = useState(false);
+    
+    // Pagination state
+    const [currentPage, setCurrentPage] = useState(1);
+    const [rowsPerPage, setRowsPerPage] = useState(10);
+    const [totalPages, setTotalPages] = useState(1);
 
     useEffect(() => {
         const fetchEmployees = () => {
@@ -28,22 +33,12 @@ export default function DisplayEmployee() {
                         });
 
                         // Sort employees by ID number in descending order
-                        const sortedEmployees = employeesData.sort((a, b) => {
-                            // Extract numeric part from ID (JW00001 -> 1, JW00025 -> 25)
-                            const getNumericId = (emp) => {
-                                const id = emp.idNo || emp.employeeId || '';
-                                if (id.startsWith('JW')) {
-                                    return parseInt(id.replace('JW', '')) || 0;
-                                }
-                                return 0;
-                            };
-
-                            return getNumericId(b) - getNumericId(a);
-                        });
-
+                        const sortedEmployees = sortEmployeesDescending(employeesData);
                         setEmployees(sortedEmployees);
+                        setTotalPages(Math.ceil(sortedEmployees.length / rowsPerPage));
                     } else {
                         setEmployees([]);
+                        setTotalPages(1);
                     }
                     setLoading(false);
                 });
@@ -56,9 +51,75 @@ export default function DisplayEmployee() {
         fetchEmployees();
 
         return () => {
-            firebaseDB.child("ExitEmployees").off('value'); // Fixed: Changed from EmployeeBioData to ExitEmployees
+            firebaseDB.child("ExitEmployees").off('value');
         };
     }, []);
+
+    // Update total pages when rowsPerPage changes
+    useEffect(() => {
+        setTotalPages(Math.ceil(employees.length / rowsPerPage));
+        setCurrentPage(1); // Reset to first page when rows per page changes
+    }, [employees, rowsPerPage]);
+
+    // Alternative simpler sorting method
+    const sortEmployeesDescending = (employeesData) => {
+        return employeesData.sort((a, b) => {
+            // Get the ID numbers
+            const idA = a.idNo || a.employeeId || '';
+            const idB = b.idNo || b.employeeId || '';
+
+            // For JW00001 pattern
+            if (idA.startsWith('JW') && idB.startsWith('JW')) {
+                const numA = parseInt(idA.replace('JW', '')) || 0;
+                const numB = parseInt(idB.replace('JW', '')) || 0;
+                return numB - numA;
+            }
+
+            // For numeric IDs
+            if (!isNaN(idA) && !isNaN(idB)) {
+                return parseInt(idB) - parseInt(idA);
+            }
+
+            // For string IDs
+            return idB.localeCompare(idA);
+        });
+    };
+
+    // Calculate current employees to display
+    const indexOfLastEmployee = currentPage * rowsPerPage;
+    const indexOfFirstEmployee = indexOfLastEmployee - rowsPerPage;
+    const currentEmployees = employees.slice(indexOfFirstEmployee, indexOfLastEmployee);
+
+    // Change page
+    const paginate = (pageNumber) => setCurrentPage(pageNumber);
+
+    // Handle rows per page change
+    const handleRowsPerPageChange = (e) => {
+        setRowsPerPage(parseInt(e.target.value));
+    };
+
+    // Generate page numbers for pagination
+    const pageNumbers = [];
+    for (let i = 1; i <= totalPages; i++) {
+        pageNumbers.push(i);
+    }
+
+    // Show limited page numbers with ellipsis for many pages
+    const getDisplayedPageNumbers = () => {
+        if (totalPages <= 7) {
+            return pageNumbers;
+        }
+        
+        if (currentPage <= 4) {
+            return [1, 2, 3, 4, 5, '...', totalPages];
+        }
+        
+        if (currentPage >= totalPages - 3) {
+            return [1, '...', totalPages - 4, totalPages - 3, totalPages - 2, totalPages - 1, totalPages];
+        }
+        
+        return [1, '...', currentPage - 1, currentPage, currentPage + 1, '...', totalPages];
+    };
 
     const handleView = (employee) => {
         setSelectedEmployee(employee);
@@ -98,12 +159,12 @@ export default function DisplayEmployee() {
 
     const handleSave = async (updatedEmployee) => {
         try {
-            // FIX: Update in ExitEmployees instead of EmployeeBioData
+            // Update in ExitEmployees
             await firebaseDB.child(`ExitEmployees/${updatedEmployee.id}`).update(updatedEmployee);
             setIsModalOpen(false);
             alert('Employee details updated successfully!');
             
-            // Optional: Force refresh the data
+            // Force refresh the data
             const snapshot = await firebaseDB.child("ExitEmployees").once('value');
             if (snapshot.exists()) {
                 const employeesData = [];
@@ -126,36 +187,35 @@ export default function DisplayEmployee() {
         setIsEditMode(false);
     };
 
-    // Alternative simpler sorting method
-    const sortEmployeesDescending = (employeesData) => {
-        return employeesData.sort((a, b) => {
-            // Get the ID numbers
-            const idA = a.idNo || a.employeeId || '';
-            const idB = b.idNo || b.employeeId || '';
-
-            // For JW00001 pattern
-            if (idA.startsWith('JW') && idB.startsWith('JW')) {
-                const numA = parseInt(idA.replace('JW', '')) || 0;
-                const numB = parseInt(idB.replace('JW', '')) || 0;
-                return numB - numA;
-            }
-
-            // For numeric IDs
-            if (!isNaN(idA) && !isNaN(idB)) {
-                return parseInt(idB) - parseInt(idA);
-            }
-
-            // For string IDs
-            return idB.localeCompare(idA);
-        });
-    };
-
     if (loading) return <div className="text-center my-5">Loading employees...</div>;
     if (error) return <div className="alert alert-danger">Error: {error}</div>;
     if (employees.length === 0) return <div className="alert alert-info">No employees found</div>;
 
     return (
         <div>
+            {/* Rows per page selector */}
+            <div className="d-flex justify-content-between align-items-center mb-3">
+                <div className="d-flex align-items-center">
+                    <span className="me-2">Show</span>
+                    <select 
+                        className="form-select form-select-sm" 
+                        style={{width: '80px'}}
+                        value={rowsPerPage}
+                        onChange={handleRowsPerPageChange}
+                    >
+                        <option value={10}>10</option>
+                        <option value={20}>20</option>
+                        <option value={30}>30</option>
+                        <option value={40}>40</option>
+                        <option value={50}>50</option>
+                    </select>
+                    <span className="ms-2">entries</span>
+                </div>
+                <div>
+                    Showing {indexOfFirstEmployee + 1} to {Math.min(indexOfLastEmployee, employees.length)} of {employees.length} entries
+                </div>
+            </div>
+
             <div className="table-responsive">
                 <table className="table table-dark table-hover">
                     <thead className="table-dark">
@@ -170,7 +230,7 @@ export default function DisplayEmployee() {
                         </tr>
                     </thead>
                     <tbody>
-                        {employees.map((employee) => (
+                        {currentEmployees.map((employee) => (
                             <tr key={employee.id}>
                                 <td>
                                     <strong>{employee.employeeId || employee.idNo || 'N/A'}</strong>
@@ -214,6 +274,51 @@ export default function DisplayEmployee() {
                     </tbody>
                 </table>
             </div>
+
+            {/* Pagination controls */}
+            {totalPages > 1 && (
+                <nav aria-label="Employee pagination">
+                    <ul className="pagination justify-content-center">
+                        <li className={`page-item ${currentPage === 1 ? 'disabled' : ''}`}>
+                            <button 
+                                className="page-link" 
+                                onClick={() => paginate(currentPage - 1)}
+                                disabled={currentPage === 1}
+                            >
+                                Previous
+                            </button>
+                        </li>
+                        
+                        {getDisplayedPageNumbers().map((number, index) => (
+                            <li 
+                                key={index} 
+                                className={`page-item ${number === currentPage ? 'active' : ''} ${number === '...' ? 'disabled' : ''}`}
+                            >
+                                {number === '...' ? (
+                                    <span className="page-link">...</span>
+                                ) : (
+                                    <button 
+                                        className="page-link" 
+                                        onClick={() => paginate(number)}
+                                    >
+                                        {number}
+                                    </button>
+                                )}
+                            </li>
+                        ))}
+                        
+                        <li className={`page-item ${currentPage === totalPages ? 'disabled' : ''}`}>
+                            <button 
+                                className="page-link" 
+                                onClick={() => paginate(currentPage + 1)}
+                                disabled={currentPage === totalPages}
+                            >
+                                Next
+                            </button>
+                        </li>
+                    </ul>
+                </nav>
+            )}
 
             {selectedEmployee && (
                 <EmployeeModal

@@ -4,11 +4,6 @@ import 'firebase/compat/firestore';
 import "firebase/compat/database";
 import 'firebase/compat/storage';
 
-// Import the functions you need from the SDKs you need
-// import { initializeApp } from "firebase/app";
-// TODO: Add SDKs for Firebase products that you want to use
-// https://firebase.google.com/docs/web/setup#available-libraries
-
 // Your web app's Firebase configuration
 const firebaseConfig = {
   apiKey: "AIzaSyBYBYDMqcK5tdMCrvMCuqTsgqso9MBNt18",
@@ -21,5 +16,14 @@ const firebaseConfig = {
 };
 
 // Initialize Firebase
-const firebaseDB = firebase.initializeApp(firebaseConfig);
-export default firebaseDB.database().ref("JenCeo-DataBase");
+const firebaseApp = firebase.initializeApp(firebaseConfig);
+const database = firebaseApp.database();
+
+// Export the database reference and methods
+export const firebaseDB = database.ref("JenCeo-DataBase");
+export const ref = database.ref;
+export const set = (ref, data) => ref.set(data);
+export const push = (ref) => ref.push();
+export const update = (updates) => database.ref().update(updates);
+
+export default firebaseDB;

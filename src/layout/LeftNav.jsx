@@ -14,6 +14,7 @@ import workerData from "../assets/workers-data.svg";
 import employee from "../assets/employee.svg";
 import workerExit from "../assets/worker-exit.svg";
 import WorkerAggrement from "../assets/workers-aggrement.svg";
+import client from "../assets/client.svg";
 
 
 import invest from "../assets/invest.svg";
@@ -36,7 +37,7 @@ import ExistingEmployees from '../pages/ExistingWorker';
 
 
 import Investments from '../pages/Investments';
-import Orders from '../pages/Orders';
+import ClientInfo from '../pages/ClientInfo';
 import Reports from '../pages/Reports';
 import Expenses from '../pages/Expenses';
 import Task from '../pages/Task';
@@ -84,24 +85,25 @@ export default function LeftNav() {
                         <li className="nav-item">
                             <NavLink to='/' className="nav-link" title='Dash Board'> <img src={home} alt="" /> Dash Board</NavLink>
                         </li>
+                            <li className="nav-item">
+                            <NavLink to='Investments' className="nav-link" title='Investments'> <img src={invest} alt="" /> Investments</NavLink>
+                        </li>
                         <hr></hr>
                         <li className="nav-item">
-                            <NavLink to='Employees' className="nav-link" title='Employees'> <img src={workerData} alt="" />Worker Data </NavLink>
+                            <NavLink to='Employees' className="nav-link" title='Employees'> <img src={workerData} alt="" />Worker Info </NavLink>
                         </li>
                         <li className="nav-item">
                             <NavLink to='EmployeeAggrement' className="nav-link" title='Employee Aggrement English'> <img src={WorkerAggrement} alt="" />Worker Aggremnt</NavLink>
                         </li>
                         
                         <li className="nav-item">
-                            <NavLink to='ExistingEmployees' className="nav-link" title='Existing Employees'> <img src={workerExit} alt="Worker Exit" />Exist Worker</NavLink>
+                            <NavLink to='ExistingEmployees' className="nav-link" title='Existing Employees'> <img src={workerExit} alt="Worker Exit" />Exit Worker</NavLink>
                         </li>
                         <hr />
 
+                    
                         <li className="nav-item">
-                            <NavLink to='Investments' className="nav-link" title='Investments'> <img src={invest} alt="" /> Investments</NavLink>
-                        </li>
-                        <li className="nav-item">
-                            <NavLink to='Orders' className="nav-link" title='Orders'> <img src={purchase} alt="" /> Orders</NavLink>
+                            <NavLink to='ClientInfo' className="nav-link" title='ClientInfo'> <img src={client} alt="" /> Client Info</NavLink>
                         </li>
                         <li className="nav-item">
                             <NavLink to='Reports' className="nav-link" title='Reports'> <img src={sales} alt="" /> Reports</NavLink>
@@ -142,7 +144,7 @@ export default function LeftNav() {
 
 
                 <Route path="Investments" element={<Investments />} />
-                <Route path="Orders" element={<Orders />} />
+                <Route path="ClientInfo" element={<ClientInfo />} />
                 <Route path="Reports" element={<Reports />} />
                 <Route path="Expenses" element={<Expenses />} />
                 <Route path="Task" element={<Task />} />

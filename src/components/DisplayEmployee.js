@@ -253,7 +253,7 @@ export default function DisplayEmployee() {
 
             {/* Pagination controls */}
             {totalPages > 1 && (
-                <nav aria-label="Employee pagination">
+                <nav aria-label="Employee pagination" className='pagination-wrapper'>
                     <ul className="pagination justify-content-center">
                         <li className={`page-item ${currentPage === 1 ? 'disabled' : ''}`}>
                             <button 

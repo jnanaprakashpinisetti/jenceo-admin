@@ -9,7 +9,13 @@ import close from "../assets/close.svg";
 
 import arrow from "../assets/arrow.svg";
 import home from "../assets/home.svg";
+
+import workerData from "../assets/workers-data.svg";
 import employee from "../assets/employee.svg";
+import workerExit from "../assets/worker-exit.svg";
+import WorkerAggrement from "../assets/workers-aggrement.svg";
+
+
 import invest from "../assets/invest.svg";
 import purchase from "../assets/purchase.svg";
 import sales from "../assets/sales.svg";
@@ -26,7 +32,6 @@ import Dashboard from '../pages/Dashboard';
 // Employee Data
 import Employees from '../pages/Employees';
 import EmployeeAggrement from '../pages/WorkerAggrement';
-import EmployeeBioData from '../pages/WorkerBioData';
 import ExistingEmployees from '../pages/ExistingWorker';
 
 
@@ -79,18 +84,16 @@ export default function LeftNav() {
                         <li className="nav-item">
                             <NavLink to='/' className="nav-link" title='Dash Board'> <img src={home} alt="" /> Dash Board</NavLink>
                         </li>
+                        <hr></hr>
                         <li className="nav-item">
-                            <NavLink to='Employees' className="nav-link" title='Employees'> <img src={employee} alt="" />Worker Data </NavLink>
+                            <NavLink to='Employees' className="nav-link" title='Employees'> <img src={workerData} alt="" />Worker Data </NavLink>
                         </li>
                         <li className="nav-item">
-                            <NavLink to='EmployeeAggrement' className="nav-link" title='Employee Aggrement English'> <img src={employee} alt="" />Worker Aggremnt</NavLink>
+                            <NavLink to='EmployeeAggrement' className="nav-link" title='Employee Aggrement English'> <img src={WorkerAggrement} alt="" />Worker Aggremnt</NavLink>
                         </li>
                         
                         <li className="nav-item">
-                            <NavLink to='EmployeeBioData' className="nav-link" title='Employee Bio Data'> <img src={employee} alt="" />Worker Bio Data</NavLink>
-                        </li>
-                        <li className="nav-item">
-                            <NavLink to='ExistingEmployees' className="nav-link" title='Existing Employees'> <img src={employee} alt="" />Exist Worker</NavLink>
+                            <NavLink to='ExistingEmployees' className="nav-link" title='Existing Employees'> <img src={workerExit} alt="Worker Exit" />Exist Worker</NavLink>
                         </li>
                         <hr />
 
@@ -135,7 +138,6 @@ export default function LeftNav() {
                 <Route path="/" element={<Dashboard />} />
                 <Route path="Employees" element={<Employees />} />
                 <Route path="EmployeeAggrement" element={<EmployeeAggrement />} />
-                <Route path="EmployeeBioData" element={<EmployeeBioData />} />
                 <Route path="ExistingEmployees" element={<ExistingEmployees />} />
 
 

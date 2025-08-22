@@ -55,3 +55,38 @@ table {
     }
 
 }
+
+.pagination-wrapper {
+
+    background-color: transparent;
+    padding: 0;
+    margin: auto;
+
+    .page-item {
+        .page-link {
+            background-color: #777B7E;
+            color: #EFF0F4;
+            border-color: #4d5154;
+               &:focus {
+            box-shadow: none; 
+        }
+        }
+
+        &.active {
+            box-shadow: none;
+            .page-link {
+                background-color: #535353;
+            }
+        }
+
+     &.disabled {
+        opacity: .8;
+
+        .page-link {
+            opacity: .5;
+        }
+     }
+
+    }
+
+}

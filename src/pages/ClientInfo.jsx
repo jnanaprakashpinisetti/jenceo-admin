@@ -1,9 +1,9 @@
 import React from 'react'
 
-export default function Orders() {
+export default function ClientInfo() {
   return (
     <div className="layout-body">
-      Orders
+      ClientInfo
     </div>
   )
 }

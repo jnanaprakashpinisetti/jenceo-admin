@@ -59,7 +59,7 @@ const EmployeeModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode
         }
     };
 
-    const renderInputField = (label, name, value, type = 'text', placeholder = '') => (
+    const renderInputField = (label, name, value, type = 'text', placeholder = '', disabled = false) => (
         <div className="bio-info">
             <label className="form-label"><strong>{label}</strong></label>
             <input
@@ -68,7 +68,7 @@ const EmployeeModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode
                 name={name}
                 value={value || ''}
                 onChange={handleInputChange}
-                disabled={!isEditMode}
+                disabled={disabled || !isEditMode}
                 placeholder={placeholder}
             />
         </div>
@@ -140,19 +140,33 @@ const EmployeeModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode
                     <div className="row">
                         <div className="col-md-4">
                             {renderInputField("Name", `${contactKey}.name`, contact.name)}
-                            {renderInputField("Village", `${contactKey}.village`, contact.village)}
-                            {renderInputField("Mobile 1", `${contactKey}.mobile1`, contact.mobile1)}
                         </div>
                         <div className="col-md-4">
                             {renderInputField("Relation", `${contactKey}.relation`, contact.relation)}
-                            {renderInputField("Mandal / Dist", `${contactKey}.mandal`, contact.mandal)}
-                            {renderInputField("Mobile 2", `${contactKey}.mobile2`, contact.mobile2)}
                         </div>
                         <div className="col-md-4">
                             {renderInputField("D.No", `${contactKey}.address`, contact.address)}
-                            {renderInputField("State", `${contactKey}.state`, contact.state)}
-
                         </div>
+                    </div>
+                    <div className="row">
+                        <div className="col-md-4">
+                            {renderInputField("Village", `${contactKey}.village`, contact.village)}
+                        </div>
+                        <div className="col-md-4">
+                            {renderInputField("Mandal / Dist", `${contactKey}.mandal`, contact.mandal)}
+                        </div>
+                        <div className="col-md-4">
+                            {renderInputField("State", `${contactKey}.state`, contact.state)}
+                        </div>
+                    </div>
+                    <div className="row">
+                        <div className="col-md-4">
+                            {renderInputField("Mobile 1", `${contactKey}.mobile1`, contact.mobile1)}
+                        </div>
+                        <div className="col-md-4">
+                            {renderInputField("Mobile 2", `${contactKey}.mobile2`, contact.mobile2)}
+                        </div>
+
                     </div>
                 </div>
             </div>
@@ -203,33 +217,57 @@ const EmployeeModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode
                             <div className="modal-card-body">
                                 <div className="row">
                                     <div className="col-md-4">
-                                        {renderInputField("ID No", "idNo", formData.idNo || formData.employeeId)}
-                                        {renderSelectField("Gender", "gender", formData.gender, [
+                                          {renderInputField("ID No", "idNo", formData.idNo || formData.employeeId)}
+                                    </div>
+                                    <div className="col-md-4">
+                                          {renderInputField("First Name", "firstName", formData.firstName)}
+                                    </div>
+                                    <div className="col-md-4">
+                                          {renderInputField("Last Name", "lastName", formData.lastName)}
+                                    </div>
+                                </div>
+
+                                 <div className="row">
+                                    <div className="col-md-4">
+                                             {renderSelectField("Gender", "gender", formData.gender, [
                                             { value: "Male", label: "Male" },
                                             { value: "Female", label: "Female" },
                                             { value: "Other", label: "Other" }
                                         ])}
 
-                                        {renderInputField("C/o", "co", formData.co)}
+                                    </div>
+                                    <div className="col-md-4">
+                                         {renderInputField("Date of Birth", "dateOfBirth", formData.dateOfBirth, "date")}
+                                    </div>
+                                    <div className="col-md-4">
+                                         {renderInputField("Age", "years", formData.years, "number")}
+                                    </div>
+                                    </div>
+
+                                    <div className="row">
+                                        <div className="col-md-4">
+                                             {renderInputField("C/o", "co", formData.co)}
+                                        </div>
+                                        <div className="col-md-4">
+                                             {renderInputField("Aadhar No", "aadharNo", formData.aadharNo)}
+                                        </div>
+                                        <div className="col-md-4">
+                                            {renderInputField("Local ID", "localId", formData.localId)}
+                                        </div>
+                                    </div>
+
+                                <div className="row">
+                                    <div className="col-md-4">
+                                       
                                         {renderInputField("Date of Joining", "date", formData.date || formData.dateOfJoining, "date")}
-
-
                                     </div>
                                     <div className="col-md-4">
-                                        {renderInputField("First Name", "firstName", formData.firstName)}
-                                        {renderInputField("Date of Birth", "dateOfBirth", formData.dateOfBirth, "date")}
-                                        {renderInputField("Aadhar No", "aadharNo", formData.aadharNo)}
+                                       
                                         {renderInputField("Mobile 1", "mobileNo1", formData.mobileNo1, "tel")}
-
-
-
-
                                     </div>
 
                                     <div className="col-md-4">
-                                        {renderInputField("Last Name", "lastName", formData.lastName)}
-                                        {renderInputField("Age", "years", formData.years, "number")}
-                                        {renderInputField("Local ID", "localId", formData.localId)}
+                                        
                                         {renderInputField("Mobile 2", "mobileNo2", formData.mobileNo2, "tel")}
                                     </div>
 
@@ -246,19 +284,34 @@ const EmployeeModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode
                                 <div className="row">
                                     <div className="col-md-4">
                                         {renderInputField("D.No", "permanentAddress", formData.permanentAddress)}
-                                        {renderInputField("Village", "permanentVillage", formData.permanentVillage)}
-                                        {renderInputField("State", "permanentState", formData.permanentState)}
                                     </div>
                                     <div className="col-md-4">
                                         {renderInputField("Street", "permanentStreet", formData.permanentStreet)}
-                                        {renderInputField("Mandal", "permanentMandal", formData.permanentMandal)}
+                                    </div>
+                                    <div className="col-md-4">
+                                         {renderInputField("Landmark", "permanentLandmark", formData.permanentLandmark)}
+                                    </div>
+                                </div>
+                                <div className="row">
+                                    <div className="col-md-4">
+                                        {renderInputField("Village", "permanentVillage", formData.permanentVillage)}
+                                    </div>
+                                    <div className="col-md-4">
+                                         {renderInputField("Mandal", "permanentMandal", formData.permanentMandal)}
+                                    </div>
+                                    <div className="col-md-4">
+                                          {renderInputField("District", "permanentDistrict", formData.permanentDistrict)}
+                                    </div>
+                                </div>
+                                <div className="row">
+                                    <div className="col-md-4">
+                                        {renderInputField("State", "permanentState", formData.permanentState)}
+                                    </div>
+                                    <div className="col-md-4">
                                         {renderInputField("Pincode", "permanentPincode", formData.permanentPincode)}
                                     </div>
 
                                     <div className="col-md-4">
-                                        {renderInputField("Landmark", "permanentLandmark", formData.permanentLandmark)}
-                                        {renderInputField("District", "permanentDistrict", formData.permanentDistrict)}
-
                                     </div>
                                 </div>
                             </div>
@@ -273,18 +326,33 @@ const EmployeeModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode
                                 <div className="row">
                                     <div className="col-md-4">
                                         {renderInputField("D.No", "presentAddress", formData.presentAddress)}
-                                        {renderInputField("Village", "presentVillage", formData.presentVillage)}
-                                        {renderInputField("State", "presentState", formData.presentState)}
                                     </div>
                                     <div className="col-md-4">
-                                        {renderInputField("Street", "presentStreet", formData.presentStreet)}
-                                        {renderInputField("Mandal", "presentMandal", formData.presentMandal)}
-                                        {renderInputField("Pincode", "presentPincode", formData.presentPincode)}
+                                          {renderInputField("Street", "presentStreet", formData.presentStreet)}
                                     </div>
                                     <div className="col-md-4">
                                         {renderInputField("Landmark", "presentLandmark", formData.presentLandmark)}
-                                        {renderInputField("District", "presentDistrict", formData.presentDistrict)}
-
+                                    </div>
+                                </div>
+                                <div className="row">
+                                    <div className="col-md-4">
+                                        {renderInputField("Village", "presentVillage", formData.presentVillage)}
+                                    </div>
+                                    <div className="col-md-4">
+                                         {renderInputField("Mandal", "presentMandal", formData.presentMandal)}
+                                    </div>
+                                    <div className="col-md-4">
+                                         {renderInputField("District", "presentDistrict", formData.presentDistrict)}
+                                    </div>
+                                </div>
+                                <div className="row">
+                                    <div className="col-md-4">
+                                        {renderInputField("State", "presentState", formData.presentState)}
+                                    </div>
+                                    <div className="col-md-4">
+                                        {renderInputField("Pincode", "presentPincode", formData.presentPincode)}
+                                    </div>
+                                    <div className="col-md-4">
                                     </div>
                                 </div>
                             </div>
@@ -298,22 +366,35 @@ const EmployeeModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode
                             <div className="modal-card-body">
                                 <div className="row">
                                     <div className="col-md-4">
-                                        {renderSelectField("Marital Status", "maritalStatus", formData.maritalStatus, [
+                                               {renderSelectField("Marital Status", "maritalStatus", formData.maritalStatus, [
                                             { value: "Single", label: "Single" },
                                             { value: "Married", label: "Married" },
                                             { value: "Divorced", label: "Divorced" },
                                             { value: "Widowed", label: "Widowed" }
                                         ])}
-                                        {renderInputField("Child 1", "childName1", formData.childName1)}
-                                        {renderInputField("Caste", "cast", formData.cast)}
                                     </div>
                                     <div className="col-md-4">
-                                        {renderInputField("Date of Marriage", "dateOfMarriage", formData.dateOfMarriage, "date")}
-                                        {renderInputField("Child 2", "childName2", formData.childName2)}
+                                         {renderInputField("Date of Marriage", "dateOfMarriage", formData.dateOfMarriage, "date")}
                                     </div>
                                     <div className="col-md-4">
                                         {renderInputField("Marriage Years", "marriageYears", formData.marriageYears, "number")}
+                                    </div>
+                                </div>
+                                <div className="row">
+                                    <div className="col-md-4">
+                                        {renderInputField("Child 1", "childName1", formData.childName1)}
+                                    </div>
+                                    <div className="col-md-4">
+                                         {renderInputField("Child 2", "childName2", formData.childName2)}
+                                    </div>
+                                    <div className="col-md-4">
                                         {renderInputField("Religion", "religion", formData.religion)}
+                                    </div>
+                                </div>
+
+                                <div className="row">
+                                    <div className="col-md-4">
+                                        {renderInputField("Caste", "cast", formData.cast)}
                                     </div>
                                 </div>
                             </div>
@@ -328,18 +409,28 @@ const EmployeeModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode
                                 <div className="row">
                                     <div className="col-md-4">
                                         {renderInputField("Qualification", "qualification", formData.qualification)}
-                                        {renderInputField("Work Experience", "workExperince", formData.workExperince, "text")}
-                                        {renderInputField("Mother Tongue", "motherTongue", formData.motherTongue)}
                                     </div>
                                     <div className="col-md-4">
                                         {renderInputField("School/College", "schoolCollege", formData.schoolCollege)}
-                                        {renderArrayField("Working Skills", "workingSkills", "Add skill")}
-
                                     </div>
                                     <div className="col-md-4">
                                         {renderInputField("Primary Skill", "primarySkill", formData.primarySkill)}
+                                    </div>
+                                </div>
+                                <div className="row">
+                                    <div className="col-md-4">
+                                        {renderInputField("Work Experience", "workExperince", formData.workExperince, "text")}
+                                    </div>
+                                    <div className="col-md-4">
+                                        {renderArrayField("Working Skills", "workingSkills", "Add skill")}
+                                    </div>
+                                    <div className="col-md-4">
                                         {renderInputField("Languages", "languages", formData.languages)}
-
+                                    </div>
+                                </div>
+                                <div className="row">
+                                    <div className="col-md-4">
+                                        {renderInputField("Mother Tongue", "motherTongue", formData.motherTongue)}
                                     </div>
                                 </div>
                             </div>
@@ -369,7 +460,9 @@ const EmployeeModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode
                             </div>
                             <div className="modal-card-body">
                                 {renderEmergencyContact("emergencyContact1", "Emergency Contact 1")}
+                                <hr></hr>
                                 {renderEmergencyContact("emergencyContact2", "Emergency Contact 2")}
+                                  <hr></hr>
                                 {renderEmergencyContact("emergencyContact3", "Emergency Contact 3")}
                             </div>
                         </div>

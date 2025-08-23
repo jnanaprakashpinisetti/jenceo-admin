@@ -4,6 +4,17 @@ const PaymentDetails = ({ formData, handleChange, addPayment, removePayment, err
   const paymentsErrors = errors.payments || [];
   const getErr = (idx, key) => (paymentsErrors[idx] ? paymentsErrors[idx][key] : "");
 
+  // Custom handler for radio buttons
+  const handleRadioChange = (e, index, value) => {
+    const fakeEvent = {
+      target: {
+        name: "paymentMethod",
+        value: value
+      }
+    };
+    handleChange(fakeEvent, "payments", index);
+  };
+
   return (
     <div>
       {formData.payments.map((payment, index) => (
@@ -21,10 +32,10 @@ const PaymentDetails = ({ formData, handleChange, addPayment, removePayment, err
                     <input
                       type="radio"
                       className={`form-check-input ${getErr(index, "paymentMethod") ? "is-invalid" : ""}`}
-                      name={`paymentMethod`}
+                      name={`paymentMethod-${index}`}
                       value="cash"
                       checked={payment.paymentMethod === "cash"}
-                      onChange={(e) => handleChange(e, "payments", index)}
+                      onChange={(e) => handleRadioChange(e, index, "cash")}
                       id={`paymentMethod-cash-${index}`}
                     />
                     <label className="form-check-label" htmlFor={`paymentMethod-cash-${index}`}>
@@ -35,10 +46,10 @@ const PaymentDetails = ({ formData, handleChange, addPayment, removePayment, err
                     <input
                       type="radio"
                       className={`form-check-input ${getErr(index, "paymentMethod") ? "is-invalid" : ""}`}
-                      name={`paymentMethod`}
+                      name={`paymentMethod-${index}`}
                       value="online"
                       checked={payment.paymentMethod === "online"}
-                      onChange={(e) => handleChange(e, "payments", index)}
+                      onChange={(e) => handleRadioChange(e, index, "online")}
                       id={`paymentMethod-online-${index}`}
                     />
                     <label className="form-check-label" htmlFor={`paymentMethod-online-${index}`}>
@@ -49,10 +60,10 @@ const PaymentDetails = ({ formData, handleChange, addPayment, removePayment, err
                     <input
                       type="radio"
                       className={`form-check-input ${getErr(index, "paymentMethod") ? "is-invalid" : ""}`}
-                      name={`paymentMethod`}
+                      name={`paymentMethod-${index}`}
                       value="check"
                       checked={payment.paymentMethod === "check"}
-                      onChange={(e) => handleChange(e, "payments", index)}
+                      onChange={(e) => handleRadioChange(e, index, "check")}
                       id={`paymentMethod-check-${index}`}
                     />
                     <label className="form-check-label" htmlFor={`paymentMethod-check-${index}`}>

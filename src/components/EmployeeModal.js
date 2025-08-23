@@ -898,6 +898,7 @@ const EmployeeModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode
                                                                     className="form-control form-control-sm"
                                                                     value={p.remarks || ""}
                                                                     onChange={(e) => handleArrayChange("payments", i, "remarks", e.target.value)}
+                                                                    rows="4"
                                                                     disabled={!isEditMode || locked}
                                                                 />
                                                             </div>
@@ -938,8 +939,8 @@ const EmployeeModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode
                                                             )}
                                                         </div>
 
-                                                        <div className="row">
-                                                            <div className="col-md-3 mb-2">
+                                                        <div className="row"> 
+                                                            <div className="col-md-4 mb-2">
                                                                 <label className="form-label">Client ID *</label>
                                                                 <input
                                                                     type="text"
@@ -950,7 +951,7 @@ const EmployeeModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode
                                                                 />
                                                                 <Err msg={workErrors[i]?.clientId} />
                                                             </div>
-                                                            <div className="col-md-3 mb-2">
+                                                            <div className="col-md-4 mb-2">
                                                                 <label className="form-label">Client Name *</label>
                                                                 <input
                                                                     type="text"
@@ -961,7 +962,7 @@ const EmployeeModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode
                                                                 />
                                                                 <Err msg={workErrors[i]?.clientName} />
                                                             </div>
-                                                            <div className="col-md-2 mb-2">
+                                                            <div className="col-md-4 mb-2">
                                                                 <label className="form-label">Location</label>
                                                                 <input
                                                                     type="text"
@@ -971,32 +972,11 @@ const EmployeeModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode
                                                                     disabled={!isEditMode || locked}
                                                                 />
                                                             </div>
-                                                            <div className="col-md-2 mb-2">
-                                                                <label className="form-label">Days *</label>
-                                                                <input
-                                                                    type="number"
-                                                                    className={`form-control form-control-sm${invalidClass("days")}`}
-                                                                    value={w.days || ""}
-                                                                    onChange={(e) => handleArrayChange("workDetails", i, "days", e.target.value)}
-                                                                    disabled={!isEditMode || locked}
-                                                                />
-                                                                <Err msg={workErrors[i]?.days} />
-                                                            </div>
-                                                            <div className="col-md-2 mb-2">
-                                                                <label className="form-label">Service Type *</label>
-                                                                <input
-                                                                    type="text"
-                                                                    className={`form-control form-control-sm${invalidClass("serviceType")}`}
-                                                                    value={w.serviceType || ""}
-                                                                    onChange={(e) => handleArrayChange("workDetails", i, "serviceType", e.target.value)}
-                                                                    disabled={!isEditMode || locked}
-                                                                />
-                                                                <Err msg={workErrors[i]?.serviceType} />
-                                                            </div>
+                                                            
                                                         </div>
-
                                                         <div className="row">
-                                                            <div className="col-md-3 mb-2">
+
+                                                            <div className="col-md-4 mb-2">
                                                                 <label className="form-label">From (Date) *</label>
                                                                 <input
                                                                     type="date"
@@ -1007,7 +987,7 @@ const EmployeeModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode
                                                                 />
                                                                 <Err msg={workErrors[i]?.fromDate} />
                                                             </div>
-                                                            <div className="col-md-3 mb-2">
+                                                            <div className="col-md-4 mb-2">
                                                                 <label className="form-label">To (Date) *</label>
                                                                 <input
                                                                     type="date"
@@ -1018,9 +998,38 @@ const EmployeeModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode
                                                                 />
                                                                 <Err msg={workErrors[i]?.toDate} />
                                                             </div>
-                                                            <div className="col-md-6 mb-2">
-                                                                <label className="form-label">Remarks</label>
+                                                            
+                                                            <div className="col-md-4 mb-2">
+                                                                <label className="form-label">Days *</label>
                                                                 <input
+                                                                    type="number"
+                                                                    className={`form-control form-control-sm${invalidClass("days")}`}
+                                                                    value={w.days || ""}
+                                                                    onChange={(e) => handleArrayChange("workDetails", i, "days", e.target.value)}
+                                                                    disabled={!isEditMode || locked}
+                                                                />
+                                                                <Err msg={workErrors[i]?.days} />
+                                                            </div>
+                                                            
+                                                        </div>
+
+                                                        <div className="row">
+                                                            <div className="col-md-4 mb-2">
+                                                                <label className="form-label">Service Type *</label>
+                                                                <input
+                                                                    type="text"
+                                                                    className={`form-control form-control-sm${invalidClass("serviceType")}`}
+                                                                    value={w.serviceType || ""}
+                                                                    onChange={(e) => handleArrayChange("workDetails", i, "serviceType", e.target.value)}
+                                                                    disabled={!isEditMode || locked}
+                                                                />
+                                                                <Err msg={workErrors[i]?.serviceType} />
+                                                            </div>
+                                                            
+                                                            <div className="col-md-8 mb-2">
+                                                                <label className="form-label">Remarks</label>
+                                                                <textarea
+                                                                    row="5"
                                                                     type="text"
                                                                     className="form-control form-control-sm"
                                                                     value={w.remarks || ""}

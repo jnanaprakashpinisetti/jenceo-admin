@@ -323,7 +323,7 @@ const EmployeeModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode
         <div className={`modal fade show ${modalClass}`} style={{ display: "block", backgroundColor: "rgba(0, 0, 0, 0.81)" }}>
             <div className="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
                 <div className="modal-content">
-                    <div className="modal-header bg-primary text-white">
+                    <div className="modal-header bg-secondary text-white">
                         <h3 className="modal-title">
                             {isEditMode ? "Edit Employee - " : ""}
                             {formData.idNo || formData.employeeId || "N/A"} - {formData.firstName || ""} {formData.lastName || ""}
@@ -338,9 +338,9 @@ const EmployeeModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode
                                 ["basic", "Basic Info"],
                                 ["address", "Address"],
                                 ["personal", "Personal Info"],
-                                ["qualification", "Qualification & Skills"],
-                                ["health", "Health Details"],
-                                ["emergency", "Emergency Contacts"],
+                                ["qualification", "Skills"],
+                                ["health", "Health Info"],
+                                ["emergency", "Emg Contacts"],
                                 ["bank", "Bank Details"],
                                 ["payment", "Payment"],
                                 ["working", "Working"],
@@ -373,7 +373,7 @@ const EmployeeModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode
                             {/* Basic */}
                             {activeTab === "basic" && (
                                 <div className="modal-card mb-3">
-                                    <div className="modal-card-header bg-secondary text-white">
+                                    <div className="modal-card-header">
                                         <h4 className="mb-0">Basic Information</h4>
                                     </div>
                                     <div className="modal-card-body">
@@ -419,7 +419,7 @@ const EmployeeModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode
                             {activeTab === "address" && (
                                 <>
                                     <div className="modal-card mb-3">
-                                        <div className="modal-card-header bg-secondary text-white">
+                                        <div className="modal-card-header">
                                             <h4 className="mb-0">Permanent Address</h4>
                                         </div>
                                         <div className="modal-card-body">
@@ -441,7 +441,7 @@ const EmployeeModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode
                                     </div>
 
                                     <div className="modal-card mb-3">
-                                        <div className="modal-card-header bg-secondary text-white">
+                                        <div className="modal-card-header">
                                             <h4 className="mb-0">Present Address</h4>
                                         </div>
                                         <div className="modal-card-body">
@@ -467,7 +467,7 @@ const EmployeeModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode
                             {/* Personal */}
                             {activeTab === "personal" && (
                                 <div className="modal-card mb-3">
-                                    <div className="modal-card-header bg-secondary text-white">
+                                    <div className="modal-card-header">
                                         <h4 className="mb-0">Personal Information</h4>
                                     </div>
                                     <div className="modal-card-body">
@@ -498,7 +498,7 @@ const EmployeeModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode
                             {/* Qualification & Skills */}
                             {activeTab === "qualification" && (
                                 <div className="modal-card mb-3">
-                                    <div className="modal-card-header bg-secondary text-white">
+                                    <div className="modal-card-header">
                                         <h4 className="mb-0">Qualification & Skills</h4>
                                     </div>
                                     <div className="modal-card-body">
@@ -522,7 +522,7 @@ const EmployeeModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode
                             {/* Health */}
                             {activeTab === "health" && (
                                 <div className="modal-card mb-3">
-                                    <div className="modal-card-header bg-secondary text-white">
+                                    <div className="modal-card-header">
                                         <h4 className="mb-0">Health Details</h4>
                                     </div>
                                     <div className="modal-card-body">
@@ -537,7 +537,7 @@ const EmployeeModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode
                             {/* Emergency */}
                             {activeTab === "emergency" && (
                                 <div className="modal-card mb-3">
-                                    <div className="modal-card-header bg-secondary text-white">
+                                    <div className="modal-card-header">
                                         <h4 className="mb-0">Emergency Contacts</h4>
                                     </div>
                                     <div className="modal-card-body">
@@ -553,7 +553,7 @@ const EmployeeModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode
                             {/* Bank */}
                             {activeTab === "bank" && (
                                 <div className="modal-card mb-3">
-                                    <div className="modal-card-header bg-secondary text-white">
+                                    <div className="modal-card-header">
                                         <h4 className="mb-0">Bank Details</h4>
                                     </div>
                                     <div className="modal-card-body">
@@ -593,7 +593,7 @@ const EmployeeModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode
                             {/* Payment */}
                             {activeTab === "payment" && (
                                 <div className="modal-card mb-3">
-                                    <div className="modal-card-header bg-secondary text-white">
+                                    <div className="modal-card-header">
                                         <h4 className="mb-0">Payment</h4>
                                     </div>
                                     <div className="modal-card-body">
@@ -728,7 +728,7 @@ const EmployeeModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode
                             {/* Working */}
                             {activeTab === "working" && (
                                 <div className="modal-card mb-3">
-                                    <div className="modal-card-header bg-secondary text-white">
+                                    <div className="modal-card-header">
                                         <h4 className="mb-0">Working</h4>
                                     </div>
                                     <div className="modal-card-body">

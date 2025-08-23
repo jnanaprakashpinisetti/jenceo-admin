@@ -1,17 +1,16 @@
 import React, { useState, useEffect } from 'react';
-import firebaseDB from '../firebase';
-import editIcon from '../assets/eidt.svg';
-import viewIcon from '../assets/view.svg';
-import deleteIcon from '../assets/delete.svg'; // (not used but kept if you use elsewhere)
-import returnIcon from '../assets/return.svg';
-import EmployeeModal from './EmployeeModal';
+import firebaseDB from '../../firebase';
+import editIcon from '../../assets/eidt.svg';
+import viewIcon from '../../assets/view.svg';
+import returnIcon from '../../assets/return.svg';
+import ClientModal from './ClientModal';
 
-export default function DisplayEmployee() {
-  const [employees, setEmployees] = useState([]);
+export default function DisplayExitClient() {
+  const [clients, setClients] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  const [selectedEmployee, setSelectedEmployee] = useState(null);
+  const [selectedClient, setSelectedClient] = useState(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isEditMode, setIsEditMode] = useState(false);
 
@@ -20,32 +19,33 @@ export default function DisplayEmployee() {
   const [rowsPerPage, setRowsPerPage] = useState(10);
   const [totalPages, setTotalPages] = useState(1);
 
-  // Return flow modals
+  // Return flow (ExitClients -> ClientData)
   const [showReturnConfirm, setShowReturnConfirm] = useState(false);
-  const [employeeToReturn, setEmployeeToReturn] = useState(null);
+  const [clientToReturn, setClientToReturn] = useState(null);
   const [showReturnedModal, setShowReturnedModal] = useState(false);
 
-  // Save success modal
+  // Save flow for edit on ExitClients
   const [showSaveModal, setShowSaveModal] = useState(false);
 
   useEffect(() => {
-    const fetchEmployees = () => {
+    const fetchExitClients = () => {
       try {
-        firebaseDB.child('ExitEmployees').on('value', (snapshot) => {
+        // 🔁 Read from ExitClients
+        firebaseDB.child('ExitClients').on('value', (snapshot) => {
           if (snapshot.exists()) {
-            const employeesData = [];
+            const clientsData = [];
             snapshot.forEach((childSnapshot) => {
-              employeesData.push({
+              clientsData.push({
                 id: childSnapshot.key,
                 ...childSnapshot.val(),
               });
             });
 
-            const sortedEmployees = sortEmployeesDescending(employeesData);
-            setEmployees(sortedEmployees);
-            setTotalPages(Math.ceil(sortedEmployees.length / rowsPerPage));
+            const sortedClients = sortClientsDescending(clientsData);
+            setClients(sortedClients);
+            setTotalPages(Math.ceil(sortedClients.length / rowsPerPage));
           } else {
-            setEmployees([]);
+            setClients([]);
             setTotalPages(1);
           }
           setLoading(false);
@@ -56,41 +56,44 @@ export default function DisplayEmployee() {
       }
     };
 
-    fetchEmployees();
+    fetchExitClients();
     return () => {
-      firebaseDB.child('ExitEmployees').off('value');
+      firebaseDB.child('ExitClients').off('value');
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
-    setTotalPages(Math.ceil(employees.length / rowsPerPage));
+    setTotalPages(Math.ceil(clients.length / rowsPerPage));
     setCurrentPage(1);
-  }, [employees, rowsPerPage]);
+  }, [clients, rowsPerPage]);
 
-  const sortEmployeesDescending = (employeesData) => {
-    return employeesData.sort((a, b) => {
-      const idA = a.idNo || a.employeeId || '';
-      const idB = b.idNo || b.employeeId || '';
+  const sortClientsDescending = (clientsData) => {
+    return clientsData.sort((a, b) => {
+      const idA = a.idNo || '';
+      const idB = b.idNo || '';
 
-      if (idA.startsWith('JW') && idB.startsWith('JW')) {
-        const numA = parseInt(idA.replace('JW', '')) || 0;
-        const numB = parseInt(idB.replace('JW', '')) || 0;
+      // Pattern JC00001
+      if (idA.startsWith('JC') && idB.startsWith('JC')) {
+        const numA = parseInt(idA.replace('JC', '')) || 0;
+        const numB = parseInt(idB.replace('JC', '')) || 0;
         return numB - numA;
       }
 
+      // Numeric IDs
       if (!isNaN(idA) && !isNaN(idB)) {
         return parseInt(idB) - parseInt(idA);
       }
 
+      // String IDs
       return idB.localeCompare(idA);
     });
   };
 
-  // Pagination calculations
-  const indexOfLastEmployee = currentPage * rowsPerPage;
-  const indexOfFirstEmployee = indexOfLastEmployee - rowsPerPage;
-  const currentEmployees = employees.slice(indexOfFirstEmployee, indexOfLastEmployee);
+  // Pagination
+  const indexOfLastClient = currentPage * rowsPerPage;
+  const indexOfFirstClient = indexOfLastClient - rowsPerPage;
+  const currentClients = clients.slice(indexOfFirstClient, indexOfLastClient);
 
   const paginate = (pageNumber) => setCurrentPage(pageNumber);
   const handleRowsPerPageChange = (e) => setRowsPerPage(parseInt(e.target.value));
@@ -107,77 +110,79 @@ export default function DisplayEmployee() {
   };
 
   // View/Edit
-  const handleView = (employee) => {
-    setSelectedEmployee(employee);
+  const handleView = (client) => {
+    setSelectedClient(client);
     setIsEditMode(false);
     setIsModalOpen(true);
   };
 
-  const handleEdit = (employee) => {
-    setSelectedEmployee(employee);
+  const handleEdit = (client) => {
+    setSelectedClient(client);
     setIsEditMode(true);
     setIsModalOpen(true);
   };
 
-  // Return flow open/close confirm
-  const openReturnConfirm = (employee) => {
-    setEmployeeToReturn(employee);
+  // Open/close return confirm
+  const openReturnConfirm = (client) => {
+    setClientToReturn(client);
     setShowReturnConfirm(true);
   };
 
   const closeReturnConfirm = () => {
     setShowReturnConfirm(false);
-    setEmployeeToReturn(null);
+    setClientToReturn(null);
   };
 
-  // Confirm → Move ExitEmployees/<id> -> EmployeeBioData/<id>, then remove from ExitEmployees
+  // ✅ Return confirmed → move ExitClients/<id> to ClientData/<id> and remove from ExitClients
   const handleReturnConfirmed = async () => {
-    if (!employeeToReturn) return;
-    const { id, ...payload } = employeeToReturn;
+    if (!clientToReturn) return;
+    const { id, ...payload } = clientToReturn;
 
     try {
       const returnedAt = new Date().toISOString();
 
-      await firebaseDB.child(`EmployeeBioData/${id}`).set({
+      // 1) Write back to ClientData with same key
+      await firebaseDB.child(`ClientData/${id}`).set({
         ...payload,
         restoredFromExit: true,
         returnedAt,
       });
 
-      await firebaseDB.child(`ExitEmployees/${id}`).remove();
+      // 2) Remove from ExitClients
+      await firebaseDB.child(`ExitClients/${id}`).remove();
 
       closeReturnConfirm();
       setShowReturnedModal(true);
     } catch (err) {
-      setError('Error moving employee: ' + err.message);
+      setError('Error returning client: ' + err.message);
       closeReturnConfirm();
     }
   };
 
-  // Save edits in ExitEmployees (no alert, show modal)
-  const handleSave = async (updatedEmployee) => {
+  // Save (Edit) → update in ExitClients (not ClientData)
+  const handleSave = async (updatedClient) => {
     try {
-      await firebaseDB.child(`ExitEmployees/${updatedEmployee.id}`).update(updatedEmployee);
+      await firebaseDB.child(`ExitClients/${updatedClient.id}`).update(updatedClient);
       setIsModalOpen(false);
       setShowSaveModal(true);
     } catch (err) {
-      setError('Error updating employee: ' + err.message);
+      setError('Error updating client: ' + err.message);
     }
   };
 
   const handleCloseModal = () => {
     setIsModalOpen(false);
-    setSelectedEmployee(null);
+    setSelectedClient(null);
     setIsEditMode(false);
   };
 
-  if (loading) return <div className="text-center my-5">Loading employees...</div>;
+  if (loading) return <div className="text-center my-5">Loading clients...</div>;
   if (error) return <div className="alert alert-danger">Error: {error}</div>;
-  if (employees.length === 0) return <div className="alert alert-info">No employees found</div>;
+  if (clients.length === 0) return <div className="alert alert-info">No exit clients found</div>;
 
   return (
     <div>
-      {/* Rows per page selector */}
+      {/* Header: rows-per-page */}
       <div className="d-flex justify-content-between align-items-center mb-3">
         <div className="d-flex align-items-center">
           <span className="me-2">Show</span>
@@ -196,7 +201,7 @@ export default function DisplayEmployee() {
           <span className="ms-2">entries</span>
         </div>
         <div>
-          Showing {indexOfFirstEmployee + 1} to {Math.min(indexOfLastEmployee, employees.length)} of {employees.length} entries
+          Showing {indexOfFirstClient + 1} to {Math.min(indexOfLastClient, clients.length)} of {clients.length} entries
         </div>
       </div>
 
@@ -205,51 +210,39 @@ export default function DisplayEmployee() {
           <thead className="table-dark">
             <tr>
               <th>ID No ↓</th>
-              <th>Name</th>
-              <th>Gender</th>
-              <th>Primary Skill</th>
-              <th>Experience</th>
+              <th>Client Name</th>
+              <th>Location</th>
+              <th>Type of Service</th>
+              <th>Mobile No</th>
               <th>Status</th>
               <th>Actions</th>
             </tr>
           </thead>
           <tbody>
-            {currentEmployees.map((employee) => (
-              <tr key={employee.id}>
+            {currentClients.map((client) => (
+              <tr key={client.id}>
                 <td>
-                  <strong>{employee.employeeId || employee.idNo || 'N/A'}</strong>
+                  <strong>{client.idNo || 'N/A'}</strong>
                 </td>
-                <td>{employee.firstName} {employee.lastName}</td>
-                <td>{employee.gender || 'N/A'}</td>
-                <td>{employee.primarySkill || 'N/A'}</td>
-                <td>{employee.workExperince ? `${employee.workExperince}` : 'N/A'}</td>
+                <td>{client.clientName || 'N/A'}</td>
+                <td>{client.location || 'N/A'}</td>
+                <td>{client.typeOfService || 'N/A'}</td>
+                <td>{client.mobileNo1 || 'N/A'}</td>
                 <td>
-                  <span className={`badge ${getStatusBadgeClass(employee.status)}`}>
-                    {employee.status || 'On Duty'}
+                  <span className={`badge ${getStatusBadgeClass(client.serviceStatus)}`}>
+                    {client.serviceStatus || 'Running'}
                   </span>
                 </td>
                 <td>
                   <div className="d-flex">
-                    <button
-                      className="btn btn-sm me-2"
-                      title="View"
-                      onClick={() => handleView(employee)}
-                    >
+                    <button className="btn btn-sm me-2" title="View" onClick={() => handleView(client)}>
                       <img src={viewIcon} alt="view Icon" style={{ opacity: 0.6, width: '18px', height: '18px' }} />
                     </button>
-                    <button
-                      className="btn btn-sm me-2"
-                      title="Edit"
-                      onClick={() => handleEdit(employee)}
-                    >
+                    <button className="btn btn-sm me-2" title="Edit" onClick={() => handleEdit(client)}>
                       <img src={editIcon} alt="edit Icon" style={{ width: '15px', height: '15px' }} />
                     </button>
-                    <button
-                      className="btn btn-sm"
-                      title="Return Back"
-                      onClick={() => openReturnConfirm(employee)}
-                    >
-                      <img src={returnIcon} alt="return Icon" style={{ width: '14px', height: '18px' }} />
+                    <button className="btn btn-sm" title="Return to Active" onClick={() => openReturnConfirm(client)}>
+                      <img src={returnIcon} alt="return Icon" style={{ width: '18px', height: '18px' }} />
                     </button>
                   </div>
                 </td>
@@ -259,16 +252,12 @@ export default function DisplayEmployee() {
         </table>
       </div>
 
-      {/* Pagination controls */}
+      {/* Pagination */}
       {totalPages > 1 && (
-        <nav aria-label="Employee pagination" className="pagination-wrapper">
+        <nav aria-label="Exit client pagination" className="pagination-wrapper">
           <ul className="pagination justify-content-center">
             <li className={`page-item ${currentPage === 1 ? 'disabled' : ''}`}>
-              <button
-                className="page-link"
-                onClick={() => paginate(currentPage - 1)}
-                disabled={currentPage === 1}
-              >
+              <button className="page-link" onClick={() => paginate(currentPage - 1)} disabled={currentPage === 1}>
                 Previous
               </button>
             </li>
@@ -281,10 +270,7 @@ export default function DisplayEmployee() {
                 {number === '...' ? (
                   <span className="page-link">...</span>
                 ) : (
-                  <button
-                    className="page-link"
-                    onClick={() => paginate(number)}
-                  >
+                  <button className="page-link" onClick={() => paginate(number)}>
                     {number}
                   </button>
                 )}
@@ -304,20 +290,20 @@ export default function DisplayEmployee() {
         </nav>
       )}
 
-      {/* Employee View/Edit Modal */}
-      {selectedEmployee && (
-        <EmployeeModal
-          employee={selectedEmployee}
+      {/* Client View/Edit Modal */}
+      {selectedClient && (
+        <ClientModal
+          client={selectedClient}
           isOpen={isModalOpen}
           onClose={handleCloseModal}
-          onSave={handleSave}     // save edits to ExitEmployees
-          onReturn={() => {}}     // not used here
+          onSave={handleSave}          // edits apply to ExitClients
+          onDelete={() => {}}          // not used here
           isEditMode={isEditMode}
         />
       )}
 
       {/* Return Confirmation Modal */}
-      {showReturnConfirm && employeeToReturn && (
+      {showReturnConfirm && clientToReturn && (
         <div className="modal fade show" style={{ display: 'block', backgroundColor: 'rgba(0,0,0,0.5)' }}>
           <div className="modal-dialog modal-dialog-centered">
             <div className="modal-content">
@@ -326,13 +312,13 @@ export default function DisplayEmployee() {
                 <button type="button" className="btn-close" onClick={closeReturnConfirm}></button>
               </div>
               <div className="modal-body">
-                <p className="mb-0">Move this employee back to active employees?</p>
+                <p className="mb-0">Move this client back to active clients?</p>
                 <p className="mt-2">
-                  <strong>ID:</strong> {employeeToReturn.employeeId || employeeToReturn.idNo || employeeToReturn.id} <br />
-                  <strong>Name:</strong> {employeeToReturn.firstName} {employeeToReturn.lastName}
+                  <strong>ID:</strong> {clientToReturn.idNo || clientToReturn.id} <br />
+                  <strong>Name:</strong> {clientToReturn.clientName || 'N/A'}
                 </p>
                 <small className="text-muted">
-                  This will move the record from <strong>ExitEmployees</strong> to <strong>EmployeeBioData</strong>.
+                  This will move the record from <strong>ExitClients</strong> to <strong>ClientData</strong>.
                 </small>
               </div>
               <div className="modal-footer">
@@ -363,7 +349,7 @@ export default function DisplayEmployee() {
               </div>
               <div className="modal-body">
                 <p>
-                  The employee has been moved back to the <strong>EmployeeBioData</strong> section.
+                  The client has been moved back to the <strong>ClientData</strong> section.
                 </p>
               </div>
               <div className="modal-footer">
@@ -376,7 +362,7 @@ export default function DisplayEmployee() {
         </div>
       )}
 
-      {/* Save Success Modal */}
+      {/* Save Success Modal (for edits on ExitClients) */}
       {showSaveModal && (
         <div className="modal fade show" style={{ display: 'block', backgroundColor: 'rgba(0,0,0,0.5)' }}>
           <div className="modal-dialog modal-dialog-centered">
@@ -390,7 +376,7 @@ export default function DisplayEmployee() {
                 ></button>
               </div>
               <div className="modal-body">
-                <p>Exit employee details have been updated.</p>
+                <p>Exit client details have been updated.</p>
               </div>
               <div className="modal-footer">
                 <button type="button" className="btn btn-success" onClick={() => setShowSaveModal(false)}>
@@ -401,7 +387,6 @@ export default function DisplayEmployee() {
           </div>
         </div>
       )}
-
     </div>
   );
 }
@@ -409,11 +394,19 @@ export default function DisplayEmployee() {
 // Helper function for status badge styling
 const getStatusBadgeClass = (status) => {
   switch (status) {
-    case 'On Duty': return 'bg-success';
-    case 'Off Duty': return 'bg-secondary';
-    case 'Resigned': return 'bg-warning';
-    case 'Absconder': return 'bg-danger';
-    case 'Terminated': return 'bg-dark';
-    default: return 'bg-info';
+    case 'Running':
+      return 'bg-success';
+    case 'Closed':
+      return 'bg-secondary';
+    case 'Stop':
+      return 'bg-warning';
+    case 'Re-open':
+      return 'bg-info';
+    case 'Re-start':
+      return 'bg-primary';
+    case 'Re-place':
+      return 'bg-dark';
+    default:
+      return 'bg-info';
   }
 };

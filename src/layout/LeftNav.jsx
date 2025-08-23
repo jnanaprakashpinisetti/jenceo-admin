@@ -38,7 +38,7 @@ import ExistingEmployees from '../pages/ExistingWorker';
 
 import Investments from '../pages/Investments';
 import ClientInfo from '../pages/ClientInfo';
-import Reports from '../pages/Reports';
+import ClientExit from '../pages/ClientExit';
 import Expenses from '../pages/Expenses';
 import Task from '../pages/Task';
 import Admin from '../pages/Admin';
@@ -106,7 +106,7 @@ export default function LeftNav() {
                             <NavLink to='ClientInfo' className="nav-link" title='ClientInfo'> <img src={client} alt="" /> Client Info</NavLink>
                         </li>
                         <li className="nav-item">
-                            <NavLink to='Reports' className="nav-link" title='Reports'> <img src={sales} alt="" /> Reports</NavLink>
+                            <NavLink to='ClientExit' className="nav-link" title='ClientExit'> <img src={sales} alt="" /> ClientExit</NavLink>
                         </li>
                         <li className="nav-item">
                             <NavLink to='Dues' className="nav-link" title='Dues'> <img src={balance} alt="" /> Dues</NavLink>
@@ -145,7 +145,7 @@ export default function LeftNav() {
 
                 <Route path="Investments" element={<Investments />} />
                 <Route path="ClientInfo" element={<ClientInfo />} />
-                <Route path="Reports" element={<Reports />} />
+                <Route path="ClientExit" element={<ClientExit />} />
                 <Route path="Expenses" element={<Expenses />} />
                 <Route path="Task" element={<Task />} />
                 <Route path="Admin" element={<Admin />} />

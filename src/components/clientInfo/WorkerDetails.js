@@ -14,13 +14,13 @@ const WorkerDetails = ({ formData, handleChange, addWorker, removeWorker, errors
             <div className="col-md-6">
               {/* Worker ID No */}
               <div className="form-group mb-3">
-                <label>
+                <label htmlFor={`workerIdNo-${index}`}>
                   Worker ID No<span className="star">*</span>
                 </label>
                 <input
                   type="text"
                   className={`form-control ${getErr(index, "workerIdNo") ? "is-invalid" : ""}`}
-                  name="workerIdNo"
+                  name={`workerIdNo-${index}`}
                   value={worker.workerIdNo}
                   onChange={(e) => handleChange(e, "workers", index)}
                   id={`workerIdNo-${index}`}
@@ -32,13 +32,13 @@ const WorkerDetails = ({ formData, handleChange, addWorker, removeWorker, errors
 
               {/* Name */}
               <div className="form-group mb-3">
-                <label>
+                <label htmlFor={`cName-${index}`}>
                   Name <span className="star">*</span>
                 </label>
                 <input
                   type="text"
                   className={`form-control ${getErr(index, "cName") ? "is-invalid" : ""}`}
-                  name="cName"
+                  name={`cName-${index}`}
                   value={worker.cName}
                   onChange={(e) => handleChange(e, "workers", index)}
                   id={`cName-${index}`}
@@ -50,13 +50,13 @@ const WorkerDetails = ({ formData, handleChange, addWorker, removeWorker, errors
 
               {/* Basic Salary */}
               <div className="form-group mb-3">
-                <label>
+                <label htmlFor={`basicSalary-${index}`}>
                   Basic Salary <span className="star">*</span>
                 </label>
                 <input
                   type="number"
                   className={`form-control ${getErr(index, "basicSalary") ? "is-invalid" : ""}`}
-                  name="basicSalary"
+                  name={`basicSalary-${index}`}
                   value={worker.basicSalary}
                   onChange={(e) => handleChange(e, "workers", index)}
                   id={`basicSalary-${index}`}
@@ -70,13 +70,13 @@ const WorkerDetails = ({ formData, handleChange, addWorker, removeWorker, errors
             <div className="col-md-6">
               {/* Starting Date */}
               <div className="form-group mb-3">
-                <label>
+                <label htmlFor={`startingDate-${index}`}>
                   Starting Date <span className="star">*</span>
                 </label>
                 <input
                   type="date"
                   className={`form-control ${getErr(index, "startingDate") ? "is-invalid" : ""}`}
-                  name="startingDate"
+                  name={`startingDate-${index}`}
                   value={worker.startingDate}
                   onChange={(e) => handleChange(e, "workers", index)}
                   id={`startingDate-${index}`}
@@ -88,11 +88,11 @@ const WorkerDetails = ({ formData, handleChange, addWorker, removeWorker, errors
 
               {/* Ending Date */}
               <div className="form-group mb-3">
-                <label>Ending Date</label>
+                <label htmlFor={`endingDate-${index}`}>Ending Date</label>
                 <input
                   type="date"
                   className="form-control"
-                  name="endingDate"
+                  name={`endingDate-${index}`}
                   value={worker.endingDate}
                   onChange={(e) => handleChange(e, "workers", index)}
                   id={`endingDate-${index}`}
@@ -101,13 +101,13 @@ const WorkerDetails = ({ formData, handleChange, addWorker, removeWorker, errors
 
               {/* Mobile 1 */}
               <div className="form-group mb-3">
-                <label>
+                <label htmlFor={`mobile1-${index}`}>
                   Mobile 1 <span className="star">*</span>
                 </label>
                 <input
                   type="tel"
                   className={`form-control ${getErr(index, "mobile1") ? "is-invalid" : ""}`}
-                  name="mobile1"
+                  name={`mobile1-${index}`}
                   value={worker.mobile1}
                   onChange={(e) => handleChange(e, "workers", index)}
                   maxLength="10"
@@ -120,11 +120,11 @@ const WorkerDetails = ({ formData, handleChange, addWorker, removeWorker, errors
 
               {/* Mobile 2 */}
               <div className="form-group mb-3">
-                <label>Mobile 2</label>
+                <label htmlFor={`mobile2-${index}`}>Mobile 2</label>
                 <input
                   type="tel"
                   className={`form-control ${getErr(index, "mobile2") ? "is-invalid" : ""}`}
-                  name="mobile2"
+                  name={`mobile2-${index}`}
                   value={worker.mobile2}
                   onChange={(e) => handleChange(e, "workers", index)}
                   maxLength="10"
@@ -137,11 +137,11 @@ const WorkerDetails = ({ formData, handleChange, addWorker, removeWorker, errors
 
               {/* Remarks */}
               <div className="form-group mb-3">
-                <label>Remarks</label>
+                <label htmlFor={`remarks-${index}`}>Remarks</label>
                 <input
                   type="text"
                   className="form-control"
-                  name="remarks"
+                  name={`remarks-${index}`}
                   value={worker.remarks}
                   onChange={(e) => handleChange(e, "workers", index)}
                   id={`remarks-${index}`}

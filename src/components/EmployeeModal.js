@@ -5,9 +5,9 @@ const EmployeeModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode
     const [status, setStatus] = useState("On Duty");
     const [activeTab, setActiveTab] = useState("basic");
 
-    // validation errors
-    const [paymentErrors, setPaymentErrors] = useState([]);   // [{field: 'message'} per section]
-    const [workErrors, setWorkErrors] = useState([]);         // [{field: 'message'} per section]
+    // validation errors (array per row)
+    const [paymentErrors, setPaymentErrors] = useState([{}]);
+    const [workErrors, setWorkErrors] = useState([{}]);
 
     const blankPayment = () => ({
         date: "",
@@ -18,7 +18,7 @@ const EmployeeModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode
         bookNo: "",
         status: "",
         remarks: "",
-        __locked: false, // new = editable & removable
+        __locked: false, // new rows are editable/removable
     });
 
     const blankWork = () => ({
@@ -30,58 +30,88 @@ const EmployeeModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode
         toDate: "",
         serviceType: "",
         remarks: "",
-        __locked: false, // new = editable & removable
+        __locked: false, // new rows are editable/removable
     });
 
-    const lockArray = (arr) => (Array.isArray(arr) ? arr.map((r) => ({ ...r, __locked: true })) : []);
+    /* ------------------------------ helpers -------------------------------- */
+    const hasAnyValue = (row) =>
+        Object.entries(row).some(
+            ([k, v]) => k !== "__locked" && v !== null && v !== undefined && String(v).trim() !== ""
+        );
+
+    // Lock only rows that actually have any user-entered value
+    const lockIfFilled = (arr = []) =>
+        Array.isArray(arr) ? arr.map((r) => (hasAnyValue(r) ? { ...r, __locked: true } : { ...r, __locked: false })) : [];
+
+    // dot-notation safe set for nested fields (e.g., "emergencyContact1.name")
+    const setNested = (obj, path, value) => {
+        const keys = path.split(".");
+        const next = { ...obj };
+        let cur = next;
+        for (let i = 0; i < keys.length - 1; i++) {
+            const k = keys[i];
+            cur[k] = typeof cur[k] === "object" && cur[k] !== null ? { ...cur[k] } : {};
+            cur = cur[k];
+        }
+        cur[keys[keys.length - 1]] = value;
+        return next;
+    };
 
     useEffect(() => {
         if (employee) {
+            const paymentsInit =
+                Array.isArray(employee.payments) && employee.payments.length
+                    ? lockIfFilled(employee.payments)
+                    : [blankPayment()];
+            const workInit =
+                Array.isArray(employee.workDetails) && employee.workDetails.length
+                    ? lockIfFilled(employee.workDetails)
+                    : [blankWork()];
+
             setFormData({
                 ...employee,
-                // treat incoming items as existing (locked)
-                payments:
-                    Array.isArray(employee.payments) && employee.payments.length
-                        ? lockArray(employee.payments)
-                        : [blankPayment()],
-                workDetails:
-                    Array.isArray(employee.workDetails) && employee.workDetails.length
-                        ? lockArray(employee.workDetails)
-                        : [blankWork()],
+                payments: paymentsInit,
+                workDetails: workInit,
             });
+
             setStatus(employee.status || "On Duty");
-            setPaymentErrors((employee.payments || []).map(() => ({})).length ? (employee.payments || []).map(() => ({})) : [{}]);
-            setWorkErrors((employee.workDetails || []).map(() => ({})).length ? (employee.workDetails || []).map(() => ({})) : [{}]);
+
+            // initialize error arrays aligned with rows
+            setPaymentErrors((paymentsInit.length ? paymentsInit : [blankPayment()]).map(() => ({})));
+            setWorkErrors((workInit.length ? workInit : [blankWork()]).map(() => ({})));
         }
     }, [employee]);
 
     if (!isOpen) return null;
 
-    /* ----------------------- generic handlers ----------------------- */
+    /* ----------------------------- generic handlers ---------------------------- */
     const handleInputChange = (e) => {
         const { name, value } = e.target;
-        setFormData((prev) => ({ ...prev, [name]: value }));
+        setFormData((prev) => {
+            // support nested paths like "emergencyContact1.name"
+            if (name.includes(".")) return setNested(prev || {}, name, value);
+            return { ...prev, [name]: value };
+        });
     };
 
     const handleArrayChange = (section, index, field, value) => {
         setFormData((prev) => {
             const arr = [...(prev[section] || [])];
             const row = { ...(arr[index] || {}) };
-            if (row.__locked) return prev; // safety: don't edit locked rows
+            if (row.__locked) return prev; // don't edit locked rows
             row[field] = value;
             arr[index] = row;
             return { ...prev, [section]: arr };
         });
 
-        // clear that specific error
+        // clear the field error where the user typed
         if (section === "payments") {
             setPaymentErrors((prev) => {
                 const next = [...(prev || [])];
                 next[index] = { ...(next[index] || {}), [field]: "" };
                 return next;
             });
-        }
-        if (section === "workDetails") {
+        } else if (section === "workDetails") {
             setWorkErrors((prev) => {
                 const next = [...(prev || [])];
                 next[index] = { ...(next[index] || {}), [field]: "" };
@@ -128,15 +158,14 @@ const EmployeeModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode
         });
     };
 
-    /* ----------------------- validation ----------------------- */
-    const validate = () => {
+    /* -------------------------------- validation ------------------------------- */
+    const validatePayments = () => {
         let ok = true;
-
-        // Payments required: date, clientName, days, amount, typeOfPayment, status
         const pErrs = (formData.payments || []).map((p) => {
+            if (!hasAnyValue(p)) return {};
             const e = {};
             if (!p.date) e.date = "Date is required";
-            if (!p.clientName) e.clientName = "Client Name is required";
+            if (!p.clientName) e.clientName = "Client name is required";
             if (!p.days) e.days = "Days is required";
             else if (Number(p.days) <= 0 || isNaN(Number(p.days))) e.days = "Days must be a positive number";
             if (!p.amount) e.amount = "Amount is required";
@@ -147,12 +176,16 @@ const EmployeeModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode
             return e;
         });
         setPaymentErrors(pErrs.length ? pErrs : [{}]);
+        return ok;
+    };
 
-        // Work required: clientId, clientName, days, fromDate, toDate, serviceType
+    const validateWork = () => {
+        let ok = true;
         const wErrs = (formData.workDetails || []).map((w) => {
+            if (!hasAnyValue(w)) return {};
             const e = {};
             if (!w.clientId) e.clientId = "Client ID is required";
-            if (!w.clientName) e.clientName = "Client Name is required";
+            if (!w.clientName) e.clientName = "Client name is required";
             if (!w.days) e.days = "Days is required";
             else if (Number(w.days) <= 0 || isNaN(Number(w.days))) e.days = "Days must be a positive number";
             if (!w.fromDate) e.fromDate = "From date is required";
@@ -165,21 +198,30 @@ const EmployeeModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode
             return e;
         });
         setWorkErrors(wErrs.length ? wErrs : [{}]);
-
         return ok;
     };
 
+    const validateSection = (tabKey) => {
+        if (tabKey === "payment") return validatePayments();
+        if (tabKey === "working") return validateWork();
+        return true; // other tabs: no blocking validation here
+    };
+
+    /* --------------------------------- saving ---------------------------------- */
     const handleSave = () => {
-        if (!validate()) {
-            if ((paymentErrors || []).some((e) => Object.keys(e).length) || (formData.payments || []).some((p) => !p.date)) {
+        // validate only the active section
+        const ok = validateSection(activeTab);
+        if (!ok) {
+            // keep user on the tab with errors
+            if (activeTab !== "payment" && (paymentErrors || []).some((e) => Object.keys(e || {}).length)) {
                 setActiveTab("payment");
-            } else if ((workErrors || []).some((e) => Object.keys(e).length)) {
+            } else if (activeTab !== "working" && (workErrors || []).some((e) => Object.keys(e || {}).length)) {
                 setActiveTab("working");
             }
             return;
         }
 
-        // Save outgoing WITHOUT helper flags
+        // strip helper flags before sending up
         const payload = {
             ...formData,
             payments: (formData.payments || []).map(({ __locked, ...rest }) => rest),
@@ -188,12 +230,16 @@ const EmployeeModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode
         };
         onSave(payload);
 
-        // 1) After Save: mark all current rows as locked (old -> disabled)
-        setFormData((prev) => ({
-            ...prev,
-            payments: (prev.payments || []).map((p) => ({ ...p, __locked: true })),
-            workDetails: (prev.workDetails || []).map((w) => ({ ...w, __locked: true })),
-        }));
+        // Only lock rows in the section that was just saved — and ONLY the rows that are actually filled
+        setFormData((prev) => {
+            const updatedData = { ...prev };
+            if (activeTab === "payment") {
+                updatedData.payments = lockIfFilled(prev.payments);
+            } else if (activeTab === "working") {
+                updatedData.workDetails = lockIfFilled(prev.workDetails);
+            }
+            return updatedData;
+        });
     };
 
     const handleDelete = () => {
@@ -202,8 +248,8 @@ const EmployeeModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode
         }
     };
 
-    /* ----------------------- small UI helpers ----------------------- */
-    const renderInputField = (label, name, value, type = "text", placeholder = "", disabled = false) => (
+    /* ------------------------------ render helpers ----------------------------- */
+    const renderInputField = (label, name, value, type = "text", placeholder = "", hardDisabled = false) => (
         <div className="mb-3">
             <label className="form-label">
                 <strong>{label}</strong>
@@ -214,7 +260,7 @@ const EmployeeModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode
                 name={name}
                 value={value || ""}
                 onChange={handleInputChange}
-                disabled={disabled || !isEditMode}
+                disabled={hardDisabled || !isEditMode}
                 placeholder={placeholder}
             />
         </div>
@@ -252,13 +298,13 @@ const EmployeeModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode
                     type="text"
                     className="form-control form-control-sm me-2"
                     placeholder={placeholder}
-                    onKeyPress={(e) => {
-                        if (e.key === "Enter" && e.target.value) {
+                    onKeyDown={(e) => {
+                        if (e.key === "Enter" && e.currentTarget.value) {
                             const currentArray = formData[field] || [];
-                            if (!currentArray.includes(e.target.value)) {
-                                setFormData((prev) => ({ ...prev, [field]: [...currentArray, e.target.value] }));
+                            if (!currentArray.includes(e.currentTarget.value)) {
+                                setFormData((prev) => ({ ...prev, [field]: [...currentArray, e.currentTarget.value] }));
                             }
-                            e.target.value = "";
+                            e.currentTarget.value = "";
                             e.preventDefault();
                         }
                     }}
@@ -316,8 +362,7 @@ const EmployeeModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode
     };
 
     const modalClass = isEditMode ? "editEmployee" : "viewEmployee";
-    const Err = ({ msg }) =>
-        msg ? <div className="text-danger mt-1" style={{ fontSize: ".85rem" }}>{msg}</div> : null;
+    const Err = ({ msg }) => (msg ? <div className="text-danger mt-1" style={{ fontSize: ".85rem" }}>{msg}</div> : null);
 
     return (
         <div className={`modal fade show ${modalClass}`} style={{ display: "block", backgroundColor: "rgba(0, 0, 0, 0.81)" }}>
@@ -379,7 +424,7 @@ const EmployeeModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode
                                     <div className="modal-card-body">
                                         <div className="row">
                                             <div className="col-md-4">
-                                                {/* Disabled in edit mode */}
+                                                {/* Always disabled */}
                                                 {renderInputField("ID No", "idNo", formData.idNo || formData.employeeId, "text", "", true)}
                                             </div>
                                             <div className="col-md-4">{renderInputField("First Name", "firstName", formData.firstName)}</div>
@@ -884,6 +929,11 @@ const EmployeeModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode
                         ) : (
                             <button type="button" className="btn btn-secondary" onClick={onClose}>
                                 Close
+                            </button>
+                        )}
+                        {!!onDelete && isEditMode && (
+                            <button type="button" className="btn btn-outline-danger ms-auto" onClick={handleDelete}>
+                                Delete Employee
                             </button>
                         )}
                     </div>

@@ -3,6 +3,23 @@ import React from "react";
 export default function BasicInformation({ formData, handleChange, errors = {} }) {
   return (
     <div className="row">
+      <div className="col-12">
+        {/* ID No */}
+        <div className="form-group mb-3">
+          <label>ID No<span className="text-danger">*</span></label>
+          <input
+            type="text"
+            className={`form-control ${errors.idNo ? "is-invalid" : ""}`}
+            name="idNo"
+            value={formData.idNo}
+            onChange={handleChange}
+            placeholder="JC00001"
+            maxLength={7}
+          />
+          {errors.idNo && <div className="invalid-feedback">{errors.idNo}</div>}
+        </div>
+      </div>
+      
       <div className="col-md-6">
         {/* Client Name */}
         <div className="form-group mb-3">
@@ -42,6 +59,17 @@ export default function BasicInformation({ formData, handleChange, errors = {} }
             className="form-control"
             name="careOf"
             value={formData.careOf}
+            onChange={handleChange}
+          />
+        </div>
+        {/* Relation */}
+        <div className="form-group mb-3">
+          <label>Relation</label>
+          <input
+            type="text"
+            className="form-control"
+            name="relation"
+            value={formData.relation}
             onChange={handleChange}
           />
         </div>

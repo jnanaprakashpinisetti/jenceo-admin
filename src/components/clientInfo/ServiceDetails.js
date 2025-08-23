@@ -1,6 +1,8 @@
 import React from "react";
 
 export default function ServiceDetails({ formData, handleChange, errors = {} }) {
+  const today = new Date().toISOString().split('T')[0]; // Get today's date in YYYY-MM-DD format
+
   return (
     <div className="row">
       <div className="col-md-6">
@@ -38,11 +40,12 @@ export default function ServiceDetails({ formData, handleChange, errors = {} }) 
         <div className="form-group mb-3">
           <label>Service Charges<span className="text-danger">*</span></label>
           <input
-            type="number"
+            type="tel"
             className={`form-control ${errors.serviceCharges ? "is-invalid" : ""}`}
             name="serviceCharges"
             value={formData.serviceCharges}
             onChange={handleChange}
+            maxLength={5}
           />
           {errors.serviceCharges && (
             <div className="invalid-feedback">{errors.serviceCharges}</div>
@@ -53,11 +56,12 @@ export default function ServiceDetails({ formData, handleChange, errors = {} }) 
         <div className="form-group mb-3">
           <label>Travelling Charges</label>
           <input
-            type="number"
+            type="tel"
             className="form-control"
             name="travellingCharges"
             value={formData.travellingCharges}
             onChange={handleChange}
+            maxLength={4}
           />
         </div>
       </div>
@@ -72,6 +76,7 @@ export default function ServiceDetails({ formData, handleChange, errors = {} }) 
             name="startingDate"
             value={formData.startingDate}
             onChange={handleChange}
+            max={today} // Disable future dates
           />
           {errors.startingDate && (
             <div className="invalid-feedback">{errors.startingDate}</div>
@@ -87,6 +92,7 @@ export default function ServiceDetails({ formData, handleChange, errors = {} }) 
             name="endingDate"
             value={formData.endingDate}
             onChange={handleChange}
+            max={today} // Disable future dates
           />
         </div>
 
@@ -106,11 +112,12 @@ export default function ServiceDetails({ formData, handleChange, errors = {} }) 
         <div className="form-group mb-3">
           <label>Page No<span className="text-danger">*</span></label>
           <input
-            type="text"
+            type="tel"
             className={`form-control ${errors.pageNo ? "is-invalid" : ""}`}
             name="pageNo"
             value={formData.pageNo}
             onChange={handleChange}
+            maxLength={3}
           />
           {errors.pageNo && (
             <div className="invalid-feedback">{errors.pageNo}</div>

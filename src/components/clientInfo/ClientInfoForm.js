@@ -8,9 +8,11 @@ import PatientDetails from "../clientInfo/PatientDetails";
 import firebaseDB from "../../firebase";
 
 const getInitialFormData = () => ({
+  idNo: "",
   clientName: "",
   gender: "",
   careOf: "",
+  relation:"",
   location: "",
   mobileNo1: "",
   mobileNo2: "",
@@ -163,6 +165,15 @@ export default function ClientInfoForm() {
     });
   };
 
+  // this function to get today's date in YYYY-MM-DD format
+  const getTodayDate = () => {
+    const today = new Date();
+    const year = today.getFullYear();
+    const month = String(today.getMonth() + 1).padStart(2, '0');
+    const day = String(today.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+
   // COMPREHENSIVE VALIDATION FUNCTION
   const validateStep = (currentStep) => {
     let newErrors = { ...errors };
@@ -170,6 +181,13 @@ export default function ClientInfoForm() {
 
     // Step 1: Basic Info
     if (currentStep === 1) {
+        if (!formData.idNo.trim()) {
+          newErrors.idNo = "ID No is required";
+          isValid = false;
+        } else if (!/^JC\d{5}$/.test(formData.idNo)) {
+          newErrors.idNo = "ID No must be (e.g., JC00001)";
+          isValid = false;
+        }
       if (!formData.clientName.trim()) {
         newErrors.clientName = "Client Name is required";
         isValid = false;
@@ -424,17 +442,17 @@ export default function ClientInfoForm() {
   return (
     <div className="container mt-4">
       <div className="form-card">
-        <div className="card-header bg-primary text-white">
-          <h2 className="text-center mb-0">Client Information Form</h2>
+        <div className="card-header">
+          <h3 className="text-center mb-0">Client Information Form</h3>
         </div>
 
         <div className="px-4 pt-3">
-          <p className="text-center fw-bold">
+          <p className="text-center">
             Step {step} of {totalSteps}
           </p>
           <div className="progress mb-3">
             <div
-              className="progress-bar bg-success"
+              className="progress-bar bg-primary "
               role="progressbar"
               style={{ width: `${(step / totalSteps) * 100}%` }}
             />
@@ -445,7 +463,7 @@ export default function ClientInfoForm() {
         <form onSubmit={handleSubmit}>
           <div className="card-body">{renderStep()}</div>
 
-          <div className="card-footer d-flex justify-content-between">
+          <div className="card-footer d-flex justify-content-end w-100">
             {step > 1 && (
               <button type="button" className="btn btn-secondary" onClick={prevStep}>
                 Previous

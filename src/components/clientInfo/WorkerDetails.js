@@ -2,28 +2,29 @@ import React from "react";
 
 const WorkerDetails = ({ formData, handleChange, addWorker, removeWorker, errors = {} }) => {
   const workersErrors = errors.workers || [];
-
+  const today = new Date().toISOString().split('T')[0]; // Get today's date in YYYY-MM-DD format
+  
   const getErr = (idx, key) => (workersErrors[idx] ? workersErrors[idx][key] : "");
 
   return (
     <div>
       {formData.workers.map((worker, index) => (
-        <div key={worker.id} className="worker-card mb-3 p-3 border rounded">
+        <div key={index} className="worker-card mb-3 p-3 border rounded">
           <h5>Worker #{index + 1}</h5>
           <div className="row">
             <div className="col-md-6">
               {/* Worker ID No */}
               <div className="form-group mb-3">
                 <label htmlFor={`workerIdNo-${index}`}>
-                  Worker ID No<span className="star">*</span>
+                  Worker ID No <span className="star">*</span>
                 </label>
                 <input
                   type="text"
+                  id={`workerIdNo-${index}`}
                   className={`form-control ${getErr(index, "workerIdNo") ? "is-invalid" : ""}`}
-                  name={`workerIdNo-${index}`}
+                  name="workerIdNo"                       
                   value={worker.workerIdNo}
                   onChange={(e) => handleChange(e, "workers", index)}
-                  id={`workerIdNo-${index}`}
                 />
                 {getErr(index, "workerIdNo") && (
                   <div className="invalid-feedback">{getErr(index, "workerIdNo")}</div>
@@ -37,11 +38,11 @@ const WorkerDetails = ({ formData, handleChange, addWorker, removeWorker, errors
                 </label>
                 <input
                   type="text"
+                  id={`cName-${index}`}
                   className={`form-control ${getErr(index, "cName") ? "is-invalid" : ""}`}
-                  name={`cName-${index}`}
+                  name="cName"                            
                   value={worker.cName}
                   onChange={(e) => handleChange(e, "workers", index)}
-                  id={`cName-${index}`}
                 />
                 {getErr(index, "cName") && (
                   <div className="invalid-feedback">{getErr(index, "cName")}</div>
@@ -54,12 +55,13 @@ const WorkerDetails = ({ formData, handleChange, addWorker, removeWorker, errors
                   Basic Salary <span className="star">*</span>
                 </label>
                 <input
-                  type="number"
+                  type="tel"  
+                  id={`basicSalary-${index}`}
                   className={`form-control ${getErr(index, "basicSalary") ? "is-invalid" : ""}`}
-                  name={`basicSalary-${index}`}
+                  name="basicSalary"                       
                   value={worker.basicSalary}
                   onChange={(e) => handleChange(e, "workers", index)}
-                  id={`basicSalary-${index}`}
+                  maxLength={5}
                 />
                 {getErr(index, "basicSalary") && (
                   <div className="invalid-feedback">{getErr(index, "basicSalary")}</div>
@@ -75,11 +77,12 @@ const WorkerDetails = ({ formData, handleChange, addWorker, removeWorker, errors
                 </label>
                 <input
                   type="date"
+                  id={`startingDate-${index}`}
                   className={`form-control ${getErr(index, "startingDate") ? "is-invalid" : ""}`}
-                  name={`startingDate-${index}`}
+                  name="startingDate"                       
                   value={worker.startingDate}
                   onChange={(e) => handleChange(e, "workers", index)}
-                  id={`startingDate-${index}`}
+                  max={today}  
                 />
                 {getErr(index, "startingDate") && (
                   <div className="invalid-feedback">{getErr(index, "startingDate")}</div>
@@ -91,11 +94,12 @@ const WorkerDetails = ({ formData, handleChange, addWorker, removeWorker, errors
                 <label htmlFor={`endingDate-${index}`}>Ending Date</label>
                 <input
                   type="date"
+                  id={`endingDate-${index}`}
                   className="form-control"
-                  name={`endingDate-${index}`}
+                  name="endingDate"                       
                   value={worker.endingDate}
                   onChange={(e) => handleChange(e, "workers", index)}
-                  id={`endingDate-${index}`}
+                  max={today}  
                 />
               </div>
 
@@ -106,12 +110,12 @@ const WorkerDetails = ({ formData, handleChange, addWorker, removeWorker, errors
                 </label>
                 <input
                   type="tel"
+                  id={`mobile1-${index}`}
                   className={`form-control ${getErr(index, "mobile1") ? "is-invalid" : ""}`}
-                  name={`mobile1-${index}`}
+                  name="mobile1"                            
                   value={worker.mobile1}
                   onChange={(e) => handleChange(e, "workers", index)}
                   maxLength="10"
-                  id={`mobile1-${index}`}
                 />
                 {getErr(index, "mobile1") && (
                   <div className="invalid-feedback">{getErr(index, "mobile1")}</div>
@@ -123,12 +127,12 @@ const WorkerDetails = ({ formData, handleChange, addWorker, removeWorker, errors
                 <label htmlFor={`mobile2-${index}`}>Mobile 2</label>
                 <input
                   type="tel"
+                  id={`mobile2-${index}`}
                   className={`form-control ${getErr(index, "mobile2") ? "is-invalid" : ""}`}
-                  name={`mobile2-${index}`}
+                  name="mobile2"                            
                   value={worker.mobile2}
                   onChange={(e) => handleChange(e, "workers", index)}
                   maxLength="10"
-                  id={`mobile2-${index}`}
                 />
                 {getErr(index, "mobile2") && (
                   <div className="invalid-feedback">{getErr(index, "mobile2")}</div>
@@ -140,26 +144,30 @@ const WorkerDetails = ({ formData, handleChange, addWorker, removeWorker, errors
                 <label htmlFor={`remarks-${index}`}>Remarks</label>
                 <input
                   type="text"
+                  id={`remarks-${index}`}
                   className="form-control"
-                  name={`remarks-${index}`}
+                  name="remarks"                            
                   value={worker.remarks}
                   onChange={(e) => handleChange(e, "workers", index)}
-                  id={`remarks-${index}`}
                 />
               </div>
             </div>
           </div>
 
           {formData.workers.length > 1 && (
-            <button type="button" className="btn btn-danger btn-sm" onClick={() => removeWorker(index)}>
-              Remove Worker
+            <button
+              type="button"
+              className="btn btn-danger btn-sm"
+              onClick={() => removeWorker(index)}
+            >
+              Remove
             </button>
           )}
         </div>
       ))}
 
-      <button type="button" className="btn btn-primary" onClick={addWorker}>
-        Add Worker
+      <button type="button" className="btn btn-primary btn-sm" onClick={addWorker}>
+        Add
       </button>
     </div>
   );

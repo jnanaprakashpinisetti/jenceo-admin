@@ -7,7 +7,6 @@ import due from '../assets/due-blue.svg';
 import stock from '../assets/stock-blue.svg';
 
 import Card from '../components/Card';
-import Table from '../components/Table';
 
 export default function Dashboard() {
   return (
@@ -86,7 +85,6 @@ export default function Dashboard() {
         
       </div>
 
-      <Table/>
 
     </div>
   )

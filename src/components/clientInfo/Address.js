@@ -6,7 +6,7 @@ export default function Address({ formData, handleChange, errors = {} }) {
       <div className="col-md-6">
         {/* Door No */}
         <div className="form-group mb-3">
-          <label>D.No<span className="text-danger">*</span></label>
+          <label>Door No<span className="text-danger">*</span></label>
           <input
             type="text"
             className={`form-control ${errors.dNo ? "is-invalid" : ""}`}

@@ -2,6 +2,13 @@ import React from "react";
 
 const PaymentDetails = ({ formData, handleChange, addPayment, removePayment, errors = {} }) => {
   const paymentsErrors = errors.payments || [];
+  
+  // Calculate min date (10 days from today)
+  const today = new Date();
+  const minDate = new Date();
+  minDate.setDate(today.getDate());
+  const minDateFormatted = minDate.toISOString().split('T')[0];
+
   const getErr = (idx, key) => (paymentsErrors[idx] ? paymentsErrors[idx][key] : "");
 
   // Custom handler for radio buttons
@@ -82,12 +89,13 @@ const PaymentDetails = ({ formData, handleChange, addPayment, removePayment, err
                   Balance <span className="star">*</span>
                 </label>
                 <input
-                  type="number"
+                  type="tel"   
                   className={`form-control ${getErr(index, "balance") ? "is-invalid" : ""}`}
                   name="balance"
                   value={payment.balance}
                   onChange={(e) => handleChange(e, "payments", index)}
                   id={`balance-${index}`}
+                  maxLength={5}
                 />
                 {getErr(index, "balance") && (
                   <div className="invalid-feedback">{getErr(index, "balance")}</div>
@@ -100,12 +108,13 @@ const PaymentDetails = ({ formData, handleChange, addPayment, removePayment, err
                   Receipt No <span className="star">*</span>
                 </label>
                 <input
-                  type="text"
+                  type="tel"  
                   className={`form-control ${getErr(index, "receptNo") ? "is-invalid" : ""}`}
                   name="receptNo"
                   value={payment.receptNo}
                   onChange={(e) => handleChange(e, "payments", index)}
                   id={`receptNo-${index}`}
+                  maxLength={3}
                 />
                 {getErr(index, "receptNo") && (
                   <div className="invalid-feedback">{getErr(index, "receptNo")}</div>
@@ -137,7 +146,11 @@ const PaymentDetails = ({ formData, handleChange, addPayment, removePayment, err
                   value={payment.reminderDate}
                   onChange={(e) => handleChange(e, "payments", index)}
                   id={`reminderDate-${index}`}
+                  min={minDateFormatted} // Disable dates before 10 days from today
                 />
+                <small className="form-text text-muted">
+                  Must be at least 10 days from today
+                </small>
               </div>
             </div>
           </div>
@@ -148,14 +161,14 @@ const PaymentDetails = ({ formData, handleChange, addPayment, removePayment, err
               className="btn btn-danger btn-sm"
               onClick={() => removePayment(index)}
             >
-              Remove Payment
+              Remove
             </button>
           )}
         </div>
       ))}
 
-      <button type="button" className="btn btn-primary" onClick={addPayment}>
-        Add Payment
+      <button type="button" className="btn btn-primary btn-sm" onClick={addPayment}>
+        Add
       </button>
     </div>
   );

@@ -151,7 +151,7 @@ export default function DisplayEmployee() {
         try {
             await firebaseDB.child(`EmployeeBioData/${updatedEmployee.id}`).update(updatedEmployee);
             setIsModalOpen(false);
-            alert('Employee details updated successfully!');
+            // alert('Employee details updated successfully!');
         } catch (err) {
             setError('Error updating employee: ' + err.message);
         }

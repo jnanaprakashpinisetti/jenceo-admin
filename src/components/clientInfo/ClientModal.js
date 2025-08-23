@@ -53,7 +53,6 @@ const ClientModal = ({ client, isOpen, onClose, onSave, onDelete, isEditMode }) 
 
     const handleSubmit = (e) => {
         e.preventDefault();
-        // Remove helper keys before save
         const payload = stripLocks(formData);
         onSave(payload);
     };
@@ -80,8 +79,7 @@ const ClientModal = ({ client, isOpen, onClose, onSave, onDelete, isEditMode }) 
         setFormData((prev) => {
             const list = [...(prev.workers || [])];
             const row = list[index];
-            // don't remove locked rows
-            if (row?.__locked) return prev;
+            if (row?.__locked) return prev; // don't remove locked rows
             list.splice(index, 1);
             return { ...prev, workers: list };
         });
@@ -90,6 +88,7 @@ const ClientModal = ({ client, isOpen, onClose, onSave, onDelete, isEditMode }) 
     const addPayment = () => {
         const newPayment = {
             paymentMethod: "cash",
+            amount: "",        // <-- NEW field
             balance: "",
             receptNo: "",
             remarks: "",
@@ -106,8 +105,7 @@ const ClientModal = ({ client, isOpen, onClose, onSave, onDelete, isEditMode }) 
         setFormData((prev) => {
             const list = [...(prev.payments || [])];
             const row = list[index];
-            // don't remove locked rows
-            if (row?.__locked) return prev;
+            if (row?.__locked) return prev; // don't remove locked rows
             list.splice(index, 1);
             return { ...prev, payments: list };
         });
@@ -129,7 +127,9 @@ const ClientModal = ({ client, isOpen, onClose, onSave, onDelete, isEditMode }) 
             <div className="modal-dialog modal-xl modal-dialog-centered">
                 <div className="modal-content">
                     <div className="modal-header">
-                        <h5 className="modal-title">{isEditMode ? "Edit Client" : "View Client"} - {formData.idNo} - {formData.clientName}</h5>
+                        <h5 className="modal-title">
+                            {isEditMode ? "Edit Client" : "View Client"} - {formData.idNo} - {formData.clientName}
+                        </h5>
                         <button type="button" className="btn-close" onClick={onClose}></button>
                     </div>
 
@@ -159,85 +159,105 @@ const ClientModal = ({ client, isOpen, onClose, onSave, onDelete, isEditMode }) 
                             {/* Basic */}
                             {activeTab === "basic" && (
                                 <div className="row">
-                                    <div className="col-md-6">
-                                        <div className="mb-3">
-                                            <label className="form-label">ID No</label>
-                                            <input type="text" className="form-control" value={formData.idNo || ""} disabled />
+                                    <div className="row">
+
+                                        <div className="col-md-4">
+                                            <div className="mb-3">
+                                                <label className="form-label">ID No</label>
+                                                <input type="text" className="form-control" value={formData.idNo || ""} disabled />
+                                            </div>
                                         </div>
-                                        <div className="mb-3">
-                                            <label className="form-label">Client Name *</label>
-                                            <input
-                                                type="text"
-                                                className="form-control"
-                                                name="clientName"
-                                                value={formData.clientName || ""}
-                                                onChange={handleChange}
-                                                disabled={!isEditMode}
-                                            />
+                                        <div className="col-md-4">
+                                            <div className="mb-3">
+                                                <label className="form-label">Client Name *</label>
+                                                <input
+                                                    type="text"
+                                                    className="form-control"
+                                                    name="clientName"
+                                                    value={formData.clientName || ""}
+                                                    onChange={handleChange}
+                                                    disabled={!isEditMode}
+                                                />
+                                            </div>
                                         </div>
-                                        <div className="mb-3">
-                                            <label className="form-label">Gender *</label>
-                                            <select
-                                                className="form-control"
-                                                name="gender"
-                                                value={formData.gender || ""}
-                                                onChange={handleChange}
-                                                disabled={!isEditMode}
-                                            >
-                                                <option value="">Select Gender</option>
-                                                <option value="Male">Male</option>
-                                                <option value="Female">Female</option>
-                                                <option value="Other">Other</option>
-                                            </select>
+                                        <div className="col-md-4">
+                                            <div className="mb-3">
+                                                <label className="form-label">Gender *</label>
+                                                <select
+                                                    className="form-control"
+                                                    name="gender"
+                                                    value={formData.gender || ""}
+                                                    onChange={handleChange}
+                                                    disabled={!isEditMode}
+                                                >
+                                                    <option value="">Select Gender</option>
+                                                    <option value="Male">Male</option>
+                                                    <option value="Female">Female</option>
+                                                    <option value="Other">Other</option>
+                                                </select>
+                                            </div>
                                         </div>
-                                        <div className="mb-3">
-                                            <label className="form-label">Care Of</label>
-                                            <input
-                                                type="text"
-                                                className="form-control"
-                                                name="careOf"
-                                                value={formData.careOf || ""}
-                                                onChange={handleChange}
-                                                disabled={!isEditMode}
-                                            />
+
+                                    </div>
+                                    <div className="row">
+                                        <div className="col-md-4">
+                                            <div className="mb-3">
+                                                <label className="form-label">Care Of</label>
+                                                <input
+                                                    type="text"
+                                                    className="form-control"
+                                                    name="careOf"
+                                                    value={formData.careOf || ""}
+                                                    onChange={handleChange}
+                                                    disabled={!isEditMode}
+                                                />
+                                            </div>
+                                        </div>
+                                        <div className="col-md-4">
+                                            <div className="mb-3">
+                                                <label className="form-label">Location *</label>
+                                                <input
+                                                    type="text"
+                                                    className="form-control"
+                                                    name="location"
+                                                    value={formData.location || ""}
+                                                    onChange={handleChange}
+                                                    disabled={!isEditMode}
+                                                />
+                                            </div>
+                                        </div>
+                                        <div className="col-md-4">
+                                            <div className="mb-3">
+                                                <label className="form-label">Mobile No 1 *</label>
+                                                <input
+                                                    type="tel"
+                                                    className="form-control"
+                                                    name="mobileNo1"
+                                                    value={formData.mobileNo1 || ""}
+                                                    onChange={handleChange}
+                                                    disabled={!isEditMode}
+                                                    maxLength="10"
+                                                />
+                                            </div>
                                         </div>
                                     </div>
-                                    <div className="col-md-6">
-                                        <div className="mb-3">
-                                            <label className="form-label">Location *</label>
-                                            <input
-                                                type="text"
-                                                className="form-control"
-                                                name="location"
-                                                value={formData.location || ""}
-                                                onChange={handleChange}
-                                                disabled={!isEditMode}
-                                            />
+                                    <div className="row">
+                                        <div className="col-md-4">
+                                            <div className="mb-3">
+                                                <label className="form-label">Mobile No 2</label>
+                                                <input
+                                                    type="tel"
+                                                    className="form-control"
+                                                    name="mobileNo2"
+                                                    value={formData.mobileNo2 || ""}
+                                                    onChange={handleChange}
+                                                    disabled={!isEditMode}
+                                                    maxLength="10"
+                                                />
+                                            </div>
                                         </div>
-                                        <div className="mb-3">
-                                            <label className="form-label">Mobile No 1 *</label>
-                                            <input
-                                                type="tel"
-                                                className="form-control"
-                                                name="mobileNo1"
-                                                value={formData.mobileNo1 || ""}
-                                                onChange={handleChange}
-                                                disabled={!isEditMode}
-                                                maxLength="10"
-                                            />
-                                        </div>
-                                        <div className="mb-3">
-                                            <label className="form-label">Mobile No 2</label>
-                                            <input
-                                                type="tel"
-                                                className="form-control"
-                                                name="mobileNo2"
-                                                value={formData.mobileNo2 || ""}
-                                                onChange={handleChange}
-                                                disabled={!isEditMode}
-                                                maxLength="10"
-                                            />
-                                        </div>
+                                        <div className="col-md-4"></div>
+                                        <div className="col-md-4"></div>
                                     </div>
                                 </div>
                             )}
@@ -245,9 +265,9 @@ const ClientModal = ({ client, isOpen, onClose, onSave, onDelete, isEditMode }) 
                             {/* Address */}
                             {activeTab === "address" && (
                                 <div className="row">
-                                    <div className="col-md-6">
+                                    <div className="col-md-4">
                                         <div className="mb-3">
-                                            <label className="form-label">D.No *</label>
+                                            <label className="form-label">Door No *</label>
                                             <input
                                                 type="text"
                                                 className="form-control"
@@ -257,6 +277,8 @@ const ClientModal = ({ client, isOpen, onClose, onSave, onDelete, isEditMode }) 
                                                 disabled={!isEditMode}
                                             />
                                         </div>
+                                    </div>
+                                    <div className="col-md-4">
                                         <div className="mb-3">
                                             <label className="form-label">Landmark</label>
                                             <input
@@ -268,6 +290,8 @@ const ClientModal = ({ client, isOpen, onClose, onSave, onDelete, isEditMode }) 
                                                 disabled={!isEditMode}
                                             />
                                         </div>
+                                    </div>
+                                    <div className="col-md-4">
                                         <div className="mb-3">
                                             <label className="form-label">Street</label>
                                             <input
@@ -279,63 +303,79 @@ const ClientModal = ({ client, isOpen, onClose, onSave, onDelete, isEditMode }) 
                                                 disabled={!isEditMode}
                                             />
                                         </div>
-                                        <div className="mb-3">
-                                            <label className="form-label">Village/Town *</label>
-                                            <input
-                                                type="text"
-                                                className="form-control"
-                                                name="villageTown"
-                                                value={formData.villageTown || ""}
-                                                onChange={handleChange}
-                                                disabled={!isEditMode}
-                                            />
-                                        </div>
                                     </div>
-                                    <div className="col-md-6">
-                                        <div className="mb-3">
-                                            <label className="form-label">Mandal *</label>
-                                            <input
-                                                type="text"
-                                                className="form-control"
-                                                name="mandal"
-                                                value={formData.mandal || ""}
-                                                onChange={handleChange}
-                                                disabled={!isEditMode}
-                                            />
+
+                                    <div className="row">
+
+                                        <div className="col-md-4">
+                                            <div className="mb-3">
+                                                <label className="form-label">Village/Town *</label>
+                                                <input
+                                                    type="text"
+                                                    className="form-control"
+                                                    name="villageTown"
+                                                    value={formData.villageTown || ""}
+                                                    onChange={handleChange}
+                                                    disabled={!isEditMode}
+                                                />
+                                            </div>
                                         </div>
-                                        <div className="mb-3">
-                                            <label className="form-label">District *</label>
-                                            <input
-                                                type="text"
-                                                className="form-control"
-                                                name="district"
-                                                value={formData.district || ""}
-                                                onChange={handleChange}
-                                                disabled={!isEditMode}
-                                            />
+                                        <div className="col-md-4">
+                                            <div className="mb-3">
+                                                <label className="form-label">Mandal *</label>
+                                                <input
+                                                    type="text"
+                                                    className="form-control"
+                                                    name="mandal"
+                                                    value={formData.mandal || ""}
+                                                    onChange={handleChange}
+                                                    disabled={!isEditMode}
+                                                />
+                                            </div>
                                         </div>
-                                        <div className="mb-3">
-                                            <label className="form-label">State *</label>
-                                            <input
-                                                type="text"
-                                                className="form-control"
-                                                name="state"
-                                                value={formData.state || ""}
-                                                onChange={handleChange}
-                                                disabled={!isEditMode}
-                                            />
+                                        <div className="col-md-4">
+                                            <div className="mb-3">
+                                                <label className="form-label">District *</label>
+                                                <input
+                                                    type="text"
+                                                    className="form-control"
+                                                    name="district"
+                                                    value={formData.district || ""}
+                                                    onChange={handleChange}
+                                                    disabled={!isEditMode}
+                                                />
+                                            </div>
                                         </div>
-                                        <div className="mb-3">
-                                            <label className="form-label">Pincode *</label>
-                                            <input
-                                                type="text"
-                                                className="form-control"
-                                                name="pincode"
-                                                value={formData.pincode || ""}
-                                                onChange={handleChange}
-                                                disabled={!isEditMode}
-                                                maxLength="6"
-                                            />
+
+
+                                    </div>
+                                    <div className="row">
+                                        <div className="col-md-4">
+                                            <div className="mb-3">
+                                                <label className="form-label">State *</label>
+                                                <input
+                                                    type="text"
+                                                    className="form-control"
+                                                    name="state"
+                                                    value={formData.state || ""}
+                                                    onChange={handleChange}
+                                                    disabled={!isEditMode}
+                                                />
+                                            </div>
+                                        </div>
+                                        <div className="col-md-4">
+                                            <div className="mb-3">
+                                                <label className="form-label">Pincode *</label>
+                                                <input
+                                                    type="text"
+                                                    className="form-control"
+                                                    name="pincode"
+                                                    value={formData.pincode || ""}
+                                                    onChange={handleChange}
+                                                    disabled={!isEditMode}
+                                                    maxLength="6"
+                                                />
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
@@ -344,7 +384,8 @@ const ClientModal = ({ client, isOpen, onClose, onSave, onDelete, isEditMode }) 
                             {/* Service */}
                             {activeTab === "service" && (
                                 <div className="row">
-                                    <div className="col-md-6">
+
+                                    <div className="col-md-4">
                                         <div className="mb-3">
                                             <label className="form-label">Type of Service *</label>
                                             <input
@@ -356,17 +397,8 @@ const ClientModal = ({ client, isOpen, onClose, onSave, onDelete, isEditMode }) 
                                                 disabled={!isEditMode}
                                             />
                                         </div>
-                                        <div className="mb-3">
-                                            <label className="form-label">Service Period *</label>
-                                            <input
-                                                type="text"
-                                                className="form-control"
-                                                name="servicePeriod"
-                                                value={formData.servicePeriod || ""}
-                                                onChange={handleChange}
-                                                disabled={!isEditMode}
-                                            />
-                                        </div>
+                                    </div>
+                                    <div className="col-md-4">
                                         <div className="mb-3">
                                             <label className="form-label">Service Charges *</label>
                                             <input
@@ -378,71 +410,123 @@ const ClientModal = ({ client, isOpen, onClose, onSave, onDelete, isEditMode }) 
                                                 disabled={!isEditMode}
                                             />
                                         </div>
+                                    </div>
+                                    <div className="col-md-4">
                                         <div className="mb-3">
-                                            <label className="form-label">Travelling Charges</label>
+                                            <label className="form-label">Service Period *</label>
                                             <input
-                                                type="number"
+                                                type="text"
                                                 className="form-control"
-                                                name="travellingCharges"
-                                                value={formData.travellingCharges || ""}
+                                                name="servicePeriod"
+                                                value={formData.servicePeriod || ""}
                                                 onChange={handleChange}
                                                 disabled={!isEditMode}
                                             />
                                         </div>
                                     </div>
-                                    <div className="col-md-6">
-                                        <div className="mb-3">
-                                            <label className="form-label">Starting Date *</label>
-                                            <input
-                                                type="date"
-                                                className="form-control"
-                                                name="startingDate"
-                                                value={formData.startingDate || ""}
-                                                onChange={handleChange}
-                                                disabled={!isEditMode}
-                                            />
+
+
+                                    <div className="row">
+                                        <div className="col-md-4">
+                                            <div className="mb-3">
+                                                <label className="form-label">Travelling Charges</label>
+                                                <input
+                                                    type="number"
+                                                    className="form-control"
+                                                    name="travellingCharges"
+                                                    value={formData.travellingCharges || ""}
+                                                    onChange={handleChange}
+                                                    disabled={!isEditMode}
+                                                />
+                                            </div>
                                         </div>
-                                        <div className="mb-3">
-                                            <label className="form-label">Ending Date</label>
-                                            <input
-                                                type="date"
-                                                className="form-control"
-                                                name="endingDate"
-                                                value={formData.endingDate || ""}
-                                                onChange={handleChange}
-                                                disabled={!isEditMode}
-                                            />
+                                        <div className="col-md-4">
+                                            <div className="mb-3">
+                                                <label className="form-label">Service Status *</label>
+                                                <select
+                                                    className="form-control"
+                                                    name="serviceStatus"
+                                                    value={formData.serviceStatus || ""}
+                                                    onChange={handleChange}
+                                                    disabled={!isEditMode}
+                                                >
+                                                    <option value="">Select Status</option>
+                                                    <option value="running">Running</option>
+                                                    <option value="closed">Closed</option>
+                                                    <option value="stop">Stop</option>
+                                                    <option value="re-open">Re-open</option>
+                                                    <option value="re-start">Re-start</option>
+                                                    <option value="re-place">Re-place</option>
+                                                </select>
+                                            </div>
                                         </div>
-                                        <div className="mb-3">
-                                            <label className="form-label">Gap If Any</label>
-                                            <input
-                                                type="text"
-                                                className="form-control"
-                                                name="gapIfAny"
-                                                value={formData.gapIfAny || ""}
-                                                onChange={handleChange}
-                                                disabled={!isEditMode}
-                                            />
+                                        <div className="col-md-4">
+                                            <div className="mb-3">
+                                                <label className="form-label">Gap If Any</label>
+                                                <input
+                                                    type="text"
+                                                    className="form-control"
+                                                    name="gapIfAny"
+                                                    value={formData.gapIfAny || ""}
+                                                    onChange={handleChange}
+                                                    disabled={!isEditMode}
+                                                />
+                                            </div>
                                         </div>
-                                        <div className="mb-3">
-                                            <label className="form-label">Page No *</label>
-                                            <input
-                                                type="text"
-                                                className="form-control"
-                                                name="pageNo"
-                                                value={formData.pageNo || ""}
-                                                onChange={handleChange}
-                                                disabled={!isEditMode}
-                                            />
+
+                                    </div>
+
+                                    <div className="row">
+                                        <div className="col-md-4">
+                                            <div className="mb-3">
+                                                <label className="form-label">Starting Date *</label>
+                                                <input
+                                                    type="date"
+                                                    className="form-control"
+                                                    name="startingDate"
+                                                    value={formData.startingDate || ""}
+                                                    onChange={handleChange}
+                                                    disabled={!isEditMode}
+                                                />
+                                            </div>
+                                        </div>
+                                        <div className="col-md-4">
+                                            <div className="mb-3">
+                                                <label className="form-label">Ending Date</label>
+                                                <input
+                                                    type="date"
+                                                    className="form-control"
+                                                    name="endingDate"
+                                                    value={formData.endingDate || ""}
+                                                    onChange={handleChange}
+                                                    disabled={!isEditMode}
+                                                />
+                                            </div>
+                                        </div>
+                                        <div className="col-md-4">
+                                            <div className="mb-3">
+                                                <label className="form-label">Page No *</label>
+                                                <input
+                                                    type="text"
+                                                    className="form-control"
+                                                    name="pageNo"
+                                                    value={formData.pageNo || ""}
+                                                    onChange={handleChange}
+                                                    disabled={!isEditMode}
+                                                />
+                                            </div>
                                         </div>
                                     </div>
+
                                 </div>
                             )}
 
                             {/* Patient */}
                             {activeTab === "patient" && (
+
+
                                 <div className="row">
-                                    <div className="col-md-6">
+                                    <div className="col-md-4">
                                         <div className="mb-3">
                                             <label className="form-label">Patient Name *</label>
                                             <input
@@ -454,6 +538,10 @@ const ClientModal = ({ client, isOpen, onClose, onSave, onDelete, isEditMode }) 
                                                 disabled={!isEditMode}
                                             />
                                         </div>
+
+                                    </div>
+
+                                    <div className="col-md-4">
                                         <div className="mb-3">
                                             <label className="form-label">Patient Age *</label>
                                             <input
@@ -465,24 +553,9 @@ const ClientModal = ({ client, isOpen, onClose, onSave, onDelete, isEditMode }) 
                                                 disabled={!isEditMode}
                                             />
                                         </div>
-                                        <div className="mb-3">
-                                            <label className="form-label">Service Status *</label>
-                                            <select
-                                                className="form-control"
-                                                name="serviceStatus"
-                                                value={formData.serviceStatus || ""}
-                                                onChange={handleChange}
-                                                disabled={!isEditMode}
-                                            >
-                                                <option value="">Select Status</option>
-                                                <option value="running">Running</option>
-                                                <option value="closed">Closed</option>
-                                                <option value="stop">Stop</option>
-                                                <option value="re-open">Re-open</option>
-                                                <option value="re-start">Re-start</option>
-                                                <option value="re-place">Re-place</option>
-                                            </select>
-                                        </div>
+
+                                    </div>
+                                    <div className="col-md-4">
                                         <div className="mb-3">
                                             <label className="form-label">Dropper Name *</label>
                                             <input
@@ -495,6 +568,7 @@ const ClientModal = ({ client, isOpen, onClose, onSave, onDelete, isEditMode }) 
                                             />
                                         </div>
                                     </div>
+
                                     <div className="col-md-6">
                                         <div className="mb-3">
                                             <label className="form-label">About Patient *</label>
@@ -507,6 +581,8 @@ const ClientModal = ({ client, isOpen, onClose, onSave, onDelete, isEditMode }) 
                                                 rows="4"
                                             />
                                         </div>
+                                    </div>
+                                    <div className="col-md-6">
                                         <div className="mb-3">
                                             <label className="form-label">About Work *</label>
                                             <textarea
@@ -534,7 +610,6 @@ const ClientModal = ({ client, isOpen, onClose, onSave, onDelete, isEditMode }) 
                                                         Worker #{index + 1} {isLocked && <span className="badge bg-secondary ms-2">Existing (locked)</span>}
                                                     </h6>
 
-                                                    {/* Remove only for NEW rows in edit mode */}
                                                     {isEditMode && !isLocked && (formData.workers?.length || 0) > 1 && (
                                                         <button type="button" className="btn btn-danger btn-sm" onClick={() => removeWorker(index)}>
                                                             Remove
@@ -544,7 +619,7 @@ const ClientModal = ({ client, isOpen, onClose, onSave, onDelete, isEditMode }) 
 
                                                 <div className="modal-card-body">
                                                     <div className="row">
-                                                        <div className="col-md-6">
+                                                        <div className="col-md-4">
                                                             <div className="mb-3">
                                                                 <label className="form-label">Worker ID No *</label>
                                                                 <input
@@ -556,6 +631,8 @@ const ClientModal = ({ client, isOpen, onClose, onSave, onDelete, isEditMode }) 
                                                                     disabled={!isEditMode || isLocked}
                                                                 />
                                                             </div>
+                                                        </div>
+                                                        <div className="col-md-4">
                                                             <div className="mb-3">
                                                                 <label className="form-label">Name *</label>
                                                                 <input
@@ -567,6 +644,9 @@ const ClientModal = ({ client, isOpen, onClose, onSave, onDelete, isEditMode }) 
                                                                     disabled={!isEditMode || isLocked}
                                                                 />
                                                             </div>
+                                                        </div>
+
+                                                        <div className="col-md-4">
                                                             <div className="mb-3">
                                                                 <label className="form-label">Basic Salary *</label>
                                                                 <input
@@ -579,8 +659,10 @@ const ClientModal = ({ client, isOpen, onClose, onSave, onDelete, isEditMode }) 
                                                                 />
                                                             </div>
                                                         </div>
+                                                    </div>
 
-                                                        <div className="col-md-6">
+                                                    <div className="row">
+                                                        <div className="col-md-4">
                                                             <div className="mb-3">
                                                                 <label className="form-label">Starting Date *</label>
                                                                 <input
@@ -592,6 +674,8 @@ const ClientModal = ({ client, isOpen, onClose, onSave, onDelete, isEditMode }) 
                                                                     disabled={!isEditMode || isLocked}
                                                                 />
                                                             </div>
+                                                        </div>
+                                                        <div className="col-md-4">
                                                             <div className="mb-3">
                                                                 <label className="form-label">Ending Date</label>
                                                                 <input
@@ -603,6 +687,8 @@ const ClientModal = ({ client, isOpen, onClose, onSave, onDelete, isEditMode }) 
                                                                     disabled={!isEditMode || isLocked}
                                                                 />
                                                             </div>
+                                                        </div>
+                                                        <div className="col-md-4">
                                                             <div className="mb-3">
                                                                 <label className="form-label">Mobile 1 *</label>
                                                                 <input
@@ -615,21 +701,14 @@ const ClientModal = ({ client, isOpen, onClose, onSave, onDelete, isEditMode }) 
                                                                     maxLength="10"
                                                                 />
                                                             </div>
-                                                            <div className="mb-3">
-                                                                <label className="form-label">Mobile 2</label>
-                                                                <input
-                                                                    type="tel"
-                                                                    className="form-control"
-                                                                    name="mobile2"
-                                                                    value={worker.mobile2 || ""}
-                                                                    onChange={(e) => handleChange(e, "workers", index)}
-                                                                    disabled={!isEditMode || isLocked}
-                                                                    maxLength="10"
-                                                                />
-                                                            </div>
+                                                        </div>
+                                                    </div>
+
+                                                    <div className="row">
+                                                        <div className="col-md-12">
                                                             <div className="mb-3">
                                                                 <label className="form-label">Remarks</label>
-                                                                <input
+                                                                <textarea
                                                                     type="text"
                                                                     className="form-control"
                                                                     name="remarks"
@@ -645,7 +724,6 @@ const ClientModal = ({ client, isOpen, onClose, onSave, onDelete, isEditMode }) 
                                         );
                                     })}
 
-                                    {/* Add only in edit mode */}
                                     {isEditMode && (
                                         <button type="button" className="btn btn-primary" onClick={addWorker}>
                                             Add New Worker
@@ -666,7 +744,6 @@ const ClientModal = ({ client, isOpen, onClose, onSave, onDelete, isEditMode }) 
                                                         Payment #{index + 1} {isLocked && <span className="badge bg-secondary ms-2">Existing (locked)</span>}
                                                     </h6>
 
-                                                    {/* Remove only for NEW rows in edit mode */}
                                                     {isEditMode && !isLocked && (formData.payments?.length || 0) > 1 && (
                                                         <button type="button" className="btn btn-danger btn-sm" onClick={() => removePayment(index)}>
                                                             Remove
@@ -675,8 +752,9 @@ const ClientModal = ({ client, isOpen, onClose, onSave, onDelete, isEditMode }) 
                                                 </div>
 
                                                 <div className="modal-card-body">
+                                                    {/* Row: Payment Method, Amount, Balance */}
                                                     <div className="row">
-                                                        <div className="col-md-6">
+                                                        <div className="col-md-4">
                                                             <div className="mb-3">
                                                                 <label className="form-label">Payment Method *</label>
                                                                 <div>
@@ -689,7 +767,11 @@ const ClientModal = ({ client, isOpen, onClose, onSave, onDelete, isEditMode }) 
                                                                                 value={opt}
                                                                                 checked={payment.paymentMethod === opt}
                                                                                 onChange={() =>
-                                                                                    handleChange({ target: { name: "paymentMethod", value: opt } }, "payments", index)
+                                                                                    handleChange(
+                                                                                        { target: { name: "paymentMethod", value: opt } },
+                                                                                        "payments",
+                                                                                        index
+                                                                                    )
                                                                                 }
                                                                                 disabled={!isEditMode || isLocked}
                                                                             />
@@ -700,7 +782,23 @@ const ClientModal = ({ client, isOpen, onClose, onSave, onDelete, isEditMode }) 
                                                                     ))}
                                                                 </div>
                                                             </div>
+                                                        </div>
 
+                                                        <div className="col-md-4">
+                                                            <div className="mb-3">
+                                                                <label className="form-label">Amount *</label>
+                                                                <input
+                                                                    type="number"
+                                                                    className="form-control"
+                                                                    name="amount"
+                                                                    value={payment.amount || ""}
+                                                                    onChange={(e) => handleChange(e, "payments", index)}
+                                                                    disabled={!isEditMode || isLocked}
+                                                                />
+                                                            </div>
+                                                        </div>
+
+                                                        <div className="col-md-4">
                                                             <div className="mb-3">
                                                                 <label className="form-label">Balance *</label>
                                                                 <input
@@ -712,7 +810,11 @@ const ClientModal = ({ client, isOpen, onClose, onSave, onDelete, isEditMode }) 
                                                                     disabled={!isEditMode || isLocked}
                                                                 />
                                                             </div>
+                                                        </div>
+                                                    </div>
 
+                                                    <div className="row">
+                                                        <div className="col-md-4">
                                                             <div className="mb-3">
                                                                 <label className="form-label">Receipt No *</label>
                                                                 <input
@@ -725,20 +827,7 @@ const ClientModal = ({ client, isOpen, onClose, onSave, onDelete, isEditMode }) 
                                                                 />
                                                             </div>
                                                         </div>
-
-                                                        <div className="col-md-6">
-                                                            <div className="mb-3">
-                                                                <label className="form-label">Remarks</label>
-                                                                <input
-                                                                    type="text"
-                                                                    className="form-control"
-                                                                    name="remarks"
-                                                                    value={payment.remarks || ""}
-                                                                    onChange={(e) => handleChange(e, "payments", index)}
-                                                                    disabled={!isEditMode || isLocked}
-                                                                />
-                                                            </div>
-
+                                                        <div className="col-md-4">
                                                             <div className="mb-3">
                                                                 <label className="form-label">Reminder Date</label>
                                                                 <input
@@ -750,14 +839,30 @@ const ClientModal = ({ client, isOpen, onClose, onSave, onDelete, isEditMode }) 
                                                                     disabled={!isEditMode || isLocked}
                                                                 />
                                                             </div>
+
+                                                        </div>
+
+                                                        <div className="col-md-4">
+                                                            <div className="mb-3">
+                                                                <label className="form-label">Remarks</label>
+                                                                <input
+                                                                    type="text"
+                                                                    className="form-control"
+                                                                    name="remarks"
+                                                                    value={payment.remarks || ""}
+                                                                    onChange={(e) => handleChange(e, "payments", index)}
+                                                                    disabled={!isEditMode || isLocked}
+                                                                />
+                                                            </div>
                                                         </div>
                                                     </div>
+
+
                                                 </div>
                                             </div>
                                         );
                                     })}
 
-                                    {/* Add only in edit mode */}
                                     {isEditMode && (
                                         <button type="button" className="btn btn-primary" onClick={addPayment}>
                                             Add New Payment
@@ -775,8 +880,8 @@ const ClientModal = ({ client, isOpen, onClose, onSave, onDelete, isEditMode }) 
                                     Save Changes
                                 </button>
                                 {/* <button type="button" className="btn btn-danger" onClick={handleDeleteClick}>
-                  Delete
-                </button> */}
+                                    Delete
+                                </button> */}
                             </>
                         )}
                         <button type="button" className="btn btn-secondary" onClick={onClose}>
@@ -797,7 +902,8 @@ const ClientModal = ({ client, isOpen, onClose, onSave, onDelete, isEditMode }) 
                             </div>
                             <div className="modal-body">
                                 <p>
-                                    Are you sure you want to delete this client? The client data will be moved to the ExistClients database.
+                                    Are you sure you want to delete this client? The client data will be moved to the ExistClients
+                                    database.
                                 </p>
                             </div>
                             <div className="modal-footer">

@@ -92,14 +92,30 @@ const EmployeeModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode
     const openConfirm = (title, message, onConfirm) => setConfirmState({ open: true, title, message, onConfirm });
     const closeConfirm = () => setConfirmState((s) => ({ ...s, open: false }));
 
+    // date helpers
+    const today = new Date();
+    const toISO = (d) => (d instanceof Date ? new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10) : "");
+    const minusYears = (y) => new Date(today.getFullYear() - y, today.getMonth(), today.getDate());
+
+    const DOB_MIN = toISO(minusYears(60));
+    const DOB_MAX = toISO(minusYears(18));
+
+    const DOM_MIN = toISO(minusYears(40));
+    const DOM_MAX = toISO(today);
+
+    const PAY_MIN = toISO(minusYears(1));
+    const PAY_MAX = toISO(today);
+
     const blankPayment = () => ({
         date: "",
         clientName: "",
         days: "",
         amount: "",
+        balanceAmount: "",
         typeOfPayment: "",
         bookNo: "",
         status: "",
+        receiptNo: "",
         remarks: "",
         __locked: false,
     });
@@ -117,9 +133,7 @@ const EmployeeModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode
     });
 
     const hasAnyValue = (row) =>
-        Object.entries(row).some(
-            ([k, v]) => k !== "__locked" && v !== null && v !== undefined && String(v).trim() !== ""
-        );
+        Object.entries(row).some(([k, v]) => k !== "__locked" && v !== null && v !== undefined && String(v).trim() !== "");
 
     // Lock only rows that have data; keep empty rows editable
     const lockIfFilled = (arr = []) =>
@@ -144,13 +158,15 @@ const EmployeeModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode
             const paymentsInit =
                 Array.isArray(employee.payments) && employee.payments.length ? lockIfFilled(employee.payments) : [blankPayment()];
             const workInit =
-                Array.isArray(employee.workDetails) && employee.workDetails.length
-                    ? lockIfFilled(employee.workDetails)
-                    : [blankWork()];
-
+                Array.isArray(employee.workDetails) && employee.workDetails.length ? lockIfFilled(employee.workDetails) : [blankWork()];
             setFormData({
                 ...employee,
-                payments: paymentsInit,
+                // ensure optional/new fields exist
+                secondarySkills: employee.secondarySkills || [],
+                allowance: employee.allowance ?? "",       // NEW
+                pageNo: employee.pageNo ?? "",             // moved field still in formData
+                basicSalary: employee.basicSalary ?? "",   // moved field still in formData
+                payments: paymentsInit.map((p) => ({ balanceAmount: "", receiptNo: "", ...p })), // add new keys if missing
                 workDetails: workInit,
             });
 
@@ -169,11 +185,21 @@ const EmployeeModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode
     };
 
     const handleArrayChange = (section, index, field, value) => {
+        // Hard sanitization for some fields
+        let val = value;
+        if (section === "payments") {
+            if (field === "amount") {
+                val = String(value || "").replace(/\D/g, "").slice(0, 5); // max 5 digits, numeric only
+            } else if (field === "balanceAmount") {
+                val = String(value || "").replace(/\D/g, ""); // numeric only
+            }
+        }
+
         setFormData((prev) => {
             const arr = [...(prev[section] || [])];
             const row = { ...(arr[index] || {}) };
             if (row.__locked) return prev; // prevent editing locked rows
-            row[field] = value;
+            row[field] = val;
             arr[index] = row;
             return { ...prev, [section]: arr };
         });
@@ -233,17 +259,78 @@ const EmployeeModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode
     };
 
     /* ------------------------------- Validation -------------------------------- */
+
+    const validateBasic = () => {
+        const errs = [];
+        // DOB range check
+        if (formData.dateOfBirth) {
+            const dob = new Date(formData.dateOfBirth);
+            if (toISO(dob) < DOB_MIN || toISO(dob) > DOB_MAX) {
+                errs.push("Age must be between 18 and 60 years.");
+            }
+        }
+
+        // mobile numbers (10 digits)
+        const mobilePattern = /^[0-9]{10}$/;
+        if (formData.mobileNo1 && !mobilePattern.test(String(formData.mobileNo1))) errs.push("Mobile 1 must be a 10-digit number.");
+        if (formData.mobileNo2 && !mobilePattern.test(String(formData.mobileNo2))) errs.push("Mobile 2 must be a 10-digit number.");
+
+        // Aadhaar (12 digits)
+        const aadhaarPattern = /^[0-9]{12}$/;
+        if (formData.aadharNo && !aadhaarPattern.test(String(formData.aadharNo))) errs.push("Aadhaar must be a 12-digit number.");
+
+        return { ok: errs.length === 0, errs };
+    };
+
+    const validateAddress = () => {
+        const errs = [];
+        const pinPattern = /^[0-9]{6}$/;
+        if (formData.permanentPincode && !pinPattern.test(String(formData.permanentPincode)))
+            errs.push("Permanent pincode must be a 6-digit number.");
+        if (formData.presentPincode && !pinPattern.test(String(formData.presentPincode)))
+            errs.push("Present pincode must be a 6-digit number.");
+        return { ok: errs.length === 0, errs };
+    };
+
+    const validatePersonal = () => {
+        const errs = [];
+        // Date of Marriage range only if Married and provided
+        if (formData.maritalStatus === "Married" && formData.dateOfMarriage) {
+            const dom = new Date(formData.dateOfMarriage);
+            if (toISO(dom) < DOM_MIN || toISO(dom) > DOM_MAX) {
+                errs.push("Date of marriage must be within the last 40 years.");
+            }
+        }
+        return { ok: errs.length === 0, errs };
+    };
+
     const validatePayments = () => {
         let ok = true;
         const pErrs = (formData.payments || []).map((p) => {
             if (!hasAnyValue(p)) return {};
             const e = {};
-            if (!p.date) e.date = "Date is required";
+            // date required + within last 1 year
+            if (!p.date) {
+                e.date = "Date is required";
+            } else {
+                const d = new Date(p.date);
+                const iso = toISO(d);
+                if (iso < PAY_MIN || iso > PAY_MAX) e.date = "Payment date must be within the last 1 year";
+            }
             if (!p.clientName) e.clientName = "Client name is required";
             if (!p.days) e.days = "Days is required";
             else if (Number(p.days) <= 0 || isNaN(Number(p.days))) e.days = "Days must be a positive number";
-            if (!p.amount) e.amount = "Amount is required";
-            else if (Number(p.amount) <= 0 || isNaN(Number(p.amount))) e.amount = "Amount must be a positive number";
+
+            // amount: positive number up to 5 digits
+            const amountDigits = String(p.amount || "").replace(/\D/g, "");
+            if (!amountDigits) e.amount = "Amount is required";
+            else if (!/^[0-9]{1,5}$/.test(amountDigits) || Number(amountDigits) <= 0)
+                e.amount = "Amount must be a positive number up to 5 digits";
+
+            // balanceAmount (optional but if present must be numeric)
+            if (p.balanceAmount && !/^[0-9]+$/.test(String(p.balanceAmount)))
+                e.balanceAmount = "Enter a valid balance amount";
+
             if (!p.typeOfPayment) e.typeOfPayment = "Type of payment is required";
             if (!p.status) e.status = "Status is required";
             if (Object.keys(e).length) ok = false;
@@ -276,9 +363,12 @@ const EmployeeModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode
     };
 
     const validateSection = (tabKey) => {
-        if (tabKey === "payment") return validatePayments();
-        if (tabKey === "working") return validateWork();
-        return true; // other tabs not blocking
+        if (tabKey === "basic") return validateBasic();
+        if (tabKey === "address") return validateAddress();
+        if (tabKey === "personal") return validatePersonal();
+        if (tabKey === "payment") return { ok: validatePayments(), errs: [] };
+        if (tabKey === "working") return { ok: validateWork(), errs: [] };
+        return { ok: true, errs: [] };
     };
 
     const summarizeErrors = () => {
@@ -286,12 +376,22 @@ const EmployeeModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode
         if (activeTab === "payment") {
             (paymentErrors || []).forEach((row, idx) => {
                 const fields = Object.keys(row || {});
-                if (fields.length) items.push(<li key={`p-${idx}`}>Payment #{idx + 1}: {Object.values(row).join(", ")}</li>);
+                if (fields.length)
+                    items.push(
+                        <li key={`p-${idx}`}>
+                            Payment #{idx + 1}: {Object.values(row).join(", ")}
+                        </li>
+                    );
             });
         } else if (activeTab === "working") {
             (workErrors || []).forEach((row, idx) => {
                 const fields = Object.keys(row || {});
-                if (fields.length) items.push(<li key={`w-${idx}`}>Work #{idx + 1}: {Object.values(row).join(", ")}</li>);
+                if (fields.length)
+                    items.push(
+                        <li key={`w-${idx}`}>
+                            Work #{idx + 1}: {Object.values(row).join(", ")}
+                        </li>
+                    );
             });
         }
         return items.length ? <ul className="mb-0">{items}</ul> : <span>No errors</span>;
@@ -299,7 +399,8 @@ const EmployeeModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode
 
     /* --------------------------------- Actions --------------------------------- */
     const handleSave = () => {
-        const ok = validateSection(activeTab);
+        const { ok, errs } = validateSection(activeTab);
+
         if (!ok) {
             // ensure user stays on the tab with errors
             if (activeTab !== "payment" && (paymentErrors || []).some((e) => Object.keys(e || {}).length)) {
@@ -307,7 +408,21 @@ const EmployeeModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode
             } else if (activeTab !== "working" && (workErrors || []).some((e) => Object.keys(e || {}).length)) {
                 setActiveTab("working");
             }
-            openAlert("Please fix the following", summarizeErrors(), "danger");
+
+            openAlert(
+                "Please fix the following",
+                <>
+                    {!!errs?.length && (
+                        <ul className="mb-2">
+                            {errs.map((m, i) => (
+                                <li key={i}>{m}</li>
+                            ))}
+                        </ul>
+                    )}
+                    {activeTab === "payment" || activeTab === "working" ? summarizeErrors() : null}
+                </>,
+                "danger"
+            );
             return;
         }
 
@@ -331,19 +446,24 @@ const EmployeeModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode
     };
 
     const handleDelete = () => {
-        openConfirm(
-            "Delete Employee",
-            "Are you sure you want to delete this employee? This action cannot be undone.",
-            () => {
-                closeConfirm();
-                onDelete && onDelete(formData.id || formData.employeeId);
-                openAlert("Deleted", <span>Employee has been deleted successfully.</span>, "success");
-            }
-        );
+        openConfirm("Delete Employee", "Are you sure you want to delete this employee? This action cannot be undone.", () => {
+            closeConfirm();
+            onDelete && onDelete(formData.id || formData.employeeId);
+            openAlert("Deleted", <span>Employee has been deleted successfully.</span>, "success");
+        });
     };
 
     /* ------------------------------ render helpers ----------------------------- */
-    const renderInputField = (label, name, value, type = "text", placeholder = "", hardDisabled = false) => (
+    // Enhanced to accept extraProps (like min, max, maxLength, pattern, inputMode)
+    const renderInputField = (
+        label,
+        name,
+        value,
+        type = "text",
+        placeholder = "",
+        hardDisabled = false,
+        extraProps = {}
+    ) => (
         <div className="mb-3">
             <label className="form-label">
                 <strong>{label}</strong>
@@ -354,8 +474,9 @@ const EmployeeModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode
                 name={name}
                 value={value || ""}
                 onChange={handleInputChange}
-                disabled={hardDisabled || !isEditMode}
+                disabled={hardDisabled || !isEditMode || extraProps?.disabled === true}
                 placeholder={placeholder}
+                {...extraProps}
             />
         </div>
     );
@@ -365,13 +486,7 @@ const EmployeeModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode
             <label className="form-label">
                 <strong>{label}</strong>
             </label>
-            <select
-                className="form-select form-select-sm"
-                name={name}
-                value={value || ""}
-                onChange={handleInputChange}
-                disabled={!isEditMode}
-            >
+            <select className="form-select form-select-sm" name={name} value={value || ""} onChange={handleInputChange} disabled={!isEditMode}>
                 <option value="">Select {label}</option>
                 {options.map((option) => (
                     <option key={option.value} value={option.value}>
@@ -439,16 +554,36 @@ const EmployeeModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode
                     <div className="row">
                         <div className="col-md-4">{renderInputField("Name", `${contactKey}.name`, contact.name)}</div>
                         <div className="col-md-4">{renderInputField("Relation", `${contactKey}.relation`, contact.relation)}</div>
-                        <div className="col-md-4">{renderInputField("D.No", `${contactKey}.address`, contact.address)}</div>
+                        <div className="col-md-4">{renderInputField("Door No", `${contactKey}.address`, contact.address)}</div>
                     </div>
                     <div className="row">
-                        <div className="col-md-4">{renderInputField("Village", `${contactKey}.village`, contact.village)}</div>
+                        <div className="col-md-4">{renderInputField("Village / Town", `${contactKey}.village`, contact.village)}</div>
                         <div className="col-md-4">{renderInputField("Mandal / Dist", `${contactKey}.mandal`, contact.mandal)}</div>
                         <div className="col-md-4">{renderInputField("State", `${contactKey}.state`, contact.state)}</div>
                     </div>
                     <div className="row">
-                        <div className="col-md-4">{renderInputField("Mobile 1", `${contactKey}.mobile1`, contact.mobile1)}</div>
-                        <div className="col-md-4">{renderInputField("Mobile 2", `${contactKey}.mobile2`, contact.mobile2)}</div>
+                        <div className="col-md-4">
+                            {renderInputField(
+                                "Mobile 1",
+                                `${contactKey}.mobile1`,
+                                contact.mobile1,
+                                "tel",
+                                "",
+                                false,
+                                { inputMode: "numeric", maxLength: 10, pattern: "^[0-9]{10}$" }
+                            )}
+                        </div>
+                        <div className="col-md-4">
+                            {renderInputField(
+                                "Mobile 2",
+                                `${contactKey}.mobile2`,
+                                contact.mobile2,
+                                "tel",
+                                "",
+                                false,
+                                { inputMode: "numeric", maxLength: 10, pattern: "^[0-9]{10}$" }
+                            )}
+                        </div>
                     </div>
                 </div>
             </div>
@@ -511,25 +646,26 @@ const EmployeeModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode
                             </ul>
 
                             <div className="tab-content p-3">
-                                {/* Status */}
-                                <div className="row mb-3 status">
-                                    <div className="col-md-4">
-                                        <label className="form-label">
-                                            <strong>Status</strong>
-                                        </label>
-                                        <select className="form-select" value={status} onChange={(e) => setStatus(e.target.value)} disabled={!isEditMode}>
-                                            <option value="On Duty">On Duty</option>
-                                            <option value="Off Duty">Off Duty</option>
-                                            <option value="Resigned">Resigned</option>
-                                            <option value="Absconder">Absconder</option>
-                                            <option value="Terminated">Terminated</option>
-                                        </select>
-                                    </div>
-                                </div>
+
 
                                 {/* Basic */}
                                 {activeTab === "basic" && (
                                     <div className="modal-card mb-3">
+                                        {/* Status */}
+                                        <div className="row mb-3 status">
+                                            <div className="col-md-4">
+                                                <label className="form-label">
+                                                    <strong>Work Status</strong>
+                                                </label>
+                                                <select className="form-select" value={status} onChange={(e) => setStatus(e.target.value)} disabled={!isEditMode}>
+                                                    <option value="On Duty">On Duty</option>
+                                                    <option value="Off Duty">Off Duty</option>
+                                                    <option value="Resigned">Resigned</option>
+                                                    <option value="Absconder">Absconder</option>
+                                                    <option value="Terminated">Terminated</option>
+                                                </select>
+                                            </div>
+                                        </div>
                                         <div className="modal-card-header">
                                             <h4 className="mb-0">Basic Information</h4>
                                         </div>
@@ -550,22 +686,98 @@ const EmployeeModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode
                                                         { value: "Other", label: "Other" },
                                                     ])}
                                                 </div>
-                                                <div className="col-md-4">{renderInputField("Date of Birth", "dateOfBirth", formData.dateOfBirth, "date")}</div>
+                                                <div className="col-md-4">
+                                                    {renderInputField(
+                                                        "Date of Birth",
+                                                        "dateOfBirth",
+                                                        formData.dateOfBirth,
+                                                        "date",
+                                                        "",
+                                                        false,
+                                                        { min: DOB_MIN, max: DOB_MAX }
+                                                    )}
+                                                </div>
                                                 <div className="col-md-4">{renderInputField("Age", "years", formData.years, "number")}</div>
                                             </div>
 
                                             <div className="row">
                                                 <div className="col-md-4">{renderInputField("C/o", "co", formData.co)}</div>
-                                                <div className="col-md-4">{renderInputField("Aadhar No", "aadharNo", formData.aadharNo)}</div>
+                                                <div className="col-md-4">
+                                                    {renderInputField(
+                                                        "Aadhar No",
+                                                        "aadharNo",
+                                                        formData.aadharNo,
+                                                        "tel",
+                                                        "",
+                                                        false,
+                                                        { inputMode: "numeric", maxLength: 12, pattern: "^[0-9]{12}$" }
+                                                    )}
+                                                </div>
                                                 <div className="col-md-4">{renderInputField("Local ID", "localId", formData.localId)}</div>
                                             </div>
 
                                             <div className="row">
                                                 <div className="col-md-4">
-                                                    {renderInputField("Date of Joining", "date", formData.date || formData.dateOfJoining, "date")}
+                                                    {renderInputField(
+                                                        "Date of Joining",
+                                                        "date",
+                                                        formData.date || formData.dateOfJoining,
+                                                        "date"
+                                                    )}
                                                 </div>
-                                                <div className="col-md-4">{renderInputField("Mobile 1", "mobileNo1", formData.mobileNo1, "tel")}</div>
-                                                <div className="col-md-4">{renderInputField("Mobile 2", "mobileNo2", formData.mobileNo2, "tel")}</div>
+                                                <div className="col-md-4">
+                                                    {renderInputField(
+                                                        "Mobile 1",
+                                                        "mobileNo1",
+                                                        formData.mobileNo1,
+                                                        "tel",
+                                                        "",
+                                                        false,
+                                                        { inputMode: "numeric", maxLength: 10, pattern: "^[0-9]{10}$" }
+                                                    )}
+                                                </div>
+                                                <div className="col-md-4">
+                                                    {renderInputField(
+                                                        "Mobile 2",
+                                                        "mobileNo2",
+                                                        formData.mobileNo2,
+                                                        "tel",
+                                                        "",
+                                                        false,
+                                                        { inputMode: "numeric", maxLength: 10, pattern: "^[0-9]{10}$" }
+                                                    )}
+                                                </div>
+                                            </div>
+
+                                            {/* MOVED + NEW FIELDS */}
+                                            <div className="row">
+                                                <div className="col-md-4">
+                                                    {renderInputField("Page No", "pageNo", formData.pageNo)}
+                                                </div>
+                                                <div className="col-md-4">
+                                                    {renderInputField("Basic Salary", "basicSalary", formData.basicSalary, "number")}
+                                                </div>
+                                                <div className="col-md-4">
+                                                    {renderInputField("Allowance", "allowance", formData.allowance, "number")}
+                                                </div>
+                                            </div>
+
+                                            <div className="row">
+                                                <div className="col-md-12">
+                                                    <div className="mb-2">
+                                                        <label className="form-label">
+                                                            <strong>About Employee & Skills</strong>
+                                                        </label>
+                                                        <textarea
+                                                            className="form-control"
+                                                            name="aboutEmployeee"
+                                                            value={formData.aboutEmployeee || ""}
+                                                            onChange={handleInputChange}
+                                                            disabled={!isEditMode}
+                                                            rows="3"
+                                                        />
+                                                    </div>
+                                                </div>
                                             </div>
                                         </div>
                                     </div>
@@ -580,18 +792,28 @@ const EmployeeModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode
                                             </div>
                                             <div className="modal-card-body">
                                                 <div className="row">
-                                                    <div className="col-md-4">{renderInputField("D.No", "permanentAddress", formData.permanentAddress)}</div>
+                                                    <div className="col-md-4">{renderInputField("Door No", "permanentAddress", formData.permanentAddress)}</div>
                                                     <div className="col-md-4">{renderInputField("Street", "permanentStreet", formData.permanentStreet)}</div>
                                                     <div className="col-md-4">{renderInputField("Landmark", "permanentLandmark", formData.permanentLandmark)}</div>
                                                 </div>
                                                 <div className="row">
-                                                    <div className="col-md-4">{renderInputField("Village", "permanentVillage", formData.permanentVillage)}</div>
+                                                    <div className="col-md-4">{renderInputField("Village / Town", "permanentVillage", formData.permanentVillage)}</div>
                                                     <div className="col-md-4">{renderInputField("Mandal", "permanentMandal", formData.permanentMandal)}</div>
                                                     <div className="col-md-4">{renderInputField("District", "permanentDistrict", formData.permanentDistrict)}</div>
                                                 </div>
                                                 <div className="row">
                                                     <div className="col-md-4">{renderInputField("State", "permanentState", formData.permanentState)}</div>
-                                                    <div className="col-md-4">{renderInputField("Pincode", "permanentPincode", formData.permanentPincode)}</div>
+                                                    <div className="col-md-4">
+                                                        {renderInputField(
+                                                            "Pincode",
+                                                            "permanentPincode",
+                                                            formData.permanentPincode,
+                                                            "tel",
+                                                            "",
+                                                            false,
+                                                            { inputMode: "numeric", maxLength: 6, pattern: "^[0-9]{6}$" }
+                                                        )}
+                                                    </div>
                                                 </div>
                                             </div>
                                         </div>
@@ -602,18 +824,28 @@ const EmployeeModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode
                                             </div>
                                             <div className="modal-card-body">
                                                 <div className="row">
-                                                    <div className="col-md-4">{renderInputField("D.No", "presentAddress", formData.presentAddress)}</div>
+                                                    <div className="col-md-4">{renderInputField("Door No", "presentAddress", formData.presentAddress)}</div>
                                                     <div className="col-md-4">{renderInputField("Street", "presentStreet", formData.presentStreet)}</div>
                                                     <div className="col-md-4">{renderInputField("Landmark", "presentLandmark", formData.presentLandmark)}</div>
                                                 </div>
                                                 <div className="row">
-                                                    <div className="col-md-4">{renderInputField("Village", "presentVillage", formData.presentVillage)}</div>
+                                                    <div className="col-md-4">{renderInputField("Village / Town", "presentVillage", formData.presentVillage)}</div>
                                                     <div className="col-md-4">{renderInputField("Mandal", "presentMandal", formData.presentMandal)}</div>
                                                     <div className="col-md-4">{renderInputField("District", "presentDistrict", formData.presentDistrict)}</div>
                                                 </div>
                                                 <div className="row">
                                                     <div className="col-md-4">{renderInputField("State", "presentState", formData.presentState)}</div>
-                                                    <div className="col-md-4">{renderInputField("Pincode", "presentPincode", formData.presentPincode)}</div>
+                                                    <div className="col-md-4">
+                                                        {renderInputField(
+                                                            "Pincode",
+                                                            "presentPincode",
+                                                            formData.presentPincode,
+                                                            "tel",
+                                                            "",
+                                                            false,
+                                                            { inputMode: "numeric", maxLength: 6, pattern: "^[0-9]{6}$" }
+                                                        )}
+                                                    </div>
                                                 </div>
                                             </div>
                                         </div>
@@ -636,16 +868,37 @@ const EmployeeModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode
                                                         { value: "Widowed", label: "Widowed" },
                                                     ])}
                                                 </div>
-                                                <div className="col-md-4">{renderInputField("Date of Marriage", "dateOfMarriage", formData.dateOfMarriage, "date")}</div>
-                                                <div className="col-md-4">{renderInputField("Marriage Years", "marriageYears", formData.marriageYears, "number")}</div>
+                                                <div className="col-md-4">
+                                                    {renderInputField(
+                                                        "Date of Marriage",
+                                                        "dateOfMarriage",
+                                                        formData.dateOfMarriage,
+                                                        "date",
+                                                        "",
+                                                        false,
+                                                        {
+                                                            min: DOM_MIN,
+                                                            max: DOM_MAX,
+                                                            disabled: formData.maritalStatus !== "Married",
+                                                        }
+                                                    )}
+                                                </div>
+                                                <div className="col-md-4">
+                                                    {renderInputField("Marriage Years", "marriageYears", formData.marriageYears, "number", "", false, {
+                                                        maxLength: 2,
+                                                        inputMode: "numeric",
+                                                    })}
+                                                </div>
                                             </div>
                                             <div className="row">
+                                                <div className="col-md-4">{renderInputField("Husband / Wife Name", "careOfPersonal", formData.careOfPersonal)}</div>
                                                 <div className="col-md-4">{renderInputField("Child 1", "childName1", formData.childName1)}</div>
                                                 <div className="col-md-4">{renderInputField("Child 2", "childName2", formData.childName2)}</div>
-                                                <div className="col-md-4">{renderInputField("Religion", "religion", formData.religion)}</div>
                                             </div>
                                             <div className="row">
+                                                <div className="col-md-4">{renderInputField("Religion", "religion", formData.religion)}</div>
                                                 <div className="col-md-4">{renderInputField("Caste", "cast", formData.cast)}</div>
+                                                <div className="col-md-4">{renderInputField("Sub Caste", "subCast", formData.subCast)}</div>
                                             </div>
                                         </div>
                                     </div>
@@ -664,12 +917,13 @@ const EmployeeModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode
                                                 <div className="col-md-4">{renderInputField("Primary Skill", "primarySkill", formData.primarySkill)}</div>
                                             </div>
                                             <div className="row">
+                                                <div className="col-md-4">{renderArrayField("Secondary Skills", "secondarySkills", "Add secondary skill")}</div>
+                                                <div className="col-md-4">{renderArrayField("Other Skills", "workingSkills", "Add skill")}</div>
                                                 <div className="col-md-4">{renderInputField("Work Experience", "workExperince", formData.workExperince, "text")}</div>
-                                                <div className="col-md-4">{renderArrayField("Working Skills", "workingSkills", "Add skill")}</div>
-                                                <div className="col-md-4">{renderInputField("Languages", "languages", formData.languages)}</div>
                                             </div>
                                             <div className="row">
                                                 <div className="col-md-4">{renderInputField("Mother Tongue", "motherTongue", formData.motherTongue)}</div>
+                                                <div className="col-md-4">{renderInputField("Languages", "languages", formData.languages)}</div>
                                             </div>
                                         </div>
                                     </div>
@@ -714,62 +968,18 @@ const EmployeeModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode
                                         </div>
                                         <div className="modal-card-body">
                                             <div className="row">
-                                                <div className="col-md-4">
-                                                    {renderInputField("Account No", "accountNo", formData.accountNo)}
-                                                </div>
-                                                <div className="col-md-4">
-                                                    {renderInputField("Bank Name", "bankName", formData.bankName)}
-                                                </div>
-                                                <div className="col-md-4">
-                                                    {renderInputField("Branch Name", "branchName", formData.branchName)}
-                                                </div>
-                                            </div>
-                                            <div className="row">
-                                                <div className="col-md-4">
-                                                    {renderInputField("IFSC Code", "ifscCode", formData.ifscCode)}
-                                                </div>
-                                                <div className="col-md-4">
-                                                    {renderInputField("Page No", "pageNo", formData.pageNo)}
-                                                </div>
-                                                <div className="col-md-4">
-                                                    {renderInputField("Basic Salary", "basicSalary", formData.basicSalary, "number")}
-                                                </div>
-                                            </div>
-                                            <div className="row">
-                                                <div className="col-md-4">
-                                                    {renderInputField("PhonePe Number", "phonePayNo", formData.phonePayNo)}
-                                                </div>
-                                                <div className="col-md-4">
-                                                    {renderInputField("PhonePe Name", "phonePayName", formData.phonePayName)}
-                                                </div>
-                                                <div className="col-md-4">
-                                                    {renderInputField("Google Pay Number", "googlePayNo", formData.googlePayNo)}
-                                                </div>
+                                                <div className="col-md-3">{renderInputField("Account No", "accountNo", formData.accountNo)}</div>
+                                                <div className="col-md-3">{renderInputField("Bank Name", "bankName", formData.bankName)}</div>
+                                                <div className="col-md-3">{renderInputField("Branch Name", "branchName", formData.branchName)}</div>
+                                                <div className="col-md-3">{renderInputField("IFSC Code", "ifscCode", formData.ifscCode)}</div>
                                             </div>
 
                                             <div className="row">
-
-                                                <div className="col-md-4">
-
-                                                    {renderInputField("Google Pay Name", "googlePayName", formData.googlePayName)}
-                                                </div>
-                                                <div className="col-md-8">
-                                                    <div className="mb-2">
-                                                        <label className="form-label">
-                                                            <strong>About Employee</strong>
-                                                        </label>
-                                                        <textarea
-                                                            className="form-control"
-                                                            name="aboutEmployeee"
-                                                            value={formData.aboutEmployeee || ""}
-                                                            onChange={handleInputChange}
-                                                            disabled={!isEditMode}
-                                                            rows="3"
-                                                        />
-                                                    </div>
-                                                </div>
+                                                <div className="col-md-3">{renderInputField("Phone Pay Number", "phonePayNo", formData.phonePayNo)}</div>
+                                                <div className="col-md-3">{renderInputField("Phone Pay Name", "phonePayName", formData.phonePayName)}</div>
+                                                <div className="col-md-3">{renderInputField("Google Pay Number", "googlePayNo", formData.googlePayNo)}</div>
+                                                <div className="col-md-3">{renderInputField("Google Pay Name", "googlePayName", formData.googlePayName)}</div>
                                             </div>
-
                                         </div>
                                     </div>
                                 )}
@@ -799,46 +1009,31 @@ const EmployeeModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode
 
                                                         <div className="row">
                                                             <div className="col-md-4 mb-2">
-                                                                <label className="form-label">Date *</label>
+                                                                <label className="form-label">
+                                                                    <strong>Date</strong>
+                                                                    <span className="star">*</span>
+                                                                </label>
                                                                 <input
                                                                     type="date"
                                                                     className={`form-control form-control-sm${invalidClass("date")}`}
                                                                     value={p.date || ""}
+                                                                    min={PAY_MIN}
+                                                                    max={PAY_MAX}
                                                                     onChange={(e) => handleArrayChange("payments", i, "date", e.target.value)}
                                                                     disabled={!isEditMode || locked}
                                                                 />
                                                                 <Err msg={paymentErrors[i]?.date} />
                                                             </div>
                                                             <div className="col-md-4 mb-2">
-                                                                <label className="form-label">Client Name *</label>
+                                                                <label className="form-label">
+                                                                    <strong>Amount</strong>
+                                                                    <span className="star">*</span>
+                                                                </label>
                                                                 <input
-                                                                    type="text"
-                                                                    className={`form-control form-control-sm${invalidClass("clientName")}`}
-                                                                    value={p.clientName || ""}
-                                                                    onChange={(e) => handleArrayChange("payments", i, "clientName", e.target.value)}
-                                                                    disabled={!isEditMode || locked}
-                                                                />
-                                                                <Err msg={paymentErrors[i]?.clientName} />
-                                                            </div>
-                                                            <div className="col-md-4 mb-2">
-                                                                <label className="form-label">Days *</label>
-                                                                <input
-                                                                    type="number"
-                                                                    className={`form-control form-control-sm${invalidClass("days")}`}
-                                                                    value={p.days || ""}
-                                                                    onChange={(e) => handleArrayChange("payments", i, "days", e.target.value)}
-                                                                    disabled={!isEditMode || locked}
-                                                                />
-                                                                <Err msg={paymentErrors[i]?.days} />
-                                                            </div>
-                                                        </div>
-
-                                                        <div className="row">
-
-                                                            <div className="col-md-4 mb-2">
-                                                                <label className="form-label">Amount *</label>
-                                                                <input
-                                                                    type="number"
+                                                                    type="tel"
+                                                                    inputMode="numeric"
+                                                                    maxLength={5}
+                                                                    pattern="^[0-9]{1,5}$"
                                                                     className={`form-control form-control-sm${invalidClass("amount")}`}
                                                                     value={p.amount || ""}
                                                                     onChange={(e) => handleArrayChange("payments", i, "amount", e.target.value)}
@@ -846,8 +1041,30 @@ const EmployeeModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode
                                                                 />
                                                                 <Err msg={paymentErrors[i]?.amount} />
                                                             </div>
+
                                                             <div className="col-md-4 mb-2">
-                                                                <label className="form-label">Type of payment *</label>
+                                                                <label className="form-label">
+                                                                    <strong>Balance Amount</strong>
+                                                                </label>
+                                                                <input
+                                                                    type="tel"
+                                                                    inputMode="numeric"
+                                                                    pattern="^[0-9]+$"
+                                                                    className={`form-control form-control-sm${invalidClass("balanceAmount")}`}
+                                                                    value={p.balanceAmount || ""}
+                                                                    onChange={(e) => handleArrayChange("payments", i, "balanceAmount", e.target.value)}
+                                                                    disabled={!isEditMode || locked}
+                                                                />
+                                                                <Err msg={paymentErrors[i]?.balanceAmount} />
+                                                            </div>
+                                                        </div>
+
+                                                        <div className="row">
+                                                            <div className="col-md-4 mb-2">
+                                                                <label className="form-label">
+                                                                    <strong>Type of payment</strong>
+                                                                    <span className="star">*</span>
+                                                                </label>
                                                                 <select
                                                                     className={`form-select form-select-sm${invalidClass("typeOfPayment")}`}
                                                                     value={p.typeOfPayment || ""}
@@ -863,7 +1080,76 @@ const EmployeeModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode
                                                             </div>
 
                                                             <div className="col-md-4 mb-2">
-                                                                <label className="form-label">Book No</label>
+                                                                <label className="form-label">
+                                                                    <strong>Payment For</strong>
+                                                                    <span className="star">*</span>
+                                                                </label>
+                                                                <select
+                                                                    className={`form-select form-select-sm${invalidClass("status")}`}
+                                                                    value={p.status || ""}
+                                                                    onChange={(e) => handleArrayChange("payments", i, "status", e.target.value)}
+                                                                    disabled={!isEditMode || locked}
+                                                                >
+                                                                    <option value="" disabled>
+                                                                        Select
+                                                                    </option>
+                                                                    <option value="salary">Salary</option>
+                                                                    <option value="advance">Advance</option>
+                                                                    <option value="commition">Commition</option>
+                                                                    <option value="bonus">Bonus</option>
+                                                                </select>
+                                                                <Err msg={paymentErrors[i]?.status} />
+                                                            </div>
+
+                                                            <div className="col-md-4 mb-2">
+                                                                <label className="form-label">
+                                                                    <strong>Receipt No</strong>
+                                                                </label>
+                                                                <input
+                                                                    type="text"
+                                                                    className="form-control form-control-sm"
+                                                                    value={p.receiptNo || ""}
+                                                                    onChange={(e) => handleArrayChange("payments", i, "receiptNo", e.target.value)}
+                                                                    disabled={!isEditMode || locked}
+                                                                />
+                                                            </div>
+                                                        </div>
+
+                                                        <div className="row">
+                                                            <div className="col-md-4 mb-2">
+                                                                <label className="form-label">
+                                                                    <strong>Client Name</strong>
+                                                                    <span className="star">*</span>
+                                                                </label>
+                                                                <input
+                                                                    type="text"
+                                                                    className={`form-control form-control-sm${invalidClass("clientName")}`}
+                                                                    value={p.clientName || ""}
+                                                                    onChange={(e) => handleArrayChange("payments", i, "clientName", e.target.value)}
+                                                                    disabled={!isEditMode || locked}
+                                                                />
+                                                                <Err msg={paymentErrors[i]?.clientName} />
+                                                            </div>
+
+                                                            <div className="col-md-4 mb-2">
+                                                                <label className="form-label">
+                                                                    <strong>Days</strong>
+                                                                    <span className="star">*</span>
+                                                                </label>
+                                                                <input
+                                                                    type="number"
+                                                                    className={`form-control form-control-sm${invalidClass("days")}`}
+                                                                    value={p.days || ""}
+                                                                    onChange={(e) => handleArrayChange("payments", i, "days", e.target.value)}
+                                                                    disabled={!isEditMode || locked}
+                                                                />
+                                                                <Err msg={paymentErrors[i]?.days} />
+                                                            </div>
+
+                                                            <div className="col-md-4 mb-2">
+                                                                <label className="form-label">
+                                                                    <strong>Book No</strong>
+                                                                </label>
                                                                 <input
                                                                     type="text"
                                                                     className="form-control form-control-sm"
@@ -875,30 +1161,16 @@ const EmployeeModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode
                                                         </div>
 
                                                         <div className="row">
-
-                                                            <div className="col-md-4 mb-2">
-                                                                <label className="form-label">Status *</label>
-                                                                <select
-                                                                    className={`form-select form-select-sm${invalidClass("status")}`}
-                                                                    value={p.status || ""}
-                                                                    onChange={(e) => handleArrayChange("payments", i, "status", e.target.value)}
-                                                                    disabled={!isEditMode || locked}
-                                                                >
-                                                                    <option value="">Select</option>
-                                                                    <option value="pending">Pending</option>
-                                                                    <option value="paid">Paid</option>
-                                                                    <option value="partial">Partial</option>
-                                                                </select>
-                                                                <Err msg={paymentErrors[i]?.status} />
-                                                            </div>
-                                                            <div className="col-md-8 mb-2">
-                                                                <label className="form-label">Remarks</label>
+                                                            <div className="col-md-12 mb-2">
+                                                                <label className="form-label">
+                                                                    <strong>Remarks</strong>
+                                                                </label>
                                                                 <textarea
                                                                     type="text"
                                                                     className="form-control form-control-sm"
                                                                     value={p.remarks || ""}
                                                                     onChange={(e) => handleArrayChange("payments", i, "remarks", e.target.value)}
-                                                                    rows="4"
+                                                                    rows="3"
                                                                     disabled={!isEditMode || locked}
                                                                 />
                                                             </div>
@@ -930,7 +1202,7 @@ const EmployeeModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode
                                                     <div key={i} className="border rounded p-3 mb-3">
                                                         <div className="d-flex justify-content-between align-items-center mb-2">
                                                             <h6 className="mb-0">
-                                                                Work #{i + 1} {locked && <span className="badge bg-secondary ms-2">Locked</span>}
+                                                                Work Place #{i + 1} {locked && <span className="badge bg-secondary ms-2">Locked</span>}
                                                             </h6>
                                                             {isEditMode && !locked && (
                                                                 <button className="btn btn-outline-danger btn-sm" onClick={() => removeWorkSection(i)}>
@@ -939,9 +1211,12 @@ const EmployeeModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode
                                                             )}
                                                         </div>
 
-                                                        <div className="row"> 
+                                                        <div className="row">
                                                             <div className="col-md-4 mb-2">
-                                                                <label className="form-label">Client ID *</label>
+                                                                <label className="form-label">
+                                                                    <strong>Client ID</strong>
+                                                                    <span className="star">*</span>
+                                                                </label>
                                                                 <input
                                                                     type="text"
                                                                     className={`form-control form-control-sm${invalidClass("clientId")}`}
@@ -952,7 +1227,10 @@ const EmployeeModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode
                                                                 <Err msg={workErrors[i]?.clientId} />
                                                             </div>
                                                             <div className="col-md-4 mb-2">
-                                                                <label className="form-label">Client Name *</label>
+                                                                <label className="form-label">
+                                                                    <strong>Client Name</strong>
+                                                                    <span className="star">*</span>
+                                                                </label>
                                                                 <input
                                                                     type="text"
                                                                     className={`form-control form-control-sm${invalidClass("clientName")}`}
@@ -963,7 +1241,9 @@ const EmployeeModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode
                                                                 <Err msg={workErrors[i]?.clientName} />
                                                             </div>
                                                             <div className="col-md-4 mb-2">
-                                                                <label className="form-label">Location</label>
+                                                                <label className="form-label">
+                                                                    <strong>Client Location</strong>
+                                                                </label>
                                                                 <input
                                                                     type="text"
                                                                     className="form-control form-control-sm"
@@ -972,12 +1252,13 @@ const EmployeeModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode
                                                                     disabled={!isEditMode || locked}
                                                                 />
                                                             </div>
-                                                            
                                                         </div>
                                                         <div className="row">
-
                                                             <div className="col-md-4 mb-2">
-                                                                <label className="form-label">From (Date) *</label>
+                                                                <label className="form-label">
+                                                                    <strong>From (Date)</strong>
+                                                                    <span className="star">*</span>
+                                                                </label>
                                                                 <input
                                                                     type="date"
                                                                     className={`form-control form-control-sm${invalidClass("fromDate")}`}
@@ -988,7 +1269,10 @@ const EmployeeModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode
                                                                 <Err msg={workErrors[i]?.fromDate} />
                                                             </div>
                                                             <div className="col-md-4 mb-2">
-                                                                <label className="form-label">To (Date) *</label>
+                                                                <label className="form-label">
+                                                                    <strong>To (Date)</strong>
+                                                                    <span className="star">*</span>
+                                                                </label>
                                                                 <input
                                                                     type="date"
                                                                     className={`form-control form-control-sm${invalidClass("toDate")}`}
@@ -998,9 +1282,12 @@ const EmployeeModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode
                                                                 />
                                                                 <Err msg={workErrors[i]?.toDate} />
                                                             </div>
-                                                            
+
                                                             <div className="col-md-4 mb-2">
-                                                                <label className="form-label">Days *</label>
+                                                                <label className="form-label">
+                                                                    <strong>Total Days</strong>
+                                                                    <span className="star">*</span>
+                                                                </label>
                                                                 <input
                                                                     type="number"
                                                                     className={`form-control form-control-sm${invalidClass("days")}`}
@@ -1010,12 +1297,14 @@ const EmployeeModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode
                                                                 />
                                                                 <Err msg={workErrors[i]?.days} />
                                                             </div>
-                                                            
                                                         </div>
 
                                                         <div className="row">
                                                             <div className="col-md-4 mb-2">
-                                                                <label className="form-label">Service Type *</label>
+                                                                <label className="form-label">
+                                                                    <strong>Service Type</strong>
+                                                                    <span className="star">*</span>
+                                                                </label>
                                                                 <input
                                                                     type="text"
                                                                     className={`form-control form-control-sm${invalidClass("serviceType")}`}
@@ -1025,9 +1314,11 @@ const EmployeeModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode
                                                                 />
                                                                 <Err msg={workErrors[i]?.serviceType} />
                                                             </div>
-                                                            
+
                                                             <div className="col-md-8 mb-2">
-                                                                <label className="form-label">Remarks</label>
+                                                                <label className="form-label">
+                                                                    <strong>Remarks</strong>
+                                                                </label>
                                                                 <textarea
                                                                     row="5"
                                                                     type="text"
@@ -1086,10 +1377,10 @@ const EmployeeModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode
                                 </button>
                             )}
                             {/* {!!onDelete && isEditMode && (
-                                <button type="button" className="btn btn-outline-danger ms-auto" onClick={handleDelete}>
-                                    Delete Employee
-                                </button>
-                            )} */}
+                <button type="button" className="btn btn-outline-danger ms-auto" onClick={handleDelete}>
+                  Delete Employee
+                </button>
+              )} */}
                         </div>
                     </div>
                 </div>

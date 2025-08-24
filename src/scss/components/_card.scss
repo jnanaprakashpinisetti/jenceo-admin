@@ -68,3 +68,24 @@
     padding: 20px;
 
 }
+
+.chec-box-card {
+    color: $sec-white;
+
+    .form-check-input {
+        border-radius: 0;
+        background-color: transparent;
+        &:checked, &:focus {
+            border-color: #fff;
+        }
+    }
+
+}
+
+.search-bar {
+    background-color: transparent;
+    border-color: #7c7f8c;
+    &::placeholder {
+        color: #7c7f8c;;
+    }
+}

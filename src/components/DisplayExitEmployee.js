@@ -6,10 +6,25 @@ import deleteIcon from '../assets/delete.svg'; // (not used but kept if you use 
 import returnIcon from '../assets/return.svg';
 import EmployeeModal from './EmployeeModal';
 
-export default function DisplayEmployee() {
+export default function DisplayExitEmployee() {
   const [employees, setEmployees] = useState([]);
+  const [filteredEmployees, setFilteredEmployees] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+
+  // Search and filters
+  const [searchTerm, setSearchTerm] = useState('');
+  const [genderFilters, setGenderFilters] = useState({
+      Male: false,
+      Female: false
+  });
+  const [skillFilters, setSkillFilters] = useState({
+      Nursing: false,
+      Diaper: false,
+      'Patent Care': false,
+      'Baby Care': false,
+      Cook: false
+  });
 
   const [selectedEmployee, setSelectedEmployee] = useState(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -43,9 +58,11 @@ export default function DisplayEmployee() {
 
             const sortedEmployees = sortEmployeesDescending(employeesData);
             setEmployees(sortedEmployees);
+            setFilteredEmployees(sortedEmployees);
             setTotalPages(Math.ceil(sortedEmployees.length / rowsPerPage));
           } else {
             setEmployees([]);
+            setFilteredEmployees([]);
             setTotalPages(1);
           }
           setLoading(false);
@@ -63,10 +80,47 @@ export default function DisplayEmployee() {
     };
   }, []);
 
+  // Filter employees based on search term and filters
   useEffect(() => {
-    setTotalPages(Math.ceil(employees.length / rowsPerPage));
+    let filtered = employees;
+    
+    // Apply search filter
+    if (searchTerm) {
+      const term = searchTerm.toLowerCase();
+      filtered = filtered.filter(employee => 
+        (employee.firstName && employee.firstName.toLowerCase().includes(term)) ||
+        (employee.lastName && employee.lastName.toLowerCase().includes(term)) ||
+        (employee.idNo && employee.idNo.toLowerCase().includes(term)) ||
+        (employee.employeeId && employee.employeeId.toLowerCase().includes(term)) ||
+        (employee.primarySkill && employee.primarySkill.toLowerCase().includes(term)) ||
+        (employee.gender && employee.gender.toLowerCase().includes(term))
+      );
+    }
+
+    // Apply gender filters
+    const activeGenderFilters = Object.keys(genderFilters).filter(key => genderFilters[key]);
+    if (activeGenderFilters.length > 0) {
+      filtered = filtered.filter(employee => 
+        employee.gender && activeGenderFilters.includes(employee.gender)
+      );
+    }
+
+    // Apply skill filters
+    const activeSkillFilters = Object.keys(skillFilters).filter(key => skillFilters[key]);
+    if (activeSkillFilters.length > 0) {
+      filtered = filtered.filter(employee => 
+        employee.primarySkill && activeSkillFilters.includes(employee.primarySkill)
+      );
+    }
+
+    setFilteredEmployees(filtered);
+    setTotalPages(Math.ceil(filtered.length / rowsPerPage));
     setCurrentPage(1);
-  }, [employees, rowsPerPage]);
+  }, [employees, searchTerm, genderFilters, skillFilters, rowsPerPage]);
+
+  useEffect(() => {
+    setTotalPages(Math.ceil(filteredEmployees.length / rowsPerPage));
+  }, [filteredEmployees, rowsPerPage]);
 
   const sortEmployeesDescending = (employeesData) => {
     return employeesData.sort((a, b) => {
@@ -80,7 +134,7 @@ export default function DisplayEmployee() {
 
   const indexOfLastEmployee = currentPage * rowsPerPage;
   const indexOfFirstEmployee = indexOfLastEmployee - rowsPerPage;
-  const currentEmployees = employees.slice(indexOfFirstEmployee, indexOfLastEmployee);
+  const currentEmployees = filteredEmployees.slice(indexOfFirstEmployee, indexOfLastEmployee);
 
   const paginate = (pageNumber) => setCurrentPage(pageNumber);
 
@@ -107,6 +161,27 @@ export default function DisplayEmployee() {
     }
 
     return numbers;
+  };
+
+  // Handle search input change
+  const handleSearchChange = (e) => {
+    setSearchTerm(e.target.value);
+  };
+
+  // Handle gender filter change
+  const handleGenderFilterChange = (gender) => {
+    setGenderFilters(prev => ({
+      ...prev,
+      [gender]: !prev[gender]
+    }));
+  };
+
+  // Handle skill filter change
+  const handleSkillFilterChange = (skill) => {
+    setSkillFilters(prev => ({
+      ...prev,
+      [skill]: !prev[skill]
+    }));
   };
 
   const handleView = (employee) => {
@@ -183,8 +258,74 @@ export default function DisplayEmployee() {
 
   return (
     <div className="container-fluid py-4">
+      {/* Search Bar */}
+      <div className="row mb-3">
+        <div className="col-md-6">
+          <div className="input-group">
+            <span className="input-group-text">
+              <i className="bi bi-search"></i>
+            </span>
+            <input
+              type="text"
+              className="form-control search-bar"
+              placeholder="Search by name, ID, skill, or gender..."
+              value={searchTerm}
+              onChange={handleSearchChange}
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* Filter Checkboxes */}
+      <div className="row mb-3">
+        <div className="col-12">
+          <div className="chec-box-card">
+            <div className="card-body py-2">
+              <div className="row">
+                <div className="col-md-3">
+                  <strong className="me-2">Gender:</strong>
+                  {Object.keys(genderFilters).map(gender => (
+                    <div className="form-check form-check-inline" key={gender}>
+                      <input
+                        className="form-check-input"
+                        type="checkbox"
+                        checked={genderFilters[gender]}
+                        onChange={() => handleGenderFilterChange(gender)}
+                        id={`exit-gender-${gender}`}
+                      />
+                      <label className="form-check-label" htmlFor={`exit-gender-${gender}`}>
+                        {gender}
+                      </label>
+                    </div>
+                  ))}
+                </div>
+                <div className="col-md-9">
+                  <strong className="me-2">Skills:</strong>
+                  {Object.keys(skillFilters).map(skill => (
+                    <div className="form-check form-check-inline" key={skill}>
+                      <input
+                        className="form-check-input"
+                        type="checkbox"
+                        checked={skillFilters[skill]}
+                        onChange={() => handleSkillFilterChange(skill)}
+                        id={`exit-skill-${skill}`}
+                      />
+                      <label className="form-check-label" htmlFor={`exit-skill-${skill}`}>
+                        {skill}
+                      </label>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <hr></hr>
+
       <div className="d-flex justify-content-between align-items-center mb-3">
-        <h4 className="mb-0">Existing Employees</h4>
+        <h4 className="mb-0">Exit Employees</h4>
 
         <div className="d-flex align-items-center">
           <label className="me-2 mb-0">Rows:</label>
@@ -216,83 +357,91 @@ export default function DisplayEmployee() {
             </tr>
           </thead>
           <tbody>
-            {currentEmployees.map((employee) => (
-              <tr key={employee.id}>
-                {/* Photo column — same as DisplayEmployee */}
-                <td>
-                  {employee.employeePhoto ? (
-                    <img
-                      src={employee.employeePhoto}
-                      alt="Employee"
-                      style={{ width: '50px', height: '50px', objectFit: 'cover', borderRadius: '50%' }}
-                    />
-                  ) : (
-                    <div
-                      style={{
-                        width: '50px',
-                        height: '50px',
-                        backgroundColor: '#4c4b4b',
-                        borderRadius: '50%',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center'
-                      }}
-                    />
-                  )}
-                </td>
+            {currentEmployees.length > 0 ? (
+              currentEmployees.map((employee) => (
+                <tr key={employee.id}>
+                  {/* Photo column */}
+                  <td>
+                    {employee.employeePhoto ? (
+                      <img
+                        src={employee.employeePhoto}
+                        alt="Employee"
+                        style={{ width: '50px', height: '50px', objectFit: 'cover', borderRadius: '50%' }}
+                      />
+                    ) : (
+                      <div
+                        style={{
+                          width: '50px',
+                          height: '50px',
+                          backgroundColor: '#4c4b4b',
+                          borderRadius: '50%',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center'
+                        }}
+                      />
+                    )}
+                  </td>
 
-                {/* ID */}
-                <td>
-                  <strong>{employee.employeeId || employee.idNo || 'N/A'}</strong>
-                </td>
+                  {/* ID */}
+                  <td>
+                    <strong>{employee.employeeId || employee.idNo || 'N/A'}</strong>
+                  </td>
 
-                {/* Name */}
-                <td>{employee.firstName} {employee.lastName}</td>
+                  {/* Name */}
+                  <td>{employee.firstName} {employee.lastName}</td>
 
-                {/* Gender */}
-                <td>{employee.gender || 'N/A'}</td>
+                  {/* Gender */}
+                  <td>{employee.gender || 'N/A'}</td>
 
-                {/* Primary Skill */}
-                <td>{employee.primarySkill || 'N/A'}</td>
+                  {/* Primary Skill */}
+                  <td>{employee.primarySkill || 'N/A'}</td>
 
-                {/* Experience */}
-                <td>{employee.workExperince ? `${employee.workExperince}` : 'N/A'}</td>
+                  {/* Experience */}
+                  <td>{employee.workExperince ? `${employee.workExperince}` : 'N/A'}</td>
 
-                {/* Status */}
-                <td>
-                  <span className={`badge ${getStatusBadgeClass(employee.status)}`}>
-                    {employee.status || 'On Duty'}
-                  </span>
-                </td>
+                  {/* Status */}
+                  <td>
+                    <span className={`badge ${getStatusBadgeClass(employee.status)}`}>
+                      {employee.status || 'On Duty'}
+                    </span>
+                  </td>
 
-                {/* Actions */}
-                <td>
-                  <div className="d-flex">
-                    <button
-                      className="btn btn-sm me-2"
-                      title="View"
-                      onClick={() => handleView(employee)}
-                    >
-                      <img src={viewIcon} alt="view Icon" style={{ opacity: 0.6, width: '18px', height: '18px' }} />
-                    </button>
-                    <button
-                      className="btn btn-sm me-2"
-                      title="Edit"
-                      onClick={() => handleEdit(employee)}
-                    >
-                      <img src={editIcon} alt="edit Icon" style={{ width: '15px', height: '15px' }} />
-                    </button>
-                    <button
-                      className="btn btn-sm"
-                      title="Return Back"
-                      onClick={() => openReturnConfirm(employee)}
-                    >
-                      <img src={returnIcon} alt="return Icon" style={{ width: '14px', height: '18px' }} />
-                    </button>
-                  </div>
+                  {/* Actions */}
+                  <td>
+                    <div className="d-flex">
+                      <button
+                        className="btn btn-sm me-2"
+                        title="View"
+                        onClick={() => handleView(employee)}
+                      >
+                        <img src={viewIcon} alt="view Icon" style={{ opacity: 0.6, width: '18px', height: '18px' }} />
+                      </button>
+                      <button
+                        className="btn btn-sm me-2"
+                        title="Edit"
+                        onClick={() => handleEdit(employee)}
+                      >
+                        <img src={editIcon} alt="edit Icon" style={{ width: '15px', height: '15px' }} />
+                      </button>
+                      <button
+                        className="btn btn-sm"
+                        title="Return Back"
+                        onClick={() => openReturnConfirm(employee)}
+                      >
+                        <img src={returnIcon} alt="return Icon" style={{ width: '14px', height: '18px' }} />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))
+            ) : (
+              <tr>
+                <td colSpan="8" className="text-center py-4">
+                  No exit employees found matching your search criteria
                 </td>
               </tr>
-            ))}
+            )}
           </tbody>
         </table>
       </div>

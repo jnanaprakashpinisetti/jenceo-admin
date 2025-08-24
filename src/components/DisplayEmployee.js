@@ -12,7 +12,7 @@ export default function DisplayEmployee() {
     const [selectedEmployee, setSelectedEmployee] = useState(null);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [isEditMode, setIsEditMode] = useState(false);
-    
+
     // Pagination state
     const [currentPage, setCurrentPage] = useState(1);
     const [rowsPerPage, setRowsPerPage] = useState(10);
@@ -107,15 +107,15 @@ export default function DisplayEmployee() {
         if (totalPages <= 7) {
             return pageNumbers;
         }
-        
+
         if (currentPage <= 4) {
             return [1, 2, 3, 4, 5, '...', totalPages];
         }
-        
+
         if (currentPage >= totalPages - 3) {
             return [1, '...', totalPages - 4, totalPages - 3, totalPages - 2, totalPages - 1, totalPages];
         }
-        
+
         return [1, '...', currentPage - 1, currentPage, currentPage + 1, '...', totalPages];
     };
 
@@ -173,9 +173,9 @@ export default function DisplayEmployee() {
             <div className="d-flex justify-content-between align-items-center mb-3">
                 <div className="d-flex align-items-center">
                     <span className="me-2">Show</span>
-                    <select 
-                        className="form-select form-select-sm" 
-                        style={{width: '80px'}}
+                    <select
+                        className="form-select form-select-sm"
+                        style={{ width: '80px' }}
                         value={rowsPerPage}
                         onChange={handleRowsPerPageChange}
                     >
@@ -196,6 +196,7 @@ export default function DisplayEmployee() {
                 <table className="table table-dark table-hover">
                     <thead className="table-dark">
                         <tr>
+                            <th>Photo</th>
                             <th>ID No ↓</th>
                             <th>Name</th>
                             <th>Gender</th>
@@ -208,6 +209,28 @@ export default function DisplayEmployee() {
                     <tbody>
                         {currentEmployees.map((employee) => (
                             <tr key={employee.id}>
+                                <td>
+                                    {employee.employeePhoto ? (
+                                        <img
+                                            src={employee.employeePhoto}
+                                            alt="Employee"
+                                            style={{ width: '50px', height: '50px', objectFit: 'cover', borderRadius: '50%' }}
+                                        />
+                                    ) : (
+                                        <div
+                                            style={{
+                                                width: '50px',
+                                                height: '50px',
+                                                backgroundColor: '#4c4b4b',
+                                                borderRadius: '50%',
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                justifyContent: 'center'
+                                            }}
+                                        >
+                                        </div>
+                                    )}
+                                </td>
                                 <td>
                                     <strong>{employee.employeeId || employee.idNo || 'N/A'}</strong>
                                 </td>
@@ -256,25 +279,25 @@ export default function DisplayEmployee() {
                 <nav aria-label="Employee pagination" className='pagination-wrapper'>
                     <ul className="pagination justify-content-center">
                         <li className={`page-item ${currentPage === 1 ? 'disabled' : ''}`}>
-                            <button 
-                                className="page-link" 
+                            <button
+                                className="page-link"
                                 onClick={() => paginate(currentPage - 1)}
                                 disabled={currentPage === 1}
                             >
                                 Previous
                             </button>
                         </li>
-                        
+
                         {getDisplayedPageNumbers().map((number, index) => (
-                            <li 
-                                key={index} 
+                            <li
+                                key={index}
                                 className={`page-item ${number === currentPage ? 'active' : ''} ${number === '...' ? 'disabled' : ''}`}
                             >
                                 {number === '...' ? (
                                     <span className="page-link">...</span>
                                 ) : (
-                                    <button 
-                                        className="page-link" 
+                                    <button
+                                        className="page-link"
                                         onClick={() => paginate(number)}
                                     >
                                         {number}
@@ -282,10 +305,10 @@ export default function DisplayEmployee() {
                                 )}
                             </li>
                         ))}
-                        
+
                         <li className={`page-item ${currentPage === totalPages ? 'disabled' : ''}`}>
-                            <button 
-                                className="page-link" 
+                            <button
+                                className="page-link"
                                 onClick={() => paginate(currentPage + 1)}
                                 disabled={currentPage === totalPages}
                             >

@@ -57,10 +57,10 @@ export default function DisplayEmployee() {
     };
 
     fetchEmployees();
+
     return () => {
       firebaseDB.child('ExitEmployees').off('value');
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -70,43 +70,45 @@ export default function DisplayEmployee() {
 
   const sortEmployeesDescending = (employeesData) => {
     return employeesData.sort((a, b) => {
-      const idA = a.idNo || a.employeeId || '';
-      const idB = b.idNo || b.employeeId || '';
-
-      if (idA.startsWith('JW') && idB.startsWith('JW')) {
-        const numA = parseInt(idA.replace('JW', '')) || 0;
-        const numB = parseInt(idB.replace('JW', '')) || 0;
-        return numB - numA;
-      }
-
-      if (!isNaN(idA) && !isNaN(idB)) {
-        return parseInt(idB) - parseInt(idA);
-      }
-
-      return idB.localeCompare(idA);
+      const aId = (a.employeeId || a.idNo || '').toString().replace(/\D/g, '');
+      const bId = (b.employeeId || b.idNo || '').toString().replace(/\D/g, '');
+      const aNum = parseInt(aId || '0', 10);
+      const bNum = parseInt(bId || '0', 10);
+      return bNum - aNum;
     });
   };
 
-  // Pagination calculations
   const indexOfLastEmployee = currentPage * rowsPerPage;
   const indexOfFirstEmployee = indexOfLastEmployee - rowsPerPage;
   const currentEmployees = employees.slice(indexOfFirstEmployee, indexOfLastEmployee);
 
   const paginate = (pageNumber) => setCurrentPage(pageNumber);
-  const handleRowsPerPageChange = (e) => setRowsPerPage(parseInt(e.target.value));
-
-  const pageNumbers = [];
-  for (let i = 1; i <= totalPages; i++) pageNumbers.push(i);
 
   const getDisplayedPageNumbers = () => {
-    if (totalPages <= 7) return pageNumbers;
-    if (currentPage <= 4) return [1, 2, 3, 4, 5, '...', totalPages];
-    if (currentPage >= totalPages - 3)
-      return [1, '...', totalPages - 4, totalPages - 3, totalPages - 2, totalPages - 1, totalPages];
-    return [1, '...', currentPage - 1, currentPage, currentPage + 1, '...', totalPages];
+    const numbers = [];
+    const maxPagesToShow = 5;
+    const half = Math.floor(maxPagesToShow / 2);
+
+    if (totalPages <= maxPagesToShow) {
+      for (let i = 1; i <= totalPages; i++) numbers.push(i);
+      return numbers;
+    }
+
+    if (currentPage <= half + 1) {
+      for (let i = 1; i <= maxPagesToShow; i++) numbers.push(i);
+      numbers.push('...', totalPages);
+    } else if (currentPage >= totalPages - half) {
+      numbers.push(1, '...');
+      for (let i = totalPages - maxPagesToShow + 1; i <= totalPages; i++) numbers.push(i);
+    } else {
+      numbers.push(1, '...');
+      for (let i = currentPage - half; i <= currentPage + half; i++) numbers.push(i);
+      numbers.push('...', totalPages);
+    }
+
+    return numbers;
   };
 
-  // View/Edit
   const handleView = (employee) => {
     setSelectedEmployee(employee);
     setIsEditMode(false);
@@ -140,21 +142,23 @@ export default function DisplayEmployee() {
 
       await firebaseDB.child(`EmployeeBioData/${id}`).set({
         ...payload,
-        restoredFromExit: true,
+        status: 'On Duty',
         returnedAt,
       });
 
       await firebaseDB.child(`ExitEmployees/${id}`).remove();
 
-      closeReturnConfirm();
+      setShowReturnConfirm(false);
       setShowReturnedModal(true);
     } catch (err) {
-      setError('Error moving employee: ' + err.message);
-      closeReturnConfirm();
+      setError('Error returning employee: ' + err.message);
     }
   };
 
-  // Save edits in ExitEmployees (no alert, show modal)
+  const closeReturnedModal = () => {
+    setShowReturnedModal(false);
+  };
+
   const handleSave = async (updatedEmployee) => {
     try {
       await firebaseDB.child(`ExitEmployees/${updatedEmployee.id}`).update(updatedEmployee);
@@ -165,45 +169,43 @@ export default function DisplayEmployee() {
     }
   };
 
-  const handleCloseModal = () => {
-    setIsModalOpen(false);
-    setSelectedEmployee(null);
-    setIsEditMode(false);
+  const handleRowsPerPageChange = (e) => {
+    setRowsPerPage(Number(e.target.value));
   };
 
-  if (loading) return <div className="text-center my-5">Loading employees...</div>;
-  if (error) return <div className="alert alert-danger">Error: {error}</div>;
-  if (employees.length === 0) return <div className="alert alert-info">No employees found</div>;
+  if (loading) {
+    return <div className="container py-4">Loading...</div>;
+  }
+
+  if (error) {
+    return <div className="container py-4 text-danger">Error: {error}</div>;
+  }
 
   return (
-    <div>
-      {/* Rows per page selector */}
+    <div className="container-fluid py-4">
       <div className="d-flex justify-content-between align-items-center mb-3">
+        <h4 className="mb-0">Existing Employees</h4>
+
         <div className="d-flex align-items-center">
-          <span className="me-2">Show</span>
+          <label className="me-2 mb-0">Rows:</label>
           <select
-            className="form-select form-select-sm"
+            className="form-select"
             style={{ width: '80px' }}
             value={rowsPerPage}
             onChange={handleRowsPerPageChange}
           >
+            <option value={5}>5</option>
             <option value={10}>10</option>
-            <option value={20}>20</option>
-            <option value={30}>30</option>
-            <option value={40}>40</option>
-            <option value={50}>50</option>
+            <option value={25}>25</option>
           </select>
-          <span className="ms-2">entries</span>
-        </div>
-        <div>
-          Showing {indexOfFirstEmployee + 1} to {Math.min(indexOfLastEmployee, employees.length)} of {employees.length} entries
         </div>
       </div>
 
-      <div className="table-responsive">
-        <table className="table table-dark table-hover">
+      <div className="table-responsive shadow-sm">
+        <table className="table table-hover align-middle">
           <thead className="table-dark">
             <tr>
+              <th>Photo</th>
               <th>ID No ↓</th>
               <th>Name</th>
               <th>Gender</th>
@@ -216,18 +218,54 @@ export default function DisplayEmployee() {
           <tbody>
             {currentEmployees.map((employee) => (
               <tr key={employee.id}>
+                {/* Photo column — same as DisplayEmployee */}
+                <td>
+                  {employee.employeePhoto ? (
+                    <img
+                      src={employee.employeePhoto}
+                      alt="Employee"
+                      style={{ width: '50px', height: '50px', objectFit: 'cover', borderRadius: '50%' }}
+                    />
+                  ) : (
+                    <div
+                      style={{
+                        width: '50px',
+                        height: '50px',
+                        backgroundColor: '#4c4b4b',
+                        borderRadius: '50%',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center'
+                      }}
+                    />
+                  )}
+                </td>
+
+                {/* ID */}
                 <td>
                   <strong>{employee.employeeId || employee.idNo || 'N/A'}</strong>
                 </td>
+
+                {/* Name */}
                 <td>{employee.firstName} {employee.lastName}</td>
+
+                {/* Gender */}
                 <td>{employee.gender || 'N/A'}</td>
+
+                {/* Primary Skill */}
                 <td>{employee.primarySkill || 'N/A'}</td>
+
+                {/* Experience */}
                 <td>{employee.workExperince ? `${employee.workExperince}` : 'N/A'}</td>
+
+                {/* Status */}
                 <td>
                   <span className={`badge ${getStatusBadgeClass(employee.status)}`}>
                     {employee.status || 'On Duty'}
                   </span>
                 </td>
+
+                {/* Actions */}
                 <td>
                   <div className="d-flex">
                     <button
@@ -259,66 +297,67 @@ export default function DisplayEmployee() {
         </table>
       </div>
 
-      {/* Pagination controls */}
-      {totalPages > 1 && (
-        <nav aria-label="Employee pagination" className="pagination-wrapper">
-          <ul className="pagination justify-content-center">
-            <li className={`page-item ${currentPage === 1 ? 'disabled' : ''}`}>
-              <button
-                className="page-link"
-                onClick={() => paginate(currentPage - 1)}
-                disabled={currentPage === 1}
-              >
-                Previous
-              </button>
+      {/* Pagination */}
+      <nav aria-label="Page navigation" className="mt-3 pagination-wrapper">
+        <ul className="pagination justify-content-center">
+          <li className={`page-item ${currentPage === 1 ? 'disabled' : ''}`}>
+            <button
+              className="page-link"
+              onClick={() => paginate(currentPage - 1)}
+              disabled={currentPage === 1}
+            >
+              Previous
+            </button>
+          </li>
+
+          {getDisplayedPageNumbers().map((number, index) => (
+            <li
+              key={index}
+              className={`page-item ${number === currentPage ? 'active' : ''} ${number === '...' ? 'disabled' : ''}`}
+            >
+              {number === '...' ? (
+                <span className="page-link">...</span>
+              ) : (
+                <button
+                  className="page-link"
+                  onClick={() => paginate(number)}
+                >
+                  {number}
+                </button>
+              )}
             </li>
+          ))}
 
-            {getDisplayedPageNumbers().map((number, index) => (
-              <li
-                key={index}
-                className={`page-item ${number === currentPage ? 'active' : ''} ${number === '...' ? 'disabled' : ''}`}
-              >
-                {number === '...' ? (
-                  <span className="page-link">...</span>
-                ) : (
-                  <button
-                    className="page-link"
-                    onClick={() => paginate(number)}
-                  >
-                    {number}
-                  </button>
-                )}
-              </li>
-            ))}
+          <li className={`page-item ${currentPage === totalPages ? 'disabled' : ''}`}>
+            <button
+              className="page-link"
+              onClick={() => paginate(currentPage + 1)}
+              disabled={currentPage === totalPages}
+            >
+              Next
+            </button>
+          </li>
+        </ul>
+      </nav>
 
-            <li className={`page-item ${currentPage === totalPages ? 'disabled' : ''}`}>
-              <button
-                className="page-link"
-                onClick={() => paginate(currentPage + 1)}
-                disabled={currentPage === totalPages}
-              >
-                Next
-              </button>
-            </li>
-          </ul>
-        </nav>
-      )}
+      {/* View/Edit Modal */}
+      <EmployeeModal
+        employee={selectedEmployee}
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        onSave={handleSave}
+        isEditMode={isEditMode}
+      />
 
-      {/* Employee View/Edit Modal */}
-      {selectedEmployee && (
-        <EmployeeModal
-          employee={selectedEmployee}
-          isOpen={isModalOpen}
-          onClose={handleCloseModal}
-          onSave={handleSave}     // save edits to ExitEmployees
-          onReturn={() => {}}     // not used here
-          isEditMode={isEditMode}
-        />
-      )}
-
-      {/* Return Confirmation Modal */}
+      {/* Return Confirm Modal */}
       {showReturnConfirm && employeeToReturn && (
-        <div className="modal fade show" style={{ display: 'block', backgroundColor: 'rgba(0,0,0,0.5)' }}>
+        <div
+          className="modal fade show"
+          style={{ display: 'block', backgroundColor: 'rgba(0,0,0,0.5)' }}
+          tabIndex="-1"
+          role="dialog"
+          aria-modal="true"
+        >
           <div className="modal-dialog modal-dialog-centered">
             <div className="modal-content">
               <div className="modal-header">
@@ -336,12 +375,8 @@ export default function DisplayEmployee() {
                 </small>
               </div>
               <div className="modal-footer">
-                <button type="button" className="btn btn-secondary" onClick={closeReturnConfirm}>
-                  Cancel
-                </button>
-                <button type="button" className="btn btn-primary" onClick={handleReturnConfirmed}>
-                  Yes, Return to Active
-                </button>
+                <button className="btn btn-secondary" onClick={closeReturnConfirm}>Cancel</button>
+                <button className="btn btn-primary" onClick={handleReturnConfirmed}>Yes, Return</button>
               </div>
             </div>
           </div>
@@ -350,58 +385,53 @@ export default function DisplayEmployee() {
 
       {/* Returned Success Modal */}
       {showReturnedModal && (
-        <div className="modal fade show" style={{ display: 'block', backgroundColor: 'rgba(0,0,0,0.5)' }}>
+        <div
+          className="modal fade show"
+          style={{ display: 'block', backgroundColor: 'rgba(0,0,0,0.5)' }}
+          tabIndex="-1"
+          role="dialog"
+          aria-modal="true"
+        >
           <div className="modal-dialog modal-dialog-centered">
             <div className="modal-content">
               <div className="modal-header bg-success text-white">
-                <h5 className="modal-title">Returned Successfully</h5>
-                <button
-                  type="button"
-                  className="btn-close btn-close-white"
-                  onClick={() => setShowReturnedModal(false)}
-                ></button>
+                <h5 className="modal-title">Employee Returned</h5>
+                <button type="button" className="btn-close" onClick={closeReturnedModal}></button>
               </div>
               <div className="modal-body">
-                <p>
-                  The employee has been moved back to the <strong>EmployeeBioData</strong> section.
-                </p>
+                Employee moved back to <strong>Existing Employees</strong>.
               </div>
               <div className="modal-footer">
-                <button type="button" className="btn btn-success" onClick={() => setShowReturnedModal(false)}>
-                  OK
-                </button>
+                <button className="btn btn-success" onClick={closeReturnedModal}>Done</button>
               </div>
             </div>
           </div>
         </div>
       )}
 
-      {/* Save Success Modal */}
+      {/* Save Success Modal (when editing inside ExitEmployees) */}
       {showSaveModal && (
-        <div className="modal fade show" style={{ display: 'block', backgroundColor: 'rgba(0,0,0,0.5)' }}>
+        <div
+          className="modal fade show"
+          style={{ display: 'block', backgroundColor: 'rgba(0,0,0,0.5)' }}
+          tabIndex="-1"
+          role="dialog"
+          aria-modal="true"
+        >
           <div className="modal-dialog modal-dialog-centered">
             <div className="modal-content">
               <div className="modal-header bg-success text-white">
-                <h5 className="modal-title">Saved Successfully</h5>
-                <button
-                  type="button"
-                  className="btn-close btn-close-white"
-                  onClick={() => setShowSaveModal(false)}
-                ></button>
+                <h5 className="modal-title">Saved</h5>
+                <button type="button" className="btn-close" onClick={() => setShowSaveModal(false)}></button>
               </div>
-              <div className="modal-body">
-                <p>Exit employee details have been updated.</p>
-              </div>
+              <div className="modal-body">Employee details updated successfully.</div>
               <div className="modal-footer">
-                <button type="button" className="btn btn-success" onClick={() => setShowSaveModal(false)}>
-                  OK
-                </button>
+                <button className="btn btn-success" onClick={() => setShowSaveModal(false)}>Done</button>
               </div>
             </div>
           </div>
         </div>
       )}
-
     </div>
   );
 }

@@ -783,7 +783,7 @@ const EmployeeModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode
                                             <div className="row align-items-start">
                                                 <div className="col-md-4">
                                                     <div className="mb-3">
-                                                        <label className="form-label">
+                                                        <label className="form-label center">
                                                             <strong>Employee Photo</strong>
                                                         </label>
                                                         <div className="text-center">
@@ -1426,9 +1426,9 @@ const EmployeeModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode
                                                 return (
                                                     <div key={i} className="border rounded p-3 mb-3">
                                                         <div className="d-flex justify-content-between align-items-center mb-2">
-                                                            <h6 className="mb-0">
+                                                            <h5 className="">
                                                                 Work Place #{i + 1} {locked && <span className="badge bg-secondary ms-2">Locked</span>}
-                                                            </h6>
+                                                            </h5>
                                                             {isEditMode && !locked && (
                                                                 <button className="btn btn-outline-danger btn-sm" onClick={() => removeWorkSection(i)}>
                                                                     Remove

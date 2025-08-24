@@ -655,15 +655,44 @@ const EmployeeModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode
                                         <div className="row mb-3 status">
                                             <div className="col-md-4">
                                                 <label className="form-label">
-                                                    <strong>Work Status</strong>
+                                                    <strong>Status</strong>
                                                 </label>
-                                                <select className="form-select" value={status} onChange={(e) => setStatus(e.target.value)} disabled={!isEditMode}>
-                                                    <option value="On Duty">On Duty</option>
-                                                    <option value="Off Duty">Off Duty</option>
-                                                    <option value="Resigned">Resigned</option>
-                                                    <option value="Absconder">Absconder</option>
-                                                    <option value="Terminated">Terminated</option>
-                                                </select>
+
+                                                {isEditMode ? (
+                                                    <select
+                                                        className="form-select"
+                                                        value={status}
+                                                        onChange={(e) => setStatus(e.target.value)}
+                                                    >
+                                                        <option value="On Duty">On Duty</option>
+                                                        <option value="Off Duty">Off Duty</option>
+                                                        <option value="Resigned">Resigned</option>
+                                                        <option value="Absconder">Absconder</option>
+                                                        <option value="Terminated">Terminated</option>
+                                                    </select>
+                                                ) : (
+                                                    <div>
+                                                        <span
+                                                            className={`badge px-3 py-2`}
+                                                            style={{
+                                                                fontSize: "1rem",
+                                                                backgroundColor:
+                                                                    status === "On Duty"
+                                                                        ? "green"
+                                                                        : status === "Off Duty"
+                                                                            ? "gray"
+                                                                            : status === "Terminated"
+                                                                                ? "red"
+                                                                                : status === "Resigned"
+                                                                                    ? "brown"
+                                                                                    : "red", // Terminated or Absconder
+                                                                color: "white",
+                                                            }}
+                                                        >
+                                                            {status}
+                                                        </span>
+                                                    </div>
+                                                )}
                                             </div>
                                         </div>
                                         <div className="modal-card-header">

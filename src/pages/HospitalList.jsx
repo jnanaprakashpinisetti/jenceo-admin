@@ -1,9 +1,9 @@
 import React from 'react'
 
-export default function Dues() {
+export default function HospitalList() {
     return (
         <div className="layout-body">
-            Dues
+            HospitalList
         </div>
     )
 }

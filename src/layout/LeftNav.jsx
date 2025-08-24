@@ -15,6 +15,7 @@ import workerExit from "../assets/worker-exit.svg";
 import WorkerAggrement from "../assets/workers-aggrement.svg";
 import client from "../assets/client.svg";
 import ClientExitIcon from "../assets/client-exit.svg";
+import HospitalIcon from "../assets/hospital-icon.svg";
 
 import invest from "../assets/invest.svg";
 import purchase from "../assets/purchase.svg";
@@ -42,7 +43,7 @@ import Admin from '../pages/Admin';
 import Hr from '../pages/Hr';
 import Accounts from '../pages/Accounts';
 import Operations from '../pages/Operations';
-import Dues from '../pages/Dues';
+import HospitalList from '../pages/HospitalList';
 
 export default function LeftNav() {
   const [isActive, setIsActive] = useState(false);   // side collapse (arrow)
@@ -136,9 +137,11 @@ export default function LeftNav() {
               </NavLink>
             </li>
 
+            <hr />
+
             <li className="nav-item">
-              <NavLink to='Dues' className="nav-link" title='Dues' onClick={closeMobile}>
-                <img src={balance} alt="" /> Dues
+              <NavLink to='HospitalList' className="nav-link" title='Hospital List' onClick={closeMobile}>
+                <img src={HospitalIcon} alt="" /> Hospital List
               </NavLink>
             </li>
 
@@ -198,7 +201,7 @@ export default function LeftNav() {
         <Route path="HR" element={<Hr />} />
         <Route path="Accounts" element={<Accounts />} />
         <Route path="Operations" element={<Operations />} />
-        <Route path="Dues" element={<Dues />} />
+        <Route path="HospitalList" element={<HospitalList />} />
       </Routes>
     </>
   );

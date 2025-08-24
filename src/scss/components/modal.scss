@@ -21,6 +21,14 @@
 }
 
 .viewEmployee {
+
+    .modal-card {
+    .row:nth-child(even) {
+        background-color: rgb(239, 241, 241);
+        padding-top: 15px;
+    }
+}
+
     .status {
         display: none;
     }

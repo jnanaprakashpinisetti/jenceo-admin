@@ -14,6 +14,7 @@ import employee from "../assets/employee.svg";
 import workerExit from "../assets/worker-exit.svg";
 import WorkerAggrement from "../assets/workers-aggrement.svg";
 import client from "../assets/client.svg";
+import ClientExitIcon from "../assets/client-exit.svg";
 
 import invest from "../assets/invest.svg";
 import purchase from "../assets/purchase.svg";
@@ -131,7 +132,7 @@ export default function LeftNav() {
 
             <li className="nav-item">
               <NavLink to='ClientExit' className="nav-link" title='ClientExit' onClick={closeMobile}>
-                <img src={sales} alt="" /> ClientExit
+                <img src={ClientExitIcon} alt="" /> ClientExit
               </NavLink>
             </li>
 

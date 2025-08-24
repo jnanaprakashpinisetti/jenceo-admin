@@ -26,6 +26,7 @@
     .row:nth-child(even) {
         background-color: rgb(239, 241, 241);
         padding-top: 15px;
+        margin-bottom: 15px;
     }
 }
 
@@ -35,12 +36,12 @@
 
     .form-control {
         border: none;
-        background-color: transparent;
+        background-color: transparent !important;
         padding: 0;
     }
 
     .form-select {
-        background-color: transparent;
+        background-color: transparent !important;
         border: none;
     }
 
@@ -61,3 +62,4 @@
 .alert-card {
     background-color: #fff;
 }
+

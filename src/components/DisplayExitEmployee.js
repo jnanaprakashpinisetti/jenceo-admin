@@ -189,7 +189,7 @@ export default function DisplayEmployee() {
         <div className="d-flex align-items-center">
           <label className="me-2 mb-0">Rows:</label>
           <select
-            className="form-select"
+            className="form-select form-select-sm"
             style={{ width: '80px' }}
             value={rowsPerPage}
             onChange={handleRowsPerPageChange}
@@ -201,8 +201,8 @@ export default function DisplayEmployee() {
         </div>
       </div>
 
-      <div className="table-responsive shadow-sm">
-        <table className="table table-hover align-middle">
+      <div className="table-responsive">
+        <table className="table table-dark table-hover">
           <thead className="table-dark">
             <tr>
               <th>Photo</th>

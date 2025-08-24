@@ -149,14 +149,8 @@ form {
 
 }
 
-#permanentAddress,
-#peresentAddress,
-#personalInformation,
-#qualificationSkills,
-#healthDetails,
-#emergencyContact1,
-#emergencyContact2,
-#emergencyContact3 {
-    // display: none;
-
-}
+ .form-select.form-select-sm {
+     background-color: #929496;
+     border-color: #7c7f83;
+     color: #fff;
+ }

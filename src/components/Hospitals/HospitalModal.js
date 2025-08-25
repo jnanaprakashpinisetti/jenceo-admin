@@ -15,13 +15,33 @@ const HospitalModal = ({ hospital, isOpen, onClose, onSave, isEditMode }) => {
   const [paymentSuccess, setPaymentSuccess] = useState({});
   const [currentAgentPage, setCurrentAgentPage] = useState(1);
   const [currentPaymentPage, setCurrentPaymentPage] = useState(1);
+  const [visitTouched, setVisitTouched] = useState(false); // manual change guard
   const itemsPerPage = 5;
 
+  // ---------- Helpers ----------
+  const autoVisitFromCount = (count) => {
+    if (count >= 8) return 'Visit Fully';
+    if (count >= 4) return 'Visit Medium';
+    if (count >= 1) return 'Visit Low';
+    return ''; // no agents → leave empty
+  };
+
+  // ---------- Load / hydrate ----------
   useEffect(() => {
     if (hospital) {
-      setHospitalData(hospital);
+      setHospitalData({
+        ...hospital,
+        visitType: hospital.visitType || autoVisitFromCount((hospital.agents || []).length),
+        comments: Array.isArray(hospital.comments) ? hospital.comments : []
+      });
       setAgents(hospital.agents || []);
-      setPayments(hospital.payments || []);
+      setPayments(
+        (hospital.payments || []).map(p => ({
+          ...p,
+          // ensure a date exists for the Payment List:
+          date: p.date || (p.createdAt ? new Date(p.createdAt).toISOString().slice(0,10) : new Date().toISOString().slice(0,10))
+        }))
+      );
       setAgentErrors(hospital.agents ? hospital.agents.map(() => ({})) : []);
       setPaymentErrors(hospital.payments ? hospital.payments.map(() => ({})) : []);
       setAgentSuccess(
@@ -38,10 +58,18 @@ const HospitalModal = ({ hospital, isOpen, onClose, onSave, isEditMode }) => {
       // Reset edit tracking whenever the modal loads fresh data
       editedRef.current = false;
       setHasUnsavedChanges(false);
+      setVisitTouched(false);
     }
   }, [hospital]);
 
-  // Removed the old effect that inferred "changes" from unlocked rows.
+  // Auto-update visit type when agent length changes unless user manually chose
+  useEffect(() => {
+    if (!visitTouched) {
+      const nextVisit = autoVisitFromCount(agents.length);
+      setHospitalData(prev => ({ ...prev, visitType: nextVisit }));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [agents.length]);
 
   const isPaymentLocked = (payment) => payment.isLocked || payment.submittedAt;
   const isAgentLocked = (agent) => agent.isLocked || agent.submittedAt;
@@ -167,8 +195,10 @@ const HospitalModal = ({ hospital, isOpen, onClose, onSave, isEditMode }) => {
 
   /* --------------------- Payment Details Functions --------------------- */
   const addNewPayment = () => {
+    const today = new Date().toISOString().slice(0, 10);
     const newPayment = {
       id: Date.now().toString(),
+      date: today,
       name: '',
       mobileNo: '',
       upiNo: '',
@@ -220,8 +250,9 @@ const HospitalModal = ({ hospital, isOpen, onClose, onSave, isEditMode }) => {
   const validatePayment = (index) => {
     const payment = payments[index];
     const errors = {};
-    if (!payment.commition) errors.commition = "Commition is required";
+    if (!payment.commition && payment.commition !== 0) errors.commition = "Commition is required";
     if (!payment.paymentMode) errors.paymentMode = "Payment Mode is required";
+    if (!payment.date) errors.date = "Date is required";
     return errors;
   };
 
@@ -255,8 +286,10 @@ const HospitalModal = ({ hospital, isOpen, onClose, onSave, isEditMode }) => {
 
     const foundAgent = agents.find(agent => agent.id === paymentIdInput);
     if (foundAgent) {
+      const today = new Date().toISOString().slice(0, 10);
       const newPayment = {
         id: Date.now().toString(),
+        date: today,
         name: foundAgent.name,
         mobileNo: foundAgent.mobileNo,
         upiNo: foundAgent.upiNo,
@@ -278,6 +311,20 @@ const HospitalModal = ({ hospital, isOpen, onClose, onSave, isEditMode }) => {
     }
   };
 
+  /* --------------------- Hospital (header) comments --------------------- */
+  const addHospitalComment = () => {
+    const input = document.getElementById('hospital-comment-input');
+    if (!input || !input.value.trim()) return;
+    const text = input.value.trim();
+    setHospitalData(prev => ({
+      ...prev,
+      comments: [{ text, date: new Date().toISOString() }, ...(prev.comments || [])]
+    }));
+    input.value = '';
+    markEdited();
+  };
+
+  /* --------------------- Save / Close --------------------- */
   const handleSave = () => {
     const dataToSave = {
       ...hospitalData,
@@ -333,6 +380,8 @@ const HospitalModal = ({ hospital, isOpen, onClose, onSave, isEditMode }) => {
 
   const paymentModeOptions = [ 'Online', 'Cash', 'Gift' ];
 
+  const visitTypeOptions = ['Visit Fully', 'Visit Medium', 'Visit Low'];
+
   const getStatusColor = (status) => {
     switch (status) {
       case 'Very Good': return 'success';
@@ -344,6 +393,9 @@ const HospitalModal = ({ hospital, isOpen, onClose, onSave, isEditMode }) => {
       default: return 'secondary';
     }
   };
+
+  const sumCommission = () =>
+    payments.reduce((acc, p) => acc + (parseFloat(p.commition) || 0), 0);
 
   if (!isOpen) return null;
 
@@ -412,51 +464,202 @@ const HospitalModal = ({ hospital, isOpen, onClose, onSave, isEditMode }) => {
                     Payment Details
                   </button>
                 </li>
+                {/* New Tabs */}
+                <li className="nav-item" role="presentation">
+                  <button
+                    className={`nav-link ${activeTab === 'agentList' ? 'active' : ''}`}
+                    onClick={() => setActiveTab('agentList')}
+                  >
+                    Agent List
+                  </button>
+                </li>
+                <li className="nav-item" role="presentation">
+                  <button
+                    className={`nav-link ${activeTab === 'paymentList' ? 'active' : ''}`}
+                    onClick={() => setActiveTab('paymentList')}
+                  >
+                    Payment List
+                  </button>
+                </li>
               </ul>
 
               <div className="tab-content p-3">
-                {/* Hospital Details Tab */}
+                {/* Hospital Details Tab (now editable + visit dropdown + comments) */}
                 {activeTab === 'hospitalDetails' && (
                   <div className="row">
                     <div className="col-md-4 mb-3">
                       <label className="form-label"><strong>Hospital ID</strong></label>
-                      <p>{hospitalData.idNo || 'N/A'}</p>
+                      {isEditMode ? (
+                        <input
+                          type="text"
+                          className="form-control"
+                          value={hospitalData.idNo || ''}
+                          onChange={(e) => { setHospitalData({ ...hospitalData, idNo: e.target.value }); markEdited(); }}
+                        />
+                      ) : (
+                        <p>{hospitalData.idNo || 'N/A'}</p>
+                      )}
                     </div>
                     <div className="col-md-4 mb-3">
                       <label className="form-label"><strong>Hospital Name</strong></label>
-                      <p>{hospitalData.hospitalName || 'N/A'}</p>
+                      {isEditMode ? (
+                        <input
+                          type="text"
+                          className="form-control"
+                          value={hospitalData.hospitalName || ''}
+                          onChange={(e) => { setHospitalData({ ...hospitalData, hospitalName: e.target.value }); markEdited(); }}
+                        />
+                      ) : (
+                        <p>{hospitalData.hospitalName || 'N/A'}</p>
+                      )}
                     </div>
                     <div className="col-md-4 mb-3">
                       <label className="form-label"><strong>Hospital Type</strong></label>
-                      <p>{hospitalData.hospitalType || 'N/A'}</p>
+                      {isEditMode ? (
+                        <input
+                          type="text"
+                          className="form-control"
+                          value={hospitalData.hospitalType || ''}
+                          onChange={(e) => { setHospitalData({ ...hospitalData, hospitalType: e.target.value }); markEdited(); }}
+                        />
+                      ) : (
+                        <p>{hospitalData.hospitalType || 'N/A'}</p>
+                      )}
                     </div>
 
                     <div className="col-md-4 mb-3">
                       <label className="form-label"><strong>Number of Beds</strong></label>
-                      <p>{hospitalData.noOfBeds || 'N/A'}</p>
+                      {isEditMode ? (
+                        <input
+                          type="number"
+                          className="form-control"
+                          value={hospitalData.noOfBeds || ''}
+                          onChange={(e) => { setHospitalData({ ...hospitalData, noOfBeds: e.target.value }); markEdited(); }}
+                        />
+                      ) : (
+                        <p>{hospitalData.noOfBeds || 'N/A'}</p>
+                      )}
                     </div>
                     <div className="col-md-4 mb-3">
                       <label className="form-label"><strong>Timing</strong></label>
-                      <p>{hospitalData.timing || 'N/A'}</p>
+                      {isEditMode ? (
+                        <input
+                          type="text"
+                          className="form-control"
+                          value={hospitalData.timing || ''}
+                          onChange={(e) => { setHospitalData({ ...hospitalData, timing: e.target.value }); markEdited(); }}
+                        />
+                      ) : (
+                        <p>{hospitalData.timing || 'N/A'}</p>
+                      )}
                     </div>
                     <div className="col-md-4 mb-3">
                       <label className="form-label"><strong>Location</strong></label>
-                      <p>{hospitalData.location || 'N/A'}</p>
+                      {isEditMode ? (
+                        <input
+                          type="text"
+                          className="form-control"
+                          value={hospitalData.location || ''}
+                          onChange={(e) => { setHospitalData({ ...hospitalData, location: e.target.value }); markEdited(); }}
+                        />
+                      ) : (
+                        <p>{hospitalData.location || 'N/A'}</p>
+                      )}
                     </div>
                     <div className="col-md-9 mb-3">
                       <label className="form-label"><strong>Address</strong></label>
-                      <p>{hospitalData.address || 'N/A'}</p>
+                      {isEditMode ? (
+                        <textarea
+                          className="form-control"
+                          rows={2}
+                          value={hospitalData.address || ''}
+                          onChange={(e) => { setHospitalData({ ...hospitalData, address: e.target.value }); markEdited(); }}
+                        />
+                      ) : (
+                        <p>{hospitalData.address || 'N/A'}</p>
+                      )}
                     </div>
-                    {hospitalData.locationLink && (
-                      <div className="col-12 mb-3">
-                        <label className="form-label"><strong>Location Link</strong></label>
-                        <p>
-                          <a href={hospitalData.locationLink} target="_blank" rel="noopener noreferrer">
-                            {hospitalData.locationLink}
-                          </a>
-                        </p>
+                    <div className="col-md-3 mb-3">
+                      <label className="form-label"><strong>Visit</strong></label>
+                      {isEditMode ? (
+                        <select
+                          className="form-select"
+                          value={hospitalData.visitType || ''}
+                          onChange={(e) => {
+                            setVisitTouched(true);
+                            setHospitalData({ ...hospitalData, visitType: e.target.value });
+                            markEdited();
+                          }}
+                        >
+                          <option value="">Select Visit</option>
+                          {visitTypeOptions.map(v => (
+                            <option key={v} value={v}>{v}</option>
+                          ))}
+                        </select>
+                      ) : (
+                        <p>{hospitalData.visitType || 'N/A'}</p>
+                      )}
+                      <div className="form-text">
+                        Auto-set by Agent count: 1–3 Low, 4–7 Medium, 8+ Fully
                       </div>
-                    )}
+                    </div>
+
+                    <div className="col-12 mb-3">
+                      <label className="form-label"><strong>Location Link</strong></label>
+                      {isEditMode ? (
+                        <input
+                          type="url"
+                          className="form-control"
+                          value={hospitalData.locationLink || ''}
+                          onChange={(e) => { setHospitalData({ ...hospitalData, locationLink: e.target.value }); markEdited(); }}
+                        />
+                      ) : (
+                        hospitalData.locationLink ? (
+                          <p>
+                            <a href={hospitalData.locationLink} target="_blank" rel="noopener noreferrer">
+                              {hospitalData.locationLink}
+                            </a>
+                          </p>
+                        ) : <p>N/A</p>
+                      )}
+                    </div>
+
+                    {/* Hospital Comments */}
+                    <div className="col-12">
+                      <label className="form-label"><strong>Comments</strong></label>
+                      <div className="mb-2">
+                        <textarea
+                          id="hospital-comment-input"
+                          className="form-control"
+                          placeholder="Add a comment"
+                          rows={3}
+                          disabled={!isEditMode}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' && !e.shiftKey) {
+                              e.preventDefault();
+                              addHospitalComment();
+                            }
+                          }}
+                        />
+                        {isEditMode && (
+                          <button className="btn btn-sm btn-outline-secondary mt-2" onClick={addHospitalComment}>
+                            Add Comment
+                          </button>
+                        )}
+                      </div>
+                      {(hospitalData.comments && hospitalData.comments.length > 0) ? (
+                        <div className="mt-2">
+                          {hospitalData.comments.map((c, i) => (
+                            <div key={i} className="border-bottom pb-2 mb-2">
+                              <p className="mb-0">{c.text}</p>
+                              <small className="text-muted">{new Date(c.date).toLocaleString()}</small>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <p>No comments added</p>
+                      )}
+                    </div>
                   </div>
                 )}
 
@@ -790,7 +993,26 @@ const HospitalModal = ({ hospital, isOpen, onClose, onSave, isEditMode }) => {
                               </div>
 
                               <div className="row">
-                                <div className="col-md-4 mb-2">
+                                <div className="col-md-3 mb-2">
+                                  <label className="form-label"><strong>Date</strong></label>
+                                  {isEditMode && !locked ? (
+                                    <>
+                                      <input
+                                        type="date"
+                                        className={`form-control ${paymentErrors[originalIndex]?.date ? 'is-invalid' : ''}`}
+                                        value={payment.date || ''}
+                                        onChange={(e) => handlePaymentChange(originalIndex, 'date', e.target.value)}
+                                      />
+                                      {paymentErrors[originalIndex]?.date && (
+                                        <div className="invalid-feedback">{paymentErrors[originalIndex].date}</div>
+                                      )}
+                                    </>
+                                  ) : (
+                                    <p>{payment.date || 'N/A'}</p>
+                                  )}
+                                </div>
+
+                                <div className="col-md-3 mb-2">
                                   <label className="form-label"><strong>Agent Name</strong></label>
                                   {isEditMode && !locked ? (
                                     <input
@@ -804,7 +1026,7 @@ const HospitalModal = ({ hospital, isOpen, onClose, onSave, isEditMode }) => {
                                   )}
                                 </div>
 
-                                <div className="col-md-4 mb-2">
+                                <div className="col-md-3 mb-2">
                                   <label className="form-label"><strong>Agent Mobile No</strong></label>
                                   {isEditMode && !locked ? (
                                     <input
@@ -828,7 +1050,7 @@ const HospitalModal = ({ hospital, isOpen, onClose, onSave, isEditMode }) => {
                                   )}
                                 </div>
 
-                                <div className="col-md-4 mb-2">
+                                <div className="col-md-3 mb-2">
                                   <label className="form-label"><strong>Agent UPI No</strong></label>
                                   {isEditMode && !locked ? (
                                     <input
@@ -842,7 +1064,7 @@ const HospitalModal = ({ hospital, isOpen, onClose, onSave, isEditMode }) => {
                                   )}
                                 </div>
 
-                                <div className="col-md-4 mb-2">
+                                <div className="col-md-3 mb-2">
                                   <label className="form-label"><strong>Client ID</strong></label>
                                   {isEditMode && !locked ? (
                                     <input
@@ -856,7 +1078,7 @@ const HospitalModal = ({ hospital, isOpen, onClose, onSave, isEditMode }) => {
                                   )}
                                 </div>
 
-                                <div className="col-md-4 mb-2">
+                                <div className="col-md-3 mb-2">
                                   <label className="form-label"><strong>Client Name</strong></label>
                                   {isEditMode && !locked ? (
                                     <input
@@ -870,7 +1092,7 @@ const HospitalModal = ({ hospital, isOpen, onClose, onSave, isEditMode }) => {
                                   )}
                                 </div>
 
-                                <div className="col-md-4 mb-2">
+                                <div className="col-md-3 mb-2">
                                   <label className="form-label">Service Type</label>
                                   {isEditMode && !locked ? (
                                     <input
@@ -884,7 +1106,7 @@ const HospitalModal = ({ hospital, isOpen, onClose, onSave, isEditMode }) => {
                                   )}
                                 </div>
 
-                                <div className="col-md-4 mb-2">
+                                <div className="col-md-3 mb-2">
                                   <label className="form-label"><strong>Service Charges</strong></label>
                                   {isEditMode && !locked ? (
                                     <input
@@ -898,7 +1120,7 @@ const HospitalModal = ({ hospital, isOpen, onClose, onSave, isEditMode }) => {
                                   )}
                                 </div>
 
-                                <div className="col-md-4 mb-2">
+                                <div className="col-md-3 mb-2">
                                   <label className="form-label"><strong>Commition</strong><span className="text-danger">*</span></label>
                                   {isEditMode && !locked ? (
                                     <>
@@ -917,7 +1139,7 @@ const HospitalModal = ({ hospital, isOpen, onClose, onSave, isEditMode }) => {
                                   )}
                                 </div>
 
-                                <div className="col-md-4 mb-2">
+                                <div className="col-md-3 mb-2">
                                   <label className="form-label"><strong>Payment Mode</strong><span className="text-danger">*</span></label>
                                   {isEditMode && !locked ? (
                                     <>
@@ -926,7 +1148,7 @@ const HospitalModal = ({ hospital, isOpen, onClose, onSave, isEditMode }) => {
                                         value={payment.paymentMode}
                                         onChange={(e) => handlePaymentChange(originalIndex, 'paymentMode', e.target.value)}
                                       >
-                                        <option value=""><strong>Select Payment Mode</strong></option>
+                                        <option value="">Select Payment Mode</option>
                                         {paymentModeOptions.map(option => (
                                           <option key={option} value={option}>{option}</option>
                                         ))}
@@ -1018,6 +1240,97 @@ const HospitalModal = ({ hospital, isOpen, onClose, onSave, isEditMode }) => {
                         )}
                       </>
                     )}
+                  </div>
+                )}
+
+                {/* NEW: Agent List Tab */}
+                {activeTab === 'agentList' && (
+                  <div>
+                    <h5 className="mb-3">Agent List</h5>
+                    <div className="table-responsive">
+                      <table className="table table-bordered table-striped align-middle">
+                        <thead className="table-light">
+                          <tr>
+                            <th style={{width:'120px'}}>ID NO</th>
+                            <th>Name</th>
+                            <th>Designation</th>
+                            <th>Status</th>
+                            <th style={{width:'220px'}}>Mobile No</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {agents.length === 0 ? (
+                            <tr><td colSpan="5" className="text-center py-4">No agents</td></tr>
+                          ) : (
+                            agents.map((a, idx) => (
+                              <tr key={a.id || idx}>
+                                <td>{a.id || '—'}</td>
+                                <td>{a.name || '—'}</td>
+                                <td>{a.designation || '—'}</td>
+                                <td>
+                                  {a.status
+                                    ? <span className={`badge bg-${getStatusColor(a.status)}`}>{a.status}</span>
+                                    : '—'}
+                                </td>
+                                <td>
+                                  <div className="d-flex align-items-center">
+                                    <span>{a.mobileNo || '—'}</span>
+                                    {a.mobileNo && (
+                                      <a href={`tel:${a.mobileNo}`} className="btn btn-sm btn-outline-primary ms-2">
+                                        Call
+                                      </a>
+                                    )}
+                                  </div>
+                                </td>
+                              </tr>
+                            ))
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+
+                {/* NEW: Payment List Tab */}
+                {activeTab === 'paymentList' && (
+                  <div>
+                    <h5 className="mb-3">Payment List</h5>
+                    <div className="table-responsive">
+                      <table className="table table-bordered table-striped align-middle">
+                        <thead className="table-light">
+                          <tr>
+                            <th style={{width:'130px'}}>Date</th>
+                            <th>Agent Name</th>
+                            <th>Client Name</th>
+                            <th style={{width:'150px'}}>Commition</th>
+                            <th style={{width:'160px'}}>Payment Mode</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {payments.length === 0 ? (
+                            <tr><td colSpan="5" className="text-center py-4">No payments</td></tr>
+                          ) : (
+                            <>
+                              {payments.map((p, idx) => (
+                                <tr key={p.id || idx}>
+                                  <td>{p.date || (p.createdAt ? new Date(p.createdAt).toISOString().slice(0,10) : '—')}</td>
+                                  <td>{p.name || '—'}</td>
+                                  <td>{p.clientName || '—'}</td>
+                                  <td>{(p.commition !== undefined && p.commition !== null && p.commition !== '') ? Number(p.commition) : '—'}</td>
+                                  <td>{p.paymentMode || '—'}</td>
+                                </tr>
+                              ))}
+                              {/* Total Row */}
+                              <tr className="fw-bold">
+                                <td colSpan="3" className="text-end">Total Amount</td>
+                                <td>{sumCommission()}</td>
+                                <td></td>
+                              </tr>
+                            </>
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
                   </div>
                 )}
               </div>

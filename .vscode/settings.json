@@ -1,0 +1,15 @@
+{
+    "beautify.config": "",
+    "editor.dropIntoEditor.preferences": [
+
+    ],
+"workbench.colorCustomizations": {
+  "tab.activeBackground": "#005f9e",
+  "tab.activeForeground": "#ffffff",
+  "tab.inactiveBackground": "#2d2d2d",
+  "tab.inactiveForeground": "#bbbbbb",
+  "list.activeSelectionBackground": "#007acc",
+  "list.activeSelectionForeground": "#ffffff"
+}
+}
+

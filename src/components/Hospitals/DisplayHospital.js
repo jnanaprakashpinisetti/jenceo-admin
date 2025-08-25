@@ -14,6 +14,9 @@ export default function DisplayHospital() {
     const [isEditMode, setIsEditMode] = useState(false);
     const [saveSuccess, setSaveSuccess] = useState(false);
 
+    // NEW: auto visit map (id -> autoVisit string)
+    const [autoVisits, setAutoVisits] = useState({});
+
     // Search state
     const [searchTerm, setSearchTerm] = useState('');
 
@@ -21,6 +24,28 @@ export default function DisplayHospital() {
     const [currentPage, setCurrentPage] = useState(1);
     const [rowsPerPage, setRowsPerPage] = useState(10);
     const [totalPages, setTotalPages] = useState(1);
+
+    // ---- Helper for auto visit ----
+    const autoVisitFromCount = (count) => {
+        if (count >= 8) return 'Visit Fully';
+        if (count >= 4) return 'Visit Medium';
+        if (count >= 1) return 'Visit Low';
+        return '';
+    };
+
+    // ---- Color helper for badge ----
+    const getVisitColor = (visit) => {
+        switch (visit) {
+            case 'Visit Fully':
+                return 'success';   // green
+            case 'Visit Medium':
+                return 'warning';   // orange
+            case 'Visit Low':
+                return 'primary';   // blue
+            default:
+                return 'secondary'; // gray
+        }
+    };
 
     useEffect(() => {
         const fetchHospitals = () => {
@@ -40,10 +65,19 @@ export default function DisplayHospital() {
                         setHospitals(sortedHospitals);
                         setFilteredHospitals(sortedHospitals);
                         setTotalPages(Math.ceil(sortedHospitals.length / rowsPerPage));
+
+                        // Build auto visit map for display
+                        const map = {};
+                        sortedHospitals.forEach(h => {
+                            const agentCount = Array.isArray(h.agents) ? h.agents.length : 0;
+                            map[h.id] = autoVisitFromCount(agentCount);
+                        });
+                        setAutoVisits(map);
                     } else {
                         setHospitals([]);
                         setFilteredHospitals([]);
                         setTotalPages(1);
+                        setAutoVisits({});
                     }
                     setLoading(false);
                 });
@@ -58,16 +92,25 @@ export default function DisplayHospital() {
         return () => {
             firebaseDB.child("HospitalData").off('value');
         };
-    }, []);
+    }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+    // Recompute autoVisits whenever hospitals array changes (e.g., due to save or live updates)
+    useEffect(() => {
+        const map = {};
+        hospitals.forEach(h => {
+            const agentCount = Array.isArray(h.agents) ? h.agents.length : 0;
+            map[h.id] = autoVisitFromCount(agentCount);
+        });
+        setAutoVisits(map);
+    }, [hospitals]);
 
     // Filter hospitals based on search term
     useEffect(() => {
         let filtered = hospitals;
-        
-        // Apply search filter
+
         if (searchTerm) {
             const term = searchTerm.toLowerCase();
-            filtered = filtered.filter(hospital => 
+            filtered = filtered.filter(hospital =>
                 (hospital.hospitalName && hospital.hospitalName.toLowerCase().includes(term)) ||
                 (hospital.idNo && hospital.idNo.toLowerCase().includes(term)) ||
                 (hospital.location && hospital.location.toLowerCase().includes(term)) ||
@@ -87,18 +130,14 @@ export default function DisplayHospital() {
 
     const sortHospitalsDescending = (hospitalsData) => {
         return hospitalsData.sort((a, b) => {
-            // Get the ID numbers
             const idA = a.idNo || '';
             const idB = b.idNo || '';
 
-            // For H1, H2 pattern
             if (idA.startsWith('H') && idB.startsWith('H')) {
                 const numA = parseInt(idA.replace('H', '')) || 0;
                 const numB = parseInt(idB.replace('H', '')) || 0;
                 return numB - numA;
             }
-
-            // For string IDs
             return idB.localeCompare(idA);
         });
     };
@@ -129,17 +168,10 @@ export default function DisplayHospital() {
 
     // Show limited page numbers with ellipsis for many pages
     const getDisplayedPageNumbers = () => {
-        if (totalPages <= 7) {
-            return pageNumbers;
-        }
+        if (totalPages <= 7) return pageNumbers;
 
-        if (currentPage <= 4) {
-            return [1, 2, 3, 4, 5, '...', totalPages];
-        }
-
-        if (currentPage >= totalPages - 3) {
-            return [1, '...', totalPages - 4, totalPages - 3, totalPages - 2, totalPages - 1, totalPages];
-        }
+        if (currentPage <= 4) return [1, 2, 3, 4, 5, '...', totalPages];
+        if (currentPage >= totalPages - 3) return [1, '...', totalPages - 4, totalPages - 3, totalPages - 2, totalPages - 1, totalPages];
 
         return [1, '...', currentPage - 1, currentPage, currentPage + 1, '...', totalPages];
     };
@@ -236,43 +268,58 @@ export default function DisplayHospital() {
                             <th>Location</th>
                             <th>Type</th>
                             <th>No of Beds</th>
+                            {/* NEW: Auto Visit column right after No of Beds */}
+                            <th>Auto Visit</th>
                             <th>Actions</th>
                         </tr>
                     </thead>
                     <tbody>
                         {currentHospitals.length > 0 ? (
-                            currentHospitals.map((hospital) => (
-                                <tr key={hospital.id}>
-                                    <td>
-                                        <strong>{hospital.idNo || 'N/A'}</strong>
-                                    </td>
-                                    <td>{hospital.hospitalName || 'N/A'}</td>
-                                    <td>{hospital.location || 'N/A'}</td>
-                                    <td>{hospital.hospitalType || 'N/A'}</td>
-                                    <td>{hospital.noOfBeds || 'N/A'}</td>
-                                    <td>
-                                        <div className="d-flex">
-                                            <button
-                                                className="btn btn-sm me-2"
-                                                title="View"
-                                                onClick={() => handleView(hospital)}
-                                            >
-                                                <img src={viewIcon} alt="view Icon" style={{ opacity: 0.6, width: '18px', height: '18px' }} />
-                                            </button>
-                                            <button
-                                                className="btn btn-sm me-2"
-                                                title="Edit"
-                                                onClick={() => handleEdit(hospital)}
-                                            >
-                                                <img src={editIcon} alt="edit Icon" style={{ width: '15px', height: '15px' }} />
-                                            </button>
-                                        </div>
-                                    </td>
-                                </tr>
-                            ))
+                            currentHospitals.map((hospital) => {
+                                const visit = autoVisits[hospital.id] || '';
+                                const badgeClass = `badge bg-${getVisitColor(visit)}`;
+                                return (
+                                    <tr key={hospital.id}>
+                                        <td>
+                                            <strong>{hospital.idNo || 'N/A'}</strong>
+                                        </td>
+                                        <td>{hospital.hospitalName || 'N/A'}</td>
+                                        <td>{hospital.location || 'N/A'}</td>
+                                        <td>{hospital.hospitalType || 'N/A'}</td>
+                                        <td>{hospital.noOfBeds || 'N/A'}</td>
+                                        {/* NEW: display auto visit derived from agents length with color */}
+                                        <td>
+                                            {visit ? (
+                                                <span className={badgeClass}>{visit}</span>
+                                            ) : (
+                                                <span className="text-muted">N/A</span>
+                                            )}
+                                        </td>
+                                        <td>
+                                            <div className="d-flex">
+                                                <button
+                                                    className="btn btn-sm me-2"
+                                                    title="View"
+                                                    onClick={() => handleView(hospital)}
+                                                >
+                                                    <img src={viewIcon} alt="view Icon" style={{ opacity: 0.6, width: '18px', height: '18px' }} />
+                                                </button>
+                                                <button
+                                                    className="btn btn-sm me-2"
+                                                    title="Edit"
+                                                    onClick={() => handleEdit(hospital)}
+                                                >
+                                                    <img src={editIcon} alt="edit Icon" style={{ width: '15px', height: '15px' }} />
+                                                </button>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                );
+                            })
                         ) : (
                             <tr>
-                                <td colSpan="6" className="text-center py-4">
+                                {/* colSpan updated from 6 → 7 because of new column */}
+                                <td colSpan="7" className="text-center py-4">
                                     No hospitals found {searchTerm ? 'matching your search criteria' : ''}
                                 </td>
                             </tr>

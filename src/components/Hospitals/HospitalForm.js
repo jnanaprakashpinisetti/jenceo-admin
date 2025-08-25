@@ -383,14 +383,14 @@ const HospitalForm = ({ onSubmit, initialData = {}, isEdit = false }) => {
                     isEdit ? "Update Hospital" : "Add Hospital"
                   )}
                 </button>
-                <button 
+                {/* <button 
                   type="button" 
                   className="btn btn-secondary"
                   onClick={handleCancel}
                   disabled={isSubmitting}
                 >
                   Cancel
-                </button>
+                </button> */}
               </div>
             </div>
           </form>

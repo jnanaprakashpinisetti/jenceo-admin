@@ -1,0 +1,1043 @@
+import React, { useState, useEffect } from 'react';
+
+const HospitalModal = ({ hospital, isOpen, onClose, onSave, isEditMode }) => {
+    const [activeTab, setActiveTab] = useState('hospitalDetails');
+    const [hospitalData, setHospitalData] = useState({});
+    const [agents, setAgents] = useState([]);
+    const [payments, setPayments] = useState([]);
+    const [agentErrors, setAgentErrors] = useState([]);
+    const [paymentErrors, setPaymentErrors] = useState([]);
+    const [paymentIdInput, setPaymentIdInput] = useState('');
+    const [showConfirmClose, setShowConfirmClose] = useState(false);
+    const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+    const [agentSuccess, setAgentSuccess] = useState({});
+    const [paymentSuccess, setPaymentSuccess] = useState({});
+    const [currentAgentPage, setCurrentAgentPage] = useState(1);
+    const [currentPaymentPage, setCurrentPaymentPage] = useState(1);
+    const itemsPerPage = 5;
+
+    useEffect(() => {
+        if (hospital) {
+            setHospitalData(hospital);
+            setAgents(hospital.agents || []);
+            setPayments(hospital.payments || []);
+            setAgentErrors(hospital.agents ? hospital.agents.map(() => ({})) : []);
+            setPaymentErrors(hospital.payments ? hospital.payments.map(() => ({})) : []);
+            setAgentSuccess(hospital.agents ? hospital.agents.reduce((acc, _, index) => ({ ...acc, [index]: false }), {}) : {});
+            setPaymentSuccess(hospital.payments ? hospital.payments.reduce((acc, _, index) => ({ ...acc, [index]: false }), {}) : {});
+        }
+    }, [hospital]);
+
+    // Check if there are unsaved changes
+    useEffect(() => {
+        const hasChanges = agents.some(agent => !agent.isLocked) || payments.some(payment => !payment.isLocked);
+        setHasUnsavedChanges(hasChanges);
+    }, [agents, payments]);
+
+    // Check if a payment is locked (should not be editable)
+    const isPaymentLocked = (payment) => {
+        return payment.isLocked || payment.submittedAt;
+    };
+
+    // Check if an agent is locked (should not be editable)
+    const isAgentLocked = (agent) => {
+        return agent.isLocked || agent.submittedAt;
+    };
+
+    // Generate unique agent ID
+    const generateAgentId = () => {
+        if (!hospitalData.idNo) return '';
+
+        const existingIds = agents.map(agent => {
+            const parts = agent.id?.split('-') || [];
+            return parts.length > 1 ? parseInt(parts[1]) : 0;
+        });
+
+        const maxId = existingIds.length > 0 ? Math.max(...existingIds) : 0;
+        return `${hospitalData.idNo}-${maxId + 1}`;
+    };
+
+    // Agent Details Functions
+    const addNewAgent = () => {
+        const newAgentId = generateAgentId();
+        const newAgent = {
+            id: newAgentId,
+            name: '',
+            designation: '',
+            mobileNo: '',
+            upiNo: '',
+            upiName: '',
+            status: '',
+            comments: [],
+            isLocked: false,
+            createdAt: new Date().toISOString()
+        };
+        setAgents([newAgent, ...agents]);
+        setAgentErrors([{}, ...agentErrors]);
+        setHasUnsavedChanges(true);
+    };
+
+    const removeAgent = (index) => {
+        const updatedAgents = [...agents];
+        updatedAgents.splice(index, 1);
+        setAgents(updatedAgents);
+
+        const updatedErrors = [...agentErrors];
+        updatedErrors.splice(index, 1);
+        setAgentErrors(updatedErrors);
+
+        const updatedSuccess = { ...agentSuccess };
+        delete updatedSuccess[index];
+        setAgentSuccess(updatedSuccess);
+
+        setHasUnsavedChanges(true);
+    };
+
+    const handleAgentChange = (index, field, value) => {
+        const updatedAgents = [...agents];
+        updatedAgents[index][field] = value;
+        setAgents(updatedAgents);
+
+        // Clear error when field is updated
+        if (agentErrors[index] && agentErrors[index][field]) {
+            const updatedErrors = [...agentErrors];
+            delete updatedErrors[index][field];
+            setAgentErrors(updatedErrors);
+        }
+
+        setHasUnsavedChanges(true);
+    };
+
+    const addAgentComment = (agentIndex) => {
+        const commentInput = document.getElementById(`agent-comment-${agentIndex}`);
+        if (!commentInput || !commentInput.value.trim()) return;
+
+        const updatedAgents = [...agents];
+        if (!updatedAgents[agentIndex].comments) {
+            updatedAgents[agentIndex].comments = [];
+        }
+        updatedAgents[agentIndex].comments.unshift({
+            text: commentInput.value,
+            date: new Date().toISOString()
+        });
+        setAgents(updatedAgents);
+        commentInput.value = '';
+        setHasUnsavedChanges(true);
+    };
+
+    const validateAgent = (index) => {
+        const agent = agents[index];
+        const errors = {};
+
+        if (!agent.name.trim()) errors.name = "Name is required";
+        if (!agent.designation) errors.designation = "Designation is required";
+        if (!agent.mobileNo.trim()) errors.mobileNo = "Mobile No is required";
+        else if (!/^\d{10}$/.test(agent.mobileNo)) errors.mobileNo = "Enter valid 10-digit mobile number";
+
+        return errors;
+    };
+
+    const handleAgentSubmit = (index) => {
+        const errors = validateAgent(index);
+        if (Object.keys(errors).length > 0) {
+            const updatedErrors = [...agentErrors];
+            updatedErrors[index] = errors;
+            setAgentErrors(updatedErrors);
+            return;
+        }
+
+        // Lock the agent after submission
+        const updatedAgents = [...agents];
+        updatedAgents[index] = {
+            ...updatedAgents[index],
+            isLocked: true,
+            submittedAt: new Date().toISOString()
+        };
+        setAgents(updatedAgents);
+
+        // Show success message
+        setAgentSuccess({ ...agentSuccess, [index]: true });
+        setTimeout(() => {
+            setAgentSuccess({ ...agentSuccess, [index]: false });
+        }, 3000);
+
+        setHasUnsavedChanges(true);
+    };
+
+    // Payment Details Functions
+    const addNewPayment = () => {
+        const newPayment = {
+            id: Date.now().toString(),
+            name: '',
+            mobileNo: '',
+            upiNo: '',
+            clientId: '',
+            clientName: '',
+            serviceType: '',
+            serviceCharges: '',
+            commition: '',
+            paymentMode: '',
+            comments: '',
+            isLocked: false,
+            createdAt: new Date().toISOString()
+        };
+        setPayments([newPayment, ...payments]);
+        setPaymentErrors([{}, ...paymentErrors]);
+        setHasUnsavedChanges(true);
+    };
+
+    const removePayment = (index) => {
+        const updatedPayments = [...payments];
+        updatedPayments.splice(index, 1);
+        setPayments(updatedPayments);
+
+        const updatedErrors = [...paymentErrors];
+        updatedErrors.splice(index, 1);
+        setPaymentErrors(updatedErrors);
+
+        const updatedSuccess = { ...paymentSuccess };
+        delete updatedSuccess[index];
+        setPaymentSuccess(updatedSuccess);
+
+        setHasUnsavedChanges(true);
+    };
+
+    const handlePaymentChange = (index, field, value) => {
+        const updatedPayments = [...payments];
+        updatedPayments[index][field] = value;
+        setPayments(updatedPayments);
+
+        // Clear error when field is updated
+        if (paymentErrors[index] && paymentErrors[index][field]) {
+            const updatedErrors = [...paymentErrors];
+            delete updatedErrors[index][field];
+            setPaymentErrors(updatedErrors);
+        }
+
+        setHasUnsavedChanges(true);
+    };
+
+    const validatePayment = (index) => {
+        const payment = payments[index];
+        const errors = {};
+
+        if (!payment.commition) errors.commition = "Commition is required";
+        if (!payment.paymentMode) errors.paymentMode = "Payment Mode is required";
+
+        return errors;
+    };
+
+    const handlePaymentSubmit = (index) => {
+        const errors = validatePayment(index);
+        if (Object.keys(errors).length > 0) {
+            const updatedErrors = [...paymentErrors];
+            updatedErrors[index] = errors;
+            setPaymentErrors(updatedErrors);
+            return;
+        }
+
+        // Lock the payment after submission
+        const updatedPayments = [...payments];
+        updatedPayments[index] = {
+            ...updatedPayments[index],
+            isLocked: true,
+            submittedAt: new Date().toISOString()
+        };
+        setPayments(updatedPayments);
+
+        // Show success message
+        setPaymentSuccess({ ...paymentSuccess, [index]: true });
+        setTimeout(() => {
+            setPaymentSuccess({ ...paymentSuccess, [index]: false });
+        }, 3000);
+
+        setHasUnsavedChanges(true);
+    };
+
+    const handlePaymentIdSearch = () => {
+        if (!paymentIdInput) return;
+
+        // Find agent by ID and populate payment fields
+        const foundAgent = agents.find(agent => agent.id === paymentIdInput);
+        if (foundAgent) {
+            const newPayment = {
+                id: Date.now().toString(),
+                name: foundAgent.name,
+                mobileNo: foundAgent.mobileNo,
+                upiNo: foundAgent.upiNo,
+                clientId: '',
+                clientName: '',
+                serviceType: '',
+                serviceCharges: '',
+                commition: '',
+                paymentMode: '',
+                comments: '',
+                isLocked: false,
+                agentId: foundAgent.id,
+                createdAt: new Date().toISOString()
+            };
+            setPayments([newPayment, ...payments]);
+            setPaymentErrors([{}, ...paymentErrors]);
+            setPaymentIdInput('');
+            setHasUnsavedChanges(true);
+        }
+    };
+
+    const handleSave = () => {
+        // Prepare data for saving
+        const dataToSave = {
+            ...hospitalData,
+            agents: agents,
+            payments: payments
+        };
+
+        onSave(dataToSave);
+        setHasUnsavedChanges(false);
+    };
+
+    const handleClose = () => {
+        if (hasUnsavedChanges) {
+            setShowConfirmClose(true);
+        } else {
+            onClose();
+        }
+    };
+
+    const confirmClose = () => {
+        setShowConfirmClose(false);
+        onClose();
+    };
+
+    const cancelClose = () => {
+        setShowConfirmClose(false);
+    };
+
+    // Pagination for agents
+    const agentStartIndex = (currentAgentPage - 1) * itemsPerPage;
+    const agentEndIndex = agentStartIndex + itemsPerPage;
+    const currentAgents = agents.slice(agentStartIndex, agentEndIndex);
+    const totalAgentPages = Math.ceil(agents.length / itemsPerPage);
+
+    // Pagination for payments
+    const paymentStartIndex = (currentPaymentPage - 1) * itemsPerPage;
+    const paymentEndIndex = paymentStartIndex + itemsPerPage;
+    const currentPayments = payments.slice(paymentStartIndex, paymentEndIndex);
+    const totalPaymentPages = Math.ceil(payments.length / itemsPerPage);
+
+    const designationOptions = [
+        'Supervisor', 'Security', 'Compounder', 'Nurse', 'Attender',
+        'Cleaner', 'Driver', 'Medical Shop', 'Doctor', 'Pharmacist',
+        'Lab Technician', 'Receptionist', 'Accountant', 'Manager'
+    ];
+
+    const statusOptions = [
+        'Very Good', 'Good', 'Average', 'Below Average', 'Not Good', 'Very Bad'
+    ];
+
+    const paymentModeOptions = [
+        'Online', 'Cash', 'Gift'
+    ];
+
+    const getStatusColor = (status) => {
+        switch (status) {
+            case 'Very Good': return 'success';
+            case 'Good': return 'info';
+            case 'Average': return 'primary';
+            case 'Below Average': return 'warning';
+            case 'Not Good': return 'warning';
+            case 'Very Bad': return 'danger';
+            default: return 'secondary';
+        }
+    };
+
+    if (!isOpen) return null;
+
+    return (
+        <>
+            {/* Confirmation Modal */}
+            {showConfirmClose && (
+                <div className="modal fade show" style={{ display: 'block', backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 1060 }}>
+                    <div className="modal-dialog modal-dialog-centered">
+                        <div className="modal-content">
+                            <div className="modal-header">
+                                <h5 className="modal-title">Unsaved Changes</h5>
+                                <button type="button" className="btn-close" onClick={cancelClose}></button>
+                            </div>
+                            <div className="modal-body">
+                                <p>You have unsaved changes. Are you sure you want to close without saving?</p>
+                            </div>
+                            <div className="modal-footer">
+                                <button type="button" className="btn btn-secondary" onClick={cancelClose}>
+                                    Cancel
+                                </button>
+                                <button type="button" className="btn btn-primary" onClick={confirmClose}>
+                                    Yes, Close
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            <div className="modal fade show" style={{ display: 'block', backgroundColor: 'rgba(0,0,0,0.5)' }}>
+                <div className="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
+                    <div className="modal-content">
+                        <div className="modal-header bg-secondary text-white">
+                            <h5 className="modal-title">
+                                {isEditMode ? "Edit" : "View"} Hospital - {hospitalData.idNo} - {hospitalData.hospitalName}
+                            </h5>
+                            <button type="button" className="btn-close btn-close-white" onClick={handleClose}></button>
+                        </div>
+
+                        <div className="modal-body">
+                            {/* Tabs */}
+                            <ul className="nav nav-tabs" id="hospitalTabs" role="tablist">
+                                <li className="nav-item" role="presentation">
+                                    <button
+                                        className={`nav-link ${activeTab === 'hospitalDetails' ? 'active' : ''}`}
+                                        onClick={() => setActiveTab('hospitalDetails')}
+                                    >
+                                        Hospital Details
+                                    </button>
+                                </li>
+                                <li className="nav-item" role="presentation">
+                                    <button
+                                        className={`nav-link ${activeTab === 'agentDetails' ? 'active' : ''}`}
+                                        onClick={() => setActiveTab('agentDetails')}
+                                    >
+                                        Agent Details
+                                    </button>
+                                </li>
+                                <li className="nav-item" role="presentation">
+                                    <button
+                                        className={`nav-link ${activeTab === 'paymentDetails' ? 'active' : ''}`}
+                                        onClick={() => setActiveTab('paymentDetails')}
+                                    >
+                                        Payment Details
+                                    </button>
+                                </li>
+                            </ul>
+
+                            <div className="tab-content p-3">
+                                {/* Hospital Details Tab */}
+                                {activeTab === 'hospitalDetails' && (
+                                    <div className="row">
+                                        <div className="col-md-6 mb-3">
+                                            <label className="form-label"><strong>Hospital ID</strong></label>
+                                            <p>{hospitalData.idNo || 'N/A'}</p>
+                                        </div>
+                                        <div className="col-md-6 mb-3">
+                                            <label className="form-label"><strong>Hospital Name</strong></label>
+                                            <p>{hospitalData.hospitalName || 'N/A'}</p>
+                                        </div>
+                                        <div className="col-md-6 mb-3">
+                                            <label className="form-label"><strong>Hospital Type</strong></label>
+                                            <p>{hospitalData.hospitalType || 'N/A'}</p>
+                                        </div>
+                                        <div className="col-md-6 mb-3">
+                                            <label className="form-label"><strong>Location</strong></label>
+                                            <p>{hospitalData.location || 'N/A'}</p>
+                                        </div>
+                                        <div className="col-md-6 mb-3">
+                                            <label className="form-label"><strong>Number of Beds</strong></label>
+                                            <p>{hospitalData.noOfBeds || 'N/A'}</p>
+                                        </div>
+                                        <div className="col-md-6 mb-3">
+                                            <label className="form-label"><strong>Timing</strong></label>
+                                            <p>{hospitalData.timing || 'N/A'}</p>
+                                        </div>
+                                        <div className="col-12 mb-3">
+                                            <label className="form-label"><strong>Address</strong></label>
+                                            <p>{hospitalData.address || 'N/A'}</p>
+                                        </div>
+                                        {hospitalData.locationLink && (
+                                            <div className="col-12 mb-3">
+                                                <label className="form-label"><strong>Location Link</strong></label>
+                                                <p>
+                                                    <a href={hospitalData.locationLink} target="_blank" rel="noopener noreferrer">
+                                                        {hospitalData.locationLink}
+                                                    </a>
+                                                </p>
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
+
+                                {/* Agent Details Tab */}
+                                {activeTab === 'agentDetails' && (
+                                    <div>
+                                        <div className="d-flex justify-content-between align-items-center mb-3">
+                                            <h5>Agent Details</h5>
+                                            {isEditMode && (
+                                                <button type="button" className="btn btn-primary btn-sm" onClick={addNewAgent}>
+                                                    + Add Agent
+                                                </button>
+                                            )}
+                                        </div>
+
+                                        {agents.length === 0 ? (
+                                            <div className="text-center py-4">
+                                                <p>No agents added yet.</p>
+                                            </div>
+                                        ) : (
+                                            <>
+                                                {currentAgents.map((agent, index) => {
+                                                    const originalIndex = agents.findIndex(a => a.id === agent.id);
+                                                    const locked = isAgentLocked(agent);
+                                                    return (
+                                                        <div key={agent.id || originalIndex} className="bg-light p-3 mb-3 rounded">
+                                                            {agentSuccess[originalIndex] && (
+                                                                <div className="alert alert-success alert-dismissible fade show mb-3" role="alert">
+                                                                    Agent saved successfully!
+                                                                    <button type="button" className="btn-close" onClick={() => setAgentSuccess({ ...agentSuccess, [originalIndex]: false })}></button>
+                                                                </div>
+                                                            )}
+
+                                                            <div className="d-flex justify-content-between align-items-center mb-2">
+                                                                <h6 className="mb-0">
+                                                                    Agent ID: {agent.id}
+                                                                    {locked && <span className="badge bg-secondary ms-2">Saved</span>}
+                                                                </h6>
+                                                                {isEditMode && !locked && (
+                                                                    <button
+                                                                        type="button"
+                                                                        className="btn btn-danger btn-sm"
+                                                                        onClick={() => removeAgent(originalIndex)}
+                                                                    >
+                                                                        Remove
+                                                                    </button>
+                                                                )}
+                                                            </div>
+                                                            <div className="row">
+                                                                <div className="col-md-6 mb-2">
+                                                                    <label className="form-label">Name<span className="text-danger">*</span></label>
+                                                                    {isEditMode && !locked ? (
+                                                                        <>
+                                                                            <input
+                                                                                type="text"
+                                                                                className={`form-control ${agentErrors[originalIndex]?.name ? 'is-invalid' : ''}`}
+                                                                                value={agent.name}
+                                                                                onChange={(e) => handleAgentChange(originalIndex, 'name', e.target.value)}
+                                                                            />
+                                                                            {agentErrors[originalIndex]?.name && (
+                                                                                <div className="invalid-feedback">{agentErrors[originalIndex].name}</div>
+                                                                            )}
+                                                                        </>
+                                                                    ) : (
+                                                                        <p>{agent.name || 'N/A'}</p>
+                                                                    )}
+                                                                </div>
+
+                                                                <div className="col-md-6 mb-2">
+                                                                    <label className="form-label">Designation<span className="text-danger">*</span></label>
+                                                                    {isEditMode && !locked ? (
+                                                                        <>
+                                                                            <select
+                                                                                className={`form-select ${agentErrors[originalIndex]?.designation ? 'is-invalid' : ''}`}
+                                                                                value={agent.designation}
+                                                                                onChange={(e) => handleAgentChange(originalIndex, 'designation', e.target.value)}
+                                                                            >
+                                                                                <option value="">Select Designation</option>
+                                                                                {designationOptions.map(option => (
+                                                                                    <option key={option} value={option}>{option}</option>
+                                                                                ))}
+                                                                            </select>
+                                                                            {agentErrors[originalIndex]?.designation && (
+                                                                                <div className="invalid-feedback">{agentErrors[originalIndex].designation}</div>
+                                                                            )}
+                                                                        </>
+                                                                    ) : (
+                                                                        <p>{agent.designation || 'N/A'}</p>
+                                                                    )}
+                                                                </div>
+
+                                                                <div className="col-md-6 mb-2">
+                                                                    <label className="form-label">Mobile No<span className="text-danger">*</span></label>
+                                                                    {isEditMode && !locked ? (
+                                                                        <>
+                                                                            <input
+                                                                                type="tel"
+                                                                                className={`form-control ${agentErrors[originalIndex]?.mobileNo ? 'is-invalid' : ''}`}
+                                                                                value={agent.mobileNo}
+                                                                                onChange={(e) => handleAgentChange(originalIndex, 'mobileNo', e.target.value)}
+                                                                                maxLength="10"
+                                                                            />
+                                                                            {agentErrors[originalIndex]?.mobileNo && (
+                                                                                <div className="invalid-feedback">{agentErrors[originalIndex].mobileNo}</div>
+                                                                            )}
+                                                                        </>
+                                                                    ) : (
+                                                                        <div className="d-flex align-items-center">
+                                                                            <span>{agent.mobileNo || 'N/A'}</span>
+                                                                            {agent.mobileNo && (
+                                                                                <a
+                                                                                    href={`tel:${agent.mobileNo}`}
+                                                                                    className="btn btn-sm btn-outline-primary ms-2"
+                                                                                >
+                                                                                    Call
+                                                                                </a>
+                                                                            )}
+                                                                        </div>
+                                                                    )}
+                                                                </div>
+
+                                                                <div className="col-md-6 mb-2">
+                                                                    <label className="form-label">UPI No</label>
+                                                                    {isEditMode && !locked ? (
+                                                                        <input
+                                                                            type="text"
+                                                                            className="form-control"
+                                                                            value={agent.upiNo}
+                                                                            onChange={(e) => handleAgentChange(originalIndex, 'upiNo', e.target.value)}
+                                                                        />
+                                                                    ) : (
+                                                                        <p>{agent.upiNo || 'N/A'}</p>
+                                                                    )}
+                                                                </div>
+
+                                                                <div className="col-md-6 mb-2">
+                                                                    <label className="form-label">UPI Name</label>
+                                                                    {isEditMode && !locked ? (
+                                                                        <input
+                                                                            type="text"
+                                                                            className="form-control"
+                                                                            value={agent.upiName}
+                                                                            onChange={(e) => handleAgentChange(originalIndex, 'upiName', e.target.value)}
+                                                                        />
+                                                                    ) : (
+                                                                        <p>{agent.upiName || 'N/A'}</p>
+                                                                    )}
+                                                                </div>
+
+                                                                <div className="col-md-6 mb-2">
+                                                                    <label className="form-label">Status</label>
+                                                                    {isEditMode && !locked ? (
+                                                                        <select
+                                                                            className="form-select"
+                                                                            value={agent.status}
+                                                                            onChange={(e) => handleAgentChange(originalIndex, 'status', e.target.value)}
+                                                                        >
+                                                                            <option value="">Select Status</option>
+                                                                            {statusOptions.map(option => (
+                                                                                <option key={option} value={option}>{option}</option>
+                                                                            ))}
+                                                                        </select>
+                                                                    ) : (
+                                                                        <span className={`badge bg-${getStatusColor(agent.status)}`}>
+                                                                            {agent.status || 'N/A'}
+                                                                        </span>
+                                                                    )}
+                                                                </div>
+
+                                                                <div className="col-12 mb-2">
+                                                                    <label className="form-label">Comments</label>
+                                                                    <div>
+                                                                        <input
+                                                                            type="text"
+                                                                            className="form-control mb-2"
+                                                                            id={`agent-comment-${originalIndex}`}
+                                                                            placeholder="Add a comment"
+                                                                            onKeyDown={(e) => {
+                                                                                if (e.key === 'Enter') {
+                                                                                    addAgentComment(originalIndex);
+                                                                                }
+                                                                            }}
+                                                                            disabled={!isEditMode}
+                                                                        />
+                                                                        {isEditMode && (
+                                                                            <button
+                                                                                className="btn btn-sm btn-outline-secondary"
+                                                                                onClick={() => addAgentComment(originalIndex)}
+                                                                            >
+                                                                                Add Comment
+                                                                            </button>
+                                                                        )}
+                                                                    </div>
+
+                                                                    {agent.comments && agent.comments.length > 0 ? (
+                                                                        <div className="mt-2">
+                                                                            {agent.comments.map((comment, commentIndex) => (
+                                                                                <div key={commentIndex} className="border-bottom pb-2 mb-2">
+                                                                                    <p className="mb-0">{comment.text}</p>
+                                                                                    <small className="text-muted">
+                                                                                        {new Date(comment.date).toLocaleString()}
+                                                                                    </small>
+                                                                                </div>
+                                                                            ))}
+                                                                        </div>
+                                                                    ) : (
+                                                                        <p>No comments added</p>
+                                                                    )}
+                                                                </div>
+
+                                                                {isEditMode && !locked && (
+                                                                    <div className="col-12 mt-3">
+                                                                        <button
+                                                                            type="button"
+                                                                            className="btn btn-success"
+                                                                            onClick={() => handleAgentSubmit(originalIndex)}
+                                                                        >
+                                                                            Save Agent
+                                                                        </button>
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                            <hr className="mt-3" />
+                                                        </div>
+                                                    );
+                                                })}
+
+                                                {/* Agent Pagination */}
+                                                {totalAgentPages > 1 && (
+                                                    <nav aria-label="Agent pagination">
+                                                        <ul className="pagination justify-content-center">
+                                                            <li className={`page-item ${currentAgentPage === 1 ? 'disabled' : ''}`}>
+                                                                <button
+                                                                    className="page-link"
+                                                                    onClick={() => setCurrentAgentPage(currentAgentPage - 1)}
+                                                                    disabled={currentAgentPage === 1}
+                                                                >
+                                                                    Previous
+                                                                </button>
+                                                            </li>
+                                                            {[...Array(totalAgentPages)].map((_, i) => (
+                                                                <li key={i} className={`page-item ${currentAgentPage === i + 1 ? 'active' : ''}`}>
+                                                                    <button
+                                                                        className="page-link"
+                                                                        onClick={() => setCurrentAgentPage(i + 1)}
+                                                                    >
+                                                                        {i + 1}
+                                                                    </button>
+                                                                </li>
+                                                            ))}
+                                                            <li className={`page-item ${currentAgentPage === totalAgentPages ? 'disabled' : ''}`}>
+                                                                <button
+                                                                    className="page-link"
+                                                                    onClick={() => setCurrentAgentPage(currentAgentPage + 1)}
+                                                                    disabled={currentAgentPage === totalAgentPages}
+                                                                >
+                                                                    Next
+                                                                </button>
+                                                            </li>
+                                                        </ul>
+                                                    </nav>
+                                                )}
+                                            </>
+                                        )}
+                                    </div>
+                                )}
+
+                                {/* Payment Details Tab */}
+                                {activeTab === 'paymentDetails' && (
+                                    <div>
+                                        <div className="d-flex justify-content-between align-items-center mb-3">
+                                            <h5>Payment Details</h5>
+                                            {isEditMode && (
+                                                <div className="d-flex">
+                                                    <input
+                                                        type="text"
+                                                        className="form-control me-2"
+                                                        placeholder="Enter Agent ID (e.g., H1-1)"
+                                                        value={paymentIdInput}
+                                                        onChange={(e) => setPaymentIdInput(e.target.value)}
+                                                        style={{ width: '200px' }}
+                                                    />
+                                                    <button
+                                                        type="button"
+                                                        className="btn btn-info me-2"
+                                                        onClick={handlePaymentIdSearch}
+                                                    >
+                                                        Search
+                                                    </button>
+                                                    <button type="button" className="btn btn-primary btn-sm" onClick={addNewPayment}>
+                                                        + Add Payment
+                                                    </button>
+                                                </div>
+                                            )}
+                                        </div>
+
+                                        {payments.length === 0 ? (
+                                            <div className="text-center py-4">
+                                                <p>No payments added yet.</p>
+                                            </div>
+                                        ) : (
+                                            <>
+                                                {currentPayments.map((payment, index) => {
+                                                    const originalIndex = payments.findIndex(p => p.id === payment.id);
+                                                    const locked = isPaymentLocked(payment);
+                                                    return (
+                                                        <div key={payment.id || originalIndex} className="bg-light p-3 mb-3 rounded">
+                                                            {paymentSuccess[originalIndex] && (
+                                                                <div className="alert alert-success alert-dismissible fade show mb-3" role="alert">
+                                                                    Payment submitted successfully!
+                                                                    <button type="button" className="btn-close" onClick={() => setPaymentSuccess({ ...paymentSuccess, [originalIndex]: false })}></button>
+                                                                </div>
+                                                            )}
+
+                                                            <div className="d-flex justify-content-between align-items-center mb-2">
+                                                                <h6 className="mb-0">
+                                                                    Payment ID: {payment.id}
+                                                                    {locked && <span className="badge bg-secondary ms-2">Submitted</span>}
+                                                                </h6>
+                                                                {isEditMode && !locked && (
+                                                                    <button
+                                                                        type="button"
+                                                                        className="btn btn-danger btn-sm"
+                                                                        onClick={() => removePayment(originalIndex)}
+                                                                    >
+                                                                        Remove
+                                                                    </button>
+                                                                )}
+                                                            </div>
+                                                            <div className="row">
+                                                                <div className="col-md-6 mb-2">
+                                                                    <label className="form-label">Name</label>
+                                                                    {isEditMode && !locked ? (
+                                                                        <input
+                                                                            type="text"
+                                                                            className="form-control"
+                                                                            value={payment.name}
+                                                                            onChange={(e) => handlePaymentChange(originalIndex, 'name', e.target.value)}
+                                                                        />
+                                                                    ) : (
+                                                                        <p>{payment.name || 'N/A'}</p>
+                                                                    )}
+                                                                </div>
+
+                                                                <div className="col-md-6 mb-2">
+                                                                    <label className="form-label">Mobile No</label>
+                                                                    {isEditMode && !locked ? (
+                                                                        <input
+                                                                            type="tel"
+                                                                            className="form-control"
+                                                                            value={payment.mobileNo}
+                                                                            onChange={(e) => handlePaymentChange(originalIndex, 'mobileNo', e.target.value)}
+                                                                        />
+                                                                    ) : (
+                                                                        <div className="d-flex align-items-center">
+                                                                            <span>{payment.mobileNo || 'N/A'}</span>
+                                                                            {payment.mobileNo && (
+                                                                                <a
+                                                                                    href={`tel:${payment.mobileNo}`}
+                                                                                    className="btn btn-sm btn-outline-primary ms-2"
+                                                                                >
+                                                                                    Call
+                                                                                </a>
+                                                                            )}
+                                                                        </div>
+                                                                    )}
+                                                                </div>
+
+                                                                <div className="col-md-6 mb-2">
+                                                                    <label className="form-label">UPI No</label>
+                                                                    {isEditMode && !locked ? (
+                                                                        <input
+                                                                            type="text"
+                                                                            className="form-control"
+                                                                            value={payment.upiNo}
+                                                                            onChange={(e) => handlePaymentChange(originalIndex, 'upiNo', e.target.value)}
+                                                                        />
+                                                                    ) : (
+                                                                        <p>{payment.upiNo || 'N/A'}</p>
+                                                                    )}
+                                                                </div>
+
+                                                                <div className="col-md-6 mb-2">
+                                                                    <label className="form-label">Client ID</label>
+                                                                    {isEditMode && !locked ? (
+                                                                        <input
+                                                                            type="text"
+                                                                            className="form-control"
+                                                                            value={payment.clientId}
+                                                                            onChange={(e) => handlePaymentChange(originalIndex, 'clientId', e.target.value)}
+                                                                        />
+                                                                    ) : (
+                                                                        <p>{payment.clientId || 'N/A'}</p>
+                                                                    )}
+                                                                </div>
+
+                                                                <div className="col-md-6 mb-2">
+                                                                    <label className="form-label">Client Name</label>
+                                                                    {isEditMode && !locked ? (
+                                                                        <input
+                                                                            type="text"
+                                                                            className="form-control"
+                                                                            value={payment.clientName}
+                                                                            onChange={(e) => handlePaymentChange(originalIndex, 'clientName', e.target.value)}
+                                                                        />
+                                                                    ) : (
+                                                                        <p>{payment.clientName || 'N/A'}</p>
+                                                                    )}
+                                                                </div>
+
+                                                                <div className="col-md-6 mb-2">
+                                                                    <label className="form-label">Service Type</label>
+                                                                    {isEditMode && !locked ? (
+                                                                        <input
+                                                                            type="text"
+                                                                            className="form-control"
+                                                                            value={payment.serviceType}
+                                                                            onChange={(e) => handlePaymentChange(originalIndex, 'serviceType', e.target.value)}
+                                                                        />
+                                                                    ) : (
+                                                                        <p>{payment.serviceType || 'N/A'}</p>
+                                                                    )}
+                                                                </div>
+
+                                                                <div className="col-md-6 mb-2">
+                                                                    <label className="form-label">Service Charges</label>
+                                                                    {isEditMode && !locked ? (
+                                                                        <input
+                                                                            type="number"
+                                                                            className="form-control"
+                                                                            value={payment.serviceCharges}
+                                                                            onChange={(e) => handlePaymentChange(originalIndex, 'serviceCharges', e.target.value)}
+                                                                        />
+                                                                    ) : (
+                                                                        <p>{payment.serviceCharges || 'N/A'}</p>
+                                                                    )}
+                                                                </div>
+
+                                                                <div className="col-md-6 mb-2">
+                                                                    <label className="form-label">Commition<span className="text-danger">*</span></label>
+                                                                    {isEditMode && !locked ? (
+                                                                        <>
+                                                                            <input
+                                                                                type="number"
+                                                                                className={`form-control ${paymentErrors[originalIndex]?.commition ? 'is-invalid' : ''}`}
+                                                                                value={payment.commition}
+                                                                                onChange={(e) => handlePaymentChange(originalIndex, 'commition', e.target.value)}
+                                                                            />
+                                                                            {paymentErrors[originalIndex]?.commition && (
+                                                                                <div className="invalid-feedback">{paymentErrors[originalIndex].commition}</div>
+                                                                            )}
+                                                                        </>
+                                                                    ) : (
+                                                                        <p>{payment.commition || 'N/A'}</p>
+                                                                    )}
+                                                                </div>
+
+                                                                <div className="col-md-6 mb-2">
+                                                                    <label className="form-label">Payment Mode<span className="text-danger">*</span></label>
+                                                                    {isEditMode && !locked ? (
+                                                                        <>
+                                                                            <select
+                                                                                className={`form-select ${paymentErrors[originalIndex]?.paymentMode ? 'is-invalid' : ''}`}
+                                                                                value={payment.paymentMode}
+                                                                                onChange={(e) => handlePaymentChange(originalIndex, 'paymentMode', e.target.value)}
+                                                                            >
+                                                                                <option value="">Select Payment Mode</option>
+                                                                                {paymentModeOptions.map(option => (
+                                                                                    <option key={option} value={option}>{option}</option>
+                                                                                ))}
+                                                                            </select>
+                                                                            {paymentErrors[originalIndex]?.paymentMode && (
+                                                                                <div className="invalid-feedback">{paymentErrors[originalIndex].paymentMode}</div>
+                                                                            )}
+                                                                        </>
+                                                                    ) : (
+                                                                        <p>{payment.paymentMode || 'N/A'}</p>
+                                                                    )}
+                                                                </div>
+
+                                                                <div className="col-12 mb-2">
+                                                                    <label className="form-label">Comments</label>
+                                                                    {isEditMode && !locked ? (
+                                                                        <textarea
+                                                                            className="form-control"
+                                                                            value={payment.comments}
+                                                                            onChange={(e) => handlePaymentChange(originalIndex, 'comments', e.target.value)}
+                                                                            rows="2"
+                                                                        />
+                                                                    ) : (
+                                                                        <p>{payment.comments || 'N/A'}</p>
+                                                                    )}
+                                                                </div>
+
+                                                                {/* Submit/Lock button for payments */}
+                                                                {isEditMode && !locked && (
+                                                                    <div className="col-12 mt-3">
+                                                                        <button
+                                                                            type="button"
+                                                                            className="btn btn-success"
+                                                                            onClick={() => handlePaymentSubmit(originalIndex)}
+                                                                        >
+                                                                            Submit Payment
+                                                                        </button>
+                                                                    </div>
+                                                                )}
+
+                                                                {/* Show submission date if locked */}
+                                                                {locked && payment.submittedAt && (
+                                                                    <div className="col-12 mt-2">
+                                                                        <small className="text-muted">
+                                                                            Submitted on: {new Date(payment.submittedAt).toLocaleString()}
+                                                                        </small>
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                            <hr className="mt-3" />
+                                                        </div>
+                                                    );
+                                                })}
+
+                                                {/* Payment Pagination */}
+                                                {totalPaymentPages > 1 && (
+                                                    <nav aria-label="Payment pagination">
+                                                        <ul className="pagination justify-content-center">
+                                                            <li className={`page-item ${currentPaymentPage === 1 ? 'disabled' : ''}`}>
+                                                                <button
+                                                                    className="page-link"
+                                                                    onClick={() => setCurrentPaymentPage(currentPaymentPage - 1)}
+                                                                    disabled={currentPaymentPage === 1}
+                                                                >
+                                                                    Previous
+                                                                </button>
+                                                            </li>
+                                                            {[...Array(totalPaymentPages)].map((_, i) => (
+                                                                <li key={i} className={`page-item ${currentPaymentPage === i + 1 ? 'active' : ''}`}>
+                                                                    <button
+                                                                        className="page-link"
+                                                                        onClick={() => setCurrentPaymentPage(i + 1)}
+                                                                    >
+                                                                        {i + 1}
+                                                                    </button>
+                                                                </li>
+                                                            ))}
+                                                            <li className={`page-item ${currentPaymentPage === totalPaymentPages ? 'disabled' : ''}`}>
+                                                                <button
+                                                                    className="page-link"
+                                                                    onClick={() => setCurrentPaymentPage(currentPaymentPage + 1)}
+                                                                    disabled={currentPaymentPage === totalPaymentPages}
+                                                                >
+                                                                    Next
+                                                                </button>
+                                                            </li>
+                                                        </ul>
+                                                    </nav>
+                                                )}
+                                            </>
+                                        )}
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+
+                        <div className="modal-footer">
+                            <button type="button" className="btn btn-secondary" onClick={handleClose}>
+                                Close
+                            </button>
+                            {isEditMode && (
+                                <button type="button" className="btn btn-primary" onClick={handleSave}>
+                                    Save All Changes
+                                </button>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </>
+    );
+};
+
+export default HospitalModal;

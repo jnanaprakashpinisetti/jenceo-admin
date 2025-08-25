@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 
 const HospitalModal = ({ hospital, isOpen, onClose, onSave, isEditMode }) => {
   const [activeTab, setActiveTab] = useState('hospitalDetails');
@@ -15,30 +15,33 @@ const HospitalModal = ({ hospital, isOpen, onClose, onSave, isEditMode }) => {
   const [paymentSuccess, setPaymentSuccess] = useState({});
   const [currentAgentPage, setCurrentAgentPage] = useState(1);
   const [currentPaymentPage, setCurrentPaymentPage] = useState(1);
-  const [visitTouched, setVisitTouched] = useState(false); // manual change guard
+  const [visitTouched, setVisitTouched] = useState(false);
+  const [autoVisit, setAutoVisit] = useState('');
+  const [agentCommentInputs, setAgentCommentInputs] = useState({});
+  const [hospitalCommentInput, setHospitalCommentInput] = useState('');
   const itemsPerPage = 5;
 
   // ---------- Helpers ----------
-  const autoVisitFromCount = (count) => {
+  const autoVisitFromCount = useCallback((count) => {
     if (count >= 8) return 'Visit Fully';
     if (count >= 4) return 'Visit Medium';
     if (count >= 1) return 'Visit Low';
-    return ''; // no agents → leave empty
-  };
+    return '';
+  }, []);
 
   // ---------- Load / hydrate ----------
   useEffect(() => {
     if (hospital) {
+      const initialAuto = autoVisitFromCount((hospital.agents || []).length);
       setHospitalData({
         ...hospital,
-        visitType: hospital.visitType || autoVisitFromCount((hospital.agents || []).length),
+        visitType: hospital.visitType || initialAuto,
         comments: Array.isArray(hospital.comments) ? hospital.comments : []
       });
       setAgents(hospital.agents || []);
       setPayments(
         (hospital.payments || []).map(p => ({
           ...p,
-          // ensure a date exists for the Payment List:
           date: p.date || (p.createdAt ? new Date(p.createdAt).toISOString().slice(0,10) : new Date().toISOString().slice(0,10))
         }))
       );
@@ -55,21 +58,25 @@ const HospitalModal = ({ hospital, isOpen, onClose, onSave, isEditMode }) => {
           : {}
       );
 
+      setAutoVisit(initialAuto);
+      setAgentCommentInputs({});
+      setHospitalCommentInput('');
+
       // Reset edit tracking whenever the modal loads fresh data
       editedRef.current = false;
       setHasUnsavedChanges(false);
       setVisitTouched(false);
     }
-  }, [hospital]);
+  }, [hospital, autoVisitFromCount]);
 
-  // Auto-update visit type when agent length changes unless user manually chose
+  // Auto-update autoVisit (always) and visitType (only if not manually touched)
   useEffect(() => {
+    const nextVisit = autoVisitFromCount(agents.length);
+    setAutoVisit(nextVisit);
     if (!visitTouched) {
-      const nextVisit = autoVisitFromCount(agents.length);
       setHospitalData(prev => ({ ...prev, visitType: nextVisit }));
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [agents.length]);
+  }, [agents.length, visitTouched, autoVisitFromCount]);
 
   const isPaymentLocked = (payment) => payment.isLocked || payment.submittedAt;
   const isAgentLocked = (agent) => agent.isLocked || agent.submittedAt;
@@ -140,19 +147,22 @@ const HospitalModal = ({ hospital, isOpen, onClose, onSave, isEditMode }) => {
   };
 
   const addAgentComment = (agentIndex) => {
-    const commentInput = document.getElementById(`agent-comment-${agentIndex}`);
-    if (!commentInput || !commentInput.value.trim()) return;
+    const commentText = agentCommentInputs[agentIndex] || '';
+    if (!commentText.trim()) return;
 
     const updatedAgents = [...agents];
     if (!updatedAgents[agentIndex].comments) {
       updatedAgents[agentIndex].comments = [];
     }
     updatedAgents[agentIndex].comments.unshift({
-      text: commentInput.value,
-      date: new Date().toISOString()
+      text: commentText,
+      date: new Date().toISOString(),
+      id: Date.now() // Add unique ID for key prop
     });
     setAgents(updatedAgents);
-    commentInput.value = '';
+    
+    // Clear the input for this agent
+    setAgentCommentInputs(prev => ({ ...prev, [agentIndex]: '' }));
     markEdited();
   };
 
@@ -186,11 +196,12 @@ const HospitalModal = ({ hospital, isOpen, onClose, onSave, isEditMode }) => {
     setAgents(updatedAgents);
 
     setAgentSuccess({ ...agentSuccess, [index]: true });
-    setTimeout(() => {
+    const timer = setTimeout(() => {
       setAgentSuccess(prev => ({ ...prev, [index]: false }));
     }, 3000);
-
-    markEdited();
+    
+    // Cleanup timer on component unmount
+    return () => clearTimeout(timer);
   };
 
   /* --------------------- Payment Details Functions --------------------- */
@@ -234,6 +245,12 @@ const HospitalModal = ({ hospital, isOpen, onClose, onSave, isEditMode }) => {
   };
 
   const handlePaymentChange = (index, field, value) => {
+    // Validate numeric fields
+    if (field === 'serviceCharges' || field === 'commition') {
+      // Allow only numbers and decimal point
+      if (value !== '' && !/^\d*\.?\d*$/.test(value)) return;
+    }
+    
     const updatedPayments = [...payments];
     updatedPayments[index][field] = value;
     setPayments(updatedPayments);
@@ -274,11 +291,12 @@ const HospitalModal = ({ hospital, isOpen, onClose, onSave, isEditMode }) => {
     setPayments(updatedPayments);
 
     setPaymentSuccess({ ...paymentSuccess, [index]: true });
-    setTimeout(() => {
+    const timer = setTimeout(() => {
       setPaymentSuccess(prev => ({ ...prev, [index]: false }));
     }, 3000);
-
-    markEdited();
+    
+    // Cleanup timer on component unmount
+    return () => clearTimeout(timer);
   };
 
   const handlePaymentIdSearch = () => {
@@ -313,14 +331,13 @@ const HospitalModal = ({ hospital, isOpen, onClose, onSave, isEditMode }) => {
 
   /* --------------------- Hospital (header) comments --------------------- */
   const addHospitalComment = () => {
-    const input = document.getElementById('hospital-comment-input');
-    if (!input || !input.value.trim()) return;
-    const text = input.value.trim();
+    if (!hospitalCommentInput.trim()) return;
+    const text = hospitalCommentInput.trim();
     setHospitalData(prev => ({
       ...prev,
-      comments: [{ text, date: new Date().toISOString() }, ...(prev.comments || [])]
+      comments: [{ text, date: new Date().toISOString(), id: Date.now() }, ...(prev.comments || [])]
     }));
-    input.value = '';
+    setHospitalCommentInput('');
     markEdited();
   };
 
@@ -483,7 +500,7 @@ const HospitalModal = ({ hospital, isOpen, onClose, onSave, isEditMode }) => {
                 </li>
               </ul>
 
-              <div className="tab-content p-3">
+              <div className="tab-content p-3 agent-list-table">
                 {/* Hospital Details Tab (now editable + visit dropdown + comments) */}
                 {activeTab === 'hospitalDetails' && (
                   <div className="row">
@@ -540,6 +557,14 @@ const HospitalModal = ({ hospital, isOpen, onClose, onSave, isEditMode }) => {
                         <p>{hospitalData.noOfBeds || 'N/A'}</p>
                       )}
                     </div>
+
+                    {/* NEW: Auto Visit (display-only) */}
+                    <div className="col-md-4 mb-3">
+                      <label className="form-label"><strong>Auto Visit (by Agent count)</strong></label>
+                      <p className="mb-0">{autoVisit || 'N/A'}</p>
+                      <small className="text-muted">1–3 Low, 4–7 Medium, 8+ Fully</small>
+                    </div>
+
                     <div className="col-md-4 mb-3">
                       <label className="form-label"><strong>Timing</strong></label>
                       {isEditMode ? (
@@ -629,11 +654,12 @@ const HospitalModal = ({ hospital, isOpen, onClose, onSave, isEditMode }) => {
                       <label className="form-label"><strong>Comments</strong></label>
                       <div className="mb-2">
                         <textarea
-                          id="hospital-comment-input"
                           className="form-control"
                           placeholder="Add a comment"
                           rows={3}
                           disabled={!isEditMode}
+                          value={hospitalCommentInput}
+                          onChange={(e) => setHospitalCommentInput(e.target.value)}
                           onKeyDown={(e) => {
                             if (e.key === 'Enter' && !e.shiftKey) {
                               e.preventDefault();
@@ -649,8 +675,8 @@ const HospitalModal = ({ hospital, isOpen, onClose, onSave, isEditMode }) => {
                       </div>
                       {(hospitalData.comments && hospitalData.comments.length > 0) ? (
                         <div className="mt-2">
-                          {hospitalData.comments.map((c, i) => (
-                            <div key={i} className="border-bottom pb-2 mb-2">
+                          {hospitalData.comments.map((c) => (
+                            <div key={c.id || c.date} className="border-bottom pb-2 mb-2">
                               <p className="mb-0">{c.text}</p>
                               <small className="text-muted">{new Date(c.date).toLocaleString()}</small>
                             </div>
@@ -682,7 +708,7 @@ const HospitalModal = ({ hospital, isOpen, onClose, onSave, isEditMode }) => {
                     ) : (
                       <>
                         {currentAgents.map((agent, index) => {
-                          const originalIndex = agents.findIndex(a => a.id === agent.id);
+                          const originalIndex = agentStartIndex + index;
                           const locked = isAgentLocked(agent);
                           return (
                             <div key={agent.id || originalIndex} className="bg-light p-3 mb-3 rounded">
@@ -834,12 +860,16 @@ const HospitalModal = ({ hospital, isOpen, onClose, onSave, isEditMode }) => {
                                   <label className="form-label">Comments</label>
                                   <div>
                                     <textarea
-                                      type="text"
                                       className="form-control mb-2"
-                                      id={`agent-comment-${originalIndex}`}
                                       placeholder="Add a comment"
+                                      value={agentCommentInputs[originalIndex] || ''}
+                                      onChange={(e) => setAgentCommentInputs(prev => ({
+                                        ...prev,
+                                        [originalIndex]: e.target.value
+                                      }))}
                                       onKeyDown={(e) => {
                                         if (e.key === 'Enter') {
+                                          e.preventDefault();
                                           addAgentComment(originalIndex);
                                         }
                                       }}
@@ -858,8 +888,8 @@ const HospitalModal = ({ hospital, isOpen, onClose, onSave, isEditMode }) => {
 
                                   {agent.comments && agent.comments.length > 0 ? (
                                     <div className="mt-2">
-                                      {agent.comments.map((comment, commentIndex) => (
-                                        <div key={commentIndex} className="border-bottom pb-2 mb-2">
+                                      {agent.comments.map((comment) => (
+                                        <div key={comment.id || comment.date} className="border-bottom pb-2 mb-2">
                                           <p className="mb-0">{comment.text}</p>
                                           <small className="text-muted">
                                             {new Date(comment.date).toLocaleString()}
@@ -965,7 +995,7 @@ const HospitalModal = ({ hospital, isOpen, onClose, onSave, isEditMode }) => {
                     ) : (
                       <>
                         {currentPayments.map((payment, index) => {
-                          const originalIndex = payments.findIndex(p => p.id === payment.id);
+                          const originalIndex = paymentStartIndex + index;
                           const locked = isPaymentLocked(payment);
                           return (
                             <div key={payment.id || originalIndex} className="bg-light p-3 mb-3 rounded">

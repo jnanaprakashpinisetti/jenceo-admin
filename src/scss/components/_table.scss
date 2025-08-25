@@ -95,3 +95,14 @@ table {
     }
 
 }
+
+.agent-list-table {
+    tr {
+        &:nth-child(even) {
+            td {
+                background-color: transparent;
+            }
+        }
+
+}
+}

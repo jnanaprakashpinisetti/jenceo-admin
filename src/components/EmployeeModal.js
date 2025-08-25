@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { storageRef, uploadFile, getDownloadURL } from "../firebase";
 
 /* ----------------------------- Lightweight Modals ----------------------------- */
@@ -78,6 +78,7 @@ const EmployeeModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode
     const [formData, setFormData] = useState({});
     const [status, setStatus] = useState("On Duty");
     const [activeTab, setActiveTab] = useState("basic");
+    const biodataRef = useRef(null)
 
     // validation errors (array per row)
     const [paymentErrors, setPaymentErrors] = useState([{}]);
@@ -676,6 +677,226 @@ const EmployeeModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode
         );
     };
 
+    /* ------------------------------ BIODATA (Bodata) --------------------------- */
+
+
+    const formatLine = (...parts) => parts.filter(Boolean).join(" ");
+    const safe = (v, fallback = "—") => (v !== undefined && v !== null && String(v).trim() !== "" ? v : fallback);
+
+    const buildBiodataHTML = () => {
+        const fullName = formatLine(safe(formData.firstName, ""), safe(formData.lastName, "")).trim() || "—";
+        const ageText = formData.years ? `${formData.years} Years` : "—";
+        const dobText = formData.dateOfBirth ? new Date(formData.dateOfBirth).toLocaleDateString() : "—";
+        const gender = safe(formData.gender);
+        const marital = safe(formData.maritalStatus);
+        const co = safe(formData.co || formData.careOfPersonal);
+
+        const permAddr = [
+            `D.No: ${safe(formData.permanentAddress)}`,
+            `Street: ${safe(formData.permanentStreet)}`,
+            `Landmark: ${safe(formData.permanentLandmark)}`,
+            `Village / Town ${safe(formData.permanentVillage)}`,
+            `Mandal: ${safe(formData.permanentMandal)}`,
+            `District: ${safe(formData.permanentDistrict)}`,
+            `State: ${safe(formData.permanentState)}${formData.permanentPincode ? " - " + formData.permanentPincode : ""}`,
+        ];
+
+        const presentAddr = [
+            `D.No: ${safe(formData.presentAddress)}`,
+            `Street: ${safe(formData.presentStreet)}`,
+            `Landmark: ${safe(formData.presentLandmark)}`,
+            `Village / Town ${safe(formData.presentVillage)}`,
+            `Mandal: ${safe(formData.presentMandal)}`,
+            `District: ${safe(formData.presentDistrict)}`,
+            `State: ${safe(formData.presentState)}${formData.presentPincode ? " - " + formData.presentPincode : ""}`,
+        ];
+
+        const qual = safe(formData.qualification);
+        const college = safe(formData.schoolCollege);
+        const pskill = safe(formData.primarySkill);
+        const mtongue = safe(formData.motherTongue || formData.motherTung); // allow common spelling
+        const langs = safe(formData.languages);
+        const skills = (formData.secondarySkills || []).concat(formData.workingSkills || []);
+
+        const rightNow = new Date();
+        const metaDate = rightNow.toLocaleDateString();
+
+        const photoHtml = formData.employeePhotoUrl
+            ? `<img src="${formData.employeePhotoUrl}" style="width:120px;height:120px;object-fit:cover;border-radius:6px;border:1px solid #ccc" />`
+            : `<div style="width:120px;height:120px;border:1px solid #ccc;border-radius:6px;display:flex;align-items:center;justify-content:center;color:#888;font-size:12px">No Photo</div>`;
+
+        const section = (title, body) => `
+            <div class="sec">
+              <div class="sec-title">${title}</div>
+              <div class="sec-body">
+                ${body}
+              </div>
+            </div>
+        `;
+
+        const row2 = (label1, value1, label2, value2) => `
+            <div class="row">
+                <div class="col"><span class="lbl">${label1}:</span> <span class="val">${value1}</span></div>
+                <div class="col"><span class="lbl">${label2}:</span> <span class="val">${value2}</span></div>
+            </div>
+        `;
+
+        const addressBlock = (heading, lines) => `
+            <div class="addr">
+                <div class="addr-title">${heading}</div>
+                ${lines.map((l) => `<div class="addr-line">${l}</div>`).join("")}
+            </div>
+        `;
+
+        const skillsBlock = skills.length
+            ? `<div class="tags">${skills
+                  .filter(Boolean)
+                  .map((s) => `<span class="tag">${String(s).trim()}</span>`)
+                  .join("")}</div>`
+            : `<div class="muted">—</div>`;
+
+        const html = `
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8" />
+<title>Employee Biodata - ${fullName}</title>
+<style>
+*{box-sizing:border-box} html,body{margin:0;padding:0;font-family:Arial,Helvetica,sans-serif;color:#111}
+.page{width: 794px; /* A4 width at 96 DPI */
+      margin:16px auto; background:#fff; border:1px solid #e5e5e5; padding:20px}
+.header{display:flex; align-items:flex-start; justify-content:space-between; gap:12px; border-bottom:2px solid #222; padding-bottom:10px}
+.h-left{flex:1}
+.title{font-size:20px; font-weight:700; letter-spacing:.5px}
+.subtitle{font-size:12px; color:#444; margin-top:2px}
+.meta{font-size:11px; color:#555; margin-top:4px; display:flex; gap:14px; flex-wrap:wrap}
+.sec{margin-top:14px; border:1px solid #ddd; border-radius:6px; overflow:hidden}
+.sec-title{background:#f3f4f6; padding:8px 10px; font-weight:700}
+.sec-body{padding:10px}
+.row{display:flex; gap:12px; margin-bottom:6px}
+.col{flex:1}
+.lbl{font-weight:600}
+.val{font-weight:500}
+.addr{border:1px dashed #c9c9c9; border-radius:6px; padding:8px; margin-top:6px}
+.addr-title{font-weight:700; margin-bottom:4px}
+.addr-line{font-size:12px; line-height:1.4}
+.grid2{display:grid; grid-template-columns:1fr 1fr; gap:10px}
+.tags{display:flex; flex-wrap:wrap; gap:6px}
+.tag{background:#eef2ff; border:1px solid #c7d2fe; color:#1e3a8a; font-size:12px; padding:3px 8px; border-radius:999px}
+.muted{color:#777}
+.footer{margin-top:14px; font-size:11px; color:#666; display:flex; justify-content:space-between}
+.badge{display:inline-block; padding:2px 8px; border-radius:999px; font-size:11px; color:#fff}
+.badge.green{background:#16a34a}
+.badge.gray{background:#6b7280}
+.badge.red{background:#dc2626}
+.badge.brown{background:#7c3a1d}
+.badge.orange{background:#ea580c}
+@media print{
+  .page{border:none; margin:0; width:100%}
+}
+</style>
+</head>
+<body>
+<div class="page">
+  <div class="header">
+    <div class="h-left">
+      <div class="title">EMPLOYEE BIO-DATA</div>
+      <div class="subtitle">H.R Department (Reg No: SEA/HYD/ALO/26/1040178/2025)</div>
+      <div class="meta">
+         <div><strong>ID:</strong> ${safe(formData.idNo || formData.employeeId)}</div>
+         <div><strong>Date:</strong> ${metaDate}</div>
+      </div>
+    </div>
+    <div class="h-right">${photoHtml}</div>
+  </div>
+
+  ${section(
+      "Basic Information",
+      `
+      <div class="grid2">
+        <div>
+          ${row2("Full Name", fullName, "Age", ageText)}
+          ${row2("Gender", gender, "Date of Birth", dobText)}
+          ${row2("C/O", co, "Marital Status", marital)}
+        </div>
+        <div>
+          <div style="margin-bottom:6px"><span class="lbl">Status:</span>
+            <span class="badge ${status === "On Duty" ? "green" : status === "Off Duty" ? "gray" : status === "Resigned" ? "brown" : status === "Terminated" ? "red" : "orange"}">
+              ${safe(status, "—")}
+            </span>
+          </div>
+          <div><span class="lbl">Mobile 1:</span> <span class="val">${safe(formData.mobileNo1)}</span></div>
+          <div><span class="lbl">Mobile 2:</span> <span class="val">${safe(formData.mobileNo2)}</span></div>
+          <div><span class="lbl">Aadhar:</span> <span class="val">${safe(formData.aadharNo)}</span></div>
+        </div>
+      </div>
+      `
+  )}
+
+  ${section(
+      "Addresses",
+      `
+        ${addressBlock("Permanent Address", permAddr)}
+        ${addressBlock("Present Address", presentAddr)}
+      `
+  )}
+
+  ${section(
+      "Qualification & Skills",
+      `
+        <div class="row">
+          <div class="col"><span class="lbl">Qualification:</span> <span class="val">${qual}</span></div>
+          <div class="col"><span class="lbl">College / School:</span> <span class="val">${college}</span></div>
+        </div>
+        <div class="row">
+          <div class="col"><span class="lbl">Primary Skill:</span> <span class="val">${pskill}</span></div>
+          <div class="col"><span class="lbl">Mother Tongue:</span> <span class="val">${mtongue}</span></div>
+        </div>
+        <div class="row">
+          <div class="col"><span class="lbl">Languages:</span> <span class="val">${langs}</span></div>
+        </div>
+        <div style="margin-top:8px">
+          <div class="lbl" style="margin-bottom:6px">Other Skills</div>
+          ${skillsBlock}
+        </div>
+      `
+  )}
+
+  <div class="footer">
+    <div>Doc Ref: JC-HR-07</div>
+    <div>Revision: 1</div>
+    <div>Date: ${metaDate}</div>
+    <div>Page 1 of 1</div>
+  </div>
+</div>
+<script>
+  // Auto print if opened in a new window
+  window.focus && window.focus();
+</script>
+</body>
+</html>
+        `;
+        return html;
+    };
+
+    const handleDownloadBiodata = () => {
+        const html = buildBiodataHTML();
+        const win = window.open("", "_blank", "noopener,noreferrer");
+        if (!win) return;
+        win.document.open();
+        win.document.write(html);
+        win.document.close();
+        // Give browser a tick to render, then open print dialog
+        setTimeout(() => {
+            try {
+                win.focus();
+                win.print();
+            } catch (e) {}
+        }, 400);
+    };
+
+    /* -------------------------------------------------------------------------- */
+
     const modalClass = isEditMode ? "editEmployee" : "viewEmployee";
 
     return (
@@ -721,6 +942,7 @@ const EmployeeModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode
                                     ["bank", "Bank Details"],
                                     ["payment", "Payment"],
                                     ["working", "Working"],
+                                    ["biodata", "Bodata"], // NEW TAB
                                 ].map(([key, label]) => (
                                     <li className="nav-item" role="presentation" key={key}>
                                         <button className={`nav-link ${activeTab === key ? "active" : ""}`} onClick={() => setActiveTab(key)}>
@@ -1320,315 +1542,470 @@ const EmployeeModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode
                                                                     />
                                                                 ) : (
                                                                     <div className="form-control form-control-sm bg-light">{p.receiptNo || "N/A"}</div>
+                                                               
                                                                 )}
+                                                                </div>
+                                                            </div>
+    
+                                                            <div className="row">
+                                                                <div className="col-md-4 mb-2">
+                                                                    <label className="form-label">
+                                                                        <strong>Client Name</strong>
+                                                                        <span className="star">*</span>
+                                                                    </label>
+                                                                    {isEditMode ? (
+                                                                        <input
+                                                                            type="text"
+                                                                            className={`form-control form-control-sm${invalidClass("clientName")}`}
+                                                                            value={p.clientName || ""}
+                                                                            onChange={(e) => handleArrayChange("payments", i, "clientName", e.target.value)}
+                                                                            disabled={locked}
+                                                                        />
+                                                                    ) : (
+                                                                        <div className="form-control form-control-sm bg-light">{p.clientName || "N/A"}</div>
+                                                                    )}
+                                                                    <Err msg={paymentErrors[i]?.clientName} />
+                                                                </div>
+    
+                                                                <div className="col-md-4 mb-2">
+                                                                    <label className="form-label">
+                                                                        <strong>Days</strong>
+                                                                        <span className="star">*</span>
+                                                                    </label>
+                                                                    {isEditMode ? (
+                                                                        <input
+                                                                            type="number"
+                                                                            className={`form-control form-control-sm${invalidClass("days")}`}
+                                                                            value={p.days || ""}
+                                                                            onChange={(e) => handleArrayChange("payments", i, "days", e.target.value)}
+                                                                            disabled={locked}
+                                                                        />
+                                                                    ) : (
+                                                                        <div className="form-control form-control-sm bg-light">{p.days || "N/A"}</div>
+                                                                    )}
+                                                                    <Err msg={paymentErrors[i]?.days} />
+                                                                </div>
+    
+                                                                <div className="col-md-4 mb-2">
+                                                                    <label className="form-label">
+                                                                        <strong>Book No</strong>
+                                                                    </label>
+                                                                    {isEditMode ? (
+                                                                        <input
+                                                                            type="text"
+                                                                            className="form-control form-control-sm"
+                                                                            value={p.bookNo || ""}
+                                                                            onChange={(e) => handleArrayChange("payments", i, "bookNo", e.target.value)}
+                                                                            disabled={locked}
+                                                                        />
+                                                                    ) : (
+                                                                        <div className="form-control form-control-sm bg-light">{p.bookNo || "N/A"}</div>
+                                                                    )}
+                                                                </div>
+                                                            </div>
+    
+                                                            <div className="row">
+                                                                <div className="col-12 mb-2">
+                                                                    <label className="form-label">
+                                                                        <strong>Remarks</strong>
+                                                                    </label>
+                                                                    {isEditMode ? (
+                                                                        <textarea
+                                                                            className="form-control form-control-sm"
+                                                                            rows={2}
+                                                                            value={p.remarks || ""}
+                                                                            onChange={(e) => handleArrayChange("payments", i, "remarks", e.target.value)}
+                                                                            disabled={locked}
+                                                                        />
+                                                                    ) : (
+                                                                        <div className="form-control form-control-sm bg-light">{p.remarks || "N/A"}</div>
+                                                                    )}
+                                                                </div>
                                                             </div>
                                                         </div>
-
-                                                        <div className="row">
-                                                            <div className="col-md-4 mb-2">
-                                                                <label className="form-label">
-                                                                    <strong>Client Name</strong>
-                                                                    <span className="star">*</span>
-                                                                </label>
-                                                                {isEditMode ? (
-                                                                    <input
-                                                                        type="text"
-                                                                        className={`form-control form-control-sm${paymentErrors[i]?.clientName ? " is-invalid" : ""}`}
-                                                                        value={p.clientName || ""}
-                                                                        onChange={(e) => handleArrayChange("payments", i, "clientName", e.target.value)}
-                                                                        disabled={locked}
-                                                                    />
-                                                                ) : (
-                                                                    <div className="form-control form-control-sm bg-light">{p.clientName || "N/A"}</div>
-                                                                )}
-                                                                <Err msg={paymentErrors[i]?.clientName} />
-                                                            </div>
-
-                                                            <div className="col-md-4 mb-2">
-                                                                <label className="form-label">
-                                                                    <strong>Days</strong>
-                                                                    <span className="star">*</span>
-                                                                </label>
-                                                                {isEditMode ? (
-                                                                    <input
-                                                                        type="number"
-                                                                        className={`form-control form-control-sm${paymentErrors[i]?.days ? " is-invalid" : ""}`}
-                                                                        value={p.days || ""}
-                                                                        onChange={(e) => handleArrayChange("payments", i, "days", e.target.value)}
-                                                                        disabled={locked}
-                                                                    />
-                                                                ) : (
-                                                                    <div className="form-control form-control-sm bg-light">{p.days || "N/A"}</div>
-                                                                )}
-                                                                <Err msg={paymentErrors[i]?.days} />
-                                                            </div>
-
-                                                            <div className="col-md-4 mb-2">
-                                                                <label className="form-label">
-                                                                    <strong>Book No</strong>
-                                                                </label>
-                                                                {isEditMode ? (
-                                                                    <input
-                                                                        type="text"
-                                                                        className="form-control form-control-sm"
-                                                                        value={p.bookNo || ""}
-                                                                        onChange={(e) => handleArrayChange("payments", i, "bookNo", e.target.value)}
-                                                                        disabled={locked}
-                                                                    />
-                                                                ) : (
-                                                                    <div className="form-control form-control-sm bg-light">{p.bookNo || "N/A"}</div>
-                                                                )}
-                                                            </div>
-                                                        </div>
-
-                                                        <div className="row">
-                                                            <div className="col-md-12 mb-2">
-                                                                <label className="form-label">
-                                                                    <strong>Remarks</strong>
-                                                                </label>
-                                                                {isEditMode ? (
-                                                                    <textarea
-                                                                        type="text"
-                                                                        className="form-control form-control-sm"
-                                                                        value={p.remarks || ""}
-                                                                        onChange={(e) => handleArrayChange("payments", i, "remarks", e.target.value)}
-                                                                        rows="3"
-                                                                        disabled={locked}
-                                                                    />
-                                                                ) : (
-                                                                    <div className="form-control form-control-sm bg-light">{p.remarks || "N/A"}</div>
-                                                                )}
-                                                            </div>
-                                                        </div>
+                                                    );
+                                                })}
+    
+                                                {isEditMode && (
+                                                    <div className="d-flex justify-content-end">
+                                                        <button className="btn btn-outline-primary btn-sm" onClick={addPaymentSection}>
+                                                            + Add Payment
+                                                        </button>
                                                     </div>
-                                                );
-                                            })}
-
-                                            {isEditMode && (
-                                                <button type="button" className="btn btn-primary btn-sm" onClick={addPaymentSection}>
-                                                    Add Payment
-                                                </button>
-                                            )}
+                                                )}
+                                            </div>
                                         </div>
-                                    </div>
-                                )}
-
-                                {/* Working */}
-                                {activeTab === "working" && (
-                                    <div className="modal-card mb-3">
-                                        <div className="modal-card-header">
-                                            <h4 className="mb-0">Working</h4>
+                                    )}
+    
+                                    {/* Working */}
+                                    {activeTab === "working" && (
+                                        <div className="modal-card mb-3">
+                                            <div className="modal-card-header">
+                                                <h4 className="mb-0">Working Details</h4>
+                                            </div>
+                                            <div className="modal-card-body">
+                                                {(formData.workDetails || []).map((w, i) => {
+                                                    const locked = !!w.__locked;
+                                                    const invalidClass = (field) => (workErrors[i]?.[field] ? " is-invalid" : "");
+                                                    return (
+                                                        <div key={i} className="border rounded p-3 mb-3">
+                                                            <div className="d-flex justify-content-between align-items-center mb-2">
+                                                                <h6 className="mb-0">
+                                                                    Work #{i + 1} {locked && <span className="badge bg-secondary ms-2">Locked</span>}
+                                                                </h6>
+                                                                {isEditMode && !locked && (
+                                                                    <button className="btn btn-outline-danger btn-sm" onClick={() => removeWorkSection(i)}>
+                                                                        Remove
+                                                                    </button>
+                                                                )}
+                                                            </div>
+    
+                                                            <div className="row">
+                                                                <div className="col-md-4 mb-2">
+                                                                    <label className="form-label">
+                                                                        <strong>Client ID</strong>
+                                                                        <span className="star">*</span>
+                                                                    </label>
+                                                                    {isEditMode ? (
+                                                                        <input
+                                                                            type="text"
+                                                                            className={`form-control form-control-sm${invalidClass("clientId")}`}
+                                                                            value={w.clientId || ""}
+                                                                            onChange={(e) => handleArrayChange("workDetails", i, "clientId", e.target.value)}
+                                                                            disabled={locked}
+                                                                        />
+                                                                    ) : (
+                                                                        <div className="form-control form-control-sm bg-light">{w.clientId || "N/A"}</div>
+                                                                    )}
+                                                                    <Err msg={workErrors[i]?.clientId} />
+                                                                </div>
+    
+                                                                <div className="col-md-4 mb-2">
+                                                                    <label className="form-label">
+                                                                        <strong>Client Name</strong>
+                                                                        <span className="star">*</span>
+                                                                    </label>
+                                                                    {isEditMode ? (
+                                                                        <input
+                                                                            type="text"
+                                                                            className={`form-control form-control-sm${invalidClass("clientName")}`}
+                                                                            value={w.clientName || ""}
+                                                                            onChange={(e) => handleArrayChange("workDetails", i, "clientName", e.target.value)}
+                                                                            disabled={locked}
+                                                                        />
+                                                                    ) : (
+                                                                        <div className="form-control form-control-sm bg-light">{w.clientName || "N/A"}</div>
+                                                                    )}
+                                                                    <Err msg={workErrors[i]?.clientName} />
+                                                                </div>
+    
+                                                                <div className="col-md-4 mb-2">
+                                                                    <label className="form-label">
+                                                                        <strong>Location</strong>
+                                                                    </label>
+                                                                    {isEditMode ? (
+                                                                        <input
+                                                                            type="text"
+                                                                            className="form-control form-control-sm"
+                                                                            value={w.location || ""}
+                                                                            onChange={(e) => handleArrayChange("workDetails", i, "location", e.target.value)}
+                                                                            disabled={locked}
+                                                                        />
+                                                                    ) : (
+                                                                        <div className="form-control form-control-sm bg-light">{w.location || "N/A"}</div>
+                                                                    )}
+                                                                </div>
+                                                            </div>
+    
+                                                            <div className="row">
+                                                                <div className="col-md-4 mb-2">
+                                                                    <label className="form-label">
+                                                                        <strong>Days</strong>
+                                                                        <span className="star">*</span>
+                                                                    </label>
+                                                                    {isEditMode ? (
+                                                                        <input
+                                                                            type="number"
+                                                                            className={`form-control form-control-sm${invalidClass("days")}`}
+                                                                            value={w.days || ""}
+                                                                            onChange={(e) => handleArrayChange("workDetails", i, "days", e.target.value)}
+                                                                            disabled={locked}
+                                                                        />
+                                                                    ) : (
+                                                                        <div className="form-control form-control-sm bg-light">{w.days || "N/A"}</div>
+                                                                    )}
+                                                                    <Err msg={workErrors[i]?.days} />
+                                                                </div>
+    
+                                                                <div className="col-md-4 mb-2">
+                                                                    <label className="form-label">
+                                                                        <strong>From Date</strong>
+                                                                        <span className="star">*</span>
+                                                                    </label>
+                                                                    {isEditMode ? (
+                                                                        <input
+                                                                            type="date"
+                                                                            className={`form-control form-control-sm${invalidClass("fromDate")}`}
+                                                                            value={w.fromDate || ""}
+                                                                            onChange={(e) => handleArrayChange("workDetails", i, "fromDate", e.target.value)}
+                                                                            disabled={locked}
+                                                                        />
+                                                                    ) : (
+                                                                        <div className="form-control form-control-sm bg-light">{w.fromDate || "N/A"}</div>
+                                                                    )}
+                                                                    <Err msg={workErrors[i]?.fromDate} />
+                                                                </div>
+    
+                                                                <div className="col-md-4 mb-2">
+                                                                    <label className="form-label">
+                                                                        <strong>To Date</strong>
+                                                                        <span className="star">*</span>
+                                                                    </label>
+                                                                    {isEditMode ? (
+                                                                        <input
+                                                                            type="date"
+                                                                            className={`form-control form-control-sm${invalidClass("toDate")}`}
+                                                                            value={w.toDate || ""}
+                                                                            onChange={(e) => handleArrayChange("workDetails", i, "toDate", e.target.value)}
+                                                                            disabled={locked}
+                                                                        />
+                                                                    ) : (
+                                                                        <div className="form-control form-control-sm bg-light">{w.toDate || "N/A"}</div>
+                                                                    )}
+                                                                    <Err msg={workErrors[i]?.toDate} />
+                                                                </div>
+                                                            </div>
+    
+                                                            <div className="row">
+                                                                <div className="col-md-6 mb-2">
+                                                                    <label className="form-label">
+                                                                        <strong>Service Type</strong>
+                                                                        <span className="star">*</span>
+                                                                    </label>
+                                                                    {isEditMode ? (
+                                                                        <input
+                                                                            type="text"
+                                                                            className={`form-control form-control-sm${invalidClass("serviceType")}`}
+                                                                            value={w.serviceType || ""}
+                                                                            onChange={(e) => handleArrayChange("workDetails", i, "serviceType", e.target.value)}
+                                                                            disabled={locked}
+                                                                        />
+                                                                    ) : (
+                                                                        <div className="form-control form-control-sm bg-light">{w.serviceType || "N/A"}</div>
+                                                                    )}
+                                                                    <Err msg={workErrors[i]?.serviceType} />
+                                                                </div>
+    
+                                                                <div className="col-md-6 mb-2">
+                                                                    <label className="form-label">
+                                                                        <strong>Remarks</strong>
+                                                                    </label>
+                                                                    {isEditMode ? (
+                                                                        <input
+                                                                            type="text"
+                                                                            className="form-control form-control-sm"
+                                                                            value={w.remarks || ""}
+                                                                            onChange={(e) => handleArrayChange("workDetails", i, "remarks", e.target.value)}
+                                                                            disabled={locked}
+                                                                        />
+                                                                    ) : (
+                                                                        <div className="form-control form-control-sm bg-light">{w.remarks || "N/A"}</div>
+                                                                    )}
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    );
+                                                })}
+    
+                                                {isEditMode && (
+                                                    <div className="d-flex justify-content-end">
+                                                        <button className="btn btn-outline-primary btn-sm" onClick={addWorkSection}>
+                                                            + Add Work
+                                                        </button>
+                                                    </div>
+                                                )}
+                                            </div>
                                         </div>
-                                        <div className="modal-card-body">
-                                            {(formData.workDetails || []).map((w, i) => {
-                                                const locked = !!w.__locked;
-                                                const invalidClass = (field) => (workErrors[i]?.[field] ? " is-invalid" : "");
-                                                return (
-                                                    <div key={i} className="border rounded p-3 mb-3">
-                                                        <div className="d-flex justify-content-between align-items-center mb-2">
-                                                            <h5 className="">
-                                                                Work Place #{i + 1} {locked && <span className="badge bg-secondary ms-2">Locked</span>}
-                                                            </h5>
-                                                            {isEditMode && !locked && (
-                                                                <button className="btn btn-outline-danger btn-sm" onClick={() => removeWorkSection(i)}>
-                                                                    Remove
-                                                                </button>
+                                    )}
+    
+                                    {/* Bodata (Biodata) */}
+                                    {activeTab === "biodata" && (
+                                        <div className="modal-card mb-3">
+                                            <div className="modal-card-header d-flex align-items-center justify-content-between">
+                                                <h4 className="mb-0">Biodata</h4>
+                                                <div className="d-flex gap-2">
+                                                    <button type="button" className="btn btn-outline-secondary btn-sm" onClick={handleDownloadBiodata}>
+                                                        Download Biodata
+                                                    </button>
+                                                </div>
+                                            </div>
+    
+                                            <div className="modal-card-body">
+                                                <div className="alert alert-info">
+                                                    This section uses the same fields you filled in the other tabs and formats them
+                                                    into the biodata layout (as per your PDF). Click <strong>Download Biodata</strong> to open a print-ready
+                                                    window (you can save as PDF).
+                                                </div>
+    
+                                                {/* Lightweight live preview */}
+                                                <div className="border rounded p-3" ref={biodataRef} style={{ background: "#fafafa" }}>
+                                                    <div className="d-flex justify-content-between align-items-start mb-3">
+                                                        <div>
+                                                            <h5 className="mb-1">EMPLOYEE BIO-DATA</h5>
+                                                            <div className="text-muted" style={{ fontSize: ".9rem" }}>
+                                                                H.R Department (Reg No: SEA/HYD/ALO/26/1040178/2025)
+                                                            </div>
+                                                            <div className="small text-secondary mt-1">
+                                                                <strong>ID:</strong> {formData.idNo || formData.employeeId || "—"} &nbsp;|&nbsp;
+                                                                <strong>Date:</strong> {new Date().toLocaleDateString()}
+                                                            </div>
+                                                        </div>
+                                                        <div>
+                                                            {formData.employeePhotoUrl ? (
+                                                                <img
+                                                                    src={formData.employeePhotoUrl}
+                                                                    alt="Employee"
+                                                                    style={{ width: 96, height: 96, objectFit: "cover", borderRadius: 6, border: "1px solid #ddd" }}
+                                                                />
+                                                            ) : (
+                                                                <div
+                                                                    style={{
+                                                                        width: 96,
+                                                                        height: 96,
+                                                                        border: "1px solid #ddd",
+                                                                        borderRadius: 6,
+                                                                        display: "flex",
+                                                                        alignItems: "center",
+                                                                        justifyContent: "center",
+                                                                        color: "#888",
+                                                                        fontSize: 12,
+                                                                    }}
+                                                                >
+                                                                    No Photo
+                                                                </div>
                                                             )}
                                                         </div>
-
+                                                    </div>
+    
+                                                    <div className="mb-2">
+                                                        <strong>Full Name:</strong>{" "}
+                                                        {(formData.firstName || "") + " " + (formData.lastName || "") || "—"}
+                                                        <span className="ms-3"><strong>Gender:</strong> {formData.gender || "—"}</span>
+                                                        <span className="ms-3">
+                                                            <strong>DOB:</strong>{" "}
+                                                            {formData.dateOfBirth ? new Date(formData.dateOfBirth).toLocaleDateString() : "—"}
+                                                        </span>
+                                                        <span className="ms-3"><strong>Age:</strong> {formData.years || "—"}</span>
+                                                    </div>
+    
+                                                    <div className="mb-2">
+                                                        <strong>C/O:</strong> {formData.co || formData.careOfPersonal || "—"}
+                                                        <span className="ms-3"><strong>Marital:</strong> {formData.maritalStatus || "—"}</span>
+                                                        <span className="ms-3"><strong>Aadhar:</strong> {formData.aadharNo || "—"}</span>
+                                                    </div>
+    
+                                                    <div className="mb-2">
+                                                        <strong>Mobile 1:</strong> {formData.mobileNo1 || "—"}
+                                                        <span className="ms-3"><strong>Mobile 2:</strong> {formData.mobileNo2 || "—"}</span>
+                                                    </div>
+    
+                                                    <div className="mt-3">
+                                                        <h6 className="mb-1">Addresses</h6>
                                                         <div className="row">
-                                                            <div className="col-md-4 mb-2">
-                                                                <label className="form-label">
-                                                                    <strong>Client ID</strong>
-                                                                    <span className="star">*</span>
-                                                                </label>
-                                                                {isEditMode ? (
-                                                                    <input
-                                                                        type="text"
-                                                                        className={`form-control form-control-sm${invalidClass("clientId")}`}
-                                                                        value={w.clientId || ""}
-                                                                        onChange={(e) => handleArrayChange("workDetails", i, "clientId", e.target.value)}
-                                                                        disabled={locked}
-                                                                    />
-                                                                ) : (
-                                                                    <div className="form-control form-control-sm bg-light">{w.clientId || "N/A"}</div>
-                                                                )}
-                                                                <Err msg={workErrors[i]?.clientId} />
+                                                            <div className="col-md-6">
+                                                                <div className="border rounded p-2 mb-2 bg-white">
+                                                                    <strong>Permanent</strong>
+                                                                    <div className="small text-muted">
+                                                                        {[
+                                                                            formData.permanentAddress && `D.No: ${formData.permanentAddress}`,
+                                                                            formData.permanentStreet && `Street: ${formData.permanentStreet}`,
+                                                                            formData.permanentLandmark && `Landmark: ${formData.permanentLandmark}`,
+                                                                            formData.permanentVillage && `Village/Town: ${formData.permanentVillage}`,
+                                                                            formData.permanentMandal && `Mandal: ${formData.permanentMandal}`,
+                                                                            formData.permanentDistrict && `District: ${formData.permanentDistrict}`,
+                                                                            (formData.permanentState || formData.permanentPincode) &&
+                                                                                `State: ${formData.permanentState || "—"}${formData.permanentPincode ? " - " + formData.permanentPincode : ""}`,
+                                                                        ]
+                                                                            .filter(Boolean)
+                                                                            .join(", ") || "—"}
+                                                                    </div>
+                                                                </div>
                                                             </div>
-
-                                                            <div className="col-md-4 mb-2">
-                                                                <label className="form-label">
-                                                                    <strong>Client Name</strong>
-                                                                    <span className="star">*</span>
-                                                                </label>
-                                                                {isEditMode ? (
-                                                                    <input
-                                                                        type="text"
-                                                                        className={`form-control form-control-sm${invalidClass("clientName")}`}
-                                                                        value={w.clientName || ""}
-                                                                        onChange={(e) => handleArrayChange("workDetails", i, "clientName", e.target.value)}
-                                                                        disabled={locked}
-                                                                    />
-                                                                ) : (
-                                                                    <div className="form-control form-control-sm bg-light">{w.clientName || "N/A"}</div>
-                                                                )}
-                                                                <Err msg={workErrors[i]?.clientName} />
-                                                            </div>
-
-                                                            <div className="col-md-4 mb-2">
-                                                                <label className="form-label">
-                                                                    <strong>Client Location</strong>
-                                                                </label>
-                                                                {isEditMode ? (
-                                                                    <input
-                                                                        type="text"
-                                                                        className="form-control form-control-sm"
-                                                                        value={w.location || ""}
-                                                                        onChange={(e) => handleArrayChange("workDetails", i, "location", e.target.value)}
-                                                                        disabled={locked}
-                                                                    />
-                                                                ) : (
-                                                                    <div className="form-control form-control-sm bg-light">{w.location || "N/A"}</div>
-                                                                )}
-                                                            </div>
-                                                        </div>
-
-                                                        <div className="row">
-                                                            <div className="col-md-4 mb-2">
-                                                                <label className="form-label">
-                                                                    <strong>From (Date)</strong>
-                                                                    <span className="star">*</span>
-                                                                </label>
-                                                                {isEditMode ? (
-                                                                    <input
-                                                                        type="date"
-                                                                        className={`form-control form-control-sm${invalidClass("fromDate")}`}
-                                                                        value={w.fromDate || ""}
-                                                                        onChange={(e) => handleArrayChange("workDetails", i, "fromDate", e.target.value)}
-                                                                        disabled={locked}
-                                                                    />
-                                                                ) : (
-                                                                    <div className="form-control form-control-sm bg-light">{w.fromDate || "N/A"}</div>
-                                                                )}
-                                                                <Err msg={workErrors[i]?.fromDate} />
-                                                            </div>
-                                                            <div className="col-md-4 mb-2">
-                                                                <label className="form-label">
-                                                                    <strong>To (Date)</strong>
-                                                                    <span className="star">*</span>
-                                                                </label>
-                                                                {isEditMode ? (
-                                                                    <input
-                                                                        type="date"
-                                                                        className={`form-control form-control-sm${invalidClass("toDate")}`}
-                                                                        value={w.toDate || ""}
-                                                                        onChange={(e) => handleArrayChange("workDetails", i, "toDate", e.target.value)}
-                                                                        disabled={locked}
-                                                                    />
-                                                                ) : (
-                                                                    <div className="form-control form-control-sm bg-light">{w.toDate || "N/A"}</div>
-                                                                )}
-                                                                <Err msg={workErrors[i]?.toDate} />
-                                                            </div>
-
-                                                            <div className="col-md-4 mb-2">
-                                                                <label className="form-label">
-                                                                    <strong>Total Days</strong>
-                                                                    <span className="star">*</span>
-                                                                </label>
-                                                                {isEditMode ? (
-                                                                    <input
-                                                                        type="number"
-                                                                        className={`form-control form-control-sm${invalidClass("days")}`}
-                                                                        value={w.days || ""}
-                                                                        onChange={(e) => handleArrayChange("workDetails", i, "days", e.target.value)}
-                                                                        disabled={locked}
-                                                                    />
-                                                                ) : (
-                                                                    <div className="form-control form-control-sm bg-light">{w.days || "N/A"}</div>
-                                                                )}
-                                                                <Err msg={workErrors[i]?.days} />
-                                                            </div>
-                                                        </div>
-
-                                                        <div className="row">
-                                                            <div className="col-md-4 mb-2">
-                                                                <label className="form-label">
-                                                                    <strong>Service Type</strong>
-                                                                    <span className="star">*</span>
-                                                                </label>
-                                                                {isEditMode ? (
-                                                                    <input
-                                                                        type="text"
-                                                                        className={`form-control form-control-sm${invalidClass("serviceType")}`}
-                                                                        value={w.serviceType || ""}
-                                                                        onChange={(e) => handleArrayChange("workDetails", i, "serviceType", e.target.value)}
-                                                                        disabled={locked}
-                                                                    />
-                                                                ) : (
-                                                                    <div className="form-control form-control-sm bg-light">{w.serviceType || "N/A"}</div>
-                                                                )}
-                                                                <Err msg={workErrors[i]?.serviceType} />
-                                                            </div>
-
-                                                            <div className="col-md-8 mb-2">
-                                                                <label className="form-label">
-                                                                    <strong>Remarks</strong>
-                                                                </label>
-                                                                {isEditMode ? (
-                                                                    <textarea
-                                                                        rows="5"
-                                                                        className="form-control form-control-sm"
-                                                                        value={w.remarks || ""}
-                                                                        onChange={(e) => handleArrayChange("workDetails", i, "remarks", e.target.value)}
-                                                                        disabled={locked}
-                                                                    />
-                                                                ) : (
-                                                                    <div className="form-control form-control-sm bg-light">{w.remarks || "N/A"}</div>
-                                                                )}
+                                                            <div className="col-md-6">
+                                                                <div className="border rounded p-2 mb-2 bg-white">
+                                                                    <strong>Present</strong>
+                                                                    <div className="small text-muted">
+                                                                        {[
+                                                                            formData.presentAddress && `D.No: ${formData.presentAddress}`,
+                                                                            formData.presentStreet && `Street: ${formData.presentStreet}`,
+                                                                            formData.presentLandmark && `Landmark: ${formData.presentLandmark}`,
+                                                                            formData.presentVillage && `Village/Town: ${formData.presentVillage}`,
+                                                                            formData.presentMandal && `Mandal: ${formData.presentMandal}`,
+                                                                            formData.presentDistrict && `District: ${formData.presentDistrict}`,
+                                                                            (formData.presentState || formData.presentPincode) &&
+                                                                                `State: ${formData.presentState || "—"}${formData.presentPincode ? " - " + formData.presentPincode : ""}`,
+                                                                        ]
+                                                                            .filter(Boolean)
+                                                                            .join(", ") || "—"}
+                                                                    </div>
+                                                                </div>
                                                             </div>
                                                         </div>
                                                     </div>
-                                                );
-                                            })}
-
-                                            {isEditMode && (
-                                                <button type="button" className="btn btn-primary btn-sm" onClick={addWorkSection}>
-                                                    Add Work Details
-                                                </button>
-                                            )}
+    
+                                                    <div className="mt-2">
+                                                        <h6 className="mb-1">Qualification & Skills</h6>
+                                                        <div className="small">
+                                                            <strong>Qualification:</strong> {formData.qualification || "—"} &nbsp; | &nbsp;
+                                                            <strong>School/College:</strong> {formData.schoolCollege || "—"} &nbsp; | &nbsp;
+                                                            <strong>Primary Skill:</strong> {formData.primarySkill || "—"}
+                                                        </div>
+                                                        <div className="small mt-1">
+                                                            <strong>Mother Tongue:</strong> {formData.motherTongue || formData.motherTung || "—"} &nbsp; | &nbsp;
+                                                            <strong>Languages:</strong> {formData.languages || "—"}
+                                                        </div>
+                                                        <div className="d-flex flex-wrap gap-1 mt-2">
+                                                            {((formData.secondarySkills || []).concat(formData.workingSkills || [])).length ? (
+                                                                ((formData.secondarySkills || []).concat(formData.workingSkills || [])).map((s, idx) => (
+                                                                    <span key={idx} className="badge bg-light text-dark border">{s}</span>
+                                                                ))
+                                                            ) : (
+                                                                <span className="text-muted">—</span>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
                                         </div>
-                                    </div>
-                                )}
+                                    )}
+                                </div>
                             </div>
-                        </div>
-
-                        <div className="modal-footer">
-                            {isEditMode ? (
-                                <>
-                                    <button type="button" className="btn btn-secondary" onClick={onClose}>
-                                        Cancel
-                                    </button>
-                                    <button type="button" className="btn btn-success" onClick={handleSaveClick}>
-                                        Save Changes
-                                    </button>
-                                </>
-                            ) : (
-                                <button type="button" className="btn btn-secondary" onClick={onClose}>
-                                    Close
-                                </button>
-                            )}
-                            {/* {!!onDelete && isEditMode && (
-                <button type="button" className="btn btn-outline-danger ms-auto" onClick={handleDelete}>
-                  Delete Employee
-                </button>
-              )} */}
+    
+                            <div className="modal-footer">
+                                <div className="d-flex w-100 justify-content-between">
+                                    <div>
+                                        {onDelete && (
+                                            <button type="button" className="btn btn-outline-danger" onClick={handleDelete}>
+                                                Delete
+                                            </button>
+                                        )}
+                                    </div>
+                                    <div className="d-flex gap-2">
+                                        <button type="button" className="btn btn-secondary" onClick={onClose}>
+                                            Close
+                                        </button>
+                                        <button type="button" className="btn btn-primary" onClick={handleSaveClick}>
+                                            {isEditMode ? "Save Changes" : "Save"}
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
-            </div>
-        </>
-    );
-};
-
-export default EmployeeModal;
+            </>
+        );
+    };
+    
+    export default EmployeeModal;
+    

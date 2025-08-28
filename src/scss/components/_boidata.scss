@@ -1,0 +1,40 @@
+.biodata-wrapper {
+
+    .f20 {
+        font-size: 20px;
+    }
+
+    .title {
+        background-color: #ececed;
+        text-align: center;
+        margin-top: 25px;
+        margin-bottom: 25px;
+        padding: 5px 0;
+        h3 {
+            font-weight: bold;
+        }
+    }
+
+    .basic-info {
+        display: flex;
+        margin-top: 20px;
+
+        @include mobile {
+            display: block;
+        }
+    }
+
+    .info {
+        padding-left: 25px;
+    }
+    .bottom {
+        background-color: $blue;
+        color: #fff;
+        text-align: center;
+        padding: 15px;
+    }
+
+    .blue {
+        color: $blue;
+    }
+}

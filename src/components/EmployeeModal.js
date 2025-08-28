@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import { storageRef, uploadFile, getDownloadURL } from "../firebase";
-import BioDataHeader from '../assets/biodata-header.svg'
+import BioDataHeader from "../assets/biodata-header.svg";
 
 /* ----------------------------- Lightweight Modals ----------------------------- */
 const BaseModal = ({ open, title, children, onClose, footer }) => {
@@ -12,7 +12,7 @@ const BaseModal = ({ open, title, children, onClose, footer }) => {
             role="dialog"
             aria-modal="true"
         >
-            <div className="card shadow-lg" style={{ width: "min(720px, 92vw)" }}>
+            <div className="card shadow-lg" style={{ width: "min(980px, 96vw)" }}>
                 <div className="card-header d-flex align-items-center justify-content-between">
                     <strong className="me-3">{title}</strong>
                     <button type="button" className="btn-close" onClick={onClose} />
@@ -79,15 +79,14 @@ const EmployeeModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode
     const [formData, setFormData] = useState({});
     const [status, setStatus] = useState("On Duty");
     const [activeTab, setActiveTab] = useState("basic");
-    const biodataRef = useRef(null)
+    const [alertState, setAlertState] = useState({ open: false, title: "", variant: "info", body: null });
+    const [confirmState, setConfirmState] = useState({ open: false, title: "", message: "", onConfirm: null });
 
     // validation errors (array per row)
     const [paymentErrors, setPaymentErrors] = useState([{}]);
     const [workErrors, setWorkErrors] = useState([{}]);
 
-    // modal states
-    const [alertState, setAlertState] = useState({ open: false, title: "", variant: "info", body: null });
-    const [confirmState, setConfirmState] = useState({ open: false, title: "", message: "", onConfirm: null });
+    const iframeRef = useRef(null);
 
     const openAlert = (title, body, variant = "info") => setAlertState({ open: true, title, body, variant });
     const closeAlert = () => setAlertState((s) => ({ ...s, open: false }));
@@ -164,38 +163,50 @@ const EmployeeModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode
             const workInit =
                 Array.isArray(employee.workDetails) && employee.workDetails.length ? lockIfFilled(employee.workDetails) : [blankWork()];
 
+            // SAFER DEFAULTS so edited values persist and load correctly
             setFormData({
                 ...employee,
-                secondarySkills: employee.secondarySkills || [],
+                secondarySkills: Array.isArray(employee.secondarySkills) ? employee.secondarySkills : [],
+                workingSkills: Array.isArray(employee.workingSkills) ? employee.workingSkills : [],
+                healthIssues: Array.isArray(employee.healthIssues) ? employee.healthIssues : [],
+                otherIssues: employee.otherIssues ?? "",
                 allowance: employee.allowance ?? "",
                 pageNo: employee.pageNo ?? "",
                 basicSalary: employee.basicSalary ?? "",
                 payments: paymentsInit.map((p) => ({ balanceAmount: "", receiptNo: "", ...p })), // add new keys if missing
                 workDetails: workInit,
-                // Store the photo URL for display
+                // preview URL for UI
                 employeePhotoUrl: employee.employeePhoto || null,
             });
 
             setStatus(employee.status || "On Duty");
             setPaymentErrors(paymentsInit.map(() => ({})));
             setWorkErrors(workInit.map(() => ({})));
+        } else {
+            // new record defaults
+            setFormData({
+                secondarySkills: [],
+                workingSkills: [],
+                healthIssues: [],
+                otherIssues: "",
+                payments: [blankPayment()],
+                workDetails: [blankWork()],
+            });
+            setStatus("On Duty");
+            setPaymentErrors([{}]);
+            setWorkErrors([{}]);
         }
     }, [employee]);
 
     // Handle photo upload to Firebase Storage
     const handlePhotoUpload = async (file) => {
-        try {
-            const timestamp = Date.now();
-            const fileExtension = file.name.split(".").pop();
-            const fileName = `employee-photos/${formData.idNo || formData.employeeId || "employee"}-${timestamp}.${fileExtension}`;
-            const fileRef = storageRef.child(fileName);
-            const snapshot = await uploadFile(fileRef, file);
-            const downloadURL = await getDownloadURL(snapshot.ref);
-            return downloadURL;
-        } catch (error) {
-            console.error("Error uploading image:", error);
-            throw new Error("Failed to upload image. Please try again.");
-        }
+        const timestamp = Date.now();
+        const fileExtension = file.name.split(".").pop();
+        const fileName = `employee-photos/${formData.idNo || formData.employeeId || "employee"}-${timestamp}.${fileExtension}`;
+        const fileRef = storageRef.child(fileName);
+        const snapshot = await uploadFile(fileRef, file);
+        const downloadURL = await getDownloadURL(snapshot.ref);
+        return downloadURL;
     };
 
     // Handle photo change in the modal
@@ -223,7 +234,7 @@ const EmployeeModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode
         }
     };
 
-    if (!isOpen) return null;
+    //   if (!isOpen) return null;
 
     /* -------------------------------- Handlers --------------------------------- */
     const handleInputChange = (e) => {
@@ -232,13 +243,13 @@ const EmployeeModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode
     };
 
     const handleArrayChange = (section, index, field, value) => {
-        // Hard sanitization for some fields
+        // sanitize for payments only
         let val = value;
         if (section === "payments") {
             if (field === "amount") {
-                val = String(value || "").replace(/\D/g, "").slice(0, 5); // max 5 digits, numeric only
+                val = String(value || "").replace(/\D/g, "").slice(0, 5);
             } else if (field === "balanceAmount") {
-                val = String(value || "").replace(/\D/g, ""); // numeric only
+                val = String(value || "").replace(/\D/g, "");
             }
         }
 
@@ -251,7 +262,6 @@ const EmployeeModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode
             return { ...prev, [section]: arr };
         });
 
-        // clear field error on user input
         if (section === "payments") {
             setPaymentErrors((prev) => {
                 const next = [...(prev || [])];
@@ -280,7 +290,7 @@ const EmployeeModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode
     const removePaymentSection = (index) => {
         setFormData((prev) => {
             const list = [...(prev.payments || [])];
-            if (list[index]?.__locked) return prev; // cannot remove locked
+            if (list[index]?.__locked) return prev;
             list.splice(index, 1);
             return { ...prev, payments: list.length ? list : [blankPayment()] };
         });
@@ -294,7 +304,7 @@ const EmployeeModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode
     const removeWorkSection = (index) => {
         setFormData((prev) => {
             const list = [...(prev.workDetails || [])];
-            if (list[index]?.__locked) return prev; // cannot remove locked
+            if (list[index]?.__locked) return prev;
             list.splice(index, 1);
             return { ...prev, workDetails: list.length ? list : [blankWork()] };
         });
@@ -315,10 +325,8 @@ const EmployeeModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode
             }
         }
         const mobilePattern = /^[0-9]{10}$/;
-        if (formData.mobileNo1 && !mobilePattern.test(String(formData.mobileNo1)))
-            errs.push("Mobile 1 must be a 10-digit number.");
-        if (formData.mobileNo2 && !mobilePattern.test(String(formData.mobileNo2)))
-            errs.push("Mobile 2 must be a 10-digit number.");
+        if (formData.mobileNo1 && !mobilePattern.test(String(formData.mobileNo1))) errs.push("Mobile 1 must be a 10-digit number.");
+        if (formData.mobileNo2 && !mobilePattern.test(String(formData.mobileNo2))) errs.push("Mobile 2 must be a 10-digit number.");
 
         const aadhaarPattern = /^[0-9]{12}$/;
         if (formData.aadharNo && !aadhaarPattern.test(String(formData.aadharNo))) errs.push("Aadhaar must be a 12-digit number.");
@@ -434,7 +442,243 @@ const EmployeeModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode
         return items.length ? <ul className="mb-0">{items}</ul> : <span>No errors</span>;
     };
 
-    /* --------------------------------- Actions --------------------------------- */
+    /* ------------------------------ Shared renderer ---------------------------- */
+    const formatLine = (...parts) => parts.filter(Boolean).join(" ");
+    const safe = (v, fallback = "—") => (v !== undefined && v !== null && String(v).trim() !== "" ? v : fallback);
+
+    // Build the same HTML for preview and PDF.
+    // `opts.hideSensitive` will hide status + phones + aadhar in the downloaded PDF only.
+    const buildBiodataHTML = (opts = { hideSensitive: false }) => {
+        const fullName = formatLine(safe(formData.firstName, ""), safe(formData.lastName, "")).trim() || "—";
+        const ageText = formData.years ? `${formData.years} Years` : "—";
+        const dobText = formData.dateOfBirth ? new Date(formData.dateOfBirth).toLocaleDateString() : "—";
+        const gender = safe(formData.gender);
+        const marital = safe(formData.maritalStatus);
+        const co = safe(formData.co || formData.careOfPersonal);
+
+        const permAddr = [
+            `<strong>Door No</strong> ${safe(formData.permanentAddress)}`,
+            `<strong>Street:</strong> ${safe(formData.permanentStreet)}`,
+            `<strong>Landmark:</strong> ${safe(formData.permanentLandmark)}`,
+            `<strong>Village / Town </strong> ${safe(formData.permanentVillage)}`,
+            `<strong>Mandal:</strong> ${safe(formData.permanentMandal)}`,
+            `<strong>District:</strong> ${safe(formData.permanentDistrict)}`,
+            `<strong>State:</strong> ${safe(formData.permanentState)}${formData.permanentPincode ? " - " + formData.permanentPincode : ""}`,
+        ];
+
+        const presentAddr = [
+            `<strong>Door No</strong>${safe(formData.presentAddress)}`,
+            `<strong>Street:</strong> ${safe(formData.presentStreet)}`,
+            `<strong>Landmark:</strong> ${safe(formData.presentLandmark)}`,
+            `<strong>Village / Town</strong> ${safe(formData.presentVillage)}`,
+            `<strong>Mandal:</strong> ${safe(formData.presentMandal)}`,
+            `<strong>District:</strong> ${safe(formData.presentDistrict)}`,
+            `<strong>State:</strong> ${safe(formData.presentState)}${formData.presentPincode ? " - " + formData.presentPincode : ""}`,
+        ];
+
+        const qual = safe(formData.qualification);
+        const college = safe(formData.schoolCollege);
+        const pskill = safe(formData.primarySkill);
+        const mtongue = safe(formData.motherTongue || formData.motherTung);
+        const langs = safe(formData.languages);
+        const secondary = Array.isArray(formData.secondarySkills) ? formData.secondarySkills.filter(Boolean) : [];
+        const otherSkills = Array.isArray(formData.workingSkills) ? formData.workingSkills.filter(Boolean) : [];
+        const health = Array.isArray(formData.healthIssues) ? formData.healthIssues.filter(Boolean) : [];
+        const rightNow = new Date();
+        const metaDate = rightNow.toLocaleDateString();
+
+        const photoHtml = formData.employeePhotoUrl
+            ? `<img src="${formData.employeePhotoUrl}" style="width:120px;height:120px;object-fit:cover;border-radius:6px;border:1px solid #ccc" />`
+            : `<div style="width:120px;height:120px;border:1px solid #ccc;border-radius:6px;display:flex;align-items:center;justify-content:center;color:#888;font-size:12px">No Photo</div>`;
+
+        const section = (title, body) => `
+      <div class="sec">
+        <div class="sec-title">${title}</div>
+        <div class="sec-body">
+          ${body}
+        </div>
+      </div>
+    `;
+
+        const row2 = (value1) => `
+      
+        ${value1}
+      
+    `;
+
+        const addressBlock = (heading, lines) => `
+      <div class="addr">
+        <div class="addr-title">${heading}</div>
+        ${lines.map((l) => `<div class="addr-line">${l}</div>`).join("")}
+      </div>
+    `;
+
+        const chips = (items) =>
+            items.length
+                ? `<div class="tags">${items.map((s) => `<span class="tag">${String(s).trim()}</span>`).join("")}</div>`
+                : `<div class="muted">—</div>`;
+
+        // SENSITIVE BLOCKS (hidden in PDF)
+        const sensitiveBlock = opts.hideSensitive
+            ? ""
+            : `
+        -
+      `;
+
+        const html = `
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8" />
+<title>Employee Biodata - ${fullName}</title>
+<style>
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0;font-family:Arial,Helvetica,sans-serif;color:#111}
+  .page{ max-width:900px; margin:auto;background:#fff;border:1px solid #e5e5e5;padding:20px}
+  .header{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;border-bottom:2px solid #222;padding-bottom:10px}
+  .h-left{flex:1}
+  .title{font-size:32px;font-weight:700;letter-spacing:.4px;margin:0}
+  .subtitle{font-size:12px;color:#444;margin-top:2px}
+  .meta{font-size:11px;color:#555;margin-top:4px;display:flex;gap:14px;flex-wrap:wrap}
+  .sec{margin-top:14px;border:1px solid #ddd;border-radius:6px;overflow:hidden}
+  .sec-title{background:#f3f4f6;padding:8px 10px;font-weight:700}
+  .sec-title h3{margin:0;font-size:24px}
+  .sec-body{padding:10px}
+  /* UNIFIED rows: label | : | value have the same width everywhere */
+  .kv-row{display:grid;grid-template-columns: 240px 12px 1fr;gap:10px;align-items:start;margin-bottom:15px}
+  .kv-label{font-weight:600}
+  .kv-colon{text-align:center}
+  .kv-value{font-weight:500;word-break:break-word}
+  .addr{border:1px dashed #c9c9c9;border-radius:6px;padding:8px;margin-top:6px}
+  .addr-title{font-weight:700;margin-bottom:4px}
+  .addr-line{font-size:12px;line-height:1.4; margin-bottom:5px}
+  /* Two even columns area */
+  .two-col{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  .tags{display:flex;flex-wrap:wrap;gap:6px}
+  .tag{border:1px solid #02acf2;color:#02acf2;font-size:12px;padding:3px 8px;border-radius:999px}
+  .muted{color:#777}
+  .footer{margin-top:14px;font-size:11px;color:#fff;display:flex;justify-content:space-between; background-color:#02acf2; padding:10px}
+  .blue {color:#02acf2}
+  @media print{.page{border:none;margin:0;width:100%}}
+  .header-img{width:100%;max-height:120px;object-fit:contain;margin-bottom:6px}
+  /* photo box on the right */
+  .photo-box{display:flex;align-items:center;justify-content:center}
+  .photo-box img{width:120px;height:120px;object-fit:cover;border-radius:6px;border:1px solid #ccc}
+  .photo-box .no-photo{width:120px;height:120px;border:1px solid #ccc;border-radius:6px;display:flex;align-items:center;justify-content:center;color:#888;font-size:12px}
+</style>
+</head>
+<body>
+<div class="page">
+  <img src="${BioDataHeader}" alt="Header" class="header-img" />
+  <div class="header">
+    <div class="h-left">
+      <h1 class="title">EMPLOYEE BIO-DATA</h1>
+      <div class="subtitle">H.R Department (Reg No: SEA/HYD/ALO/26/1040178/2025)</div>
+      <div class="meta">
+        <div><strong>ID:</strong> ${safe(formData.idNo || formData.employeeId)}</div>
+        <div><strong>Date:</strong> ${metaDate}</div>
+      </div>
+    </div>
+    <div class="photo-box">
+      ${photoHtml}
+    </div>
+  </div>
+
+  ${section(
+    "<h3>Basic Information</h3>",
+    `
+      <div class="kv-row">
+        <div class="kv-label ">Full Name</div><div class="kv-colon">:</div>
+        <div class="kv-value blue"><strong>${fullName}</strong></div>
+      </div>
+      <div class="kv-row">
+        <div class="kv-label">Gender</div><div class="kv-colon">:</div>
+        <div class="kv-value blue">${gender}</div>
+      </div>
+      <div class="kv-row">
+        <div class="kv-label">Date of Birth</div><div class="kv-colon">:</div>
+        <div class="kv-value">${dobText}</div>
+      </div>
+      <div class="kv-row">
+        <div class="kv-label">Age</div><div class="kv-colon">:</div>
+        <div class="kv-value">${ageText}</div>
+      </div>
+      <div class="kv-row">
+        <div class="kv-label">Care of</div><div class="kv-colon">:</div>
+        <div class="kv-value">${co}</div>
+      </div>
+      <div class="kv-row">
+        <div class="kv-label">Marital Status</div><div class="kv-colon">:</div>
+        <div class="kv-value blue">${marital}</div>
+      </div>
+   
+    `
+  )}
+
+  ${section(
+    "<h3>Addresses</h3>",
+    `
+      <div class="two-col">
+        <div>${addressBlock("Permanent Address", permAddr)}</div>
+        <div>${addressBlock("Present Address", presentAddr)}</div>
+      </div>
+    `
+  )}
+
+  ${section(
+    "<h3>Qualification & Skills</h3>",
+    `
+      <div class="kv-row">
+        <div class="kv-label">Qualification</div><div class="kv-colon">:</div>
+        <div class="kv-value">${qual}</div>
+      </div>
+      <div class="kv-row">
+        <div class="kv-label">College / School</div><div class="kv-colon">:</div>
+        <div class="kv-value">${college}</div>
+      </div>
+      <div class="kv-row">
+        <div class="kv-label">Primary Skill</div><div class="kv-colon">:</div>
+        <div class="kv-value blue"><strong>${pskill}</strong></div>
+      </div>
+
+      <div class="kv-row">
+        <div class="kv-label">Other Skills</div><div class="kv-colon">:</div>
+        <div class="kv-value">${chips(otherSkills)}</div>
+      </div>
+      <div class="kv-row">
+        <div class="kv-label">Experince</div><div class="kv-colon">:</div>
+        <div class="kv-value blue"><strong>${safe(formData.workExperince)}</strong></div>
+      </div>
+
+      <div class="kv-row">
+        <div class="kv-label">Mother Tongue</div><div class="kv-colon">:</div>
+        <div class="kv-value">${mtongue}</div>
+      </div>
+      <div class="kv-row">
+        <div class="kv-label">Languages</div><div class="kv-colon">:</div>
+        <div class="kv-value">${langs}</div>
+      </div>
+    `
+  )}
+
+
+
+  <div class="footer">
+    <div>Doc Ref: JC-HR-07</div>
+    <div>Revision: 1</div>
+    <div>Date: 1st May 2025</div>
+    <div>Page 1 of 1</div>
+  </div>
+</div>
+<script>window.focus && window.focus();</script>
+</body>
+</html>
+`;
+return html;
+
+    };
+
+    /* ------------------------------ Actions --------------------------------- */
     const handleSaveClick = async () => {
         const { ok, errs } = validateSection(activeTab);
 
@@ -477,7 +721,7 @@ const EmployeeModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode
             };
             delete payload.employeePhotoFile;
 
-            onSave(payload);
+            await Promise.resolve(onSave && onSave(payload));
 
             setFormData((prev) => {
                 const updated = { ...prev };
@@ -487,6 +731,11 @@ const EmployeeModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode
             });
 
             openAlert("Saved", <span>Changes have been saved successfully.</span>, "success");
+
+            setTimeout(() => {
+                closeAlert();
+                onClose && onClose();
+            }, 900);
         } catch (error) {
             openAlert("Error", <span>Failed to save changes: {error.message}</span>, "danger");
         }
@@ -500,6 +749,10 @@ const EmployeeModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode
                 closeConfirm();
                 onDelete && onDelete(formData.id || formData.employeeId);
                 openAlert("Deleted", <span>Employee has been deleted successfully.</span>, "success");
+                setTimeout(() => {
+                    closeAlert();
+                    onClose && onClose();
+                }, 800);
             }
         );
     };
@@ -507,16 +760,7 @@ const EmployeeModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode
     /* ------------------------------ render helpers ----------------------------- */
     const Err = ({ msg }) => (msg ? <div className="text-danger mt-1" style={{ fontSize: ".85rem" }}>{msg}</div> : null);
 
-    // Generic text/select input (edit mode shows input; view mode shows plain text)
-    const renderInputField = (
-        label,
-        name,
-        value,
-        type = "text",
-        placeholder = "",
-        hardDisabled = false,
-        extraProps = {}
-    ) => (
+    const renderInputField = (label, name, value, type = "text", placeholder = "", hardDisabled = false, extraProps = {}) => (
         <div className="mb-3">
             <label className="form-label">
                 <strong>{label}</strong>
@@ -538,7 +782,6 @@ const EmployeeModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode
         </div>
     );
 
-    // Phone input that becomes a tel: link in view mode
     const renderPhoneField = (label, name, value, extraProps = {}) => {
         const digitsOnly = String(value || "").replace(/\D/g, "");
         const canCall = !!digitsOnly;
@@ -579,7 +822,7 @@ const EmployeeModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode
                 <strong>{label}</strong>
             </label>
             {isEditMode ? (
-                <select className="form-select " name={name} value={value || ""} onChange={handleInputChange}>
+                <select className="form-select" name={name} value={value || ""} onChange={handleInputChange}>
                     <option value="">Select {label}</option>
                     {options.map((option) => (
                         <option key={option.value} value={option.value}>
@@ -606,17 +849,26 @@ const EmployeeModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode
                             className="form-control form-control-sm me-2"
                             placeholder={placeholder}
                             onKeyDown={(e) => {
-                                if (e.key === "Enter" && e.currentTarget.value) {
-                                    const currentArray = formData[field] || [];
-                                    if (!currentArray.includes(e.currentTarget.value)) {
-                                        setFormData((prev) => ({ ...prev, [field]: [...currentArray, e.currentTarget.value] }));
+                                if (e.key === "Enter" && e.currentTarget.value.trim()) {
+                                    const v = e.currentTarget.value.trim();
+                                    const currentArray = Array.isArray(formData[field]) ? formData[field] : [];
+                                    if (!currentArray.includes(v)) {
+                                        setFormData((prev) => ({ ...prev, [field]: [...currentArray, v] }));
                                     }
                                     e.currentTarget.value = "";
                                     e.preventDefault();
                                 }
                             }}
-                            disabled={!isEditMode}
                         />
+                        {Array.isArray(formData[field]) && formData[field].length > 0 && (
+                            <button
+                                type="button"
+                                className="btn btn-outline-secondary btn-sm"
+                                onClick={() => setFormData((prev) => ({ ...prev, [field]: [] }))}
+                            >
+                                Clear All
+                            </button>
+                        )}
                     </div>
                     <div className="d-flex flex-wrap gap-1 mt-2">
                         {(formData[field] || []).map((item, index) => (
@@ -666,237 +918,41 @@ const EmployeeModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode
                         <div className="col-md-4">{renderInputField("State", `${contactKey}.state`, contact.state)}</div>
                     </div>
                     <div className="row">
-                        <div className="col-md-4">
-                            {renderPhoneField("Mobile 1", `${contactKey}.mobile1`, contact.mobile1)}
-                        </div>
-                        <div className="col-md-4">
-                            {renderPhoneField("Mobile 2", `${contactKey}.mobile2`, contact.mobile2)}
-                        </div>
+                        <div className="col-md-4">{renderPhoneField("Mobile 1", `${contactKey}.mobile1`, contact.mobile1)}</div>
+                        <div className="col-md-4">{renderPhoneField("Mobile 2", `${contactKey}.mobile2`, contact.mobile2)}</div>
                     </div>
                 </div>
             </div>
         );
     };
 
-    /* ------------------------------ BIODATA (Bodata) --------------------------- */
+    /* ------------------------------ Main UI --------------------------- */
 
+    // Keep preview iframe in sync with data & tab
+    useEffect(() => {
+        if (activeTab === "biodata" && iframeRef.current) {
+            const doc = iframeRef.current;
+            // In view: show everything (hideSensitive=false)
+            doc.srcdoc = buildBiodataHTML({ hideSensitive: false });
+        }
+    }, [activeTab, formData, status]);
 
-    const formatLine = (...parts) => parts.filter(Boolean).join(" ");
-    const safe = (v, fallback = "—") => (v !== undefined && v !== null && String(v).trim() !== "" ? v : fallback);
-
-    const buildBiodataHTML = () => {
-        const fullName = formatLine(safe(formData.firstName, ""), safe(formData.lastName, "")).trim() || "—";
-        const ageText = formData.years ? `${formData.years} Years` : "—";
-        const dobText = formData.dateOfBirth ? new Date(formData.dateOfBirth).toLocaleDateString() : "—";
-        const gender = safe(formData.gender);
-        const marital = safe(formData.maritalStatus);
-        const co = safe(formData.co || formData.careOfPersonal);
-
-        const permAddr = [
-            `D.No: ${safe(formData.permanentAddress)}`,
-            `Street: ${safe(formData.permanentStreet)}`,
-            `Landmark: ${safe(formData.permanentLandmark)}`,
-            `Village / Town ${safe(formData.permanentVillage)}`,
-            `Mandal: ${safe(formData.permanentMandal)}`,
-            `District: ${safe(formData.permanentDistrict)}`,
-            `State: ${safe(formData.permanentState)}${formData.permanentPincode ? " - " + formData.permanentPincode : ""}`,
-        ];
-
-        const presentAddr = [
-            `D.No: ${safe(formData.presentAddress)}`,
-            `Street: ${safe(formData.presentStreet)}`,
-            `Landmark: ${safe(formData.presentLandmark)}`,
-            `Village / Town ${safe(formData.presentVillage)}`,
-            `Mandal: ${safe(formData.presentMandal)}`,
-            `District: ${safe(formData.presentDistrict)}`,
-            `State: ${safe(formData.presentState)}${formData.presentPincode ? " - " + formData.presentPincode : ""}`,
-        ];
-
-        const qual = safe(formData.qualification);
-        const college = safe(formData.schoolCollege);
-        const pskill = safe(formData.primarySkill);
-        const mtongue = safe(formData.motherTongue || formData.motherTung); // allow common spelling
-        const langs = safe(formData.languages);
-        const skills = (formData.secondarySkills || []).concat(formData.workingSkills || []);
-
-        const rightNow = new Date();
-        const metaDate = rightNow.toLocaleDateString();
-
-        const photoHtml = formData.employeePhotoUrl
-            ? `<img src="${formData.employeePhotoUrl}" style="width:120px;height:120px;object-fit:cover;border-radius:6px;border:1px solid #ccc" />`
-            : `<div style="width:120px;height:120px;border:1px solid #ccc;border-radius:6px;display:flex;align-items:center;justify-content:center;color:#888;font-size:12px">No Photo</div>`;
-
-        const section = (title, body) => `
-            <div class="sec">
-              <div class="sec-title">${title}</div>
-              <div class="sec-body">
-                ${body}
-              </div>
-            </div>
-        `;
-
-        const row2 = (label1, value1, label2, value2) => `
-            <div class="row">
-                <div class="col"><span class="lbl">${label1}:</span> <span class="val">${value1}</span></div>
-                <div class="col"><span class="lbl">${label2}:</span> <span class="val">${value2}</span></div>
-            </div>
-        `;
-
-        const addressBlock = (heading, lines) => `
-            <div class="addr">
-                <div class="addr-title">${heading}</div>
-                ${lines.map((l) => `<div class="addr-line">${l}</div>`).join("")}
-            </div>
-        `;
-
-        const skillsBlock = skills.length
-            ? `<div class="tags">${skills
-                .filter(Boolean)
-                .map((s) => `<span class="tag">${String(s).trim()}</span>`)
-                .join("")}</div>`
-            : `<div class="muted">—</div>`;
-
-        const html = `
-<!doctype html>
-<html>
-<head>
-<meta charset="utf-8" />
-<title>Employee Biodata - ${fullName}</title>
-<style>
-*{box-sizing:border-box} html,body{margin:0;padding:0;font-family:Arial,Helvetica,sans-serif;color:#111}
-.page{width: 794px; /* A4 width at 96 DPI */
-      margin:16px auto; background:#fff; border:1px solid #e5e5e5; padding:20px}
-.header{display:flex; align-items:flex-start; justify-content:space-between; gap:12px; border-bottom:2px solid #222; padding-bottom:10px}
-.h-left{flex:1}
-.title{font-size:20px; font-weight:700; letter-spacing:.5px}
-.subtitle{font-size:12px; color:#444; margin-top:2px}
-.meta{font-size:11px; color:#555; margin-top:4px; display:flex; gap:14px; flex-wrap:wrap}
-.sec{margin-top:14px; border:1px solid #ddd; border-radius:6px; overflow:hidden}
-.sec-title{background:#f3f4f6; padding:8px 10px; font-weight:700}
-.sec-body{padding:10px}
-.row{display:flex; gap:12px; margin-bottom:6px}
-.col{flex:1}
-.lbl{font-weight:600}
-.val{font-weight:500}
-.addr{border:1px dashed #c9c9c9; border-radius:6px; padding:8px; margin-top:6px}
-.addr-title{font-weight:700; margin-bottom:4px}
-.addr-line{font-size:12px; line-height:1.4}
-.grid2{display:grid; grid-template-columns:1fr 1fr; gap:10px}
-.tags{display:flex; flex-wrap:wrap; gap:6px}
-.tag{background:#eef2ff; border:1px solid #c7d2fe; color:#1e3a8a; font-size:12px; padding:3px 8px; border-radius:999px}
-.muted{color:#777}
-.footer{margin-top:14px; font-size:11px; color:#666; display:flex; justify-content:space-between}
-.badge{display:inline-block; padding:2px 8px; border-radius:999px; font-size:11px; color:#fff}
-.badge.green{background:#16a34a}
-.badge.gray{background:#6b7280}
-.badge.red{background:#dc2626}
-.badge.brown{background:#7c3a1d}
-.badge.orange{background:#ea580c}
-@media print{
-  .page{border:none; margin:0; width:100%}
-}
-</style>
-</head>
-<body>
-<div class="page">
-  <div class="header">
-    <div class="h-left">
-      <div class="title">EMPLOYEE BIO-DATA</div>
-      <div class="subtitle">H.R Department (Reg No: SEA/HYD/ALO/26/1040178/2025)</div>
-      <div class="meta">
-         <div><strong>ID:</strong> ${safe(formData.idNo || formData.employeeId)}</div>
-         <div><strong>Date:</strong> ${metaDate}</div>
-      </div>
-    </div>
-    <div class="h-right">${photoHtml}</div>
-  </div>
-
-  ${section(
-            "Basic Information",
-            `
-      <div class="grid2">
-        <div>
-          ${row2("Full Name", fullName, "Age", ageText)}
-          ${row2("Gender", gender, "Date of Birth", dobText)}
-          ${row2("C/O", co, "Marital Status", marital)}
-        </div>
-        <div>
-          <div style="margin-bottom:6px"><span class="lbl">Status:</span>
-            <span class="badge ${status === "On Duty" ? "green" : status === "Off Duty" ? "gray" : status === "Resigned" ? "brown" : status === "Terminated" ? "red" : "orange"}">
-              ${safe(status, "—")}
-            </span>
-          </div>
-          <div><span class="lbl">Mobile 1:</span> <span class="val">${safe(formData.mobileNo1)}</span></div>
-          <div><span class="lbl">Mobile 2:</span> <span class="val">${safe(formData.mobileNo2)}</span></div>
-          <div><span class="lbl">Aadhar:</span> <span class="val">${safe(formData.aadharNo)}</span></div>
-        </div>
-      </div>
-      `
-        )}
-
-  ${section(
-            "Addresses",
-            `
-        ${addressBlock("Permanent Address", permAddr)}
-        ${addressBlock("Present Address", presentAddr)}
-      `
-        )}
-
-  ${section(
-            "Qualification & Skills",
-            `
-        <div class="row">
-          <div class="col"><span class="lbl">Qualification:</span> <span class="val">${qual}</span></div>
-          <div class="col"><span class="lbl">College / School:</span> <span class="val">${college}</span></div>
-        </div>
-        <div class="row">
-          <div class="col"><span class="lbl">Primary Skill:</span> <span class="val">${pskill}</span></div>
-          <div class="col"><span class="lbl">Mother Tongue:</span> <span class="val">${mtongue}</span></div>
-        </div>
-        <div class="row">
-          <div class="col"><span class="lbl">Languages:</span> <span class="val">${langs}</span></div>
-        </div>
-        <div style="margin-top:8px">
-          <div class="lbl" style="margin-bottom:6px">Other Skills</div>
-          ${skillsBlock}
-        </div>
-      `
-        )}
-
-  <div class="footer">
-    <div>Doc Ref: JC-HR-07</div>
-    <div>Revision: 1</div>
-    <div>Date: ${metaDate}</div>
-    <div>Page 1 of 1</div>
-  </div>
-</div>
-<script>
-  // Auto print if opened in a new window
-  window.focus && window.focus();
-</script>
-</body>
-</html>
-        `;
-        return html;
-    };
-
+    // Download uses the same renderer but hides sensitive fields
     const handleDownloadBiodata = () => {
-        const html = buildBiodataHTML();
-        const win = window.open("", "_blank", "noopener,noreferrer");
-        if (!win) return;
-        win.document.open();
-        win.document.write(html);
-        win.document.close();
-        // Give browser a tick to render, then open print dialog
-        setTimeout(() => {
-            try {
-                win.focus();
-                win.print();
-            } catch (e) { }
-        }, 400);
+        const html = buildBiodataHTML({ hideSensitive: true });
+        try {
+            const blob = new Blob([html], { type: "text/html;charset=utf-8" });
+            const url = URL.createObjectURL(blob);
+            window.open(url, "_blank", "noopener,noreferrer");
+            setTimeout(() => URL.revokeObjectURL(url), 5000);
+        } catch {
+            const win = window.open("", "_blank", "noopener,noreferrer");
+            if (!win) return;
+            win.document.open();
+            win.document.write(html);
+            win.document.close();
+        }
     };
-
-    /* -------------------------------------------------------------------------- */
 
     const modalClass = isEditMode ? "editEmployee" : "viewEmployee";
 
@@ -943,7 +999,7 @@ const EmployeeModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode
                                     ["bank", "Bank Details"],
                                     ["payment", "Payment"],
                                     ["working", "Working"],
-                                    ["biodata", "Biodata"], // NEW TAB
+                                    ["biodata", "Biodata"],
                                 ].map(([key, label]) => (
                                     <li className="nav-item" role="presentation" key={key}>
                                         <button className={`nav-link ${activeTab === key ? "active" : ""}`} onClick={() => setActiveTab(key)}>
@@ -1056,13 +1112,11 @@ const EmployeeModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode
                                                         <div className="col-md-6">
                                                             {renderInputField("ID No", "idNo", formData.idNo || formData.employeeId, "text", "", true)}
                                                         </div>
-
                                                     </div>
 
                                                     <div className="row">
                                                         <div className="col-md-6">{renderInputField("First Name", "firstName", formData.firstName)}</div>
                                                         <div className="col-md-6">{renderInputField("Last Name", "lastName", formData.lastName)}</div>
-
                                                     </div>
 
                                                     <div className="row">
@@ -1078,66 +1132,43 @@ const EmployeeModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode
 
                                                     <div className="row">
                                                         <div className="col-md-6">
-                                                            {renderInputField(
-                                                                "Date of Birth",
-                                                                "dateOfBirth",
-                                                                formData.dateOfBirth,
-                                                                "date",
-                                                                "",
-                                                                false,
-                                                                { min: DOB_MIN, max: DOB_MAX }
-                                                            )}
+                                                            {renderInputField("Date of Birth", "dateOfBirth", formData.dateOfBirth, "date", "", false, {
+                                                                min: DOB_MIN,
+                                                                max: DOB_MAX,
+                                                            })}
                                                         </div>
                                                         <div className="col-md-6">{renderInputField("Age", "years", formData.years, "number")}</div>
                                                     </div>
 
                                                     <div className="row">
                                                         <div className="col-md-6">
-                                                            {renderInputField(
-                                                                "Aadhar No",
-                                                                "aadharNo",
-                                                                formData.aadharNo,
-                                                                "tel",
-                                                                "",
-                                                                false,
-                                                                { inputMode: "numeric", maxLength: 12, pattern: "^[0-9]{12}$" }
-                                                            )}
+                                                            {renderInputField("Aadhar No", "aadharNo", formData.aadharNo, "tel", "", false, {
+                                                                inputMode: "numeric",
+                                                                maxLength: 12,
+                                                                pattern: "^[0-9]{12}$",
+                                                            })}
                                                         </div>
                                                         <div className="col-md-6">{renderInputField("Local ID", "localId", formData.localId)}</div>
-
-
                                                     </div>
 
                                                     <div className="row">
-
-                                                        <div className="col-md-6">
-                                                            {renderPhoneField("Mobile 1", "mobileNo1", formData.mobileNo1)}
-                                                        </div>
-
-                                                        <div className="col-md-6">
-                                                            {renderPhoneField("Mobile 2", "mobileNo2", formData.mobileNo2)}
-                                                        </div>
-
+                                                        <div className="col-md-6">{renderPhoneField("Mobile 1", "mobileNo1", formData.mobileNo1)}</div>
+                                                        <div className="col-md-6">{renderPhoneField("Mobile 2", "mobileNo2", formData.mobileNo2)}</div>
                                                     </div>
 
                                                     <div className="row">
-
-
                                                         <div className="col-md-6">
                                                             {renderInputField("Date of Joining", "date", formData.date || formData.dateOfJoining, "date")}
                                                         </div>
                                                         <div className="col-md-6">{renderInputField("Page No", "pageNo", formData.pageNo)}</div>
-
                                                     </div>
 
                                                     <div className="row">
-                                                        <div className="col-md-6">
-                                                            {renderInputField("Basic Salary", "basicSalary", formData.basicSalary, "number")}
-                                                        </div>
+                                                        <div className="col-md-6">{renderInputField("Basic Salary", "basicSalary", formData.basicSalary, "number")}</div>
                                                         <div className="col-md-6">{renderInputField("Allowance", "allowance", formData.allowance, "number")}</div>
-
                                                     </div>
                                                 </div>
+
                                                 <div className="row">
                                                     <div className="col-md-12">
                                                         <label className="form-label">
@@ -1155,7 +1186,6 @@ const EmployeeModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode
                                                             <div className="form-control bg-light">{String(formData.aboutEmployeee || "N/A")}</div>
                                                         )}
                                                     </div>
-
                                                 </div>
                                             </div>
                                         </div>
@@ -1171,77 +1201,51 @@ const EmployeeModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode
                                             </div>
                                             <div className="modal-card-body">
                                                 <div className="row">
-                                                    <div className="col-md-4">
-                                                        {renderInputField("Door No", "permanentAddress", formData.permanentAddress)}
-                                                    </div>
-                                                    <div className="col-md-4">
-                                                        {renderInputField("Street", "permanentStreet", formData.permanentStreet)}
-                                                    </div>
-                                                    <div className="col-md-4">
-                                                        {renderInputField("Landmark", "permanentLandmark", formData.permanentLandmark)}
-                                                    </div>
+                                                    <div className="col-md-4">{renderInputField("Door No", "permanentAddress", formData.permanentAddress)}</div>
+                                                    <div className="col-md-4">{renderInputField("Street", "permanentStreet", formData.permanentStreet)}</div>
+                                                    <div className="col-md-4">{renderInputField("Landmark", "permanentLandmark", formData.permanentLandmark)}</div>
                                                 </div>
                                                 <div className="row">
-                                                    <div className="col-md-4">
-                                                        {renderInputField("Village / Town", "permanentVillage", formData.permanentVillage)}
-                                                    </div>
-                                                    <div className="col-md-4">
-                                                        {renderInputField("Mandal", "permanentMandal", formData.permanentMandal)}
-                                                    </div>
-                                                    <div className="col-md-4">
-                                                        {renderInputField("District", "permanentDistrict", formData.permanentDistrict)}
-                                                    </div>
+                                                    <div className="col-md-4">{renderInputField("Village / Town", "permanentVillage", formData.permanentVillage)}</div>
+                                                    <div className="col-md-4">{renderInputField("Mandal", "permanentMandal", formData.permanentMandal)}</div>
+                                                    <div className="col-md-4">{renderInputField("District", "permanentDistrict", formData.permanentDistrict)}</div>
                                                 </div>
                                                 <div className="row">
                                                     <div className="col-md-4">{renderInputField("State", "permanentState", formData.permanentState)}</div>
                                                     <div className="col-md-4">
-                                                        {renderInputField(
-                                                            "Pincode",
-                                                            "permanentPincode",
-                                                            formData.permanentPincode,
-                                                            "tel",
-                                                            "",
-                                                            false,
-                                                            { inputMode: "numeric", maxLength: 6, pattern: "^[0-9]{6}$" }
-                                                        )}
+                                                        {renderInputField("Pincode", "permanentPincode", formData.permanentPincode, "tel", "", false, {
+                                                            inputMode: "numeric",
+                                                            maxLength: 6,
+                                                            pattern: "^[0-9]{6}$",
+                                                        })}
                                                     </div>
                                                 </div>
                                             </div>
                                         </div>
-                                        <hr></hr>
+                                        <hr />
                                         <div className="modal-card mb-3">
                                             <div className="modal-card-header">
                                                 <h4 className="mb-0">Present Address</h4>
                                             </div>
                                             <div className="modal-card-body">
                                                 <div className="row">
-                                                    <div className="col-md-4">
-                                                        {renderInputField("Door No", "presentAddress", formData.presentAddress)}
-                                                    </div>
+                                                    <div className="col-md-4">{renderInputField("Door No", "presentAddress", formData.presentAddress)}</div>
                                                     <div className="col-md-4">{renderInputField("Street", "presentStreet", formData.presentStreet)}</div>
-                                                    <div className="col-md-4">
-                                                        {renderInputField("Landmark", "presentLandmark", formData.presentLandmark)}
-                                                    </div>
+                                                    <div className="col-md-4">{renderInputField("Landmark", "presentLandmark", formData.presentLandmark)}</div>
                                                 </div>
                                                 <div className="row">
                                                     <div className="col-md-4">{renderInputField("Village / Town", "presentVillage", formData.presentVillage)}</div>
                                                     <div className="col-md-4">{renderInputField("Mandal", "presentMandal", formData.presentMandal)}</div>
-                                                    <div className="col-md-4">
-                                                        {renderInputField("District", "presentDistrict", formData.presentDistrict)}
-                                                    </div>
+                                                    <div className="col-md-4">{renderInputField("District", "presentDistrict", formData.presentDistrict)}</div>
                                                 </div>
                                                 <div className="row">
                                                     <div className="col-md-4">{renderInputField("State", "presentState", formData.presentState)}</div>
                                                     <div className="col-md-4">
-                                                        {renderInputField(
-                                                            "Pincode",
-                                                            "presentPincode",
-                                                            formData.presentPincode,
-                                                            "tel",
-                                                            "",
-                                                            false,
-                                                            { inputMode: "numeric", maxLength: 6, pattern: "^[0-9]{6}$" }
-                                                        )}
+                                                        {renderInputField("Pincode", "presentPincode", formData.presentPincode, "tel", "", false, {
+                                                            inputMode: "numeric",
+                                                            maxLength: 6,
+                                                            pattern: "^[0-9]{6}$",
+                                                        })}
                                                     </div>
                                                 </div>
                                             </div>
@@ -1266,19 +1270,11 @@ const EmployeeModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode
                                                     ])}
                                                 </div>
                                                 <div className="col-md-4">
-                                                    {renderInputField(
-                                                        "Date of Marriage",
-                                                        "dateOfMarriage",
-                                                        formData.dateOfMarriage,
-                                                        "date",
-                                                        "",
-                                                        false,
-                                                        {
-                                                            min: DOM_MIN,
-                                                            max: DOM_MAX,
-                                                            disabled: formData.maritalStatus !== "Married",
-                                                        }
-                                                    )}
+                                                    {renderInputField("Date of Marriage", "dateOfMarriage", formData.dateOfMarriage, "date", "", false, {
+                                                        min: DOM_MIN,
+                                                        max: DOM_MAX,
+                                                        disabled: formData.maritalStatus !== "Married",
+                                                    })}
                                                 </div>
                                                 <div className="col-md-4">
                                                     {renderInputField("Marriage Years", "marriageYears", formData.marriageYears, "number", "", false, {
@@ -1316,9 +1312,7 @@ const EmployeeModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode
                                             <div className="row">
                                                 <div className="col-md-4">{renderArrayField("Secondary Skills", "secondarySkills", "Add secondary skill")}</div>
                                                 <div className="col-md-4">{renderArrayField("Other Skills", "workingSkills", "Add skill")}</div>
-                                                <div className="col-md-4">
-                                                    {renderInputField("Work Experience", "workExperince", formData.workExperince, "text")}
-                                                </div>
+                                                <div className="col-md-4">{renderInputField("Work Experience", "workExperince", formData.workExperince, "text")}</div>
                                             </div>
                                             <div className="row">
                                                 <div className="col-md-4">{renderInputField("Mother Tongue", "motherTongue", formData.motherTongue)}</div>
@@ -1357,7 +1351,7 @@ const EmployeeModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode
                                     </div>
                                 )}
 
-                                {/* Bank (NO photo here anymore) */}
+                                {/* Bank */}
                                 {activeTab === "bank" && (
                                     <div className="modal-card mb-3">
                                         <div className="modal-card-header">
@@ -1372,18 +1366,10 @@ const EmployeeModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode
                                             </div>
 
                                             <div className="row">
-                                                <div className="col-md-3">
-                                                    {renderPhoneField("Phone Pay Number", "phonePayNo", formData.phonePayNo)}
-                                                </div>
-                                                <div className="col-md-3">
-                                                    {renderInputField("Phone Pay Name", "phonePayName", formData.phonePayName)}
-                                                </div>
-                                                <div className="col-md-3">
-                                                    {renderPhoneField("Google Pay Number", "googlePayNo", formData.googlePayNo)}
-                                                </div>
-                                                <div className="col-md-3">
-                                                    {renderInputField("Google Pay Name", "googlePayName", formData.googlePayName)}
-                                                </div>
+                                                <div className="col-md-3">{renderPhoneField("Phone Pay Number", "phonePayNo", formData.phonePayNo)}</div>
+                                                <div className="col-md-3">{renderInputField("Phone Pay Name", "phonePayName", formData.phonePayName)}</div>
+                                                <div className="col-md-3">{renderPhoneField("Google Pay Number", "googlePayNo", formData.googlePayNo)}</div>
+                                                <div className="col-md-3">{renderInputField("Google Pay Name", "googlePayName", formData.googlePayName)}</div>
                                             </div>
                                         </div>
                                     </div>
@@ -1541,7 +1527,6 @@ const EmployeeModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode
                                                                     />
                                                                 ) : (
                                                                     <div className="form-control form-control-sm bg-light">{p.receiptNo || "N/A"}</div>
-
                                                                 )}
                                                             </div>
                                                         </div>
@@ -1827,275 +1812,43 @@ const EmployeeModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode
                                     </div>
                                 )}
 
-                                {/* Bodata (Biodata) */}
+                                {/* Biodata */}
                                 {activeTab === "biodata" && (
                                     <div className="modal-card mb-3">
                                         <div className="modal-card-header d-flex align-items-center justify-content-between">
-                                            <h4 className="mb-0">Biodata</h4>
+                                            <h4 className="mb-0">Biodata (Preview)</h4>
                                             <div className="d-flex gap-2">
-                                                <button type="button" className="btn btn-outline-secondary btn-sm" onClick={handleDownloadBiodata}>
-                                                    Download Biodata
+                                                <button type="button" className="btn btn-outline-primary btn-sm" onClick={handleDownloadBiodata}>
+                                                    Download)
                                                 </button>
                                             </div>
                                         </div>
 
                                         <div className="modal-card-body biodata-wrapper">
-                                            <div>
-                                                <img src={BioDataHeader} />
-                                            </div>
-
-                                            {/* Lightweight live preview */}
-                                            <div className="border rounded p-3" ref={biodataRef} style={{ background: "#fafafa" }}>
-                                                <div className="d-flex justify-content-center align-items-center mb-3">
-                                                    <div className="text-center">
-                                                        <h1 className="mb-1"><strong>EMPLOYEE BIO-DATA</strong></h1>
-                                                        <div className="text-muted" style={{ fontSize: ".9rem" }}>
-                                                            H.R Department (Reg No: SEA/HYD/ALO/26/1040178/2025)
-                                                        </div>
-
-                                                    </div>
-
-                                                </div>
-                                                <div className="title">
-                                                    <h3>Baisc Information</h3>
-                                                </div>
-                                                <div className="basic-info">
-                                                    <div>
-                                                        {formData.employeePhotoUrl ? (
-                                                            <img
-                                                                src={formData.employeePhotoUrl}
-                                                                alt="Employee"
-                                                                style={{ width: 150, height: 150, objectFit: "cover", borderRadius: 6, border: "1px solid #ddd" }}
-                                                            />
-                                                        ) : (
-                                                            <div
-                                                                style={{
-                                                                    width: 150,
-                                                                    height: 150,
-                                                                    border: "1px solid #ddd",
-                                                                    borderRadius: 6,
-                                                                    display: "flex",
-                                                                    alignItems: "center",
-                                                                    justifyContent: "center",
-                                                                    color: "#888",
-                                                                    fontSize: 12,
-                                                                }}
-                                                            >
-                                                                No Photo
-                                                            </div>
-                                                        )}
-
-                                                        {/* Employee ID and Date */}
-
-                                                        <div className="small text-secondary mt-1 text-center">
-                                                            <strong>ID:</strong> {formData.idNo || formData.employeeId || "—"}
-                                                            {/* <strong>Date:</strong> {new Date().toLocaleDateString()} */}
-                                                        </div>
-                                                    </div>
-
-                                                    <div className="container info">
-
-                                                        <div className="row">
-                                                            <div className="col-sm-2"><strong>Full Name</strong></div>
-                                                            <div className="col-sm-1">:</div>
-                                                            <div className="col-sm-6 blue f20"><strong>{(formData.firstName || "") + " " + (formData.lastName || "") || "—"}</strong></div>
-                                                        </div>
-                                                        <div className="row">
-                                                            <div className="col-sm-2"><strong>Gender</strong></div>
-                                                            <div className="col-sm-1">:</div>
-                                                            <div className="col-sm-6 blue">{formData.gender || "—"}</div>
-                                                        </div>
-                                                        <div className="row">
-                                                            <div className="col-sm-2"><strong>Date of Birth{" "}</strong></div>
-                                                            <div className="col-sm-1">:</div>
-                                                            <div className="col-sm-6">{formData.dateOfBirth ? new Date(formData.dateOfBirth).toLocaleDateString() : "—"}</div>
-                                                        </div>
-                                                        <div className="row">
-                                                            <div className="col-sm-2"><strong>Age</strong></div>
-                                                            <div className="col-sm-1">:</div>
-                                                            <div className="col-sm-6 blue">{formData.years || "—"}</div>
-                                                        </div>
-                                                        <div className="row">
-                                                            <div className="col-sm-2"><strong>Care Of</strong></div>
-                                                            <div className="col-sm-1">:</div>
-                                                            <div className="col-sm-6">{formData.co || formData.careOfPersonal || "—"}</div>
-                                                        </div>
-                                                        <div className="row">
-                                                            <div className="col-sm-2"><strong>Marital Status</strong></div>
-                                                            <div className="col-sm-1">:</div>
-                                                            <div className="col-sm-6 blue">{formData.maritalStatus || "—"}</div>
-                                                        </div>
-
-                                                    </div>
-                                                </div>
-                                                <div className="title">
-                                                    <h3>Addresses</h3>
-                                                </div>
-
-                                                <div className="row">
-                                                    <div className="col-md-6">
-                                                        <h5><strong>Permanent address</strong></h5>
-                                                        <div className="row">
-                                                            <div className="col-sm-4"><strong>Door No</strong></div>
-                                                            <div className="col-sm-1">:</div>
-                                                            <div className="col-sm-7">{formData.permanentAddress || "—"}</div>
-                                                        </div>
-                                                        <div className="row">
-                                                            <div className="col-sm-4"><strong>Street</strong></div>
-                                                            <div className="col-sm-1">:</div>
-                                                            <div className="col-sm-7">{formData.permanentStreet || "—"}</div>
-                                                        </div>
-                                                        <div className="row">
-                                                            <div className="col-sm-4"><strong>Landmark</strong></div>
-                                                            <div className="col-sm-1">:</div>
-                                                            <div className="col-sm-7">{formData.permanentLandmark || "—"}</div>
-                                                        </div>
-                                                        <div className="row">
-                                                            <div className="col-sm-4"><strong>Village/Town</strong></div>
-                                                            <div className="col-sm-1">:</div>
-                                                            <div className="col-sm-7">{formData.permanentVillage || "—"}</div>
-                                                        </div>
-                                                        <div className="row">
-                                                            <div className="col-sm-4"><strong>Mandal</strong></div>
-                                                            <div className="col-sm-1">:</div>
-                                                            <div className="col-sm-7">{formData.permanentMandal || "—"}</div>
-                                                        </div>
-                                                        <div className="row">
-                                                            <div className="col-sm-4"><strong>District</strong></div>
-                                                            <div className="col-sm-1">:</div>
-                                                            <div className="col-sm-7">{formData.permanentDistrict || "—"}</div>
-                                                        </div>
-                                                        <div className="row">
-                                                            <div className="col-sm-4"><strong>State & Pincode</strong></div>
-                                                            <div className="col-sm-1">:</div>
-                                                            <div className="col-sm-7">{formData.permanentState || "—"}{formData.permanentPincode ? " - " + formData.permanentPincode : ""}</div>
-                                                        </div>
-                                                    </div>
-                                                    <div className="col-md-6">
-                                                        <h5><strong>Present Address</strong></h5>
-                                                        <div className="row">
-                                                            <div className="col-sm-4"><strong>Door No</strong></div>
-                                                            <div className="col-sm-1">:</div>
-                                                            <div className="col-sm-7">{formData.presentAddress || "—"}</div>
-                                                        </div>
-                                                        <div className="row">
-                                                            <div className="col-sm-4"><strong>Street</strong></div>
-                                                            <div className="col-sm-1">:</div>
-                                                            <div className="col-sm-7">{formData.presentStreet || "—"}</div>
-                                                        </div>
-                                                        <div className="row">
-                                                            <div className="col-sm-4"><strong>Landmark</strong></div>
-                                                            <div className="col-sm-1">:</div>
-                                                            <div className="col-sm-7">{formData.presentLandmark || "—"}</div>
-                                                        </div>
-                                                        <div className="row">
-                                                            <div className="col-sm-4"><strong>Village/Town</strong></div>
-                                                            <div className="col-sm-1">:</div>
-                                                            <div className="col-sm-7">{formData.presentVillage || "—"}</div>
-                                                        </div>
-                                                        <div className="row">
-                                                            <div className="col-sm-4"><strong>Mandal</strong></div>
-                                                            <div className="col-sm-1">:</div>
-                                                            <div className="col-sm-7">{formData.presentMandal || "—"}</div>
-                                                        </div>
-                                                        <div className="row">
-                                                            <div className="col-sm-4"><strong>District</strong></div>
-                                                            <div className="col-sm-1">:</div>
-                                                            <div className="col-sm-7">{formData.presentDistrict || "—"}</div>
-                                                        </div>
-                                                        <div className="row">
-                                                            <div className="col-sm-4"><strong>State & Pincode</strong></div>
-                                                            <div className="col-sm-1">:</div>
-                                                            <div className="col-sm-7">{formData.presentState || "—"}{formData.presentPincode ? " - " + formData.presentPincode : ""}</div>
-                                                        </div>
-                                                    </div>
-                                                </div>
-
-                                                <div className="title">
-                                                    <h3>Qualification & Skills</h3>
-                                                </div>
-
-
-                                                <div className="row">
-                                                    <div className="col-md-6">
-                                                        <h5><strong>Qulifications</strong></h5>
-                                                        <div className="row">
-                                                            <div className="col-md-4"><strong>Qualification</strong></div>
-                                                            <div className="col-md-1">:</div>
-                                                            <div className="col-md-7 blue">{formData.qualification || "—"}</div>
-                                                        </div>
-                                                        <div className="row">
-                                                            <div className="col-md-4"><strong>School/College</strong></div>
-                                                            <div className="col-md-1">:</div>
-                                                            <div className="col-md-7">{formData.schoolCollege || "—"}</div>
-                                                        </div>
-                                                        <div className="row">
-                                                            <div className="col-md-4"><strong>Mother Tongue</strong></div>
-                                                            <div className="col-md-1">:</div>
-                                                            <div className="col-md-7">{formData.motherTongue || formData.motherTung || "—"}</div>
-                                                        </div>
-                                                        <div className="row">
-                                                            <div className="col-md-4"><strong>Languages</strong></div>
-                                                            <div className="col-md-1">:</div>
-                                                            <div className="col-md-7">{formData.languages || "—"}</div>
-                                                        </div>
-                                                    </div>
-                                                    <div className="col-md-6">
-                                                        <h5><strong>Skills</strong></h5>
-                                                        <div className="row">
-                                                            <div className="col-md-4"><strong>Primary Skill</strong></div>
-                                                            <div className="col-md-1">:</div>
-                                                            <div className="col-md-7 blue">{formData.primarySkill || "—"}</div>
-                                                        </div>
-                                                        <div className="row">
-                                                            <div className="col-md-4"><strong>Secondary Skills</strong></div>
-                                                            <div className="col-md-1">:</div>
-                                                            <div className="col-md-7">{formData.secondarySkills || "—"}</div>
-                                                        </div>
-                                                        <div className="row">
-                                                            <div className="col-md-4"><strong>Other Skills</strong></div>
-                                                            <div className="col-md-1">:</div>
-                                                            <div className="col-md-7">   {((formData.secondarySkills || []).concat(formData.workingSkills || [])).length ? (
-                                                                ((formData.secondarySkills || []).concat(formData.workingSkills || [])).map((s, idx) => (
-                                                                    <span key={idx} className="badge bg-light text-dark border">{s}</span>
-                                                                ))
-                                                            ) : (
-                                                                <span className="text-muted">—</span>
-                                                            )}</div>
-                                                        </div>
-                                                        <div className="row">
-                                                            <div className="col-md-4"><strong>Experince</strong></div>
-                                                            <div className="col-md-1">:</div>
-                                                            <div className="col-md-7 blue">{formData.workExperince || "—"}</div>
-                                                        </div>
-
-                                                    </div>
-                                                </div>
-                                            </div>
-                                            <div className="bottom"> Doc Ref: JC-HR-07 | Revision: 1 | Date: 1st May 2025</div>
+                                            {/* EXACT preview using the same HTML used for the download */}
+                                            <iframe
+                                                ref={iframeRef}
+                                                title="Biodata Preview"
+                                                style={{ width: "100%", height: "900px", border: "1px solid #e5e5e5", borderRadius: 8 }}
+                                            />
                                         </div>
                                     </div>
                                 )}
                             </div>
-                        </div>
 
-                        <div className="modal-footer">
-                            <div className="d-flex w-100 justify-content-end">
-                                {/* <div>
-                                    {onDelete && (
-                                        <button type="button" className="btn btn-outline-danger" onClick={handleDelete}>
-                                            Delete
-                                        </button>
-                                    )}
-                                </div> */}
-                                <div className="d-flex gap-2">
-                                    <button type="button" className="btn btn-secondary" onClick={onClose}>
-                                        Close
+                            {/* Footer buttons */}
+                            <div className="d-flex gap-2 justify-content-end hideInView">
+                                {/* {onDelete && isEditMode && (
+                                    <button type="button" className="btn btn-outline-danger" onClick={handleDelete}>
+                                        Delete
                                     </button>
-                                    <button type="button" className="btn btn-primary" onClick={handleSaveClick}>
-                                        {isEditMode ? "Save Changes" : "Save"}
-                                    </button>
-                                </div>
+                                )} */}
+                                <button type="button" className="btn btn-secondary" onClick={onClose}>
+                                    Close
+                                </button>
+                                <button type="button" className="btn btn-primary" onClick={handleSaveClick}>
+                                    {isEditMode ? "Save Changes" : "Save"}
+                                </button>
                             </div>
                         </div>
                     </div>

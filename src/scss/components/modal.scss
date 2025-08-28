@@ -23,13 +23,19 @@
 .viewEmployee {
 
     .modal-card {
-    .row:nth-child(even) {
-        padding-top: 15px;
-        margin-bottom: 15px;
-        border-top: 1px solid #e6e3e3;
-        border-bottom: 1px solid #e6e3e3;
+        .row:nth-child(even) {
+            padding-top: 15px;
+            margin-bottom: 15px;
+            border-top: 1px solid #e6e3e3;
+            border-bottom: 1px solid #e6e3e3;
+        }
+
+
     }
-}
+
+    .hideInView {
+        display: none !important;
+    }
 
     // .status {
     //     display: none;

@@ -456,25 +456,82 @@ const EmployeeModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode
         const marital = safe(formData.maritalStatus);
         const co = safe(formData.co || formData.careOfPersonal);
 
-        const permAddr = [
-            `<strong>Door No</strong> ${safe(formData.permanentAddress)}`,
-            `<strong>Street:</strong> ${safe(formData.permanentStreet)}`,
-            `<strong>Landmark:</strong> ${safe(formData.permanentLandmark)}`,
-            `<strong>Village / Town </strong> ${safe(formData.permanentVillage)}`,
-            `<strong>Mandal:</strong> ${safe(formData.permanentMandal)}`,
-            `<strong>District:</strong> ${safe(formData.permanentDistrict)}`,
-            `<strong>State:</strong> ${safe(formData.permanentState)}${formData.permanentPincode ? " - " + formData.permanentPincode : ""}`,
-        ];
+        const permAddr = [`
+  <div class="row">
+    <div class="col-md-4"><strong>Door No</strong></div>
+    <div class="col-md-1">:</div>
+    <div class="col-md-7">${safe(formData.permanentAddress)}</div>
+</div>
+<div class="row">
+    <div class="col-md-4"><strong>Street</strong></div>
+    <div class="col-md-1">:</div>
+    <div class="col-md-7">${safe(formData.permanentStreet)}</div>
+</div>
+<div class="row">
+    <div class="col-md-4"><strong>Landmark</strong></div>
+    <div class="col-md-1">:</div>
+    <div class="col-md-7">${safe(formData.permanentLandmark)}</div>
+</div>
+<div class="row">
+    <div class="col-md-4"><strong>Village / Town</strong></div>
+    <div class="col-md-1">:</div>
+    <div class="col-md-7">${safe(formData.permanentVillage)}</div>
+</div>
+<div class="row">
+    <div class="col-md-4"><strong>Mandal</strong></div>
+    <div class="col-md-1">:</div>
+    <div class="col-md-7">${safe(formData.permanentMandal)}</div>
+</div>
+<div class="row">
+    <div class="col-md-4"><strong>District</strong></div>
+    <div class="col-md-1">:</div>
+    <div class="col-md-7">${safe(formData.permanentDistrict)}</div>
+</div>
+<div class="row">
+    <div class="col-md-4"><strong>State</strong></div>
+    <div class="col-md-1">:</div>
+    <div class="col-md-7">${safe(formData.permanentState)}${formData.permanentPincode ? " - " + formData.permanentPincode : ""}</div>
+  </div>
+`];
 
-        const presentAddr = [
-            `<strong>Door No</strong>${safe(formData.presentAddress)}`,
-            `<strong>Street:</strong> ${safe(formData.presentStreet)}`,
-            `<strong>Landmark:</strong> ${safe(formData.presentLandmark)}`,
-            `<strong>Village / Town</strong> ${safe(formData.presentVillage)}`,
-            `<strong>Mandal:</strong> ${safe(formData.presentMandal)}`,
-            `<strong>District:</strong> ${safe(formData.presentDistrict)}`,
-            `<strong>State:</strong> ${safe(formData.presentState)}${formData.presentPincode ? " - " + formData.presentPincode : ""}`,
-        ];
+        const presentAddr = [`
+<div class="row">
+    <div class="col-md-4"><strong>Door No</strong></div>
+    <div class="col-md-1">:</div>
+    <div class="col-md-7">${safe(formData.presentAddress)}</div>
+</div>
+<div class="row">
+    <div class="col-md-4"><strong>Street</strong></div>
+    <div class="col-md-1">:</div>
+    <div class="col-md-7">${safe(formData.presentStreet)}</div>
+</div>
+<div class="row">
+    <div class="col-md-4"><strong>Landmark</strong></div>
+    <div class="col-md-1">:</div>
+    <div class="col-md-7">${safe(formData.presentLandmark)}</div>
+</div>
+<div class="row">
+    <div class="col-md-4"><strong>Village / Town</strong></div>
+    <div class="col-md-1">:</div>
+    <div class="col-md-7">${safe(formData.presentVillage)}</div>
+</div>
+<div class="row">
+    <div class="col-md-4"><strong>Mandal</strong></div>
+    <div class="col-md-1">:</div>
+    <div class="col-md-7">${safe(formData.presentMandal)}</div>
+</div>
+<div class="row">
+    <div class="col-md-4"><strong>District</strong></div>
+    <div class="col-md-1">:</div>
+    <div class="col-md-7">${safe(formData.presentDistrict)}</div>
+</div>
+<div class="row">
+    <div class="col-md-4"><strong>State</strong></div>
+    <div class="col-md-1">:</div>
+    <div class="col-md-7">${safe(formData.presentState)}${formData.presentPincode ? " - " + formData.presentPincode : ""}</div>
+  </div>
+`];
+
 
         const qual = safe(formData.qualification);
         const college = safe(formData.schoolCollege);
@@ -536,6 +593,12 @@ const EmployeeModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode
   html,body{margin:0;padding:0;font-family:Arial,Helvetica,sans-serif;color:#111}
   .page{ max-width:900px; margin:auto;background:#fff;border:1px solid #e5e5e5;padding:20px}
   .header{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;border-bottom:2px solid #222;padding-bottom:10px}
+  .row { display: flex; flex-wrap: wrap; margin-left: -6px; margin-right: -6px; border-bottom:1px solid #f1f1f1; margin-bottom:6px }
+  .row > div { padding-left: 6px; padding-right: 6px; }
+  .col-md-1 { flex: 0 0 8.3333%;  max-width: 8.3333%; }
+  .col-md-4 { flex: 0 0 33.3333%; max-width: 33.3333%; }
+  .col-md-7 { flex: 0 0 58.3333%; max-width: 58.3333%; }
+
   .h-left{flex:1}
   .title{font-size:32px;font-weight:700;letter-spacing:.4px;margin:0}
   .subtitle{font-size:12px;color:#444;margin-top:2px}
@@ -585,8 +648,8 @@ const EmployeeModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode
   </div>
 
   ${section(
-    "<h3>Basic Information</h3>",
-    `
+            "<h3>Basic Information</h3>",
+            `
       <div class="kv-row">
         <div class="kv-label ">Full Name</div><div class="kv-colon">:</div>
         <div class="kv-value blue"><strong>${fullName}</strong></div>
@@ -613,21 +676,21 @@ const EmployeeModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode
       </div>
    
     `
-  )}
+        )}
 
   ${section(
-    "<h3>Addresses</h3>",
-    `
+            "<h3>Addresses</h3>",
+            `
       <div class="two-col">
         <div>${addressBlock("Permanent Address", permAddr)}</div>
         <div>${addressBlock("Present Address", presentAddr)}</div>
       </div>
     `
-  )}
+        )}
 
   ${section(
-    "<h3>Qualification & Skills</h3>",
-    `
+            "<h3>Qualification & Skills</h3>",
+            `
       <div class="kv-row">
         <div class="kv-label">Qualification</div><div class="kv-colon">:</div>
         <div class="kv-value">${qual}</div>
@@ -659,7 +722,7 @@ const EmployeeModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode
         <div class="kv-value">${langs}</div>
       </div>
     `
-  )}
+        )}
 
 
 
@@ -674,7 +737,7 @@ const EmployeeModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode
 </body>
 </html>
 `;
-return html;
+        return html;
 
     };
 

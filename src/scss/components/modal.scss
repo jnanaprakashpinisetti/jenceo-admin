@@ -16,7 +16,7 @@
 .modal-card-header {
     margin-bottom: 10px;
     font-size: 15px;
-    border-bottom: 1px solid #e6e3e3;
+    border-bottom: 2px solid #e6e3e3;
     padding-bottom: 15px;
 }
 
@@ -24,9 +24,10 @@
 
     .modal-card {
     .row:nth-child(even) {
-        background-color: rgb(239, 241, 241);
         padding-top: 15px;
         margin-bottom: 15px;
+        border-top: 1px solid #e6e3e3;
+        border-bottom: 1px solid #e6e3e3;
     }
 }
 

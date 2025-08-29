@@ -27,10 +27,78 @@ export default function DisplayExitClient() {
   // Save flow for edit on ExitClients
   const [showSaveModal, setShowSaveModal] = useState(false);
 
+  // --- Reminder helpers ---
+  const today = new Date();
+  const startOfToday = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+
+  const parseDate = (v) => {
+    if (!v) return null;
+    if (typeof v === 'string') {
+      const s = v.trim();
+      if (!s) return null;
+      if (/^\d{4}-\d{2}-\d{2}/.test(s)) {
+        const d = new Date(s);
+        return isNaN(d) ? null : d;
+      }
+      if (/^\d{2}\/\d{2}\/\d{4}$/.test(s)) {
+        const [dd, mm, yyyy] = s.split('/').map(Number);
+        const d = new Date(yyyy, mm - 1, dd);
+        return isNaN(d) ? null : d;
+      }
+      const d = new Date(s);
+      return isNaN(d) ? null : d;
+    }
+    if (v instanceof Date) return v;
+    return null;
+  };
+
+  const getReminderDate = (c) =>
+    parseDate(c?.reminderDate) || parseDate(c?.reminder) || parseDate(c?.nextVisitDate) || null;
+
+  const daysUntil = (d) => {
+    if (!d) return Infinity;
+    const onlyDate = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+    const ms = onlyDate - startOfToday;
+    return ms / (1000 * 60 * 60 * 24);
+  };
+
+  const getUrgencyGroup = (c) => {
+    const d = getReminderDate(c);
+    const du = daysUntil(d);
+    if (du < 1) return 0; // red
+    if (du < 2) return 1; // brown
+    return 2;
+  };
+
+  const sortClientsWithUrgency = (data) => {
+    const byIdDesc = (a, b) => {
+      const idA = a.idNo || '';
+      const idB = b.idNo || '';
+      if (idA.startsWith('JC') && idB.startsWith('JC')) {
+        const numA = parseInt(idA.replace('JC', '')) || 0;
+        const numB = parseInt(idB.replace('JC', '')) || 0;
+        return numB - numA;
+      }
+      if (!isNaN(idA) && !isNaN(idB)) return parseInt(idB) - parseInt(idA);
+      return idB.localeCompare(idA);
+    };
+
+    return [...data].sort((a, b) => {
+      const ua = getUrgencyGroup(a);
+      const ub = getUrgencyGroup(b);
+      if (ua !== ub) return ua - ub;
+      const da = getReminderDate(a);
+      const db = getReminderDate(b);
+      const tda = da ? da.getTime() : Number.MAX_SAFE_INTEGER;
+      const tdb = db ? db.getTime() : Number.MAX_SAFE_INTEGER;
+      if (tda !== tdb) return tda - tdb;
+      return byIdDesc(a, b);
+    });
+  };
+
   useEffect(() => {
     const fetchExitClients = () => {
       try {
-        // 🔁 Read from ExitClients
         firebaseDB.child('ExitClients').on('value', (snapshot) => {
           if (snapshot.exists()) {
             const clientsData = [];
@@ -41,9 +109,9 @@ export default function DisplayExitClient() {
               });
             });
 
-            const sortedClients = sortClientsDescending(clientsData);
-            setClients(sortedClients);
-            setTotalPages(Math.ceil(sortedClients.length / rowsPerPage));
+            const sorted = sortClientsWithUrgency(clientsData);
+            setClients(sorted);
+            setTotalPages(Math.ceil(sorted.length / rowsPerPage));
           } else {
             setClients([]);
             setTotalPages(1);
@@ -67,28 +135,6 @@ export default function DisplayExitClient() {
     setTotalPages(Math.ceil(clients.length / rowsPerPage));
     setCurrentPage(1);
   }, [clients, rowsPerPage]);
-
-  const sortClientsDescending = (clientsData) => {
-    return clientsData.sort((a, b) => {
-      const idA = a.idNo || '';
-      const idB = b.idNo || '';
-
-      // Pattern JC00001
-      if (idA.startsWith('JC') && idB.startsWith('JC')) {
-        const numA = parseInt(idA.replace('JC', '')) || 0;
-        const numB = parseInt(idB.replace('JC', '')) || 0;
-        return numB - numA;
-      }
-
-      // Numeric IDs
-      if (!isNaN(idA) && !isNaN(idB)) {
-        return parseInt(idB) - parseInt(idA);
-      }
-
-      // String IDs
-      return idB.localeCompare(idA);
-    });
-  };
 
   // Pagination
   const indexOfLastClient = currentPage * rowsPerPage;
@@ -133,7 +179,7 @@ export default function DisplayExitClient() {
     setClientToReturn(null);
   };
 
-  // ✅ Return confirmed → move ExitClients/<id> to ClientData/<id> and remove from ExitClients
+  // Return confirmed
   const handleReturnConfirmed = async () => {
     if (!clientToReturn) return;
     const { id, ...payload } = clientToReturn;
@@ -141,14 +187,12 @@ export default function DisplayExitClient() {
     try {
       const returnedAt = new Date().toISOString();
 
-      // 1) Write back to ClientData with same key
       await firebaseDB.child(`ClientData/${id}`).set({
         ...payload,
         restoredFromExit: true,
         returnedAt,
       });
 
-      // 2) Remove from ExitClients
       await firebaseDB.child(`ExitClients/${id}`).remove();
 
       closeReturnConfirm();
@@ -159,7 +203,7 @@ export default function DisplayExitClient() {
     }
   };
 
-  // Save (Edit) → update in ExitClients (not ClientData)
+  // Save (Edit) → update in ExitClients
   const handleSave = async (updatedClient) => {
     try {
       await firebaseDB.child(`ExitClients/${updatedClient.id}`).update(updatedClient);
@@ -176,14 +220,38 @@ export default function DisplayExitClient() {
     setIsEditMode(false);
   };
 
+  const formatDate = (d) => {
+    if (!d) return '—';
+    const dt = d instanceof Date ? d : parseDate(d);
+    if (!dt) return '—';
+    return dt.toLocaleDateString();
+  };
+
+  const reminderCount = clients.filter((c) => {
+    const d = getReminderDate(c);
+    const du = daysUntil(d);
+    return du < 2;
+  }).length;
+
+  const rowStyleFor = (c) => {
+    const g = getUrgencyGroup(c);
+    if (g === 0) {
+      return { backgroundColor: '#b91c1c', color: '#fff' };
+    }
+    if (g === 1) {
+      return { backgroundColor: '#a52a2a', color: '#fff' };
+    }
+    return {};
+  };
+
   if (loading) return <div className="text-center my-5">Loading clients...</div>;
   if (error) return <div className="alert alert-danger">Error: {error}</div>;
   if (clients.length === 0) return <div className="alert alert-info">No exit clients found</div>;
 
   return (
     <div>
-      {/* Header: rows-per-page */}
-      <div className="d-flex justify-content-between align-items-center mb-3">
+      {/* Header: rows-per-page + Reminder badge + showing entries */}
+      <div className="d-flex justify-content-between align-items-center mb-3 flex-wrap" style={{ gap: '10px' }}>
         <div className="d-flex align-items-center">
           <span className="me-2">Show</span>
           <select
@@ -200,6 +268,20 @@ export default function DisplayExitClient() {
           </select>
           <span className="ms-2">entries</span>
         </div>
+
+        {/* Reminder Clients pill */}
+        <div
+          className="px-3 py-1 rounded-pill"
+          style={{
+            background: 'linear-gradient(90deg,#b91c1c,#a52a2a)',
+            color: '#fff',
+            fontWeight: 600,
+            boxShadow: '0 2px 6px rgba(0,0,0,.2)',
+          }}
+        >
+          Reminder Clients: {reminderCount}
+        </div>
+
         <div>
           Showing {indexOfFirstClient + 1} to {Math.min(indexOfLastClient, clients.length)} of {clients.length} entries
         </div>
@@ -213,41 +295,47 @@ export default function DisplayExitClient() {
               <th>Client Name</th>
               <th>Location</th>
               <th>Type of Service</th>
+              <th>Reminder Date</th>{/* NEW */}
               <th>Mobile No</th>
               <th>Status</th>
               <th>Actions</th>
             </tr>
           </thead>
           <tbody>
-            {currentClients.map((client) => (
-              <tr key={client.id}>
-                <td>
-                  <strong>{client.idNo || 'N/A'}</strong>
-                </td>
-                <td>{client.clientName || 'N/A'}</td>
-                <td>{client.location || 'N/A'}</td>
-                <td>{client.typeOfService || 'N/A'}</td>
-                <td>{client.mobileNo1 || 'N/A'}</td>
-                <td>
-                  <span className={`badge ${getStatusBadgeClass(client.serviceStatus)}`}>
-                    {client.serviceStatus || 'Running'}
-                  </span>
-                </td>
-                <td>
-                  <div className="d-flex">
-                    <button className="btn btn-sm me-2" title="View" onClick={() => handleView(client)}>
-                      <img src={viewIcon} alt="view Icon" style={{ opacity: 0.6, width: '18px', height: '18px' }} />
-                    </button>
-                    <button className="btn btn-sm me-2" title="Edit" onClick={() => handleEdit(client)}>
-                      <img src={editIcon} alt="edit Icon" style={{ width: '15px', height: '15px' }} />
-                    </button>
-                    <button className="btn btn-sm" title="Return to Active" onClick={() => openReturnConfirm(client)}>
-                      <img src={returnIcon} alt="return Icon" style={{ width: '18px', height: '18px' }} />
-                    </button>
-                  </div>
-                </td>
-              </tr>
-            ))}
+            {currentClients.map((client) => {
+              const rDate = getReminderDate(client) || null;
+
+              return (
+                <tr key={client.id} style={rowStyleFor(client)}>
+                  <td>
+                    <strong>{client.idNo || 'N/A'}</strong>
+                  </td>
+                  <td>{client.clientName || 'N/A'}</td>
+                  <td>{client.location || 'N/A'}</td>
+                  <td>{client.typeOfService || 'N/A'}</td>
+                  <td>{formatDate(rDate)}</td>
+                  <td>{client.mobileNo1 || 'N/A'}</td>
+                  <td>
+                    <span className={`badge ${getStatusBadgeClass(client.serviceStatus)}`}>
+                      {client.serviceStatus || 'Running'}
+                    </span>
+                  </td>
+                  <td>
+                    <div className="d-flex">
+                      <button className="btn btn-sm me-2" title="View" onClick={() => handleView(client)}>
+                        <img src={viewIcon} alt="view Icon" style={{ opacity: 0.6, width: '18px', height: '18px' }} />
+                      </button>
+                      <button className="btn btn-sm me-2" title="Edit" onClick={() => handleEdit(client)}>
+                        <img src={editIcon} alt="edit Icon" style={{ width: '15px', height: '15px' }} />
+                      </button>
+                      <button className="btn btn-sm" title="Return to Active" onClick={() => openReturnConfirm(client)}>
+                        <img src={returnIcon} alt="return Icon" style={{ width: '18px', height: '18px' }} />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>

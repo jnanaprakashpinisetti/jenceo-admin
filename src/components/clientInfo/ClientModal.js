@@ -140,7 +140,7 @@ const ClientModal = ({ client, isOpen, onClose, onSave, onDelete, isEditMode }) 
                                 ["basic", "Basic Info"],
                                 ["address", "Address"],
                                 ["service", "Service Details"],
-                                ["patient", "Patient Details"],
+                                ["patient", "Care Recipients"],
                                 ["workers", `Workers (${formData.workers?.length || 0})`],
                                 ["payments", `Payments (${formData.payments?.length || 0})`],
                             ].map(([key, label]) => (

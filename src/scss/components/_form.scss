@@ -79,11 +79,13 @@ form {
             color: $prim-white;
             background-color: #286397;
         }
+
         &.btn-success {
-            background-color: gold; 
-            color: $prim-black;  
-            border-color: transparent;                  
+            background-color: gold;
+            color: $prim-black;
+            border-color: transparent;
         }
+
         &:focus-visible {
             background-color: #085caa;
 
@@ -133,14 +135,23 @@ form {
         height: 100px;
         border: 1px solid $sec-white;
     }
+
     .form-label {
         white-space: nowrap;
     }
 
 
 }
+
 .star {
     color: red;
+}
+
+.btn-remov {
+    background-color: red !important;
+    padding: 2px 5px !important;
+    color: #fff !important;
+    font-size: 12px !important;
 }
 
 .input-group-text {
@@ -149,8 +160,8 @@ form {
 
 }
 
- .form-select.form-select-sm {
-     background-color: #929496;
-     border-color: #7c7f83;
-     color: #fff;
- }
+.form-select.form-select-sm {
+    background-color: #929496;
+    border-color: #7c7f83;
+    color: #fff;
+}

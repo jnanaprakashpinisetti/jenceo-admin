@@ -75,7 +75,7 @@ export default function ClientInfoForm() {
     "Basic Information",
     "Address",
     "Service Details",
-    "Patient Details",
+    "Care Recipients Details ",
     "Worker Details",
     "Payment Details",
   ];
@@ -271,17 +271,17 @@ export default function ClientInfoForm() {
       }
     }
 
-    // Step 4: Patient Details
+    // Step 4: Care Recipients Details
     if (currentStep === 4) {
       if (!formData.patientName.trim()) {
-        newErrors.patientName = "Patient Name is required";
+        newErrors.patientName = "Care Recipients Name is required";
         isValid = false;
       }
       if (!formData.patentAge) {
-        newErrors.patentAge = "Patient Age is required";
+        newErrors.patentAge = "Care Recipients Age is required";
         isValid = false;
       } else if (isNaN(Number(formData.patentAge)) || Number(formData.patentAge) <= 0) {
-        newErrors.patentAge = "Patient Age must be a positive number";
+        newErrors.patentAge = "Care Recipients Age must be a positive number";
         isValid = false;
       }
       if (!formData.serviceStatus) {

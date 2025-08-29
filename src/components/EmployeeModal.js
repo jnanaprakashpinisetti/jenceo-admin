@@ -591,7 +591,7 @@ const EmployeeModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode
   *{box-sizing:border-box}
   html,body{margin:0;padding:0;font-family:Arial,Helvetica,sans-serif;color:#111}
   .page{ max-width:900px; margin:auto;background:#fff;border:1px solid #e5e5e5;padding:20px}
-  .header{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;border-bottom:2px solid #444;padding-bottom:10px}
+  .header{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;border-bottom:2px solid #b7b4b4; padding:20px; margin:0 -20px; background: #c7d1f5; border-radius: 5px;}
   .row { display: flex; flex-wrap: wrap; margin-left: -6px; margin-right: -6px; border-bottom:1px solid #f1f1f1; margin-bottom:6px }
   .row > div { padding-left: 6px; padding-right: 6px; }
   .col-md-1 { flex: 0 0 8.3333%;  max-width: 8.3333%; }
@@ -612,17 +612,20 @@ const EmployeeModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode
   .subtitle{font-size:12px;color:#444;margin-top:2px}
   .meta{font-size:11px;color:#555;margin-top:4px;display:flex;gap:14px;flex-wrap:wrap}
   .sec{margin-top:14px;border:1px solid #ddd;border-radius:6px;overflow:hidden}
-  .sec-title{background:#f3f4f6;padding:8px 10px;font-weight:700}
+  .sec-title{background:#dfe2f5; padding:8px 10px;font-weight:700}
   .sec-title h3{margin:0;font-size:14px}
   .sec-body{padding:10px}
   /* UNIFIED rows: label | : | value have the same width everywhere */
-  .kv-row{display:grid;grid-template-columns: 240px 12px 1fr;gap:10px;align-items:start;margin-bottom:10px}
+  .kv-row{display:grid;grid-template-columns: 240px 12px 1fr;gap:10px;align-items:start; margin-bottom:0; padding-top: 7px;padding-bottom: 5px;}
+  .kv-row:nth-child(even) {background-color: #f2f3fd; padding-top: 8px; padding-botton:2px}
   .kv-label{font-weight:600; font-size:12px}
   .kv-colon{text-align:center}
   .kv-value{font-weight:500;word-break:break-word; font-size:12px}
   .addr{border:1px dashed #c9c9c9;border-radius:6px; padding:10px;margin-top:10px; margin-bottom:5px}
   .addr-title{font-weight:700;margin-bottom:4px; font-size:14px}
   .addr-line{font-size:10px;line-height:1; margin-bottom:5px}
+  .addr-line .row {padding-top:10px; padding-bottom:10px; border-bottom:0; margin-bottom:0}
+  .addr-line .row:nth-child(odd) {background-color:#f2f3fd;}
   /* Two even columns area */
   .two-col{display:grid;grid-template-columns:1fr 1fr;gap:12px}
   .tags{display:flex;flex-wrap:wrap;gap:6px}
@@ -651,7 +654,6 @@ const EmployeeModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode
         .col-md-4 { flex: 0 0 100%; max-width: 100%; }
         .col-md-7 { flex: 0 0 100%; max-width: 100%; }
         .addr-title {font-size:12px}
-        .addr-line .row {padding-bottom:10px}
         .addr-line .col-md-4 {padding-bottom:5px}
   }
 </style>

@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
 import { storageRef, uploadFile, getDownloadURL } from "../firebase";
-import BioDataHeader from "../assets/biodata-header.svg";
 
 /* ----------------------------- Lightweight Modals ----------------------------- */
 const BaseModal = ({ open, title, children, onClose, footer }) => {
@@ -592,14 +591,23 @@ const EmployeeModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode
   *{box-sizing:border-box}
   html,body{margin:0;padding:0;font-family:Arial,Helvetica,sans-serif;color:#111}
   .page{ max-width:900px; margin:auto;background:#fff;border:1px solid #e5e5e5;padding:20px}
-  .header{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;border-bottom:2px solid #222;padding-bottom:10px}
+  .header{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;border-bottom:2px solid #444;padding-bottom:10px}
   .row { display: flex; flex-wrap: wrap; margin-left: -6px; margin-right: -6px; border-bottom:1px solid #f1f1f1; margin-bottom:6px }
   .row > div { padding-left: 6px; padding-right: 6px; }
   .col-md-1 { flex: 0 0 8.3333%;  max-width: 8.3333%; }
   .col-md-4 { flex: 0 0 33.3333%; max-width: 33.3333%; }
   .col-md-7 { flex: 0 0 58.3333%; max-width: 58.3333%; }
 
-  .h-left{flex:1}
+  .biodataHeader {display:flex; justify-content:space-between; align-items: stretch; color:#fff; margin: -20px -20px 20px -20px}
+  .logoSection {flex: 0 0 40%; align-content: center; border-bottom:10px solid #02acf2 }
+  .logoSection h1 {color:#FCC603; margin:0; font-size:60px; margin-left:50px; font-weight:900; line-height:1}
+  .logoSection h1 spane {color:#02acf2; margin:0; font-size:100px; }
+  .logoSection .subText {color:#817f7f; margin-left:100px; font-size:20px; font-weight:bold; letter-spacing:5px  }
+  .dataSection {background:#02acf2; flex: 1;  padding:20px; border-top-left-radius: 125px; padding-left: 70px; }
+  .dataSection * {margin:0; }
+  .dataSection span {font-size:10px; }
+
+  .h-left{flex:1; margin-top:25px}
   .title{font-size:32px;font-weight:700;letter-spacing:.4px;margin:0}
   .subtitle{font-size:12px;color:#444;margin-top:2px}
   .meta{font-size:11px;color:#555;margin-top:4px;display:flex;gap:14px;flex-wrap:wrap}
@@ -612,7 +620,7 @@ const EmployeeModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode
   .kv-label{font-weight:600}
   .kv-colon{text-align:center}
   .kv-value{font-weight:500;word-break:break-word}
-  .addr{border:1px dashed #c9c9c9;border-radius:6px;padding:8px;margin-top:6px}
+  .addr{border:1px dashed #c9c9c9;border-radius:6px; padding:10px;margin-top:10px; margin-bottom:5px}
   .addr-title{font-weight:700;margin-bottom:4px}
   .addr-line{font-size:12px;line-height:1.4; margin-bottom:5px}
   /* Two even columns area */
@@ -620,7 +628,7 @@ const EmployeeModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode
   .tags{display:flex;flex-wrap:wrap;gap:6px}
   .tag{border:1px solid #02acf2;color:#02acf2;font-size:12px;padding:3px 8px;border-radius:999px}
   .muted{color:#777}
-  .footer{margin-top:14px;font-size:11px;color:#fff;display:flex;justify-content:space-between; background-color:#02acf2; padding:10px}
+  .footer{margin :20px -20px -20px -20px;font-size:10px; color:#fff;display:flex;justify-content:space-between; background-color:#02acf2; padding:20px}
   .blue {color:#02acf2}
   @media print{.page{border:none;margin:0;width:100%}}
   .header-img{width:100%;max-height:120px;object-fit:contain;margin-bottom:6px}
@@ -632,7 +640,17 @@ const EmployeeModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode
 </head>
 <body>
 <div class="page">
-  <img src="${BioDataHeader}" alt="Header" class="header-img" />
+<div class ="biodataHeader">
+<div class ="logoSection">
+    <h1>Jen<span class="blue">Ceo</h1>
+    <span class="subText">HOME CARE</span>
+</div>
+<div class ="dataSection">
+    <h1>Cell: <strong> 9888 55 99 55</strong></h1>
+    <h5>Web: <strong>www.jenceo.com</strong> | Mail: <strong>jenceohomecare.com</strong></h5>
+    <span>Address: #15-102/A, Road No-6, Vandhanapuri Colony Phase-1, Ameenpur Village & Mandal <br> Hyderabad, Telangana, Pin: 502 032</span>
+    </div>
+</div>
   <div class="header">
     <div class="h-left">
       <h1 class="title">EMPLOYEE BIO-DATA</h1>
@@ -664,7 +682,7 @@ const EmployeeModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode
       </div>
       <div class="kv-row">
         <div class="kv-label">Age</div><div class="kv-colon">:</div>
-        <div class="kv-value">${ageText}</div>
+        <div class="kv-value blue">${ageText}</div>
       </div>
       <div class="kv-row">
         <div class="kv-label">Care of</div><div class="kv-colon">:</div>
@@ -693,7 +711,7 @@ const EmployeeModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode
             `
       <div class="kv-row">
         <div class="kv-label">Qualification</div><div class="kv-colon">:</div>
-        <div class="kv-value">${qual}</div>
+        <div class="kv-value blue">${qual}</div>
       </div>
       <div class="kv-row">
         <div class="kv-label">College / School</div><div class="kv-colon">:</div>

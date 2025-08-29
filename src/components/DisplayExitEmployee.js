@@ -244,6 +244,11 @@ export default function DisplayExitEmployee() {
     }
   };
 
+  const handleCloseModal = () => {
+    setIsModalOpen(false);
+    setSelectedEmployee(null);
+  };
+
   const handleRowsPerPageChange = (e) => {
     setRowsPerPage(Number(e.target.value));
   };
@@ -490,13 +495,15 @@ export default function DisplayExitEmployee() {
       </nav>
 
       {/* View/Edit Modal */}
-      <EmployeeModal
-        employee={selectedEmployee}
-        isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
-        onSave={handleSave}
-        isEditMode={isEditMode}
-      />
+      {isModalOpen && (
+        <EmployeeModal
+          employee={selectedEmployee}
+          isOpen={isModalOpen}
+          onClose={handleCloseModal}
+          onSave={handleSave}
+          isEditMode={isEditMode}
+        />
+      )}
 
       {/* Return Confirm Modal */}
       {showReturnConfirm && employeeToReturn && (

@@ -636,27 +636,23 @@ const EmployeeModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode
   .photo-box{display:flex;align-items:center;justify-content:center}
   .photo-box img{width:120px;height:120px;object-fit:cover;border-radius:6px;border:1px solid #ccc}
   .photo-box .no-photo{width:120px;height:120px;border:1px solid #ccc;border-radius:6px;display:flex;align-items:center;justify-content:center;color:#888;font-size:12px}
+  
   @media only screen and (max-width: 767px) {
-
-  .biodataHeader {display:none}
-  .header {display:block}
-  .header .h-left {text-align:center; margin-top:10px}
-  .header .meta {justify-content:center; margin-bottom:15px}
-  .title {font-size: 20px}
-  .kv-row {display:block}
-  .kv-colon {display:none}
-  .kv-label {margin-bottom:5px}
-  .two-col {display:block}
-  .col-md-1 { display:none}
-  .col-md-4 { flex: 0 0 100%; max-width: 100%; }
-  .col-md-7 { flex: 0 0 100%; max-width: 100%; }
-
-  .addr-line .row {
-    padding-bottom:10px
-  }
-  .addr-line .col-md-4 {
-    padding-bottom:5px
-  }
+        .biodataHeader {display:none}
+        .header {display:block}
+        .header .h-left {text-align:center; margin-top:10px}
+        .header .meta {justify-content:center; margin-bottom:15px}
+        .title {font-size: 20px}
+        .kv-row {display:block}
+        .kv-colon {display:none}
+        .kv-label {margin-bottom:5px}
+        .two-col {display:block}
+        .col-md-1 { display:none}
+        .col-md-4 { flex: 0 0 100%; max-width: 100%; }
+        .col-md-7 { flex: 0 0 100%; max-width: 100%; }
+        .addr-title {font-size:12px}
+        .addr-line .row {padding-bottom:10px}
+        .addr-line .col-md-4 {padding-bottom:5px}
   }
 </style>
 </head>

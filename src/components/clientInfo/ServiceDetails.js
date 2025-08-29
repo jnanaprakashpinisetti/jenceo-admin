@@ -8,7 +8,7 @@ export default function ServiceDetails({ formData, handleChange, errors = {} }) 
       <div className="row">
         <div className="col-md-6">
           {/* Type of Service */}
-          <div className="form-group mb-3">
+          <div className="form-group">
             <label>Type of Service<span className="text-danger">*</span></label>
             <input
               type="text"
@@ -25,7 +25,7 @@ export default function ServiceDetails({ formData, handleChange, errors = {} }) 
         </div>
         <div className="col-md-6">
           {/* Service Period */}
-          <div className="form-group mb-3">
+          <div className="form-group">
             <label>Service Period<span className="text-danger">*</span></label>
             <input
               type="text"
@@ -44,7 +44,7 @@ export default function ServiceDetails({ formData, handleChange, errors = {} }) 
       <div className="row">
         <div className="col-md-6">
           {/* Service Charges */}
-          <div className="form-group mb-3">
+          <div className="form-group">
             <label>Service Charges<span className="text-danger">*</span></label>
             <input
               type="tel"
@@ -62,7 +62,7 @@ export default function ServiceDetails({ formData, handleChange, errors = {} }) 
         </div>
         <div className="col-md-6">
           {/* Travelling Charges */}
-          <div className="form-group mb-3">
+          <div className="form-group">
             <label>Travelling Charges</label>
             <input
               type="tel"
@@ -79,7 +79,7 @@ export default function ServiceDetails({ formData, handleChange, errors = {} }) 
       <div className="row">
         <div className="col-md-6">
           {/* Starting Date */}
-          <div className="form-group mb-3">
+          <div className="form-group">
             <label>Starting Date<span className="text-danger">*</span></label>
             <input
               type="date"
@@ -97,7 +97,7 @@ export default function ServiceDetails({ formData, handleChange, errors = {} }) 
         </div>
         <div className="col-md-6">
           {/* Ending Date */}
-          <div className="form-group mb-3">
+          <div className="form-group">
             <label>Ending Date</label>
             <input
               type="date"
@@ -114,7 +114,7 @@ export default function ServiceDetails({ formData, handleChange, errors = {} }) 
       <div className="row">
         {/* Page No */}
         <div className="col-md-6">
-          <div className="form-group mb-3">
+          <div className="form-group">
             <label>Page No<span className="text-danger">*</span></label>
             <input
               type="tel"
@@ -132,7 +132,7 @@ export default function ServiceDetails({ formData, handleChange, errors = {} }) 
         </div>
         <div className="col-md-6">
           {/* Gap If Any */}
-          <div className="form-group mb-3">
+          <div className="form-group">
             <label>Gap If Any</label>
             <input
               type="text"

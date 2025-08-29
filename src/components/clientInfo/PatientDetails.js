@@ -7,7 +7,7 @@ export default function PatientDetails({ formData, handleChange, errors = {} }) 
       <div className="row">
         <div className="col-md-6">
           {/* Care Recipients Name */}
-          <div className="form-group mb-3">
+          <div className="form-group">
             <label>Care Recipients Name<span className="text-danger">*</span></label>
             <input
               type="text"
@@ -21,10 +21,10 @@ export default function PatientDetails({ formData, handleChange, errors = {} }) 
         </div>
         <div className="col-md-6">
           {/* Care Recipients Age */}
-          <div className="form-group mb-3">
+          <div className="form-group">
             <label>Care Recipients Age<span className="text-danger">*</span></label>
             <input
-              type="number"
+              type="text"
               className={`form-control ${errors.patentAge ? "is-invalid" : ""}`}
               name="patentAge"
               value={formData.patentAge}
@@ -37,7 +37,7 @@ export default function PatientDetails({ formData, handleChange, errors = {} }) 
       <div className="row">
         <div className="col-md-6">
           {/* Service Status */}
-          <div className="form-group mb-3">
+          <div className="form-group">
             <label>Service Status<span className="text-danger">*</span></label>
             <select
               className={`form-control ${errors.serviceStatus ? "is-invalid" : ""}`}
@@ -58,7 +58,7 @@ export default function PatientDetails({ formData, handleChange, errors = {} }) 
         </div>
         <div className="col-md-6">
           {/* Dropper Name */}
-          <div className="form-group mb-3">
+          <div className="form-group">
             <label>Dropper Name<span className="text-danger">*</span></label>
             <input
               type="text"
@@ -74,7 +74,7 @@ export default function PatientDetails({ formData, handleChange, errors = {} }) 
       <div className="row">
         <div className="col-md-12">
           {/* About Care Recipients */}
-          <div className="form-group mb-3">
+          <div className="form-group">
             <label>About Care Recipients<span className="text-danger">*</span></label>
             <textarea
               className={`form-control ${errors.aboutPatent ? "is-invalid" : ""}`}
@@ -86,9 +86,11 @@ export default function PatientDetails({ formData, handleChange, errors = {} }) 
             {errors.aboutPatent && <div className="invalid-feedback">{errors.aboutPatent}</div>}
           </div>
         </div>
+      </div>
+      <div className="row">
         <div className="col-md-12">
           {/* About Work */}
-          <div className="form-group mb-3">
+          <div className="form-group">
             <label>About Work<span className="text-danger">*</span></label>
             <textarea
               className={`form-control ${errors.aboutWork ? "is-invalid" : ""}`}

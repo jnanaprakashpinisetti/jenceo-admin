@@ -2,7 +2,15 @@ import React from "react";
 
 const WorkerDetails = ({ formData, handleChange, addWorker, removeWorker, errors = {} }) => {
   const workersErrors = errors.workers || [];
-  const today = new Date().toISOString().split('T')[0]; // Get today's date in YYYY-MM-DD format
+  
+  // Get today's date in YYYY-MM-DD format
+  const today = new Date();
+  const todayFormatted = today.toISOString().split('T')[0];
+  
+  // Calculate minimum date (1 month from today)
+  const minDate = new Date();
+  minDate.setMonth(today.getMonth() + 1);
+  const minDateFormatted = minDate.toISOString().split('T')[0];
 
   const getErr = (idx, key) => (workersErrors[idx] ? workersErrors[idx][key] : "");
 
@@ -15,7 +23,7 @@ const WorkerDetails = ({ formData, handleChange, addWorker, removeWorker, errors
           <div className="row">
             <div className="col-md-6">
               {/* Worker ID No */}
-              <div className="form-group mb-3">
+              <div className="form-group">
                 <label htmlFor={`workerIdNo-${index}`}>
                   Worker ID No <span className="star">*</span>
                 </label>
@@ -34,7 +42,7 @@ const WorkerDetails = ({ formData, handleChange, addWorker, removeWorker, errors
             </div>
             <div className="col-md-6">
               {/* Name */}
-              <div className="form-group mb-3">
+              <div className="form-group">
                 <label htmlFor={`cName-${index}`}>
                   Name <span className="star">*</span>
                 </label>
@@ -55,7 +63,7 @@ const WorkerDetails = ({ formData, handleChange, addWorker, removeWorker, errors
           <div className="row">
             <div className="col-md-6">
               {/* Starting Date */}
-              <div className="form-group mb-3">
+              <div className="form-group">
                 <label htmlFor={`startingDate-${index}`}>
                   Starting Date <span className="star">*</span>
                 </label>
@@ -66,7 +74,7 @@ const WorkerDetails = ({ formData, handleChange, addWorker, removeWorker, errors
                   name="startingDate"
                   value={worker.startingDate}
                   onChange={(e) => handleChange(e, "workers", index)}
-                  max={today}
+                  min={minDateFormatted}
                 />
                 {getErr(index, "startingDate") && (
                   <div className="invalid-feedback">{getErr(index, "startingDate")}</div>
@@ -75,7 +83,7 @@ const WorkerDetails = ({ formData, handleChange, addWorker, removeWorker, errors
             </div>
             <div className="col-md-6">
               {/* Ending Date */}
-              <div className="form-group mb-3">
+              <div className="form-group">
                 <label htmlFor={`endingDate-${index}`}>Ending Date</label>
                 <input
                   type="date"
@@ -84,7 +92,7 @@ const WorkerDetails = ({ formData, handleChange, addWorker, removeWorker, errors
                   name="endingDate"
                   value={worker.endingDate}
                   onChange={(e) => handleChange(e, "workers", index)}
-                  max={today}
+                  min={minDateFormatted}
                 />
               </div>
             </div>
@@ -92,7 +100,7 @@ const WorkerDetails = ({ formData, handleChange, addWorker, removeWorker, errors
           <div className="row">
             <div className="col-md-6">
               {/* Mobile 1 */}
-              <div className="form-group mb-3">
+              <div className="form-group">
                 <label htmlFor={`mobile1-${index}`}>
                   Mobile 1 <span className="star">*</span>
                 </label>
@@ -112,7 +120,7 @@ const WorkerDetails = ({ formData, handleChange, addWorker, removeWorker, errors
             </div>
             <div className="col-md-6">
               {/* Mobile 2 */}
-              <div className="form-group mb-3">
+              <div className="form-group">
                 <label htmlFor={`mobile2-${index}`}>Mobile 2</label>
                 <input
                   type="tel"
@@ -132,7 +140,7 @@ const WorkerDetails = ({ formData, handleChange, addWorker, removeWorker, errors
           <div className="row">
             <div className="col-md-6">
               {/* Basic Salary */}
-              <div className="form-group mb-3">
+              <div className="form-group">
                 <label htmlFor={`basicSalary-${index}`}>
                   Basic <span className="star">*</span>
                 </label>
@@ -152,7 +160,7 @@ const WorkerDetails = ({ formData, handleChange, addWorker, removeWorker, errors
             </div>
             <div className="col-md-6">
               {/* Remarks */}
-              <div className="form-group mb-3">
+              <div className="form-group">
                 <label htmlFor={`remarks-${index}`}>Remarks</label>
                 <input
                   type="text"

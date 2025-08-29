@@ -99,9 +99,10 @@ const ClientModal = ({ client, isOpen, onClose, onSave, onDelete, isEditMode }) 
     const addPayment = () => {
         const newPayment = {
             paymentMethod: "cash",
-            amount: "",
+            paidAmount:"",
             balance: "",
             receptNo: "",
+            bookNo:"",
             remarks: "",
             reminderDate: "",
             __locked: false,
@@ -164,8 +165,8 @@ const ClientModal = ({ client, isOpen, onClose, onSave, onDelete, isEditMode }) 
             .map(
                 (p, i) => `
       <div class="row" style="margin-bottom:6px;">
-        <div class="col"><span class="lbl">#${i + 1} ${safe(p.paymentMethod).toUpperCase()}</span> — <span class="val">Amount: ${safe(
-                    p.amount
+        <div class="col"><span class="lbl">#${i + 1} ${safe(p.paymentMethod).toUpperCase()}</span> — <span class="val">Paid Amount: ${safe(
+                    p.paidAmount
                 )}, Balance: ${safe(p.balance)}, Receipt: ${safe(p.receptNo)}, Reminder: ${safe(p.reminderDate)}</span></div>
       </div>`
             )
@@ -428,6 +429,19 @@ const ClientModal = ({ client, isOpen, onClose, onSave, onDelete, isEditMode }) 
                                         </div>
                                         <div className="col-md-4">
                                             <div className="mb-3">
+                                                <label className="form-label">Relation</label>
+                                                <input
+                                                    type="text"
+                                                    className="form-control"
+                                                    name="relation"
+                                                    value={formData.relation || ""}
+                                                    onChange={handleChange}
+                                                    disabled={!isEditMode}
+                                                />
+                                            </div>
+                                        </div>
+                                        <div className="col-md-4">
+                                            <div className="mb-3">
                                                 <label className="form-label">Location *</label>
                                                 <input
                                                     type="text"
@@ -439,7 +453,11 @@ const ClientModal = ({ client, isOpen, onClose, onSave, onDelete, isEditMode }) 
                                                 />
                                             </div>
                                         </div>
-                                        <div className="col-md-4">
+                                  
+                                    </div>
+
+                                    <div className="row">
+                                              <div className="col-md-4">
                                             <div className="mb-3">
                                                 <label className="form-label">Mobile No 1 *</label>
                                                 <input
@@ -453,9 +471,6 @@ const ClientModal = ({ client, isOpen, onClose, onSave, onDelete, isEditMode }) 
                                                 />
                                             </div>
                                         </div>
-                                    </div>
-
-                                    <div className="row">
                                         <div className="col-md-4">
                                             <div className="mb-3">
                                                 <label className="form-label">Mobile No 2</label>
@@ -470,7 +485,6 @@ const ClientModal = ({ client, isOpen, onClose, onSave, onDelete, isEditMode }) 
                                                 />
                                             </div>
                                         </div>
-                                        <div className="col-md-4"></div>
                                         <div className="col-md-4"></div>
                                     </div>
                                 </div>
@@ -564,7 +578,7 @@ const ClientModal = ({ client, isOpen, onClose, onSave, onDelete, isEditMode }) 
                                     <div className="row">
                                         <div className="col-md-4">
                                             <div className="mb-3">
-                                                <label className="form-label">State & Pin Code *</label>
+                                                <label className="form-label">State *</label>
                                                 <input
                                                     type="text"
                                                     className="form-control"
@@ -722,6 +736,7 @@ const ClientModal = ({ client, isOpen, onClose, onSave, onDelete, isEditMode }) 
                                                     value={formData.pageNo || ""}
                                                     onChange={handleChange}
                                                     disabled={!isEditMode}
+                                                    maxLength={3}
                                                 />
                                             </div>
                                         </div>
@@ -734,7 +749,7 @@ const ClientModal = ({ client, isOpen, onClose, onSave, onDelete, isEditMode }) 
                                 <div className="row">
                                     <div className="col-md-4">
                                         <div className="mb-3">
-                                            <label className="form-label">Patient Name *</label>
+                                            <label className="form-label">Care Recipients Name *</label>
                                             <input
                                                 type="text"
                                                 className="form-control"
@@ -748,7 +763,7 @@ const ClientModal = ({ client, isOpen, onClose, onSave, onDelete, isEditMode }) 
 
                                     <div className="col-md-4">
                                         <div className="mb-3">
-                                            <label className="form-label">Patient Age *</label>
+                                            <label className="form-label">Care Recipients Age *</label>
                                             <input
                                                 type="number"
                                                 className="form-control"
@@ -990,12 +1005,12 @@ const ClientModal = ({ client, isOpen, onClose, onSave, onDelete, isEditMode }) 
 
                                                         <div className="col-md-4">
                                                             <div className="mb-3">
-                                                                <label className="form-label">Amount *</label>
+                                                                <label className="form-label">Paid Amount *</label>
                                                                 <input
                                                                     type="number"
                                                                     className="form-control"
-                                                                    name="amount"
-                                                                    value={payment.amount || ""}
+                                                                    name="paidAmount"
+                                                                    value={payment.paidAmount || ""}
                                                                     onChange={(e) => handleChange(e, "payments", index)}
                                                                     disabled={!isEditMode || isLocked}
                                                                 />

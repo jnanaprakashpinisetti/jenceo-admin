@@ -55,6 +55,7 @@ const getInitialFormData = () => ({
     {
       id: Date.now(),
       paymentMethod: "cash",
+      paidAmount: "",
       balance: "",
       receptNo: "",
       remarks: "",
@@ -138,6 +139,7 @@ export default function ClientInfoForm() {
     const newPayment = {
       id: Date.now(),
       paymentMethod: "cash",
+      paidAmount: "",
       balance: "",
       receptNo: "",
       remarks: "",
@@ -280,10 +282,7 @@ export default function ClientInfoForm() {
       if (!formData.patentAge) {
         newErrors.patentAge = "Care Recipients Age is required";
         isValid = false;
-      } else if (isNaN(Number(formData.patentAge)) || Number(formData.patentAge) <= 0) {
-        newErrors.patentAge = "Care Recipients Age must be a positive number";
-        isValid = false;
-      }
+      } 
       if (!formData.serviceStatus) {
         newErrors.serviceStatus = "Service Status is required";
         isValid = false;
@@ -325,6 +324,7 @@ export default function ClientInfoForm() {
           e.startingDate = "Starting Date is required";
           isValid = false;
         }
+        // Ending date can be empty or a future date (no validation required)
         if (!w.mobile1) {
           e.mobile1 = "Mobile 1 is required";
           isValid = false;
@@ -347,6 +347,16 @@ export default function ClientInfoForm() {
         const e = {};
         if (!p.paymentMethod) {
           e.paymentMethod = "Payment Method is required";
+          isValid = false;
+        }
+        if (!p.paidAmount) {
+          e.paidAmount = "Paid Amount is required";
+          isValid = false;
+        } else if (isNaN(Number(p.paidAmount)) || Number(p.paidAmount) <= 0) {
+          e.paidAmount = "Paid Amount must be a positive number";
+          isValid = false;
+        } else if (p.paidAmount.length > 5) {
+          e.paidAmount = "Paid Amount must be 5 digits or less";
           isValid = false;
         }
         if (!p.balance) {

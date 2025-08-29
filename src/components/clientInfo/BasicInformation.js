@@ -2,9 +2,10 @@ import React from "react";
 
 export default function BasicInformation({ formData, handleChange, errors = {} }) {
   return (
-    <div className="row">
-      <div className="col-12">
-        {/* ID No */}
+    <>
+      <div className="row">
+        <div className="col-md-6">
+                {/* ID No */}
         <div className="form-group mb-3">
           <label>ID No<span className="text-danger">*</span></label>
           <input
@@ -18,10 +19,9 @@ export default function BasicInformation({ formData, handleChange, errors = {} }
           />
           {errors.idNo && <div className="invalid-feedback">{errors.idNo}</div>}
         </div>
-      </div>
-      
-      <div className="col-md-6">
-        {/* Client Name */}
+        </div>
+        <div className="col-md-6">
+                 {/* Client Name */}
         <div className="form-group mb-3">
           <label>Client Name<span className="text-danger">*</span></label>
           <input
@@ -33,8 +33,11 @@ export default function BasicInformation({ formData, handleChange, errors = {} }
           />
           {errors.clientName && <div className="invalid-feedback">{errors.clientName}</div>}
         </div>
-
-        {/* Gender */}
+        </div>
+      </div>
+      <div className="row">
+        <div className="col-md-6">
+                  {/* Gender */}
         <div className="form-group mb-3">
           <label>Gender<span className="text-danger">*</span></label>
           <select
@@ -50,8 +53,9 @@ export default function BasicInformation({ formData, handleChange, errors = {} }
           </select>
           {errors.gender && <div className="invalid-feedback">{errors.gender}</div>}
         </div>
-
-        {/* Care Of */}
+        </div>
+        <div className="col-md-6">
+                  {/* Care Of */}
         <div className="form-group mb-3">
           <label>Care Of</label>
           <input
@@ -62,7 +66,11 @@ export default function BasicInformation({ formData, handleChange, errors = {} }
             onChange={handleChange}
           />
         </div>
-        {/* Relation */}
+        </div>
+      </div>
+      <div className="row">
+        <div className="col-md-6">
+              {/* Relation */}
         <div className="form-group mb-3">
           <label>Relation</label>
           <input
@@ -73,10 +81,9 @@ export default function BasicInformation({ formData, handleChange, errors = {} }
             onChange={handleChange}
           />
         </div>
-      </div>
-
-      <div className="col-md-6">
-        {/* Location */}
+        </div>
+        <div className="col-md-6">
+                 {/* Location */}
         <div className="form-group mb-3">
           <label>Location<span className="text-danger">*</span></label>
           <input
@@ -88,7 +95,11 @@ export default function BasicInformation({ formData, handleChange, errors = {} }
           />
           {errors.location && <div className="invalid-feedback">{errors.location}</div>}
         </div>
+        </div>
+      </div>
 
+      <div className="row">
+        <div className="col-md-6">
         {/* Mobile No 1 */}
         <div className="form-group mb-3">
           <label>Mobile No 1<span className="text-danger">*</span></label>
@@ -102,8 +113,11 @@ export default function BasicInformation({ formData, handleChange, errors = {} }
           />
           {errors.mobileNo1 && <div className="invalid-feedback">{errors.mobileNo1}</div>}
         </div>
+        </div>
 
-        {/* Mobile No 2 */}
+        <div className="col-md-6">
+
+              {/* Mobile No 2 */}
         <div className="form-group mb-3">
           <label>Mobile No 2</label>
           <input
@@ -116,7 +130,10 @@ export default function BasicInformation({ formData, handleChange, errors = {} }
           />
           {errors.mobileNo2 && <div className="invalid-feedback">{errors.mobileNo2}</div>}
         </div>
+
+        </div>
       </div>
-    </div>
+
+    </>
   );
 }

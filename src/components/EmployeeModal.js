@@ -842,7 +842,7 @@ const EmployeeModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode
     const Err = ({ msg }) => (msg ? <div className="text-danger mt-1" style={{ fontSize: ".85rem" }}>{msg}</div> : null);
 
     const renderInputField = (label, name, value, type = "text", placeholder = "", hardDisabled = false, extraProps = {}) => (
-        <div className="mb-3">
+        <div className="">
             <label className="form-label">
                 <strong>{label}</strong>
             </label>
@@ -867,7 +867,7 @@ const EmployeeModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode
         const digitsOnly = String(value || "").replace(/\D/g, "");
         const canCall = !!digitsOnly;
         return (
-            <div className="mb-3">
+            <div className="">
                 <label className="form-label">
                     <strong>{label}</strong>
                 </label>
@@ -898,7 +898,7 @@ const EmployeeModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode
     };
 
     const renderSelectField = (label, name, value, options) => (
-        <div className="mb-3">
+        <div className="">
             <label className="form-label">
                 <strong>{label}</strong>
             </label>
@@ -918,7 +918,7 @@ const EmployeeModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode
     );
 
     const renderArrayField = (label, field, placeholder = "Add item") => (
-        <div className="mb-3">
+        <div className="">
             <label className="form-label">
                 <strong>{label}</strong>
             </label>
@@ -983,7 +983,7 @@ const EmployeeModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode
     const renderEmergencyContact = (contactKey, title) => {
         const contact = formData[contactKey] || {};
         return (
-            <div className="modal-card mb-3">
+            <div className="modal-card ">
                 <div className="modal-card-header bg-light py-1">
                     <strong>{title}</strong>
                 </div>
@@ -1124,9 +1124,9 @@ const EmployeeModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode
                             <div className="tab-content p-3">
                                 {/* Basic */}
                                 {activeTab === "basic" && (
-                                    <div className="modal-card mb-3">
+                                    <div className="modal-card">
                                         {/* Status */}
-                                        <div className="row mb-3 status">
+                                        <div className="row  status">
                                             <div className="col-md-4">
                                                 <label className="form-label">
                                                     <strong>Status</strong>
@@ -1173,7 +1173,7 @@ const EmployeeModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode
                                             {/* Photo lives ONLY in Basic Info now */}
                                             <div className="row align-items-start">
                                                 <div className="col-md-4">
-                                                    <div className="mb-3">
+                                                    <div className="">
                                                         <label className="form-label center">
                                                             <strong>Employee Photo</strong>
                                                         </label>
@@ -1183,10 +1183,10 @@ const EmployeeModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode
                                                                     src={formData.employeePhotoUrl}
                                                                     alt="Employee"
                                                                     style={{ maxWidth: "300px", maxHeight: "300px", objectFit: "cover" }}
-                                                                    className="rounded img-fluid mb-3"
+                                                                    className="rounded img-fluid "
                                                                 />
                                                             ) : (
-                                                                <div className="text-muted mb-3">No photo selected</div>
+                                                                <div className="text-muted ">No photo selected</div>
                                                             )}
 
                                                             {isEditMode && (
@@ -1307,7 +1307,7 @@ const EmployeeModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode
                                 {/* Address */}
                                 {activeTab === "address" && (
                                     <>
-                                        <div className="modal-card mb-3">
+                                        <div className="modal-card ">
                                             <div className="modal-card-header">
                                                 <h4 className="mb-0">Permanent Address</h4>
                                             </div>
@@ -1335,7 +1335,7 @@ const EmployeeModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode
                                             </div>
                                         </div>
                                         <hr />
-                                        <div className="modal-card mb-3">
+                                        <div className="modal-card ">
                                             <div className="modal-card-header">
                                                 <h4 className="mb-0">Present Address</h4>
                                             </div>
@@ -1367,7 +1367,7 @@ const EmployeeModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode
 
                                 {/* Personal */}
                                 {activeTab === "personal" && (
-                                    <div className="modal-card mb-3">
+                                    <div className="modal-card ">
                                         <div className="modal-card-header">
                                             <h4 className="mb-0">Personal Information</h4>
                                         </div>
@@ -1411,7 +1411,7 @@ const EmployeeModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode
 
                                 {/* Qualification & Skills */}
                                 {activeTab === "qualification" && (
-                                    <div className="modal-card mb-3">
+                                    <div className="modal-card ">
                                         <div className="modal-card-header">
                                             <h4 className="mb-0">Qualification & Skills</h4>
                                         </div>
@@ -1436,7 +1436,7 @@ const EmployeeModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode
 
                                 {/* Health */}
                                 {activeTab === "health" && (
-                                    <div className="modal-card mb-3">
+                                    <div className="modal-card ">
                                         <div className="modal-card-header">
                                             <h4 className="mb-0">Health Details</h4>
                                         </div>
@@ -1451,7 +1451,7 @@ const EmployeeModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode
 
                                 {/* Emergency */}
                                 {activeTab === "emergency" && (
-                                    <div className="modal-card mb-3">
+                                    <div className="modal-card ">
                                         <div className="modal-card-header">
                                             <h4 className="mb-0">Emergency Contacts</h4>
                                         </div>
@@ -1465,7 +1465,7 @@ const EmployeeModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode
 
                                 {/* Bank */}
                                 {activeTab === "bank" && (
-                                    <div className="modal-card mb-3">
+                                    <div className="modal-card ">
                                         <div className="modal-card-header">
                                             <h4 className="mb-0">Bank Details</h4>
                                         </div>
@@ -1489,7 +1489,7 @@ const EmployeeModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode
 
                                 {/* Payment */}
                                 {activeTab === "payment" && (
-                                    <div className="modal-card mb-3">
+                                    <div className="modal-card ">
                                         <div className="modal-card-header">
                                             <h4 className="mb-0">Payment</h4>
                                         </div>
@@ -1498,7 +1498,7 @@ const EmployeeModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode
                                                 const locked = !!p.__locked;
                                                 const invalidClass = (field) => (paymentErrors[i]?.[field] ? " is-invalid" : "");
                                                 return (
-                                                    <div key={i} className="border rounded p-3 mb-3">
+                                                    <div key={i} className="border rounded p-3 ">
                                                         <div className="d-flex justify-content-between align-items-center mb-2">
                                                             <h6 className="mb-0">
                                                                 Payment #{i + 1} {locked && <span className="badge bg-secondary ms-2">Locked</span>}
@@ -1735,7 +1735,7 @@ const EmployeeModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode
 
                                 {/* Working */}
                                 {activeTab === "working" && (
-                                    <div className="modal-card mb-3">
+                                    <div className="modal-card ">
                                         <div className="modal-card-header">
                                             <h4 className="mb-0">Working Details</h4>
                                         </div>
@@ -1744,7 +1744,7 @@ const EmployeeModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode
                                                 const locked = !!w.__locked;
                                                 const invalidClass = (field) => (workErrors[i]?.[field] ? " is-invalid" : "");
                                                 return (
-                                                    <div key={i} className="border rounded p-3 mb-3">
+                                                    <div key={i} className="border rounded p-3 ">
                                                         <div className="d-flex justify-content-between align-items-center mb-2">
                                                             <h6 className="mb-0">
                                                                 Work #{i + 1} {locked && <span className="badge bg-secondary ms-2">Locked</span>}
@@ -1926,7 +1926,7 @@ const EmployeeModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode
 
                                 {/* Biodata */}
                                 {activeTab === "biodata" && (
-                                    <div className="modal-card mb-3">
+                                    <div className="modal-card ">
                                         <div className="modal-card-header d-flex align-items-center justify-content-between">
                                             <h4 className="mb-0">Biodata (Preview)</h4>
                                             <div className="d-flex gap-2">

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 
 const lockRows = (arr) =>
     (Array.isArray(arr) ? arr : []).map((r) => ({ ...r, __locked: true }));
@@ -19,27 +19,38 @@ const ClientModal = ({ client, isOpen, onClose, onSave, onDelete, isEditMode }) 
     const [activeTab, setActiveTab] = useState("basic");
     const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
+    // Biodata preview iframe
+    const bioIframeRef = useRef(null);
+
     // Initialize + lock existing rows
     useEffect(() => {
         if (!client) return;
-        setFormData((prev) => ({
+        setFormData({
             ...client,
             workers: lockRows(client.workers),
             payments: lockRows(client.payments),
-        }));
+        });
     }, [client]);
 
     const handleChange = (e, section, index = null) => {
         const { name, value } = e.target;
 
-        // Nested arrays
+        // Arrays: workers/payments
         if (index !== null && (section === "workers" || section === "payments")) {
             setFormData((prev) => {
                 const list = Array.isArray(prev[section]) ? [...prev[section]] : [];
                 const row = list[index] || {};
 
-                // hard-stop edits to locked rows (safety net)
-                if (row.__locked && isEditMode) return prev;
+                // Safety lock for existing rows — allow specific fields:
+                //  - payments.reminderDate must be editable in edit mode
+                //  - workers.basicSalary must be editable in edit mode
+                if (row.__locked && isEditMode) {
+                    const isAllowedPayment = section === "payments" && name === "reminderDate";
+                    const isAllowedWorker = section === "workers" && name === "basicSalary";
+                    if (!isAllowedPayment && !isAllowedWorker) {
+                        return prev; // block all other fields for locked rows
+                    }
+                }
 
                 list[index] = { ...row, [name]: value };
                 return { ...prev, [section]: list };
@@ -67,7 +78,7 @@ const ClientModal = ({ client, isOpen, onClose, onSave, onDelete, isEditMode }) 
             mobile1: "",
             mobile2: "",
             remarks: "",
-            __locked: false, // new rows are editable
+            __locked: false,
         };
         setFormData((prev) => ({
             ...prev,
@@ -79,7 +90,7 @@ const ClientModal = ({ client, isOpen, onClose, onSave, onDelete, isEditMode }) 
         setFormData((prev) => {
             const list = [...(prev.workers || [])];
             const row = list[index];
-            if (row?.__locked) return prev; // don't remove locked rows
+            if (row?.__locked) return prev;
             list.splice(index, 1);
             return { ...prev, workers: list };
         });
@@ -88,12 +99,12 @@ const ClientModal = ({ client, isOpen, onClose, onSave, onDelete, isEditMode }) 
     const addPayment = () => {
         const newPayment = {
             paymentMethod: "cash",
-            amount: "",        // <-- NEW field
+            amount: "",
             balance: "",
             receptNo: "",
             remarks: "",
             reminderDate: "",
-            __locked: false, // new rows are editable
+            __locked: false,
         };
         setFormData((prev) => ({
             ...prev,
@@ -105,7 +116,7 @@ const ClientModal = ({ client, isOpen, onClose, onSave, onDelete, isEditMode }) 
         setFormData((prev) => {
             const list = [...(prev.payments || [])];
             const row = list[index];
-            if (row?.__locked) return prev; // don't remove locked rows
+            if (row?.__locked) return prev;
             list.splice(index, 1);
             return { ...prev, payments: list };
         });
@@ -119,6 +130,208 @@ const ClientModal = ({ client, isOpen, onClose, onSave, onDelete, isEditMode }) 
     };
 
     const cancelDelete = () => setShowDeleteConfirm(false);
+
+    // ---- Biodata (client) HTML ----
+    const buildClientBiodataHTML = () => {
+        const safe = (v, d = "—") => (v == null || v === "" ? d : String(v));
+        const fullName = safe(formData.clientName);
+        const metaDate = new Date().toLocaleDateString();
+
+        const addrRows = `
+              <div class="row"><div class="col-md-4"><strong>Door No</strong></div><div class="col-md-1">:</div><div class="col-md-7">${safe(formData.dNo)}</div>      </div>
+              <div class="row"><div class="col-md-4"><strong>Landmark</strong></div><div class="col-md-1">:</div><div class="col-md-7">${safe(formData.landMark)}</div>      </div>
+              <div class="row"><div class="col-md-4"><strong>Street</strong></div><div class="col-md-1">:</div><div class="col-md-7">${safe(formData.street)}</div>      </div>
+              <div class="row"><div class="col-md-4"><strong>Village / Town</strong></div><div class="col-md-1">:</div><div class="col-md-7">${safe(formData.villageTown)}</div>      </div>
+              <div class="row"><div class="col-md-4"><strong>Mandal</strong></div><div class="col-md-1">:</div><div class="col-md-7">${safe(formData.mandal)}</div>      </div>
+             <div class="row"> <div class="col-md-4"><strong>District</strong></div><div class="col-md-1">:</div><div class="col-md-7">${safe(formData.district)}</div>      </div>
+              <div class="row"><div class="col-md-4"><strong>State & Pin Code</strong></div><div class="col-md-1">:</div><div class="col-md-7">${safe(formData.state)}${formData.pincode ? " - " + formData.pincode : ""}</div>      </div>
+    `;
+
+        const workersHtml = (Array.isArray(formData.workers) ? formData.workers : [])
+            .map(
+                (w, i) => `
+      <div class="row" style="margin-bottom:6px;">
+        <div class="col"><span class="lbl">#${i + 1} ${safe(w.cName)}</span> — <span class="val">ID: ${safe(
+                    w.workerIdNo
+                )}, Basic Salary: ${safe(w.basicSalary)}, Period: ${safe(w.startingDate)} to ${safe(
+                    w.endingDate
+                )}</span></div>
+      </div>`
+            )
+            .join("");
+
+        const paymentsHtml = (Array.isArray(formData.payments) ? formData.payments : [])
+            .map(
+                (p, i) => `
+      <div class="row" style="margin-bottom:6px;">
+        <div class="col"><span class="lbl">#${i + 1} ${safe(p.paymentMethod).toUpperCase()}</span> — <span class="val">Amount: ${safe(
+                    p.amount
+                )}, Balance: ${safe(p.balance)}, Receipt: ${safe(p.receptNo)}, Reminder: ${safe(p.reminderDate)}</span></div>
+      </div>`
+            )
+            .join("");
+
+        const html = `
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8" />
+<title>Client Biodata - ${fullName}</title>
+<style>
+  *{box-sizing:border-box} html,body{margin:0;padding:0;font-family:Arial,Helvetica,sans-serif;color:#111}
+  .page{width:900px;margin:16px auto;background:#fff;border:1px solid #e5e5e5;padding:20px}
+  .header-section {background-color:#05b6ff; padding: 15px; margin: 0 -15px 15px -15px; color: #fff; text-align:center}
+  .header-section * {margin:0}
+  .header{display:flex;align-items:center;justify-content:space-between;border-bottom:2px solid #222;padding-bottom:10px}
+  .title{font-size:20px;font-weight:700;letter-spacing:.4px}
+  .subtitle{font-size:12px;color:#444;margin-top:2px}
+  .sec{margin-top:14px;border:1px solid #ddd;border-radius:6px;overflow:hidden}
+  .sec-title{background:#f3f4f6;padding:8px 10px;font-weight:700}
+  .sec-title h3{margin:0;font-size:16px}
+  .sec-body{padding:10px}
+  .row{display:flex;flex-wrap:wrap;margin-bottom:10px}
+  .row:nth-child(even){background:#eef5fb; padding: 5px 0;}
+  .col{flex:1}
+  .lbl{font-weight:600; margin-right:5px}
+  .val{font-weight:500}
+  /* bootstrap-like helpers already used in your markup */
+  .col-md-4 { flex: 0 0 33.3333%; max-width: 33.3333%; }
+  .col-md-7 { flex: 0 0 58.3333%; max-width: 58.3333%; }
+  .col-md-1 { flex: 0 0 8.3333%;  max-width: 8.3333%; text-align:center; }
+  .blue {color: #05b6ff}
+  @media print{
+    .page{border:none;margin:0;width:100%}
+    @page{ size:A4; margin:10mm }
+    .page{ transform-origin: top left; }
+  }
+</style>
+</head>
+<body>
+<div class="page">
+  <div class="header-section">
+  <h2>JenCeo Home Care Services</h2>
+  <h3>Client Aggrement Info</h3>
+  </div>
+  <div class="header">
+    <div>
+      <div class="title blue">${fullName} (Bio-Data)</div>
+      <div class="subtitle">Generated: ${metaDate}</div>
+    </div>
+    <div class="blue"><strong>ID:</strong> ${safe(formData.idNo)}</div>
+  </div>
+
+  <div class="sec">
+    <div class="sec-title"><h3>Basic Information</h3></div>
+    <div class="sec-body">
+      <div class="row">
+        <div class="col"><span class="lbl">Client Name:</span> <span class="val">${fullName}</span></div>
+        <div class="col"><span class="lbl">Gender:</span> <span class="val">${safe(formData.gender)}</span></div>
+        <div class="col"><span class="lbl">Care Of:</span> <span class="val">${safe(formData.careOf)}</span></div>
+      </div>
+      <div class="row">
+        <div class="col"><span class="lbl">Location:</span> <span class="val blue">${safe(formData.location)}</span></div>
+        <div class="col"><span class="lbl">Mobile 1:</span> <span class="val blue">${safe(formData.mobileNo1)}</span></div>
+        <div class="col"><span class="lbl">Mobile 2:</span> <span class="val">${safe(formData.mobileNo2)}</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="sec">
+    <div class="sec-title"><h3>Address</h3></div>
+    <div class="sec-body">
+      ${addrRows}
+    </div>
+  </div>
+
+  <div class="sec">
+    <div class="sec-title"><h3>Service Details</h3></div>
+    <div class="sec-body">
+      <div class="row">
+        <div class="col"><span class="lbl">Type of Service:</span> <span class="val blue">${safe(formData.typeOfService)}</span></div>
+        <div class="col"><span class="lbl">Service Charges:</span> <span class="val blue">${safe(formData.serviceCharges)}</span></div>
+        <div class="col"><span class="lbl">Service Period:</span> <span class="val">${safe(formData.servicePeriod)}</span></div>
+      </div>
+      <div class="row">
+        <div class="col"><span class="lbl">Travelling Charges:</span> <span class="val">${safe(formData.travellingCharges)}</span></div>
+        <div class="col"><span class="lbl">Service Status:</span> <span class="val">${safe(formData.serviceStatus)}</span></div>
+        <div class="col"><span class="lbl">Gap If Any:</span> <span class="val">${safe(formData.gapIfAny)}</span></div>
+      </div>
+      <div class="row">
+        <div class="col"><span class="lbl">Starting Date:</span> <span class="val blue">${safe(formData.startingDate)}</span></div>
+        <div class="col"><span class="lbl">Ending Date:</span> <span class="val">${safe(formData.endingDate)}</span></div>
+        <div class="col"><span class="lbl">Page No:</span> <span class="val">${safe(formData.pageNo)}</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="sec">
+    <div class="sec-title"><h3>Care Recipients</h3></div>
+    <div class="sec-body">
+      <div class="row">
+        <div class="col"><span class="lbl">Patient Name:</span> <span class="val">${safe(formData.patientName)}</span></div>
+        <div class="col"><span class="lbl">Patient Age:</span> <span class="val">${safe(formData.patentAge)}</span></div>
+        <div class="col"><span class="lbl">Dropper Name:</span> <span class="val">${safe(formData.dropperName)}</span></div>
+      </div>
+   
+    </div>
+  </div>
+
+  <div class="sec">
+    <div class="sec-title"><h3>Workers</h3></div>
+    <div class="sec-body">
+      ${workersHtml || '<div class="muted">No workers added</div>'}
+    </div>
+  </div>
+
+  <div class="sec">
+    <div class="sec-title"><h3>Payments</h3></div>
+    <div class="sec-body">
+      ${paymentsHtml || '<div class="muted">No payments added</div>'}
+    </div>
+  </div>
+</div>
+<script>window.focus && window.focus();</script>
+</body>
+</html>
+`;
+        return html;
+    };
+
+    // keep biodata preview up to date in the tab
+    useEffect(() => {
+        if (activeTab !== "biodata") return;
+        if (!bioIframeRef.current) return;
+        bioIframeRef.current.srcdoc = buildClientBiodataHTML();
+    }, [activeTab, formData]);
+
+    const handleBioPrint = () => {
+        const html = buildClientBiodataHTML();
+        const blob = new Blob([html], { type: "text/html;charset=utf-8" });
+        const url = URL.createObjectURL(blob);
+        const win = window.open(url, "_blank", "noopener,noreferrer");
+        // a tiny delay helps mobile to render before print
+        setTimeout(() => {
+            try { win && win.focus(); } catch { }
+            try { win && win.print(); } catch { }
+        }, 200);
+        setTimeout(() => URL.revokeObjectURL(url), 20000);
+    };
+
+    const handleBioDownload = () => {
+        const html = buildClientBiodataHTML();
+        const blob = new Blob([html], { type: "text/html;charset=utf-8" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        const name = (formData.clientName || "client").replace(/\s+/g, "_");
+        a.href = url;
+        a.download = `${name}_biodata.html`;
+        document.body.appendChild(a);
+        a.click();
+        setTimeout(() => {
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }, 0);
+    };
 
     if (!isOpen) return null;
 
@@ -143,6 +356,7 @@ const ClientModal = ({ client, isOpen, onClose, onSave, onDelete, isEditMode }) 
                                 ["patient", "Care Recipients"],
                                 ["workers", `Workers (${formData.workers?.length || 0})`],
                                 ["payments", `Payments (${formData.payments?.length || 0})`],
+                                ["biodata", "Biodata"], // NEW tab (after payments)
                             ].map(([key, label]) => (
                                 <li key={key} className="nav-item" role="presentation">
                                     <button
@@ -160,7 +374,6 @@ const ClientModal = ({ client, isOpen, onClose, onSave, onDelete, isEditMode }) 
                             {activeTab === "basic" && (
                                 <div className="row">
                                     <div className="row">
-
                                         <div className="col-md-4">
                                             <div className="mb-3">
                                                 <label className="form-label">ID No</label>
@@ -197,8 +410,8 @@ const ClientModal = ({ client, isOpen, onClose, onSave, onDelete, isEditMode }) 
                                                 </select>
                                             </div>
                                         </div>
-
                                     </div>
+
                                     <div className="row">
                                         <div className="col-md-4">
                                             <div className="mb-3">
@@ -241,6 +454,7 @@ const ClientModal = ({ client, isOpen, onClose, onSave, onDelete, isEditMode }) 
                                             </div>
                                         </div>
                                     </div>
+
                                     <div className="row">
                                         <div className="col-md-4">
                                             <div className="mb-3">
@@ -306,7 +520,6 @@ const ClientModal = ({ client, isOpen, onClose, onSave, onDelete, isEditMode }) 
                                     </div>
 
                                     <div className="row">
-
                                         <div className="col-md-4">
                                             <div className="mb-3">
                                                 <label className="form-label">Village/Town *</label>
@@ -346,13 +559,12 @@ const ClientModal = ({ client, isOpen, onClose, onSave, onDelete, isEditMode }) 
                                                 />
                                             </div>
                                         </div>
-
-
                                     </div>
+
                                     <div className="row">
                                         <div className="col-md-4">
                                             <div className="mb-3">
-                                                <label className="form-label">State *</label>
+                                                <label className="form-label">State & Pin Code *</label>
                                                 <input
                                                     type="text"
                                                     className="form-control"
@@ -384,7 +596,6 @@ const ClientModal = ({ client, isOpen, onClose, onSave, onDelete, isEditMode }) 
                             {/* Service */}
                             {activeTab === "service" && (
                                 <div className="row">
-
                                     <div className="col-md-4">
                                         <div className="mb-3">
                                             <label className="form-label">Type of Service *</label>
@@ -424,7 +635,6 @@ const ClientModal = ({ client, isOpen, onClose, onSave, onDelete, isEditMode }) 
                                             />
                                         </div>
                                     </div>
-
 
                                     <div className="row">
                                         <div className="col-md-4">
@@ -473,7 +683,6 @@ const ClientModal = ({ client, isOpen, onClose, onSave, onDelete, isEditMode }) 
                                                 />
                                             </div>
                                         </div>
-
                                     </div>
 
                                     <div className="row">
@@ -517,14 +726,11 @@ const ClientModal = ({ client, isOpen, onClose, onSave, onDelete, isEditMode }) 
                                             </div>
                                         </div>
                                     </div>
-
                                 </div>
                             )}
 
                             {/* Patient */}
                             {activeTab === "patient" && (
-
-
                                 <div className="row">
                                     <div className="col-md-4">
                                         <div className="mb-3">
@@ -538,7 +744,6 @@ const ClientModal = ({ client, isOpen, onClose, onSave, onDelete, isEditMode }) 
                                                 disabled={!isEditMode}
                                             />
                                         </div>
-
                                     </div>
 
                                     <div className="col-md-4">
@@ -553,7 +758,6 @@ const ClientModal = ({ client, isOpen, onClose, onSave, onDelete, isEditMode }) 
                                                 disabled={!isEditMode}
                                             />
                                         </div>
-
                                     </div>
                                     <div className="col-md-4">
                                         <div className="mb-3">
@@ -655,7 +859,7 @@ const ClientModal = ({ client, isOpen, onClose, onSave, onDelete, isEditMode }) 
                                                                     name="basicSalary"
                                                                     value={worker.basicSalary || ""}
                                                                     onChange={(e) => handleChange(e, "workers", index)}
-                                                                    disabled={!isEditMode || isLocked}
+                                                                    disabled={!isEditMode /* enabled even if locked */}
                                                                 />
                                                             </div>
                                                         </div>
@@ -763,7 +967,7 @@ const ClientModal = ({ client, isOpen, onClose, onSave, onDelete, isEditMode }) 
                                                                             <input
                                                                                 type="radio"
                                                                                 className="form-check-input"
-                                                                                name={`paymentMethod-${index}`} // unique group per row
+                                                                                name={`paymentMethod-${index}`}
                                                                                 value={opt}
                                                                                 checked={payment.paymentMethod === opt}
                                                                                 onChange={() =>
@@ -827,6 +1031,7 @@ const ClientModal = ({ client, isOpen, onClose, onSave, onDelete, isEditMode }) 
                                                                 />
                                                             </div>
                                                         </div>
+
                                                         <div className="col-md-4">
                                                             <div className="mb-3">
                                                                 <label className="form-label">Reminder Date</label>
@@ -836,10 +1041,9 @@ const ClientModal = ({ client, isOpen, onClose, onSave, onDelete, isEditMode }) 
                                                                     name="reminderDate"
                                                                     value={payment.reminderDate || ""}
                                                                     onChange={(e) => handleChange(e, "payments", index)}
-                                                                    disabled={!isEditMode || isLocked}
+                                                                    disabled={!isEditMode /* enabled even if locked */}
                                                                 />
                                                             </div>
-
                                                         </div>
 
                                                         <div className="col-md-4">
@@ -856,8 +1060,6 @@ const ClientModal = ({ client, isOpen, onClose, onSave, onDelete, isEditMode }) 
                                                             </div>
                                                         </div>
                                                     </div>
-
-
                                                 </div>
                                             </div>
                                         );
@@ -870,6 +1072,32 @@ const ClientModal = ({ client, isOpen, onClose, onSave, onDelete, isEditMode }) 
                                     )}
                                 </div>
                             )}
+
+                            {/* Biodata (NEW) */}
+                            {activeTab === "biodata" && (
+                                <div>
+                                    <div className="modal-card">
+                                        <div className="modal-card-header d-flex align-items-center justify-content-between">
+                                            <h6 className="mb-0">Biodata (Preview)</h6>
+                                            <div className="d-flex gap-2">
+                                                <button type="button" className="btn btn-outline-secondary btn-sm" onClick={handleBioDownload}>
+                                                    Download
+                                                </button>
+                                                <button type="button" className="btn btn-primary btn-sm" onClick={handleBioPrint}>
+                                                    Print
+                                                </button>
+                                            </div>
+                                        </div>
+                                        <div className="modal-card-body" style={{ height: 520 }}>
+                                            <iframe
+                                                ref={bioIframeRef}
+                                                title="BiodataPreview"
+                                                style={{ width: "100%", height: "100%", border: "1px solid #e5e5e5", borderRadius: 6 }}
+                                            />
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
                         </div>
                     </div>
 
@@ -880,8 +1108,8 @@ const ClientModal = ({ client, isOpen, onClose, onSave, onDelete, isEditMode }) 
                                     Save Changes
                                 </button>
                                 {/* <button type="button" className="btn btn-danger" onClick={handleDeleteClick}>
-                                    Delete
-                                </button> */}
+                  Delete
+                </button> */}
                             </>
                         )}
                         <button type="button" className="btn btn-secondary" onClick={onClose}>

@@ -600,35 +600,35 @@ const EmployeeModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode
 
   .biodataHeader {display:flex; justify-content:space-between; align-items: stretch; color:#fff; margin: -20px -20px 20px -20px}
   .logoSection {flex: 0 0 40%; align-content: center; border-bottom:10px solid #02acf2 }
-  .logoSection h1 {color:#FCC603; margin:0; font-size:60px; margin-left:50px; font-weight:900; line-height:1}
+  .logoSection h1 {color:#FCC603; margin:0; font-size:40px; margin-left:50px; font-weight:900; line-height:1}
   .logoSection h1 spane {color:#02acf2; margin:0; font-size:100px; }
-  .logoSection .subText {color:#817f7f; margin-left:100px; font-size:20px; font-weight:bold; letter-spacing:5px  }
-  .dataSection {background:#02acf2; flex: 1;  padding:20px; border-top-left-radius: 125px; padding-left: 70px; }
+  .logoSection .subText {color:#817f7f; margin-left:65px; font-size:12px; font-weight:bold; letter-spacing:3px  }
+  .dataSection {background:#02acf2; flex: 1;  padding:10px 20px; border-top-left-radius: 125px; padding-left: 70px; }
   .dataSection * {margin:0; }
   .dataSection span {font-size:10px; }
 
   .h-left{flex:1; margin-top:25px}
-  .title{font-size:32px;font-weight:700;letter-spacing:.4px;margin:0}
+  .title{font-size:40px;font-weight:700;letter-spacing:.4px;margin:0}
   .subtitle{font-size:12px;color:#444;margin-top:2px}
   .meta{font-size:11px;color:#555;margin-top:4px;display:flex;gap:14px;flex-wrap:wrap}
   .sec{margin-top:14px;border:1px solid #ddd;border-radius:6px;overflow:hidden}
   .sec-title{background:#f3f4f6;padding:8px 10px;font-weight:700}
-  .sec-title h3{margin:0;font-size:24px}
+  .sec-title h3{margin:0;font-size:14px}
   .sec-body{padding:10px}
   /* UNIFIED rows: label | : | value have the same width everywhere */
-  .kv-row{display:grid;grid-template-columns: 240px 12px 1fr;gap:10px;align-items:start;margin-bottom:15px}
-  .kv-label{font-weight:600}
+  .kv-row{display:grid;grid-template-columns: 240px 12px 1fr;gap:10px;align-items:start;margin-bottom:10px}
+  .kv-label{font-weight:600; font-size:12px}
   .kv-colon{text-align:center}
-  .kv-value{font-weight:500;word-break:break-word}
+  .kv-value{font-weight:500;word-break:break-word; font-size:12px}
   .addr{border:1px dashed #c9c9c9;border-radius:6px; padding:10px;margin-top:10px; margin-bottom:5px}
-  .addr-title{font-weight:700;margin-bottom:4px}
-  .addr-line{font-size:12px;line-height:1.4; margin-bottom:5px}
+  .addr-title{font-weight:700;margin-bottom:4px; font-size:14px}
+  .addr-line{font-size:10px;line-height:1; margin-bottom:5px}
   /* Two even columns area */
   .two-col{display:grid;grid-template-columns:1fr 1fr;gap:12px}
   .tags{display:flex;flex-wrap:wrap;gap:6px}
   .tag{border:1px solid #02acf2;color:#02acf2;font-size:12px;padding:3px 8px;border-radius:999px}
   .muted{color:#777}
-  .footer{margin :20px -20px -20px -20px;font-size:10px; color:#fff;display:flex;justify-content:space-between; background-color:#02acf2; padding:20px}
+  .footer{margin :20px -20px -20px -20px;font-size:10px; color:#fff;display:flex;justify-content:space-between; background-color:#02acf2; padding:10px 20px}
   .blue {color:#02acf2}
   @media print{.page{border:none;margin:0;width:100%}}
   .header-img{width:100%;max-height:120px;object-fit:contain;margin-bottom:6px}
@@ -1021,17 +1021,48 @@ const EmployeeModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode
     // Download uses the same renderer but hides sensitive fields
     const handleDownloadBiodata = () => {
         const html = buildBiodataHTML({ hideSensitive: true });
+
+        // Create a blob from the HTML content
+        const blob = new Blob([html], { type: 'text/html' });
+        const url = URL.createObjectURL(blob);
+
+        // Create a temporary anchor element for downloading
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `Employee_Biodata_${formData.idNo || formData.employeeId || 'unknown'}.html`;
+        document.body.appendChild(a);
+        a.click();
+
+        // Clean up
+        setTimeout(() => {
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }, 100);
+    };
+
+    // For better mobile compatibility, also provide a share option
+    const handleShareBiodata = async () => {
         try {
-            const blob = new Blob([html], { type: "text/html;charset=utf-8" });
-            const url = URL.createObjectURL(blob);
-            window.open(url, "_blank", "noopener,noreferrer");
-            setTimeout(() => URL.revokeObjectURL(url), 5000);
-        } catch {
-            const win = window.open("", "_blank", "noopener,noreferrer");
-            if (!win) return;
-            win.document.open();
-            win.document.write(html);
-            win.document.close();
+            const html = buildBiodataHTML({ hideSensitive: true });
+            const blob = new Blob([html], { type: 'text/html' });
+
+            if (navigator.share) {
+                // Mobile share API
+                const file = new File([blob], `Employee_Biodata_${formData.idNo || formData.employeeId || 'unknown'}.html`,
+                    { type: 'text/html' });
+
+                await navigator.share({
+                    title: 'Employee Biodata',
+                    files: [file]
+                });
+            } else {
+                // Fallback for desktop
+                handleDownloadBiodata();
+            }
+        } catch (error) {
+            console.error('Error sharing:', error);
+            // Fallback to download if share fails
+            handleDownloadBiodata();
         }
     };
 
@@ -1899,14 +1930,24 @@ const EmployeeModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode
                                         <div className="modal-card-header d-flex align-items-center justify-content-between">
                                             <h4 className="mb-0">Biodata (Preview)</h4>
                                             <div className="d-flex gap-2">
-                                                <button type="button" className="btn btn-outline-primary btn-sm" onClick={handleDownloadBiodata}>
-                                                    Download)
+                                                <button
+                                                    type="button"
+                                                    className="btn btn-outline-primary btn-sm"
+                                                    onClick={handleDownloadBiodata}
+                                                >
+                                                    Download
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    className="btn btn-outline-info btn-sm"
+                                                    onClick={handleShareBiodata}
+                                                >
+                                                    Share
                                                 </button>
                                             </div>
                                         </div>
 
                                         <div className="modal-card-body biodata-wrapper">
-                                            {/* EXACT preview using the same HTML used for the download */}
                                             <iframe
                                                 ref={iframeRef}
                                                 title="Biodata Preview"

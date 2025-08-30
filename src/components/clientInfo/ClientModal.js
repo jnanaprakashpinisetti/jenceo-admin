@@ -338,7 +338,7 @@ const ClientModal = ({ client, isOpen, onClose, onSave, onDelete, isEditMode }) 
 
     return (
         <div className="modal fade show" style={{ display: "block", backgroundColor: "rgba(0,0,0,0.5)" }}>
-            <div className="modal-dialog modal-xl modal-dialog-centered">
+            <div className="modal-dialog modal-xl modal-dialog-centered display-client-modal">
                 <div className="modal-content">
                     <div className="modal-header">
                         <h5 className="modal-title">

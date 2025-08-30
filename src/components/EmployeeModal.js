@@ -616,8 +616,8 @@ const EmployeeModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode
   .sec-title h3{margin:0;font-size:14px}
   .sec-body{padding:10px}
   /* UNIFIED rows: label | : | value have the same width everywhere */
-  .kv-row{display:grid;grid-template-columns: 240px 12px 1fr;gap:10px;align-items:start; margin-bottom:0; padding-top: 7px;padding-bottom: 5px;}
-  .kv-row:nth-child(even) {background-color: #f2f3fd; padding-top: 8px; padding-botton:2px}
+  .kv-row{display:grid;grid-template-columns: 240px 12px 1fr;gap:10px;align-items:start; margin-bottom:0; padding: 8px 0 2px 5px;}
+  .kv-row:nth-child(even) {background-color: #f2f3fd;}
   .kv-label{font-weight:600; font-size:12px}
   .kv-colon{text-align:center}
   .kv-value{font-weight:500;word-break:break-word; font-size:12px}

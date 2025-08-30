@@ -28,52 +28,83 @@ export default function DisplayClient() {
   const [showSaveModal, setShowSaveModal] = useState(false);
 
   // --- Reminder helpers ---
-  const today = new Date();
-  const startOfToday = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  const [today] = useState(() => {
+    const date = new Date();
+    date.setHours(0, 0, 0, 0);
+    return date;
+  });
 
   const parseDate = (v) => {
     if (!v) return null;
-    // supports ISO, yyyy-mm-dd, dd/mm/yyyy
+    
+    // Handle Firebase timestamp objects
+    if (v && typeof v === 'object' && v.hasOwnProperty('seconds')) {
+      return new Date(v.seconds * 1000);
+    }
+    
+    // Handle string dates
     if (typeof v === 'string') {
       const s = v.trim();
       if (!s) return null;
-      if (/^\d{4}-\d{2}-\d{2}/.test(s)) { // yyyy-mm-dd
-        const d = new Date(s);
-        return isNaN(d) ? null : d;
+      
+      // Try ISO format (yyyy-mm-dd)
+      if (/^\d{4}-\d{2}-\d{2}/.test(s)) {
+        const parts = s.split('-');
+        const date = new Date(parts[0], parts[1] - 1, parts[2]);
+        return isNaN(date.getTime()) ? null : date;
       }
-      if (/^\d{2}\/\d{2}\/\d{4}$/.test(s)) { // dd/mm/yyyy
+      
+      // Try dd/mm/yyyy format
+      if (/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(s)) {
         const [dd, mm, yyyy] = s.split('/').map(Number);
-        const d = new Date(yyyy, mm - 1, dd);
-        return isNaN(d) ? null : d;
+        const date = new Date(yyyy, mm - 1, dd);
+        return isNaN(date.getTime()) ? null : date;
       }
-      const d = new Date(s); // last resort
-      return isNaN(d) ? null : d;
+      
+      // Try any other format that Date can parse
+      const d = new Date(s);
+      return isNaN(d.getTime()) ? null : d;
     }
-    if (v instanceof Date) return v;
+    
+    // Handle Date objects
+    if (v instanceof Date) {
+      return isNaN(v.getTime()) ? null : v;
+    }
+    
     return null;
   };
 
-  const getReminderDate = (c) =>
-    parseDate(c?.reminderDate) || parseDate(c?.reminder) || parseDate(c?.nextVisitDate) || null;
+  // Get reminder date from client
+  const getReminderDate = (c) => {
+    return parseDate(c?.paymentReminderDate) || null;
+  };
 
+  // Calculate days until reminder
   const daysUntil = (d) => {
     if (!d) return Infinity;
-    const onlyDate = new Date(d.getFullYear(), d.getMonth(), d.getDate());
-    const ms = onlyDate - startOfToday;
-    return ms / (1000 * 60 * 60 * 24);
+    
+    const reminderDate = new Date(d);
+    reminderDate.setHours(0, 0, 0, 0);
+    
+    const timeDiff = reminderDate.getTime() - today.getTime();
+    return Math.ceil(timeDiff / (1000 * 60 * 60 * 24));
   };
 
-  // urgencyGroup: 0 = <1 day (red), 1 = <2 days (brown), 2 = others
-  const getUrgencyGroup = (c) => {
-    const d = getReminderDate(c);
+  // Get urgency class based on days until reminder
+  const getUrgencyClass = (client) => {
+    const d = getReminderDate(client);
+    if (!d) return '';
+    
     const du = daysUntil(d);
-    if (du < 1) return 0;
-    if (du < 2) return 1;
-    return 2;
+    if (du < 0) return 'reminder-overdue';
+    if (du === 0) return 'reminder-today';
+    if (du === 1) return 'reminder-tomorrow';
+    if (du === 2) return 'reminder-upcoming';
+    return '';
   };
 
+  // Sort clients with urgent reminders first, then by ID
   const sortClientsWithUrgency = (data) => {
-    // First by urgency group, then your original ID-desc logic
     const byIdDesc = (a, b) => {
       const idA = a.idNo || '';
       const idB = b.idNo || '';
@@ -87,15 +118,24 @@ export default function DisplayClient() {
     };
 
     return [...data].sort((a, b) => {
-      const ua = getUrgencyGroup(a);
-      const ub = getUrgencyGroup(b);
-      if (ua !== ub) return ua - ub; // red first, then brown, then others
-      // within the same group, earlier reminder date first
-      const da = getReminderDate(a);
-      const db = getReminderDate(b);
-      const tda = da ? da.getTime() : Number.MAX_SAFE_INTEGER;
-      const tdb = db ? db.getTime() : Number.MAX_SAFE_INTEGER;
-      if (tda !== tdb) return tda - tdb;
+      const dA = getReminderDate(a);
+      const dB = getReminderDate(b);
+      const duA = daysUntil(dA);
+      const duB = daysUntil(dB);
+
+      const urgentA = duA <= 2;
+      const urgentB = duB <= 2;
+      
+      // Both are urgent, sort by date (earliest first)
+      if (urgentA && urgentB) {
+        return dA - dB;
+      }
+      
+      // Only one is urgent, put it first
+      if (urgentA && !urgentB) return -1;
+      if (!urgentA && urgentB) return 1;
+      
+      // Neither is urgent, sort by ID
       return byIdDesc(a, b);
     });
   };
@@ -112,7 +152,6 @@ export default function DisplayClient() {
                 ...childSnapshot.val(),
               });
             });
-
             const sorted = sortClientsWithUrgency(clientsData);
             setClients(sorted);
             setTotalPages(Math.ceil(sorted.length / rowsPerPage));
@@ -132,34 +171,36 @@ export default function DisplayClient() {
     return () => {
       firebaseDB.child('ClientData').off('value');
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
     setTotalPages(Math.ceil(clients.length / rowsPerPage));
-    setCurrentPage(1);
-  }, [clients, rowsPerPage]);
+    if (currentPage > totalPages && totalPages > 0) {
+      setCurrentPage(totalPages);
+    }
+  }, [clients, rowsPerPage, totalPages, currentPage]);
 
-  // Pagination
   const indexOfLastClient = currentPage * rowsPerPage;
   const indexOfFirstClient = indexOfLastClient - rowsPerPage;
   const currentClients = clients.slice(indexOfFirstClient, indexOfLastClient);
 
   const paginate = (pageNumber) => setCurrentPage(pageNumber);
-  const handleRowsPerPageChange = (e) => setRowsPerPage(parseInt(e.target.value));
 
-  const pageNumbers = [];
-  for (let i = 1; i <= totalPages; i++) pageNumbers.push(i);
-
-  const getDisplayedPageNumbers = () => {
-    if (totalPages <= 7) return pageNumbers;
-    if (currentPage <= 4) return [1, 2, 3, 4, 5, '...', totalPages];
-    if (currentPage >= totalPages - 3)
-      return [1, '...', totalPages - 4, totalPages - 3, totalPages - 2, totalPages - 1, totalPages];
-    return [1, '...', currentPage - 1, currentPage, currentPage + 1, '...', totalPages];
+  const formatDate = (d) => {
+    if (!d) return '—';
+    const dt = parseDate(d);
+    if (!dt) return '—';
+    return dt.toLocaleDateString('en-GB');
   };
 
-  // View/Edit
+  // Reminder count calculation
+  const reminderCount = clients.filter((c) => {
+    const d = getReminderDate(c);
+    const du = daysUntil(d);
+    return du <= 2;
+  }).length;
+
+  // View/Edit handlers
   const handleView = (client) => {
     setSelectedClient(client);
     setIsEditMode(false);
@@ -172,7 +213,7 @@ export default function DisplayClient() {
     setIsModalOpen(true);
   };
 
-  // Delete flow: open/close confirm
+  // Delete handlers
   const openDeleteConfirm = (client) => {
     setClientToDelete(client);
     setShowDeleteConfirm(true);
@@ -183,7 +224,6 @@ export default function DisplayClient() {
     setClientToDelete(null);
   };
 
-  // Delete confirmed → move to ExitClients, then remove from ClientData
   const handleDeleteConfirmed = async () => {
     if (!clientToDelete) return;
     const { id, ...payload } = clientToDelete;
@@ -206,7 +246,7 @@ export default function DisplayClient() {
     }
   };
 
-  // Save (Edit)
+  // Save handler
   const handleSave = async (updatedClient) => {
     try {
       await firebaseDB.child(`ClientData/${updatedClient.id}`).update(updatedClient);
@@ -223,37 +263,13 @@ export default function DisplayClient() {
     setIsEditMode(false);
   };
 
-  const formatDate = (d) => {
-    if (!d) return '—';
-    const dt = parseDate(d);
-    if (!dt) return '—';
-    return dt.toLocaleDateString();
-  };
-
-  const reminderCount = clients.filter((c) => {
-    const d = getReminderDate(c);
-    const du = daysUntil(d);
-    return du < 2; // within 2 days (includes <1 day)
-  }).length;
-
-  const rowStyleFor = (c) => {
-    const g = getUrgencyGroup(c);
-    if (g === 0) {
-      return { backgroundColor: '#b91c1c', color: '#fff' }; // red
-    }
-    if (g === 1) {
-      return { backgroundColor: '#a52a2a', color: '#fff' }; // brown
-    }
-    return {};
-  };
-
   if (loading) return <div className="text-center my-5">Loading clients...</div>;
   if (error) return <div className="alert alert-danger">Error: {error}</div>;
   if (clients.length === 0) return <div className="alert alert-info">No clients found</div>;
 
   return (
     <div>
-      {/* Header: rows-per-page + Reminder badge + showing entries */}
+      {/* Header */}
       <div className="d-flex justify-content-between align-items-center mb-3 flex-wrap" style={{ gap: '10px' }}>
         <div className="d-flex align-items-center">
           <span className="me-2">Show</span>
@@ -261,7 +277,10 @@ export default function DisplayClient() {
             className="form-select form-select-sm"
             style={{ width: '80px' }}
             value={rowsPerPage}
-            onChange={handleRowsPerPageChange}
+            onChange={(e) => {
+              setRowsPerPage(parseInt(e.target.value));
+              setCurrentPage(1);
+            }}
           >
             <option value={10}>10</option>
             <option value={20}>20</option>
@@ -271,34 +290,22 @@ export default function DisplayClient() {
           </select>
           <span className="ms-2">entries</span>
         </div>
-
-        {/* Reminder Clients pill */}
-        <div
-          className="px-3 py-1 rounded-pill"
-          style={{
-            background: 'linear-gradient(90deg,#b91c1c,#a52a2a)',
-            color: '#fff',
-            fontWeight: 600,
-            boxShadow: '0 2px 6px rgba(0,0,0,.2)',
-          }}
-        >
-          Reminder Clients: {reminderCount}
-        </div>
-
+        <div className="reminder-pill">Reminder Clients: {reminderCount}</div>
         <div>
           Showing {indexOfFirstClient + 1} to {Math.min(indexOfLastClient, clients.length)} of {clients.length} entries
         </div>
       </div>
 
+      {/* Table */}
       <div className="table-responsive">
         <table className="table table-dark table-hover">
-          <thead className="table-dark">
+          <thead>
             <tr>
               <th>ID No ↓</th>
               <th>Client Name</th>
               <th>Location</th>
               <th>Type of Service</th>
-              <th>Reminder Date</th>{/* NEW */}
+              <th>Reminder Date</th>
               <th>Mobile No</th>
               <th>Status</th>
               <th>Actions</th>
@@ -306,20 +313,26 @@ export default function DisplayClient() {
           </thead>
           <tbody>
             {currentClients.map((client) => {
-              const rDate =
-                getReminderDate(client) ||
-                null;
-
+              const rDate = getReminderDate(client);
+              const urgencyClass = getUrgencyClass(client);
+              
               return (
-                <tr key={client.id} style={rowStyleFor(client)}>
-                  <td>
-                    <strong>{client.idNo || 'N/A'}</strong>
-                  </td>
+                <tr key={client.id} className={urgencyClass}>
+                  <td><strong>{client.idNo || 'N/A'}</strong></td>
                   <td>{client.clientName || 'N/A'}</td>
                   <td>{client.location || 'N/A'}</td>
                   <td>{client.typeOfService || 'N/A'}</td>
-                  <td>{formatDate(rDate)}</td>
-                  <td>{client.mobileNo1 || 'N/A'}</td>
+                  <td>{client.formatDate(rDate)}</td>
+                  <td>
+                    {client.mobileNo1 ? (
+                      <span>
+                        {client.mobileNo1}  &nbsp;  &nbsp;
+                        <a href={`tel:${client.mobileNo1}`} className="btn btn-sm p-0 btn-info ">
+                           Call
+                        </a>
+                      </span>
+                    ) : 'N/A'}
+                  </td>
                   <td>
                     <span className={`badge ${getStatusBadgeClass(client.serviceStatus)}`}>
                       {client.serviceStatus || 'Running'}
@@ -328,13 +341,13 @@ export default function DisplayClient() {
                   <td>
                     <div className="d-flex">
                       <button className="btn btn-sm me-2" title="View" onClick={() => handleView(client)}>
-                        <img src={viewIcon} alt="view Icon" style={{ opacity: 0.6, width: '18px', height: '18px' }} />
+                        <img src={viewIcon} alt="view Icon" width="18" height="18" />
                       </button>
                       <button className="btn btn-sm me-2" title="Edit" onClick={() => handleEdit(client)}>
-                        <img src={editIcon} alt="edit Icon" style={{ width: '15px', height: '15px' }} />
+                        <img src={editIcon} alt="edit Icon" width="15" height="15" />
                       </button>
                       <button className="btn btn-sm" title="Delete" onClick={() => openDeleteConfirm(client)}>
-                        <img src={deleteIcon} alt="delete Icon" style={{ width: '14px', height: '14px' }} />
+                        <img src={deleteIcon} alt="delete Icon" width="14" height="14" />
                       </button>
                     </div>
                   </td>
@@ -354,28 +367,13 @@ export default function DisplayClient() {
                 Previous
               </button>
             </li>
-
-            {getDisplayedPageNumbers().map((number, index) => (
-              <li
-                key={index}
-                className={`page-item ${number === currentPage ? 'active' : ''} ${number === '...' ? 'disabled' : ''}`}
-              >
-                {number === '...' ? (
-                  <span className="page-link">...</span>
-                ) : (
-                  <button className="page-link" onClick={() => paginate(number)}>
-                    {number}
-                  </button>
-                )}
+            {Array.from({ length: totalPages }, (_, i) => i + 1).map((num) => (
+              <li key={num} className={`page-item ${currentPage === num ? 'active' : ''}`}>
+                <button className="page-link" onClick={() => paginate(num)}>{num}</button>
               </li>
             ))}
-
             <li className={`page-item ${currentPage === totalPages ? 'disabled' : ''}`}>
-              <button
-                className="page-link"
-                onClick={() => paginate(currentPage + 1)}
-                disabled={currentPage === totalPages}
-              >
+              <button className="page-link" onClick={() => paginate(currentPage + 1)} disabled={currentPage === totalPages}>
                 Next
               </button>
             </li>
@@ -410,17 +408,11 @@ export default function DisplayClient() {
                   <strong>ID:</strong> {clientToDelete.idNo || clientToDelete.id} <br />
                   <strong>Name:</strong> {clientToDelete.clientName || 'N/A'}
                 </p>
-                <small className="text-muted">
-                  This will move the record to the <strong>ExitClients</strong> section.
-                </small>
+                <small className="text-muted">This will move the record to the <strong>ExitClients</strong> section.</small>
               </div>
               <div className="modal-footer">
-                <button type="button" className="btn btn-secondary" onClick={closeDeleteConfirm}>
-                  Cancel
-                </button>
-                <button type="button" className="btn btn-danger" onClick={handleDeleteConfirmed}>
-                  Yes, Move & Delete
-                </button>
+                <button type="button" className="btn btn-secondary" onClick={closeDeleteConfirm}>Cancel</button>
+                <button type="button" className="btn btn-danger" onClick={handleDeleteConfirmed}>Yes, Move & Delete</button>
               </div>
             </div>
           </div>
@@ -441,14 +433,10 @@ export default function DisplayClient() {
                 ></button>
               </div>
               <div className="modal-body">
-                <p>
-                  The client has been moved to the <strong>ExitClients</strong> section.
-                </p>
+                <p>The client has been moved to the <strong>ExitClients</strong> section.</p>
               </div>
               <div className="modal-footer">
-                <button type="button" className="btn btn-success" onClick={() => setShowMovedModal(false)}>
-                  OK
-                </button>
+                <button type="button" className="btn btn-success" onClick={() => setShowMovedModal(false)}>OK</button>
               </div>
             </div>
           </div>
@@ -472,9 +460,7 @@ export default function DisplayClient() {
                 <p>Client details have been updated.</p>
               </div>
               <div className="modal-footer">
-                <button type="button" className="btn btn-success" onClick={() => setShowSaveModal(false)}>
-                  OK
-                </button>
+                <button type="button" className="btn btn-success" onClick={() => setShowSaveModal(false)}>OK</button>
               </div>
             </div>
           </div>
@@ -484,22 +470,14 @@ export default function DisplayClient() {
   );
 }
 
-// Helper function for status badge styling
 const getStatusBadgeClass = (status) => {
   switch (status) {
-    case 'Running':
-      return 'bg-success';
-    case 'Closed':
-      return 'bg-secondary';
-    case 'Stop':
-      return 'bg-warning';
-    case 'Re-open':
-      return 'bg-info';
-    case 'Re-start':
-      return 'bg-primary';
-    case 'Re-place':
-      return 'bg-dark';
-    default:
-      return 'bg-info';
+    case 'Running': return 'bg-success';
+    case 'Closed': return 'bg-secondary';
+    case 'Stop': return 'bg-warning';
+    case 'Re-open': return 'bg-info';
+    case 'Re-start': return 'bg-primary';
+    case 'Re-place': return 'bg-dark';
+    default: return 'bg-info';
   }
 };

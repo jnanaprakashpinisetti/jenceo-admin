@@ -28,48 +28,82 @@ export default function DisplayExitClient() {
   const [showSaveModal, setShowSaveModal] = useState(false);
 
   // --- Reminder helpers ---
-  const today = new Date();
-  const startOfToday = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  const [today] = useState(() => {
+    const date = new Date();
+    date.setHours(0, 0, 0, 0);
+    return date;
+  });
 
   const parseDate = (v) => {
     if (!v) return null;
+    
+    // Handle Firebase timestamp objects
+    if (v && typeof v === 'object' && v.hasOwnProperty('seconds')) {
+      return new Date(v.seconds * 1000);
+    }
+    
+    // Handle string dates
     if (typeof v === 'string') {
       const s = v.trim();
       if (!s) return null;
+      
+      // Try ISO format (yyyy-mm-dd)
       if (/^\d{4}-\d{2}-\d{2}/.test(s)) {
-        const d = new Date(s);
-        return isNaN(d) ? null : d;
+        const parts = s.split('-');
+        const date = new Date(parts[0], parts[1] - 1, parts[2]);
+        return isNaN(date.getTime()) ? null : date;
       }
-      if (/^\d{2}\/\d{2}\/\d{4}$/.test(s)) {
+      
+      // Try dd/mm/yyyy format
+      if (/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(s)) {
         const [dd, mm, yyyy] = s.split('/').map(Number);
-        const d = new Date(yyyy, mm - 1, dd);
-        return isNaN(d) ? null : d;
+        const date = new Date(yyyy, mm - 1, dd);
+        return isNaN(date.getTime()) ? null : date;
       }
+      
+      // Try any other format that Date can parse
       const d = new Date(s);
-      return isNaN(d) ? null : d;
+      return isNaN(d.getTime()) ? null : d;
     }
-    if (v instanceof Date) return v;
+    
+    // Handle Date objects
+    if (v instanceof Date) {
+      return isNaN(v.getTime()) ? null : v;
+    }
+    
     return null;
   };
 
-  const getReminderDate = (c) =>
-    parseDate(c?.reminderDate) || parseDate(c?.reminder) || parseDate(c?.nextVisitDate) || null;
+  // Get reminder date from client - use paymentReminderDate
+  const getReminderDate = (c) => {
+    return parseDate(c?.paymentReminderDate) || null;
+  };
 
+  // Calculate days until reminder
   const daysUntil = (d) => {
     if (!d) return Infinity;
-    const onlyDate = new Date(d.getFullYear(), d.getMonth(), d.getDate());
-    const ms = onlyDate - startOfToday;
-    return ms / (1000 * 60 * 60 * 24);
+    
+    const reminderDate = new Date(d);
+    reminderDate.setHours(0, 0, 0, 0);
+    
+    const timeDiff = reminderDate.getTime() - today.getTime();
+    return Math.ceil(timeDiff / (1000 * 60 * 60 * 24));
   };
 
-  const getUrgencyGroup = (c) => {
-    const d = getReminderDate(c);
+  // Get urgency class based on days until reminder
+  const getUrgencyClass = (client) => {
+    const d = getReminderDate(client);
+    if (!d) return '';
+    
     const du = daysUntil(d);
-    if (du < 1) return 0; // red
-    if (du < 2) return 1; // brown
-    return 2;
+    if (du < 0) return 'reminder-overdue';
+    if (du === 0) return 'reminder-today';
+    if (du === 1) return 'reminder-tomorrow';
+    if (du === 2) return 'reminder-upcoming';
+    return '';
   };
 
+  // Sort clients with urgent reminders first, then by ID
   const sortClientsWithUrgency = (data) => {
     const byIdDesc = (a, b) => {
       const idA = a.idNo || '';
@@ -84,14 +118,24 @@ export default function DisplayExitClient() {
     };
 
     return [...data].sort((a, b) => {
-      const ua = getUrgencyGroup(a);
-      const ub = getUrgencyGroup(b);
-      if (ua !== ub) return ua - ub;
-      const da = getReminderDate(a);
-      const db = getReminderDate(b);
-      const tda = da ? da.getTime() : Number.MAX_SAFE_INTEGER;
-      const tdb = db ? db.getTime() : Number.MAX_SAFE_INTEGER;
-      if (tda !== tdb) return tda - tdb;
+      const dA = getReminderDate(a);
+      const dB = getReminderDate(b);
+      const duA = daysUntil(dA);
+      const duB = daysUntil(dB);
+
+      const urgentA = duA <= 2;
+      const urgentB = duB <= 2;
+      
+      // Both are urgent, sort by date (earliest first)
+      if (urgentA && urgentB) {
+        return dA - dB;
+      }
+      
+      // Only one is urgent, put it first
+      if (urgentA && !urgentB) return -1;
+      if (!urgentA && urgentB) return 1;
+      
+      // Neither is urgent, sort by ID
       return byIdDesc(a, b);
     });
   };
@@ -121,6 +165,7 @@ export default function DisplayExitClient() {
       } catch (err) {
         setError(err.message);
         setLoading(false);
+        console.error('Error fetching exit clients:', err);
       }
     };
 
@@ -128,13 +173,14 @@ export default function DisplayExitClient() {
     return () => {
       firebaseDB.child('ExitClients').off('value');
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
     setTotalPages(Math.ceil(clients.length / rowsPerPage));
-    setCurrentPage(1);
-  }, [clients, rowsPerPage]);
+    if (currentPage > totalPages && totalPages > 0) {
+      setCurrentPage(totalPages);
+    }
+  }, [clients, rowsPerPage, totalPages, currentPage]);
 
   // Pagination
   const indexOfLastClient = currentPage * rowsPerPage;
@@ -142,7 +188,11 @@ export default function DisplayExitClient() {
   const currentClients = clients.slice(indexOfFirstClient, indexOfLastClient);
 
   const paginate = (pageNumber) => setCurrentPage(pageNumber);
-  const handleRowsPerPageChange = (e) => setRowsPerPage(parseInt(e.target.value));
+  const handleRowsPerPageChange = (e) => {
+    const newRowsPerPage = parseInt(e.target.value);
+    setRowsPerPage(newRowsPerPage);
+    setCurrentPage(1); // Reset to first page when changing rows per page
+  };
 
   const pageNumbers = [];
   for (let i = 1; i <= totalPages; i++) pageNumbers.push(i);
@@ -222,29 +272,19 @@ export default function DisplayExitClient() {
 
   const formatDate = (d) => {
     if (!d) return '—';
-    const dt = d instanceof Date ? d : parseDate(d);
+    const dt = parseDate(d);
     if (!dt) return '—';
-    return dt.toLocaleDateString();
+    return dt.toLocaleDateString('en-GB'); // DD/MM/YYYY format
   };
 
+  // Reminder count calculation
   const reminderCount = clients.filter((c) => {
     const d = getReminderDate(c);
     const du = daysUntil(d);
-    return du < 2;
+    return du <= 2;
   }).length;
 
-  const rowStyleFor = (c) => {
-    const g = getUrgencyGroup(c);
-    if (g === 0) {
-      return { backgroundColor: '#b91c1c', color: '#fff' };
-    }
-    if (g === 1) {
-      return { backgroundColor: '#a52a2a', color: '#fff' };
-    }
-    return {};
-  };
-
-  if (loading) return <div className="text-center my-5">Loading clients...</div>;
+  if (loading) return <div className="text-center my-5">Loading exit clients...</div>;
   if (error) return <div className="alert alert-danger">Error: {error}</div>;
   if (clients.length === 0) return <div className="alert alert-info">No exit clients found</div>;
 
@@ -270,15 +310,7 @@ export default function DisplayExitClient() {
         </div>
 
         {/* Reminder Clients pill */}
-        <div
-          className="px-3 py-1 rounded-pill"
-          style={{
-            background: 'linear-gradient(90deg,#b91c1c,#a52a2a)',
-            color: '#fff',
-            fontWeight: 600,
-            boxShadow: '0 2px 6px rgba(0,0,0,.2)',
-          }}
-        >
+        <div className="reminder-pill">
           Reminder Clients: {reminderCount}
         </div>
 
@@ -295,7 +327,7 @@ export default function DisplayExitClient() {
               <th>Client Name</th>
               <th>Location</th>
               <th>Type of Service</th>
-              <th>Reminder Date</th>{/* NEW */}
+              <th>Payment Reminder Date</th>
               <th>Mobile No</th>
               <th>Status</th>
               <th>Actions</th>
@@ -303,10 +335,11 @@ export default function DisplayExitClient() {
           </thead>
           <tbody>
             {currentClients.map((client) => {
-              const rDate = getReminderDate(client) || null;
+              const rDate = getReminderDate(client);
+              const urgencyClass = getUrgencyClass(client);
 
               return (
-                <tr key={client.id} style={rowStyleFor(client)}>
+                <tr key={client.id} className={urgencyClass}>
                   <td>
                     <strong>{client.idNo || 'N/A'}</strong>
                   </td>
@@ -314,7 +347,13 @@ export default function DisplayExitClient() {
                   <td>{client.location || 'N/A'}</td>
                   <td>{client.typeOfService || 'N/A'}</td>
                   <td>{formatDate(rDate)}</td>
-                  <td>{client.mobileNo1 || 'N/A'}</td>
+                  <td>
+                    {client.mobileNo1 ? (
+                      <a href={`tel:${client.mobileNo1}`} className="btn btn-link p-0 text-info">
+                        {client.mobileNo1}
+                      </a>
+                    ) : 'N/A'}
+                  </td>
                   <td>
                     <span className={`badge ${getStatusBadgeClass(client.serviceStatus)}`}>
                       {client.serviceStatus || 'Running'}
@@ -384,8 +423,8 @@ export default function DisplayExitClient() {
           client={selectedClient}
           isOpen={isModalOpen}
           onClose={handleCloseModal}
-          onSave={handleSave}          // edits apply to ExitClients
-          onDelete={() => {}}          // not used here
+          onSave={handleSave}
+          onDelete={() => { }}
           isEditMode={isEditMode}
         />
       )}
@@ -416,7 +455,7 @@ export default function DisplayExitClient() {
                 <button type="button" className="btn btn-primary" onClick={handleReturnConfirmed}>
                   Yes, Return to Active
                 </button>
-              </div>
+                </div>
             </div>
           </div>
         </div>

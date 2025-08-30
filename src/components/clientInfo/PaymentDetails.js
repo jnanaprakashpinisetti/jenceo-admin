@@ -119,7 +119,7 @@ const PaymentDetails = ({ formData, handleChange, addPayment, removePayment, err
                   value={payment.paidAmount || ""}
                   onChange={(e) => handleAmountChange(e, index, "paidAmount")}
                   id={`paidAmount-${index}`}
-                  maxLength={7}
+                  maxLength={5}
                   placeholder="Enter amount"
                 />
                 {getErr(index, "paidAmount") && (
@@ -142,7 +142,7 @@ const PaymentDetails = ({ formData, handleChange, addPayment, removePayment, err
                   value={payment.balance || ""}
                   onChange={(e) => handleAmountChange(e, index, "balance")}
                   id={`balance-${index}`}
-                  maxLength={7}
+                  maxLength={5}
                   placeholder="Enter balance"
                 />
                 {getErr(index, "balance") && (

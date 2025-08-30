@@ -36,56 +36,65 @@ export default function DisplayClient() {
 
   const parseDate = (v) => {
     if (!v) return null;
-    
+
     // Handle Firebase timestamp objects
     if (v && typeof v === 'object' && v.hasOwnProperty('seconds')) {
       return new Date(v.seconds * 1000);
     }
-    
+
     // Handle string dates
     if (typeof v === 'string') {
       const s = v.trim();
       if (!s) return null;
-      
+
       // Try ISO format (yyyy-mm-dd)
       if (/^\d{4}-\d{2}-\d{2}/.test(s)) {
         const parts = s.split('-');
         const date = new Date(parts[0], parts[1] - 1, parts[2]);
         return isNaN(date.getTime()) ? null : date;
       }
-      
+
       // Try dd/mm/yyyy format
       if (/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(s)) {
         const [dd, mm, yyyy] = s.split('/').map(Number);
         const date = new Date(yyyy, mm - 1, dd);
         return isNaN(date.getTime()) ? null : date;
       }
-      
+
       // Try any other format that Date can parse
       const d = new Date(s);
       return isNaN(d.getTime()) ? null : d;
     }
-    
+
     // Handle Date objects
     if (v instanceof Date) {
       return isNaN(v.getTime()) ? null : v;
     }
-    
+
     return null;
   };
 
-  // Get reminder date from client
+  // Get the most recent reminder date from client payments
   const getReminderDate = (c) => {
-    return parseDate(c?.paymentReminderDate) || null;
+    if (!c || !Array.isArray(c.payments)) return null;
+
+    // Filter out empty/null reminder dates and sort by date (most recent first)
+    const validReminders = c.payments
+      .filter(p => p.reminderDate && p.reminderDate.trim() !== '')
+      .map(p => parseDate(p.reminderDate))
+      .filter(d => d !== null)
+      .sort((a, b) => b - a); // Most recent first
+
+    return validReminders.length > 0 ? validReminders[0] : null;
   };
 
   // Calculate days until reminder
   const daysUntil = (d) => {
     if (!d) return Infinity;
-    
+
     const reminderDate = new Date(d);
     reminderDate.setHours(0, 0, 0, 0);
-    
+
     const timeDiff = reminderDate.getTime() - today.getTime();
     return Math.ceil(timeDiff / (1000 * 60 * 60 * 24));
   };
@@ -94,7 +103,7 @@ export default function DisplayClient() {
   const getUrgencyClass = (client) => {
     const d = getReminderDate(client);
     if (!d) return '';
-    
+
     const du = daysUntil(d);
     if (du < 0) return 'reminder-overdue';
     if (du === 0) return 'reminder-today';
@@ -125,16 +134,16 @@ export default function DisplayClient() {
 
       const urgentA = duA <= 2;
       const urgentB = duB <= 2;
-      
+
       // Both are urgent, sort by date (earliest first)
       if (urgentA && urgentB) {
         return dA - dB;
       }
-      
+
       // Only one is urgent, put it first
       if (urgentA && !urgentB) return -1;
       if (!urgentA && urgentB) return 1;
-      
+
       // Neither is urgent, sort by ID
       return byIdDesc(a, b);
     });
@@ -196,8 +205,10 @@ export default function DisplayClient() {
   // Reminder count calculation
   const reminderCount = clients.filter((c) => {
     const d = getReminderDate(c);
+    if (!d) return false;
+
     const du = daysUntil(d);
-    return du <= 2;
+    return du <= 2; // Show reminders for today, tomorrow, and day after tomorrow
   }).length;
 
   // View/Edit handlers
@@ -297,7 +308,7 @@ export default function DisplayClient() {
       </div>
 
       {/* Table */}
-      <div className="table-responsive">
+      <div className="table-responsive running-client">
         <table className="table table-dark table-hover">
           <thead>
             <tr>
@@ -315,20 +326,30 @@ export default function DisplayClient() {
             {currentClients.map((client) => {
               const rDate = getReminderDate(client);
               const urgencyClass = getUrgencyClass(client);
-              
+
               return (
                 <tr key={client.id} className={urgencyClass}>
                   <td><strong>{client.idNo || 'N/A'}</strong></td>
                   <td>{client.clientName || 'N/A'}</td>
                   <td>{client.location || 'N/A'}</td>
                   <td>{client.typeOfService || 'N/A'}</td>
-                  <td>{formatDate(rDate)}</td>
+                  <td>
+                    {formatDate(rDate)}
+                    {rDate && (
+                      <small className="d-block text-muted">
+                        {daysUntil(rDate) === 0 ? 'Today' :
+                          daysUntil(rDate) === 1 ? 'Tomorrow' :
+                            daysUntil(rDate) < 0 ? `${Math.abs(daysUntil(rDate))} days ago` :
+                              `${daysUntil(rDate)} days`}
+                      </small>
+                    )}
+                  </td>
                   <td>
                     {client.mobileNo1 ? (
                       <span>
                         {client.mobileNo1}  &nbsp;  &nbsp;
                         <a href={`tel:${client.mobileNo1}`} className="btn btn-sm btn-info ">
-                           Call
+                          Call
                         </a>
                       </span>
                     ) : 'N/A'}
@@ -388,7 +409,7 @@ export default function DisplayClient() {
           isOpen={isModalOpen}
           onClose={handleCloseModal}
           onSave={handleSave}
-          onDelete={() => {}}
+          onDelete={() => { }}
           isEditMode={isEditMode}
         />
       )}

@@ -107,25 +107,63 @@ table {
 }
 }
 
+.running-client {
+    td,th {
+        &:nth-child(5) {
+            text-align: center;
+        }
+    }
+
+}
+.exit-client {
+    td,th {
+        &:nth-child(5) {
+            text-align: center;
+        }
+    }
+
+}
+
 /* ClientTable.css */
 .reminder-overdue {
-  background-color: #b91c1c !important;
-  color: #fff !important;
+    td {
+        &:nth-child(5) {
+            color: red !important;
+        }
+    }
 }
 
 .reminder-today {
-  background-color: #dc2626 !important;
-  color: #fff !important;
+    td {
+        &:nth-child(5) {
+            color: yellow !important;
+
+        }
+    }
+
 }
 
 .reminder-tomorrow {
-  background-color: #a52a2a !important;
-  color: #fff !important;
+    td {
+        &:nth-child(5) {
+            color: orange !important;
+
+        }
+    }
+
 }
 
 .reminder-upcoming {
-  background-color: #7f1d1d !important;
-  color: #fff !important;
+    td {
+        &:nth-child(5) {
+            color: #3795e2 !important;
+            text-align: center
+        }
+    }
+}
+
+.text-muted {
+    color: #fff !important;
 }
 
 .reminder-overdue:hover,
@@ -136,9 +174,9 @@ table {
 }
 
 .reminder-pill {
-  padding: 0.5rem 1rem;
+  padding: 10px 20px;
   border-radius: 50rem;
-  background: linear-gradient(90deg, #b91c1c, #a52a2a);
+  background: #10a702;
   color: #fff;
   font-weight: 600;
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);

@@ -1,6 +1,6 @@
 import React, {useState} from 'react'
-import WorkerCalleDisplay from '../components/employeeBioData/WorkerCalleDisplay'
-import WorkerCalleForm from '../components/employeeBioData/WorkerCalleForm'
+import WorkerCalleDisplay from '../components/workerCalles/WorkerCalleDisplay'
+import WorkerCalleForm from '../components/workerCalles/WorkerCalleForm'
 
 
 export default function WorkerCallsData() {

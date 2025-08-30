@@ -314,13 +314,7 @@ export default function ClientInfoForm() {
           e.cName = "Worker Name is required";
           isValid = false;
         }
-        if (!w.basicSalary) {
-          e.basicSalary = "Basic Salary is required";
-          isValid = false;
-        } else if (isNaN(Number(w.basicSalary)) || Number(w.basicSalary) <= 0) {
-          e.basicSalary = "Basic Salary must be a positive number";
-          isValid = false;
-        }
+      
         if (!w.startingDate) {
           e.startingDate = "Starting Date is required";
           isValid = false;
@@ -358,13 +352,6 @@ export default function ClientInfoForm() {
           isValid = false;
         } else if (p.paidAmount.length > 5) {
           e.paidAmount = "Paid Amount must be 5 digits or less";
-          isValid = false;
-        }
-        if (!p.balance) {
-          e.balance = "Balance is required";
-          isValid = false;
-        } else if (isNaN(Number(p.balance)) || Number(p.balance) < 0) {
-          e.balance = "Balance must be a valid number";
           isValid = false;
         }
         if (!p.receptNo.trim()) {
@@ -433,6 +420,7 @@ export default function ClientInfoForm() {
             addWorker={addWorker}
             removeWorker={removeWorker}
             errors={errors}
+            setErrors={setErrors}
           />
         );
       case 6:

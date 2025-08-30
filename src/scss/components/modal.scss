@@ -76,6 +76,7 @@
 
 .client-form {
     max-width: 600px;
+
     .modal-content {
         background-color: #454647;
     }
@@ -83,11 +84,12 @@
     .modal-header {
         background-color: #727272;
     }
+
     .modal-title {
         color: #f3f3f3;
     }
 
-    .form-group  {
+    .form-group {
         text-align: left;
     }
 
@@ -96,20 +98,34 @@
     }
 
     .bio-info {
-         color: #e6e3e3;
+        color: #e6e3e3;
     }
+
     .form-steps {
         color: #e6e3e3;
     }
 
     .add-worker {
-        background-color:#f0ad4e;
+        background-color: #f0ad4e;
         color: #fff;
         font-size: 12px;
         padding: 3px 8px;
+
         &:hover {
-            background-color:#e29528;
+            background-color: #e29528;
         }
     }
 
+}
+
+.display-client-modal {
+    .modal-card {
+        padding: 10px;
+        border-radius: 5px;
+        border: 1px solid #d7e8f3;
+
+        &:nth-child(even) {
+            background-color: #edf2f5;
+        }
+    }
 }

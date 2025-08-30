@@ -10,7 +10,6 @@ import arrow from "../assets/arrow.svg";
 import home from "../assets/home.svg";
 
 import workerData from "../assets/workers-data.svg";
-import employee from "../assets/employee.svg";
 import workerExit from "../assets/worker-exit.svg";
 import WorkerAggrement from "../assets/workers-aggrement.svg";
 import client from "../assets/client.svg";
@@ -19,7 +18,7 @@ import HospitalIcon from "../assets/hospital-icon.svg";
 
 import invest from "../assets/invest.svg";
 import purchase from "../assets/purchase.svg";
-import sales from "../assets/sales.svg";
+import cell from "../assets/cell.svg";
 import balance from "../assets/balance.svg";
 import expences from "../assets/expence.svg";
 import task from "../assets/task.svg";
@@ -44,6 +43,7 @@ import Hr from '../pages/Hr';
 import Accounts from '../pages/Accounts';
 import Operations from '../pages/Operations';
 import HospitalList from '../pages/HospitalList';
+import WorkerCallsData from '../pages/WorkerCallsData';
 
 export default function LeftNav() {
   const [isActive, setIsActive] = useState(false);   // side collapse (arrow)
@@ -106,20 +106,25 @@ export default function LeftNav() {
             <hr />
 
             <li className="nav-item">
-              <NavLink to='Employees' className="nav-link" title='Employees' onClick={closeMobile}>
-                <img src={workerData} alt="" /> Worker Info
+              <NavLink to='Employees' className="nav-link" title='Worker Data' onClick={closeMobile}>
+                <img src={workerData} alt="" /> Worker Data
               </NavLink>
             </li>
 
             <li className="nav-item">
-              <NavLink to='EmployeeAggrement' className="nav-link" title='Employee Aggrement English' onClick={closeMobile}>
-                <img src={WorkerAggrement} alt="" /> Worker Aggremnt
-              </NavLink>
-            </li>
-
-            <li className="nav-item">
-              <NavLink to='ExistingEmployees' className="nav-link" title='Existing Employees' onClick={closeMobile}>
+              <NavLink to='ExistingEmployees' className="nav-link" title='Existing Workers' onClick={closeMobile}>
                 <img src={workerExit} alt="Worker Exit" /> Exit Worker
+              </NavLink>
+            </li>
+            <li className="nav-item">
+              <NavLink to='WorkerCallsData' className="nav-link" title='Worker Call Data' onClick={closeMobile}>
+                <img src={cell} alt="Worker Call Data" /> Worker Call Data
+              </NavLink>
+            </li>
+
+            <li className="nav-item">
+              <NavLink to='EmployeeAggrement' className="nav-link" title='Worker Aggrement' onClick={closeMobile}>
+                <img src={WorkerAggrement} alt="" /> Worker Aggremnt
               </NavLink>
             </li>
 
@@ -127,7 +132,7 @@ export default function LeftNav() {
 
             <li className="nav-item">
               <NavLink to='ClientInfo' className="nav-link" title='ClientInfo' onClick={closeMobile}>
-                <img src={client} alt="" /> Client Info
+                <img src={client} alt="" /> Client Data
               </NavLink>
             </li>
 
@@ -191,6 +196,7 @@ export default function LeftNav() {
         <Route path="/" element={<Dashboard />} />
         <Route path="Employees" element={<Employees />} />
         <Route path="EmployeeAggrement" element={<EmployeeAggrement />} />
+        <Route path="WorkerCallsData" element={<WorkerCallsData />} />
         <Route path="ExistingEmployees" element={<ExistingEmployees />} />
         <Route path="Investments" element={<Investments />} />
         <Route path="ClientInfo" element={<ClientInfo />} />

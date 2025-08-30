@@ -13,8 +13,6 @@ export default function Employees() {
           <div className="col-md-8">
             <DisplayEmployee />
           </div>
-
-
         </div>
       </div>
     </div>

@@ -1,16 +1,86 @@
-import React from "react";
+import React, { useState, useEffect } from "react";
 
-const WorkerDetails = ({ formData, handleChange, addWorker, removeWorker, errors = {} }) => {
+const WorkerDetails = ({ formData, handleChange, addWorker, removeWorker, errors = {}, setErrors, isViewMode = false }) => {
   const workersErrors = errors.workers || [];
+  const [dateErrors, setDateErrors] = useState({});
   
-  // Get today's date in YYYY-MM-DD format
-  const today = new Date();
-  const todayFormatted = today.toISOString().split('T')[0];
-  
-  // Calculate minimum date (1 month from today)
-  const minDate = new Date();
-  minDate.setMonth(today.getMonth() + 1);
-  const minDateFormatted = minDate.toISOString().split('T')[0];
+  // Calculate date ranges (1 month previous to 2 months future)
+  const getMinMaxDates = () => {
+    const today = new Date();
+    const oneMonthAgo = new Date();
+    oneMonthAgo.setMonth(today.getMonth() - 1);
+    
+    const twoMonthsLater = new Date();
+    twoMonthsLater.setMonth(today.getMonth() + 2);
+    
+    return {
+      minDate: oneMonthAgo.toISOString().split('T')[0],
+      maxDate: twoMonthsLater.toISOString().split('T')[0],
+      today: today.toISOString().split('T')[0]
+    };
+  };
+
+  const { minDate, maxDate, today } = getMinMaxDates();
+
+  // Validate dates when they change
+  useEffect(() => {
+    validateAllWorkerDates();
+  }, [formData.workers]);
+
+  const validateAllWorkerDates = () => {
+    const newDateErrors = {};
+    
+    formData.workers.forEach((worker, index) => {
+      if (worker.startingDate) {
+        const startDate = new Date(worker.startingDate);
+        const minDateObj = new Date(minDate);
+        const maxDateObj = new Date(maxDate);
+        
+        if (startDate < minDateObj) {
+          newDateErrors[`worker-${index}-startingDate`] = `Start date cannot be before ${minDate}`;
+        } else if (startDate > maxDateObj) {
+          newDateErrors[`worker-${index}-startingDate`] = `Start date cannot be after ${maxDate}`;
+        }
+      }
+      
+      if (worker.startingDate && worker.endingDate) {
+        const startDate = new Date(worker.startingDate);
+        const endDate = new Date(worker.endingDate);
+        
+        if (endDate <= startDate) {
+          newDateErrors[`worker-${index}-endingDate`] = "End date must be after start date";
+        }
+      }
+    });
+    
+    setDateErrors(newDateErrors);
+    
+    // Update the main errors object if setErrors function is provided
+    if (setErrors) {
+      setErrors(prevErrors => ({
+        ...prevErrors,
+        ...newDateErrors
+      }));
+    }
+  };
+
+  const handleDateChange = (e, arrayName, index) => {
+    handleChange(e, arrayName, index);
+    
+    // Clear the error for the changed field
+    const errorKey = `worker-${index}-${e.target.name}`;
+    if (dateErrors[errorKey]) {
+      setDateErrors(prev => {
+        const newErrors = { ...prev };
+        delete newErrors[errorKey];
+        return newErrors;
+      });
+    }
+  };
+
+  const getDateErr = (index, fieldName) => {
+    return dateErrors[`worker-${index}-${fieldName}`];
+  };
 
   const getErr = (idx, key) => (workersErrors[idx] ? workersErrors[idx][key] : "");
 
@@ -32,9 +102,10 @@ const WorkerDetails = ({ formData, handleChange, addWorker, removeWorker, errors
                   id={`workerIdNo-${index}`}
                   className={`form-control ${getErr(index, "workerIdNo") ? "is-invalid" : ""}`}
                   name="workerIdNo"
-                   maxLength ={7}
+                  maxLength={7}
                   value={worker.workerIdNo}
                   onChange={(e) => handleChange(e, "workers", index)}
+                  readOnly={isViewMode}
                 />
                 {getErr(index, "workerIdNo") && (
                   <div className="invalid-feedback">{getErr(index, "workerIdNo")}</div>
@@ -54,6 +125,7 @@ const WorkerDetails = ({ formData, handleChange, addWorker, removeWorker, errors
                   name="cName"
                   value={worker.cName}
                   onChange={(e) => handleChange(e, "workers", index)}
+                  readOnly={isViewMode}
                 />
                 {getErr(index, "cName") && (
                   <div className="invalid-feedback">{getErr(index, "cName")}</div>
@@ -71,14 +143,19 @@ const WorkerDetails = ({ formData, handleChange, addWorker, removeWorker, errors
                 <input
                   type="date"
                   id={`startingDate-${index}`}
-                  className={`form-control ${getErr(index, "startingDate") ? "is-invalid" : ""}`}
+                  className={`form-control ${getErr(index, "startingDate") || getDateErr(index, "startingDate") ? "is-invalid" : ""}`}
                   name="startingDate"
                   value={worker.startingDate}
-                  onChange={(e) => handleChange(e, "workers", index)}
-                  min={minDateFormatted}
+                  onChange={(e) => handleDateChange(e, "workers", index)}
+                  min={minDate}
+                  max={maxDate}
+                  readOnly={isViewMode}
                 />
                 {getErr(index, "startingDate") && (
                   <div className="invalid-feedback">{getErr(index, "startingDate")}</div>
+                )}
+                {getDateErr(index, "startingDate") && !getErr(index, "startingDate") && (
+                  <div className="invalid-feedback">{getDateErr(index, "startingDate")}</div>
                 )}
               </div>
             </div>
@@ -89,12 +166,17 @@ const WorkerDetails = ({ formData, handleChange, addWorker, removeWorker, errors
                 <input
                   type="date"
                   id={`endingDate-${index}`}
-                  className="form-control"
+                  className={`form-control ${getDateErr(index, "endingDate") ? "is-invalid" : ""}`}
                   name="endingDate"
                   value={worker.endingDate}
-                  onChange={(e) => handleChange(e, "workers", index)}
-                  min={minDateFormatted}
+                  onChange={(e) => handleDateChange(e, "workers", index)}
+                  min={worker.startingDate || minDate}
+                  max={maxDate}
+                  readOnly={isViewMode}
                 />
+                {getDateErr(index, "endingDate") && (
+                  <div className="invalid-feedback">{getDateErr(index, "endingDate")}</div>
+                )}
               </div>
             </div>
           </div>
@@ -113,6 +195,7 @@ const WorkerDetails = ({ formData, handleChange, addWorker, removeWorker, errors
                   value={worker.mobile1}
                   onChange={(e) => handleChange(e, "workers", index)}
                   maxLength="10"
+                  readOnly={isViewMode}
                 />
                 {getErr(index, "mobile1") && (
                   <div className="invalid-feedback">{getErr(index, "mobile1")}</div>
@@ -131,6 +214,7 @@ const WorkerDetails = ({ formData, handleChange, addWorker, removeWorker, errors
                   value={worker.mobile2}
                   onChange={(e) => handleChange(e, "workers", index)}
                   maxLength="10"
+                  readOnly={isViewMode}
                 />
                 {getErr(index, "mobile2") && (
                   <div className="invalid-feedback">{getErr(index, "mobile2")}</div>
@@ -140,23 +224,22 @@ const WorkerDetails = ({ formData, handleChange, addWorker, removeWorker, errors
           </div>
           <div className="row">
             <div className="col-md-6">
-              {/* Basic Salary */}
+              {/* Basic Salary - REMOVED VALIDATION REQUIREMENT */}
               <div className="form-group">
                 <label htmlFor={`basicSalary-${index}`}>
-                  Basic <span className="star">*</span>
+                  Basic {/* Removed required asterisk */}
                 </label>
                 <input
                   type="tel"
                   id={`basicSalary-${index}`}
-                  className={`form-control ${getErr(index, "basicSalary") ? "is-invalid" : ""}`}
+                  className="form-control" 
                   name="basicSalary"
                   value={worker.basicSalary}
                   onChange={(e) => handleChange(e, "workers", index)}
                   maxLength={5}
+                  readOnly={isViewMode}
                 />
-                {getErr(index, "basicSalary") && (
-                  <div className="invalid-feedback">{getErr(index, "basicSalary")}</div>
-                )}
+                {/* Removed error feedback */}
               </div>
             </div>
             <div className="col-md-6">
@@ -170,12 +253,13 @@ const WorkerDetails = ({ formData, handleChange, addWorker, removeWorker, errors
                   name="remarks"
                   value={worker.remarks}
                   onChange={(e) => handleChange(e, "workers", index)}
+                  readOnly={isViewMode}
                 />
               </div>
             </div>
           </div>
 
-          {formData.workers.length > 1 && (
+          {formData.workers.length > 1 && !isViewMode && (
             <button
               type="button"
               className="btn btn-danger btn-sm btn-remov"
@@ -187,9 +271,11 @@ const WorkerDetails = ({ formData, handleChange, addWorker, removeWorker, errors
         </div>
       ))}
 
-      <button type="button" className="btn btn-primary btn-sm" onClick={addWorker}>
-        Add
-      </button>
+      {!isViewMode && (
+        <button type="button" className="btn btn-primary btn-sm" onClick={addWorker}>
+          Add Worker
+        </button>
+      )}
     </div>
   );
 };

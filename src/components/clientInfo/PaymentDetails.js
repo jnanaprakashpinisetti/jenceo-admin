@@ -132,7 +132,7 @@ const PaymentDetails = ({ formData, handleChange, addPayment, removePayment, err
               {/* Balance */}
               <div className="form-group">
                 <label>
-                  Balance <span className="star">*</span>
+                  Balance
                 </label>
                 <input
                   type="text"

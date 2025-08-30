@@ -69,24 +69,27 @@
 
 }
 
-.chec-box-card {
-    color: $sec-white;
 
-    .form-check-input {
-        border-radius: 0;
-        background-color: transparent;
-        &:checked, &:focus {
-            border-color: #fff;
-        }
+
+.form-check-input {
+    border-radius: 0 !important;
+    background-color: transparent !important;
+
+    &:checked,
+    &:focus {
+        border-color: #fff;
     }
-
 }
+
+
 
 .search-bar {
     background-color: transparent;
     border-color: #7c7f8c;
+
     &::placeholder {
-        color: #7c7f8c;;
+        color: #7c7f8c;
+        ;
     }
 }
 
@@ -95,6 +98,7 @@
     border-radius: 10px;
     padding: 10px;
     margin-bottom: 20px;
+
     &:nth-child(even) {
         background-color: rgb(36, 35, 35);
     }

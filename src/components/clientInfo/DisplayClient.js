@@ -327,7 +327,7 @@ export default function DisplayClient() {
                     {client.mobileNo1 ? (
                       <span>
                         {client.mobileNo1}  &nbsp;  &nbsp;
-                        <a href={`tel:${client.mobileNo1}`} className="btn btn-sm p-0 btn-info ">
+                        <a href={`tel:${client.mobileNo1}`} className="btn btn-sm btn-info ">
                            Call
                         </a>
                       </span>

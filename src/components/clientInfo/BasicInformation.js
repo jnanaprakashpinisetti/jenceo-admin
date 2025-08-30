@@ -47,7 +47,7 @@ export default function BasicInformation({ formData, handleChange, errors = {}, 
       <div className="row">
         <div className="col-md-6">
           {/* ID No */}
-          <div className="form-group mb-3">
+          <div className="form-group ">
             <label>ID No<span className="text-danger">*</span></label>
             <input
               type="text"
@@ -64,7 +64,7 @@ export default function BasicInformation({ formData, handleChange, errors = {}, 
         </div>
         <div className="col-md-6">
           {/* Client Name */}
-          <div className="form-group mb-3">
+          <div className="form-group ">
             <label>Client Name<span className="text-danger">*</span></label>
             <input
               type="text"
@@ -81,7 +81,7 @@ export default function BasicInformation({ formData, handleChange, errors = {}, 
       <div className="row">
         <div className="col-md-6">
           {/* Gender */}
-          <div className="form-group mb-3">
+          <div className="form-group ">
             <label>Gender<span className="text-danger">*</span></label>
             <select
               className={`form-control ${errors.gender ? "is-invalid" : ""}`}
@@ -100,7 +100,7 @@ export default function BasicInformation({ formData, handleChange, errors = {}, 
         </div>
         <div className="col-md-6">
           {/* Care Of */}
-          <div className="form-group mb-3">
+          <div className="form-group ">
             <label>Care Of</label>
             <input
               type="text"
@@ -116,7 +116,7 @@ export default function BasicInformation({ formData, handleChange, errors = {}, 
       <div className="row">
         <div className="col-md-6">
           {/* Relation */}
-          <div className="form-group mb-3">
+          <div className="form-group ">
             <label>Relation</label>
             <input
               type="text"
@@ -130,7 +130,7 @@ export default function BasicInformation({ formData, handleChange, errors = {}, 
         </div>
         <div className="col-md-6">
           {/* Location */}
-          <div className="form-group mb-3">
+          <div className="form-group ">
             <label>Location<span className="text-danger">*</span></label>
             <input
               type="text"
@@ -148,7 +148,7 @@ export default function BasicInformation({ formData, handleChange, errors = {}, 
       <div className="row">
         <div className="col-md-6">
           {/* Mobile No 1 */}
-          <div className="form-group mb-3">
+          <div className="form-group ">
             <label>Mobile No 1<span className="text-danger">*</span></label>
             <input
               type="tel"
@@ -165,7 +165,7 @@ export default function BasicInformation({ formData, handleChange, errors = {}, 
 
         <div className="col-md-6">
           {/* Mobile No 2 */}
-          <div className="form-group mb-3">
+          <div className="form-group ">
             <label>Mobile No 2</label>
             <input
               type="tel"
@@ -184,7 +184,7 @@ export default function BasicInformation({ formData, handleChange, errors = {}, 
       {/* Google Location Field */}
       <div className="row">
         <div className="col-md-12">
-          <div className="form-group mb-3">
+          <div className="form-group ">
             <label>Google Location</label>
             <div className="input-group">
               <input

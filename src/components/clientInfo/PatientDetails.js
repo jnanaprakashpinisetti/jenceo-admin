@@ -1,9 +1,8 @@
 import React from "react";
 
-export default function PatientDetails({ formData, handleChange, errors = {} }) {
+export default function PatientDetails({ formData, handleChange, errors = {}, isViewMode = false }) {
   return (
-    <div className="row">
-
+    <>
       <div className="row">
         <div className="col-md-6">
           {/* Care Recipients Name */}
@@ -15,6 +14,7 @@ export default function PatientDetails({ formData, handleChange, errors = {} }) 
               name="patientName"
               value={formData.patientName}
               onChange={handleChange}
+              readOnly={isViewMode}
             />
             {errors.patientName && <div className="invalid-feedback">{errors.patientName}</div>}
           </div>
@@ -29,6 +29,7 @@ export default function PatientDetails({ formData, handleChange, errors = {} }) 
               name="patentAge"
               value={formData.patentAge}
               onChange={handleChange}
+              readOnly={isViewMode}
             />
             {errors.patentAge && <div className="invalid-feedback">{errors.patentAge}</div>}
           </div>
@@ -44,6 +45,7 @@ export default function PatientDetails({ formData, handleChange, errors = {} }) 
               name="serviceStatus"
               value={formData.serviceStatus}
               onChange={handleChange}
+              disabled={isViewMode}
             >
               <option value="">Select Status</option>
               <option value="running">Running</option>
@@ -66,6 +68,7 @@ export default function PatientDetails({ formData, handleChange, errors = {} }) 
               name="dropperName"
               value={formData.dropperName}
               onChange={handleChange}
+              readOnly={isViewMode}
             />
             {errors.dropperName && <div className="invalid-feedback">{errors.dropperName}</div>}
           </div>
@@ -82,6 +85,7 @@ export default function PatientDetails({ formData, handleChange, errors = {} }) 
               value={formData.aboutPatent}
               onChange={handleChange}
               rows="4"
+              readOnly={isViewMode}
             />
             {errors.aboutPatent && <div className="invalid-feedback">{errors.aboutPatent}</div>}
           </div>
@@ -98,12 +102,12 @@ export default function PatientDetails({ formData, handleChange, errors = {} }) 
               value={formData.aboutWork}
               onChange={handleChange}
               rows="4"
+              readOnly={isViewMode}
             />
             {errors.aboutWork && <div className="invalid-feedback">{errors.aboutWork}</div>}
           </div>
         </div>
       </div>
-
-    </div>
+    </>
   );
 }

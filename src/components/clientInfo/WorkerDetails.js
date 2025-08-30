@@ -87,7 +87,7 @@ const WorkerDetails = ({ formData, handleChange, addWorker, removeWorker, errors
   return (
     <div>
       {formData.workers.map((worker, index) => (
-        <div key={index} className="worker-card mb-3 p-3 border rounded">
+        <div key={index} className="worker-card">
           <h5>Worker #{index + 1}</h5>
 
           <div className="row">
@@ -272,7 +272,7 @@ const WorkerDetails = ({ formData, handleChange, addWorker, removeWorker, errors
       ))}
 
       {!isViewMode && (
-        <button type="button" className="btn btn-primary btn-sm" onClick={addWorker}>
+        <button type="button" className="btn add-worker" onClick={addWorker}>
           Add Worker
         </button>
       )}

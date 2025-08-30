@@ -99,10 +99,10 @@ const ClientModal = ({ client, isOpen, onClose, onSave, onDelete, isEditMode }) 
     const addPayment = () => {
         const newPayment = {
             paymentMethod: "cash",
-            paidAmount:"",
+            paidAmount: "",
             balance: "",
             receptNo: "",
-            bookNo:"",
+            bookNo: "",
             remarks: "",
             reminderDate: "",
             __locked: false,
@@ -453,11 +453,11 @@ const ClientModal = ({ client, isOpen, onClose, onSave, onDelete, isEditMode }) 
                                                 />
                                             </div>
                                         </div>
-                                  
+
                                     </div>
 
                                     <div className="row">
-                                              <div className="col-md-4">
+                                        <div className="col-md-4">
                                             <div className="mb-3">
                                                 <label className="form-label">Mobile No 1 *</label>
                                                 <input
@@ -485,7 +485,21 @@ const ClientModal = ({ client, isOpen, onClose, onSave, onDelete, isEditMode }) 
                                                 />
                                             </div>
                                         </div>
-                                        <div className="col-md-4"></div>
+                                        <div className="col-md-4">
+                                            <div className="mb-3">
+                                                <label className="form-label">Google Location</label>
+                                                <input
+                                                    type="text"
+                                                    className="form-control"
+                                                    name="googleLocation"
+                                                    value={formData.googleLocation || ""}
+                                                    onChange={handleChange}
+                                                    disabled={!isEditMode}
+
+                                                />
+                                            </div>
+
+                                        </div>
                                     </div>
                                 </div>
                             )}

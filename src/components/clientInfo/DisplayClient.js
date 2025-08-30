@@ -322,7 +322,7 @@ export default function DisplayClient() {
                   <td>{client.clientName || 'N/A'}</td>
                   <td>{client.location || 'N/A'}</td>
                   <td>{client.typeOfService || 'N/A'}</td>
-                  <td>{client.formatDate(rDate)}</td>
+                  <td>{formatDate(rDate)}</td>
                   <td>
                     {client.mobileNo1 ? (
                       <span>

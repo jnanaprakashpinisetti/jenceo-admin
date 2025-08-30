@@ -1,6 +1,6 @@
 import React from "react";
 
-const PaymentDetails = ({ formData, handleChange, addPayment, removePayment, errors = {} }) => {
+const PaymentDetails = ({ formData, handleChange, addPayment, removePayment, errors = {}, isViewMode = false }) => {
   const paymentsErrors = errors.payments || [];
 
   // Min date (today)
@@ -62,6 +62,7 @@ const PaymentDetails = ({ formData, handleChange, addPayment, removePayment, err
                       checked={payment.paymentMethod === "cash"}
                       onChange={(e) => handleRadioChange(e, index, "cash")}
                       id={`paymentMethod-cash-${index}`}
+                      disabled={isViewMode}
                     />
                     <label className="form-check-label" htmlFor={`paymentMethod-cash-${index}`}>
                       Cash
@@ -76,6 +77,7 @@ const PaymentDetails = ({ formData, handleChange, addPayment, removePayment, err
                       checked={payment.paymentMethod === "online"}
                       onChange={(e) => handleRadioChange(e, index, "online")}
                       id={`paymentMethod-online-${index}`}
+                      disabled={isViewMode}
                     />
                     <label className="form-check-label" htmlFor={`paymentMethod-online-${index}`}>
                       Online
@@ -90,6 +92,7 @@ const PaymentDetails = ({ formData, handleChange, addPayment, removePayment, err
                       checked={payment.paymentMethod === "check"}
                       onChange={(e) => handleRadioChange(e, index, "check")}
                       id={`paymentMethod-check-${index}`}
+                      disabled={isViewMode}
                     />
                     <label className="form-check-label" htmlFor={`paymentMethod-check-${index}`}>
                       Check
@@ -121,6 +124,7 @@ const PaymentDetails = ({ formData, handleChange, addPayment, removePayment, err
                   id={`paidAmount-${index}`}
                   maxLength={5}
                   placeholder="Enter amount"
+                  readOnly={isViewMode}
                 />
                 {getErr(index, "paidAmount") && (
                   <div className="invalid-feedback">{getErr(index, "paidAmount")}</div>
@@ -144,6 +148,7 @@ const PaymentDetails = ({ formData, handleChange, addPayment, removePayment, err
                   id={`balance-${index}`}
                   maxLength={5}
                   placeholder="Enter balance"
+                  readOnly={isViewMode}
                 />
                 {getErr(index, "balance") && (
                   <div className="invalid-feedback">{getErr(index, "balance")}</div>
@@ -170,6 +175,7 @@ const PaymentDetails = ({ formData, handleChange, addPayment, removePayment, err
                   id={`receptNo-${index}`}
                   maxLength={10}
                   placeholder="Enter receipt number"
+                  readOnly={isViewMode}
                 />
                 {getErr(index, "receptNo") && (
                   <div className="invalid-feedback">{getErr(index, "receptNo")}</div>
@@ -190,6 +196,7 @@ const PaymentDetails = ({ formData, handleChange, addPayment, removePayment, err
                   id={`bookNo-${index}`}
                   maxLength={20}
                   placeholder="Enter book number"
+                  readOnly={isViewMode}
                 />
                 {getErr(index, "bookNo") && <div className="invalid-feedback">{getErr(index, "bookNo")}</div>}
               </div>
@@ -210,6 +217,7 @@ const PaymentDetails = ({ formData, handleChange, addPayment, removePayment, err
                   onChange={(e) => handleChange(e, "payments", index)}
                   id={`reminderDate-${index}`}
                   min={minDateFormatted}
+                  readOnly={isViewMode}
                 />
                 <small className="form-text text-muted">Must be today or later</small>
               </div>
@@ -227,12 +235,13 @@ const PaymentDetails = ({ formData, handleChange, addPayment, removePayment, err
                   onChange={(e) => handleChange(e, "payments", index)}
                   id={`remarks-${index}`}
                   placeholder="Any additional notes"
+                  readOnly={isViewMode}
                 />
               </div>
             </div>
           </div>
 
-          {formData.payments.length > 1 && (
+          {formData.payments.length > 1 && !isViewMode && (
             <button
               type="button"
               className="btn btn-danger btn-sm btn-remove"
@@ -244,9 +253,11 @@ const PaymentDetails = ({ formData, handleChange, addPayment, removePayment, err
         </div>
       ))}
 
-      <button type="button" className="btn btn-primary btn-sm mt-2" onClick={addPayment}>
-        + Add Another Payment
-      </button>
+      {!isViewMode && (
+        <button type="button" className="btn btn-primary btn-sm mt-2" onClick={addPayment}>
+          + Add Another Payment
+        </button>
+      )}
     </div>
   );
 };

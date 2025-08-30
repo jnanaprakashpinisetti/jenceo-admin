@@ -89,3 +89,13 @@
         color: #7c7f8c;;
     }
 }
+
+.worker-card {
+    border: 1px solid #7c7f8c;
+    border-radius: 10px;
+    padding: 10px;
+    margin-bottom: 20px;
+    &:nth-child(even) {
+        background-color: rgb(36, 35, 35);
+    }
+}

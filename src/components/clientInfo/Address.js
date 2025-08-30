@@ -1,6 +1,6 @@
 import React from "react";
 
-export default function Address({ formData, handleChange, errors = {} }) {
+export default function Address({ formData, handleChange, errors = {}, isViewMode = false }) {
   return (
     <>
       <div className="row">
@@ -14,6 +14,7 @@ export default function Address({ formData, handleChange, errors = {} }) {
               name="dNo"
               value={formData.dNo}
               onChange={handleChange}
+              readOnly={isViewMode}
             />
             {errors.dNo && <div className="invalid-feedback">{errors.dNo}</div>}
           </div>
@@ -28,6 +29,7 @@ export default function Address({ formData, handleChange, errors = {} }) {
               name="landMark"
               value={formData.landMark}
               onChange={handleChange}
+              readOnly={isViewMode}
             />
           </div>
         </div>
@@ -43,6 +45,7 @@ export default function Address({ formData, handleChange, errors = {} }) {
               name="street"
               value={formData.street}
               onChange={handleChange}
+              readOnly={isViewMode}
             />
           </div>
         </div>
@@ -56,6 +59,7 @@ export default function Address({ formData, handleChange, errors = {} }) {
               name="villageTown"
               value={formData.villageTown}
               onChange={handleChange}
+              readOnly={isViewMode}
             />
             {errors.villageTown && <div className="invalid-feedback">{errors.villageTown}</div>}
           </div>
@@ -72,6 +76,7 @@ export default function Address({ formData, handleChange, errors = {} }) {
               name="mandal"
               value={formData.mandal}
               onChange={handleChange}
+              readOnly={isViewMode}
             />
             {errors.mandal && <div className="invalid-feedback">{errors.mandal}</div>}
           </div>
@@ -86,6 +91,7 @@ export default function Address({ formData, handleChange, errors = {} }) {
               name="district"
               value={formData.district}
               onChange={handleChange}
+              readOnly={isViewMode}
             />
             {errors.district && <div className="invalid-feedback">{errors.district}</div>}
           </div>
@@ -102,6 +108,7 @@ export default function Address({ formData, handleChange, errors = {} }) {
               name="state"
               value={formData.state}
               onChange={handleChange}
+              readOnly={isViewMode}
             />
             {errors.state && <div className="invalid-feedback">{errors.state}</div>}
           </div>
@@ -118,6 +125,7 @@ export default function Address({ formData, handleChange, errors = {} }) {
               value={formData.pincode}
               onChange={handleChange}
               maxLength="6"
+              readOnly={isViewMode}
             />
             {errors.pincode && <div className="invalid-feedback">{errors.pincode}</div>}
           </div>

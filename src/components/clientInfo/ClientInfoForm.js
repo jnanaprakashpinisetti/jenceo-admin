@@ -65,12 +65,13 @@ const getInitialFormData = () => ({
   ],
 });
 
-export default function ClientInfoForm() {
+export default function ClientInfoForm({ isOpen, onClose }) {
   const [step, setStep] = useState(1);
   const totalSteps = 6;
   const [formData, setFormData] = useState(getInitialFormData());
   const [errors, setErrors] = useState({ workers: [{}], payments: [{}] });
   const [showModal, setShowModal] = useState(false);
+  const [submittedClientData, setSubmittedClientData] = useState(null); // Store submitted data
 
   const stepTitles = [
     "",
@@ -166,15 +167,6 @@ export default function ClientInfoForm() {
       ...errors,
       payments: (errors.payments || []).filter((_, i) => i !== index),
     });
-  };
-
-  // this function to get today's date in YYYY-MM-DD format
-  const getTodayDate = () => {
-    const today = new Date();
-    const year = today.getFullYear();
-    const month = String(today.getMonth() + 1).padStart(2, '0');
-    const day = String(today.getDate()).padStart(2, '0');
-    return `${year}-${month}-${day}`;
   };
 
   // COMPREHENSIVE VALIDATION FUNCTION
@@ -389,6 +381,12 @@ export default function ClientInfoForm() {
 
       const newRef = await firebaseDB.child("ClientData").push(dataToSave);
       if (newRef && newRef.key) {
+        // Store the submitted data before resetting
+        setSubmittedClientData({
+          idNo: formData.idNo,
+          clientName: formData.clientName
+        });
+        
         setShowModal(true);
         setFormData(getInitialFormData());
         setErrors({ workers: [{}], payments: [{}] });
@@ -404,14 +402,41 @@ export default function ClientInfoForm() {
     switch (step) {
       case 1:
         return (
-          <BasicInformation formData={formData} handleChange={handleChange} errors={errors} />
+          <BasicInformation 
+            formData={formData} 
+            handleChange={handleChange} 
+            errors={errors} 
+            isViewMode={false}
+          />
         );
       case 2:
-        return <Address formData={formData} handleChange={handleChange} errors={errors} />;
+        return (
+          <Address 
+            formData={formData} 
+            handleChange={handleChange} 
+            errors={errors} 
+            isViewMode={false}
+          />
+        );
       case 3:
-        return <ServiceDetails formData={formData} handleChange={handleChange} errors={errors} />;
+        return (
+          <ServiceDetails 
+            formData={formData} 
+            handleChange={handleChange} 
+            errors={errors} 
+            setErrors={setErrors}
+            isViewMode={false}
+          />
+        );
       case 4:
-        return <PatientDetails formData={formData} handleChange={handleChange} errors={errors} />;
+        return (
+          <PatientDetails 
+            formData={formData} 
+            handleChange={handleChange} 
+            errors={errors} 
+            isViewMode={false}
+          />
+        );
       case 5:
         return (
           <WorkerDetails
@@ -421,6 +446,7 @@ export default function ClientInfoForm() {
             removeWorker={removeWorker}
             errors={errors}
             setErrors={setErrors}
+            isViewMode={false}
           />
         );
       case 6:
@@ -431,6 +457,7 @@ export default function ClientInfoForm() {
             addPayment={addPayment}
             removePayment={removePayment}
             errors={errors}
+            isViewMode={false}
           />
         );
       default:
@@ -438,47 +465,54 @@ export default function ClientInfoForm() {
     }
   };
 
+  if (!isOpen) return null;
+
   return (
-    <div className="container mt-4">
-      <div className="form-card">
-        <div className="card-header">
-          <h3 className="text-center mb-0">Client Information Form</h3>
-        </div>
-
-        <div className="px-4 pt-3">
-          <p className="text-center">
-            Step {step} of {totalSteps}
-          </p>
-          <div className="progress mb-3">
-            <div
-              className="progress-bar bg-primary "
-              role="progressbar"
-              style={{ width: `${(step / totalSteps) * 100}%` }}
-            />
+    <div className="modal fade show" style={{ display: "block", backgroundColor: "rgba(3, 3, 3, 0.9)" }}>
+      <div className="modal-dialog modal-xl modal-dialog-centered client-form">
+        <div className="modal-content">
+          <div className="modal-header">
+            <h5 className="modal-title">Client Information Form</h5>
+            <button type="button" className="btn-close" onClick={onClose}></button>
           </div>
-          <h4 className="text-center mb-3">{stepTitles[step]}</h4>
-        </div>
 
-        <form onSubmit={handleSubmit}>
-          <div className="card-body">{renderStep()}</div>
+          <div className="modal-body">
+            <div className="px-4 pt-3">
+              <p className="text-center steps">
+                Step {step} of {totalSteps}
+              </p>
+              <div className="progress mb-3">
+                <div
+                  className="progress-bar bg-primary"
+                  role="progressbar"
+                  style={{ width: `${(step / totalSteps) * 100}%` }}
+                />
+              </div>
+              <h4 className="text-center mb-3 form-steps">{stepTitles[step]}</h4>
+            </div>
 
-          <div className="card-footer d-flex justify-content-end w-100">
-            {step > 1 && (
-              <button type="button" className="btn btn-secondary" onClick={prevStep}>
-                Previous
-              </button>
-            )}
-            {step < totalSteps ? (
-              <button type="button" className="btn btn-primary" onClick={nextStep}>
-                Next
-              </button>
-            ) : (
-              <button type="submit" className="btn btn-success">
-                Submit
-              </button>
-            )}
+            <form onSubmit={handleSubmit}>
+              <div className="card-body">{renderStep()}</div>
+
+              <div className="card-footer d-flex justify-content-end w-100">
+                {step > 1 && (
+                  <button type="button" className="btn btn-secondary me-2" onClick={prevStep}>
+                    Previous
+                  </button>
+                )}
+                {step < totalSteps ? (
+                  <button type="button" className="btn btn-primary" onClick={nextStep}>
+                    Next
+                  </button>
+                ) : (
+                  <button type="submit" className="btn btn-success">
+                    Submit
+                  </button>
+                )}
+              </div>
+            </form>
           </div>
-        </form>
+        </div>
       </div>
 
       {showModal && (
@@ -486,19 +520,40 @@ export default function ClientInfoForm() {
           <div className="modal-dialog modal-dialog-centered">
             <div className="modal-content">
               <div className="modal-header">
-                <h5 className="modal-title">Thank you!</h5>
+                <h5 className="modal-title text-center">Thank you!</h5>
                 <button
                   type="button"
                   className="btn-close"
-                  onClick={() => setShowModal(false)}
+                  onClick={() => {
+                    setShowModal(false);
+                    onClose();
+                  }}
                   aria-label="Close"
                 />
               </div>
               <div className="modal-body">
                 <p>Your form has been submitted successfully.</p>
+                {submittedClientData && (
+                  <div className="alert alert-info mt-3">
+                    <strong>Client Details:</strong>
+                    <div className="mt-2">
+                      <strong>ID:</strong> {submittedClientData.idNo}
+                    </div>
+                    <div>
+                      <strong>Client Name:</strong> {submittedClientData.clientName}
+                    </div>
+                  </div>
+                )}
               </div>
               <div className="modal-footer">
-                <button type="button" className="btn btn-primary" onClick={() => setShowModal(false)}>
+                <button 
+                  type="button" 
+                  className="btn btn-primary" 
+                  onClick={() => {
+                    setShowModal(false);
+                    onClose();
+                  }}
+                >
                   OK
                 </button>
               </div>

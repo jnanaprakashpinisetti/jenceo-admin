@@ -73,3 +73,43 @@
 .text-muted {
     font-size: 9px;
 }
+
+.client-form {
+    max-width: 600px;
+    .modal-content {
+        background-color: #454647;
+    }
+
+    .modal-header {
+        background-color: #727272;
+    }
+    .modal-title {
+        color: #f3f3f3;
+    }
+
+    .form-group  {
+        text-align: left;
+    }
+
+    .steps {
+        color: #e6e3e3;
+    }
+
+    .bio-info {
+         color: #e6e3e3;
+    }
+    .form-steps {
+        color: #e6e3e3;
+    }
+
+    .add-worker {
+        background-color:#f0ad4e;
+        color: #fff;
+        font-size: 12px;
+        padding: 3px 8px;
+        &:hover {
+            background-color:#e29528;
+        }
+    }
+
+}

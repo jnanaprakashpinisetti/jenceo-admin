@@ -306,7 +306,7 @@ export default function ClientInfoForm() {
       const workersErrors = formData.workers.map((w, idx) => {
         const e = {};
         if (!w.workerIdNo.trim()) {
-          e.workerIdNo = "Worker ID No is required";
+          e.workerIdNo = "Worker ID is required";
           isValid = false;
         }
         if (!w.cName.trim()) {

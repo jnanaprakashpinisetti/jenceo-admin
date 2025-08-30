@@ -32,6 +32,7 @@ const WorkerDetails = ({ formData, handleChange, addWorker, removeWorker, errors
                   id={`workerIdNo-${index}`}
                   className={`form-control ${getErr(index, "workerIdNo") ? "is-invalid" : ""}`}
                   name="workerIdNo"
+                   maxLength ={7}
                   value={worker.workerIdNo}
                   onChange={(e) => handleChange(e, "workers", index)}
                 />

@@ -12,10 +12,11 @@ const getInitialFormData = () => ({
   clientName: "",
   gender: "",
   careOf: "",
-  relation:"",
+  relation: "",
   location: "",
   mobileNo1: "",
   mobileNo2: "",
+  googleLocation: '',
   dNo: "",
   landMark: "",
   street: "",
@@ -183,13 +184,13 @@ export default function ClientInfoForm() {
 
     // Step 1: Basic Info
     if (currentStep === 1) {
-        if (!formData.idNo.trim()) {
-          newErrors.idNo = "ID No is required";
-          isValid = false;
-        } else if (!/^JC\d{5}$/.test(formData.idNo)) {
-          newErrors.idNo = "ID No must be (e.g., JC00001)";
-          isValid = false;
-        }
+      if (!formData.idNo.trim()) {
+        newErrors.idNo = "ID No is required";
+        isValid = false;
+      } else if (!/^JC\d{5}$/.test(formData.idNo)) {
+        newErrors.idNo = "ID No must be (e.g., JC00001)";
+        isValid = false;
+      }
       if (!formData.clientName.trim()) {
         newErrors.clientName = "Client Name is required";
         isValid = false;
@@ -282,7 +283,7 @@ export default function ClientInfoForm() {
       if (!formData.patentAge) {
         newErrors.patentAge = "Care Recipients Age is required";
         isValid = false;
-      } 
+      }
       if (!formData.serviceStatus) {
         newErrors.serviceStatus = "Service Status is required";
         isValid = false;

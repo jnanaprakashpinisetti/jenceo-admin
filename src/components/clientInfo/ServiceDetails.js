@@ -1,7 +1,78 @@
-import React from "react";
+import React, { useState, useEffect } from "react";
 
-export default function ServiceDetails({ formData, handleChange, errors = {} }) {
-  const today = new Date().toISOString().split('T')[0]; // Get today's date in YYYY-MM-DD format
+export default function ServiceDetails({ formData, handleChange, errors = {}, setErrors, isViewMode = false }) {
+  const [dateErrors, setDateErrors] = useState({});
+  
+  // Calculate date ranges
+  const getMinMaxDates = () => {
+    const today = new Date();
+    const oneMonthAgo = new Date();
+    oneMonthAgo.setMonth(today.getMonth() - 1);
+    
+    const twoMonthsLater = new Date();
+    twoMonthsLater.setMonth(today.getMonth() + 2);
+    
+    return {
+      minDate: oneMonthAgo.toISOString().split('T')[0],
+      maxDate: twoMonthsLater.toISOString().split('T')[0],
+      today: today.toISOString().split('T')[0]
+    };
+  };
+
+  const { minDate, maxDate, today } = getMinMaxDates();
+
+  // Validate dates when they change
+  useEffect(() => {
+    validateDates();
+  }, [formData.startingDate, formData.endingDate]);
+
+  const validateDates = () => {
+    const newDateErrors = {};
+    
+    if (formData.startingDate) {
+      const startDate = new Date(formData.startingDate);
+      const minDateObj = new Date(minDate);
+      const maxDateObj = new Date(maxDate);
+      
+      if (startDate < minDateObj) {
+        newDateErrors.startingDate = `Start date cannot be before ${minDate}`;
+      } else if (startDate > maxDateObj) {
+        newDateErrors.startingDate = `Start date cannot be after ${maxDate}`;
+      }
+    }
+    
+    if (formData.startingDate && formData.endingDate) {
+      const startDate = new Date(formData.startingDate);
+      const endDate = new Date(formData.endingDate);
+      
+      if (endDate <= startDate) {
+        newDateErrors.endingDate = "End date must be after start date";
+      }
+    }
+    
+    setDateErrors(newDateErrors);
+    
+    // Update the main errors object if setErrors function is provided
+    if (setErrors) {
+      setErrors(prevErrors => ({
+        ...prevErrors,
+        ...newDateErrors
+      }));
+    }
+  };
+
+  const handleDateChange = (e) => {
+    handleChange(e);
+    
+    // Clear the error for the changed field
+    if (dateErrors[e.target.name]) {
+      setDateErrors(prev => {
+        const newErrors = { ...prev };
+        delete newErrors[e.target.name];
+        return newErrors;
+      });
+    }
+  };
 
   return (
     <>
@@ -16,6 +87,7 @@ export default function ServiceDetails({ formData, handleChange, errors = {} }) 
               name="typeOfService"
               value={formData.typeOfService}
               onChange={handleChange}
+              readOnly={isViewMode}
             />
             {errors.typeOfService && (
               <div className="invalid-feedback">{errors.typeOfService}</div>
@@ -33,6 +105,7 @@ export default function ServiceDetails({ formData, handleChange, errors = {} }) 
               name="servicePeriod"
               value={formData.servicePeriod}
               onChange={handleChange}
+              readOnly={isViewMode}
             />
             {errors.servicePeriod && (
               <div className="invalid-feedback">{errors.servicePeriod}</div>
@@ -53,6 +126,7 @@ export default function ServiceDetails({ formData, handleChange, errors = {} }) 
               value={formData.serviceCharges}
               onChange={handleChange}
               maxLength={5}
+              readOnly={isViewMode}
             />
             {errors.serviceCharges && (
               <div className="invalid-feedback">{errors.serviceCharges}</div>
@@ -71,6 +145,7 @@ export default function ServiceDetails({ formData, handleChange, errors = {} }) 
               value={formData.travellingCharges}
               onChange={handleChange}
               maxLength={4}
+              readOnly={isViewMode}
             />
           </div>
 
@@ -83,14 +158,19 @@ export default function ServiceDetails({ formData, handleChange, errors = {} }) 
             <label>Starting Date<span className="text-danger">*</span></label>
             <input
               type="date"
-              className={`form-control ${errors.startingDate ? "is-invalid" : ""}`}
+              className={`form-control ${errors.startingDate || dateErrors.startingDate ? "is-invalid" : ""}`}
               name="startingDate"
               value={formData.startingDate}
-              onChange={handleChange}
-              max={today} // Disable future dates
+              onChange={handleDateChange}
+              min={minDate}
+              max={maxDate}
+              readOnly={isViewMode}
             />
             {errors.startingDate && (
               <div className="invalid-feedback">{errors.startingDate}</div>
+            )}
+            {dateErrors.startingDate && !errors.startingDate && (
+              <div className="invalid-feedback">{dateErrors.startingDate}</div>
             )}
           </div>
 
@@ -101,12 +181,16 @@ export default function ServiceDetails({ formData, handleChange, errors = {} }) 
             <label>Ending Date</label>
             <input
               type="date"
-              className="form-control"
+              className={`form-control ${dateErrors.endingDate ? "is-invalid" : ""}`}
               name="endingDate"
               value={formData.endingDate}
-              onChange={handleChange}
-              max={today} // Disable future dates
+              onChange={handleDateChange}
+              min={formData.startingDate || minDate}
+              readOnly={isViewMode}
             />
+            {dateErrors.endingDate && (
+              <div className="invalid-feedback">{dateErrors.endingDate}</div>
+            )}
           </div>
 
         </div>
@@ -123,6 +207,7 @@ export default function ServiceDetails({ formData, handleChange, errors = {} }) 
               value={formData.pageNo}
               onChange={handleChange}
               maxLength={3}
+              readOnly={isViewMode}
             />
             {errors.pageNo && (
               <div className="invalid-feedback">{errors.pageNo}</div>
@@ -140,6 +225,7 @@ export default function ServiceDetails({ formData, handleChange, errors = {} }) 
               name="gapIfAny"
               value={formData.gapIfAny}
               onChange={handleChange}
+              readOnly={isViewMode}
             />
           </div>
 

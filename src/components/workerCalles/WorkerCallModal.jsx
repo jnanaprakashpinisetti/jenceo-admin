@@ -17,6 +17,15 @@ export default function WorkerCallModal({ worker, isOpen, onClose, isEditMode })
 
   if (!isOpen) return null;
 
+  const normalizeArray = (val) => {
+    if (!val) return [];
+    if (Array.isArray(val)) return val;
+    if (typeof val === "string") {
+      return val.split(",").map((s) => s.trim()).filter((s) => s);
+    }
+    return [];
+  };
+
   const handleChange = (e) => {
     const { name, value } = e.target;
     setLocalWorker({ ...localWorker, [name]: value });
@@ -24,7 +33,13 @@ export default function WorkerCallModal({ worker, isOpen, onClose, isEditMode })
   };
 
   const handleSave = async () => {
-    await firebaseDB.child(`WorkerCallData/${worker.id}`).update(localWorker);
+    // Always normalize before saving
+    const toSave = {
+      ...localWorker,
+      skills: normalizeArray(localWorker.skills),
+      languages: normalizeArray(localWorker.languages),
+    };
+    await firebaseDB.child(`WorkerCallData/${worker.id}`).update(toSave);
     setShowSaveModal(true);
     setDirty(false);
   };
@@ -46,18 +61,18 @@ export default function WorkerCallModal({ worker, isOpen, onClose, isEditMode })
   // 🔹 Tag Input handler (skills & languages)
   const handleTagAdd = (field, value) => {
     if (!value.trim()) return;
-    setLocalWorker((prev) => ({
-      ...prev,
-      [field]: [...(prev[field] || []), value.trim()],
-    }));
+    setLocalWorker((prev) => {
+      const arr = normalizeArray(prev[field]);
+      return { ...prev, [field]: [...arr, value.trim()] };
+    });
     setDirty(true);
   };
 
   const handleTagRemove = (field, idx) => {
     setLocalWorker((prev) => {
-      const updated = [...(prev[field] || [])];
-      updated.splice(idx, 1);
-      return { ...prev, [field]: updated };
+      const arr = normalizeArray(prev[field]);
+      arr.splice(idx, 1);
+      return { ...prev, [field]: arr };
     });
     setDirty(true);
   };
@@ -70,15 +85,6 @@ export default function WorkerCallModal({ worker, isOpen, onClose, isEditMode })
     }
   };
 
-  const normalizeArray = (val) => {
-    if (!val) return [];
-    if (Array.isArray(val)) return val;
-    if (typeof val === "string") {
-      return val.split(",").map((s) => s.trim()).filter((s) => s);
-    }
-    return [];
-  };
-
   return (
     <>
       <div
@@ -87,7 +93,7 @@ export default function WorkerCallModal({ worker, isOpen, onClose, isEditMode })
       >
         <div className="modal-dialog modal-lg modal-dialog-centered weker-call-modal">
           <div className="modal-content">
-            <div className="modal-header ">
+            <div className="modal-header">
               <h5 className="modal-title">Worker Details</h5>
               <button type="button" className="btn-close" onClick={confirmClose}></button>
             </div>
@@ -119,7 +125,6 @@ export default function WorkerCallModal({ worker, isOpen, onClose, isEditMode })
                   <div>
                     <div className="row">
                       <div className="col-md-6">
-
                         {/* Mobile */}
                         <div className="mb-2">
                           <label className="form-label"><strong>Mobile</strong></label>
@@ -149,48 +154,48 @@ export default function WorkerCallModal({ worker, isOpen, onClose, isEditMode })
                           )}
                         </div>
                       </div>
-                      <div className="row">
-                        <div className="col-md-6">
+                    </div>
 
-                          {/* Gender */}
-                          <div className="mb-2">
-                            <label className="form-label"><strong>Gender</strong></label>
-                            {isEditMode ? (
-                              <div className="d-flex gap-3">
-                                {["Male", "Female", "Others"].map((g) => (
-                                  <label key={g}>
-                                    <input
-                                      type="radio"
-                                      name="gender"
-                                      value={g}
-                                      checked={localWorker.gender === g}
-                                      onChange={handleChange}
-                                    />{" "}
-                                    {g}
-                                  </label>
-                                ))}
-                              </div>
-                            ) : (
-                              <p>{localWorker.gender}</p>
-                            )}
-                          </div>
+                    <div className="row">
+                      <div className="col-md-6">
+                        {/* Gender */}
+                        <div className="mb-2">
+                          <label className="form-label"><strong>Gender</strong></label>
+                          {isEditMode ? (
+                            <div className="d-flex gap-3">
+                              {["Male", "Female", "Others"].map((g) => (
+                                <label key={g}>
+                                  <input
+                                    type="radio"
+                                    name="gender"
+                                    value={g}
+                                    checked={localWorker.gender === g}
+                                    onChange={handleChange}
+                                  />{" "}
+                                  {g}
+                                </label>
+                              ))}
+                            </div>
+                          ) : (
+                            <p>{localWorker.gender}</p>
+                          )}
                         </div>
-                        <div className="col-md-6">
-                          {/* Location */}
-                          <div className="mb-2">
-                            <label className="form-label"><strong>Location</strong></label>
-                            {isEditMode ? (
-                              <input
-                                type="text"
-                                name="location"
-                                value={localWorker.location || ""}
-                                onChange={handleChange}
-                                className="form-control"
-                              />
-                            ) : (
-                              <p>{localWorker.location}</p>
-                            )}
-                          </div>
+                      </div>
+                      <div className="col-md-6">
+                        {/* Location */}
+                        <div className="mb-2">
+                          <label className="form-label"><strong>Location</strong></label>
+                          {isEditMode ? (
+                            <input
+                              type="text"
+                              name="location"
+                              value={localWorker.location || ""}
+                              onChange={handleChange}
+                              className="form-control"
+                            />
+                          ) : (
+                            <p>{localWorker.location}</p>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -228,7 +233,6 @@ export default function WorkerCallModal({ worker, isOpen, onClose, isEditMode })
                 {/* Skills Info Tab */}
                 {activeTab === "skills" && (
                   <div>
-
                     <div className="row">
                       <div className="col-md-6">
                         {/* Education */}
@@ -268,6 +272,7 @@ export default function WorkerCallModal({ worker, isOpen, onClose, isEditMode })
                         </div>
                       </div>
                     </div>
+
                     <div className="row">
                       <div className="col-md-6">
                         {/* Languages */}
@@ -338,12 +343,12 @@ export default function WorkerCallModal({ worker, isOpen, onClose, isEditMode })
                         </div>
                       </div>
                     </div>
+
                     <div className="row">
                       <div className="col-md-6">
                         {/* Conversation Level */}
                         <div className="mb-2">
                           <label className="form-label"><strong>Conversation Level</strong></label>
-                          <br></br>
                           {isEditMode ? (
                             <select
                               name="conversationLevel"
@@ -360,21 +365,23 @@ export default function WorkerCallModal({ worker, isOpen, onClose, isEditMode })
                               <option value="Very Bad">Very Bad</option>
                             </select>
                           ) : (
-                            <span className={`badge ${localWorker.conversationLevel === "Very Good"
-                              ? "bg-success"
-                              : localWorker.conversationLevel === "Good"
-                                ? "bg-primary"
-                                : localWorker.conversationLevel === "Average"
+                            <span
+                              className={`badge ${
+                                localWorker.conversationLevel === "Very Good"
+                                  ? "bg-success"
+                                  : localWorker.conversationLevel === "Good"
+                                  ? "bg-primary"
+                                  : localWorker.conversationLevel === "Average"
                                   ? "bg-warning"
                                   : "bg-danger"
-                              }`}>
+                              }`}
+                            >
                               {localWorker.conversationLevel || "N/A"}
                             </span>
                           )}
                         </div>
                       </div>
                       <div className="col-md-6">
-
                         {/* Reminder Date */}
                         <div className="mb-2">
                           <label className="form-label"><strong>Reminder Date</strong></label>
@@ -417,24 +424,38 @@ export default function WorkerCallModal({ worker, isOpen, onClose, isEditMode })
 
       {/* Save Success Modal */}
       {showSaveModal && (
-        <div className="modal fade show" style={{ display: "block", backgroundColor: "rgba(0,0,0,0.5)" }}>
+        <div
+          className="modal fade show"
+          style={{ display: "block", backgroundColor: "rgba(0,0,0,0.5)" }}
+        >
           <div className="modal-dialog modal-dialog-centered">
             <div className="modal-content">
               <div className="modal-header bg-success text-white">
                 <h5 className="modal-title">Saved Successfully</h5>
-                <button type="button" className="btn-close btn-close-white" onClick={() => {
-                  setShowSaveModal(false);
-                  onClose();
-                }}></button>
+                <button
+                  type="button"
+                  className="btn-close btn-close-white"
+                  onClick={() => {
+                    setShowSaveModal(false);
+                    onClose();
+                  }}
+                ></button>
               </div>
               <div className="modal-body">
-                <p>Worker <strong>{worker.name}</strong> details have been updated.</p>
+                <p>
+                  Worker <strong>{worker.name}</strong> details have been updated.
+                </p>
               </div>
               <div className="modal-footer">
-                <button className="btn btn-success" onClick={() => {
-                  setShowSaveModal(false);
-                  onClose();
-                }}>OK</button>
+                <button
+                  className="btn btn-success"
+                  onClick={() => {
+                    setShowSaveModal(false);
+                    onClose();
+                  }}
+                >
+                  OK
+                </button>
               </div>
             </div>
           </div>
@@ -443,7 +464,10 @@ export default function WorkerCallModal({ worker, isOpen, onClose, isEditMode })
 
       {/* Unsaved Confirmation Modal */}
       {showUnsavedConfirm && (
-        <div className="modal fade show" style={{ display: "block", background: "rgba(0,0,0,0.6)" }}>
+        <div
+          className="modal fade show"
+          style={{ display: "block", background: "rgba(0,0,0,0.6)" }}
+        >
           <div className="modal-dialog modal-dialog-centered">
             <div className="modal-content">
               <div className="modal-header bg-warning">
@@ -453,14 +477,20 @@ export default function WorkerCallModal({ worker, isOpen, onClose, isEditMode })
                 <p>You have unsaved changes. Are you sure you want to close?</p>
               </div>
               <div className="modal-footer">
-                <button className="btn btn-secondary" onClick={() => setShowUnsavedConfirm(false)}>
+                <button
+                  className="btn btn-secondary"
+                  onClick={() => setShowUnsavedConfirm(false)}
+                >
                   Cancel
                 </button>
-                <button className="btn btn-danger" onClick={() => {
-                  setShowUnsavedConfirm(false);
-                  setDirty(false);
-                  onClose();
-                }}>
+                <button
+                  className="btn btn-danger"
+                  onClick={() => {
+                    setShowUnsavedConfirm(false);
+                    setDirty(false);
+                    onClose();
+                  }}
+                >
                   Discard
                 </button>
               </div>

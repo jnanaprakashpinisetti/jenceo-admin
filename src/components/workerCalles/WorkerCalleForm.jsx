@@ -1,10 +1,13 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import firebaseDB from "../../firebase";
 import SuccessModal from "../common/SuccessModal";
+import DuplicateModal from "../common/DuplicateModal"; // You'll need to create this component
 
 export default function WorkerCallForm({ isOpen, onClose }) {
   const [step, setStep] = useState(1);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [showDuplicateModal, setShowDuplicateModal] = useState(false);
+  const [existingWorker, setExistingWorker] = useState(null);
   const [formData, setFormData] = useState({
     mobileNo: "",
     name: "",
@@ -28,6 +31,17 @@ export default function WorkerCallForm({ isOpen, onClose }) {
   });
 
   const [errors, setErrors] = useState({});
+
+  // Check for duplicate mobile number
+  const checkDuplicateMobile = async (mobileNo) => {
+    try {
+      const snapshot = await firebaseDB.child("WorkerCallData").orderByChild("mobileNo").equalTo(mobileNo).once("value");
+      return snapshot.exists() ? snapshot.val() : null;
+    } catch (err) {
+      console.error("Error checking duplicate:", err);
+      return null;
+    }
+  };
 
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
@@ -89,9 +103,23 @@ export default function WorkerCallForm({ isOpen, onClose }) {
     return Object.keys(newErrors).length === 0;
   };
 
-  const nextStep = () => {
-    if (validateStep()) setStep(step + 1);
+  const nextStep = async () => {
+    if (validateStep()) {
+      // Check for duplicate mobile number only when moving to step 2
+      if (step === 1) {
+        const duplicate = await checkDuplicateMobile(formData.mobileNo);
+        if (duplicate) {
+          // Get the first existing worker data
+          const existingWorkerData = Object.values(duplicate)[0];
+          setExistingWorker(existingWorkerData);
+          setShowDuplicateModal(true);
+          return;
+        }
+      }
+      setStep(step + 1);
+    }
   };
+  
   const prevStep = () => setStep(step - 1);
 
   const handleSubmit = async (e) => {
@@ -99,6 +127,15 @@ export default function WorkerCallForm({ isOpen, onClose }) {
     if (!validateStep()) return;
 
     try {
+      // Final duplicate check before submission
+      const duplicate = await checkDuplicateMobile(formData.mobileNo);
+      if (duplicate) {
+        const existingWorkerData = Object.values(duplicate)[0];
+        setExistingWorker(existingWorkerData);
+        setShowDuplicateModal(true);
+        return;
+      }
+
       const dataToSave = {
         ...formData,
         commentDateTime: formData.comment
@@ -108,29 +145,6 @@ export default function WorkerCallForm({ isOpen, onClose }) {
       await firebaseDB.child("WorkerCallData").push(dataToSave);
 
       setShowSuccessModal(true);
-      // ✅ Reset form after submit
-      setFormData({
-        mobileNo: "",
-        name: "",
-        location: "",
-        source: "",
-        gender: "",
-        maritalStatus: "",
-        age: "",
-        experience: "No",
-        years: "",
-        skills: "",
-        homeCareSkills: [],
-        otherSkills: [],
-        languages: [],
-        education: "",
-        workingHours: "",
-        conversationLevel: "",
-        callReminderDate: "",
-        comment: "",
-        commentDateTime: "",
-      });
-      setStep(1);
     } catch (err) {
       console.error("Error saving Worker:", err);
     }
@@ -165,7 +179,7 @@ export default function WorkerCallForm({ isOpen, onClose }) {
                     <hr />
                     <div className="row mb-3">
                       <div className="col-md-6">
-                        <label className="form-label">Mobile No <span class="star">*</span></label>
+                        <label className="form-label">Mobile No <span className="star">*</span></label>
                         <input
                           type="tel"
                           name="mobileNo"
@@ -182,7 +196,7 @@ export default function WorkerCallForm({ isOpen, onClose }) {
                         )}
                       </div>
                       <div className="col-md-6">
-                        <label className="form-label">Name <span class="star">*</span></label>
+                        <label className="form-label">Name <span className="star">*</span></label>
                         <input
                           type="text"
                           name="name"
@@ -202,7 +216,7 @@ export default function WorkerCallForm({ isOpen, onClose }) {
                     {/* Location + Source */}
                     <div className="row mb-3">
                       <div className="col-md-6">
-                        <label className="form-label">From / Location <span class="star">*</span></label>
+                        <label className="form-label">From / Location <span className="star">*</span></label>
                         <input
                           type="text"
                           name="location"
@@ -218,7 +232,7 @@ export default function WorkerCallForm({ isOpen, onClose }) {
                         )}
                       </div>
                       <div className="col-md-6">
-                        <label className="form-label">Source <span class="star">*</span></label>
+                        <label className="form-label">Source <span className="star">*</span></label>
                         <select
                           name="source"
                           value={formData.source}
@@ -257,7 +271,7 @@ export default function WorkerCallForm({ isOpen, onClose }) {
                     {/* Gender + Marital Status + Age */}
                     <div className="row mb-3">
                       <div className="col-md-6">
-                        <label className="form-label">Gender <span class="star">*</span></label>
+                        <label className="form-label">Gender <span className="star">*</span></label>
                         <select
                           name="gender"
                           value={formData.gender}
@@ -295,7 +309,7 @@ export default function WorkerCallForm({ isOpen, onClose }) {
 
                     <div className="row mb-3">
                       <div className="col-md-6">
-                        <label className="form-label">Age <span class="star">*</span></label>
+                        <label className="form-label">Age <span className="star">*</span></label>
                         <input
                           type="number"
                           name="age"
@@ -311,7 +325,7 @@ export default function WorkerCallForm({ isOpen, onClose }) {
                         )}
                       </div>
                       <div className="col-md-6">
-                        <label className="form-label">Experience <span class="star">*</span></label>
+                        <label className="form-label">Experience <span className="star">*</span></label>
                         <div>
                           <div className="form-check form-check-inline">
                             <input
@@ -455,7 +469,7 @@ export default function WorkerCallForm({ isOpen, onClose }) {
 
                     <div className="row mb-3">
                       <div className="col-md-6">
-                        <label className="form-label">Education<span class="star">*</span></label>
+                        <label className="form-label">Education<span className="star">*</span></label>
                         <input
                           type="text"
                           name="education"
@@ -531,7 +545,7 @@ export default function WorkerCallForm({ isOpen, onClose }) {
 
                     <div className="row mb-3">
                       <div className="col-md-6">
-                        <label className="form-label">Conversation Level<span class="star">*</span></label>
+                        <label className="form-label">Conversation Level<span className="star">*</span></label>
                         <select
                           name="conversationLevel"
                           value={formData.conversationLevel}
@@ -636,12 +650,71 @@ export default function WorkerCallForm({ isOpen, onClose }) {
       <SuccessModal
         show={showSuccessModal}
         title="Worker Added Successfully"
-        message={`Worker Name: ${formData.name}`}
+        message={`Worker Name: ${formData.name}, <br> Mobile: ${formData.mobileNo}`}
         onClose={() => {
           setShowSuccessModal(false);
+          // Reset form after successful submission
+          setFormData({
+            mobileNo: "",
+            name: "",
+            location: "",
+            source: "",
+            gender: "",
+            maritalStatus: "",
+            age: "",
+            experience: "No",
+            years: "",
+            skills: "",
+            homeCareSkills: [],
+            otherSkills: [],
+            languages: [],
+            education: "",
+            workingHours: "",
+            conversationLevel: "",
+            callReminderDate: "",
+            comment: "",
+            commentDateTime: "",
+          });
+          setStep(1);
           onClose();
         }}
       />
+
+      {/* ✅ Duplicate Modal */}
+      {showDuplicateModal && existingWorker && (
+        <div
+          className="modal fade show"
+          style={{ display: "block", backgroundColor: "rgba(0,0,0,0.6)" }}
+        >
+          <div className="modal-dialog modal-dialog-centered">
+            <div className="modal-content">
+              <div className="modal-header bg-danger text-white">
+                <h5 className="modal-title">Duplicate Mobile Number</h5>
+                <button
+                  type="button"
+                  className="btn-close"
+                  onClick={() => setShowDuplicateModal(false)}
+                ></button>
+              </div>
+              <div className="modal-body">
+                <p>This mobile number already exists in our system:</p>
+                <p ><strong>Name:</strong> {existingWorker.name}</p>
+                <p className="text-danger"><strong>Mobile:</strong> {existingWorker.mobileNo}</p>
+                <p><strong>Location:</strong> {existingWorker.location}</p>
+              </div>
+              <div className="modal-footer">
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={() => setShowDuplicateModal(false)}
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 }

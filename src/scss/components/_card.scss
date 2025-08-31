@@ -69,15 +69,21 @@
 
 }
 
-
+.form-check-label {
+    color: $sec-white;
+}
 
 .form-check-input {
     border-radius: 0 !important;
     background-color: transparent !important;
+    border-color: $sec-white;
 
-    &:checked,
-    &:focus {
+    &:checked {
         border-color: #fff;
+    }
+    &:focus {
+        border-color: $sec-white;
+        box-shadow: none;
     }
 }
 

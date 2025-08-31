@@ -10,16 +10,16 @@ export default function WorkerCallsData() {
             <div className="container-fluid">
                 <div className="row">
                     <div className="col-md-12">
+                        <div className='text-center'>
 
-                        <button className="btn btn-primary" onClick={() => setShowForm(true)}>
-                            + Add Worker Call
+
+                        <button className="btn btn-warning" onClick={() => setShowForm(true)}>
+                            Add Worker Call
                         </button>
+                        </div>
                         <WorkerCalleForm isOpen={showForm} onClose={() => setShowForm(false)} />
 
-
                         <WorkerCalleDisplay />
-
-
                     </div>
                 </div>
             </div>

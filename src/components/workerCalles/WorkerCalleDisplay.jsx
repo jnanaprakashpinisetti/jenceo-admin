@@ -19,8 +19,8 @@ export default function WorkerCallDisplay() {
 
   // Filters
   const [searchTerm, setSearchTerm] = useState("");
-  const [skillFilter, setSkillFilter] = useState("");
-  const [selectedGender, setSelectedGender] = useState("");
+  const [selectedSkills, setSelectedSkills] = useState([]);
+  const [selectedGender, setSelectedGender] = useState([]);
   const [selectedHours, setSelectedHours] = useState("");
   const [reminderFilter, setReminderFilter] = useState("");
 
@@ -30,10 +30,7 @@ export default function WorkerCallDisplay() {
   const [totalPages, setTotalPages] = useState(1);
 
   // Sorting
-  const [sortConfig, setSortConfig] = useState({ key: null, direction: "asc" });
-
-  // Theme toggle
-  const [darkTheme, setDarkTheme] = useState(true);
+  const [sortConfig, setSortConfig] = useState({ key: "id", direction: "desc" });
 
   // Reminder helpers
   const today = new Date();
@@ -113,14 +110,16 @@ export default function WorkerCallDisplay() {
       w.location?.toLowerCase().includes(term) ||
       w.mobileNo?.toLowerCase().includes(term);
 
-    const matchesSkill = skillFilter
-      ? normalizeArray(w.skills)
-          .join(" ")
-          .toLowerCase()
-          .includes(skillFilter.toLowerCase())
-      : true;
+    const matchesSkill =
+      selectedSkills.length > 0
+        ? selectedSkills.some((skill) =>
+          normalizeArray(w.skills).includes(skill)
+        )
+        : true;
 
-    const matchesGender = selectedGender ? w.gender === selectedGender : true;
+    const matchesGender =
+      selectedGender.length > 0 ? selectedGender.includes(w.gender) : true;
+
     const matchesHours = selectedHours ? w.workingHours === selectedHours : true;
 
     const d = getReminderDate(w);
@@ -141,6 +140,11 @@ export default function WorkerCallDisplay() {
     if (!sortConfig.key) return 0;
     const valA = a[sortConfig.key] || "";
     const valB = b[sortConfig.key] || "";
+    if (sortConfig.key === "id") {
+      return sortConfig.direction === "asc"
+        ? valA.localeCompare(valB)
+        : valB.localeCompare(valA);
+    }
     if (sortConfig.key === "callReminderDate") {
       return sortConfig.direction === "asc"
         ? new Date(valA) - new Date(valB)
@@ -199,35 +203,44 @@ export default function WorkerCallDisplay() {
   };
 
   // Export to Excel
-const handleExport = () => {
-  const exportData = filteredWorkers.map((w, idx) => ({
-    SNo: idx + 1,
-    Name: w.name,
-    Location: w.location,
-    Gender: w.gender,
-    Skills: normalizeArray(w.skills).join(", "),
-    ReminderDate: w.callReminderDate
-      ? new Date(w.callReminderDate).toLocaleDateString("en-GB")
-      : "—",
-    Mobile: w.mobileNo,
-    Communication: w.conversationLevel,
-  }));
+  const handleExport = () => {
+    const exportData = filteredWorkers.map((w, idx) => ({
+      SNo: idx + 1,
+      Name: w.name,
+      Location: w.location,
+      Gender: w.gender,
+      Skills: normalizeArray(w.skills).join(", "),
+      ReminderDate: w.callReminderDate
+        ? new Date(w.callReminderDate).toLocaleDateString("en-GB")
+        : "—",
+      Mobile: w.mobileNo,
+      Communication: w.conversationLevel,
+    }));
 
-  const ws = XLSX.utils.json_to_sheet(exportData);
-  const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, "Workers");
-  XLSX.writeFile(wb, "WorkerCallData.xlsx");
-};
-
+    const ws = XLSX.utils.json_to_sheet(exportData);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Workers");
+    XLSX.writeFile(wb, "WorkerCallData.xlsx");
+  };
 
   if (loading) return <div className="text-center my-5">Loading...</div>;
   if (error) return <div className="alert alert-danger">Error: {error}</div>;
 
+  // Home care skills for filters
+  const homeCareSkills = [
+    "Nursing",
+    "Patient Care",
+    "Care Taker",
+    "Old Age Care",
+    "Baby Care",
+    "Bedside Attender",
+    "Supporting",
+  ];
+
   return (
-    <div className={darkTheme ? "bg-dark text-light p-3" : "bg-light text-dark p-3"}>
+    <div className="p-3">
       {/* Controls */}
       <div className="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
-        {/* Show entries */}
         <div className="d-flex align-items-center">
           <span className="me-2">Show</span>
           <select
@@ -247,125 +260,103 @@ const handleExport = () => {
           </select>
           <span className="ms-2">entries</span>
         </div>
+        <div className="search-box">
+          <input
+            type="text"
+            className="form-control"
+            placeholder="Search..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+          />
 
-        {/* Search */}
-        <input
-          type="text"
-          className="form-control w-auto"
-          placeholder="Search..."
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-        />
+        </div>
 
-        {/* Reset */}
-        <button
-          className="btn btn-secondary"
-          onClick={() => {
-            setSearchTerm("");
-            setSkillFilter("");
-            setSelectedGender("");
-            setSelectedHours("");
-            setReminderFilter("");
-          }}
-        >
-          Reset Filters
-        </button>
-
-        {/* Export */}
-        <button className="btn btn-success" onClick={handleExport}>
+        {/* Export Excel Function */}
+        {/* <button className="btn btn-success" onClick={handleExport}>
           Export Excel
-        </button>
-
-        {/* Theme toggle */}
-        <button
-          className="btn btn-outline-info"
-          onClick={() => setDarkTheme(!darkTheme)}
-        >
-          {darkTheme ? "Light Mode" : "Dark Mode"}
-        </button>
+        </button> */}
 
         <div className="reminder-pill">Reminder Calls: {reminderCount}</div>
       </div>
 
       {/* Filters */}
-      <div className="mb-3 d-flex flex-wrap gap-3">
-        <div>
-          <strong>Skill:</strong>
-          <input
-            type="text"
-            className="form-control"
-            value={skillFilter}
-            onChange={(e) => setSkillFilter(e.target.value)}
-          />
-        </div>
-        <div>
-          <strong>Gender:</strong>
-          <select
-            className="form-select"
-            value={selectedGender}
-            onChange={(e) => setSelectedGender(e.target.value)}
+      <div className="mb-3">
+        <div className="filter-wrapper">
+          {/* Gender filter */}
+          <div className="d-flex gap-2">
+            <h5>Gender:</h5>
+            {["Male", "Female", "Others"].map((g) => (
+              <label key={g} className="form-check-label me-2">
+                <input
+                  type="checkbox"
+                  className="form-check-input me-1"
+                  checked={selectedGender.includes(g)}
+                  onChange={(e) =>
+                    setSelectedGender((prev) =>
+                      e.target.checked
+                        ? [...prev, g]
+                        : prev.filter((x) => x !== g)
+                    )
+                  }
+                />
+                {g}
+              </label>
+            ))}
+          </div>
+
+          {/* Skill filter */}
+          <div className="d-flex flex-wrap gap-2">
+            <h5>Skills:</h5>
+            {homeCareSkills.map((skill) => (
+              <label key={skill} className="form-check-label me-2">
+                <input
+                  type="checkbox"
+                  className="form-check-input me-1"
+                  checked={selectedSkills.includes(skill)}
+                  onChange={(e) =>
+                    setSelectedSkills((prev) =>
+                      e.target.checked
+                        ? [...prev, skill]
+                        : prev.filter((s) => s !== skill)
+                    )
+                  }
+                />
+                {skill}
+              </label>
+            ))}
+          </div>
+
+          {/* Reset button */}
+          <button
+            className="btn btn-secondary"
+            onClick={() => {
+              setSearchTerm("");
+              setSelectedSkills([]);
+              setSelectedGender([]);
+              setSelectedHours("");
+              setReminderFilter("");
+            }}
           >
-            <option value="">All</option>
-            <option>Male</option>
-            <option>Female</option>
-            <option>Others</option>
-          </select>
+            Reset Filters
+          </button>
         </div>
-        <div>
-          <strong>Hours:</strong>
-          <select
-            className="form-select"
-            value={selectedHours}
-            onChange={(e) => setSelectedHours(e.target.value)}
-          >
-            <option value="">All</option>
-            <option value="12">12 Hours</option>
-            <option value="24">24 Hours</option>
-          </select>
-        </div>
-        <div>
-          <strong>Reminder:</strong>
-          <select
-            className="form-select"
-            value={reminderFilter}
-            onChange={(e) => setReminderFilter(e.target.value)}
-          >
-            <option value="">All</option>
-            <option value="overdue">Overdue</option>
-            <option value="today">Today</option>
-            <option value="tomorrow">Tomorrow</option>
-            <option value="upcoming">Upcoming</option>
-          </select>
-        </div>
+
+
       </div>
 
-      {/* Table */}
+      {/* Dispaly Table */}
       <div className="table-responsive">
-        <table
-          className={`table table-hover ${
-            darkTheme ? "table-dark" : "table-light"
-          }`}
-        >
+        <table className="table table-hover table-dark">
           <thead>
             <tr>
               <th>S.No</th>
-              <th onClick={() => setSortConfig({ key: "name", direction: sortConfig.direction === "asc" ? "desc" : "asc" })}>
-                Name ⬍
-              </th>
-              <th onClick={() => setSortConfig({ key: "location", direction: sortConfig.direction === "asc" ? "desc" : "asc" })}>
-                Location ⬍
-              </th>
-              <th onClick={() => setSortConfig({ key: "gender", direction: sortConfig.direction === "asc" ? "desc" : "asc" })}>
-                Gender ⬍
-              </th>
+              <th>Name</th>
+              <th>Location</th>
+              <th>Gender</th>
+              <th>Reminder Date</th>
               <th>Skills</th>
-              <th onClick={() => setSortConfig({ key: "callReminderDate", direction: sortConfig.direction === "asc" ? "desc" : "asc" })}>
-                Reminder Date ⬍
-              </th>
               <th>Mobile</th>
-              <th onClick={() => setSortConfig({ key: "conversationLevel", direction: sortConfig.direction === "asc" ? "desc" : "asc" })}>
-                Communication ⬍
-              </th>
+              <th>Communication</th>
               <th>Actions</th>
             </tr>
           </thead>
@@ -376,25 +367,33 @@ const handleExport = () => {
                 <td>{w.name || "N/A"}</td>
                 <td>{w.location || "N/A"}</td>
                 <td>{w.gender || "N/A"}</td>
-                <td>{normalizeArray(w.skills).join(", ") || "N/A"}</td>
                 <td>
                   {w.callReminderDate
                     ? new Date(w.callReminderDate).toLocaleDateString("en-GB")
                     : "—"}
                 </td>
+                <td>{normalizeArray(w.skills).join(", ") || "N/A"}</td>
+
                 <td>
                   {w.mobileNo}{" "}
                   {w.mobileNo && (
                     <a
                       href={`tel:${w.mobileNo}`}
-                      className="btn btn-sm btn-success ms-2"
+                      className="btn btn-sm btn-info ms-2"
                     >
-                      📞
+                      Call
                     </a>
                   )}
                 </td>
                 <td>
-                  <span className="badge bg-info">
+                  <span className={`badge ${w.conversationLevel === "Very Good"
+                    ? "bg-success"
+                    : w.conversationLevel === "Good"
+                      ? "bg-primary"
+                      : w.conversationLevel === "Average"
+                        ? "bg-warning"
+                        : "bg-danger"
+                    }`}>
                     {w.conversationLevel || "N/A"}
                   </span>
                 </td>
@@ -441,7 +440,6 @@ const handleExport = () => {
             setIsEditMode(false);
           }}
           isEditMode={isEditMode}
-          darkTheme={darkTheme}
         />
       )}
 

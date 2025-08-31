@@ -136,14 +136,18 @@ export default function PettyCashForm() {
 
   return (
     <div className="container mt-4">
-      <h3 className="mb-4">Petty Cash Form</h3>
-      <p><strong>Employee:</strong> Admin</p>
-      <p><strong>Current Month:</strong> {formatMonth(today)}</p>
+      <h3 className="mb-4 text-center opacity-75">Petty Cash Form</h3>
+      <hr></hr>
+      <div className="d-flex justify-content-between align-items-center p-3 opacity-75">
+      <p>Admin</p>
+      <p>{formatMonth(today)}</p>
 
-      <form onSubmit={handleSubmit} noValidate>
+      </div>
+
+      <form onSubmit={handleSubmit} noValidate className="pb-5">
         {/* Main & Sub Category */}
-        <div className="row mb-3">
-          <div className="col-md-6">
+        <div className="row mb-0">
+          <div className="col-md-6 mb-3">
             <label><strong>Main Category <span className="star">*</span></strong></label>
             <select
               name="mainCategory"
@@ -159,7 +163,7 @@ export default function PettyCashForm() {
             </select>
             {errors.mainCategory && <div className="invalid-feedback">{errors.mainCategory}</div>}
           </div>
-          <div className="col-md-6">
+          <div className="col-md-6 mb-3">
             <label><strong>Sub Category <span className="star">*</span></strong></label>
             <select
               name="subCategory"
@@ -180,8 +184,8 @@ export default function PettyCashForm() {
 
         {/* Extra Fields */}
         {extraFieldsConfig[formData.subCategory] && (
-          <div className="row mb-3">
-            <div className="col-md-6">
+          <div className="row mb-0">
+            <div className="col-md-6 mb-3">
               <label><strong>{extraFieldsConfig[formData.subCategory][0]} <span className="star">*</span></strong></label>
               <input
                 type="text"
@@ -193,7 +197,7 @@ export default function PettyCashForm() {
               />
               {errors.extraField1 && <div className="invalid-feedback">{errors.extraField1}</div>}
             </div>
-            <div className="col-md-6">
+            <div className="col-md-6 mb-3">
               <label><strong>{extraFieldsConfig[formData.subCategory][1]} <span className="star">*</span></strong></label>
               <input
                 type="text"
@@ -209,8 +213,8 @@ export default function PettyCashForm() {
         )}
 
         {/* Date & Description */}
-        <div className="row mb-3">
-          <div className="col-md-6">
+        <div className="row mb-0">
+          <div className="col-md-6 mb-3">
             <label><strong>Date <span className="star">*</span></strong></label>
             <input
               type="date"
@@ -224,7 +228,7 @@ export default function PettyCashForm() {
             />
             {errors.date && <div className="invalid-feedback">{errors.date}</div>}
           </div>
-          <div className="col-md-6">
+          <div className="col-md-6 mb-3">
             <label><strong>Description <span className="star">*</span></strong></label>
             <input
               type="text"
@@ -239,8 +243,8 @@ export default function PettyCashForm() {
         </div>
 
         {/* Quantity, Price, Total */}
-        <div className="row mb-3">
-          <div className="col-md-4">
+        <div className="row mb-0">
+          <div className="col-md-4 mb-3">
             <label><strong>Quantity <span className="star">*</span></strong></label>
             <input
               type="number"
@@ -252,7 +256,7 @@ export default function PettyCashForm() {
             />
             {errors.quantity && <div className="invalid-feedback">{errors.quantity}</div>}
           </div>
-          <div className="col-md-4">
+          <div className="col-md-4 mb-3">
             <label><strong>Price <span className="star">*</span></strong></label>
             <input
               type="number"
@@ -264,7 +268,7 @@ export default function PettyCashForm() {
             />
             {errors.price && <div className="invalid-feedback">{errors.price}</div>}
           </div>
-          <div className="col-md-4">
+          <div className="col-md-4 mb-3">
             <label><strong>Total</strong></label>
             <input type="number" name="total" value={formData.total} className="form-control" disabled />
           </div>

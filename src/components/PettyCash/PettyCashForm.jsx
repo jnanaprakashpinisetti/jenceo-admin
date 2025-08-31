@@ -135,12 +135,12 @@ export default function PettyCashForm() {
     date.toLocaleString("en-US", { month: "long", year: "numeric" });
 
   return (
-    <div className="container mt-4">
-      <h3 className="mb-4 text-center opacity-75">Petty Cash Form</h3>
-      <hr></hr>
+    <div className="container mt-4 client-form">
+      <h3 className="mb-4 text-center opacity-75 text-white">Petty Cash Form</h3>
+      <hr className="text-white"></hr>
       <div className="d-flex justify-content-between align-items-center p-3 opacity-75">
-      <p>Admin</p>
-      <p>{formatMonth(today)}</p>
+      <p className="text-white">Admin</p>
+      <p className="text-white">{formatMonth(today)}</p>
 
       </div>
 

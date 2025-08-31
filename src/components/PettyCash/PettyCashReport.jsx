@@ -140,7 +140,7 @@ export default function PettyCashReport() {
   };
 
   return (
-    <div className="container mt-4 pettyCash-report">
+    <div className="container-fluid mt-4 pettyCash-report">
       <h3 className="mb-3 opacity-75">Petty Cash Report</h3>
 
       {/* Month Tabs */}

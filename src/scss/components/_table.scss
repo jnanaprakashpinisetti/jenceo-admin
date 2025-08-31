@@ -252,3 +252,213 @@ table {
         }
     }
 }
+
+
+// Patty Cash Table
+
+.custom-tabs.nav-tabs button {
+    color: $sec-white;
+}
+
+// Table-1
+.pettyCash-report {
+
+    .form-control, 
+    .form-select {
+        background-color: #7c7c7c;
+        border-color: #7c7c7c;
+        border-radius: 10px;
+        
+    }
+
+}
+
+// Table - 2
+.pettyCash-Category {
+    margin-top: 20px;
+    td[rowspan] {
+        vertical-align: middle !important;
+        font-weight: bold;
+    }
+
+    .catagory-header {
+        th {
+            background-color: #2D855D !important;
+             color: #B0F9D8 !important;
+        }
+    }
+
+    .table-success {
+        td {
+            color: #115c4b !important;
+        }
+
+        &:nth-child(even) {
+            td {
+                background-color: #DAEFE6 !important;
+            }
+        }
+    }
+
+    .table-warning {
+        td {
+            color: #D3AE3B !important;
+        }
+
+        &:nth-child(even) {
+            td {
+                background-color: #FCF2D2 !important;
+            }
+        }
+    }
+    .table-secondary {
+        td {
+            color: #597FCA !important;
+        }
+
+        &:nth-child(even) {
+            td {
+                background-color: #EBEDEF !important;
+            }
+        }
+    }
+    .table-info {
+        td {
+            color: #3A97AB !important;
+        }
+
+        &:nth-child(even) {
+            td {
+                background-color: #DFF7FC !important;
+            }
+        }
+    }
+    .table-danger {
+        td {
+            color: #D3626D !important;
+        }
+
+        &:nth-child(even) {
+            td {
+                background-color: #FBE0E3 !important;
+            }
+        }
+    }
+    .table-primary {
+        td {
+            color: #3C67A7 !important;
+        }
+
+        &:nth-child(even) {
+            td {
+                background-color: #DBE9FE !important;
+            }
+        }
+    }
+
+
+
+
+}
+
+/* Tabs */
+.custom-tabs {
+  .nav-link {
+    border-radius: 0.5rem 0.5rem 0 0;
+    font-weight: 500;
+    padding: 8px 16px;
+    transition: all 0.2s ease-in-out;
+
+    &.active {
+      background-color: #0d6efd;
+      color: #fff !important;
+      font-weight: 600;
+    }
+
+    &:hover {
+      background-color: #e9ecef;
+    }
+  }
+}
+
+/* Summary Table */
+
+/* Sticky header */
+.freeze-header {
+  thead th {
+    position: sticky;
+    top: 0;
+    z-index: 3;
+    background-color: #212529 !important;
+    color: #fff !important;
+    text-align: center;
+  }
+}
+
+/* Sticky columns */
+.freeze-enabled {
+  td:first-child,
+  th:first-child {
+    position: sticky;
+    left: 0;
+    z-index: 2;
+    background-color: #f8f9fa !important;
+    font-weight: bold;
+  }
+
+  td:nth-child(2),
+  th:nth-child(2) {
+    position: sticky;
+    left: 150px; // adjust for col1 width
+    z-index: 2;
+    background-color: #f8f9fa !important;
+  }
+
+  &.freeze-header {
+    thead th:first-child,
+    thead th:nth-child(2) {
+      z-index: 4;
+    }
+  }
+}
+
+/* Category total rows */
+.table-category-total {
+  font-weight: bold;
+  border-top: 2px solid #000;
+}
+
+/* Category colors */
+.table-success.table-category-total {
+  background-color: #28a745 !important;
+  color: #fff;
+}
+.table-warning.table-category-total {
+  background-color: #e0a800 !important;
+  color: #000;
+}
+.table-secondary.table-category-total {
+  background-color: #6c757d !important;
+  color: #fff;
+}
+.table-info.table-category-total {
+  background-color: #117a8b !important;
+  color: #fff;
+}
+.table-danger.table-category-total {
+  background-color: #c82333 !important;
+  color: #fff;
+}
+.table-primary.table-category-total {
+  background-color: #004085 !important;
+  color: #fff;
+}
+
+/* Sticky Grand Total row */
+.sticky-grand-total {
+  position: sticky;
+  bottom: 0;
+  z-index: 3;
+  background-color: #218838 !important;
+  color: #fff !important;
+}

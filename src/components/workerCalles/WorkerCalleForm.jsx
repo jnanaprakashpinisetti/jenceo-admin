@@ -650,7 +650,7 @@ export default function WorkerCallForm({ isOpen, onClose }) {
       <SuccessModal
         show={showSuccessModal}
         title="Worker Added Successfully"
-        message={`Worker Name: ${formData.name}, <br> Mobile: ${formData.mobileNo}`}
+        message={`Worker Name: ${formData.name}, Mobile: ${formData.mobileNo}`}
         onClose={() => {
           setShowSuccessModal(false);
           // Reset form after successful submission

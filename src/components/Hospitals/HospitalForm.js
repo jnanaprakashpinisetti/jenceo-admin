@@ -189,6 +189,28 @@ const HospitalForm = ({ onSubmit, initialData = {}, isEdit = false }) => {
     setSubmitStatus({ success: null, message: "" });
   };
 
+  const getCurrentLocation = () => {
+  if (navigator.geolocation) {
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        const { latitude, longitude } = pos.coords;
+        const mapsUrl = `https://www.google.com/maps?q=${latitude},${longitude}`;
+        setFormData((prev) => ({
+          ...prev,
+          locationLink: mapsUrl,
+        }));
+      },
+      (err) => {
+        console.error("Error getting location:", err);
+        alert("Unable to fetch current location. Please allow location access.");
+      }
+    );
+  } else {
+    alert("Geolocation is not supported by this browser.");
+  }
+};
+
+
   return (
     <div className="container">
       <div className="form-card shadow">
@@ -342,26 +364,36 @@ const HospitalForm = ({ onSubmit, initialData = {}, isEdit = false }) => {
               </div>
 
               {/* Location Link */}
-              <div className="col-12">
-                <label htmlFor="locationLink" className="form-label">
-                  Location Link
-                </label>
-                <input
-                  type="url"
-                  className={`form-control ${errors.locationLink ? "is-invalid" : ""}`}
-                  id="locationLink"
-                  name="locationLink"
-                  value={formData.locationLink}
-                  onChange={handleChange}
-                  placeholder="https://maps.google.com/..."
-                />
-                {errors.locationLink && (
-                  <div className="invalid-feedback">{errors.locationLink}</div>
-                )}
-                <div className="form-text">
-                  Enter Google Maps link or other location URL
-                </div>
-              </div>
+             <div className="col-12">
+  <label htmlFor="locationLink" className="form-label">
+    Location Link
+  </label>
+  <div className="input-group">
+    <input
+      type="url"
+      className={`form-control ${errors.locationLink ? "is-invalid" : ""}`}
+      id="locationLink"
+      name="locationLink"
+      value={formData.locationLink}
+      onChange={handleChange}
+      placeholder="https://maps.google.com/..."
+    />
+    <button
+      type="button"
+      className="btn btn-outline-primary mb-0"
+      onClick={getCurrentLocation}
+    >
+      Use Current Location
+    </button>
+  </div>
+  {errors.locationLink && (
+    <div className="invalid-feedback">{errors.locationLink}</div>
+  )}
+  <div className="form-text">
+    Enter Google Maps link or click to use current location
+  </div>
+</div>
+
 
               {/* Form Actions */}
               <div className="col-12 mt-4">

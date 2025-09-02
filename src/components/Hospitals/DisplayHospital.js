@@ -247,10 +247,10 @@ export default function DisplayHospital() {
     return (
         <div>
             {/* ✅ Filters & Search */}
-            <div className="d-flex flex-wrap gap-2 mb-3">
+            <div className="hospital-filter">
                 <input
                     type="text"
-                    className="form-control w-50"
+                    className="form-control"
                     placeholder="Search..."
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}

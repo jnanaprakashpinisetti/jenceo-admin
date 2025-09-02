@@ -74,25 +74,27 @@ table {
             background-color: #777B7E;
             color: #EFF0F4;
             border-color: #4d5154;
-               &:focus {
-            box-shadow: none; 
-        }
+
+            &:focus {
+                box-shadow: none;
+            }
         }
 
         &.active {
             box-shadow: none;
+
             .page-link {
                 background-color: #535353;
             }
         }
 
-     &.disabled {
-        opacity: .8;
+        &.disabled {
+            opacity: .8;
 
-        .page-link {
-            opacity: .5;
+            .page-link {
+                opacity: .5;
+            }
         }
-     }
 
     }
 
@@ -106,19 +108,24 @@ table {
             }
         }
 
-}
+    }
 }
 
 .running-client {
-    td,th {
+
+    td,
+    th {
         &:nth-child(5) {
             text-align: center;
         }
     }
 
 }
+
 .exit-client {
-    td,th {
+
+    td,
+    th {
         &:nth-child(5) {
             text-align: center;
         }
@@ -129,7 +136,7 @@ table {
 /* ClientTable.css */
 .reminder-overdue {
     color: red !important;
-    
+
     td {
         &:nth-child(5) {
             color: red !important;
@@ -139,6 +146,7 @@ table {
 
 .reminder-today {
     color: yellow !important;
+
     td {
         &:nth-child(5) {
             color: yellow !important;
@@ -150,6 +158,7 @@ table {
 
 .reminder-tomorrow {
     color: orange !important;
+
     td {
         &:nth-child(5) {
             color: orange !important;
@@ -161,6 +170,7 @@ table {
 
 .reminder-upcoming {
     color: #3795e2 !important;
+
     td {
         &:nth-child(5) {
             color: #3795e2 !important;
@@ -177,62 +187,81 @@ table {
 .reminder-today:hover,
 .reminder-tomorrow:hover,
 .reminder-upcoming:hover {
-  opacity: 0.9;
+    opacity: 0.9;
 }
 
 .reminder-pill {
-  padding: 10px 20px;
-  border-radius: 50rem;
-  background: #4f75f3;
-  color: #fff;
-  font-weight: 600;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+    padding: 10px 20px;
+    border-radius: 50rem;
+    background: #4f75f3;
+    color: #fff;
+    font-weight: 600;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
 }
 
 /* Ensure table rows maintain proper contrast */
 .table-dark {
-  --bs-table-bg: #212529;
-  --bs-table-striped-bg: #2c3034;
-  --bs-table-striped-color: #fff;
-  --bs-table-active-bg: #373b3e;
-  --bs-table-active-color: #fff;
-  --bs-table-hover-bg: #323539;
-  --bs-table-hover-color: #fff;
-  color: #fff;
-  border-color: #373b3e;
+    --bs-table-bg: #212529;
+    --bs-table-striped-bg: #2c3034;
+    --bs-table-striped-color: #fff;
+    --bs-table-active-bg: #373b3e;
+    --bs-table-active-color: #fff;
+    --bs-table-hover-bg: #323539;
+    --bs-table-hover-color: #fff;
+    color: #fff;
+    border-color: #373b3e;
 }
 
 /* Pagination styling */
 .pagination-wrapper .page-item.active .page-link {
-  background-color: #6c757d;
-  border-color: #6c757d;
+    background-color: #6c757d;
+    border-color: #6c757d;
 }
 
 .pagination-wrapper .page-link {
-  color: #6c757d;
+    color: #6c757d;
 }
 
 .pagination-wrapper .page-link:hover {
-  color: #495057;
+    color: #495057;
 }
 
 /* Modal backdrop */
 .modal-backdrop {
-  background-color: rgba(0, 0, 0, 0.5);
+    background-color: rgba(0, 0, 0, 0.5);
 }
 
 /* Status badges */
-.badge.bg-success { background-color: #198754 !important; }
-.badge.bg-secondary { background-color: #6c757d !important; }
-.badge.bg-warning { background-color: #ffc107 !important; color: #000 !important; }
-.badge.bg-info { background-color: #0dcaf0 !important; color: #000 !important; }
-.badge.bg-primary { background-color: #0d6efd !important; }
-.badge.bg-dark { background-color: #212529 !important; }
+.badge.bg-success {
+    background-color: #198754 !important;
+}
+
+.badge.bg-secondary {
+    background-color: #6c757d !important;
+}
+
+.badge.bg-warning {
+    background-color: #ffc107 !important;
+    color: #000 !important;
+}
+
+.badge.bg-info {
+    background-color: #0dcaf0 !important;
+    color: #000 !important;
+}
+
+.badge.bg-primary {
+    background-color: #0d6efd !important;
+}
+
+.badge.bg-dark {
+    background-color: #212529 !important;
+}
 
 // Filters styles
 .filter-wrapper {
-   background-color: #323131;
-   border-radius: 10px;
+    background-color: #323131;
+    border-radius: 10px;
     padding: 10px 20px;
     display: flex;
     gap: 3px;
@@ -247,11 +276,13 @@ table {
 
 .search-box {
     width: 30%;
+
     input {
         background-color: transparent;
         border: 1px solid $sec-white;
         border-radius: 30px;
         width: 100%;
+
         &::placeholder {
             color: $sec-white;
         }
@@ -268,12 +299,12 @@ table {
 // Table-1
 .pettyCash-report {
 
-    .form-control, 
+    .form-control,
     .form-select {
         background-color: #7c7c7c;
         border-color: #7c7c7c;
         border-radius: 10px;
-        
+
     }
 
 }
@@ -281,6 +312,7 @@ table {
 // Table - 2
 .pettyCash-Category {
     margin-top: 20px;
+
     td[rowspan] {
         vertical-align: middle !important;
         font-weight: bold;
@@ -289,7 +321,7 @@ table {
     .catagory-header {
         th {
             background-color: #2D855D !important;
-             color: #B0F9D8 !important;
+            color: #B0F9D8 !important;
         }
     }
 
@@ -316,6 +348,7 @@ table {
             }
         }
     }
+
     .table-secondary {
         td {
             color: #597FCA !important;
@@ -327,6 +360,7 @@ table {
             }
         }
     }
+
     .table-info {
         td {
             color: #3A97AB !important;
@@ -338,6 +372,7 @@ table {
             }
         }
     }
+
     .table-danger {
         td {
             color: #D3626D !important;
@@ -349,6 +384,7 @@ table {
             }
         }
     }
+
     .table-primary {
         td {
             color: #3C67A7 !important;
@@ -363,5 +399,40 @@ table {
 
 
 
+
+}
+
+.hospital-filter {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 15px;
+    opacity: .8;
+
+    @include mobile {
+        display: block;
+        margin-top: 15px;
+        margin-bottom: 15px;
+        padding: 0 15px;
+    }
+
+    .form-control {
+        max-height: fit-content;
+
+        @include mobile {
+            width: 100% !important;
+            margin-bottom: 15px;
+            margin-top: 25px;
+        }
+
+    }
+
+    .form-select {
+        max-height: fit-content;
+
+        @include mobile {
+            width: 100% !important;
+            margin-bottom: 15px;
+        }
+    }
 
 }

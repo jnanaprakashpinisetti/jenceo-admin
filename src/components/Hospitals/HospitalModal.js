@@ -905,20 +905,22 @@ const HospitalModal = ({ hospital, isOpen, onClose, onSave, isEditMode }) => {
                                       {agent.mobileNo && (
                                         <a
                                           href={`tel:${agent.mobileNo}`}
-                                          className="btn btn-sm btn-outline-primary ms-2"
+                                          className="btn btn-sm btn-outline-primary ms-2 mb-1"
                                         >
                                           Call
                                         </a>
 
                                       )}
-                                      <a
-                                        className="btn btn-sm btn-warning ms-1"
-                                        href={`https://wa.me/${agent.mobile}?text=${encodeURIComponent(
-                                          "Hello This is Sudheer From JenCeo Home Care Services"
-                                        )}`}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                      >Watsapp</a>
+                                 <a
+                                          className="btn btn-sm btn-warning ms-1"
+                                          href={`https://wa.me/${agent.mobileNo.replace(/\D/g, '')}?text=${encodeURIComponent(
+                                            "Hello This is Sudheer From JenCeo Home Care Services"
+                                          )}`}
+                                          target="_blank"
+                                          rel="noopener noreferrer"
+                                        >
+                                          WhatsApp
+                                        </a>
                                     </div>
                                   )}
                                 </div>
@@ -1429,7 +1431,7 @@ const HospitalModal = ({ hospital, isOpen, onClose, onSave, isEditMode }) => {
                                 <td>{agent.name}</td>
                                 <td>{agent.designation}</td>
                                 <td>{agent.mobileNo}
-                                  <a href={`tel:${agent.mobileNo1}`} className="btn btn-sm btn-info "> Call</a>
+                                  <a href={`tel:${agent.mobileNo1}`} className="btn btn-sm btn-info ms-1"> Call</a>
                                   <a
                                     className="btn btn-sm btn-warning ms-1"
                                     href={`https://wa.me/${agent.mobile}?text=${encodeURIComponent(

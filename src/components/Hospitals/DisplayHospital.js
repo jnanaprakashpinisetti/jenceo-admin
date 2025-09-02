@@ -1,386 +1,389 @@
-import React, { useState, useEffect } from 'react';
-import firebaseDB from '../../firebase';
-import viewIcon from '../../assets/view.svg';
-import editIcon from '../../assets/eidt.svg';
-import HospitalModal from './HospitalModal';
+import React, { useState, useEffect } from "react";
+import firebaseDB from "../../firebase";
+import HospitalModal from "./HospitalModal";
+import viewIcon from "../../assets/view.svg";
+import editIcon from "../../assets/eidt.svg";
+import deleteIcon from "../../assets/delete.svg";
 
 export default function DisplayHospital() {
-    const [hospitals, setHospitals] = useState([]);
-    const [filteredHospitals, setFilteredHospitals] = useState([]);
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState(null);
-    const [selectedHospital, setSelectedHospital] = useState(null);
-    const [isModalOpen, setIsModalOpen] = useState(false);
-    const [isEditMode, setIsEditMode] = useState(false);
-    const [saveSuccess, setSaveSuccess] = useState(false);
+  const [hospitals, setHospitals] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [selectedHospital, setSelectedHospital] = useState(null);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isEditMode, setIsEditMode] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [hospitalToDelete, setHospitalToDelete] = useState(null);
 
-    // NEW: auto visit map (id -> autoVisit string)
-    const [autoVisits, setAutoVisits] = useState({});
+  // Filters
+  const [search, setSearch] = useState("");
+  const [filterType, setFilterType] = useState("");
+  const [filterLocation, setFilterLocation] = useState("");
 
-    // Search state
-    const [searchTerm, setSearchTerm] = useState('');
+  // Sorting
+  const [sortField, setSortField] = useState("");
+  const [sortOrder, setSortOrder] = useState("asc");
 
-    // Pagination state
-    const [currentPage, setCurrentPage] = useState(1);
-    const [rowsPerPage, setRowsPerPage] = useState(10);
-    const [totalPages, setTotalPages] = useState(1);
+  // Pagination
+  const [currentPage, setCurrentPage] = useState(1);
+  const [rowsPerPage, setRowsPerPage] = useState(10);
+  const [totalPages, setTotalPages] = useState(1);
 
-    // ---- Helper for auto visit ----
-    const autoVisitFromCount = (count) => {
-        if (count >= 8) return 'Visit Fully';
-        if (count >= 4) return 'Visit Medium';
-        if (count >= 1) return 'Visit Low';
-        return '';
-    };
+  // ✅ Reminder logic helpers
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
 
-    // ---- Color helper for badge ----
-    const getVisitColor = (visit) => {
-        switch (visit) {
-            case 'Visit Fully':
-                return 'success';   // green
-            case 'Visit Medium':
-                return 'warning';   // orange
-            case 'Visit Low':
-                return 'primary';   // blue
-            default:
-                return 'secondary'; // gray
-        }
-    };
+  const parseDate = (val) => {
+    if (!val) return null;
+    const d = new Date(val);
+    return isNaN(d.getTime()) ? null : d;
+  };
 
-    useEffect(() => {
-        const fetchHospitals = () => {
-            try {
-                firebaseDB.child("HospitalData").on('value', (snapshot) => {
-                    if (snapshot.exists()) {
-                        const hospitalsData = [];
-                        snapshot.forEach((childSnapshot) => {
-                            hospitalsData.push({
-                                id: childSnapshot.key,
-                                ...childSnapshot.val()
-                            });
-                        });
+  const daysUntil = (date) => {
+    if (!date) return Infinity;
+    const reminderDate = new Date(date);
+    reminderDate.setHours(0, 0, 0, 0);
+    return Math.ceil((reminderDate - today) / (1000 * 60 * 60 * 24));
+  };
 
-                        // Sort hospitals by ID number in descending order
-                        const sortedHospitals = sortHospitalsDescending(hospitalsData);
-                        setHospitals(sortedHospitals);
-                        setFilteredHospitals(sortedHospitals);
-                        setTotalPages(Math.ceil(sortedHospitals.length / rowsPerPage));
+  const getReminderClass = (date) => {
+    const d = parseDate(date);
+    if (!d) return "";
+    const du = daysUntil(d);
+    if (du < 0) return "reminder-overdue";
+    if (du === 0) return "reminder-today";
+    if (du === 1) return "reminder-tomorrow";
+    if (du === 2) return "reminder-upcoming";
+    return "";
+  };
 
-                        // Build auto visit map for display
-                        const map = {};
-                        sortedHospitals.forEach(h => {
-                            const agentCount = Array.isArray(h.agents) ? h.agents.length : 0;
-                            map[h.id] = autoVisitFromCount(agentCount);
-                        });
-                        setAutoVisits(map);
-                    } else {
-                        setHospitals([]);
-                        setFilteredHospitals([]);
-                        setTotalPages(1);
-                        setAutoVisits({});
-                    }
-                    setLoading(false);
-                });
-            } catch (err) {
-                setError(err.message);
-                setLoading(false);
-            }
-        };
+  // ✅ Nearest reminder date (agents + payments)
+  const getNearestReminderDate = (hospital) => {
+    const dates = [
+      ...(hospital.agents || []).map((a) => a.reminderDate).filter(Boolean),
+      ...(hospital.payments || []).map((p) => p.reminderDate).filter(Boolean),
+    ];
+    if (dates.length === 0) return null;
 
-        fetchHospitals();
+    const validDates = dates
+      .map((d) => new Date(d))
+      .filter((d) => !isNaN(d.getTime()));
 
-        return () => {
-            firebaseDB.child("HospitalData").off('value');
-        };
-    }, []); // eslint-disable-line react-hooks/exhaustive-deps
+    if (validDates.length === 0) return null;
 
-    // Recompute autoVisits whenever hospitals array changes (e.g., due to save or live updates)
-    useEffect(() => {
-        const map = {};
-        hospitals.forEach(h => {
-            const agentCount = Array.isArray(h.agents) ? h.agents.length : 0;
-            map[h.id] = autoVisitFromCount(agentCount);
+    return validDates.reduce((a, b) => (a < b ? a : b));
+  };
+
+  useEffect(() => {
+    const fetchHospitals = () => {
+      try {
+        firebaseDB.child("HospitalData").on("value", (snapshot) => {
+          if (snapshot.exists()) {
+            const hospitalData = [];
+            snapshot.forEach((childSnapshot) => {
+              hospitalData.push({
+                id: childSnapshot.key,
+                ...childSnapshot.val(),
+              });
+            });
+            setHospitals(hospitalData);
+            setTotalPages(Math.ceil(hospitalData.length / rowsPerPage));
+          } else {
+            setHospitals([]);
+            setTotalPages(1);
+          }
+          setLoading(false);
         });
-        setAutoVisits(map);
-    }, [hospitals]);
-
-    // Filter hospitals based on search term
-    useEffect(() => {
-        let filtered = hospitals;
-
-        if (searchTerm) {
-            const term = searchTerm.toLowerCase();
-            filtered = filtered.filter(hospital =>
-                (hospital.hospitalName && hospital.hospitalName.toLowerCase().includes(term)) ||
-                (hospital.idNo && hospital.idNo.toLowerCase().includes(term)) ||
-                (hospital.location && hospital.location.toLowerCase().includes(term)) ||
-                (hospital.hospitalType && hospital.hospitalType.toLowerCase().includes(term))
-            );
-        }
-
-        setFilteredHospitals(filtered);
-        setTotalPages(Math.ceil(filtered.length / rowsPerPage));
-        setCurrentPage(1);
-    }, [hospitals, searchTerm, rowsPerPage]);
-
-    // Update total pages when rowsPerPage changes
-    useEffect(() => {
-        setTotalPages(Math.ceil(filteredHospitals.length / rowsPerPage));
-    }, [filteredHospitals, rowsPerPage]);
-
-    const sortHospitalsDescending = (hospitalsData) => {
-        return hospitalsData.sort((a, b) => {
-            const idA = a.idNo || '';
-            const idB = b.idNo || '';
-
-            if (idA.startsWith('H') && idB.startsWith('H')) {
-                const numA = parseInt(idA.replace('H', '')) || 0;
-                const numB = parseInt(idB.replace('H', '')) || 0;
-                return numB - numA;
-            }
-            return idB.localeCompare(idA);
-        });
+      } catch (err) {
+        setError(err.message);
+        setLoading(false);
+      }
     };
 
-    // Calculate current hospitals to display
-    const indexOfLastHospital = currentPage * rowsPerPage;
-    const indexOfFirstHospital = indexOfLastHospital - rowsPerPage;
-    const currentHospitals = filteredHospitals.slice(indexOfFirstHospital, indexOfLastHospital);
-
-    // Change page
-    const paginate = (pageNumber) => setCurrentPage(pageNumber);
-
-    // Handle rows per page change
-    const handleRowsPerPageChange = (e) => {
-        setRowsPerPage(parseInt(e.target.value));
+    fetchHospitals();
+    return () => {
+      firebaseDB.child("HospitalData").off("value");
     };
+  }, []);
 
-    // Handle search input change
-    const handleSearchChange = (e) => {
-        setSearchTerm(e.target.value);
-    };
+  // ✅ Apply filters & search
+  const filteredHospitals = hospitals.filter((h) => {
+    const searchMatch =
+      h.hospitalName?.toLowerCase().includes(search.toLowerCase()) ||
+      h.location?.toLowerCase().includes(search.toLowerCase()) ||
+      h.type?.toLowerCase().includes(search.toLowerCase()) ||
+      h.idNo?.toLowerCase().includes(search.toLowerCase());
 
-    // Generate page numbers for pagination
-    const pageNumbers = [];
-    for (let i = 1; i <= totalPages; i++) {
-        pageNumbers.push(i);
+    const typeMatch = filterType ? h.type === filterType : true;
+    const locationMatch = filterLocation ? h.location === filterLocation : true;
+
+    return searchMatch && typeMatch && locationMatch;
+  });
+
+  // ✅ Sorting
+  const sortedHospitals = [...filteredHospitals].sort((a, b) => {
+    let valA, valB;
+    if (sortField === "beds") {
+      valA = parseInt(a.noOfBeds) || 0;
+      valB = parseInt(b.noOfBeds) || 0;
+    } else if (sortField === "reminder") {
+      valA = getNearestReminderDate(a)?.getTime() || Infinity;
+      valB = getNearestReminderDate(b)?.getTime() || Infinity;
+    } else {
+      valA = (a[sortField] || "").toString().toLowerCase();
+      valB = (b[sortField] || "").toString().toLowerCase();
     }
 
-    // Show limited page numbers with ellipsis for many pages
-    const getDisplayedPageNumbers = () => {
-        if (totalPages <= 7) return pageNumbers;
+    if (valA < valB) return sortOrder === "asc" ? -1 : 1;
+    if (valA > valB) return sortOrder === "asc" ? 1 : -1;
+    return 0;
+  });
 
-        if (currentPage <= 4) return [1, 2, 3, 4, 5, '...', totalPages];
-        if (currentPage >= totalPages - 3) return [1, '...', totalPages - 4, totalPages - 3, totalPages - 2, totalPages - 1, totalPages];
+  // Pagination logic
+  const indexOfLastHospital = currentPage * rowsPerPage;
+  const indexOfFirstHospital = indexOfLastHospital - rowsPerPage;
+  const currentHospitals = sortedHospitals.slice(
+    indexOfFirstHospital,
+    indexOfLastHospital
+  );
+  const totalFilteredPages = Math.ceil(sortedHospitals.length / rowsPerPage);
 
-        return [1, '...', currentPage - 1, currentPage, currentPage + 1, '...', totalPages];
-    };
+  const paginate = (pageNumber) => setCurrentPage(pageNumber);
 
-    const handleView = (hospital) => {
-        setSelectedHospital(hospital);
-        setIsEditMode(false);
-        setIsModalOpen(true);
-    };
+  const toggleSort = (field) => {
+    if (sortField === field) {
+      setSortOrder(sortOrder === "asc" ? "desc" : "asc");
+    } else {
+      setSortField(field);
+      setSortOrder("asc");
+    }
+  };
 
-    const handleEdit = (hospital) => {
-        setSelectedHospital(hospital);
-        setIsEditMode(true);
-        setIsModalOpen(true);
-    };
+  // Modal logic
+  const handleView = (hospital) => {
+    setSelectedHospital(hospital);
+    setIsEditMode(false);
+    setIsModalOpen(true);
+  };
 
-    const handleSave = async (updatedData) => {
-        try {
-            await firebaseDB.child(`HospitalData/${updatedData.id}`).update(updatedData);
-            setIsModalOpen(false);
-            setSaveSuccess(true);
-            setTimeout(() => setSaveSuccess(false), 3000);
-        } catch (err) {
-            setError('Error updating hospital: ' + err.message);
-        }
-    };
+  const handleEdit = (hospital) => {
+    setSelectedHospital(hospital);
+    setIsEditMode(true);
+    setIsModalOpen(true);
+  };
 
-    const handleCloseModal = () => {
-        setIsModalOpen(false);
-        setSelectedHospital(null);
-        setIsEditMode(false);
-    };
+  const openDeleteConfirm = (hospital) => {
+    setHospitalToDelete(hospital);
+    setShowDeleteConfirm(true);
+  };
 
-    if (loading) return <div className="text-center my-5">Loading hospitals...</div>;
-    if (error) return <div className="alert alert-danger">Error: {error}</div>;
+  const closeDeleteConfirm = () => {
+    setShowDeleteConfirm(false);
+    setHospitalToDelete(null);
+  };
 
-    return (
-        <div className="container-fluid py-4">
-            {/* Success Message */}
-            {saveSuccess && (
-                <div className="alert alert-success alert-dismissible fade show" role="alert">
-                    Hospital details updated successfully!
-                    <button type="button" className="btn-close" onClick={() => setSaveSuccess(false)}></button>
-                </div>
-            )}
+  const handleDeleteConfirmed = async () => {
+    if (!hospitalToDelete) return;
+    const { id, ...payload } = hospitalToDelete;
 
-            {/* Search Bar */}
-            <div className="row mb-3">
-                <div className="col-md-6">
-                    <div className="input-group">
-                        <span className="input-group-text">
-                            <i className="bi bi-search"></i>
-                        </span>
-                        <input
-                            type="text"
-                            className="form-control"
-                            placeholder="Search by name, ID, or location..."
-                            value={searchTerm}
-                            onChange={handleSearchChange}
-                        />
+    try {
+      const movedAt = new Date().toISOString();
+      await firebaseDB.child(`DeletedHospitalData/${id}`).set({
+        ...payload,
+        originalId: id,
+        movedAt,
+      });
+
+      await firebaseDB.child(`HospitalData/${id}`).remove();
+
+      closeDeleteConfirm();
+    } catch (err) {
+      setError("Error deleting hospital: " + err.message);
+      closeDeleteConfirm();
+    }
+  };
+
+  const handleCloseModal = () => {
+    setIsModalOpen(false);
+    setSelectedHospital(null);
+    setIsEditMode(false);
+  };
+
+  if (loading) return <div className="text-center my-5">Loading hospitals...</div>;
+  if (error) return <div className="alert alert-danger">Error: {error}</div>;
+  if (hospitals.length === 0)
+    return <div className="alert alert-info">No hospitals found</div>;
+
+  return (
+    <div>
+      {/* ✅ Filters & Search */}
+      <div className="d-flex flex-wrap gap-2 mb-3">
+        <input
+          type="text"
+          className="form-control w-50"
+          placeholder="Search..."
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+        />
+        <select
+          className="form-select w-auto"
+          value={filterType}
+          onChange={(e) => setFilterType(e.target.value)}
+        >
+          <option value="">All Types</option>
+          {[...new Set(hospitals.map((h) => h.type).filter(Boolean))].map(
+            (t, idx) => (
+              <option key={idx} value={t}>
+                {t}
+              </option>
+            )
+          )}
+        </select>
+        <select
+          className="form-select w-auto"
+          value={filterLocation}
+          onChange={(e) => setFilterLocation(e.target.value)}
+        >
+          <option value="">All Locations</option>
+          {[...new Set(hospitals.map((h) => h.location).filter(Boolean))].map(
+            (l, idx) => (
+              <option key={idx} value={l}>
+                {l}
+              </option>
+            )
+          )}
+        </select>
+      </div>
+
+      {/* ✅ Table */}
+      <div className="table-responsive">
+        <table className="table table-dark table-hover">
+          <thead className="table-dark">
+            <tr>
+              <th>ID No ↓</th>
+              <th onClick={() => toggleSort("hospitalName")} style={{ cursor: "pointer" }}>
+                Hospital Name {sortField === "hospitalName" ? (sortOrder === "asc" ? "↑" : "↓") : ""}
+              </th>
+              <th onClick={() => toggleSort("location")} style={{ cursor: "pointer" }}>
+                Location {sortField === "location" ? (sortOrder === "asc" ? "↑" : "↓") : ""}
+              </th>
+              <th>Type</th>
+              <th onClick={() => toggleSort("beds")} style={{ cursor: "pointer" }}>
+                No of Beds {sortField === "beds" ? (sortOrder === "asc" ? "↑" : "↓") : ""}
+              </th>
+              <th onClick={() => toggleSort("reminder")} style={{ cursor: "pointer" }}>
+                Reminder Date {sortField === "reminder" ? (sortOrder === "asc" ? "↑" : "↓") : ""}
+              </th>
+              <th>Auto Visit</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {currentHospitals.map((hospital) => {
+              const nearestReminder = getNearestReminderDate(hospital);
+
+              return (
+                <tr key={hospital.id}>
+                  <td>{hospital.idNo || "N/A"}</td>
+                  <td>{hospital.hospitalName || "N/A"}</td>
+                  <td>{hospital.location || "N/A"}</td>
+                  <td>{hospital.type || "N/A"}</td>
+                  <td>{hospital.noOfBeds || "N/A"}</td>
+                  {/* Reminder Date */}
+                  <td className={getReminderClass(nearestReminder)}>
+                    {nearestReminder
+                      ? new Date(nearestReminder).toLocaleDateString("en-GB")
+                      : "—"}
+                  </td>
+                  <td>{hospital.autoVisit || "N/A"}</td>
+                  <td>
+                    <div className="d-flex">
+                      <button
+                        className="btn btn-sm me-2"
+                        title="View"
+                        onClick={() => handleView(hospital)}
+                      >
+                        <img src={viewIcon} alt="view" style={{ width: "18px", height: "18px", opacity: 0.7 }} />
+                      </button>
+                      <button
+                        className="btn btn-sm me-2"
+                        title="Edit"
+                        onClick={() => handleEdit(hospital)}
+                      >
+                        <img src={editIcon} alt="edit" style={{ width: "15px", height: "15px" }} />
+                      </button>
+                      <button
+                        className="btn btn-sm"
+                        title="Delete"
+                        onClick={() => openDeleteConfirm(hospital)}
+                      >
+                        <img src={deleteIcon} alt="delete" style={{ width: "14px", height: "14px" }} />
+                      </button>
                     </div>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+
+      {/* Pagination */}
+      {totalFilteredPages > 1 && (
+        <nav aria-label="Hospital pagination" className="pagination-wrapper">
+          <ul className="pagination justify-content-center">
+            {Array.from({ length: totalFilteredPages }, (_, i) => i + 1).map((n) => (
+              <li key={n} className={`page-item ${n === currentPage ? "active" : ""}`}>
+                <button className="page-link" onClick={() => paginate(n)}>
+                  {n}
+                </button>
+              </li>
+            ))}
+          </ul>
+        </nav>
+      )}
+
+      {/* Modal */}
+      {selectedHospital && (
+        <HospitalModal
+          hospital={selectedHospital}
+          isOpen={isModalOpen}
+          onClose={handleCloseModal}
+          isEditMode={isEditMode}
+        />
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {showDeleteConfirm && hospitalToDelete && (
+        <div className="modal fade show" style={{ display: "block", backgroundColor: "rgba(0,0,0,0.5)" }}>
+          <div className="modal-dialog modal-dialog-centered">
+            <div className="modal-content">
+              <div className="modal-header">
+                <h5 className="modal-title">Confirm Delete</h5>
+                <button type="button" className="btn-close" onClick={closeDeleteConfirm}></button>
+              </div>
+              <div className="modal-body">
+                <p className="mb-0">Are you sure you want to delete this hospital?</p>
+                <p className="mt-2">
+                  <strong>ID:</strong> {hospitalToDelete.idNo || hospitalToDelete.id} <br />
+                  <strong>Name:</strong> {hospitalToDelete.hospitalName || "N/A"}
+                </p>
+                <small className="text-muted">
+                  This will move the record to the <strong>DeletedHospitalData</strong> section.
+                </small>
+                <div className="modal-footer">
+                  <button type="button" className="btn btn-secondary" onClick={closeDeleteConfirm}>
+                    Cancel
+                  </button>
+                  <button type="button" className="btn btn-danger" onClick={handleDeleteConfirmed}>
+                    Yes, Move & Delete
+                  </button>
                 </div>
+              </div>
             </div>
-
-            {/* Rows per page selector */}
-            <div className="d-flex justify-content-between align-items-center mb-3">
-                <div className="d-flex align-items-center">
-                    <span className="me-2">Show</span>
-                    <select
-                        className="form-select form-select-sm"
-                        style={{ width: '80px' }}
-                        value={rowsPerPage}
-                        onChange={handleRowsPerPageChange}
-                    >
-                        <option value={10}>10</option>
-                        <option value={20}>20</option>
-                        <option value={30}>30</option>
-                        <option value={40}>40</option>
-                        <option value={50}>50</option>
-                    </select>
-                    <span className="ms-2">entries</span>
-                </div>
-                <div>
-                    Showing {indexOfFirstHospital + 1} to {Math.min(indexOfLastHospital, filteredHospitals.length)} of {filteredHospitals.length} entries
-                </div>
-            </div>
-
-            <div className="table-responsive">
-                <table className="table table-dark table-hover">
-                    <thead className="table-dark">
-                        <tr>
-                            <th>ID No ↓</th>
-                            <th>Hospital Name</th>
-                            <th>Location</th>
-                            <th>Type</th>
-                            <th>No of Beds</th>
-                            {/* NEW: Auto Visit column right after No of Beds */}
-                            <th>Auto Visit</th>
-                            <th>Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {currentHospitals.length > 0 ? (
-                            currentHospitals.map((hospital) => {
-                                const visit = autoVisits[hospital.id] || '';
-                                const badgeClass = `badge bg-${getVisitColor(visit)}`;
-                                return (
-                                    <tr key={hospital.id}>
-                                        <td>
-                                            <strong>{hospital.idNo || 'N/A'}</strong>
-                                        </td>
-                                        <td>{hospital.hospitalName || 'N/A'}</td>
-                                        <td>{hospital.location || 'N/A'}</td>
-                                        <td>{hospital.hospitalType || 'N/A'}</td>
-                                        <td>{hospital.noOfBeds || 'N/A'}</td>
-                                        {/* NEW: display auto visit derived from agents length with color */}
-                                        <td>
-                                            {visit ? (
-                                                <span className={badgeClass}>{visit}</span>
-                                            ) : (
-                                                <span className="text-muted">N/A</span>
-                                            )}
-                                        </td>
-                                        <td>
-                                            <div className="d-flex">
-                                                <button
-                                                    className="btn btn-sm me-2"
-                                                    title="View"
-                                                    onClick={() => handleView(hospital)}
-                                                >
-                                                    <img src={viewIcon} alt="view Icon" style={{ opacity: 0.6, width: '18px', height: '18px' }} />
-                                                </button>
-                                                <button
-                                                    className="btn btn-sm me-2"
-                                                    title="Edit"
-                                                    onClick={() => handleEdit(hospital)}
-                                                >
-                                                    <img src={editIcon} alt="edit Icon" style={{ width: '15px', height: '15px' }} />
-                                                </button>
-                                            </div>
-                                        </td>
-                                    </tr>
-                                );
-                            })
-                        ) : (
-                            <tr>
-                                {/* colSpan updated from 6 → 7 because of new column */}
-                                <td colSpan="7" className="text-center py-4">
-                                    No hospitals found {searchTerm ? 'matching your search criteria' : ''}
-                                </td>
-                            </tr>
-                        )}
-                    </tbody>
-                </table>
-            </div>
-
-            {/* Pagination controls */}
-            {totalPages > 1 && (
-                <nav aria-label="Hospital pagination" className='pagination-wrapper'>
-                    <ul className="pagination justify-content-center">
-                        <li className={`page-item ${currentPage === 1 ? 'disabled' : ''}`}>
-                            <button
-                                className="page-link"
-                                onClick={() => paginate(currentPage - 1)}
-                                disabled={currentPage === 1}
-                            >
-                                Previous
-                            </button>
-                        </li>
-
-                        {getDisplayedPageNumbers().map((number, index) => (
-                            <li
-                                key={index}
-                                className={`page-item ${number === currentPage ? 'active' : ''} ${number === '...' ? 'disabled' : ''}`}
-                            >
-                                {number === '...' ? (
-                                    <span className="page-link">...</span>
-                                ) : (
-                                    <button
-                                        className="page-link"
-                                        onClick={() => paginate(number)}
-                                    >
-                                        {number}
-                                    </button>
-                                )}
-                            </li>
-                        ))}
-
-                        <li className={`page-item ${currentPage === totalPages ? 'disabled' : ''}`}>
-                            <button
-                                className="page-link"
-                                onClick={() => paginate(currentPage + 1)}
-                                disabled={currentPage === totalPages}
-                            >
-                                Next
-                            </button>
-                        </li>
-                    </ul>
-                </nav>
-            )}
-
-            {/* Hospital Modal */}
-            <HospitalModal
-                hospital={selectedHospital}
-                isOpen={isModalOpen}
-                onClose={handleCloseModal}
-                onSave={handleSave}
-                isEditMode={isEditMode}
-            />
+          </div>
         </div>
-    );
+      )}
+    </div>
+  );
 }

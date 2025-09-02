@@ -15,6 +15,7 @@ import WorkerAggrement from "../assets/workers-aggrement.svg";
 import client from "../assets/client.svg";
 import ClientExitIcon from "../assets/client-exit.svg";
 import HospitalIcon from "../assets/hospital-icon.svg";
+import HospitalDeleteIcon from "../assets/hospital-delet-icon.svg";
 
 import invest from "../assets/invest.svg";
 import purchase from "../assets/purchase.svg";
@@ -43,6 +44,7 @@ import Hr from '../pages/Hr';
 import Accounts from '../pages/Accounts';
 import Operations from '../pages/Operations';
 import HospitalList from '../pages/HospitalList';
+import HospitalDeleteList from '../pages/HospitalDeleteList';
 import WorkerCallsData from '../pages/WorkerCallsData';
 
 export default function LeftNav() {
@@ -151,6 +153,12 @@ export default function LeftNav() {
             </li>
 
             <li className="nav-item">
+              <NavLink to='HospitalDeleteList' className="nav-link" title='Deleted Hospital' onClick={closeMobile}>
+                <img src={HospitalDeleteIcon} alt="" /> Deleted Hospitals
+              </NavLink>
+            </li>
+
+            <li className="nav-item">
               <NavLink to='Expenses' className="nav-link" title='Expenses' onClick={closeMobile}>
                 <img src={expences} alt="" /> Expenses
               </NavLink>
@@ -208,6 +216,7 @@ export default function LeftNav() {
         <Route path="Accounts" element={<Accounts />} />
         <Route path="Operations" element={<Operations />} />
         <Route path="HospitalList" element={<HospitalList />} />
+        <Route path="HospitalDeleteList" element={<HospitalDeleteList />} />
       </Routes>
     </>
   );

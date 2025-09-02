@@ -21,6 +21,7 @@ const HospitalModal = ({ hospital, isOpen, onClose, onSave, isEditMode }) => {
   const [hospitalCommentInput, setHospitalCommentInput] = useState('');
   const [showSaveModal, setShowSaveModal] = useState(false);
 
+
   const editedRef = useRef(false);
   const itemsPerPage = 5;
 
@@ -122,6 +123,14 @@ const HospitalModal = ({ hospital, isOpen, onClose, onSave, isEditMode }) => {
 
   const isPaymentLocked = (payment) => payment.isLocked || payment.submittedAt;
   const isAgentLocked = (agent) => agent.isLocked || agent.submittedAt;
+
+  const isAgentFieldLocked = (agent, field) => {
+    // Always enable reminder date even if agent is locked
+    if (field === 'reminderDate') return false;
+
+    // For all other fields, use the normal locking logic
+    return agent.isLocked || agent.submittedAt;
+  };
 
   const markEdited = () => {
     editedRef.current = true;
@@ -798,6 +807,7 @@ const HospitalModal = ({ hospital, isOpen, onClose, onSave, isEditMode }) => {
                         {currentAgents.map((agent, index) => {
                           const originalIndex = agentStartIndex + index;
                           const locked = isAgentLocked(agent);
+
                           return (
                             <div key={agent.id || originalIndex} className="agent-info">
                               {agentSuccess[originalIndex] && (
@@ -913,16 +923,16 @@ const HospitalModal = ({ hospital, isOpen, onClose, onSave, isEditMode }) => {
                                         </a>
 
                                       )}
-                                 <a
-                                          className="btn btn-sm btn-warning ms-1"
-                                          href={`https://wa.me/${agent.mobileNo.replace(/\D/g, '')}?text=${encodeURIComponent(
-                                            "Hello This is Sudheer From JenCeo Home Care Services"
-                                          )}`}
-                                          target="_blank"
-                                          rel="noopener noreferrer"
-                                        >
-                                          WhatsApp
-                                        </a>
+                                      <a
+                                        className="btn btn-sm btn-warning ms-1"
+                                        href={`https://wa.me/${agent.mobileNo.replace(/\D/g, '')}?text=${encodeURIComponent(
+                                          "Hello This is Sudheer From JenCeo Home Care Services"
+                                        )}`}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                      >
+                                        WhatsApp
+                                      </a>
                                     </div>
                                   )}
                                 </div>
@@ -958,8 +968,8 @@ const HospitalModal = ({ hospital, isOpen, onClose, onSave, isEditMode }) => {
 
                                 {/* Reminder Date for Agents */}
                                 <div className="col-md-4 mb-2">
-                                  <label className="form-label">Reminder Date</label>
-                                  {isEditMode && !locked ? (
+                                  <label className="form-label"><strong>Reminder Date</strong></label>
+                                  {isEditMode && !isAgentFieldLocked(agent, 'reminderDate') ? (
                                     <input
                                       type="date"
                                       className="form-control"

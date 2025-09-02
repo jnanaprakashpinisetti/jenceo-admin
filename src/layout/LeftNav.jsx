@@ -120,7 +120,7 @@ export default function LeftNav() {
             </li>
             <li className="nav-item">
               <NavLink to='WorkerCallsData' className="nav-link" title='Worker Call Data' onClick={closeMobile}>
-                <img src={cell} alt="Worker Call Data" /> Worker Call Data
+                <img src={cell} alt="Worker Call Data"/> Worker Call Data
               </NavLink>
             </li>
 

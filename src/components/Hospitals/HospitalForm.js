@@ -86,9 +86,9 @@ const HospitalForm = ({ onSubmit, initialData = {}, isEdit = false }) => {
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    
+
     if (!validateForm()) return;
-    
+
     // Show confirmation modal instead of submitting directly
     setShowConfirmModal(true);
   };
@@ -117,9 +117,9 @@ const HospitalForm = ({ onSubmit, initialData = {}, isEdit = false }) => {
       if (isEdit && initialData.id) {
         // Update existing hospital
         await firebaseDB.child(`HospitalData/${initialData.id}`).update(hospitalData);
-        setSubmitStatus({ 
-          success: true, 
-          message: "Hospital updated successfully!" 
+        setSubmitStatus({
+          success: true,
+          message: "Hospital updated successfully!"
         });
       } else {
         // Add new hospital
@@ -129,11 +129,11 @@ const HospitalForm = ({ onSubmit, initialData = {}, isEdit = false }) => {
           id: newHospitalRef.key, // Store the Firebase-generated ID
           createdAt: new Date().toISOString(),
         });
-        setSubmitStatus({ 
-          success: true, 
-          message: "Hospital added successfully!" 
+        setSubmitStatus({
+          success: true,
+          message: "Hospital added successfully!"
         });
-        
+
         // Clear form after successful submission for new entries
         if (!isEdit) {
           setFormData({
@@ -156,9 +156,9 @@ const HospitalForm = ({ onSubmit, initialData = {}, isEdit = false }) => {
 
     } catch (error) {
       console.error("Error saving hospital data:", error);
-      setSubmitStatus({ 
-        success: false, 
-        message: `Error saving data: ${error.message}` 
+      setSubmitStatus({
+        success: false,
+        message: `Error saving data: ${error.message}`
       });
     } finally {
       setIsSubmitting(false);
@@ -190,25 +190,25 @@ const HospitalForm = ({ onSubmit, initialData = {}, isEdit = false }) => {
   };
 
   const getCurrentLocation = () => {
-  if (navigator.geolocation) {
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        const { latitude, longitude } = pos.coords;
-        const mapsUrl = `https://www.google.com/maps?q=${latitude},${longitude}`;
-        setFormData((prev) => ({
-          ...prev,
-          locationLink: mapsUrl,
-        }));
-      },
-      (err) => {
-        console.error("Error getting location:", err);
-        alert("Unable to fetch current location. Please allow location access.");
-      }
-    );
-  } else {
-    alert("Geolocation is not supported by this browser.");
-  }
-};
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          const { latitude, longitude } = pos.coords;
+          const mapsUrl = `https://www.google.com/maps?q=${latitude},${longitude}`;
+          setFormData((prev) => ({
+            ...prev,
+            locationLink: mapsUrl,
+          }));
+        },
+        (err) => {
+          console.error("Error getting location:", err);
+          alert("Unable to fetch current location. Please allow location access.");
+        }
+      );
+    } else {
+      alert("Geolocation is not supported by this browser.");
+    }
+  };
 
 
   return (
@@ -248,7 +248,7 @@ const HospitalForm = ({ onSubmit, initialData = {}, isEdit = false }) => {
                 {errors.idNo && (
                   <div className="invalid-feedback">{errors.idNo}</div>
                 )}
-            
+
               </div>
 
               {/* Hospital Name */}
@@ -364,41 +364,41 @@ const HospitalForm = ({ onSubmit, initialData = {}, isEdit = false }) => {
               </div>
 
               {/* Location Link */}
-             <div className="col-12">
-  <label htmlFor="locationLink" className="form-label">
-    Location Link
-  </label>
-  <div className="input-group">
-    <input
-      type="url"
-      className={`form-control ${errors.locationLink ? "is-invalid" : ""}`}
-      id="locationLink"
-      name="locationLink"
-      value={formData.locationLink}
-      onChange={handleChange}
-      placeholder="https://maps.google.com/..."
-    />
-    <button
-      type="button"
-      className="btn btn-outline-primary mb-0"
-      onClick={getCurrentLocation}
-    >
-      Use Current Location
-    </button>
-  </div>
-  {errors.locationLink && (
-    <div className="invalid-feedback">{errors.locationLink}</div>
-  )}
-  <div className="form-text">
-    Enter Google Maps link or click to use current location
-  </div>
-</div>
+              <div className="col-12">
+                <label htmlFor="locationLink" className="form-label">
+                  Location Link
+                </label>
+                <div className="input-group">
+                  <input
+                    type="url"
+                    className={`form-control ${errors.locationLink ? "is-invalid" : ""}`}
+                    id="locationLink"
+                    name="locationLink"
+                    value={formData.locationLink}
+                    onChange={handleChange}
+                    placeholder="https://maps.google.com/..."
+                  />
+                  <button
+                    type="button"
+                    className="btn btn-outline-primary mb-0"
+                    onClick={getCurrentLocation}
+                  >
+                    Use Current Location
+                  </button>
+                </div>
+                {errors.locationLink && (
+                  <div className="invalid-feedback">{errors.locationLink}</div>
+                )}
+                <div className="form-text">
+                  Enter Google Maps link or click to use current location
+                </div>
+              </div>
 
 
               {/* Form Actions */}
               <div className="col-12 mt-4">
-                <button 
-                  type="submit" 
+                <button
+                  type="submit"
                   className="btn btn-success me-2"
                   disabled={isSubmitting}
                 >

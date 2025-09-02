@@ -140,6 +140,49 @@
             color: #444 !important;
         }
     }
+}
+
+// Hospital list
+
+.hospital-modal {
+    hr {
+        margin-top: 0;
+        border-color: #b7b7bd;
+    }
 
 
+
+ .agent-info, 
+    .payment-info {
+        background-color: #f7f7f7;
+        padding: 15px;
+        border-radius: 10px;
+        margin-bottom: 15px;
+        border: 1px solid #efebeb;
+
+        &:nth-child(even) {
+            background-color: #f3f3f7;
+        }
+    }
+
+
+    .text-muted {
+        color: #444 !important;
+    }
+
+    .badge {
+        display: block;
+        max-width: fit-content;
+    }
+
+    .comment {
+        border: 1px solid #cfcdcd;
+        border-radius: 10px;
+        margin-bottom: 15px;
+        padding: 15px 15px 5px 15px;
+
+        &:nth-child(even) {
+            background-color: #e9eef8;
+        }
+    }
 }

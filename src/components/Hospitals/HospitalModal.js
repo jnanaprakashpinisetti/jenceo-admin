@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import firebaseDB from "../../firebase";
 
 const HospitalModal = ({ hospital, isOpen, onClose, onSave, isEditMode }) => {
   const [activeTab, setActiveTab] = useState('hospitalDetails');
@@ -10,7 +11,6 @@ const HospitalModal = ({ hospital, isOpen, onClose, onSave, isEditMode }) => {
   const [paymentIdInput, setPaymentIdInput] = useState('');
   const [showConfirmClose, setShowConfirmClose] = useState(false);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
-  const editedRef = useRef(false);
   const [agentSuccess, setAgentSuccess] = useState({});
   const [paymentSuccess, setPaymentSuccess] = useState({});
   const [currentAgentPage, setCurrentAgentPage] = useState(1);
@@ -19,7 +19,49 @@ const HospitalModal = ({ hospital, isOpen, onClose, onSave, isEditMode }) => {
   const [autoVisit, setAutoVisit] = useState('');
   const [agentCommentInputs, setAgentCommentInputs] = useState({});
   const [hospitalCommentInput, setHospitalCommentInput] = useState('');
+  const [showSaveModal, setShowSaveModal] = useState(false);
+
+  const editedRef = useRef(false);
   const itemsPerPage = 5;
+
+  // ---------- Reminder Logic ----------
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  const parseDate = (val) => {
+    if (!val) return null;
+    const d = new Date(val);
+    return isNaN(d.getTime()) ? null : d;
+  };
+
+  const daysUntil = (date) => {
+    if (!date) return Infinity;
+    const reminderDate = new Date(date);
+    reminderDate.setHours(0, 0, 0, 0);
+    return Math.ceil((reminderDate - today) / (1000 * 60 * 60 * 24));
+  };
+
+  const getReminderClass = (date) => {
+    const d = parseDate(date);
+    if (!d) return "";
+    const du = daysUntil(d);
+    if (du < 0) return "reminder-overdue";
+    if (du === 0) return "reminder-today";
+    if (du === 1) return "reminder-tomorrow";
+    if (du === 2) return "reminder-upcoming";
+    return "";
+  };
+
+  const getReminderCount = (dates) =>
+    dates.filter((d) => {
+      const dd = parseDate(d);
+      if (!dd) return false;
+      return daysUntil(dd) <= 2;
+    }).length;
+
+  const totalReminders =
+    getReminderCount((hospitalData.agents || []).map((a) => a.reminderDate)) +
+    getReminderCount((hospitalData.payments || []).map((p) => p.reminderDate));
 
   // ---------- Helpers ----------
   const autoVisitFromCount = useCallback((count) => {
@@ -42,7 +84,7 @@ const HospitalModal = ({ hospital, isOpen, onClose, onSave, isEditMode }) => {
       setPayments(
         (hospital.payments || []).map(p => ({
           ...p,
-          date: p.date || (p.createdAt ? new Date(p.createdAt).toISOString().slice(0,10) : new Date().toISOString().slice(0,10))
+          date: p.date || (p.createdAt ? new Date(p.createdAt).toISOString().slice(0, 10) : new Date().toISOString().slice(0, 10))
         }))
       );
       setAgentErrors(hospital.agents ? hospital.agents.map(() => ({})) : []);
@@ -160,7 +202,7 @@ const HospitalModal = ({ hospital, isOpen, onClose, onSave, isEditMode }) => {
       id: Date.now() // Add unique ID for key prop
     });
     setAgents(updatedAgents);
-    
+
     // Clear the input for this agent
     setAgentCommentInputs(prev => ({ ...prev, [agentIndex]: '' }));
     markEdited();
@@ -199,7 +241,7 @@ const HospitalModal = ({ hospital, isOpen, onClose, onSave, isEditMode }) => {
     const timer = setTimeout(() => {
       setAgentSuccess(prev => ({ ...prev, [index]: false }));
     }, 3000);
-    
+
     // Cleanup timer on component unmount
     return () => clearTimeout(timer);
   };
@@ -250,7 +292,7 @@ const HospitalModal = ({ hospital, isOpen, onClose, onSave, isEditMode }) => {
       // Allow only numbers and decimal point
       if (value !== '' && !/^\d*\.?\d*$/.test(value)) return;
     }
-    
+
     const updatedPayments = [...payments];
     updatedPayments[index][field] = value;
     setPayments(updatedPayments);
@@ -294,7 +336,7 @@ const HospitalModal = ({ hospital, isOpen, onClose, onSave, isEditMode }) => {
     const timer = setTimeout(() => {
       setPaymentSuccess(prev => ({ ...prev, [index]: false }));
     }, 3000);
-    
+
     // Cleanup timer on component unmount
     return () => clearTimeout(timer);
   };
@@ -342,14 +384,21 @@ const HospitalModal = ({ hospital, isOpen, onClose, onSave, isEditMode }) => {
   };
 
   /* --------------------- Save / Close --------------------- */
-  const handleSave = () => {
+  const handleSave = async () => {
     const dataToSave = {
       ...hospitalData,
       agents,
       payments
     };
 
-    onSave(dataToSave);
+    if (onSave) {
+      onSave(dataToSave);
+    } else {
+      // Fallback to Firebase save
+      await firebaseDB.child(`HospitalData/${hospital.id}`).update(dataToSave);
+      setShowSaveModal(true);
+    }
+
     // After successful save, clear dirty state
     editedRef.current = false;
     setHasUnsavedChanges(false);
@@ -395,7 +444,7 @@ const HospitalModal = ({ hospital, isOpen, onClose, onSave, isEditMode }) => {
     'Very Good', 'Good', 'Average', 'Below Average', 'Not Good', 'Very Bad'
   ];
 
-  const paymentModeOptions = [ 'Online', 'Cash', 'Gift' ];
+  const paymentModeOptions = ['Online', 'Cash', 'Gift'];
 
   const visitTypeOptions = ['Visit Fully', 'Visit Medium', 'Visit Low'];
 
@@ -443,13 +492,52 @@ const HospitalModal = ({ hospital, isOpen, onClose, onSave, isEditMode }) => {
         </div>
       )}
 
+      {/* Save Success Modal */}
+      {showSaveModal && (
+        <div
+          className="modal fade show"
+          style={{ display: "block", backgroundColor: "rgba(0,0,0,0.5)", zIndex: 1070 }}
+        >
+          <div className="modal-dialog modal-dialog-centered">
+            <div className="modal-content">
+              <div className="modal-header bg-success text-white">
+                <h5 className="modal-title">Saved Successfully</h5>
+                <button
+                  type="button"
+                  className="btn-close btn-close-white"
+                  onClick={() => {
+                    setShowSaveModal(false);
+                    onClose();
+                  }}
+                ></button>
+              </div>
+              <div className="modal-body">
+                <p>Hospital details have been updated.</p>
+              </div>
+              <div className="modal-footer">
+                <button
+                  className="btn btn-success"
+                  onClick={() => {
+                    setShowSaveModal(false);
+                    onClose();
+                  }}
+                >
+                  OK
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Main Modal */}
       <div className="modal fade show" style={{ display: 'block', backgroundColor: 'rgba(0,0,0,0.5)' }}>
-        <div className="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
+        <div className="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable hospital-modal">
           <div className="modal-content">
             <div className="modal-header bg-secondary text-white">
               <h5 className="modal-title">
                 {isEditMode ? "Edit" : "View"} Hospital - {hospitalData.idNo} - {hospitalData.hospitalName}
+                <span className="badge bg-danger ms-2">Reminders: {totalReminders}</span>
               </h5>
               <button type="button" className="btn-close btn-close-white" onClick={handleClose}></button>
             </div>
@@ -591,7 +679,7 @@ const HospitalModal = ({ hospital, isOpen, onClose, onSave, isEditMode }) => {
                         <p>{hospitalData.location || 'N/A'}</p>
                       )}
                     </div>
-                    <div className="col-md-9 mb-3">
+                    <div className="col-md-4 mb-3">
                       <label className="form-label"><strong>Address</strong></label>
                       {isEditMode ? (
                         <textarea
@@ -610,6 +698,7 @@ const HospitalModal = ({ hospital, isOpen, onClose, onSave, isEditMode }) => {
                         <select
                           className="form-select"
                           value={hospitalData.visitType || ''}
+                          disabled={true}
                           onChange={(e) => {
                             setVisitTouched(true);
                             setHospitalData({ ...hospitalData, visitType: e.target.value });
@@ -624,9 +713,6 @@ const HospitalModal = ({ hospital, isOpen, onClose, onSave, isEditMode }) => {
                       ) : (
                         <p>{hospitalData.visitType || 'N/A'}</p>
                       )}
-                      <div className="form-text">
-                        Auto-set by Agent count: 1–3 Low, 4–7 Medium, 8+ Fully
-                      </div>
                     </div>
 
                     <div className="col-12 mb-3">
@@ -668,7 +754,7 @@ const HospitalModal = ({ hospital, isOpen, onClose, onSave, isEditMode }) => {
                           }}
                         />
                         {isEditMode && (
-                          <button className="btn btn-sm btn-outline-secondary mt-2" onClick={addHospitalComment}>
+                          <button className="btn btn-sm btn-warning mt-2" onClick={addHospitalComment}>
                             Add Comment
                           </button>
                         )}
@@ -711,7 +797,7 @@ const HospitalModal = ({ hospital, isOpen, onClose, onSave, isEditMode }) => {
                           const originalIndex = agentStartIndex + index;
                           const locked = isAgentLocked(agent);
                           return (
-                            <div key={agent.id || originalIndex} className="bg-light p-3 mb-3 rounded">
+                            <div key={agent.id || originalIndex} className="agent-info">
                               {agentSuccess[originalIndex] && (
                                 <div className="alert alert-success alert-dismissible fade show mb-3" role="alert">
                                   Agent saved successfully!
@@ -720,10 +806,10 @@ const HospitalModal = ({ hospital, isOpen, onClose, onSave, isEditMode }) => {
                               )}
 
                               <div className="d-flex justify-content-between align-items-center mb-2">
-                                <h6 className="mb-0">
+                                <h5 className="mb-0">
                                   Agent ID: {agent.id}
-                                  {locked && <span className="badge bg-secondary ms-2">Saved</span>}
-                                </h6>
+                                  {locked && <span className="badge bg-secondary mt-1">Saved</span>}
+                                </h5>
                                 {isEditMode && !locked && (
                                   <button
                                     type="button"
@@ -737,7 +823,7 @@ const HospitalModal = ({ hospital, isOpen, onClose, onSave, isEditMode }) => {
 
                               <div className="row">
                                 <div className="col-md-4 mb-2">
-                                  <label className="form-label">Name<span className="text-danger">*</span></label>
+                                  <label className="form-label">Agent Name<span className="text-danger">*</span></label>
                                   {isEditMode && !locked ? (
                                     <>
                                       <input
@@ -856,6 +942,25 @@ const HospitalModal = ({ hospital, isOpen, onClose, onSave, isEditMode }) => {
                                   )}
                                 </div>
 
+                                {/* Reminder Date for Agents */}
+                                <div className="col-md-4 mb-2">
+                                  <label className="form-label">Reminder Date</label>
+                                  {isEditMode && !locked ? (
+                                    <input
+                                      type="date"
+                                      className="form-control"
+                                      value={agent.reminderDate || ""}
+                                      onChange={(e) => handleAgentChange(originalIndex, 'reminderDate', e.target.value)}
+                                    />
+                                  ) : (
+                                    <p className={getReminderClass(agent.reminderDate)}>
+                                      {agent.reminderDate
+                                        ? new Date(agent.reminderDate).toLocaleDateString("en-GB")
+                                        : "—"}
+                                    </p>
+                                  )}
+                                </div>
+
                                 <div className="col-12 mb-2">
                                   <label className="form-label">Comments</label>
                                   <div>
@@ -878,7 +983,7 @@ const HospitalModal = ({ hospital, isOpen, onClose, onSave, isEditMode }) => {
                                     />
                                     {isEditMode && (
                                       <button
-                                        className="btn btn-sm btn-outline-secondary"
+                                        className="btn btn-sm btn-warning mb-2"
                                         onClick={() => addAgentComment(originalIndex)}
                                       >
                                         Add Comment
@@ -887,9 +992,9 @@ const HospitalModal = ({ hospital, isOpen, onClose, onSave, isEditMode }) => {
                                   </div>
 
                                   {agent.comments && agent.comments.length > 0 ? (
-                                    <div className="mt-2">
+                                    <div className="comment-wrapper">
                                       {agent.comments.map((comment) => (
-                                        <div key={comment.id || comment.date} className="border-bottom pb-2 mb-2">
+                                        <div key={comment.id || comment.date} className="comment">
                                           <p className="mb-0">{comment.text}</p>
                                           <small className="text-muted">
                                             {new Date(comment.date).toLocaleString()}
@@ -901,25 +1006,26 @@ const HospitalModal = ({ hospital, isOpen, onClose, onSave, isEditMode }) => {
                                     <p>No comments added</p>
                                   )}
                                 </div>
-
-                                {isEditMode && !locked && (
-                                  <div className="col-12 mt-3">
-                                    <button
-                                      type="button"
-                                      className="btn btn-success"
-                                      onClick={() => handleAgentSubmit(originalIndex)}
-                                    >
-                                      Save Agent
-                                    </button>
-                                  </div>
-                                )}
                               </div>
-                              <hr className="mt-3" />
+
+                              {isEditMode && !locked && (
+                                <div className="text-end mb-3">
+                                  <button
+                                    type="button"
+                                    className="btn btn-success"
+                                    onClick={() => handleAgentSubmit(originalIndex)}
+                                  >
+                                    Save Agent
+                                  </button>
+                                </div>
+                              )}
+
+                              <hr className="my-4" />
                             </div>
                           );
                         })}
 
-                        {/* Agent Pagination */}
+                        {/* Pagination for Agents */}
                         {totalAgentPages > 1 && (
                           <nav aria-label="Agent pagination">
                             <ul className="pagination justify-content-center">
@@ -932,13 +1038,10 @@ const HospitalModal = ({ hospital, isOpen, onClose, onSave, isEditMode }) => {
                                   Previous
                                 </button>
                               </li>
-                              {[...Array(totalAgentPages)].map((_, i) => (
-                                <li key={i} className={`page-item ${currentAgentPage === i + 1 ? 'active' : ''}`}>
-                                  <button
-                                    className="page-link"
-                                    onClick={() => setCurrentAgentPage(i + 1)}
-                                  >
-                                    {i + 1}
+                              {Array.from({ length: totalAgentPages }, (_, i) => i + 1).map(page => (
+                                <li key={page} className={`page-item ${currentAgentPage === page ? 'active' : ''}`}>
+                                  <button className="page-link" onClick={() => setCurrentAgentPage(page)}>
+                                    {page}
                                   </button>
                                 </li>
                               ))}
@@ -965,28 +1068,35 @@ const HospitalModal = ({ hospital, isOpen, onClose, onSave, isEditMode }) => {
                     <div className="d-flex justify-content-between align-items-center mb-3 payment-details">
                       <h5>Payment Details</h5>
                       {isEditMode && (
-                        <div className="d-flex">
-                          <input
-                            type="text"
-                            className="form-control me-2"
-                            placeholder="Enter Agent ID (e.g., H1-1)"
-                            value={paymentIdInput}
-                            onChange={(e) => setPaymentIdInput(e.target.value)}
-                            style={{ width: '200px' }}
-                          />
-                          <button
-                            type="button"
-                            className="btn btn-info me-2"
-                            onClick={handlePaymentIdSearch}
-                          >
-                            Search
-                          </button>
-                          <button type="button" className="btn btn-primary btn-sm" onClick={addNewPayment}>
-                            + Add Payment
-                          </button>
-                        </div>
+                        <button type="button" className="btn btn-primary btn-sm" onClick={addNewPayment}>
+                          + Add Payment
+                        </button>
                       )}
                     </div>
+
+                    {isEditMode && (
+                      <div className="row mb-3">
+                        <div className="col-md-8">
+                          <label className="form-label">Search by Agent ID</label>
+                          <div className="input-group">
+                            <input
+                              type="text"
+                              className="form-control"
+                              placeholder="Enter Agent ID"
+                              value={paymentIdInput}
+                              onChange={(e) => setPaymentIdInput(e.target.value)}
+                            />
+                            <button
+                              className="btn btn-outline-secondary"
+                              type="button"
+                              onClick={handlePaymentIdSearch}
+                            >
+                              Search
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    )}
 
                     {payments.length === 0 ? (
                       <div className="text-center py-4">
@@ -998,19 +1108,19 @@ const HospitalModal = ({ hospital, isOpen, onClose, onSave, isEditMode }) => {
                           const originalIndex = paymentStartIndex + index;
                           const locked = isPaymentLocked(payment);
                           return (
-                            <div key={payment.id || originalIndex} className="bg-light p-3 mb-3 rounded">
+                            <div key={payment.id || originalIndex} className="payment-info">
                               {paymentSuccess[originalIndex] && (
                                 <div className="alert alert-success alert-dismissible fade show mb-3" role="alert">
-                                  Payment submitted successfully!
+                                  Payment saved successfully!
                                   <button type="button" className="btn-close" onClick={() => setPaymentSuccess({ ...paymentSuccess, [originalIndex]: false })}></button>
                                 </div>
                               )}
 
                               <div className="d-flex justify-content-between align-items-center mb-2">
-                                <h6 className="mb-0">
-                                  Payment ID: {payment.id}
-                                  {locked && <span className="badge bg-secondary ms-2">Submitted</span>}
-                                </h6>
+                                <h5 className="mb-0">
+                                  {/* Payment ID: {payment.id} */}
+                                  {locked && <span className="badge bg-secondary mt-1">Saved</span>}
+                                </h5>
                                 {isEditMode && !locked && (
                                   <button
                                     type="button"
@@ -1023,14 +1133,14 @@ const HospitalModal = ({ hospital, isOpen, onClose, onSave, isEditMode }) => {
                               </div>
 
                               <div className="row">
-                                <div className="col-md-3 mb-2">
-                                  <label className="form-label"><strong>Date</strong></label>
+                                <div className="col-md-4 mb-2">
+                                  <label className="form-label">Date<span className="text-danger">*</span></label>
                                   {isEditMode && !locked ? (
                                     <>
                                       <input
                                         type="date"
                                         className={`form-control ${paymentErrors[originalIndex]?.date ? 'is-invalid' : ''}`}
-                                        value={payment.date || ''}
+                                        value={payment.date}
                                         onChange={(e) => handlePaymentChange(originalIndex, 'date', e.target.value)}
                                       />
                                       {paymentErrors[originalIndex]?.date && (
@@ -1042,8 +1152,8 @@ const HospitalModal = ({ hospital, isOpen, onClose, onSave, isEditMode }) => {
                                   )}
                                 </div>
 
-                                <div className="col-md-3 mb-2">
-                                  <label className="form-label"><strong>Agent Name</strong></label>
+                                <div className="col-md-4 mb-2">
+                                  <label className="form-label">Name</label>
                                   {isEditMode && !locked ? (
                                     <input
                                       type="text"
@@ -1056,14 +1166,15 @@ const HospitalModal = ({ hospital, isOpen, onClose, onSave, isEditMode }) => {
                                   )}
                                 </div>
 
-                                <div className="col-md-3 mb-2">
-                                  <label className="form-label"><strong>Agent Mobile No</strong></label>
+                                <div className="col-md-4 mb-2">
+                                  <label className="form-label">Mobile No</label>
                                   {isEditMode && !locked ? (
                                     <input
                                       type="tel"
                                       className="form-control"
                                       value={payment.mobileNo}
                                       onChange={(e) => handlePaymentChange(originalIndex, 'mobileNo', e.target.value)}
+                                      maxLength="10"
                                     />
                                   ) : (
                                     <div className="d-flex align-items-center">
@@ -1080,8 +1191,8 @@ const HospitalModal = ({ hospital, isOpen, onClose, onSave, isEditMode }) => {
                                   )}
                                 </div>
 
-                                <div className="col-md-3 mb-2">
-                                  <label className="form-label"><strong>Agent UPI No</strong></label>
+                                <div className="col-md-4 mb-2">
+                                  <label className="form-label">UPI No</label>
                                   {isEditMode && !locked ? (
                                     <input
                                       type="text"
@@ -1094,8 +1205,8 @@ const HospitalModal = ({ hospital, isOpen, onClose, onSave, isEditMode }) => {
                                   )}
                                 </div>
 
-                                <div className="col-md-3 mb-2">
-                                  <label className="form-label"><strong>Client ID</strong></label>
+                                <div className="col-md-4 mb-2">
+                                  <label className="form-label">Client ID</label>
                                   {isEditMode && !locked ? (
                                     <input
                                       type="text"
@@ -1108,8 +1219,8 @@ const HospitalModal = ({ hospital, isOpen, onClose, onSave, isEditMode }) => {
                                   )}
                                 </div>
 
-                                <div className="col-md-3 mb-2">
-                                  <label className="form-label"><strong>Client Name</strong></label>
+                                <div className="col-md-4 mb-2">
+                                  <label className="form-label">Client Name</label>
                                   {isEditMode && !locked ? (
                                     <input
                                       type="text"
@@ -1122,7 +1233,7 @@ const HospitalModal = ({ hospital, isOpen, onClose, onSave, isEditMode }) => {
                                   )}
                                 </div>
 
-                                <div className="col-md-3 mb-2">
+                                <div className="col-md-4 mb-2">
                                   <label className="form-label">Service Type</label>
                                   {isEditMode && !locked ? (
                                     <input
@@ -1136,11 +1247,11 @@ const HospitalModal = ({ hospital, isOpen, onClose, onSave, isEditMode }) => {
                                   )}
                                 </div>
 
-                                <div className="col-md-3 mb-2">
-                                  <label className="form-label"><strong>Service Charges</strong></label>
+                                <div className="col-md-4 mb-2">
+                                  <label className="form-label">Service Charges</label>
                                   {isEditMode && !locked ? (
                                     <input
-                                      type="number"
+                                      type="text"
                                       className="form-control"
                                       value={payment.serviceCharges}
                                       onChange={(e) => handlePaymentChange(originalIndex, 'serviceCharges', e.target.value)}
@@ -1150,12 +1261,12 @@ const HospitalModal = ({ hospital, isOpen, onClose, onSave, isEditMode }) => {
                                   )}
                                 </div>
 
-                                <div className="col-md-3 mb-2">
-                                  <label className="form-label"><strong>Commition</strong><span className="text-danger">*</span></label>
+                                <div className="col-md-4 mb-2">
+                                  <label className="form-label">Commition<span className="text-danger">*</span></label>
                                   {isEditMode && !locked ? (
                                     <>
                                       <input
-                                        type="number"
+                                        type="text"
                                         className={`form-control ${paymentErrors[originalIndex]?.commition ? 'is-invalid' : ''}`}
                                         value={payment.commition}
                                         onChange={(e) => handlePaymentChange(originalIndex, 'commition', e.target.value)}
@@ -1169,8 +1280,8 @@ const HospitalModal = ({ hospital, isOpen, onClose, onSave, isEditMode }) => {
                                   )}
                                 </div>
 
-                                <div className="col-md-3 mb-2">
-                                  <label className="form-label"><strong>Payment Mode</strong><span className="text-danger">*</span></label>
+                                <div className="col-md-4 mb-2">
+                                  <label className="form-label">Payment Mode<span className="text-danger">*</span></label>
                                   {isEditMode && !locked ? (
                                     <>
                                       <select
@@ -1192,48 +1303,58 @@ const HospitalModal = ({ hospital, isOpen, onClose, onSave, isEditMode }) => {
                                   )}
                                 </div>
 
+                                {/* Reminder Date for Payments */}
+                                <div className="col-md-4 mb-2">
+                                  <label className="form-label">Reminder Date</label>
+                                  {isEditMode && !locked ? (
+                                    <input
+                                      type="date"
+                                      className="form-control"
+                                      value={payment.reminderDate || ""}
+                                      onChange={(e) => handlePaymentChange(originalIndex, 'reminderDate', e.target.value)}
+                                    />
+                                  ) : (
+                                    <p className={getReminderClass(payment.reminderDate)}>
+                                      {payment.reminderDate
+                                        ? new Date(payment.reminderDate).toLocaleDateString("en-GB")
+                                        : "—"}
+                                    </p>
+                                  )}
+                                </div>
+
                                 <div className="col-12 mb-2">
-                                  <label className="form-label"><strong>Comments</strong></label>
+                                  <label className="form-label">Comments</label>
                                   {isEditMode && !locked ? (
                                     <textarea
                                       className="form-control"
+                                      rows={3}
                                       value={payment.comments}
                                       onChange={(e) => handlePaymentChange(originalIndex, 'comments', e.target.value)}
-                                      rows="2"
                                     />
                                   ) : (
                                     <p>{payment.comments || 'N/A'}</p>
                                   )}
                                 </div>
-
-                                {/* Submit/Lock button for payments */}
-                                {isEditMode && !locked && (
-                                  <div className="col-12 mt-3">
-                                    <button
-                                      type="button"
-                                      className="btn btn-success"
-                                      onClick={() => handlePaymentSubmit(originalIndex)}
-                                    >
-                                      Submit Payment
-                                    </button>
-                                  </div>
-                                )}
-
-                                {/* Show submission date if locked */}
-                                {locked && payment.submittedAt && (
-                                  <div className="col-12 mt-2">
-                                    <small className="text-muted">
-                                      Submitted on: {new Date(payment.submittedAt).toLocaleString()}
-                                    </small>
-                                  </div>
-                                )}
                               </div>
-                              <hr className="mt-3" />
+
+                              {isEditMode && !locked && (
+                                <div className="text-end mb-3">
+                                  <button
+                                    type="button"
+                                    className="btn btn-success"
+                                    onClick={() => handlePaymentSubmit(originalIndex)}
+                                  >
+                                    Save Payment
+                                  </button>
+                                </div>
+                              )}
+
+                              <hr className="my-4" />
                             </div>
                           );
                         })}
 
-                        {/* Payment Pagination */}
+                        {/* Pagination for Payments */}
                         {totalPaymentPages > 1 && (
                           <nav aria-label="Payment pagination">
                             <ul className="pagination justify-content-center">
@@ -1246,13 +1367,10 @@ const HospitalModal = ({ hospital, isOpen, onClose, onSave, isEditMode }) => {
                                   Previous
                                 </button>
                               </li>
-                              {[...Array(totalPaymentPages)].map((_, i) => (
-                                <li key={i} className={`page-item ${currentPaymentPage === i + 1 ? 'active' : ''}`}>
-                                  <button
-                                    className="page-link"
-                                    onClick={() => setCurrentPaymentPage(i + 1)}
-                                  >
-                                    {i + 1}
+                              {Array.from({ length: totalPaymentPages }, (_, i) => i + 1).map(page => (
+                                <li key={page} className={`page-item ${currentPaymentPage === page ? 'active' : ''}`}>
+                                  <button className="page-link" onClick={() => setCurrentPaymentPage(page)}>
+                                    {page}
                                   </button>
                                 </li>
                               ))}
@@ -1273,106 +1391,137 @@ const HospitalModal = ({ hospital, isOpen, onClose, onSave, isEditMode }) => {
                   </div>
                 )}
 
-                {/* NEW: Agent List Tab */}
+                {/* Agent List Tab (readonly table) */}
                 {activeTab === 'agentList' && (
                   <div>
                     <h5 className="mb-3">Agent List</h5>
-                    <div className="table-responsive">
-                      <table className="table table-bordered table-striped align-middle">
-                        <thead className="table-light">
-                          <tr>
-                            <th style={{width:'120px'}}>ID NO</th>
-                            <th>Name</th>
-                            <th>Designation</th>
-                            <th>Status</th>
-                            <th style={{width:'220px'}}>Mobile No</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {agents.length === 0 ? (
-                            <tr><td colSpan="5" className="text-center py-4">No agents</td></tr>
-                          ) : (
-                            agents.map((a, idx) => (
-                              <tr key={a.id || idx}>
-                                <td>{a.id || '—'}</td>
-                                <td>{a.name || '—'}</td>
-                                <td>{a.designation || '—'}</td>
-                                <td>
-                                  {a.status
-                                    ? <span className={`badge bg-${getStatusColor(a.status)}`}>{a.status}</span>
-                                    : '—'}
+                    {agents.length === 0 ? (
+                      <div className="text-center py-4">
+                        <p>No agents added yet.</p>
+                      </div>
+                    ) : (
+                      <div className="table-responsive">
+                        <table className="table table-striped table-bordered">
+                          <thead className="table-dark">
+                            <tr>
+                              <th>ID</th>
+                              <th>Name</th>
+                              <th>Designation</th>
+                              <th>Mobile No</th>
+                              <th>UPI No</th>
+                              <th>Status</th>
+                              <th>Reminder Date</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {agents.map((agent, index) => (
+                              <tr key={agent.id || index}>
+                                <td>{agent.id}</td>
+                                <td>{agent.name}</td>
+                                <td>{agent.designation}</td>
+                                <td>{agent.mobileNo}
+                                  <a href={`tel:${agent.mobileNo1}`} className="btn btn-sm btn-info "> Call</a>
+                                  <a
+                                    className="btn btn-sm btn-warning ms-1"
+                                    href={`https://wa.me/${agent.mobile}?text=${encodeURIComponent(
+                                      "Hello This is Sudheer From JenCeo Home Care Services"
+                                    )}`}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                  >Watsapp</a>
                                 </td>
+                                <td>{agent.upiNo}</td>
                                 <td>
-                                  <div className="d-flex align-items-center">
-                                    <span>{a.mobileNo || '—'}</span>
-                                    {a.mobileNo && (
-                                      <a href={`tel:${a.mobileNo}`} className="btn btn-sm btn-outline-primary ms-2">
-                                        Call
-                                      </a>
-                                    )}
-                                  </div>
+                                  <span className={`badge bg-${getStatusColor(agent.status)}`}>
+                                    {agent.status}
+                                  </span>
+                                </td>
+                                <td className={getReminderClass(agent.reminderDate)}>
+                                  {agent.reminderDate
+                                    ? new Date(agent.reminderDate).toLocaleDateString("en-GB")
+                                    : "—"}
                                 </td>
                               </tr>
-                            ))
-                          )}
-                        </tbody>
-                      </table>
-                    </div>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
                   </div>
                 )}
 
-                {/* NEW: Payment List Tab */}
+                {/* Payment List Tab (readonly table) */}
                 {activeTab === 'paymentList' && (
                   <div>
                     <h5 className="mb-3">Payment List</h5>
-                    <div className="table-responsive">
-                      <table className="table table-bordered table-striped align-middle">
-                        <thead className="table-light">
-                          <tr>
-                            <th style={{width:'130px'}}>Date</th>
-                            <th>Agent Name</th>
-                            <th>Client Name</th>
-                            <th style={{width:'150px'}}>Commition</th>
-                            <th style={{width:'160px'}}>Payment Mode</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {payments.length === 0 ? (
-                            <tr><td colSpan="5" className="text-center py-4">No payments</td></tr>
-                          ) : (
-                            <>
-                              {payments.map((p, idx) => (
-                                <tr key={p.id || idx}>
-                                  <td>{p.date || (p.createdAt ? new Date(p.createdAt).toISOString().slice(0,10) : '—')}</td>
-                                  <td>{p.name || '—'}</td>
-                                  <td>{p.clientName || '—'}</td>
-                                  <td>{(p.commition !== undefined && p.commition !== null && p.commition !== '') ? Number(p.commition) : '—'}</td>
-                                  <td>{p.paymentMode || '—'}</td>
-                                </tr>
-                              ))}
-                              {/* Total Row */}
-                              <tr className="fw-bold">
-                                <td colSpan="3" className="text-end">Total Amount</td>
-                                <td>{sumCommission()}</td>
-                                <td></td>
+                    {payments.length === 0 ? (
+                      <div className="text-center py-4">
+                        <p>No payments added yet.</p>
+                      </div>
+                    ) : (
+                      <div className="table-responsive">
+                        <table className="table table-striped table-bordered">
+                          <thead className="table-dark">
+                            <tr>
+                              {/* <th>ID</th> */}
+                              <th>Date</th>
+                              <th>Name</th>
+                              <th>Client ID</th>
+                              <th>Service Type</th>
+                              <th>Service Charges</th>
+                              <th>Commition</th>
+                              <th>Payment Mode</th>
+                              <th>Reminder Date</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {payments.map((payment, index) => (
+                              <tr key={payment.id || index}>
+                                {/* <td>{payment.id}</td> */}
+                                <td>{payment.date}</td>
+                                <td>{payment.name}</td>
+                                <td>{payment.clientId}</td>
+                                <td>{payment.serviceType}</td>
+                                <td>{payment.serviceCharges}</td>
+                                <td>{payment.commition}</td>
+                                <td>{payment.paymentMode}</td>
+                                <td className={getReminderClass(payment.reminderDate)}>
+                                  {payment.reminderDate
+                                    ? new Date(payment.reminderDate).toLocaleDateString("en-GB")
+                                    : "—"}
+                                </td>
                               </tr>
-                            </>
-                          )}
-                        </tbody>
-                      </table>
-                    </div>
+                            ))}
+                          </tbody>
+                          <tfoot>
+                            <tr className="table-info">
+                              <td colSpan="6" className="text-end"><strong>Total Commission:</strong></td>
+                              <td colSpan="3"><strong>{sumCommission()}</strong></td>
+                            </tr>
+                          </tfoot>
+                        </table>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
             </div>
 
             <div className="modal-footer">
+              <div className="me-auto">
+                {hasUnsavedChanges && (
+                  <span className="text-warning">
+                    <i className="fas fa-exclamation-triangle me-1"></i>
+                    Unsaved changes
+                  </span>
+                )}
+              </div>
               <button type="button" className="btn btn-secondary" onClick={handleClose}>
                 Close
               </button>
               {isEditMode && (
                 <button type="button" className="btn btn-primary" onClick={handleSave}>
-                  Save All Changes
+                  Save Changes
                 </button>
               )}
             </div>

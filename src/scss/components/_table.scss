@@ -128,6 +128,8 @@ table {
 
 /* ClientTable.css */
 .reminder-overdue {
+    color: red !important;
+    
     td {
         &:nth-child(5) {
             color: red !important;
@@ -136,6 +138,7 @@ table {
 }
 
 .reminder-today {
+    color: yellow !important;
     td {
         &:nth-child(5) {
             color: yellow !important;
@@ -146,6 +149,7 @@ table {
 }
 
 .reminder-tomorrow {
+    color: orange !important;
     td {
         &:nth-child(5) {
             color: orange !important;
@@ -156,6 +160,7 @@ table {
 }
 
 .reminder-upcoming {
+    color: #3795e2 !important;
     td {
         &:nth-child(5) {
             color: #3795e2 !important;

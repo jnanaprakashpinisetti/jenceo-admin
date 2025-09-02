@@ -537,7 +537,7 @@ const HospitalModal = ({ hospital, isOpen, onClose, onSave, isEditMode }) => {
             <div className="modal-header bg-secondary text-white">
               <h5 className="modal-title">
                 {isEditMode ? "Edit" : "View"} Hospital - {hospitalData.idNo} - {hospitalData.hospitalName}
-                <span className="badge bg-danger ms-2">Reminders: {totalReminders}</span>
+                <span className="badge bg-danger mt-2">Reminders: {totalReminders}</span>
               </h5>
               <button type="button" className="btn-close btn-close-white" onClick={handleClose}></button>
             </div>
@@ -909,16 +909,16 @@ const HospitalModal = ({ hospital, isOpen, onClose, onSave, isEditMode }) => {
                                         >
                                           Call
                                         </a>
-                                        
+
                                       )}
                                       <a
-                                    className="btn btn-sm btn-warning ms-1"
-                                    href={`https://wa.me/${agent.mobile}?text=${encodeURIComponent(
-                                      "Hello This is Sudheer From JenCeo Home Care Services"
-                                    )}`}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                  >Watsapp</a>
+                                        className="btn btn-sm btn-warning ms-1"
+                                        href={`https://wa.me/${agent.mobile}?text=${encodeURIComponent(
+                                          "Hello This is Sudheer From JenCeo Home Care Services"
+                                        )}`}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                      >Watsapp</a>
                                     </div>
                                   )}
                                 </div>

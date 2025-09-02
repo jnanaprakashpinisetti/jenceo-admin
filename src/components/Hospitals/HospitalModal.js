@@ -600,6 +600,7 @@ const HospitalModal = ({ hospital, isOpen, onClose, onSave, isEditMode }) => {
                           className="form-control"
                           value={hospitalData.idNo || ''}
                           onChange={(e) => { setHospitalData({ ...hospitalData, idNo: e.target.value }); markEdited(); }}
+                          disabled
                         />
                       ) : (
                         <p>{hospitalData.idNo || 'N/A'}</p>
@@ -613,6 +614,7 @@ const HospitalModal = ({ hospital, isOpen, onClose, onSave, isEditMode }) => {
                           className="form-control"
                           value={hospitalData.hospitalName || ''}
                           onChange={(e) => { setHospitalData({ ...hospitalData, hospitalName: e.target.value }); markEdited(); }}
+                          disabled
                         />
                       ) : (
                         <p>{hospitalData.hospitalName || 'N/A'}</p>
@@ -933,6 +935,7 @@ const HospitalModal = ({ hospital, isOpen, onClose, onSave, isEditMode }) => {
                                       className="form-control"
                                       value={agent.upiNo}
                                       onChange={(e) => handleAgentChange(originalIndex, 'upiNo', e.target.value)}
+                                      maxLength={10}
                                     />
                                   ) : (
                                     <p>{agent.upiNo || 'N/A'}</p>
@@ -1266,6 +1269,7 @@ const HospitalModal = ({ hospital, isOpen, onClose, onSave, isEditMode }) => {
                                       className="form-control"
                                       value={payment.serviceCharges}
                                       onChange={(e) => handlePaymentChange(originalIndex, 'serviceCharges', e.target.value)}
+                                      maxLength={5}
                                     />
                                   ) : (
                                     <p>{payment.serviceCharges || 'N/A'}</p>
@@ -1281,6 +1285,7 @@ const HospitalModal = ({ hospital, isOpen, onClose, onSave, isEditMode }) => {
                                         className={`form-control ${paymentErrors[originalIndex]?.commition ? 'is-invalid' : ''}`}
                                         value={payment.commition}
                                         onChange={(e) => handlePaymentChange(originalIndex, 'commition', e.target.value)}
+                                        maxLength={4}
                                       />
                                       {paymentErrors[originalIndex]?.commition && (
                                         <div className="invalid-feedback">{paymentErrors[originalIndex].commition}</div>
@@ -1315,7 +1320,7 @@ const HospitalModal = ({ hospital, isOpen, onClose, onSave, isEditMode }) => {
                                 </div>
 
                                 {/* Reminder Date for Payments */}
-                                <div className="col-md-4 mb-2">
+                                {/* <div className="col-md-4 mb-2">
                                   <label className="form-label">Reminder Date</label>
                                   {isEditMode && !locked ? (
                                     <input
@@ -1331,7 +1336,7 @@ const HospitalModal = ({ hospital, isOpen, onClose, onSave, isEditMode }) => {
                                         : "—"}
                                     </p>
                                   )}
-                                </div>
+                                </div> */}
 
                                 <div className="col-12 mb-2">
                                   <label className="form-label">Comments</label>

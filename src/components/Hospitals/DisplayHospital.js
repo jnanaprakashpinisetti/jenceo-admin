@@ -57,6 +57,20 @@ export default function DisplayHospital() {
         return "";
     };
 
+    const getVisitClass = (visitType) => {
+        switch (visitType) {
+            case "Visit Low":
+                return "bg-warning";
+            case "Visit Medium":
+                return "bg-info";
+            case "Visit Fully":
+                return "bg-success";
+            default:
+                return "bg-secondary";
+        }
+    };
+
+
     // ✅ Nearest reminder date (agents + payments)
     const getNearestReminderDate = (hospital) => {
         const dates = [
@@ -129,6 +143,22 @@ export default function DisplayHospital() {
         } else if (sortField === "reminder") {
             valA = getNearestReminderDate(a)?.getTime() || Infinity;
             valB = getNearestReminderDate(b)?.getTime() || Infinity;
+        } else if (sortField === "idNo") {
+            // Special sorting for ID numbers (handle alphanumeric values)
+            valA = a.idNo || "";
+            valB = b.idNo || "";
+
+            // Extract numeric parts for proper sorting of alphanumeric IDs
+            const numA = parseInt(valA.match(/\d+/)) || 0;
+            const numB = parseInt(valB.match(/\d+/)) || 0;
+
+            if (numA !== numB) {
+                return sortOrder === "asc" ? numA - numB : numB - numA;
+            }
+
+            // If numeric parts are equal, sort by the whole string
+            valA = valA.toString().toLowerCase();
+            valB = valB.toString().toLowerCase();
         } else {
             valA = (a[sortField] || "").toString().toLowerCase();
             valB = (b[sortField] || "").toString().toLowerCase();
@@ -260,7 +290,12 @@ export default function DisplayHospital() {
                 <table className="table table-dark table-hover">
                     <thead className="table-dark">
                         <tr>
-                            <th>ID No ↓</th>
+                            <th
+                                onClick={() => toggleSort("idNo")}
+                                style={{ cursor: "pointer" }}
+                            >
+                                ID No {sortField === "idNo" ? (sortOrder === "asc" ? "↑" : "↓") : "↓"}
+                            </th>
                             <th onClick={() => toggleSort("hospitalName")} style={{ cursor: "pointer" }}>
                                 Hospital Name {sortField === "hospitalName" ? (sortOrder === "asc" ? "↑" : "↓") : ""}
                             </th>
@@ -295,7 +330,12 @@ export default function DisplayHospital() {
                                             ? new Date(nearestReminder).toLocaleDateString("en-GB")
                                             : "—"}
                                     </td>
-                                    <td>{hospital.autoVisit || "N/A"}</td>
+                                    <td>
+                                        <span className={`badge ${getVisitClass(hospital.visitType)}`}>
+                                            {hospital.visitType || "N/A"}
+                                        </span>
+                                    </td>
+
                                     <td>
                                         <div className="d-flex">
                                             <button

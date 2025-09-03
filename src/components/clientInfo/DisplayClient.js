@@ -353,6 +353,16 @@ export default function DisplayClient() {
                         </a>
                       </span>
                     ) : 'N/A'}
+                             <a
+                          className="btn btn-sm btn-warning ms-1"
+                          href={`https://wa.me/${client.mobileNo1.replace(/\D/g, '')}?text=${encodeURIComponent(
+                            "Hello, This is Sudheer From JenCeo Home Care Services"
+                          )}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                        >
+                          WAP
+                        </a>
                   </td>
                   <td>
                     <span className={`badge ${getStatusBadgeClass(client.serviceStatus)}`}>

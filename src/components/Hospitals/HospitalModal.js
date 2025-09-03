@@ -931,7 +931,7 @@ const HospitalModal = ({ hospital, isOpen, onClose, onSave, isEditMode }) => {
                                         target="_blank"
                                         rel="noopener noreferrer"
                                       >
-                                        WhatsApp
+                                        WAP
                                       </a>
                                     </div>
                                   )}
@@ -1454,7 +1454,7 @@ const HospitalModal = ({ hospital, isOpen, onClose, onSave, isEditMode }) => {
                                     )}`}
                                     target="_blank"
                                     rel="noopener noreferrer"
-                                  >Watsapp</a>
+                                  >WAP</a>
                                 </td>
                                 <td>{agent.upiNo}</td>
                                 <td>

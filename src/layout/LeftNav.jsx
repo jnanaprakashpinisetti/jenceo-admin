@@ -27,6 +27,7 @@ import admin from "../assets/admin.svg";
 import hr from "../assets/hr.svg";
 import accounts from "../assets/accounts.svg";
 import operations from "../assets/Operations.svg";
+import enquiry from "../assets/enquiry.svg";
 
 import Dashboard from '../pages/Dashboard';
 // Employee Data
@@ -46,6 +47,7 @@ import Operations from '../pages/Operations';
 import HospitalList from '../pages/HospitalList';
 import HospitalDeleteList from '../pages/HospitalDeleteList';
 import WorkerCallsData from '../pages/WorkerCallsData';
+import Enquiry from '../pages/Enquiry';
 
 export default function LeftNav() {
   const [isActive, setIsActive] = useState(false);   // side collapse (arrow)
@@ -143,6 +145,11 @@ export default function LeftNav() {
                 <img src={ClientExitIcon} alt="" /> ClientExit
               </NavLink>
             </li>
+            <li className="nav-item">
+              <NavLink to='Enquiry' className="nav-link" title='ClientExit' onClick={closeMobile}>
+                <img src={enquiry} alt="" /> Enquiry
+              </NavLink>
+            </li>
 
             <hr />
 
@@ -209,6 +216,7 @@ export default function LeftNav() {
         <Route path="Investments" element={<Investments />} />
         <Route path="ClientInfo" element={<ClientInfo />} />
         <Route path="ClientExit" element={<ClientExit />} />
+        <Route path="Enquiry" element={<Enquiry />} />
         <Route path="Expenses" element={<Expenses />} />
         <Route path="Task" element={<Task />} />
         <Route path="Admin" element={<Admin />} />

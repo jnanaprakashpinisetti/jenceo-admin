@@ -265,7 +265,7 @@ export default function DisplayExitEmployee() {
     <div className="container-fluid py-4">
       {/* Search Bar */}
       <div className="row mb-3">
-        <div className="col-md-6">
+        <div className="col-md-6 m-auto">
           <div className="input-group">
             <span className="input-group-text">
               <i className="bi bi-search"></i>
@@ -283,10 +283,10 @@ export default function DisplayExitEmployee() {
 
       {/* Filter Checkboxes */}
       <div className="row mb-3">
-        <div className="col-12">
+        <div className="col-8 m-auto">
           <div className="chec-box-card">
-            <div className="card-body py-2">
-              <div className="row">
+            <div className="card-body py-2 justify-content-between filter-wrapper">
+              <div className="row w-100">
                 <div className="col-md-3">
                   <strong className="me-2">Gender:</strong>
                   {Object.keys(genderFilters).map(gender => (

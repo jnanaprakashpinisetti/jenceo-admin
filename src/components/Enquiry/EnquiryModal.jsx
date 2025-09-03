@@ -177,7 +177,7 @@ const EnquiryModal = ({
                     className="form-select"
                     value={formData.through || ""}
                     onChange={handleChange}
-                    disabled={mode === "view"}
+                    disabled={true}
                   >
                     <option value="">Select Source</option>
                     <option value="Poster">Poster</option>

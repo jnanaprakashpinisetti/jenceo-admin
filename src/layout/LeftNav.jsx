@@ -48,6 +48,7 @@ import HospitalList from '../pages/HospitalList';
 import HospitalDeleteList from '../pages/HospitalDeleteList';
 import WorkerCallsData from '../pages/WorkerCallsData';
 import Enquiry from '../pages/Enquiry';
+import EnquiryExit from '../pages/EnquiryExit';
 
 export default function LeftNav() {
   const [isActive, setIsActive] = useState(false);   // side collapse (arrow)
@@ -146,8 +147,13 @@ export default function LeftNav() {
               </NavLink>
             </li>
             <li className="nav-item">
-              <NavLink to='Enquiry' className="nav-link" title='ClientExit' onClick={closeMobile}>
+              <NavLink to='Enquiry' className="nav-link" title='Enquiry' onClick={closeMobile}>
                 <img src={enquiry} alt="" /> Enquiry
+              </NavLink>
+            </li>
+            <li className="nav-item">
+              <NavLink to='EnquiryExit' className="nav-link" title='Old Enquirys' onClick={closeMobile}>
+                <img src={enquiry} alt="" /> Old Enquiry
               </NavLink>
             </li>
 
@@ -217,6 +223,7 @@ export default function LeftNav() {
         <Route path="ClientInfo" element={<ClientInfo />} />
         <Route path="ClientExit" element={<ClientExit />} />
         <Route path="Enquiry" element={<Enquiry />} />
+        <Route path="EnquiryExit" element={<EnquiryExit />} />
         <Route path="Expenses" element={<Expenses />} />
         <Route path="Task" element={<Task />} />
         <Route path="Admin" element={<Admin />} />

@@ -422,7 +422,7 @@ const EnquiriesDisplay = () => {
                                     <td>
                                         <a href={`tel:${enq.mobile}`} className="btn btn-sm btn-info me-2">Call</a>
                                         <a 
-                                            href={`https://wa.me/${enq.mobile?.replace(/\D/g, '')}?text=${encodeURIComponent("Hello, This is from JenCeo Home Care Services")}`} 
+                                            href={`https://wa.me/${enq.mobile?.replace(/\D/g, '')}?text=${encodeURIComponent("Hello, This is Sudheer from JenCeo Home Care Services")}`} 
                                             target="_blank" 
                                             rel="noreferrer" 
                                             className="btn btn-sm btn-warning"

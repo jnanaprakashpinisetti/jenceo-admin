@@ -15,13 +15,13 @@ const DeletedEnquiriesDisplay = () => {
   const [showRevertModal, setShowRevertModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
-  const [actionType, setActionType] = useState(""); // "revert" or "delete"
+  const [actionType, setActionType] = useState("");
   const [targetEnquiry, setTargetEnquiry] = useState(null);
 
-  // 🔹 Fetch deleted enquiries
   useEffect(() => {
     setLoading(true);
-    firebaseDB.child("DeletedEnquiries").on("value", (snapshot) => {
+    const ref = firebaseDB.child("DeletedEnquiries");
+    ref.on("value", (snapshot) => {
       if (snapshot.exists()) {
         const data = snapshot.val();
         const list = Object.keys(data).map((key) => ({
@@ -34,6 +34,9 @@ const DeletedEnquiriesDisplay = () => {
       }
       setLoading(false);
     });
+
+    // 🔹 cleanup listener on unmount
+    return () => ref.off();
   }, []);
 
   const handleView = (enquiry) => {
@@ -60,30 +63,22 @@ const DeletedEnquiriesDisplay = () => {
     setShowDeleteModal(true);
   };
 
-  // ✅ FIXED: Revert with proper Firebase operations
+  // ✅ FIXED: Atomic Revert
   const handleRevert = async () => {
     if (!targetEnquiry) return;
 
     try {
       const { id, ...enquiryData } = targetEnquiry;
 
-      // ✅ Method 1: Use separate operations (more reliable)
-      // Add to EnquiryData with the SAME ID
-      await firebaseDB.child(`EnquiryData/${id}`).set(enquiryData);
-      
-      // Remove from DeletedEnquiries
-      await firebaseDB.child(`DeletedEnquiries/${id}`).remove();
+      const updates = {};
+      updates[`EnquiryData/${id}`] = enquiryData;
+      updates[`DeletedEnquiries/${id}`] = null;
 
-      // ✅ Method 2: Alternative using update (commented out)
-      // const updates = {};
-      // updates[`EnquiryData/${id}`] = enquiryData;
-      // updates[`DeletedEnquiries/${id}`] = null;
-      // await firebaseDB.update(updates);
+      await firebaseDB.update(updates);
 
       setShowRevertModal(false);
       setShowSuccessModal(true);
 
-      // Update local state
       setDeletedEnquiries((prev) => prev.filter((item) => item.id !== id));
     } catch (err) {
       console.error("Error reverting enquiry:", err);
@@ -91,7 +86,6 @@ const DeletedEnquiriesDisplay = () => {
     }
   };
 
-  // ✅ Permanent Delete
   const handlePermanentDelete = async () => {
     if (!targetEnquiry) return;
 
@@ -101,7 +95,6 @@ const DeletedEnquiriesDisplay = () => {
 
       setShowDeleteModal(false);
       setShowSuccessModal(true);
-
       setDeletedEnquiries((prev) => prev.filter((item) => item.id !== id));
     } catch (err) {
       console.error("Error deleting enquiry:", err);
@@ -121,12 +114,11 @@ const DeletedEnquiriesDisplay = () => {
       ) : deletedEnquiries.length === 0 ? (
         <div className="alert alert-info text-center">
           <h5>No deleted enquiries found</h5>
-          <p className="mb-0">All deleted enquiries will appear here</p>
         </div>
       ) : (
         <div className="table-responsive">
-          <table className="table table-hover table-striped">
-            <thead className="table-dark">
+          <table className="table table-dark table-striped">
+            <thead>
               <tr>
                 <th>S.No</th>
                 <th>Name</th>
@@ -152,17 +144,17 @@ const DeletedEnquiriesDisplay = () => {
                   <td>{enq.reminderDate || "-"}</td>
                   <td>
                     <div className="btn-group" role="group">
-                      <button className="btn btn-outline-info btn-sm" onClick={() => handleView(enq)} title="View">
-                        <img src={viewIcon} alt="view" width="16" height="16" />
+                      <button className="btn btn-sm" onClick={() => handleView(enq)}>
+                        <img src={viewIcon} alt="view" width="16" />
                       </button>
-                      <button className="btn btn-outline-warning btn-sm" onClick={() => handleEdit(enq)} title="Edit">
-                        <img src={editIcon} alt="edit" width="14" height="14" />
+                      <button className="btn btn-sm" onClick={() => handleEdit(enq)}>
+                        <img src={editIcon} alt="edit" width="14" />
                       </button>
-                      <button className="btn btn-outline-success btn-sm" onClick={() => confirmRevert(enq)} title="Revert">
-                        <img src={revertIcon} alt="revert" width="16" height="16" />
+                      <button className="btn btn-sm" onClick={() => confirmRevert(enq)}>
+                        <img src={revertIcon} alt="revert" width="16" />
                       </button>
-                      <button className="btn btn-outline-danger btn-sm" onClick={() => confirmDelete(enq)} title="Delete Permanently">
-                        <img src={deleteIcon} alt="delete" width="14" height="14" />
+                      <button className="btn btn-sm" onClick={() => confirmDelete(enq)}>
+                        <img src={deleteIcon} alt="delete" width="14" />
                       </button>
                     </div>
                   </td>
@@ -183,7 +175,7 @@ const DeletedEnquiriesDisplay = () => {
                 <button type="button" className="btn-close" onClick={() => setShowRevertModal(false)}></button>
               </div>
               <div className="modal-body text-center">
-                Are you sure you want to move enquiry <strong>{targetEnquiry.name}</strong> back to active enquiries?
+                Move enquiry <strong>{targetEnquiry.name}</strong> back to active enquiries?
               </div>
               <div className="modal-footer justify-content-center">
                 <button className="btn btn-secondary" onClick={() => setShowRevertModal(false)}>Cancel</button>
@@ -194,7 +186,7 @@ const DeletedEnquiriesDisplay = () => {
         </div>
       )}
 
-      {/* Permanent Delete Confirmation Modal */}
+      {/* Delete Confirmation Modal */}
       {showDeleteModal && targetEnquiry && (
         <div className="modal fade show d-block" tabIndex="-1" style={{ background: "rgba(0,0,0,0.5)" }}>
           <div className="modal-dialog modal-dialog-centered">
@@ -204,12 +196,11 @@ const DeletedEnquiriesDisplay = () => {
                 <button type="button" className="btn-close" onClick={() => setShowDeleteModal(false)}></button>
               </div>
               <div className="modal-body text-center">
-                This action cannot be undone!<br />
-                Do you really want to permanently delete enquiry <strong>{targetEnquiry.name}</strong>?
+                Permanently delete enquiry <strong>{targetEnquiry.name}</strong>?
               </div>
               <div className="modal-footer justify-content-center">
                 <button className="btn btn-secondary" onClick={() => setShowDeleteModal(false)}>Cancel</button>
-                <button className="btn btn-danger" onClick={handlePermanentDelete}>Yes, Delete Permanently</button>
+                <button className="btn btn-danger" onClick={handlePermanentDelete}>Yes, Delete</button>
               </div>
             </div>
           </div>
@@ -226,8 +217,8 @@ const DeletedEnquiriesDisplay = () => {
                 <button type="button" className="btn-close" onClick={() => setShowSuccessModal(false)}></button>
               </div>
               <div className="modal-body text-center">
-                The enquiry for <strong>{targetEnquiry.name}</strong> has been{" "}
-                {actionType === "revert" ? "reverted to active enquiries" : "permanently deleted"}.
+                Enquiry for <strong>{targetEnquiry.name}</strong> has been{" "}
+                {actionType === "revert" ? "reverted" : "deleted"}.
               </div>
               <div className="modal-footer justify-content-center">
                 <button
@@ -245,7 +236,6 @@ const DeletedEnquiriesDisplay = () => {
         </div>
       )}
 
-      {/* Enquiry Modal */}
       {showModal && selectedEnquiry && (
         <EnquiryModal
           show={showModal}

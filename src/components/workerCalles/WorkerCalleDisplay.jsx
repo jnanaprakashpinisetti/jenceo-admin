@@ -384,6 +384,16 @@ export default function WorkerCallDisplay() {
                       Call
                     </a>
                   )}
+                  <a
+                    className="btn btn-sm btn-warning ms-1"
+                    href={`https://wa.me/${w.mobileNo?.replace(/\D/g, '')}?text=${encodeURIComponent(
+                      "Hello, This is Sudheer From JenCeo Home Care Services"
+                    )}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    WAP
+                  </a>
                 </td>
                 <td>
                   <span className={`badge ${w.conversationLevel === "Very Good"

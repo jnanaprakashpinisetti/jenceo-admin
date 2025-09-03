@@ -904,13 +904,24 @@ const EmployeeModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode
                         {...extraProps}
                     />
                 ) : (
-                    <div className="form-control form-control-sm bg-light d-flex justify-content-between align-items-center">
+                    <div className="form-control form-control-sm bg-light d-flex justify-content-between align-items-center ">
                         <span>{value || "N/A"}</span>
                         {canCall && (
-                            <a href={`tel:${digitsOnly}`} className="btn btn-sm btn-outline-primary">
+                            <a href={`tel:${digitsOnly}`} className="btn btn-sm btn-outline-primary mb-1">
                                 Call
                             </a>
                         )}
+
+                        <a
+                            className="btn btn-sm btn-warning ms-1 mb-1"
+                            href={`https://wa.me/${digitsOnly?.replace(/\D/g, '')}?text=${encodeURIComponent(
+                                "Hello, This is Sudheer From JenCeo Home Care Services"
+                            )}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                        >
+                            WAP
+                        </a>
                     </div>
                 )}
             </div>

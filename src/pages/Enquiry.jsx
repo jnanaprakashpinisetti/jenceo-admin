@@ -1,5 +1,7 @@
 import React from 'react'
 import EnquiryForm from '../components/Enquiry/EnquiryForm'
+import EnquiriesDisplay from '../components/Enquiry/EnquiriesDisplay'
+
 
 
 
@@ -11,7 +13,7 @@ export default function Accounts() {
           <EnquiryForm />
         </div>
         <div className="col-md-8">
-
+          <EnquiriesDisplay />
         </div>
       </div>
     </div>

@@ -9,6 +9,7 @@ import deleteIcon from "../../assets/delete.svg";
 import EnquiryModal from "./EnquiryModal";
 
 const EnquiriesDisplay = () => {
+    // State management for enquiries data and UI controls
     const [enquiries, setEnquiries] = useState([]);
     const [loading, setLoading] = useState(true);
     const [search, setSearch] = useState("");
@@ -28,13 +29,12 @@ const EnquiriesDisplay = () => {
     const [deleteItem, setDeleteItem] = useState(null);
     const [sortBy, setSortBy] = useState("date");
     
-
     // Modal state
     const [showModal, setShowModal] = useState(false);
     const [modalMode, setModalMode] = useState("view");
     const [selectedEnquiry, setSelectedEnquiry] = useState(null);
 
-    // Fetch enquiries
+    // Fetch enquiries from Firebase
     const fetchEnquiries = () => {
         firebaseDB.child("EnquiryData").once("value", (snapshot) => {
             if (snapshot.exists()) {
@@ -52,6 +52,7 @@ const EnquiriesDisplay = () => {
         });
     };
 
+    // Initial data fetch on component mount
     useEffect(() => {
         setLoading(true);
         firebaseDB.child("EnquiryData").on("value", (snapshot) => {
@@ -71,7 +72,7 @@ const EnquiriesDisplay = () => {
         });
     }, []);
 
-    // Reminder counts
+    // Calculate reminder counts based on dates
     const updateReminderCounts = (list) => {
         const today = new Date();
         const tStr = today.toISOString().split("T")[0];
@@ -91,7 +92,7 @@ const EnquiriesDisplay = () => {
         setReminderCounts(counts);
     };
 
-    // Reminder class
+    // Determine CSS class for reminder dates based on urgency
     const getReminderClass = (date) => {
         if (!date) return "";
         const today = new Date();
@@ -106,7 +107,18 @@ const EnquiriesDisplay = () => {
         return "reminder-upcoming";
     };
     
-    // Filtering + Sorting
+    // Determine CSS class for status with color coding
+    const getStatusClass = (status) => {
+        switch(status) {
+            case "Enquiry": return "status-enquiry"; // Light blue
+            case "Pending": return "status-pending"; // Yellow
+            case "On Boarding": return "status-onboarding"; // Green
+            case "No Response": return "status-noresponse"; // Red
+            default: return "";
+        }
+    };
+    
+    // Filtering + Sorting logic
     const filteredEnquiries = enquiries
         .filter((enq) => {
             const matchesSearch =
@@ -133,7 +145,7 @@ const EnquiriesDisplay = () => {
             return new Date(b.date || 0) - new Date(a.date || 0);
         });
 
-    // Pagination
+    // Pagination logic
     const indexOfLast = currentPage * recordsPerPage;
     const indexOfFirst = indexOfLast - recordsPerPage;
     const currentEnquiries = filteredEnquiries.slice(indexOfFirst, indexOfLast);
@@ -160,7 +172,7 @@ const EnquiriesDisplay = () => {
         return range;
     };
 
-    // Month-wise summary
+    // Month-wise summary data preparation
     const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
     const years = Array.from({ length: 11 }, (_, i) => new Date().getFullYear() + i); // Current year → +10 years
     const throughOptions = [
@@ -247,7 +259,7 @@ const EnquiriesDisplay = () => {
         doc.save("Enquiries.pdf");
     };
 
-    // Reset filters
+    // Reset all filters
     const resetFilters = () => {
         setSearch("");
         setFilterStatus("");
@@ -297,23 +309,23 @@ const EnquiriesDisplay = () => {
         <div className="container mt-4">
             <h3 className="mb-3">Enquiries</h3>
 
-            {/* Reminder counts */}
-            <div className="alert alert-info d-flex justify-content-around flex-wrap">
-                <span style={{ cursor: "pointer" }} onClick={() => setFilterReminder("reminder-overdue")}>
+            {/* Reminder counts with clickable badges */}
+            <div className="alert alert-info d-flex justify-content-around flex-wrap reminder-badges">
+                <span className="reminder-badge overdue" onClick={() => setFilterReminder("reminder-overdue")}>
                     Overdue: <strong>{reminderCounts.overdue}</strong>
                 </span>
-                <span style={{ cursor: "pointer" }} onClick={() => setFilterReminder("reminder-today")}>
+                <span className="reminder-badge today" onClick={() => setFilterReminder("reminder-today")}>
                     Today: <strong>{reminderCounts.today}</strong>
                 </span>
-                <span style={{ cursor: "pointer" }} onClick={() => setFilterReminder("reminder-tomorrow")}>
+                <span className="reminder-badge tomorrow" onClick={() => setFilterReminder("reminder-tomorrow")}>
                     Tomorrow: <strong>{reminderCounts.tomorrow}</strong>
                 </span>
-                <span style={{ cursor: "pointer" }} onClick={() => setFilterReminder("reminder-upcoming")}>
+                <span className="reminder-badge upcoming" onClick={() => setFilterReminder("reminder-upcoming")}>
                     Upcoming: <strong>{reminderCounts.upcoming}</strong>
                 </span>
             </div>
 
-            {/* Search + Filter */}
+            {/* Search + Filter controls */}
             <div className="row mb-3">
                 <div className="col-md-3 mb-2">
                     <input
@@ -368,16 +380,16 @@ const EnquiriesDisplay = () => {
                     <button className="btn btn-info flex-fill mb-2" onClick={exportToCSV}>
                         CSV
                     </button>
-                    <button className="btn btn-danger flex-fill mb-2" onClick={exportToPDF}>
+                    {/* <button className="btn btn-danger flex-fill mb-2" onClick={exportToPDF}>
                         PDF
-                    </button>
+                    </button> */}
                     <button className="btn btn-secondary flex-fill mb-2" onClick={resetFilters}>
                         Reset
                     </button>
                 </div>
             </div>
 
-            {/* Table */}
+            {/* Main enquiries table */}
             {loading ? (
                 <div className="text-center my-4">
                     <div className="spinner-border text-primary" role="status"></div>
@@ -421,16 +433,21 @@ const EnquiriesDisplay = () => {
                                     <td>{enq.service}</td>
                                     <td>{enq.amount}</td>
                                     <td>{enq.through}</td>
-                                    <td>{enq.status}</td>
-                                    <td className={getReminderClass(enq.reminderDate)}>{enq.reminderDate || "-"}</td>
+                                    {/* Status with color coding */}
+                                    <td className={getStatusClass(enq.status)}>
+                                        <span className="status-badge">{enq.status}</span>
+                                    </td>
+                                    <td className={getReminderClass(enq.reminderDate)}>
+                                        <span className="reminder-date">{enq.reminderDate || "-"}</span>
+                                    </td>
                                     <td>
-                                        <button className="btn btn-sm btn-outline-info me-1" onClick={() => handleView(enq)}>
+                                        <button className="btn btn-sm  me-1" onClick={() => handleView(enq)}>
                                             <img src={viewIcon} alt="view" width="18" height="18" />
                                         </button>
-                                        <button className="btn btn-sm btn-outline-warning me-1" onClick={() => handleEdit(enq)}>
+                                        <button className="btn btn-sm  me-1" onClick={() => handleEdit(enq)}>
                                             <img src={editIcon} alt="edit" width="15" height="15" />
                                         </button>
-                                        <button className="btn btn-sm btn-outline-danger" onClick={() => confirmDelete(enq)}>
+                                        <button className="btn btn-sm" onClick={() => confirmDelete(enq)}>
                                             <img src={deleteIcon} alt="delete" width="14" height="14" />
                                         </button>
                                     </td>
@@ -441,7 +458,7 @@ const EnquiriesDisplay = () => {
                 </div>
             )}
 
-            {/* Pagination */}
+            {/* Pagination controls */}
             <div className="d-flex justify-content-between align-items-center mt-3 flex-wrap">
                 <div className="mb-2">
                     <select
@@ -452,10 +469,10 @@ const EnquiriesDisplay = () => {
                             setCurrentPage(1);
                         }}
                     >
-                        <option value={10}>10 / page</option>
-                        <option value={25}>25 / page</option>
-                        <option value={50}>50 / page</option>
-                        <option value={100}>100 / page</option>
+                        <option value={10}>10 / Rows</option>
+                        <option value={25}>25 / Rows</option>
+                        <option value={50}>50 / Rows</option>
+                        <option value={100}>100 / Rows</option>
                     </select>
                 </div>
                 {totalPages > 1 && (
@@ -490,40 +507,44 @@ const EnquiriesDisplay = () => {
                 )}
             </div>
 
-            {/* Month-wise summary */}
+            {/* Month-wise summary table */}
             <h4 className="mt-5">Month-wise Enquiry Summary</h4>
-            <ul className="nav nav-tabs mb-3">
-                {years.map((y) => (
-                    <li className="nav-item" key={y}>
-                        <button className={`nav-link ${activeYear === y ? "active" : ""}`} onClick={() => setActiveYear(y)}>
-                            {y}
-                        </button>
-                    </li>
-                ))}
-            </ul>
-            <div className="table-responsive">
-                <table className="table table-dark table-hover">
-                    <thead className="table-secondary sticky-top">
-                        <tr>
-                            <th>Through</th>
-                            {months.map((m) => (
-                                <th key={m}>{m}</th>
-                            ))}
-                            <th>Total</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {throughOptions.map((t) => (
-                            <tr key={t}>
-                                <td>{t}</td>
-                                {summaryData[t].map((count, idx) => (
-                                    <td key={idx}>{count}</td>
+            <div className="summary-tabs-container">
+                <ul className="nav nav-tabs summary-tabs mb-3">
+                    {years.map((y) => (
+                        <li className="nav-item" key={y}>
+                            <button className={`nav-link summary-tab ${activeYear === y ? "active" : ""}`} onClick={() => setActiveYear(y)}>
+                                {y}
+                            </button>
+                        </li>
+                    ))}
+                </ul>
+                <div className="table-responsive summary-table-container">
+                    <table className="table table-dark summary-table">
+                        <thead className="summary-table-header">
+                            <tr>
+                                <th>Through</th>
+                                {months.map((m) => (
+                                    <th key={m}>{m}</th>
                                 ))}
-                                <td>{summaryData[t].reduce((a, b) => a + b, 0)}</td>
+                                <th>Total</th>
                             </tr>
-                        ))}
-                    </tbody>
-                </table>
+                        </thead>
+                        <tbody>
+                            {throughOptions.map((t) => (
+                                <tr key={t} className="summary-table-row">
+                                    <td className="source-name">{t}</td>
+                                    {summaryData[t].map((count, idx) => (
+                                        <td key={idx} className={count > 0 ? "has-data" : ""}>
+                                            {count > 0 ? count : ""}
+                                        </td>
+                                    ))}
+                                    <td className="total-cell">{summaryData[t].reduce((a, b) => a + b, 0)}</td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
             </div>
 
             {/* Delete Confirmation Modal */}
@@ -548,7 +569,7 @@ const EnquiriesDisplay = () => {
                 </div>
             )}
 
-            {/* Enquiry Modal */}
+            {/* Enquiry Modal for view/edit */}
             {showModal && selectedEnquiry && (
                 <EnquiryModal
                     show={showModal}
@@ -559,6 +580,8 @@ const EnquiriesDisplay = () => {
                     onSaveSuccess={() => fetchEnquiries()}
                 />
             )}
+
+           
         </div>
     );
 };

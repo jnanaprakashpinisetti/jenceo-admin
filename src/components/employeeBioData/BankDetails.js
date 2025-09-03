@@ -11,7 +11,10 @@ const BankDetails = ({
 }) => {
   return (
     <div className="bank-details-form">
-      <h3 className="mb-4">Bank Account Details</h3>
+      <div className="form-card-header mb-4">
+        <h3 className="text-center">Bank Account Details</h3>
+      </div>
+      <hr></hr>
 
       <div className="row g-3">
         {/* Account Number */}

@@ -260,13 +260,14 @@ table {
 
 // Filters styles
 .filter-wrapper {
-    background-color: #323131;
+    background-color: #4c4c4c;
     border-radius: 10px;
     padding: 10px 20px;
     display: flex;
     gap: 3px;
     align-items: center;
     justify-content: space-between;
+    border: 1px solid #726e6e;
 
     h5 {
         margin-bottom: 0;

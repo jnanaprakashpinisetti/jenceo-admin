@@ -12,7 +12,10 @@ const HealthDetails = ({ formData, handleChange, nextStep, prevStep }) => {
 
   return (
     <div>
-      <h3 className="mb-4">Health Details</h3>
+      <div className="form-card-header mb-4">
+        <h3 className="text-center">Health Details</h3>
+      </div>
+      <hr></hr>
       <div className="row g-3">
         <div className="col-12">
           <label className="form-label">Health Issues</label>

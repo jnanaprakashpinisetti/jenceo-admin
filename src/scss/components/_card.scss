@@ -64,8 +64,13 @@
 }
 
 .form-card {
-    background-color: #292E32;
+    background-color: #3c464e;
     padding: 20px;
+    border-radius: 10px;
+
+    h3.text-center {
+        color: #cac8c8;
+    }
 
 }
 

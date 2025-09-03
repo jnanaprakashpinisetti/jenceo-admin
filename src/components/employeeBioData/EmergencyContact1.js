@@ -1,7 +1,12 @@
 const EmergencyContact1 = ({ formData, errors, handleChange, handleBlur, nextStep, prevStep }) => {
   return (
     <div>
-      <h3 className="mb-4">Emergency Contact-1</h3>
+      <div className="form-card-header mb-4">
+        <h3 className="text-center">Emergency Contact-1</h3>
+      </div>
+      <hr></hr>
+
+
       <div className="row g-3">
         <div className="col-md-6">
           <label htmlFor="emergencyContact1.name" className="form-label">Contact Name<span className="star">*</span></label>

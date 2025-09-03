@@ -244,7 +244,7 @@ export default function DisplayEmployee() {
         <div>
             {/* Search Bar */}
             <div className="row mb-3">
-                <div className="col-md-6">
+                <div className="col-md-12">
                     <div className="input-group">
                         <span className="input-group-text">
                             <i className="bi bi-search"></i>
@@ -264,10 +264,10 @@ export default function DisplayEmployee() {
             <div className="row mb-3">
                 <div className="col-12">
                     <div className="chec-box-card">
-                        <div className="card-body py-2">
-                            <div className="row">
+                        <div className="card-body py-2 filter-wrapper">
+                            <div className="row w-100">
                                 <div className="col-md-3">
-                                    <strong className="me-2">Gender:</strong>
+                                    <strong className="me-2">Gender :</strong>
                                     {Object.keys(genderFilters).map(gender => (
                                         <div className="form-check form-check-inline" key={gender}>
                                             <input

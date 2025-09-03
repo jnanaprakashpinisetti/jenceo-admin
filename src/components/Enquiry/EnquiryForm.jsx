@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { firebaseDB } from "../../firebase";
 
 const EnquiryForm = () => {
     const [formData, setFormData] = useState({
@@ -16,6 +17,9 @@ const EnquiryForm = () => {
     });
 
     const [errors, setErrors] = useState({});
+    const [showModal, setShowModal] = useState(false);
+    const [isSubmitting, setIsSubmitting] = useState(false);
+    const [submittedData, setSubmittedData] = useState({ name: "", mobile: "" });
 
     // Default date setup
     useEffect(() => {
@@ -61,10 +65,13 @@ const EnquiryForm = () => {
                 if (!value) error = "Please select communication level.";
                 break;
             case "reminderDate": {
-                const today = new Date();
-                const selected = new Date(value);
-                if (!value || selected < today.setHours(0, 0, 0, 0)) {
-                    error = "Reminder date must be today or later.";
+                // Reminder date is now optional, only validate if provided
+                if (value) {
+                    const today = new Date();
+                    const selected = new Date(value);
+                    if (selected < today.setHours(0, 0, 0, 0)) {
+                        error = "Reminder date must be today or later.";
+                    }
                 }
                 break;
             }
@@ -85,10 +92,15 @@ const EnquiryForm = () => {
         setFormData((prev) => ({ ...prev, [name]: value }));
     };
 
-    const handleSubmit = (e) => {
+    const handleSubmit = async (e) => {
         e.preventDefault();
+        setIsSubmitting(true);
+
         let newErrors = {};
         Object.keys(formData).forEach((field) => {
+            // Skip validation for non-required fields if they're empty
+            if (field === "service" || field === "comments" || field === "reminderDate") return;
+
             const error = validateField(field, formData[field]);
             if (error) newErrors[field] = error;
         });
@@ -96,9 +108,57 @@ const EnquiryForm = () => {
         setErrors(newErrors);
 
         if (Object.keys(newErrors).length === 0) {
-            alert("Form submitted successfully!");
-            console.log(formData);
+            try {
+                // Save to Firebase Realtime Database under EnquiryData node
+                const newEnquiryRef = firebaseDB.child("EnquiryData").push();
+
+                await newEnquiryRef.set({
+                    ...formData,
+                    timestamp: new Date().toISOString(),
+                });
+
+                console.log("Document written with ID: ", newEnquiryRef.key);
+
+                // Store submitted name and mobile for modal
+                setSubmittedData({ name: formData.name, mobile: formData.mobile });
+
+                // Show success modal
+                setShowModal(true);
+
+                // Reset form (but keep today's date)
+                const today = new Date();
+                const formatted = today.toISOString().split("T")[0];
+                setFormData({
+                    date: formatted,
+                    name: "",
+                    mobile: "",
+                    gender: "",
+                    service: "",
+                    amount: "",
+                    through: "",
+                    status: "",
+                    communication: "",
+                    reminderDate: "",
+                    comments: "",
+                });
+
+                // Clear any previous errors
+                setErrors({});
+            } catch (error) {
+                console.error("Error adding document: ", error);
+                alert("There was an error submitting the form. Please try again.");
+            }
+        } else {
+            // Scroll to the first error
+            const firstErrorField = Object.keys(newErrors)[0];
+            const element = document.querySelector(`[name="${firstErrorField}"]`);
+            if (element) {
+                element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                element.focus();
+            }
         }
+
+        setIsSubmitting(false);
     };
 
     return (
@@ -109,226 +169,293 @@ const EnquiryForm = () => {
                 </div>
                 <div className="form-card-body">
                     <form onSubmit={handleSubmit}>
-                        <div className="">
-                            <div className="row">
-                                {/* Date */}
-                                <div className="col-md-6 mb-3">
-                                    <label className="form-label">
-                                        Date <span className="star">*</span>
-                                    </label>
-                                    <input
-                                        type="date"
-                                        name="date"
-                                        className="form-control"
-                                        value={formData.date}
-                                        onChange={handleChange}
-                                        onBlur={handleBlur}
-                                    />
-                                    {errors.date && <small className="text-danger">{errors.date}</small>}
-                                </div>
-
-                                {/* Name */}
-                                <div className="col-md-6 mb-3">
-                                    <label className="form-label">
-                                        Name <span className="star">*</span>
-                                    </label>
-                                    <input
-                                        type="text"
-                                        name="name"
-                                        className="form-control"
-                                        value={formData.name}
-                                        onChange={handleChange}
-                                        onBlur={handleBlur}
-                                    />
-                                    {errors.name && <small className="text-danger">{errors.name}</small>}
-                                </div>
+                        <div className="row">
+                            {/* Date */}
+                            <div className="col-md-6 mb-3">
+                                <label className="form-label">
+                                    Date <span className="star">*</span>
+                                </label>
+                                <input
+                                    type="date"
+                                    name="date"
+                                    className={`form-control ${errors.date ? 'is-invalid' : ''}`}
+                                    value={formData.date}
+                                    onChange={handleChange}
+                                    onBlur={handleBlur}
+                                />
+                                {errors.date && <div className="invalid-feedback">{errors.date}</div>}
                             </div>
 
-                            <div className="row">
-                                {/* Mobile */}
-                                <div className="col-md-6 mb-3">
-                                    <label className="form-label">
-                                        Mobile No <span className="star">*</span>
-                                    </label>
-                                    <input
-                                        type="text"
-                                        name="mobile"
-                                        className="form-control"
-                                        value={formData.mobile}
-                                        onChange={handleChange}
-                                        onBlur={handleBlur}
-                                        maxLength="10"
-                                    />
-                                    {errors.mobile && <small className="text-danger">{errors.mobile}</small>}
-                                </div>
+                            {/* Name */}
+                            <div className="col-md-6 mb-3">
+                                <label className="form-label">
+                                    Name <span className="star">*</span>
+                                </label>
+                                <input
+                                    type="text"
+                                    name="name"
+                                    className={`form-control ${errors.name ? 'is-invalid' : ''}`}
+                                    value={formData.name}
+                                    onChange={handleChange}
+                                    onBlur={handleBlur}
+                                />
+                                {errors.name && <div className="invalid-feedback">{errors.name}</div>}
+                            </div>
+                        </div>
 
-                                {/* Gender */}
-                                <div className="col-md-6 mb-3">
-                                    <label className="form-label">
-                                        Gender <span className="star">*</span>
-                                    </label>
-                                    <select
-                                        name="gender"
-                                        className="form-select"
-                                        value={formData.gender}
-                                        onChange={handleChange}
-                                        onBlur={handleBlur}
-                                    >
-                                        <option value="">Select Gender</option>
-                                        <option>Male</option>
-                                        <option>Female</option>
-                                        <option>Other</option>
-                                    </select>
-                                    {errors.gender && <small className="text-danger">{errors.gender}</small>}
-                                </div>
+                        <div className="row">
+                            {/* Mobile */}
+                            <div className="col-md-6 mb-3">
+                                <label className="form-label">
+                                    Mobile No <span className="star">*</span>
+                                </label>
+                                <input
+                                    type="text"
+                                    name="mobile"
+                                    className={`form-control ${errors.mobile ? 'is-invalid' : ''}`}
+                                    value={formData.mobile}
+                                    onChange={handleChange}
+                                    onBlur={handleBlur}
+                                    maxLength="10"
+                                />
+                                {errors.mobile && <div className="invalid-feedback">{errors.mobile}</div>}
                             </div>
 
-                            <div className="row">
-                                {/* Type of Service */}
-                                <div className="col-md-6 mb-3">
-                                    <label className="form-label">Type of Service</label>
-                                    <input
-                                        type="text"
-                                        name="service"
-                                        className="form-control"
-                                        value={formData.service}
-                                        onChange={handleChange}
-                                    />
-                                </div>
+                            {/* Gender */}
+                            <div className="col-md-6 mb-3">
+                                <label className="form-label">
+                                    Gender <span className="star">*</span>
+                                </label>
+                                <select
+                                    name="gender"
+                                    className={`form-select ${errors.gender ? 'is-invalid' : ''}`}
+                                    value={formData.gender}
+                                    onChange={handleChange}
+                                    onBlur={handleBlur}
+                                >
+                                    <option value="">Select Gender</option>
+                                    <option value="Male">Male</option>
+                                    <option value="Female">Female</option>
+                                    <option value="Other">Other</option>
+                                </select>
+                                {errors.gender && <div className="invalid-feedback">{errors.gender}</div>}
+                            </div>
+                        </div>
 
-                                {/* Amount */}
-                                <div className="col-md-6 mb-3">
-                                    <label className="form-label">
-                                        Amount <span className="star">*</span>
-                                    </label>
-                                    <input
-                                        type="tell"
-                                        name="amount"
-                                        className="form-control"
-                                        value={formData.amount}
-                                        onChange={handleChange}
-                                        onBlur={handleBlur}
-                                        maxLength={5}
-                                    />
-                                    {errors.amount && <small className="text-danger">{errors.amount}</small>}
-                                </div>
+                        <div className="row">
+                            {/* Type of Service */}
+                            <div className="col-md-6 mb-3">
+                                <label className="form-label">Type of Service</label>
+                                <input
+                                    type="text"
+                                    name="service"
+                                    className="form-control"
+                                    value={formData.service}
+                                    onChange={handleChange}
+                                />
                             </div>
 
-                            <div className="row">
-                                {/* Through */}
-                                <div className="col-md-6 mb-3">
-                                    <label className="form-label">
-                                        Through <span className="star">*</span>
-                                    </label>
-                                    <select
-                                        name="through"
-                                        className="form-select"
-                                        value={formData.through}
-                                        onChange={handleChange}
-                                        onBlur={handleBlur}
-                                    >
-                                        <option value="">Select</option>
-                                        <option>Poster</option>
-                                        <option>Reference</option>
-                                        <option>Hospital-Agent</option>
-                                        <option>Medical Cover</option>
-                                        <option>JustDial</option>
-                                        <option>Facebook</option>
-                                        <option>Instagram</option>
-                                        <option>LinkedIn</option>
-                                        <option>YouTube</option>
-                                        <option>Website</option>
-                                        <option>Google</option>
-                                    </select>
-                                    {errors.through && <small className="text-danger">{errors.through}</small>}
-                                </div>
+                            {/* Amount */}
+                            <div className="col-md-6 mb-3">
+                                <label className="form-label">
+                                    Amount <span className="star">*</span>
+                                </label>
+                                <input
+                                    type="number"
+                                    name="amount"
+                                    className={`form-control ${errors.amount ? 'is-invalid' : ''}`}
+                                    value={formData.amount}
+                                    onChange={handleChange}
+                                    onBlur={handleBlur}
+                                    maxLength={5}
+                                />
+                                {errors.amount && <div className="invalid-feedback">{errors.amount}</div>}
+                            </div>
+                        </div>
 
-                                {/* Status */}
-                                <div className="col-md-6 mb-3">
-                                    <label className="form-label">
-                                        Status <span className="star">*</span>
-                                    </label>
-                                    <select
-                                        name="status"
-                                        className="form-select"
-                                        value={formData.status}
-                                        onChange={handleChange}
-                                        onBlur={handleBlur}
-                                    >
-                                        <option value="">Select</option>
-                                        <option>Enquiry</option>
-                                        <option>Pending</option>
-                                        <option>On Boarding</option>
-                                        <option>No Response</option>
-                                    </select>
-                                    {errors.status && <small className="text-danger">{errors.status}</small>}
-                                </div>
+                        <div className="row">
+                            {/* Through */}
+                            <div className="col-md-6 mb-3">
+                                <label className="form-label">
+                                    Through <span className="star">*</span>
+                                </label>
+                                <select
+                                    name="through"
+                                    className={`form-select ${errors.through ? 'is-invalid' : ''}`}
+                                    value={formData.through}
+                                    onChange={handleChange}
+                                    onBlur={handleBlur}
+                                >
+                                    <option value="">Select</option>
+                                    <option value="Poster">Poster</option>
+                                    <option value="Reference">Reference</option>
+                                    <option value="Hospital-Agent">Hospital-Agent</option>
+                                    <option value="Medical Cover">Medical Cover</option>
+                                    <option value="JustDial">JustDial</option>
+                                    <option value="Facebook">Facebook</option>
+                                    <option value="Instagram">Instagram</option>
+                                    <option value="LinkedIn">LinkedIn</option>
+                                    <option value="YouTube">YouTube</option>
+                                    <option value="Website">Website</option>
+                                    <option value="Google">Google</option>
+                                </select>
+                                {errors.through && <div className="invalid-feedback">{errors.through}</div>}
                             </div>
 
-                            <div className="row">
-                                {/* Communication */}
-                                <div className="col-md-6 mb-3">
-                                    <label className="form-label">
-                                        Communication <span className="star">*</span>
-                                    </label>
-                                    <select
-                                        name="communication"
-                                        className={`form-select communication-${formData.communication.toLowerCase().replace(" ", "-")}`}
-                                        value={formData.communication}
-                                        onChange={handleChange}
-                                        onBlur={handleBlur}
-                                    >
-                                        <option value="">Select</option>
-                                        <option>Very Good</option>
-                                        <option>Good</option>
-                                        <option>Average</option>
-                                        <option>Below Average</option>
-                                        <option>Bad</option>
-                                        <option>Very Bad</option>
-                                    </select>
-                                    {errors.communication && <small className="text-danger">{errors.communication}</small>}
-                                </div>
+                            {/* Status */}
+                            <div className="col-md-6 mb-3">
+                                <label className="form-label">
+                                    Status <span className="star">*</span>
+                                </label>
+                                <select
+                                    name="status"
+                                    className={`form-select ${errors.status ? 'is-invalid' : ''}`}
+                                    value={formData.status}
+                                    onChange={handleChange}
+                                    onBlur={handleBlur}
+                                >
+                                    <option value="">Select</option>
+                                    <option value="Enquiry">Enquiry</option>
+                                    <option value="Pending">Pending</option>
+                                    <option value="On Boarding">On Boarding</option>
+                                    <option value="No Response">No Response</option>
+                                </select>
+                                {errors.status && <div className="invalid-feedback">{errors.status}</div>}
+                            </div>
+                        </div>
 
-                                {/* Reminder Date */}
-                                <div className="col-md-6 mb-3">
-                                    <label className="form-label">
-                                        Reminder Date <span className="star">*</span>
-                                    </label>
-                                    <input
-                                        type="date"
-                                        name="reminderDate"
-                                        className="form-control"
-                                        value={formData.reminderDate}
-                                        onChange={handleChange}
-                                        onBlur={handleBlur}
-                                    />
-                                    {errors.reminderDate && (
-                                        <small className="text-danger">{errors.reminderDate}</small>
-                                    )}
-                                </div>
+                        <div className="row">
+                            {/* Communication */}
+                            <div className="col-md-6 mb-3">
+                                <label className="form-label">
+                                    Communication <span className="star">*</span>
+                                </label>
+                                <select
+                                    name="communication"
+                                    className={`form-select ${errors.communication ? 'is-invalid' : ''} ${formData.communication
+                                            ? "communication-" +
+                                            formData.communication.toLowerCase().replace(/\s+/g, "-")
+                                            : ""
+                                        }`}
+                                    value={formData.communication}
+                                    onChange={handleChange}
+                                    onBlur={handleBlur}
+                                >
+                                    <option value="">Select</option>
+                                    <option value="Very Good">Very Good</option>
+                                    <option value="Good">Good</option>
+                                    <option value="Average">Average</option>
+                                    <option value="Below Average">Below Average</option>
+                                    <option value="Bad">Bad</option>
+                                    <option value="Very Bad">Very Bad</option>
+                                </select>
+                                {errors.communication && (
+                                    <div className="invalid-feedback">{errors.communication}</div>
+                                )}
                             </div>
 
-                            {/* Comments */}
-                            <div className="row">
-                                <div className="col-md-12 mb-3">
-                                    <label className="form-label">Comments</label>
-                                    <textarea
-                                        name="comments"
-                                        className="form-control"
-                                        value={formData.comments}
-                                        onChange={handleChange}
-                                    ></textarea>
-                                </div>
+                            {/* Reminder Date - Now Optional */}
+                            <div className="col-md-6 mb-3">
+                                <label className="form-label">
+                                    Reminder Date
+                                </label>
+                                <input
+                                    type="date"
+                                    name="reminderDate"
+                                    className={`form-control ${errors.reminderDate ? 'is-invalid' : ''}`}
+                                    value={formData.reminderDate}
+                                    onChange={handleChange}
+                                    onBlur={handleBlur}
+                                />
+                                {errors.reminderDate && (
+                                    <div className="invalid-feedback">{errors.reminderDate}</div>
+                                )}
                             </div>
-                            <div className="card-footer d-flex justify-content-end w-100">
-                                <button type="submit" className="btn btn-primary">
-                                    Submit Enquiry
-                                </button>
+                        </div>
+
+                        {/* Comments */}
+                        <div className="row">
+                            <div className="col-md-12 mb-3">
+                                <label className="form-label">Comments</label>
+                                <textarea
+                                    name="comments"
+                                    className="form-control"
+                                    value={formData.comments}
+                                    onChange={handleChange}
+                                    rows="3"
+                                ></textarea>
                             </div>
+                        </div>
+                        <div className="card-footer d-flex justify-content-end w-100">
+                            <button
+                                type="submit"
+                                className="btn btn-primary"
+                                disabled={isSubmitting}
+                            >
+                                {isSubmitting ? (
+                                    <>
+                                        <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                                        Submitting...
+                                    </>
+                                ) : (
+                                    "Submit Enquiry"
+                                )}
+                            </button>
                         </div>
                     </form>
                 </div>
             </div>
+
+            {/* Thank You Modal */}
+            {showModal && (
+                <div
+                    className="modal-backdrop fade show"
+                    style={{ backgroundColor: "rgba(0,0,0,0.5)", opacity: "1" }}
+                >
+                    <div className="modal d-block" tabIndex="-1">
+                        <div className="modal-dialog modal-dialog-centered">
+                            <div className="modal-content" style={{ borderRadius: "15px", border: "none" }}>
+                                <div className="modal-header bg-success text-white" style={{ borderTopLeftRadius: "15px", borderTopRightRadius: "15px" }}>
+                                    <h5 className="modal-title">
+                                        <i className="fas fa-check-circle me-2"></i>
+                                        Thank You!
+                                    </h5>
+                                    <button
+                                        type="button"
+                                        className="btn-close btn-close-white"
+                                        onClick={() => setShowModal(false)}
+                                    ></button>
+                                </div>
+                                <div className="modal-body text-center py-4">
+                                    <div className="mb-3">
+                                        <i className="fas fa-check-circle text-success" style={{ fontSize: "3rem" }}></i>
+                                    </div>
+                                    <h4 className="text-success mb-3">Enquiry Submitted Successfully!</h4>
+                                    <p className="mb-1">
+                                        Enquiry for <strong className="text-primary">{submittedData.name}</strong>
+                                    </p>
+                                    <p>
+                                        Mobile No: <strong className="text-primary">{submittedData.mobile}</strong>
+                                    </p>
+                                    <p className="text-muted">
+                                        Your enquiry has been saved and will be processed shortly.
+                                    </p>
+                                </div>
+                                <div className="modal-footer justify-content-center border-0">
+                                    <button
+                                        type="button"
+                                        className="btn btn-success px-4"
+                                        onClick={() => setShowModal(false)}
+                                    >
+                                        <i className="fas fa-thumbs-up me-2"></i>
+                                        Got It!
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

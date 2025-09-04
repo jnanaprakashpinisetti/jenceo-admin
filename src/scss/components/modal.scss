@@ -135,10 +135,19 @@
     .list-group-item {
         margin-bottom: 15px;
         background-color: #f4f6f7;
+        border-radius: 5px;
+        &:nth-child(even) {
+           background-color: #e4eef3; 
+        }
 
         .text-muted {
             color: #444 !important;
         }
+    }
+
+    .badge {
+        display: block;
+        max-width: max-content;
     }
 }
 

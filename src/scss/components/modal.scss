@@ -217,3 +217,20 @@
         /* success */
     }
 }
+
+.enquiry-modal {
+    .text-muted {
+        color: #444 !important;
+    }
+
+    .border-bottom {
+        padding-left: 7px;
+        padding-top: 7px;
+        border-radius: 10px;
+        border: 1px solid #eaedfb;
+        margin-bottom: 10px;
+        &:nth-child(even) {
+            background-color: #f5f5f5;
+        }
+    }
+}

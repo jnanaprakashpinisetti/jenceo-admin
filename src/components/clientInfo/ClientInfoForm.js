@@ -1,3 +1,4 @@
+// src/pages/.../ClientInfoForm.js
 import React, { useState } from "react";
 import Address from "../clientInfo/Address";
 import BasicInformation from "../clientInfo/BasicInformation";
@@ -70,8 +71,17 @@ export default function ClientInfoForm({ isOpen, onClose }) {
   const totalSteps = 6;
   const [formData, setFormData] = useState(getInitialFormData());
   const [errors, setErrors] = useState({ workers: [{}], payments: [{}] });
+
+  // existing "thank you" modal after submit
   const [showModal, setShowModal] = useState(false);
-  const [submittedClientData, setSubmittedClientData] = useState(null); // Store submitted data
+  const [submittedClientData, setSubmittedClientData] = useState(null);
+
+  // NEW: duplicate-ID modal state
+  const [dupModal, setDupModal] = useState({
+    show: false,
+    idNo: "",
+    name: "",
+  });
 
   const stepTitles = [
     "",
@@ -169,7 +179,7 @@ export default function ClientInfoForm({ isOpen, onClose }) {
     });
   };
 
-  // COMPREHENSIVE VALIDATION FUNCTION
+  // COMPREHENSIVE VALIDATION FUNCTION (unchanged)
   const validateStep = (currentStep) => {
     let newErrors = { ...errors };
     let isValid = true;
@@ -296,7 +306,7 @@ export default function ClientInfoForm({ isOpen, onClose }) {
 
     // Step 5: Worker Details
     if (currentStep === 5) {
-      const workersErrors = formData.workers.map((w, idx) => {
+      const workersErrors = formData.workers.map((w) => {
         const e = {};
         if (!w.workerIdNo.trim()) {
           e.workerIdNo = "Worker ID is required";
@@ -306,12 +316,10 @@ export default function ClientInfoForm({ isOpen, onClose }) {
           e.cName = "Worker Name is required";
           isValid = false;
         }
-      
         if (!w.startingDate) {
           e.startingDate = "Starting Date is required";
           isValid = false;
         }
-        // Ending date can be empty or a future date (no validation required)
         if (!w.mobile1) {
           e.mobile1 = "Mobile 1 is required";
           isValid = false;
@@ -330,7 +338,7 @@ export default function ClientInfoForm({ isOpen, onClose }) {
 
     // Step 6: Payment Details
     if (currentStep === 6) {
-      const paymentsErrors = formData.payments.map((p, idx) => {
+      const paymentsErrors = formData.payments.map((p) => {
         const e = {};
         if (!p.paymentMethod) {
           e.paymentMethod = "Payment Method is required";
@@ -359,10 +367,47 @@ export default function ClientInfoForm({ isOpen, onClose }) {
     return isValid;
   };
 
-  const nextStep = () => {
-    if (validateStep(step)) {
-      setStep(step + 1);
+  // UPDATED: nextStep checks duplicate ID when leaving Step 1
+  const nextStep = async () => {
+    // validate current step first
+    if (!validateStep(step)) return;
+
+    // Only on first "Next" (leaving Step 1 -> Step 2), check for duplicate idNo
+    if (step === 1) {
+      try {
+        const idToCheck = formData.idNo.trim();
+        // Realtime Database query
+        const queryRef = firebaseDB
+          .child("ClientData")
+          .orderByChild("idNo")
+          .equalTo(idToCheck);
+
+        // v8-style once; if you're on modular SDK, swap to get(query)
+        const snap = await queryRef.once("value");
+        if (snap.exists()) {
+          // take first match's name
+          let foundName = "";
+          const val = snap.val();
+          if (val && typeof val === "object") {
+            const firstKey = Object.keys(val)[0];
+            if (firstKey) foundName = val[firstKey]?.clientName || "";
+          }
+          setDupModal({
+            show: true,
+            idNo: idToCheck,
+            name: foundName,
+          });
+          return; // block navigation
+        }
+      } catch (err) {
+        console.error("Duplicate ID check failed:", err);
+        // (optional) You could still allow navigation even if check fails.
+        // For now we proceed to next step to avoid blocking users due to network blips.
+      }
     }
+
+    // safe to go next
+    setStep(step + 1);
   };
 
   const prevStep = () => setStep(step - 1);
@@ -376,17 +421,16 @@ export default function ClientInfoForm({ isOpen, onClose }) {
       const dataToSave = {
         ...formData,
         workers: formData.workers.map(({ id, ...worker }) => worker),
-        payments: formData.payments.map(({ id, ...payment }) => payment)
+        payments: formData.payments.map(({ id, ...payment }) => payment),
       };
 
       const newRef = await firebaseDB.child("ClientData").push(dataToSave);
       if (newRef && newRef.key) {
-        // Store the submitted data before resetting
         setSubmittedClientData({
           idNo: formData.idNo,
-          clientName: formData.clientName
+          clientName: formData.clientName,
         });
-        
+
         setShowModal(true);
         setFormData(getInitialFormData());
         setErrors({ workers: [{}], payments: [{}] });
@@ -402,38 +446,38 @@ export default function ClientInfoForm({ isOpen, onClose }) {
     switch (step) {
       case 1:
         return (
-          <BasicInformation 
-            formData={formData} 
-            handleChange={handleChange} 
-            errors={errors} 
+          <BasicInformation
+            formData={formData}
+            handleChange={handleChange}
+            errors={errors}
             isViewMode={false}
           />
         );
       case 2:
         return (
-          <Address 
-            formData={formData} 
-            handleChange={handleChange} 
-            errors={errors} 
+          <Address
+            formData={formData}
+            handleChange={handleChange}
+            errors={errors}
             isViewMode={false}
           />
         );
       case 3:
         return (
-          <ServiceDetails 
-            formData={formData} 
-            handleChange={handleChange} 
-            errors={errors} 
+          <ServiceDetails
+            formData={formData}
+            handleChange={handleChange}
+            errors={errors}
             setErrors={setErrors}
             isViewMode={false}
           />
         );
       case 4:
         return (
-          <PatientDetails 
-            formData={formData} 
-            handleChange={handleChange} 
-            errors={errors} 
+          <PatientDetails
+            formData={formData}
+            handleChange={handleChange}
+            errors={errors}
             isViewMode={false}
           />
         );
@@ -515,6 +559,7 @@ export default function ClientInfoForm({ isOpen, onClose }) {
         </div>
       </div>
 
+      {/* Submit-success modal (existing) */}
       {showModal && (
         <div className="modal fade show" style={{ display: "block", background: "rgba(0,0,0,0.5)" }}>
           <div className="modal-dialog modal-dialog-centered">
@@ -536,25 +581,69 @@ export default function ClientInfoForm({ isOpen, onClose }) {
                 {submittedClientData && (
                   <div className="alert alert-info mt-3">
                     <strong>Client Details:</strong>
-                    <div className="mt-2">
-                      <strong>ID:</strong> {submittedClientData.idNo}
-                    </div>
-                    <div>
-                      <strong>Client Name:</strong> {submittedClientData.clientName}
-                    </div>
+                    <div className="mt-2"><strong>ID:</strong> {submittedClientData.idNo}</div>
+                    <div><strong>Client Name:</strong> {submittedClientData.clientName}</div>
                   </div>
                 )}
               </div>
               <div className="modal-footer">
-                <button 
-                  type="button" 
-                  className="btn btn-primary" 
+                <button
+                  type="button"
+                  className="btn btn-primary"
                   onClick={() => {
                     setShowModal(false);
                     onClose();
                   }}
                 >
                   OK
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* NEW: Duplicate ID modal (shown only when clicking Next on Step 1) */}
+      {dupModal.show && (
+        <div className="modal fade show" style={{ display: "block", background: "rgba(0,0,0,0.5)" }}>
+          <div className="modal-dialog modal-dialog-centered">
+            <div className="modal-content">
+              <div className="modal-header bg-danger">
+                <h5 className="modal-title text-white">Duplicate Client ID</h5>
+                <button
+                  type="button"
+                  className="btn-close btn-white"
+                  onClick={() => setDupModal({ show: false, idNo: "", name: "" })}
+                  aria-label="Close"
+                />
+              </div>
+              <div className="modal-body">
+                <p className="mb-0">
+                  Client ID <strong>{dupModal.idNo}</strong> already exists
+                  {dupModal.name ? <> with the name: <strong>{dupModal.name}</strong></> : ""}.
+                </p>
+                <p className=" mt-2 mb-0">
+                  Please enter a new Client ID to continue.
+                </p>
+              </div>
+              <div className="modal-footer">
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={() => setDupModal({ show: false, idNo: "", name: "" })}
+                >
+                  OK
+                </button>
+                {/* Optional: shortcut to clear the field */}
+                <button
+                  type="button"
+                  className="btn btn-outline-danger"
+                  onClick={() => {
+                    setFormData((prev) => ({ ...prev, idNo: "" }));
+                    setDupModal({ show: false, idNo: "", name: "" });
+                  }}
+                >
+                  Clear ID
                 </button>
               </div>
             </div>

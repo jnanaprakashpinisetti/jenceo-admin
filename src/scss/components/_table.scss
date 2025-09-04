@@ -555,6 +555,11 @@ table {
     border-radius: 8px 8px 0 0;
     margin-right: 5px;
     transition: all 0.3s ease;
+
+    &.active {
+        background-color: #999999 !important;
+        border-bottom: 3px solid #757575 !important;
+    }
 }
 
 .summary-tab:hover {
@@ -636,5 +641,20 @@ table {
     .summary-tabs {
         flex-wrap: nowrap;
         overflow-x: auto;
+    }
+}
+
+.display-enquiry {
+    .reminder-badges {
+        background-color: #8f9395;
+        border: none;
+    }
+
+    .form-control {
+        opacity: .8;
+    }
+
+    .form-select {
+        opacity: .8;
     }
 }

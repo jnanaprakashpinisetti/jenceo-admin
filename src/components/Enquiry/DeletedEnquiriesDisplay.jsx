@@ -173,9 +173,10 @@ const DeletedEnquiriesDisplay = () => {
                                             <button className="btn btn-sm" onClick={() => confirmRevert(enq)} title="Revert">
                                                 <img src={revertIcon} alt="revert" width="16" />
                                             </button>
-                                            <button className="btn btn-sm" onClick={() => confirmDelete(enq)} title="Delete Permanently">
+                                            {/* Permenent delete button */}
+                                            {/* <button className="btn btn-sm" onClick={() => confirmDelete(enq)} title="Delete Permanently">
                                                 <img src={deleteIcon} alt="delete" width="14" />
-                                            </button>
+                                            </button> */}
                                         </div>
                                     </td>
                                 </tr>

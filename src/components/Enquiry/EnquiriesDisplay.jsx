@@ -28,7 +28,7 @@ const EnquiriesDisplay = () => {
     const [showDeleteModal, setShowDeleteModal] = useState(false);
     const [deleteItem, setDeleteItem] = useState(null);
     const [sortBy, setSortBy] = useState("date");
-    
+
     // Modal state
     const [showModal, setShowModal] = useState(false);
     const [modalMode, setModalMode] = useState("view");
@@ -106,10 +106,10 @@ const EnquiriesDisplay = () => {
         if (date === tmStr) return "reminder-tomorrow";
         return "reminder-upcoming";
     };
-    
+
     // Determine CSS class for status with color coding
     const getStatusClass = (status) => {
-        switch(status) {
+        switch (status) {
             case "Enquiry": return "status-enquiry"; // Light blue
             case "Pending": return "status-pending"; // Yellow
             case "On Boarding": return "status-onboarding"; // Green
@@ -117,7 +117,7 @@ const EnquiriesDisplay = () => {
             default: return "";
         }
     };
-    
+
     // Filtering + Sorting logic
     const filteredEnquiries = enquiries
         .filter((enq) => {
@@ -155,7 +155,7 @@ const EnquiriesDisplay = () => {
 
     const getDisplayedPageNumbers = () => {
         if (totalPages <= 1) return [1];
-        
+
         const delta = 2;
         const range = [];
         for (
@@ -306,7 +306,7 @@ const EnquiriesDisplay = () => {
     };
 
     return (
-        <div className="container-fluid mt-4">
+        <div className="container-fluid mt-4 display-enquiry">
             <h3 className="mb-3">Enquiries</h3>
 
             {/* Reminder counts with clickable badges */}
@@ -374,10 +374,10 @@ const EnquiriesDisplay = () => {
                     </select>
                 </div>
                 <div className="col-md-3 d-flex gap-2 flex-wrap">
-                    <button className="btn btn-success flex-fill mb-2" onClick={exportToExcel}>
+                    <button className="btn btn-success flex-fill mb-2" onClick={exportToExcel} disabled>
                         Excel
                     </button>
-                    <button className="btn btn-info flex-fill mb-2" onClick={exportToCSV}>
+                    <button className="btn btn-info flex-fill mb-2" onClick={exportToCSV} disabled>
                         CSV
                     </button>
                     {/* <button className="btn btn-danger flex-fill mb-2" onClick={exportToPDF}>
@@ -421,10 +421,10 @@ const EnquiriesDisplay = () => {
                                     <td>{enq.gender}</td>
                                     <td>
                                         <a href={`tel:${enq.mobile}`} className="btn btn-sm btn-info me-2">Call</a>
-                                        <a 
-                                            href={`https://wa.me/${enq.mobile?.replace(/\D/g, '')}?text=${encodeURIComponent("Hello, This is Sudheer from JenCeo Home Care Services")}`} 
-                                            target="_blank" 
-                                            rel="noreferrer" 
+                                        <a
+                                            href={`https://wa.me/${enq.mobile?.replace(/\D/g, '')}?text=${encodeURIComponent("Hello, This is Sudheer from JenCeo Home Care Services")}`}
+                                            target="_blank"
+                                            rel="noreferrer"
                                             className="btn btn-sm btn-warning"
                                         >
                                             WAP
@@ -506,6 +506,7 @@ const EnquiriesDisplay = () => {
                     </nav>
                 )}
             </div>
+            <hr />
 
             {/* Month-wise summary table */}
             <h4 className="mt-5">Month-wise Enquiry Summary</h4>
@@ -581,7 +582,7 @@ const EnquiriesDisplay = () => {
                 />
             )}
 
-           
+
         </div>
     );
 };

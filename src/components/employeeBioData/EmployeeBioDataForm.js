@@ -1,18 +1,18 @@
 import React, { useState } from "react";
 
-import { storageRef, uploadFile, getDownloadURL } from "../firebase";
-import firebaseDB from "../firebase";
+import { storageRef, uploadFile, getDownloadURL } from "../../firebase";
+import firebaseDB from "../../firebase";
 
-import BasicInformation from "../components/employeeBioData/BasicInformation";
-import PermanentAddress from "../components/employeeBioData/PermanentAddress";
-import PresentAddress from "../components/employeeBioData/PresentAddress";
-import PersonalInformation from "../components/employeeBioData/PersonalInformation";
-import QualificationSkills from "../components/employeeBioData/QualificationSkills";
-import HealthDetails from "../components/employeeBioData/HealthDetails";
-import EmergencyContact1 from "../components/employeeBioData/EmergencyContact1";
-import EmergencyContact2 from "../components/employeeBioData/EmergencyContact2";
-import EmergencyContact3 from "../components/employeeBioData/EmergencyContact3";
-import BankDetails from "../components/employeeBioData/BankDetails";
+import BasicInformation from "./BasicInformation";
+import PermanentAddress from "./PermanentAddress";
+import PresentAddress from "./PresentAddress";
+import PersonalInformation from "./PersonalInformation";
+import QualificationSkills from "./QualificationSkills";
+import HealthDetails from "./HealthDetails";
+import EmergencyContact1 from "./EmergencyContact1";
+import EmergencyContact2 from "./EmergencyContact2";
+import EmergencyContact3 from "./EmergencyContact3";
+import BankDetails from "./BankDetails";
 
 /* ----------------------------- Lightweight Success Modal ----------------------------- */
 const SuccessModal = ({ open, onClose, info }) => {

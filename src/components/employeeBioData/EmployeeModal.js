@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-import { storageRef, uploadFile, getDownloadURL } from "../firebase";
+import { storageRef, uploadFile, getDownloadURL } from "../../firebase";
 
 /* ----------------------------- Lightweight Modals ----------------------------- */
 const BaseModal = ({ open, title, children, onClose, footer }) => {

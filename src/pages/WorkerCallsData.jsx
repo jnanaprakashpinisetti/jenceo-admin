@@ -18,6 +18,7 @@ export default function WorkerCallsData() {
                         </button>
                         </div>
                         <WorkerCalleForm isOpen={showForm} onClose={() => setShowForm(false)} />
+                            <hr></hr>
 
                         <WorkerCalleDisplay />
                     </div>

@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import firebaseDB from '../firebase';
-import editIcon from '../assets/eidt.svg';
-import viewIcon from '../assets/view.svg';
-import deleteIcon from '../assets/delete.svg';
+import firebaseDB from '../../firebase';
+import editIcon from '../../assets/eidt.svg';
+import viewIcon from '../../assets/view.svg';
+import deleteIcon from '../../assets/delete.svg';
 import EmployeeModal from './EmployeeModal';
 
 export default function DisplayEmployee() {

@@ -206,7 +206,7 @@ export default function WorkerCallModal({ worker, isOpen, onClose, isEditMode })
                       {comments.map((c, idx) => (
                         <li key={idx} className="list-group-item">
                           <div>{c.text}</div>
-                          <small className="text-muted">
+                          <small className="text-muted bg-scusses">
                             {c.user} – {new Date(c.date).toLocaleString()}
                           </small>
                         </li>

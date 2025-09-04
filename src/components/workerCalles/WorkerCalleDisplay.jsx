@@ -41,10 +41,10 @@ const daysUntil = (v) => {
 const urgencyClass = (v) => {
   const du = daysUntil(v);
   if (!isFinite(du)) return "";
-  if (du < 0) return "reminder-overdue";
-  if (du === 0) return "reminder-today";
-  if (du === 1) return "reminder-tomorrow";
-  return "reminder-upcoming";
+  if (du < 0) return "overdue";
+  if (du === 0) return "today";
+  if (du === 1) return "tomorrow";
+  return "upcoming";
 };
 const normalizeArray = (val) => Array.isArray(val) ? val.filter(Boolean) : (typeof val === "string" ? val.split(",").map(s=>s.trim()).filter(Boolean) : []);
 
@@ -243,7 +243,7 @@ export default function WorkerCallDisplay() {
   return (
     <div className="p-3">
       {/* top controls */}
-      <div className="alert alert-info d-flex justify-content-around flex-wrap reminder-badges">
+      <div className="alert alert-info d-flex justify-content-between flex-wrap reminder-badges">
         <div className="d-flex align-items-center">
           <span className="me-2 text-white opacity-75">Show</span>
           <select
@@ -284,25 +284,33 @@ export default function WorkerCallDisplay() {
         </div>
       </div>
 
-      {/* reminder badges as filters */}
-      <div className="alert alert-info d-flex justify-content-around flex-wrap mb-3">
-        {["overdue","today","tomorrow","upcoming"].map((k) => (
-          <span
-            key={k}
-            role="button"
-            className={`badge px-3 py-2 ${reminderFilter === k ? "bg-primary" : "bg-light text-dark"}`}
-            onClick={() => setReminderFilter(reminderFilter === k ? "" : k)}
-          >
-            {k[0].toUpperCase()+k.slice(1)}:{" "}
-            <strong>
-              {k==="overdue"?badgeCounts.overdue:k==="today"?badgeCounts.today:k==="tomorrow"?badgeCounts.tomorrow:badgeCounts.upcoming}
-            </strong>
-          </span>
-        ))}
-      </div>
+{/* reminder badges as filters */}
+<div className="alert alert-info d-flex justify-content-around flex-wrap reminder-badges">
+  {["overdue","today","tomorrow","upcoming"].map((k) => (
+    <span
+      key={k}
+      role="button"
+      // ✅ same class pattern as ClientDisplay
+      className={`reminder-badge ${k} ${reminderFilter === k ? "active" : ""}`}
+      onClick={() => setReminderFilter(reminderFilter === k ? "" : k)}
+    >
+      {k[0].toUpperCase() + k.slice(1)}:{" "}
+      <strong>
+        {k === "overdue"
+          ? badgeCounts.overdue
+          : k === "today"
+          ? badgeCounts.today
+          : k === "tomorrow"
+          ? badgeCounts.tomorrow
+          : badgeCounts.upcoming}
+      </strong>
+    </span>
+  ))}
+</div>
+
 
       {/* extra filters */}
-      <div className="mb-3 d-flex gap-4 flex-wrap">
+      <div className="mb-3 d-flex gap-4 flex-wrap opacity-75">
         <div>
           <h6 className="mb-1">Gender</h6>
           {["Male","Female","Others"].map((g) => (

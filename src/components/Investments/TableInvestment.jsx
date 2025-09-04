@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import editIcon from '../assets/eidt.svg';
-import deleteIcon from '../assets/delete.svg';
-import viewIcon from '../assets/view.svg';
+import editIcon from '../../assets/eidt.svg';
+import deleteIcon from '../../assets/delete.svg';
+import viewIcon from '../../assets/view.svg';
 
-import firebaseDB from '../firebase';
+import firebaseDB from '../../firebase';
 import InvestModal from './InvestModal';
 
 export default function TableInvestment() {

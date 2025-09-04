@@ -152,7 +152,7 @@
 
 
 
- .agent-info, 
+    .agent-info,
     .payment-info {
         background-color: #f7f7f7;
         padding: 15px;
@@ -189,8 +189,22 @@
 
 .enquiry {
     .form-label {
-        font-weight: bold;
         text-align: left !important;
         display: block;
+    }
+
+    /* thankyou-modal.css */
+    .thankyou-modal .thankyou-header {
+        background: #468d61;
+        /* your brand color */
+        color: #fff;
+    }
+
+    // .thankyou-modal .thankyou-card {
+    //   border: 1px solid #d7f3e0;
+    // }
+    .thankyou-modal .fa-check-circle {
+        color: #28a745;
+        /* success */
     }
 }

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import InvestForm from '../components/InvestForm';
+import InvestForm from '../components/Investments/InvestForm';
 import Card from '../components/Card';
-import TableInvestment from '../components/TableInvestment';
+import TableInvestment from '../components/Investments/TableInvestment';
 
 
 

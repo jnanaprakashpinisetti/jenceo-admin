@@ -1,8 +1,8 @@
 import React, { useState } from "react";
 import InvestModal from "./InvestModal";
-import ThankyouModal from "./ThankyouModal";
+import ThankyouModal from "../ThankyouModal";
 
-import firebaseDB from '../firebase';
+import firebaseDB from '../../firebase';
 
 export default function InvestForm() {
 
@@ -127,7 +127,7 @@ export default function InvestForm() {
                     </div>
                 </div>
 
-                <div className="row">
+                <div clas sName="row">
                     <div className="col">
                         {/* Investment Reference No */}
                         <label htmlFor="invest_reference" className="form-label">Reference No:</label>

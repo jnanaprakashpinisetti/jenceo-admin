@@ -245,7 +245,7 @@ export default function WorkerCallDisplay() {
       {/* top controls */}
       <div className="alert alert-info d-flex justify-content-around flex-wrap reminder-badges">
         <div className="d-flex align-items-center">
-          <span className="me-2">Show</span>
+          <span className="me-2 text-white opacity-75">Show</span>
           <select
             className="form-select form-select-sm"
             style={{ width: 80 }}
@@ -254,32 +254,32 @@ export default function WorkerCallDisplay() {
           >
             {[10,20,30,40,50].map(n => <option key={n} value={n}>{n}</option>)}
           </select>
-          <span className="ms-2">entries</span>
+          <span className="ms-2 text-white opacity-75">entries</span>
         </div>
 
         <input
           type="text"
-          className="form-control"
+          className="form-control opacity-75"
           placeholder="Search name, location, mobile…"
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
-          style={{ maxWidth: 320 }}
+          style={{ maxWidth: 800 }}
         />
 
         <div className="d-flex gap-2">
-          <select className="form-select" value={sortBy} onChange={(e)=>setSortBy(e.target.value)}>
+          <select className="form-select opacity-75" value={sortBy} onChange={(e)=>setSortBy(e.target.value)}>
             <option value="id">Sort by ID</option>
             <option value="name">Sort by Name</option>
             <option value="callReminderDate">Sort by Reminder Date</option>
           </select>
-          <select className="form-select" value={sortDir} onChange={(e)=>setSortDir(e.target.value)}>
+          <select className="form-select opacity-75" value={sortDir} onChange={(e)=>setSortDir(e.target.value)}>
             <option value="desc">Desc</option>
             <option value="asc">Asc</option>
           </select>
         </div>
 
         <div className="d-flex gap-2">
-          <button className="btn btn-outline-success" onClick={handleExport}>Export Excel</button>
+          <button className="btn btn-success" onClick={handleExport} disabled>Export Excel</button>
           <button className="btn btn-secondary" onClick={resetFilters}>Reset</button>
         </div>
       </div>
@@ -330,6 +330,7 @@ export default function WorkerCallDisplay() {
           ))}
         </div>
       </div>
+      <hr></hr>
 
       {/* status line */}
       <div className="mb-2 text-muted small">

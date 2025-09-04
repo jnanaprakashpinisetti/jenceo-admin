@@ -426,15 +426,23 @@ export default function WorkerCallDisplay() {
 
       {/* Pagination */}
       {totalPages > 1 && (
-        <nav>
+        <nav aria-label="Client pagination" className="pagination-wrapper">
           <ul className="pagination justify-content-center">
-            {Array.from({ length: totalPages }, (_, i) => i + 1).map((n) => (
-              <li key={n} className={`page-item ${n === currentPage ? "active" : ""}`}>
-                <button className="page-link" onClick={() => paginate(n)}>
-                  {n}
-                </button>
+            <li className={`page-item ${currentPage === 1 ? 'disabled' : ''}`}>
+              <button className="page-link" onClick={() => setCurrentPage(currentPage - 1)} disabled={currentPage === 1}>
+                Previous
+              </button>
+            </li>
+            {Array.from({ length: totalPages }, (_, i) => i + 1).map((num) => (
+              <li key={num} className={`page-item ${currentPage === num ? 'active' : ''}`}>
+                <button className="page-link" onClick={() => setCurrentPage(num)}>{num}</button>
               </li>
             ))}
+            <li className={`page-item ${currentPage === totalPages ? 'disabled' : ''}`}>
+              <button className="page-link" onClick={() => setCurrentPage(currentPage + 1)} disabled={currentPage === totalPages}>
+                Next
+              </button>
+            </li>
           </ul>
         </nav>
       )}

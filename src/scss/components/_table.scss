@@ -645,10 +645,6 @@ table {
 }
 
 .display-enquiry {
-    .reminder-badges {
-        background-color: #8f9395;
-        border: none;
-    }
 
     .form-control {
         opacity: .8;
@@ -657,4 +653,10 @@ table {
     .form-select {
         opacity: .8;
     }
+}
+
+.alert.alert-info {
+     background-color: #8f9395;
+        border: none;
+
 }

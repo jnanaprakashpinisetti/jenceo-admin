@@ -1,9 +1,22 @@
-import React, { useState, useEffect } from 'react';
+// src/pages/clients/DisplayClient.js
+import React, { useState, useEffect, useMemo } from 'react';
 import firebaseDB from '../../firebase';
 import editIcon from '../../assets/eidt.svg';
 import viewIcon from '../../assets/view.svg';
 import deleteIcon from '../../assets/delete.svg';
 import ClientModal from './ClientModal';
+
+/**
+ * Matches EnquiriesDisplay features:
+ * - Reminder badges with counts (overdue/today/tomorrow/upcoming) + clickable filter
+ * - Search, Status filter, Sort, Reset
+ * - Urgency classes on rows (reminder-overdue, reminder-today, reminder-tomorrow, reminder-upcoming)
+ * 
+ * Data model differences handled:
+ * - Reminder date comes from the most recent payment's `reminderDate`
+ * - Status uses `serviceStatus`
+ * - Search across idNo, clientName, location, typeOfService, mobileNo1
+ */
 
 export default function DisplayClient() {
   const [clients, setClients] = useState([]);
@@ -14,10 +27,15 @@ export default function DisplayClient() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isEditMode, setIsEditMode] = useState(false);
 
+  // Filters / Sort
+  const [search, setSearch] = useState('');
+  const [filterStatus, setFilterStatus] = useState('');
+  const [filterReminder, setFilterReminder] = useState('');
+  const [sortBy, setSortBy] = useState('id'); // id | name | reminderDate
+
   // Pagination
   const [currentPage, setCurrentPage] = useState(1);
   const [rowsPerPage, setRowsPerPage] = useState(10);
-  const [totalPages, setTotalPages] = useState(1);
 
   // Delete flow
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -27,7 +45,15 @@ export default function DisplayClient() {
   // Save flow
   const [showSaveModal, setShowSaveModal] = useState(false);
 
-  // --- Reminder helpers ---
+  // Reminder badges
+  const [reminderCounts, setReminderCounts] = useState({
+    overdue: 0,
+    today: 0,
+    tomorrow: 0,
+    upcoming: 0,
+  });
+
+  // --- Reminder helpers (ported + adapted) ---
   const [today] = useState(() => {
     const date = new Date();
     date.setHours(0, 0, 0, 0);
@@ -37,36 +63,36 @@ export default function DisplayClient() {
   const parseDate = (v) => {
     if (!v) return null;
 
-    // Handle Firebase timestamp objects
-    if (v && typeof v === 'object' && v.hasOwnProperty('seconds')) {
+    // Firebase timestamp object
+    if (v && typeof v === 'object' && Object.prototype.hasOwnProperty.call(v, 'seconds')) {
       return new Date(v.seconds * 1000);
     }
 
-    // Handle string dates
+    // String dates
     if (typeof v === 'string') {
       const s = v.trim();
       if (!s) return null;
 
-      // Try ISO format (yyyy-mm-dd)
+      // ISO (yyyy-mm-dd)
       if (/^\d{4}-\d{2}-\d{2}/.test(s)) {
-        const parts = s.split('-');
-        const date = new Date(parts[0], parts[1] - 1, parts[2]);
-        return isNaN(date.getTime()) ? null : date;
+        const [yyyy, mm, dd] = s.split('-').map(Number);
+        const d = new Date(yyyy, mm - 1, dd);
+        return isNaN(d.getTime()) ? null : d;
       }
 
-      // Try dd/mm/yyyy format
+      // dd/mm/yyyy
       if (/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(s)) {
         const [dd, mm, yyyy] = s.split('/').map(Number);
-        const date = new Date(yyyy, mm - 1, dd);
-        return isNaN(date.getTime()) ? null : date;
+        const d = new Date(yyyy, mm - 1, dd);
+        return isNaN(d.getTime()) ? null : d;
       }
 
-      // Try any other format that Date can parse
+      // Fallback parse
       const d = new Date(s);
       return isNaN(d.getTime()) ? null : d;
     }
 
-    // Handle Date objects
+    // Date object
     if (v instanceof Date) {
       return isNaN(v.getTime()) ? null : v;
     }
@@ -74,144 +100,178 @@ export default function DisplayClient() {
     return null;
   };
 
-  // Get the most recent reminder date from client payments
+  // Most recent reminder from payments
   const getReminderDate = (c) => {
     if (!c || !Array.isArray(c.payments)) return null;
 
-    // Filter out empty/null reminder dates and sort by date (most recent first)
-    const validReminders = c.payments
-      .filter(p => p.reminderDate && p.reminderDate.trim() !== '')
+    const valid = c.payments
+      .filter(p => p.reminderDate && String(p.reminderDate).trim() !== '')
       .map(p => parseDate(p.reminderDate))
-      .filter(d => d !== null)
-      .sort((a, b) => b - a); // Most recent first
+      .filter(Boolean)
+      .sort((a, b) => b - a); // most recent first
 
-    return validReminders.length > 0 ? validReminders[0] : null;
+    return valid[0] || null;
   };
 
-  // Calculate days until reminder
   const daysUntil = (d) => {
     if (!d) return Infinity;
-
-    const reminderDate = new Date(d);
-    reminderDate.setHours(0, 0, 0, 0);
-
-    const timeDiff = reminderDate.getTime() - today.getTime();
-    return Math.ceil(timeDiff / (1000 * 60 * 60 * 24));
+    const rd = new Date(d);
+    rd.setHours(0, 0, 0, 0);
+    return Math.ceil((rd.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
   };
 
-  // Get urgency class based on days until reminder
-  const getUrgencyClass = (client) => {
+  // Enquiries-style CSS class for reminder state
+  const getReminderClass = (client) => {
     const d = getReminderDate(client);
     if (!d) return '';
-
     const du = daysUntil(d);
     if (du < 0) return 'reminder-overdue';
     if (du === 0) return 'reminder-today';
     if (du === 1) return 'reminder-tomorrow';
-    if (du === 2) return 'reminder-upcoming';
+    // treat day+2 as "upcoming" to mirror Enquiries "day after tomorrow+"
+    if (du >= 2) return 'reminder-upcoming';
     return '';
   };
 
-  // Sort clients with urgent reminders first, then by ID
-  const sortClientsWithUrgency = (data) => {
-    const byIdDesc = (a, b) => {
-      const idA = a.idNo || '';
-      const idB = b.idNo || '';
-      if (idA.startsWith('JC') && idB.startsWith('JC')) {
-        const numA = parseInt(idA.replace('JC', '')) || 0;
-        const numB = parseInt(idB.replace('JC', '')) || 0;
-        return numB - numA;
-      }
-      if (!isNaN(idA) && !isNaN(idB)) return parseInt(idB) - parseInt(idA);
-      return idB.localeCompare(idA);
-    };
-
-    return [...data].sort((a, b) => {
-      const dA = getReminderDate(a);
-      const dB = getReminderDate(b);
-      const duA = daysUntil(dA);
-      const duB = daysUntil(dB);
-
-      const urgentA = duA <= 2;
-      const urgentB = duB <= 2;
-
-      // Both are urgent, sort by date (earliest first)
-      if (urgentA && urgentB) {
-        return dA - dB;
-      }
-
-      // Only one is urgent, put it first
-      if (urgentA && !urgentB) return -1;
-      if (!urgentA && urgentB) return 1;
-
-      // Neither is urgent, sort by ID
-      return byIdDesc(a, b);
-    });
+  // Status badge (kept your mapping)
+  const getStatusBadgeClass = (status) => {
+    switch (status) {
+      case 'Running': return 'bg-success';
+      case 'Closed': return 'bg-secondary';
+      case 'Stop': return 'bg-warning';
+      case 'Re-open': return 'bg-info';
+      case 'Re-start': return 'bg-primary';
+      case 'Re-place': return 'bg-dark';
+      default: return 'bg-info';
+    }
   };
 
+  // Sort order (keep urgent-first behavior, then apply user sort)
+  const byIdDesc = (a, b) => {
+    const idA = a.idNo || '';
+    const idB = b.idNo || '';
+    if (idA.startsWith('JC') && idB.startsWith('JC')) {
+      const numA = parseInt(idA.replace('JC', '')) || 0;
+      const numB = parseInt(idB.replace('JC', '')) || 0;
+      return numB - numA;
+    }
+    if (!isNaN(idA) && !isNaN(idB)) return parseInt(idB) - parseInt(idA);
+    return (idB || '').localeCompare(idA || '');
+  };
+
+  const baseUrgencySort = (a, b) => {
+    const dA = getReminderDate(a);
+    const dB = getReminderDate(b);
+    const duA = daysUntil(dA);
+    const duB = daysUntil(dB);
+
+    const urgentA = duA <= 2;
+    const urgentB = duB <= 2;
+
+    // both urgent: earlier first
+    if (urgentA && urgentB) return (dA || 0) - (dB || 0);
+    if (urgentA && !urgentB) return -1;
+    if (!urgentA && urgentB) return 1;
+    return 0; // tie → user sort
+  };
+
+  // Fetch + live updates (kept your realtime listener)
   useEffect(() => {
-    const fetchClients = () => {
+    const ref = firebaseDB.child('ClientData');
+    const handler = ref.on('value', (snapshot) => {
       try {
-        firebaseDB.child('ClientData').on('value', (snapshot) => {
-          if (snapshot.exists()) {
-            const clientsData = [];
-            snapshot.forEach((childSnapshot) => {
-              clientsData.push({
-                id: childSnapshot.key,
-                ...childSnapshot.val(),
-              });
-            });
-            const sorted = sortClientsWithUrgency(clientsData);
-            setClients(sorted);
-            setTotalPages(Math.ceil(sorted.length / rowsPerPage));
-          } else {
-            setClients([]);
-            setTotalPages(1);
-          }
-          setLoading(false);
-        });
+        if (snapshot.exists()) {
+          const list = [];
+          snapshot.forEach((child) => {
+            list.push({ id: child.key, ...child.val() });
+          });
+          setClients(list);
+        } else {
+          setClients([]);
+        }
+        setLoading(false);
       } catch (err) {
         setError(err.message);
         setLoading(false);
       }
-    };
-
-    fetchClients();
-    return () => {
-      firebaseDB.child('ClientData').off('value');
-    };
+    });
+    return () => ref.off('value', handler);
   }, []);
 
+  // Compute reminder counts for badges (overdue/today/tomorrow/upcoming)
   useEffect(() => {
-    setTotalPages(Math.ceil(clients.length / rowsPerPage));
-    if (currentPage > totalPages && totalPages > 0) {
-      setCurrentPage(totalPages);
-    }
-  }, [clients, rowsPerPage, totalPages, currentPage]);
+    const counts = { overdue: 0, today: 0, tomorrow: 0, upcoming: 0 };
+    clients.forEach((c) => {
+      const d = getReminderDate(c);
+      if (!d) return;
+      const du = daysUntil(d);
+      if (du < 0) counts.overdue++;
+      else if (du === 0) counts.today++;
+      else if (du === 1) counts.tomorrow++;
+      else if (du >= 2) counts.upcoming++;
+    });
+    setReminderCounts(counts);
+  }, [clients]);
 
-  const indexOfLastClient = currentPage * rowsPerPage;
-  const indexOfFirstClient = indexOfLastClient - rowsPerPage;
-  const currentClients = clients.slice(indexOfFirstClient, indexOfLastClient);
+  // Search + filter + sort
+  const filteredSorted = useMemo(() => {
+    const needle = search.toLowerCase().trim();
 
-  const paginate = (pageNumber) => setCurrentPage(pageNumber);
+    let arr = clients.filter((c) => {
+      const rClass = getReminderClass(c);
+      const matchesReminder = filterReminder ? rClass === filterReminder : true;
+      const matchesStatus = filterStatus ? (c.serviceStatus || '').toLowerCase() === filterStatus.toLowerCase() : true;
 
-  const formatDate = (d) => {
-    if (!d) return '—';
-    const dt = parseDate(d);
-    if (!dt) return '—';
-    return dt.toLocaleDateString('en-GB');
-  };
+      const hay =
+        `${c.idNo || ''} ${c.clientName || ''} ${c.location || ''} ${c.typeOfService || ''} ${c.mobileNo1 || ''}`
+          .toLowerCase();
 
-  // Reminder count calculation
-  const reminderCount = clients.filter((c) => {
+      const matchesSearch = needle ? hay.includes(needle) : true;
+
+      return matchesReminder && matchesStatus && matchesSearch;
+    });
+
+    // Urgency-first (like your previous) then apply user sort
+    arr.sort((a, b) => {
+      const u = baseUrgencySort(a, b);
+      if (u !== 0) return u;
+
+      if (sortBy === 'name') {
+        return (a.clientName || '').localeCompare(b.clientName || '');
+      }
+      if (sortBy === 'reminderDate') {
+        const da = getReminderDate(a);
+        const db = getReminderDate(b);
+        if (!da && !db) return 0;
+        if (!da) return 1;
+        if (!db) return -1;
+        return da - db; // earliest first
+      }
+      // default id (desc)
+      return byIdDesc(a, b);
+    });
+
+    return arr;
+  }, [clients, search, filterStatus, filterReminder, sortBy]);
+
+  // Pagination derived
+  const totalPages = Math.ceil(filteredSorted.length / rowsPerPage) || 1;
+  const indexOfLast = currentPage * rowsPerPage;
+  const indexOfFirst = indexOfLast - rowsPerPage;
+  const currentClients = filteredSorted.slice(indexOfFirst, indexOfLast);
+
+  useEffect(() => {
+    if (currentPage > totalPages) setCurrentPage(totalPages);
+  }, [totalPages, currentPage]);
+
+  // Counts shown in header "Reminder Clients:"
+  const reminderCount = filteredSorted.filter((c) => {
     const d = getReminderDate(c);
     if (!d) return false;
-
-    const du = daysUntil(d);
-    return du <= 2; // Show reminders for today, tomorrow, and day after tomorrow
+    return daysUntil(d) <= 2;
   }).length;
 
-  // View/Edit handlers
+  // Handlers
   const handleView = (client) => {
     setSelectedClient(client);
     setIsEditMode(false);
@@ -224,7 +284,6 @@ export default function DisplayClient() {
     setIsModalOpen(true);
   };
 
-  // Delete handlers
   const openDeleteConfirm = (client) => {
     setClientToDelete(client);
     setShowDeleteConfirm(true);
@@ -246,9 +305,7 @@ export default function DisplayClient() {
         originalId: id,
         movedAt,
       });
-
       await firebaseDB.child(`ClientData/${id}`).remove();
-
       closeDeleteConfirm();
       setShowMovedModal(true);
     } catch (err) {
@@ -257,7 +314,6 @@ export default function DisplayClient() {
     }
   };
 
-  // Save handler
   const handleSave = async (updatedClient) => {
     try {
       await firebaseDB.child(`ClientData/${updatedClient.id}`).update(updatedClient);
@@ -274,43 +330,119 @@ export default function DisplayClient() {
     setIsEditMode(false);
   };
 
+  const formatDate = (d) => {
+    if (!d) return '—';
+    const dt = parseDate(d);
+    if (!dt) return '—';
+    return dt.toLocaleDateString('en-GB');
+  };
+
+  const resetFilters = () => {
+    setSearch('');
+    setFilterStatus('');
+    setFilterReminder('');
+    setSortBy('id');
+    setCurrentPage(1);
+  };
+
   if (loading) return <div className="text-center my-5">Loading clients...</div>;
   if (error) return <div className="alert alert-danger">Error: {error}</div>;
   if (clients.length === 0) return <div className="alert alert-info">No clients found</div>;
 
   return (
-    <div>
-      {/* Header */}
-      <div className="d-flex justify-content-between align-items-center mb-3 flex-wrap" style={{ gap: '10px' }}>
-        <div className="d-flex align-items-center">
-          <span className="me-2">Show</span>
+    <div className="container-fluid mt-4 display-client">
+      <h3 className="mb-3">Clients</h3>
+
+      {/* Reminder badges (click to filter) */}
+      <div className="alert alert-info d-flex justify-content-around flex-wrap reminder-badges">
+        <span className="reminder-badge overdue" onClick={() => { setFilterReminder('reminder-overdue'); setCurrentPage(1); }}>
+          Overdue: <strong>{reminderCounts.overdue}</strong>
+        </span>
+        <span className="reminder-badge today" onClick={() => { setFilterReminder('reminder-today'); setCurrentPage(1); }}>
+          Today: <strong>{reminderCounts.today}</strong>
+        </span>
+        <span className="reminder-badge tomorrow" onClick={() => { setFilterReminder('reminder-tomorrow'); setCurrentPage(1); }}>
+          Tomorrow: <strong>{reminderCounts.tomorrow}</strong>
+        </span>
+        <span className="reminder-badge upcoming" onClick={() => { setFilterReminder('reminder-upcoming'); setCurrentPage(1); }}>
+          Upcoming: <strong>{reminderCounts.upcoming}</strong>
+        </span>
+      </div>
+
+      {/* Filters row (search / status / sort / reset) */}
+      <div className="row mb-3">
+        <div className="col-md-6 mb-2">
+          <input
+            type="text"
+            className="form-control opacity-75"
+            placeholder="Search id, name, location, service, mobile..."
+            value={search}
+            onChange={(e) => { setSearch(e.target.value); setCurrentPage(1); }}
+          />
+        </div>
+        <div className="col-md-2 mb-2">
           <select
-            className="form-select form-select-sm"
-            style={{ width: '80px' }}
+            className="form-select opacity-75"
+            value={filterStatus}
+            onChange={(e) => { setFilterStatus(e.target.value); setCurrentPage(1); }}
+          >
+            <option value="">All Status</option>
+            <option>Running</option>
+            <option>Closed</option>
+            <option>Stop</option>
+            <option>Re-open</option>
+            <option>Re-start</option>
+            <option>Re-place</option>
+          </select>
+        </div>
+        <div className="col-md-2 mb-2">
+          <select
+            className="form-select opacity-75"
+            value={sortBy}
+            onChange={(e) => setSortBy(e.target.value)}
+          >
+            <option value="id">Sort by ID</option>
+            <option value="name">Sort by Name</option>
+            <option value="reminderDate">Sort by Reminder Date</option>
+          </select>
+        </div>
+        <div className="col-md-1 d-flex gap-2 flex-wrap">
+          <button className="btn btn-secondary flex-fill mb-2" onClick={resetFilters}>
+            Reset
+          </button>
+        </div>
+
+        {/* Page size + summary (kept, just aligned) */}
+        <div className="col-md-1 d-flex align-items-center justify-content-end mb-2">
+          <select
+            className="form-select form-select-sm w-auto"
             value={rowsPerPage}
             onChange={(e) => {
               setRowsPerPage(parseInt(e.target.value));
               setCurrentPage(1);
             }}
           >
-            <option value={10}>10</option>
-            <option value={20}>20</option>
-            <option value={30}>30</option>
-            <option value={40}>40</option>
-            <option value={50}>50</option>
+            <option value={10}>10 / Rows</option>
+            <option value={20}>20 / Rows</option>
+            <option value={30}>30 / Rows</option>
+            <option value={40}>40 / Rows</option>
+            <option value={50}>50 / Rows</option>
           </select>
-          <span className="ms-2">entries</span>
-        </div>
-        <div className="reminder-pill">Reminder Clients: {reminderCount}</div>
-        <div>
-          Showing {indexOfFirstClient + 1} to {Math.min(indexOfLastClient, clients.length)} of {clients.length} entries
         </div>
       </div>
+
+      {/* Header summary line */}
+      {/* <div className="d-flex justify-content-between align-items-center mb-3 flex-wrap" style={{ gap: '10px' }}>
+        <div className="reminder-pill">Reminder Clients (≤ 2 days): {reminderCount}</div>
+        <div>
+          Showing {indexOfFirst + 1} to {Math.min(indexOfLast, filteredSorted.length)} of {filteredSorted.length} entries
+        </div>
+      </div> */}
 
       {/* Table */}
       <div className="table-responsive running-client">
         <table className="table table-dark table-hover">
-          <thead>
+          <thead className="table-dark sticky-top">
             <tr>
               <th>ID No ↓</th>
               <th>Client Name</th>
@@ -325,44 +457,44 @@ export default function DisplayClient() {
           <tbody>
             {currentClients.map((client) => {
               const rDate = getReminderDate(client);
-              const urgencyClass = getUrgencyClass(client);
+              const rClass = getReminderClass(client);
+
+              const daysLabel = (() => {
+                const du = daysUntil(rDate);
+                if (!isFinite(du)) return '';
+                if (du === 0) return 'Today';
+                if (du === 1) return 'Tomorrow';
+                if (du < 0) return `${Math.abs(du)} days ago`;
+                return `${du} days`;
+              })();
 
               return (
-                <tr key={client.id} className={urgencyClass}>
+                <tr key={client.id} className={rClass}>
                   <td><strong>{client.idNo || 'N/A'}</strong></td>
                   <td>{client.clientName || 'N/A'}</td>
                   <td>{client.location || 'N/A'}</td>
                   <td>{client.typeOfService || 'N/A'}</td>
                   <td>
                     {formatDate(rDate)}
-                    {rDate && (
-                      <small className="d-block text-muted">
-                        {daysUntil(rDate) === 0 ? 'Today' :
-                          daysUntil(rDate) === 1 ? 'Tomorrow' :
-                            daysUntil(rDate) < 0 ? `${Math.abs(daysUntil(rDate))} days ago` :
-                              `${daysUntil(rDate)} days`}
-                      </small>
-                    )}
+                    {rDate && <small className="d-block text-muted">{daysLabel}</small>}
                   </td>
                   <td>
                     {client.mobileNo1 ? (
                       <span>
-                        {client.mobileNo1}  &nbsp;  &nbsp;
-                        <a href={`tel:${client.mobileNo1}`} className="btn btn-sm btn-info ">
-                          Call
-                        </a>
-                      </span>
-                    ) : 'N/A'}
-                             <a
+                        {client.mobileNo1} &nbsp;&nbsp;
+                        <a href={`tel:${client.mobileNo1}`} className="btn btn-sm btn-info">Call</a>
+                        <a
                           className="btn btn-sm btn-warning ms-1"
                           href={`https://wa.me/${client.mobileNo1.replace(/\D/g, '')}?text=${encodeURIComponent(
-                            "Hello, This is Sudheer From JenCeo Home Care Services"
+                            'Hello, This is Sudheer From JenCeo Home Care Services'
                           )}`}
                           target="_blank"
                           rel="noopener noreferrer"
                         >
                           WAP
                         </a>
+                      </span>
+                    ) : 'N/A'}
                   </td>
                   <td>
                     <span className={`badge ${getStatusBadgeClass(client.serviceStatus)}`}>
@@ -385,6 +517,13 @@ export default function DisplayClient() {
                 </tr>
               );
             })}
+            {currentClients.length === 0 && (
+              <tr>
+                <td colSpan="8">
+                  <div className="alert alert-warning mb-0">No records match your filters.</div>
+                </td>
+              </tr>
+            )}
           </tbody>
         </table>
       </div>
@@ -394,17 +533,17 @@ export default function DisplayClient() {
         <nav aria-label="Client pagination" className="pagination-wrapper">
           <ul className="pagination justify-content-center">
             <li className={`page-item ${currentPage === 1 ? 'disabled' : ''}`}>
-              <button className="page-link" onClick={() => paginate(currentPage - 1)} disabled={currentPage === 1}>
+              <button className="page-link" onClick={() => setCurrentPage(currentPage - 1)} disabled={currentPage === 1}>
                 Previous
               </button>
             </li>
             {Array.from({ length: totalPages }, (_, i) => i + 1).map((num) => (
               <li key={num} className={`page-item ${currentPage === num ? 'active' : ''}`}>
-                <button className="page-link" onClick={() => paginate(num)}>{num}</button>
+                <button className="page-link" onClick={() => setCurrentPage(num)}>{num}</button>
               </li>
             ))}
             <li className={`page-item ${currentPage === totalPages ? 'disabled' : ''}`}>
-              <button className="page-link" onClick={() => paginate(currentPage + 1)} disabled={currentPage === totalPages}>
+              <button className="page-link" onClick={() => setCurrentPage(currentPage + 1)} disabled={currentPage === totalPages}>
                 Next
               </button>
             </li>
@@ -419,7 +558,7 @@ export default function DisplayClient() {
           isOpen={isModalOpen}
           onClose={handleCloseModal}
           onSave={handleSave}
-          onDelete={() => { }}
+          onDelete={() => {}}
           isEditMode={isEditMode}
         />
       )}
@@ -439,7 +578,9 @@ export default function DisplayClient() {
                   <strong>ID:</strong> {clientToDelete.idNo || clientToDelete.id} <br />
                   <strong>Name:</strong> {clientToDelete.clientName || 'N/A'}
                 </p>
-                <small className="text-muted">This will move the record to the <strong>ExitClients</strong> section.</small>
+                <small className="text-muted">
+                  This will move the record to the <strong>ExitClients</strong> section.
+                </small>
               </div>
               <div className="modal-footer">
                 <button type="button" className="btn btn-secondary" onClick={closeDeleteConfirm}>Cancel</button>
@@ -500,15 +641,3 @@ export default function DisplayClient() {
     </div>
   );
 }
-
-const getStatusBadgeClass = (status) => {
-  switch (status) {
-    case 'Running': return 'bg-success';
-    case 'Closed': return 'bg-secondary';
-    case 'Stop': return 'bg-warning';
-    case 'Re-open': return 'bg-info';
-    case 'Re-start': return 'bg-primary';
-    case 'Re-place': return 'bg-dark';
-    default: return 'bg-info';
-  }
-};

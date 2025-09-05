@@ -5,15 +5,24 @@ import { Tabs, Tab } from "react-bootstrap";
 import * as XLSX from "xlsx";
 
 /**
- * PettyCashReport.jsx
- * - Top level Year tabs (2024..2035)
- * - Inner Month tabs (Jan..Dec)
- * - Purchased By column (employeeName)
- * - Approval dropdown (Approve/ Pending / Reject / Need Clarification) -> writes to DB
- * - Assets added to category summary
+ * PettyCashReport.jsx (with monthly Main-Category cards)
+ *
+ * - Year tabs (2024..2035), Month tabs (Jan..Dec)
+ * - Monthly cards: show main category totals + top subcategory lines
+ * - Manager-only approval + Employee clarifications (existing)
+ *
+ * UI suggestions:
+ *  - Cards are for quick scan; table below for details (implemented)
+ *  - Add "Pending approvals" quick filter for managers (optional)
+ *  - Consider sparkline or small trend chart inside cards (optional)
+ *  - Consider caching aggregates in server / cloud function when dataset grows
+ *
+ * Props:
+ *  - currentUser (string) optional, default "Admin"
+ *  - currentUserRole ("employee" | "manager") optional, default "employee"
  */
 
-export default function PettyCashReport() {
+export default function PettyCashReport({ currentUser = "Admin", currentUserRole = "employee" }) {
   const [data, setData] = useState([]);
   const [activeYear, setActiveYear] = useState(String(new Date().getFullYear()));
   const [activeMonth, setActiveMonth] = useState("");
@@ -28,14 +37,14 @@ export default function PettyCashReport() {
   const tableRef = useRef(null);
 
   const months = [
-    "Jan","Feb","Mar","Apr","May","Jun",
-    "Jul","Aug","Sep","Oct","Nov","Dec"
+    "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+    "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"
   ];
 
   // Years 2024..2035
   const years = Array.from({ length: 2035 - 2024 + 1 }, (_, i) => String(2024 + i));
 
-  // Fetch Data
+  // Fetch Data from Realtime DB
   useEffect(() => {
     const ref = firebaseDB.child("PettyCash/admin");
     const onValue = (snapshot) => {
@@ -44,18 +53,10 @@ export default function PettyCashReport() {
         snapshot.forEach((child) => {
           records.push({ id: child.key, ...child.val() });
         });
-        // Sort by date descending for convenience
-        records.sort((a,b) => new Date(b.date || 0) - new Date(a.date || 0));
+        records.sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0));
         setData(records);
-
-        // initialize activeYear/month if not set
-        if (!activeYear) {
-          setActiveYear(String(new Date().getFullYear()));
-        }
-        if (!activeMonth) {
-          const curMonth = months[new Date().getMonth()];
-          setActiveMonth(curMonth);
-        }
+        if (!activeYear) setActiveYear(String(new Date().getFullYear()));
+        if (!activeMonth) setActiveMonth(months[new Date().getMonth()]);
       } else {
         setData([]);
       }
@@ -66,16 +67,14 @@ export default function PettyCashReport() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Filtering by selected Year & Month
+  // Records for selected year and month (unfiltered)
   const recordsForYearMonth = useMemo(() => {
-    // filter by year
     const filteredByYear = data.filter((d) => {
       if (!d.date) return false;
       const dt = new Date(d.date);
       return String(dt.getFullYear()) === activeYear;
     });
 
-    // if month selected, filter by month as well
     if (activeMonth) {
       return filteredByYear.filter((d) => {
         if (!d.date) return false;
@@ -86,7 +85,7 @@ export default function PettyCashReport() {
     return filteredByYear;
   }, [data, activeYear, activeMonth]);
 
-  // Apply search / main / sub / date range filters on top of year/month selection
+  // Apply UI filters on top of selected year/month
   const applyFilters = (records) => {
     let recordsFiltered = [...records];
 
@@ -100,18 +99,10 @@ export default function PettyCashReport() {
       );
     }
 
-    if (mainCategory) {
-      recordsFiltered = recordsFiltered.filter((r) => r.mainCategory === mainCategory);
-    }
-    if (subCategory) {
-      recordsFiltered = recordsFiltered.filter((r) => r.subCategory === subCategory);
-    }
-    if (dateFrom) {
-      recordsFiltered = recordsFiltered.filter((r) => new Date(r.date) >= new Date(dateFrom));
-    }
-    if (dateTo) {
-      recordsFiltered = recordsFiltered.filter((r) => new Date(r.date) <= new Date(dateTo));
-    }
+    if (mainCategory) recordsFiltered = recordsFiltered.filter((r) => r.mainCategory === mainCategory);
+    if (subCategory) recordsFiltered = recordsFiltered.filter((r) => r.subCategory === subCategory);
+    if (dateFrom) recordsFiltered = recordsFiltered.filter((r) => new Date(r.date) >= new Date(dateFrom));
+    if (dateTo) recordsFiltered = recordsFiltered.filter((r) => new Date(r.date) <= new Date(dateTo));
 
     return recordsFiltered;
   };
@@ -127,7 +118,7 @@ export default function PettyCashReport() {
 
   useEffect(() => { setCurrentPage(1); }, [search, mainCategory, subCategory, dateFrom, dateTo, activeYear, activeMonth, rowsPerPage]);
 
-  // Export Excel (include PurchasedBy and Approval)
+  // Export Excel (include PurchasedBy, Approval, Clarification Response)
   const exportExcel = (records, label) => {
     const exportData = records.map((r) => ({
       Date: r.date,
@@ -140,6 +131,9 @@ export default function PettyCashReport() {
       Comments: r.comments,
       "Purchased By": r.employeeName || "",
       Approval: r.approval || "Pending",
+      "Clarification Response": r.clarificationResponse?.text || "",
+      "Clarification By": r.clarificationResponse?.responseBy || "",
+      "Clarification At": r.clarificationResponse?.responseAt || "",
     }));
     const ws = XLSX.utils.json_to_sheet(exportData);
     const wb = XLSX.utils.book_new();
@@ -158,16 +152,16 @@ export default function PettyCashReport() {
     Assets: "table-light",
   };
 
-  // Subcategories including Assets (spellings as requested)
+  // Subcategories including Assets
   const subCategories = [
-    { cat: "Food", items: ["Groceries","Vegetables","Non-Veg","Curd / Milk","Tiffins","Meals","Curries","Water Cans","Client Food","Snacks"] },
-    { cat: "Office Maintenance", items: ["Office Rent","Electricity Bill","Water Bill","Internet Bill","Mobile Bill","Repairs & Maintenance","Waste Disposal"] },
-    { cat: "Marketing", items: ["Apana Fee","Worker India Fee","Lamination Covers","Printings","Digital Marketing","Offline Marketing","Adds","Off-Food","Off-Snacks","Off-Breakfast","Off-Lunch","Off-Dinner","Off-Staying","Petrol","Transport","Health","Others"] },
-    { cat: "Stationery", items: ["Books","Files","Papers","Stationery","Office Equipment","IT Accessories","Others"] },
-    { cat: "Medical", items: ["For Staff","For Workers","First Aid","Tablets","Insurance"] },
-    { cat: "Welfare", items: ["Team Outings","Team Lunch","Movies","Gifts","Festivals","Entertainment"] },
-    // Assets category and its subcategories (exact names you provided)
-    { cat: "Assets", items: [
+    { cat: "Food", items: ["Groceries", "Vegetables", "Non-Veg", "Curd / Milk", "Tiffins", "Meals", "Curries", "Water Cans", "Client Food", "Snacks"] },
+    { cat: "Office Maintenance", items: ["Office Rent", "Electricity Bill", "Water Bill", "Internet Bill", "Mobile Bill", "Repairs & Maintenance", "Waste Disposal"] },
+    { cat: "Marketing", items: ["Apana Fee", "Worker India Fee", "Lamination Covers", "Printings", "Digital Marketing", "Offline Marketing", "Adds", "Off-Food", "Off-Snacks", "Off-Breakfast", "Off-Lunch", "Off-Dinner", "Off-Staying", "Petrol", "Transport", "Health", "Others"] },
+    { cat: "Stationery", items: ["Books", "Files", "Papers", "Stationery", "Office Equipment", "IT Accessories", "Others"] },
+    { cat: "Medical", items: ["For Staff", "For Workers", "First Aid", "Tablets", "Insurance"] },
+    { cat: "Welfare", items: ["Team Outings", "Team Lunch", "Movies", "Gifts", "Festivals", "Entertainment"] },
+    {
+      cat: "Assets", items: [
         "Furniture",
         "Electronics",
         "IT Equipment",
@@ -179,10 +173,11 @@ export default function PettyCashReport() {
         "Investments",
         "Software",
         "Advances",
-      ] },
+      ]
+    },
   ];
 
-  // Build summary totals across years/months similar to previous implementation
+  // Build summary totals across years/months (global)
   const buildSummary = () => {
     const summary = {};
     subCategories.forEach((block) => {
@@ -193,7 +188,6 @@ export default function PettyCashReport() {
       });
     });
 
-    // include all data (not filtered by year) so category summary is global (similar to previous)
     data.forEach((d) => {
       const dateStr = d.date;
       if (!dateStr) return;
@@ -221,26 +215,94 @@ export default function PettyCashReport() {
     grandTotal += row.Total;
   });
 
-  // Approval change handler: writes to DB
+  /* -------------------------
+     Approval and Clarification logic
+     ------------------------- */
+
+  // Manager only: can change approval. Employee: cannot change (disabled).
+  // Employee (who created) gets a red textarea when approval === 'Need Clarification' or 'Reject'
+  // Employee submits clarification -> saved to DB under clarificationResponse { text, responseBy, responseAt }
+  // Manager can then change approval after clarificationResponse exists.
+
   const handleApprovalChange = async (id, value) => {
     if (!id) return;
+    // enforce role: only manager can change
+    if (currentUserRole !== "manager") {
+      alert("Only managers can change approval.");
+      return;
+    }
     try {
       await firebaseDB.child(`PettyCash/admin/${id}`).update({
         approval: value,
-        approvalBy: "Manager",
+        approvalBy: currentUser,
         approvalAt: new Date().toISOString(),
       });
-      // local update for responsiveness
-      setData((prev) => prev.map((r) => (r.id === id ? { ...r, approval: value, approvalBy: "Manager", approvalAt: new Date().toISOString() } : r)));
+      setData((prev) => prev.map((r) => (r.id === id ? { ...r, approval: value, approvalBy: currentUser, approvalAt: new Date().toISOString() } : r)));
     } catch (err) {
       console.error("Failed to update approval:", err);
       alert("Failed to update approval. See console for details.");
     }
   };
 
+  const handleEmployeeClarificationSubmit = async (id, text) => {
+    if (!id) return;
+    if (!text || !text.trim()) { alert("Please enter clarification text"); return; }
+    // ensure employee owns the record
+    const rec = data.find((d) => d.id === id);
+    if (!rec) return;
+    if ((rec.employeeName || "").toLowerCase() !== (currentUser || "").toLowerCase()) {
+      alert("You can only respond to clarifications for your own entries.");
+      return;
+    }
+    try {
+      const payload = {
+        clarificationResponse: {
+          text: text.trim(),
+          responseBy: currentUser,
+          responseAt: new Date().toISOString(),
+        },
+        // optionally set approval to Pending so manager will review
+        approval: "Pending",
+      };
+      await firebaseDB.child(`PettyCash/admin/${id}`).update(payload);
+      setData((prev) => prev.map((r) => (r.id === id ? { ...r, ...payload } : r)));
+    } catch (err) {
+      console.error("Failed to submit clarification:", err);
+      alert("Failed to submit clarification. See console for details.");
+    }
+  };
+
   // Unique options for main/sub category filters from loaded data
   const mainOptions = [...new Set(data.map((d) => d.mainCategory).filter(Boolean))];
   const subOptions = mainCategory ? [...new Set(data.filter((d) => d.mainCategory === mainCategory).map((d) => d.subCategory).filter(Boolean))] : [];
+
+  // small helper to check if employee should show clarif textarea
+  const shouldShowClarificationBox = (item) => {
+    const status = (item.approval || "Pending");
+    const isClarOrReject = status === "Need Clarification" || status === "Reject";
+    const employeeOwns = (item.employeeName || "").toLowerCase() === (currentUser || "").toLowerCase();
+    return isClarOrReject && currentUserRole === "employee" && employeeOwns;
+  };
+
+  /* -------------------------
+     Monthly main-category totals (for the selected month)
+     ------------------------- */
+  const monthMainCategoryTotals = useMemo(() => {
+    // use recordsForYearMonth (unfiltered by search/main/sub) because cards should reflect month totals
+    const totals = {};
+    recordsForYearMonth.forEach((r) => {
+      const main = r.mainCategory || "Uncategorized";
+      totals[main] = totals[main] || { total: 0, sub: {} };
+      totals[main].total += Number(r.total || 0);
+
+      const sub = r.subCategory || "Other";
+      totals[main].sub[sub] = (totals[main].sub[sub] || 0) + Number(r.total || 0);
+    });
+    return totals; // { main: { total: Number, sub: { subName: Number } } }
+  }, [recordsForYearMonth]);
+
+  // Helper to format number
+  const fmt = (n) => Number(n || 0).toLocaleString();
 
   return (
     <div className="container-fluid mt-4 pettyCash-report">
@@ -252,20 +314,15 @@ export default function PettyCashReport() {
         activeKey={activeYear}
         onSelect={(k) => {
           setActiveYear(k);
-          // reset month to current month if year matches current year, otherwise unset
           const curYear = String(new Date().getFullYear());
-          if (k === curYear) {
-            setActiveMonth(months[new Date().getMonth()]);
-          } else {
-            setActiveMonth("");
-          }
+          if (k === curYear) setActiveMonth(months[new Date().getMonth()]);
+          else setActiveMonth("");
           setCurrentPage(1);
         }}
         className="mb-3 petty-cash-years"
       >
         {years.map((y) => (
           <Tab eventKey={y} title={y} key={y}>
-            {/* inner month tabs */}
             <Tabs
               id={`months-${y}`}
               activeKey={activeMonth}
@@ -273,14 +330,69 @@ export default function PettyCashReport() {
               className="mb-3 pettycash-month"
             >
               {months.map((m) => {
-                // compute records for this year+month for preview counts
+                // records for this y+m
                 const records = data.filter((d) => {
                   if (!d.date) return false;
                   const dt = new Date(d.date);
                   return String(dt.getFullYear()) === y && months[dt.getMonth()] === m;
                 });
+
+                // filteredRecords scoped to this month+year and current UI filters
+                const filteredRecords = applyFilters(records);
+
                 return (
                   <Tab eventKey={m} title={`${m} (${records.length})`} key={m}>
+                    {/* --- Monthly cards (main category totals) --- */}
+                    <div className="mb-3">
+                      <h6 className="mb-2 opacity-75">Monthly Overview — Main Category Totals</h6>
+                      <div className="row g-3">
+                        {Object.keys(monthMainCategoryTotals).length === 0 && (
+                          <div className="col-12">
+                            <div className="alert alert-secondary mb-0">No data for this month</div>
+                          </div>
+                        )}
+                        {Object.entries(monthMainCategoryTotals).map(([main, info]) => (
+                          <div className="col-12 col-md-3 col-lg-2" key={main}>
+                            <div className="card h-100 shadow-sm">
+                              <div className="card-body">
+                                <div className="d-flex justify-content-between align-items-start">
+                                  <div>
+                                    <h6 className="card-title mb-1">{main}</h6>
+                                    <div className="text-muted small opacity-75">Category total (this month)</div>
+
+                                  </div>
+                                  <div>
+                                    <h4 className="mb-0">{fmt(info.total)}</h4>
+                                  </div>
+                                </div>
+                                <hr></hr>
+                                {/* top subcategory breakdown (up to 5 rows) */}
+                                <div className="mt-3">
+                                  {Object.entries(info.sub)
+                                    .sort((a, b) => b[1] - a[1])
+                                    .slice(0, 5)
+                                    .map(([subName, subAmt]) => (
+                                      <div className="d-flex justify-content-between small" key={subName}>
+                                        <div className="text-muted">{subName}</div>
+                                        <div><strong>{fmt(subAmt)}</strong></div>
+                                      </div>
+                                    ))}
+
+                                  {/* if more than 5 subcats, show indicator */}
+                                  {Object.keys(info.sub).length > 5 && (
+                                    <div className="small text-muted mt-1">+{Object.keys(info.sub).length - 5} more</div>
+                                  )}
+                                </div>
+                              </div>
+                              <div className="card-footer bg-transparent">
+                                <small className="text-muted opacity-75">Click the category in the filters to view details in the table.</small>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
                     {/* Filters row + export */}
                     <div className="row mb-3">
                       <div className="col-md-3">
@@ -329,34 +441,71 @@ export default function PettyCashReport() {
                         </thead>
                         <tbody>
                           {pageItems.map((item, idx) => (
-                            <tr key={item.id}>
-                              <td>{indexOfFirst + idx + 1}</td>
-                              <td>{item.date}</td>
-                              <td>{item.mainCategory}</td>
-                              <td>{item.subCategory}</td>
-                              <td>{item.description}</td>
-                              <td>{item.quantity}</td>
-                              <td>{item.price}</td>
-                              <td>{item.total}</td>
-                              <td style={{ maxWidth: 220, whiteSpace: "pre-wrap" }}>{item.comments}</td>
-                              <td>{item.employeeName || "—"}</td>
-                              <td>
-                                <select
-                                  className="form-select form-select-sm"
-                                  value={item.approval || "Pending"}
-                                  onChange={(e) => handleApprovalChange(item.id, e.target.value)}
-                                >
-                                  <option value="Approve">Approve</option>
-                                  <option value="Pending">Pending</option>
-                                  <option value="Reject">Reject</option>
-                                  <option value="Need Clarification">Need Clarification</option>
-                                </select>
-                                {/* approval meta */}
-                                {item.approvalAt && (
-                                  <div><small className="text-muted">By {item.approvalBy || "Manager"} • {new Date(item.approvalAt).toLocaleString()}</small></div>
-                                )}
-                              </td>
-                            </tr>
+                            <React.Fragment key={item.id}>
+                              <tr>
+                                <td>{indexOfFirst + idx + 1}</td>
+                                <td>{item.date}</td>
+                                <td>{item.mainCategory}</td>
+                                <td>{item.subCategory}</td>
+                                <td>{item.description}</td>
+                                <td>{item.quantity}</td>
+                                <td>{item.price}</td>
+                                <td>{item.total}</td>
+                                <td style={{ maxWidth: 220, whiteSpace: "pre-wrap" }}>{item.comments}</td>
+                                <td>{item.employeeName || "—"}</td>
+                                <td style={{ minWidth: 220 }}>
+                                  {/* Approval dropdown – enabled only for manager */}
+                                  <select
+                                    className="form-select form-select-sm"
+                                    value={item.approval || "Pending"}
+                                    onChange={(e) => handleApprovalChange(item.id, e.target.value)}
+                                    disabled={currentUserRole !== "manager"}
+                                  >
+                                    <option value="Approve">Approve</option>
+                                    <option value="Pending">Pending</option>
+                                    <option value="Reject">Reject</option>
+                                    <option value="Need Clarification">Need Clarification</option>
+                                  </select>
+
+                                  {/* approval meta */}
+                                  {item.approvalAt && (
+                                    <div><small className="text-muted">By {item.approvalBy || "Manager"} • {new Date(item.approvalAt).toLocaleString()}</small></div>
+                                  )}
+                                </td>
+                              </tr>
+
+                              {/* If Need Clarification or Reject AND current user is the employee who created record -> show red textarea */}
+                              {shouldShowClarificationBox(item) && (
+                                <tr>
+                                  <td colSpan={11}>
+                                    <div style={{ border: "1px solid #f5c6cb", background: "#fff5f5", padding: 12 }}>
+                                      <label className="form-label">
+                                        <strong className="text-danger">Clarification required — please explain</strong>
+                                      </label>
+                                      {/* Show existing response if any */}
+                                      {item.clarificationResponse?.text ? (
+                                        <div className="mb-2">
+                                          <div style={{ background: "#fff", padding: 8, borderRadius: 4 }}>
+                                            <div style={{ fontSize: 12, color: "#6c757d" }}>
+                                              <strong>{item.clarificationResponse.responseBy}</strong> • {new Date(item.clarificationResponse.responseAt).toLocaleString()}
+                                            </div>
+                                            <div style={{ marginTop: 6 }}>{item.clarificationResponse.text}</div>
+                                          </div>
+                                        </div>
+                                      ) : null}
+
+                                      {/* If no response yet, show textarea */}
+                                      {!item.clarificationResponse?.text && (
+                                        <EmployeeClarificationBox
+                                          recordId={item.id}
+                                          onSubmit={(text) => handleEmployeeClarificationSubmit(item.id, text)}
+                                        />
+                                      )}
+                                    </div>
+                                  </td>
+                                </tr>
+                              )}
+                            </React.Fragment>
                           ))}
 
                           {/* totals row for visible records */}
@@ -364,7 +513,7 @@ export default function PettyCashReport() {
                             <td colSpan={7}><strong>Page Total</strong></td>
                             <td>
                               <strong>
-                                {pageItems.reduce((a,b) => a + Number(b.total || 0), 0).toLocaleString()}
+                                {pageItems.reduce((a, b) => a + Number(b.total || 0), 0).toLocaleString()}
                               </strong>
                             </td>
                             <td colSpan={3}></td>
@@ -375,7 +524,7 @@ export default function PettyCashReport() {
                             <td colSpan={7}><strong>Filtered Total</strong></td>
                             <td>
                               <strong>
-                                {filteredRecords.reduce((a,b) => a + Number(b.total || 0), 0).toLocaleString()}
+                                {filteredRecords.reduce((a, b) => a + Number(b.total || 0), 0).toLocaleString()}
                               </strong>
                             </td>
                             <td colSpan={3}></td>
@@ -393,6 +542,9 @@ export default function PettyCashReport() {
                           <option value={20}>20</option>
                           <option value={30}>30</option>
                           <option value={50}>50</option>
+                          <option value={100}>100</option>
+                          <option value={150}>150</option>
+                          <option value={200}>200</option>
                         </select>{" "}
                         entries
                       </div>
@@ -410,7 +562,7 @@ export default function PettyCashReport() {
         ))}
       </Tabs>
 
-      {/* Category Summary */}
+      {/* Category Summary (global) */}
       <div className="d-flex justify-content-between align-items-center mb-2 mt-5">
         <h4 className="opacity-85">Category Wise Summary (All Years)</h4>
       </div>
@@ -427,7 +579,6 @@ export default function PettyCashReport() {
           </thead>
           <tbody>
             {subCategories.map((block) => {
-              // compute block totals
               const blockTotals = {};
               months.forEach((m) => (blockTotals[m] = 0));
               let blockGrand = 0;
@@ -474,6 +625,43 @@ export default function PettyCashReport() {
             </tr>
           </tbody>
         </table>
+      </div>
+    </div>
+  );
+}
+
+/* -------------------------
+   EmployeeClarificationBox component
+   ------------------------- */
+function EmployeeClarificationBox({ recordId, onSubmit }) {
+  const [text, setText] = useState("");
+  const [sending, setSending] = useState(false);
+
+  const handleSend = async () => {
+    if (!text.trim()) return;
+    setSending(true);
+    try {
+      await onSubmit(text);
+      setText("");
+    } finally {
+      setSending(false);
+    }
+  };
+
+  return (
+    <div>
+      <textarea
+        className="form-control"
+        rows={3}
+        value={text}
+        onChange={(e) => setText(e.target.value)}
+        placeholder="Please provide explanation or supporting info..."
+        style={{ borderColor: "#dc3545", background: "#fff5f5" }}
+      />
+      <div className="d-flex justify-content-end mt-2">
+        <button className="btn btn-sm btn-danger" onClick={handleSend} disabled={sending || !text.trim()}>
+          {sending ? "Submitting..." : "Submit Clarification"}
+        </button>
       </div>
     </div>
   );

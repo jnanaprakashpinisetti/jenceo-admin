@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
-import { Routes, Route, NavLink, useLocation } from 'react-router-dom';
+// LeftNav.jsx
+import React, { useEffect, useState } from 'react';
+import { NavLink, useLocation } from 'react-router-dom';
 
 import logo from "../assets/jencio-logo.svg";
 import logoicon from "../assets/jenceo-icon.svg";
@@ -29,26 +30,11 @@ import accounts from "../assets/accounts.svg";
 import operations from "../assets/Operations.svg";
 import enquiry from "../assets/enquiry.svg";
 
-import Dashboard from '../pages/Dashboard';
-// Employee Data
-import Employees from '../pages/Employees';
-import EmployeeAggrement from '../pages/WorkerAggrement';
-import ExistingEmployees from '../pages/ExistingWorker';
-
-import Investments from '../pages/Investments';
-import ClientInfo from '../pages/ClientInfo';
-import ClientExit from '../pages/ClientExit';
-import Expenses from '../pages/Expenses';
-import Task from '../pages/Task';
-import Admin from '../pages/Admin';
-import Hr from '../pages/Hr';
-import Accounts from '../pages/Accounts';
-import Operations from '../pages/Operations';
-import HospitalList from '../pages/HospitalList';
-import HospitalDeleteList from '../pages/HospitalDeleteList';
-import WorkerCallsData from '../pages/WorkerCallsData';
-import Enquiry from '../pages/Enquiry';
-import EnquiryExit from '../pages/EnquiryExit';
+/**
+ * LeftNav - Navigation only. Routes are defined at App level inside <BrowserRouter>.
+ * - Removed Sign out / Restore section as requested.
+ * - NavLink 'to' uses absolute paths (leading slash) so routes resolve from root.
+ */
 
 export default function LeftNav() {
   const [isActive, setIsActive] = useState(false);   // side collapse (arrow)
@@ -56,7 +42,7 @@ export default function LeftNav() {
   const location = useLocation();
 
   // Close the mobile menu automatically on route change
-  React.useEffect(() => {
+  useEffect(() => {
     setIsShow(false);
   }, [location.pathname]);
 
@@ -64,13 +50,17 @@ export default function LeftNav() {
   const toggleMobile = () => setIsShow((v) => !v);
   const closeMobile = () => setIsShow(false);
 
+  // fixed collapseClass to include space before 'show'
   const collapseClass = `collapse navbar-collapse${isShow ? ' show' : ''}`;
+
+  // helper for active class if you also want to style active links differently
+  const navLinkClass = ({ isActive }) => `nav-link${isActive ? ' active' : ''}`;
 
   return (
     <>
       <nav className={isActive ? 'navbar navbar-expand-sm toggle' : 'navbar navbar-expand-sm'}>
         {/* Brand / Logo */}
-        <button type="button" className="navbar-brand" onClick={() => {}}>
+        <button type="button" className="navbar-brand" onClick={() => { }}>
           <img src={isActive ? logoicon : logo} alt="JenCeo Logo" />
         </button>
 
@@ -97,13 +87,13 @@ export default function LeftNav() {
         <div className={collapseClass} id="collapsibleNavbar">
           <ul className="navbar-nav">
             <li className="nav-item">
-              <NavLink to='/' className="nav-link" title='Dash Board' onClick={closeMobile}>
+              <NavLink to='/' className={navLinkClass} title='Dash Board' onClick={closeMobile}>
                 <img src={home} alt="" /> Dash Board
               </NavLink>
             </li>
 
             <li className="nav-item">
-              <NavLink to='Investments' className="nav-link" title='Investments' onClick={closeMobile}>
+              <NavLink to='/Investments' className={navLinkClass} title='Investments' onClick={closeMobile}>
                 <img src={invest} alt="" /> Investments
               </NavLink>
             </li>
@@ -111,24 +101,24 @@ export default function LeftNav() {
             <hr />
 
             <li className="nav-item">
-              <NavLink to='Employees' className="nav-link" title='Worker Data' onClick={closeMobile}>
+              <NavLink to='/Employees' className={navLinkClass} title='Worker Data' onClick={closeMobile}>
                 <img src={workerData} alt="" /> Worker Data
               </NavLink>
             </li>
 
             <li className="nav-item">
-              <NavLink to='ExistingEmployees' className="nav-link" title='Existing Workers' onClick={closeMobile}>
+              <NavLink to='/ExistingEmployees' className={navLinkClass} title='Existing Workers' onClick={closeMobile}>
                 <img src={workerExit} alt="Worker Exit" /> Exit Worker
               </NavLink>
             </li>
             <li className="nav-item">
-              <NavLink to='WorkerCallsData' className="nav-link" title='Worker Call Data' onClick={closeMobile}>
-                <img src={cell} alt="Worker Call Data"/> Worker Call Data
+              <NavLink to='/WorkerCallsData' className={navLinkClass} title='Worker Call Data' onClick={closeMobile}>
+                <img src={cell} alt="Worker Call Data" /> Worker Call Data
               </NavLink>
             </li>
 
             <li className="nav-item">
-              <NavLink to='EmployeeAggrement' className="nav-link" title='Worker Aggrement' onClick={closeMobile}>
+              <NavLink to='/EmployeeAggrement' className={navLinkClass} title='Worker Aggrement' onClick={closeMobile}>
                 <img src={WorkerAggrement} alt="" /> Worker Aggremnt
               </NavLink>
             </li>
@@ -136,23 +126,23 @@ export default function LeftNav() {
             <hr />
 
             <li className="nav-item">
-              <NavLink to='ClientInfo' className="nav-link" title='ClientInfo' onClick={closeMobile}>
+              <NavLink to='/ClientInfo' className={navLinkClass} title='ClientInfo' onClick={closeMobile}>
                 <img src={client} alt="" /> Client Data
               </NavLink>
             </li>
 
             <li className="nav-item">
-              <NavLink to='ClientExit' className="nav-link" title='ClientExit' onClick={closeMobile}>
+              <NavLink to='/ClientExit' className={navLinkClass} title='ClientExit' onClick={closeMobile}>
                 <img src={ClientExitIcon} alt="" /> ClientExit
               </NavLink>
             </li>
             <li className="nav-item">
-              <NavLink to='Enquiry' className="nav-link" title='Enquiry' onClick={closeMobile}>
+              <NavLink to='/Enquiry' className={navLinkClass} title='Enquiry' onClick={closeMobile}>
                 <img src={enquiry} alt="" /> Enquiry
               </NavLink>
             </li>
             <li className="nav-item">
-              <NavLink to='EnquiryExit' className="nav-link" title='Old Enquirys' onClick={closeMobile}>
+              <NavLink to='/EnquiryExit' className={navLinkClass} title='Old Enquirys' onClick={closeMobile}>
                 <img src={enquiry} alt="" /> Old Enquiry
               </NavLink>
             </li>
@@ -160,19 +150,19 @@ export default function LeftNav() {
             <hr />
 
             <li className="nav-item">
-              <NavLink to='HospitalList' className="nav-link" title='Hospital List' onClick={closeMobile}>
+              <NavLink to='/HospitalList' className={navLinkClass} title='Hospital List' onClick={closeMobile}>
                 <img src={HospitalIcon} alt="" /> Hospital List
               </NavLink>
             </li>
 
             <li className="nav-item">
-              <NavLink to='HospitalDeleteList' className="nav-link" title='Deleted Hospital' onClick={closeMobile}>
+              <NavLink to='/HospitalDeleteList' className={navLinkClass} title='Deleted Hospital' onClick={closeMobile}>
                 <img src={HospitalDeleteIcon} alt="" /> Deleted Hospitals
               </NavLink>
             </li>
 
             <li className="nav-item">
-              <NavLink to='Expenses' className="nav-link" title='Expenses' onClick={closeMobile}>
+              <NavLink to='/Expenses' className={navLinkClass} title='Expenses' onClick={closeMobile}>
                 <img src={expences} alt="" /> Expenses
               </NavLink>
             </li>
@@ -180,31 +170,31 @@ export default function LeftNav() {
             <hr />
 
             <li className="nav-item">
-              <NavLink to='Task' className="nav-link" title='Task' onClick={closeMobile}>
+              <NavLink to='/Task' className={navLinkClass} title='Task' onClick={closeMobile}>
                 <img src={task} alt="" /> Task
               </NavLink>
             </li>
 
             <li className="nav-item">
-              <NavLink to='Admin' className="nav-link" title='Admin' onClick={closeMobile}>
+              <NavLink to='/Admin' className={navLinkClass} title='Admin' onClick={closeMobile}>
                 <img src={admin} alt="" /> Admin
               </NavLink>
             </li>
 
             <li className="nav-item">
-              <NavLink to='HR' className="nav-link" title='HR' onClick={closeMobile}>
+              <NavLink to='/HR' className={navLinkClass} title='HR' onClick={closeMobile}>
                 <img src={hr} alt="" /> HR
               </NavLink>
             </li>
 
             <li className="nav-item">
-              <NavLink to='Accounts' className="nav-link" title='Accounts' onClick={closeMobile}>
+              <NavLink to='/Accounts' className={navLinkClass} title='Accounts' onClick={closeMobile}>
                 <img src={accounts} alt="" /> Accounts
               </NavLink>
             </li>
 
             <li className="nav-item">
-              <NavLink to='Operations' className="nav-link" title='Operations' onClick={closeMobile}>
+              <NavLink to='/Operations' className={navLinkClass} title='Operations' onClick={closeMobile}>
                 <img src={operations} alt="" /> Operations
               </NavLink>
             </li>
@@ -212,27 +202,64 @@ export default function LeftNav() {
         </div>
       </nav>
 
-      {/* Routes */}
-      <Routes>
-        <Route path="/" element={<Dashboard />} />
-        <Route path="Employees" element={<Employees />} />
-        <Route path="EmployeeAggrement" element={<EmployeeAggrement />} />
-        <Route path="WorkerCallsData" element={<WorkerCallsData />} />
-        <Route path="ExistingEmployees" element={<ExistingEmployees />} />
-        <Route path="Investments" element={<Investments />} />
-        <Route path="ClientInfo" element={<ClientInfo />} />
-        <Route path="ClientExit" element={<ClientExit />} />
-        <Route path="Enquiry" element={<Enquiry />} />
-        <Route path="EnquiryExit" element={<EnquiryExit />} />
-        <Route path="Expenses" element={<Expenses />} />
-        <Route path="Task" element={<Task />} />
-        <Route path="Admin" element={<Admin />} />
-        <Route path="HR" element={<Hr />} />
-        <Route path="Accounts" element={<Accounts />} />
-        <Route path="Operations" element={<Operations />} />
-        <Route path="HospitalList" element={<HospitalList />} />
-        <Route path="HospitalDeleteList" element={<HospitalDeleteList />} />
-      </Routes>
+      {/* Mobile menu - small overlay */}
+      <div className="d-md-none">
+        <button
+          className="btn btn-sm btn-outline-secondary m-2"
+          onClick={toggleMobile}
+          aria-expanded={isShow}
+          aria-label="Toggle mobile menu"
+        >
+          Menu
+        </button>
+
+        {isShow && (
+          <div
+            className="position-fixed top-0 start-0 vw-100 vh-100"
+            style={{ background: "rgba(0,0,0,0.5)", zIndex: 1040 }}
+            onClick={closeMobile}
+          >
+            <div
+              className="bg-white p-3"
+              style={{ width: 280, height: "100%", boxShadow: "0 8px 20px rgba(0,0,0,0.12)" }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="d-flex align-items-center mb-3">
+                <img src={logo} alt="logo" style={{ height: 36 }} />
+                <button className="btn btn-link ms-auto p-0" onClick={closeMobile} aria-label="Close menu">Close</button>
+              </div>
+
+              <nav>
+                <ul className="nav flex-column">
+                  {/* render same menu in mobile overlay */}
+                  <li className="nav-item"><NavLink to='/' className={navLinkClass} onClick={closeMobile}><img src={home} alt="" /> Dashboard</NavLink></li>
+                  <li className="nav-item"><NavLink to='/Investments' className={navLinkClass} onClick={closeMobile}><img src={invest} alt="" /> Investments</NavLink></li>
+                  <hr />
+                  <li className="nav-item"><NavLink to='/Employees' className={navLinkClass} onClick={closeMobile}><img src={workerData} alt="" /> Worker Data</NavLink></li>
+                  <li className="nav-item"><NavLink to='/ExistingEmployees' className={navLinkClass} onClick={closeMobile}><img src={workerExit} alt="" /> Exit Worker</NavLink></li>
+                  <li className="nav-item"><NavLink to='/Worker CallsData' className={navLinkClass} onClick={closeMobile}><img src={cell} alt="" /> Worker Call Data</NavLink></li>
+                  <li className="nav-item"><NavLink to='/Employee Aggrement' className={navLinkClass} onClick={closeMobile}><img src={WorkerAggrement} alt="" /> Worker Aggremnt</NavLink></li>
+                  <hr />
+                  <li className="nav-item"><NavLink to='/ClientInfo' className={navLinkClass} onClick={closeMobile}><img src={client} alt="" /> Client Data</NavLink></li>
+                  <li className="nav-item"><NavLink to='/ClientExit' className={navLinkClass} onClick={closeMobile}><img src={ClientExitIcon} alt="" /> ClientExit</NavLink></li>
+                  <li className="nav-item"><NavLink to='/Enquiry' className={navLinkClass} onClick={closeMobile}><img src={enquiry} alt="" /> Enquiry</NavLink></li>
+                  <li className="nav-item"><NavLink to='/EnquiryExit' className={navLinkClass} onClick={closeMobile}><img src={enquiry} alt="" /> Old Enquiry</NavLink></li>
+                  <hr />
+                  <li className="nav-item"><NavLink to='/HospitalList' className={navLinkClass} onClick={closeMobile}><img src={HospitalIcon} alt="" /> Hospital List</NavLink></li>
+                  <li className="nav-item"><NavLink to='/HospitalDeleteList' className={navLinkClass} onClick={closeMobile}><img src={HospitalDeleteIcon} alt="" /> Deleted Hospitals</NavLink></li>
+                  <li className="nav-item"><NavLink to='/Expenses' className={navLinkClass} onClick={closeMobile}><img src={expences} alt="" /> Expenses</NavLink></li>
+                  <hr />
+                  <li className="nav-item"><NavLink to='/Task' className={navLinkClass} onClick={closeMobile}><img src={task} alt="" /> Task</NavLink></li>
+                  <li className="nav-item"><NavLink to='/Admin' className={navLinkClass} onClick={closeMobile}><img src={admin} alt="" /> Admin</NavLink></li>
+                  <li className="nav-item"><NavLink to='/HR' className={navLinkClass} onClick={closeMobile}><img src={hr} alt="" /> HR</NavLink></li>
+                  <li className="nav-item"><NavLink to='/Accounts' className={navLinkClass} onClick={closeMobile}><img src={accounts} alt="" /> Accounts</NavLink></li>
+                  <li className="nav-item"><NavLink to='/Operations' className={navLinkClass} onClick={closeMobile}><img src={operations} alt="" /> Operations</NavLink></li>
+                </ul>
+              </nav>
+            </div>
+          </div>
+        )}
+      </div>
     </>
   );
 }

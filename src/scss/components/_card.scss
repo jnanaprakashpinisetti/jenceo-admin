@@ -114,3 +114,10 @@
         background-color: rgb(36, 35, 35);
     }
 }
+
+.invest-card {
+    @include mobile {
+        width: 100%;
+    }
+
+}

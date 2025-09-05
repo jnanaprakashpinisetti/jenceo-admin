@@ -313,7 +313,7 @@ export default function InvestForm({ currentUser = "Admin" }) {
               Reset
             </button>
             <button type="submit" className="btn btn-primary">
-              Next
+              Submit
             </button>
           </div>
         </div>

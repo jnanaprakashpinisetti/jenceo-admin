@@ -546,7 +546,7 @@ const HospitalModal = ({ hospital, isOpen, onClose, onSave, isEditMode }) => {
             <div className="modal-header bg-secondary text-white">
               <h5 className="modal-title">
                 {isEditMode ? "Edit" : "View"} Hospital - {hospitalData.idNo} - {hospitalData.hospitalName}
-                <span className="badge bg-danger mt-2">Reminders: {totalReminders}</span>
+                <span className="badge bg-primary mt-2">Reminders: {totalReminders}</span>
               </h5>
               <button type="button" className="btn-close btn-close-white" onClick={handleClose}></button>
             </div>
@@ -917,7 +917,7 @@ const HospitalModal = ({ hospital, isOpen, onClose, onSave, isEditMode }) => {
                                       {agent.mobileNo && (
                                         <a
                                           href={`tel:${agent.mobileNo}`}
-                                          className="btn btn-sm btn-outline-primary ms-2 mb-1"
+                                          className="btn btn-sm btn-info ms-2"
                                         >
                                           Call
                                         </a>

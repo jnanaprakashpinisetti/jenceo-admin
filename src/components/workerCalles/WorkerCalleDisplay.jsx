@@ -385,7 +385,7 @@ export default function WorkerCallDisplay() {
                       <>
                         <a href={`tel:${w.mobileNo}`} className="btn btn-sm btn-info ms-2">Call</a>
                         <a
-                          className="btn btn-sm btn-warning ms-1"
+                          className="btn btn-sm btn-warning ms-2"
                           href={`https://wa.me/${String(w.mobileNo).replace(/\D/g, "")}?text=${encodeURIComponent(
                             "Hello, This is Sudheer From JenCeo Home Care Services"
                           )}`}

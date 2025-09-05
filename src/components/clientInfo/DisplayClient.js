@@ -442,7 +442,7 @@ export default function DisplayClient() {
       {/* Table */}
       <div className="table-responsive running-client">
         <table className="table table-dark table-hover">
-          <thead className="table-dark sticky-top">
+          <thead className="table-dark">
             <tr>
               <th>ID No ↓</th>
               <th>Client Name</th>

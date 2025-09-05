@@ -173,7 +173,7 @@ const HospitalForm = ({ onSubmit, initialData = {}, isEdit = false }) => {
   };
 
   return (
-    <div className="container">
+    <div className="">
       <div className="form-card shadow">
         <div className="form-card-header mb-4">
           <h3 className="text-center">{isEdit ? "Edit Hospital" : "Add New Hospital"}</h3>

@@ -697,7 +697,7 @@ const MultiStepForm = () => {
 
   return (
     <>
-    <div className="form-card shadow">
+    <div className="form-card shadow mb-3">
       <form onSubmit={handleSubmit}>{renderStep()}</form>
 
       {/* Success modal */}

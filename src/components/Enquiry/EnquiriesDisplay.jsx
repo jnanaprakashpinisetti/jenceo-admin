@@ -306,7 +306,7 @@ const EnquiriesDisplay = () => {
     };
 
     return (
-        <div className="container-fluid mt-4 display-enquiry">
+        <div className="container-fluid mt-4">
             <h3 className="mb-3">Enquiries</h3>
 
             {/* Reminder counts with clickable badges */}
@@ -399,7 +399,7 @@ const EnquiriesDisplay = () => {
             ) : (
                 <div className="table-responsive">
                     <table className="table table-dark table-hover">
-                        <thead className="table-dark sticky-top">
+                        <thead className="table-dark">
                             <tr>
                                 <th>S.No</th>
                                 <th>Name</th>

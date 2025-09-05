@@ -327,11 +327,11 @@ export default function DisplayEmployee() {
                     <span className="ms-2">entries</span>
                 </div>
                 <div>
-                    Showing {indexOfFirstEmployee + 1} to {Math.min(indexOfLastEmployee, filteredEmployees.length)} of {filteredEmployees.length} entries
+                    Showing: {indexOfFirstEmployee + 1} - {Math.min(indexOfLastEmployee, filteredEmployees.length)} / {filteredEmployees.length}
                 </div>
             </div>
 
-            <div className="table-responsive">
+            <div className="table-responsive mb-3">
                 <table className="table table-dark table-hover">
                     <thead className="table-dark">
                         <tr>

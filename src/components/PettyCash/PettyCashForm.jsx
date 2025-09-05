@@ -1,3 +1,4 @@
+// src/.../PettyCashForm.jsx
 import React, { useState } from "react";
 import firebaseDB from "../../firebase";
 import SuccessModal from "../common/SuccessModal";
@@ -16,24 +17,105 @@ export default function PettyCashForm() {
     price: "",
     total: "",
     comments: "",
+    // support up to 4 extra fields for flexible asset types
     extraField1: "",
     extraField2: "",
+    extraField3: "",
+    extraField4: "",
   });
 
   const [errors, setErrors] = useState({});
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [savedExpense, setSavedExpense] = useState(null);
 
+  /* -------------------------
+     Category lists (existing + new Assets)
+     ------------------------- */
   const categories = {
-    Food: ["Groceries","Vegetables","Fruits","Non-Veg","Curd / Milk","Tiffins","Meals","Curries","Rice Bag","Water Cans","Client Food","Snacks"],
-    "Transport & Travel": ["Petrol","Staff Transport","Worker Transport","Business Trips","Vehicle Maintenance","Vehicle Insurance","Vehicle Documents","Vehicle Fine"],
-    "Office Maintenance": ["Office Rent","Electricity Bill","Water Bill","Internet Bill","Mobile Bill","Repairs & Maintenance","Waste Disposal"],
-    Stationery: ["Books","Files","Papers","Stationery","Office Equipment","IT Accessories","Others"],
-    Marketing: ["Apana Fee","Worker India Fee","Lamination Covers","Printings","Digital Marketing","Offline Marketing","Adds","Off-Food","Off-Snacks","Off-Breakfast","Off-Lunch","Off-Dinner","Off-Staying","Petrol","Transport","Health","Others"],
-    Medical: ["For Staff","For Workers","First Aid","Tablets","Insurance"],
-    Welfare: ["Team Outings","Team Lunch","Movies","Gifts","Festivals","Entertainment"],
+    Food: [
+      "Groceries",
+      "Vegetables",
+      "Fruits",
+      "Non-Veg",
+      "Curd / Milk",
+      "Tiffins",
+      "Meals",
+      "Curries",
+      "Rice Bag",
+      "Water Cans",
+      "Client Food",
+      "Snacks",
+    ],
+    "Transport & Travel": [
+      "Petrol",
+      "Staff Transport",
+      "Worker Transport",
+      "Business Trips",
+      "Vehicle Maintenance",
+      "Vehicle Insurance",
+      "Vehicle Documents",
+      "Vehicle Fine",
+    ],
+    "Office Maintenance": [
+      "Office Rent",
+      "Electricity Bill",
+      "Water Bill",
+      "Internet Bill",
+      "Mobile Bill",
+      "Repairs & Maintenance",
+      "Waste Disposal",
+    ],
+    Stationery: [
+      "Books",
+      "Files",
+      "Papers",
+      "Stationery",
+      "Office Equipment",
+      "IT Accessories",
+      "Others",
+    ],
+    Marketing: [
+      "Apana Fee",
+      "Worker India Fee",
+      "Lamination Covers",
+      "Printings",
+      "Digital Marketing",
+      "Offline Marketing",
+      "Adds",
+      "Off-Food",
+      "Off-Snacks",
+      "Off-Breakfast",
+      "Off-Lunch",
+      "Off-Dinner",
+      "Off-Staying",
+      "Petrol",
+      "Transport",
+      "Health",
+      "Others",
+    ],
+    Medical: ["For Staff", "For Workers", "First Aid", "Tablets", "Insurance"],
+    Welfare: ["Team Outings", "Team Lunch", "Movies", "Gifts", "Festivals", "Entertainment"],
+
+    // NEW: Assets main category and its subcategories (spellings checked / corrected)
+    Assets: [
+      "Furniture",
+      "Electronics",
+      "IT Equipment",
+      "Kitchen Items",
+      "Vehicles",
+      "Lands",
+      "Properties",
+      "Domain",
+      "Investments",
+      "Software",
+      "Advances",
+    ],
   };
 
+  /* -------------------------
+     Extra fields configuration for specific subcategories.
+     Each value is an array of label strings (up to 4).
+     ------------------------- */
   const extraFieldsConfig = {
     Petrol: ["Bike No", "Reading"],
     "Staff Transport": ["From", "To"],
@@ -42,7 +124,7 @@ export default function PettyCashForm() {
     "Vehicle Maintenance": ["Vehicle No", "Issue"],
     "Vehicle Insurance": ["Vehicle No", "Insurance Name"],
     "Vehicle Documents": ["Document Name", "Renewal Date"],
-    "Vehicle Fine": ["Vehicle No", "Fine Rep No"],
+    "Vehicle Fine": ["Vehicle No", "Fine Ref No"],
     "Mobile Bill": ["Mobile No", "Brand Name"],
     "Repairs & Maintenance": ["Repair", "Reason"],
     "IT Accessories": ["Item Name", "Item For"],
@@ -51,16 +133,58 @@ export default function PettyCashForm() {
     Adds: ["Add In", "Add For"],
     Health: ["For", "Problem"],
     Transport: ["Name", "To"],
+
+    // NEW mappings for Assets subcategories:
+    Furniture: ["Furniture Name", "For"],
+    Electronics: ["Electronics Name", "For"],
+    "IT Equipment": ["Equipment Name", "For"],
+    "Kitchen Items": ["Kitchen Item Name", "Details"],
+    Vehicles: ["Vehicle No", "For"],
+
+    // Lands requires 4 fields: Location, Sqfts, Reg No, Reg Name
+    Lands: ["Location", "Sqfts", "Reg No", "Reg Name"],
+
+    Properties: ["Location", "Reg No", "Reg Name", "Details"],
+    Domain: ["Domain Name", "Renewal Date"],
+
+    Investments: ["Name", "Ref No", "Company Name", "Value"],
+    Software: ["Software Name", "Licence No"],
+
+    // Advances (singular form used in labels): Advance For, To Whom
+    Advances: ["Advance For", "To Whom"],
   };
 
+  /* -------------------------
+     Handlers
+     ------------------------- */
   const handleChange = (e) => {
     const { name, value } = e.target;
     const updated = { ...formData, [name]: value };
+
+    // Recompute total if quantity or price changed
     if (name === "quantity" || name === "price") {
       const qty = parseFloat(updated.quantity) || 0;
       const price = parseFloat(updated.price) || 0;
       updated.total = qty * price;
     }
+
+    // If mainCategory changed, reset subCategory + extras
+    if (name === "mainCategory") {
+      updated.subCategory = "";
+      updated.extraField1 = "";
+      updated.extraField2 = "";
+      updated.extraField3 = "";
+      updated.extraField4 = "";
+    }
+
+    // If subCategory changed, clear extra fields
+    if (name === "subCategory") {
+      updated.extraField1 = "";
+      updated.extraField2 = "";
+      updated.extraField3 = "";
+      updated.extraField4 = "";
+    }
+
     setFormData(updated);
   };
 
@@ -71,10 +195,15 @@ export default function PettyCashForm() {
     }
   };
 
+  /* -------------------------
+     Validation
+     ------------------------- */
   const validateForm = () => {
     const newErrors = {};
+
     if (!formData.mainCategory) newErrors.mainCategory = "Main Category is required";
     if (!formData.subCategory) newErrors.subCategory = "Sub Category is required";
+
     if (!formData.date) newErrors.date = "Date is required";
     else {
       const selectedDate = new Date(formData.date);
@@ -82,22 +211,31 @@ export default function PettyCashForm() {
         newErrors.date = "Date must be within last 5 days including today";
       }
     }
+
     if (!formData.description) newErrors.description = "Description is required";
-    if (!formData.quantity) newErrors.quantity = "Quantity is required";
-    if (!formData.price) newErrors.price = "Price is required";
+
+    if (!formData.quantity && formData.quantity !== 0) newErrors.quantity = "Quantity is required";
+    if (!formData.price && formData.price !== 0) newErrors.price = "Price is required";
     if (!formData.comments) newErrors.comments = "Comments are required";
 
-    if (extraFieldsConfig[formData.subCategory]) {
-      if (!formData.extraField1)
-        newErrors.extraField1 = `${extraFieldsConfig[formData.subCategory][0]} is required`;
-      if (!formData.extraField2)
-        newErrors.extraField2 = `${extraFieldsConfig[formData.subCategory][1]} is required`;
+    // Validate dynamic extra fields based on config
+    const config = extraFieldsConfig[formData.subCategory];
+    if (config && Array.isArray(config)) {
+      config.forEach((label, idx) => {
+        const fieldName = `extraField${idx + 1}`;
+        if (!formData[fieldName]) {
+          newErrors[fieldName] = `${label} is required`;
+        }
+      });
     }
 
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
 
+  /* -------------------------
+     Submit
+     ------------------------- */
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!validateForm()) return;
@@ -114,6 +252,7 @@ export default function PettyCashForm() {
       setSavedExpense(expenseObj);
       setShowSuccessModal(true);
 
+      // reset
       setFormData({
         mainCategory: "",
         subCategory: "",
@@ -125,30 +264,69 @@ export default function PettyCashForm() {
         comments: "",
         extraField1: "",
         extraField2: "",
+        extraField3: "",
+        extraField4: "",
       });
+      setErrors({});
     } catch (err) {
       console.error("Error saving expense:", err);
+      alert("Error saving expense. See console for details.");
     }
   };
 
-  const formatMonth = (date) =>
-    date.toLocaleString("en-US", { month: "long", year: "numeric" });
+  const formatMonth = (date) => date.toLocaleString("en-US", { month: "long", year: "numeric" });
+
+  /* Helper for rendering extra fields */
+  const renderExtraFields = () => {
+    const config = extraFieldsConfig[formData.subCategory];
+    if (!config || !Array.isArray(config)) return null;
+
+    return (
+      <div className="row mb-0">
+        {config.map((label, idx) => {
+          const fieldName = `extraField${idx + 1}`;
+          return (
+            <div key={fieldName} className="col-md-6 mb-3">
+              <label>
+                <strong>
+                  {label}
+                  <span className="star">*</span>
+                </strong>
+              </label>
+              <input
+                type={label.toLowerCase().includes("date") || label.toLowerCase().includes("renewal") ? "date" : "text"}
+                name={fieldName}
+                value={formData[fieldName] || ""}
+                onChange={handleChange}
+                onBlur={handleBlur}
+                className={`form-control ${errors[fieldName] ? "is-invalid" : ""}`}
+              />
+              {errors[fieldName] && <div className="invalid-feedback">{errors[fieldName]}</div>}
+            </div>
+          );
+        })}
+      </div>
+    );
+  };
 
   return (
     <div className="container mt-4 client-form">
       <h3 className="mb-4 text-center opacity-75 text-white">Petty Cash Form</h3>
-      <hr className="text-white"></hr>
+      <hr className="text-white" />
       <div className="d-flex justify-content-between align-items-center p-3 opacity-75">
-      <p className="text-white">Admin</p>
-      <p className="text-white">{formatMonth(today)}</p>
-
+        <p className="text-white">Admin</p>
+        <p className="text-white">{formatMonth(today)}</p>
       </div>
 
       <form onSubmit={handleSubmit} noValidate className="pb-5">
         {/* Main & Sub Category */}
         <div className="row mb-0">
           <div className="col-md-6 mb-3">
-            <label><strong>Main Category <span className="star">*</span></strong></label>
+            <label>
+              <strong>
+                Main Category <span className="star">*</span>
+              </strong>
+            </label>
             <select
               name="mainCategory"
               className={`form-select ${errors.mainCategory ? "is-invalid" : ""}`}
@@ -158,13 +336,20 @@ export default function PettyCashForm() {
             >
               <option value="">Select Category</option>
               {Object.keys(categories).map((cat, idx) => (
-                <option key={idx} value={cat}>{cat}</option>
+                <option key={idx} value={cat}>
+                  {cat}
+                </option>
               ))}
             </select>
             {errors.mainCategory && <div className="invalid-feedback">{errors.mainCategory}</div>}
           </div>
+
           <div className="col-md-6 mb-3">
-            <label><strong>Sub Category <span className="star">*</span></strong></label>
+            <label>
+              <strong>
+                Sub Category <span className="star">*</span>
+              </strong>
+            </label>
             <select
               name="subCategory"
               className={`form-select ${errors.subCategory ? "is-invalid" : ""}`}
@@ -174,48 +359,28 @@ export default function PettyCashForm() {
               disabled={!formData.mainCategory}
             >
               <option value="">Select Sub Category</option>
-              {formData.mainCategory && categories[formData.mainCategory].map((sub, idx) => (
-                <option key={idx} value={sub}>{sub}</option>
-              ))}
+              {formData.mainCategory &&
+                (categories[formData.mainCategory] || []).map((sub, idx) => (
+                  <option key={idx} value={sub}>
+                    {sub}
+                  </option>
+                ))}
             </select>
             {errors.subCategory && <div className="invalid-feedback">{errors.subCategory}</div>}
           </div>
         </div>
 
-        {/* Extra Fields */}
-        {extraFieldsConfig[formData.subCategory] && (
-          <div className="row mb-0">
-            <div className="col-md-6 mb-3">
-              <label><strong>{extraFieldsConfig[formData.subCategory][0]} <span className="star">*</span></strong></label>
-              <input
-                type="text"
-                name="extraField1"
-                value={formData.extraField1}
-                onChange={handleChange}
-                onBlur={handleBlur}
-                className={`form-control ${errors.extraField1 ? "is-invalid" : ""}`}
-              />
-              {errors.extraField1 && <div className="invalid-feedback">{errors.extraField1}</div>}
-            </div>
-            <div className="col-md-6 mb-3">
-              <label><strong>{extraFieldsConfig[formData.subCategory][1]} <span className="star">*</span></strong></label>
-              <input
-                type="text"
-                name="extraField2"
-                value={formData.extraField2}
-                onChange={handleChange}
-                onBlur={handleBlur}
-                className={`form-control ${errors.extraField2 ? "is-invalid" : ""}`}
-              />
-              {errors.extraField2 && <div className="invalid-feedback">{errors.extraField2}</div>}
-            </div>
-          </div>
-        )}
+        {/* Extra Fields (dynamic) */}
+        {renderExtraFields()}
 
         {/* Date & Description */}
         <div className="row mb-0">
           <div className="col-md-6 mb-3">
-            <label><strong>Date <span className="star">*</span></strong></label>
+            <label>
+              <strong>
+                Date <span className="star">*</span>
+              </strong>
+            </label>
             <input
               type="date"
               name="date"
@@ -229,7 +394,11 @@ export default function PettyCashForm() {
             {errors.date && <div className="invalid-feedback">{errors.date}</div>}
           </div>
           <div className="col-md-6 mb-3">
-            <label><strong>Description <span className="star">*</span></strong></label>
+            <label>
+              <strong>
+                Description <span className="star">*</span>
+              </strong>
+            </label>
             <input
               type="text"
               name="description"
@@ -245,7 +414,11 @@ export default function PettyCashForm() {
         {/* Quantity, Price, Total */}
         <div className="row mb-0">
           <div className="col-md-4 mb-3">
-            <label><strong>Quantity <span className="star">*</span></strong></label>
+            <label>
+              <strong>
+                Quantity <span className="star">*</span>
+              </strong>
+            </label>
             <input
               type="number"
               name="quantity"
@@ -257,7 +430,11 @@ export default function PettyCashForm() {
             {errors.quantity && <div className="invalid-feedback">{errors.quantity}</div>}
           </div>
           <div className="col-md-4 mb-3">
-            <label><strong>Price <span className="star">*</span></strong></label>
+            <label>
+              <strong>
+                Price <span className="star">*</span>
+              </strong>
+            </label>
             <input
               type="number"
               name="price"
@@ -269,14 +446,20 @@ export default function PettyCashForm() {
             {errors.price && <div className="invalid-feedback">{errors.price}</div>}
           </div>
           <div className="col-md-4 mb-3">
-            <label><strong>Total</strong></label>
+            <label>
+              <strong>Total</strong>
+            </label>
             <input type="number" name="total" value={formData.total} className="form-control" disabled />
           </div>
         </div>
 
         {/* Comments */}
         <div className="mb-3">
-          <label><strong>Comments <span className="star">*</span></strong></label>
+          <label>
+            <strong>
+              Comments <span className="star">*</span>
+            </strong>
+          </label>
           <textarea
             name="comments"
             value={formData.comments}
@@ -288,7 +471,9 @@ export default function PettyCashForm() {
           {errors.comments && <div className="invalid-feedback">{errors.comments}</div>}
         </div>
 
-        <button type="submit" className="btn btn-success">Submit</button>
+        <button type="submit" className="btn btn-success">
+          Submit
+        </button>
       </form>
 
       {/* Success Modal */}
@@ -298,10 +483,16 @@ export default function PettyCashForm() {
         message={
           savedExpense ? (
             <>
-              <p>Thank you! <strong>{savedExpense.subCategory}</strong> has been added.</p>
-              <p><strong>Price:</strong> ₹{savedExpense.price}</p>
+              <p>
+                Thank you! <strong>{savedExpense.subCategory}</strong> has been added.
+              </p>
+              <p>
+                <strong>Price:</strong> ₹{savedExpense.price}
+              </p>
             </>
-          ) : <p>Expense saved successfully</p>
+          ) : (
+            <p>Expense saved successfully</p>
+          )
         }
         onClose={() => setShowSuccessModal(false)}
       />

@@ -8,7 +8,7 @@ import deleteIcon from "../../assets/delete.svg";
 import * as XLSX from "xlsx";
 
 /* ------------ date helpers ------------ */
-const startOfDay = (d) => { const x = new Date(d); x.setHours(0,0,0,0); return x; };
+const startOfDay = (d) => { const x = new Date(d); x.setHours(0, 0, 0, 0); return x; };
 const parseDate = (v) => {
   if (!v) return null;
   if (typeof v === "object" && v && "seconds" in v) return new Date(v.seconds * 1000);
@@ -18,11 +18,11 @@ const parseDate = (v) => {
     const iso = new Date(s); if (!isNaN(iso.getTime())) return iso;
     const parts = s.split(/[\/-]/);
     if (parts.length === 3) {
-      let y,m,d;
-      if (parts[0].length === 4) { y=+parts[0]; m=+parts[1]-1; d=+parts[2]; }
-      else if (+parts[0] > 12)   { d=+parts[0]; m=+parts[1]-1; y=+parts[2]; }
-      else                       { m=+parts[0]-1; d=+parts[1]; y=+parts[2]; }
-      const dt = new Date(y,m,d); if (!isNaN(dt.getTime())) return dt;
+      let y, m, d;
+      if (parts[0].length === 4) { y = +parts[0]; m = +parts[1] - 1; d = +parts[2]; }
+      else if (+parts[0] > 12) { d = +parts[0]; m = +parts[1] - 1; y = +parts[2]; }
+      else { m = +parts[0] - 1; d = +parts[1]; y = +parts[2]; }
+      const dt = new Date(y, m, d); if (!isNaN(dt.getTime())) return dt;
     }
   }
   const dt = new Date(v);
@@ -36,17 +36,17 @@ const formatDDMMYYYY = (v) => {
 const daysUntil = (v) => {
   const d = parseDate(v);
   if (!isValidDate(d)) return Number.POSITIVE_INFINITY;
-  return Math.ceil((startOfDay(d) - startOfDay(new Date())) / (1000*60*60*24));
+  return Math.ceil((startOfDay(d) - startOfDay(new Date())) / (1000 * 60 * 60 * 24));
 };
 const urgencyClass = (v) => {
   const du = daysUntil(v);
   if (!isFinite(du)) return "";
-  if (du < 0) return "overdue";
-  if (du === 0) return "today";
-  if (du === 1) return "tomorrow";
-  return "upcoming";
+  if (du < 0) return "reminder-overdue";
+  if (du === 0) return "reminder-today";
+  if (du === 1) return "reminder-tomorrow";
+  return "reminder-upcoming";
 };
-const normalizeArray = (val) => Array.isArray(val) ? val.filter(Boolean) : (typeof val === "string" ? val.split(",").map(s=>s.trim()).filter(Boolean) : []);
+const normalizeArray = (val) => Array.isArray(val) ? val.filter(Boolean) : (typeof val === "string" ? val.split(",").map(s => s.trim()).filter(Boolean) : []);
 
 /* ------------ looks-like-a-worker detector (so we know which nested objects to collect) ------------ */
 const isWorkerShape = (v) => {
@@ -189,7 +189,7 @@ export default function WorkerCallDisplay() {
 
   /* actions */
   const handleView = (w) => { setSelectedWorker(w); setIsEditMode(false); setIsModalOpen(true); };
-  const handleEdit = (w) => { setSelectedWorker(w); setIsEditMode(true);  setIsModalOpen(true); };
+  const handleEdit = (w) => { setSelectedWorker(w); setIsEditMode(true); setIsModalOpen(true); };
   const handleDelete = (w) => { setSelectedWorker(w); setShowDeleteConfirm(true); };
   const handleDeleteConfirmed = async () => {
     if (!selectedWorker) return;
@@ -238,7 +238,7 @@ export default function WorkerCallDisplay() {
   if (loading) return <div className="text-center my-5">Loading…</div>;
   if (error) return <div className="alert alert-danger">Error: {error}</div>;
 
-  const skillOptions = ["Nursing","Patient Care","Care Taker","Old Age Care","Baby Care","Bedside Attender","Supporting"];
+  const skillOptions = ["Nursing", "Patient Care", "Care Taker", "Old Age Care", "Baby Care", "Bedside Attender", "Supporting"];
 
   return (
     <div className="p-3">
@@ -250,9 +250,9 @@ export default function WorkerCallDisplay() {
             className="form-select form-select-sm"
             style={{ width: 80 }}
             value={rowsPerPage}
-            onChange={(e) => { setRowsPerPage(parseInt(e.target.value,10)||10); setCurrentPage(1); }}
+            onChange={(e) => { setRowsPerPage(parseInt(e.target.value, 10) || 10); setCurrentPage(1); }}
           >
-            {[10,20,30,40,50].map(n => <option key={n} value={n}>{n}</option>)}
+            {[10, 20, 30, 40, 50].map(n => <option key={n} value={n}>{n}</option>)}
           </select>
           <span className="ms-2 text-white opacity-75">entries</span>
         </div>
@@ -267,12 +267,12 @@ export default function WorkerCallDisplay() {
         />
 
         <div className="d-flex gap-2">
-          <select className="form-select opacity-75" value={sortBy} onChange={(e)=>setSortBy(e.target.value)}>
+          <select className="form-select opacity-75" value={sortBy} onChange={(e) => setSortBy(e.target.value)}>
             <option value="id">Sort by ID</option>
             <option value="name">Sort by Name</option>
             <option value="callReminderDate">Sort by Reminder Date</option>
           </select>
-          <select className="form-select opacity-75" value={sortDir} onChange={(e)=>setSortDir(e.target.value)}>
+          <select className="form-select opacity-75" value={sortDir} onChange={(e) => setSortDir(e.target.value)}>
             <option value="desc">Desc</option>
             <option value="asc">Asc</option>
           </select>
@@ -284,42 +284,42 @@ export default function WorkerCallDisplay() {
         </div>
       </div>
 
-{/* reminder badges as filters */}
-<div className="alert alert-info d-flex justify-content-around flex-wrap reminder-badges">
-  {["overdue","today","tomorrow","upcoming"].map((k) => (
-    <span
-      key={k}
-      role="button"
-      // ✅ same class pattern as ClientDisplay
-      className={`reminder-badge ${k} ${reminderFilter === k ? "active" : ""}`}
-      onClick={() => setReminderFilter(reminderFilter === k ? "" : k)}
-    >
-      {k[0].toUpperCase() + k.slice(1)}:{" "}
-      <strong>
-        {k === "overdue"
-          ? badgeCounts.overdue
-          : k === "today"
-          ? badgeCounts.today
-          : k === "tomorrow"
-          ? badgeCounts.tomorrow
-          : badgeCounts.upcoming}
-      </strong>
-    </span>
-  ))}
-</div>
+      {/* reminder badges as filters */}
+      <div className="alert alert-info d-flex justify-content-around flex-wrap reminder-badges">
+        {["overdue", "today", "tomorrow", "upcoming"].map((k) => (
+          <span
+            key={k}
+            role="button"
+            // ✅ same class pattern as ClientDisplay
+            className={`reminder-badge ${k} ${reminderFilter === k ? "active" : ""}`}
+            onClick={() => setReminderFilter(reminderFilter === k ? "" : k)}
+          >
+            {k[0].toUpperCase() + k.slice(1)}:{" "}
+            <strong>
+              {k === "overdue"
+                ? badgeCounts.overdue
+                : k === "today"
+                  ? badgeCounts.today
+                  : k === "tomorrow"
+                    ? badgeCounts.tomorrow
+                    : badgeCounts.upcoming}
+            </strong>
+          </span>
+        ))}
+      </div>
 
 
       {/* extra filters */}
       <div className="mb-3 d-flex gap-4 flex-wrap opacity-75">
         <div>
           <h6 className="mb-1">Gender</h6>
-          {["Male","Female","Others"].map((g) => (
+          {["Male", "Female", "Others"].map((g) => (
             <label key={g} className="me-3">
               <input
                 type="checkbox"
                 className="form-check-input me-1"
                 checked={selectedGender.includes(g)}
-                onChange={(e)=>setSelectedGender((prev)=>e.target.checked?[...prev,g]:prev.filter(x=>x!==g))}
+                onChange={(e) => setSelectedGender((prev) => e.target.checked ? [...prev, g] : prev.filter(x => x !== g))}
               />{g}
             </label>
           ))}
@@ -332,7 +332,7 @@ export default function WorkerCallDisplay() {
                 type="checkbox"
                 className="form-check-input me-1"
                 checked={selectedSkills.includes(s)}
-                onChange={(e)=>setSelectedSkills((prev)=>e.target.checked?[...prev,s]:prev.filter(x=>x!==s))}
+                onChange={(e) => setSelectedSkills((prev) => e.target.checked ? [...prev, s] : prev.filter(x => x !== s))}
               />{s}
             </label>
           ))}
@@ -397,11 +397,10 @@ export default function WorkerCallDisplay() {
                     )}
                   </td>
                   <td>
-                    <span className={`badge ${
-                      w?.conversationLevel === "Very Good" ? "bg-success" :
-                      w?.conversationLevel === "Good"      ? "bg-primary" :
-                      w?.conversationLevel === "Average"   ? "bg-warning" : "bg-secondary"
-                    }`}>
+                    <span className={`badge ${w?.conversationLevel === "Very Good" ? "bg-success" :
+                        w?.conversationLevel === "Good" ? "bg-primary" :
+                          w?.conversationLevel === "Average" ? "bg-warning" : "bg-secondary"
+                      }`}>
                       {w?.conversationLevel || "N/A"}
                     </span>
                   </td>

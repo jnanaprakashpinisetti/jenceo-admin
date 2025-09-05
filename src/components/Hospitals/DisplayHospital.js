@@ -1,14 +1,25 @@
-import React, { useState, useEffect } from "react";
+// src/pages/hospitals/DisplayHospital.js
+import React, { useState, useEffect, useMemo } from "react";
 import firebaseDB from "../../firebase";
 import HospitalModal from "./HospitalModal";
 import viewIcon from "../../assets/view.svg";
 import editIcon from "../../assets/eidt.svg";
 import deleteIcon from "../../assets/delete.svg";
 
+/*
+  Updated:
+  - reminder badges with classes like `reminder-badge reminder-overdue` (same as ClientDisplay)
+  - reminder badge filters (toggle)
+  - Reset button to clear filters/sort/pagination
+  - extended sorting (hospitalName, location, idNo, beds, reminder, visitType)
+  - badge counts computed from nearest reminder across agents/payments
+*/
+
 export default function DisplayHospital() {
     const [hospitals, setHospitals] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
+
     const [selectedHospital, setSelectedHospital] = useState(null);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [isEditMode, setIsEditMode] = useState(false);
@@ -19,17 +30,17 @@ export default function DisplayHospital() {
     const [search, setSearch] = useState("");
     const [filterType, setFilterType] = useState("");
     const [filterLocation, setFilterLocation] = useState("");
+    const [reminderFilter, setReminderFilter] = useState(""); // '', 'overdue','today','tomorrow','upcoming'
 
     // Sorting
-    const [sortField, setSortField] = useState("");
+    const [sortField, setSortField] = useState("idNo");
     const [sortOrder, setSortOrder] = useState("asc");
 
     // Pagination
     const [currentPage, setCurrentPage] = useState(1);
     const [rowsPerPage, setRowsPerPage] = useState(10);
-    const [totalPages, setTotalPages] = useState(1);
 
-    // ✅ Reminder logic helpers
+    // Date helpers
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
@@ -53,8 +64,7 @@ export default function DisplayHospital() {
         if (du < 0) return "reminder-overdue";
         if (du === 0) return "reminder-today";
         if (du === 1) return "reminder-tomorrow";
-        if (du === 2) return "reminder-upcoming";
-        return "";
+        return "reminder-upcoming"; // >=2
     };
 
     const getVisitClass = (visitType) => {
@@ -70,8 +80,7 @@ export default function DisplayHospital() {
         }
     };
 
-
-    // ✅ Nearest reminder date (agents + payments)
+    // Nearest reminder date (agents + payments)
     const getNearestReminderDate = (hospital) => {
         const dates = [
             ...(hospital.agents || []).map((a) => a.reminderDate).filter(Boolean),
@@ -89,107 +98,150 @@ export default function DisplayHospital() {
     };
 
     useEffect(() => {
-        const fetchHospitals = () => {
+        const ref = firebaseDB.child("HospitalData");
+        const onValue = (snapshot) => {
             try {
-                firebaseDB.child("HospitalData").on("value", (snapshot) => {
-                    if (snapshot.exists()) {
-                        const hospitalData = [];
-                        snapshot.forEach((childSnapshot) => {
-                            hospitalData.push({
-                                id: childSnapshot.key,
-                                ...childSnapshot.val(),
-                            });
-                        });
-                        setHospitals(hospitalData);
-                        setTotalPages(Math.ceil(hospitalData.length / rowsPerPage));
-                    } else {
-                        setHospitals([]);
-                        setTotalPages(1);
-                    }
-                    setLoading(false);
-                });
-            } catch (err) {
-                setError(err.message);
+                if (snapshot.exists()) {
+                    const arr = [];
+                    snapshot.forEach((child) => {
+                        arr.push({ id: child.key, ...child.val() });
+                    });
+                    setHospitals(arr);
+                } else {
+                    setHospitals([]);
+                }
+                setLoading(false);
+            } catch (e) {
+                setError(e.message || "Failed to load hospitals");
                 setLoading(false);
             }
         };
 
-        fetchHospitals();
-        return () => {
-            firebaseDB.child("HospitalData").off("value");
-        };
+        ref.on("value", onValue);
+        return () => ref.off("value", onValue);
     }, []);
 
-    // ✅ Apply filters & search
-    const filteredHospitals = hospitals.filter((h) => {
-        const searchMatch =
-            h.hospitalName?.toLowerCase().includes(search.toLowerCase()) ||
-            h.location?.toLowerCase().includes(search.toLowerCase()) ||
-            h.type?.toLowerCase().includes(search.toLowerCase()) ||
-            h.idNo?.toLowerCase().includes(search.toLowerCase());
+    // Badge counts computed from nearest reminder date across all hospitals
+    const badgeCounts = useMemo(() => {
+        const counts = { overdue: 0, today: 0, tomorrow: 0, upcoming: 0 };
+        hospitals.forEach((h) => {
+            const nr = getNearestReminderDate(h);
+            if (!nr) return;
+            const du = daysUntil(nr);
+            if (!isFinite(du)) return;
+            if (du < 0) counts.overdue++;
+            else if (du === 0) counts.today++;
+            else if (du === 1) counts.tomorrow++;
+            else counts.upcoming++;
+        });
+        return counts;
+    }, [hospitals]);
 
-        const typeMatch = filterType ? h.type === filterType : true;
-        const locationMatch = filterLocation ? h.location === filterLocation : true;
+    // Filtered list
+    const filteredHospitals = useMemo(() => {
+        return hospitals.filter((h) => {
+            const term = search.trim().toLowerCase();
+            const searchMatch =
+                !term ||
+                (h.hospitalName || "").toLowerCase().includes(term) ||
+                (h.location || "").toLowerCase().includes(term) ||
+                (h.type || "").toLowerCase().includes(term) ||
+                (h.idNo || "").toLowerCase().includes(term);
 
-        return searchMatch && typeMatch && locationMatch;
-    });
+            const typeMatch = filterType ? h.type === filterType : true;
+            const locationMatch = filterLocation ? h.location === filterLocation : true;
 
-    // ✅ Sorting
-    const sortedHospitals = [...filteredHospitals].sort((a, b) => {
-        let valA, valB;
-        if (sortField === "beds") {
-            valA = parseInt(a.noOfBeds) || 0;
-            valB = parseInt(b.noOfBeds) || 0;
-        } else if (sortField === "reminder") {
-            valA = getNearestReminderDate(a)?.getTime() || Infinity;
-            valB = getNearestReminderDate(b)?.getTime() || Infinity;
-        } else if (sortField === "idNo") {
-            // Special sorting for ID numbers (handle alphanumeric values)
-            valA = a.idNo || "";
-            valB = b.idNo || "";
-
-            // Extract numeric parts for proper sorting of alphanumeric IDs
-            const numA = parseInt(valA.match(/\d+/)) || 0;
-            const numB = parseInt(valB.match(/\d+/)) || 0;
-
-            if (numA !== numB) {
-                return sortOrder === "asc" ? numA - numB : numB - numA;
+            // reminder filter toggle
+            if (reminderFilter) {
+                const nr = getNearestReminderDate(h);
+                if (!nr) return false;
+                const du = daysUntil(nr);
+                if (reminderFilter === "overdue" && !(du < 0)) return false;
+                if (reminderFilter === "today" && du !== 0) return false;
+                if (reminderFilter === "tomorrow" && du !== 1) return false;
+                if (reminderFilter === "upcoming" && !(du >= 2)) return false;
             }
 
-            // If numeric parts are equal, sort by the whole string
-            valA = valA.toString().toLowerCase();
-            valB = valB.toString().toLowerCase();
-        } else {
-            valA = (a[sortField] || "").toString().toLowerCase();
-            valB = (b[sortField] || "").toString().toLowerCase();
-        }
+            return searchMatch && typeMatch && locationMatch;
+        });
+    }, [hospitals, search, filterType, filterLocation, reminderFilter]);
 
-        if (valA < valB) return sortOrder === "asc" ? -1 : 1;
-        if (valA > valB) return sortOrder === "asc" ? 1 : -1;
-        return 0;
-    });
+    // Sorting
+    const sortedHospitals = useMemo(() => {
+        const arr = [...filteredHospitals];
+        if (!sortField) return arr;
+        const dir = sortOrder === "asc" ? 1 : -1;
 
-    // Pagination logic
-    const indexOfLastHospital = currentPage * rowsPerPage;
+        arr.sort((a, b) => {
+            let valA, valB;
+
+            if (sortField === "beds") {
+                valA = parseInt(a.noOfBeds) || 0;
+                valB = parseInt(b.noOfBeds) || 0;
+            } else if (sortField === "reminder") {
+                valA = getNearestReminderDate(a)?.getTime() || Infinity;
+                valB = getNearestReminderDate(b)?.getTime() || Infinity;
+            } else if (sortField === "idNo") {
+                const ida = a.idNo || "";
+                const idb = b.idNo || "";
+                const numA = parseInt((ida.match(/\d+/) || ["0"])[0], 10) || 0;
+                const numB = parseInt((idb.match(/\d+/) || ["0"])[0], 10) || 0;
+                if (numA !== numB) return (numA - numB) * dir;
+                valA = ida.toLowerCase();
+                valB = idb.toLowerCase();
+            } else if (sortField === "visitType") {
+                valA = (a.visitType || "").toLowerCase();
+                valB = (b.visitType || "").toLowerCase();
+            } else {
+                valA = ((a[sortField] || "") + "").toString().toLowerCase();
+                valB = ((b[sortField] || "") + "").toString().toLowerCase();
+            }
+
+            if (valA < valB) return -1 * dir;
+            if (valA > valB) return 1 * dir;
+            return 0;
+        });
+
+        return arr;
+    }, [filteredHospitals, sortField, sortOrder]);
+
+    // Pagination
+    const totalPages = Math.max(1, Math.ceil(sortedHospitals.length / rowsPerPage));
+    const safePage = Math.min(Math.max(1, currentPage), totalPages);
+    const indexOfLastHospital = safePage * rowsPerPage;
     const indexOfFirstHospital = indexOfLastHospital - rowsPerPage;
-    const currentHospitals = sortedHospitals.slice(
-        indexOfFirstHospital,
-        indexOfLastHospital
-    );
-    const totalFilteredPages = Math.ceil(sortedHospitals.length / rowsPerPage);
+    const currentHospitals = sortedHospitals.slice(indexOfFirstHospital, indexOfLastHospital);
+
+    useEffect(() => {
+        // keep current page valid if rowsPerPage or filtered length changes
+        if (currentPage > totalPages) setCurrentPage(totalPages);
+    }, [totalPages, currentPage]);
 
     const paginate = (pageNumber) => setCurrentPage(pageNumber);
 
     const toggleSort = (field) => {
         if (sortField === field) {
-            setSortOrder(sortOrder === "asc" ? "desc" : "asc");
+            setSortOrder((s) => (s === "asc" ? "desc" : "asc"));
         } else {
             setSortField(field);
             setSortOrder("asc");
         }
+        setCurrentPage(1);
     };
 
-    // Modal logic
+    // Reset all filters/sort/pagination
+    const handleReset = () => {
+        setSearch("");
+        setFilterType("");
+        setFilterLocation("");
+        setReminderFilter("");
+        setSortField("idNo");
+        setSortOrder("asc");
+        setRowsPerPage(10);
+        setCurrentPage(1);
+    };
+
+    // Modal actions
     const handleView = (hospital) => {
         setSelectedHospital(hospital);
         setIsEditMode(false);
@@ -215,7 +267,6 @@ export default function DisplayHospital() {
     const handleDeleteConfirmed = async () => {
         if (!hospitalToDelete) return;
         const { id, ...payload } = hospitalToDelete;
-
         try {
             const movedAt = new Date().toISOString();
             await firebaseDB.child(`DeletedHospitalData/${id}`).set({
@@ -223,9 +274,7 @@ export default function DisplayHospital() {
                 originalId: id,
                 movedAt,
             });
-
             await firebaseDB.child(`HospitalData/${id}`).remove();
-
             closeDeleteConfirm();
         } catch (err) {
             setError("Error deleting hospital: " + err.message);
@@ -241,60 +290,79 @@ export default function DisplayHospital() {
 
     if (loading) return <div className="text-center my-5">Loading hospitals...</div>;
     if (error) return <div className="alert alert-danger">Error: {error}</div>;
-    if (hospitals.length === 0)
-        return <div className="alert alert-info">No hospitals found</div>;
+    if (hospitals.length === 0) return <div className="alert alert-info">No hospitals found</div>;
+
+    // unique filter options
+    const types = [...new Set(hospitals.map((h) => h.type).filter(Boolean))];
+    const locations = [...new Set(hospitals.map((h) => h.location).filter(Boolean))];
 
     return (
-        <div>
-            {/* ✅ Filters & Search */}
-            <div className="hospital-filter">
-                <input
-                    type="text"
-                    className="form-control"
-                    placeholder="Search..."
-                    value={search}
-                    onChange={(e) => setSearch(e.target.value)}
-                />
-                <select
-                    className="form-select w-auto"
-                    value={filterType}
-                    onChange={(e) => setFilterType(e.target.value)}
-                >
-                    <option value="">All Types</option>
-                    {[...new Set(hospitals.map((h) => h.type).filter(Boolean))].map(
-                        (t, idx) => (
-                            <option key={idx} value={t}>
-                                {t}
-                            </option>
-                        )
-                    )}
-                </select>
-                <select
-                    className="form-select w-auto"
-                    value={filterLocation}
-                    onChange={(e) => setFilterLocation(e.target.value)}
-                >
-                    <option value="">All Locations</option>
-                    {[...new Set(hospitals.map((h) => h.location).filter(Boolean))].map(
-                        (l, idx) => (
-                            <option key={idx} value={l}>
-                                {l}
-                            </option>
-                        )
-                    )}
-                </select>
+        <div className="p-3">
+     
+
+            {/* Reminder badges (same class scheme as ClientDisplay) */}
+            <div className="alert alert-info d-flex justify-content-around flex-wrap reminder-badges">
+                {["overdue", "today", "tomorrow", "upcoming"].map((k) => (
+                    <span
+                        key={k}
+                        role="button"
+                        className={`reminder-badge ${k} ${reminderFilter === k ? "active" : ""}`}
+                        onClick={() => { setReminderFilter(reminderFilter === k ? "" : k); setCurrentPage(1); }}
+                    >
+                        {k[0].toUpperCase() + k.slice(1)}: <strong className="ms-1">
+                            {k === "overdue" ? badgeCounts.overdue : k === "today" ? badgeCounts.today : k === "tomorrow" ? badgeCounts.tomorrow : badgeCounts.upcoming}
+                        </strong>
+                    </span>
+                ))}
             </div>
 
-            {/* ✅ Table */}
+                   {/* Top row: search, filters, reset */}
+            <div className="mb-3">
+                <div className="row gap-2">
+                <div className="col-md-6">
+                    <input
+                        type="text"
+                        className="form-control"
+                        placeholder="Search by name, id, location, type..."
+                        style={{ minWidth: 240 }}
+                        value={search}
+                        onChange={(e) => { setSearch(e.target.value); setCurrentPage(1); }}
+                    />
+                </div>
+                <div className="col-md-2">
+                    <select
+                        className="form-select"
+                        value={filterType}
+                        onChange={(e) => { setFilterType(e.target.value); setCurrentPage(1); }}
+                    >
+                        <option value="">All Types</option>
+                        {types.map((t) => <option key={t} value={t}>{t}</option>)}
+                    </select>
+                </div>
+                <div className="col-md-2">
+                    <select
+                        className="form-select"
+                        value={filterLocation}
+                        onChange={(e) => { setFilterLocation(e.target.value); setCurrentPage(1); }}
+                    >
+                        <option value="">All Locations</option>
+                        {locations.map((l) => <option key={l} value={l}>{l}</option>)}
+                    </select>
+                </div>
+                <div className="col-md-1">
+                    <button className="btn btn-secondary" onClick={handleReset}>Reset</button>
+                </div>
+
+            </div>
+            </div>
+
+            {/* Table */}
             <div className="table-responsive">
                 <table className="table table-dark table-hover">
                     <thead className="table-dark">
                         <tr>
-                            <th
-                                onClick={() => toggleSort("idNo")}
-                                style={{ cursor: "pointer" }}
-                            >
-                                ID No {sortField === "idNo" ? (sortOrder === "asc" ? "↑" : "↓") : "↓"}
+                            <th onClick={() => toggleSort("idNo")} style={{ cursor: "pointer" }}>
+                                ID No {sortField === "idNo" ? (sortOrder === "asc" ? "↑" : "↓") : ""}
                             </th>
                             <th onClick={() => toggleSort("hospitalName")} style={{ cursor: "pointer" }}>
                                 Hospital Name {sortField === "hospitalName" ? (sortOrder === "asc" ? "↑" : "↓") : ""}
@@ -309,76 +377,77 @@ export default function DisplayHospital() {
                             <th onClick={() => toggleSort("reminder")} style={{ cursor: "pointer" }}>
                                 Reminder Date {sortField === "reminder" ? (sortOrder === "asc" ? "↑" : "↓") : ""}
                             </th>
-                            <th>Auto Visit</th>
+                            <th onClick={() => toggleSort("visitType")} style={{ cursor: "pointer" }}>
+                                Auto Visit {sortField === "visitType" ? (sortOrder === "asc" ? "↑" : "↓") : ""}
+                            </th>
                             <th>Actions</th>
                         </tr>
                     </thead>
                     <tbody>
                         {currentHospitals.map((hospital) => {
                             const nearestReminder = getNearestReminderDate(hospital);
-
+                            const reminderClass = getReminderClass(nearestReminder);
                             return (
                                 <tr key={hospital.id}>
-                                    <td>{hospital.idNo || "N/A"}</td>
+                                    <td>{hospital.idNo || hospital.id || "N/A"}</td>
                                     <td>{hospital.hospitalName || "N/A"}</td>
                                     <td>{hospital.location || "N/A"}</td>
                                     <td>{hospital.type || "N/A"}</td>
                                     <td>{hospital.noOfBeds || "N/A"}</td>
-                                    {/* Reminder Date */}
-                                    <td className={getReminderClass(nearestReminder)}>
-                                        {nearestReminder
-                                            ? new Date(nearestReminder).toLocaleDateString("en-GB")
-                                            : "—"}
+                                    <td className={reminderClass}>
+                                        {nearestReminder ? new Date(nearestReminder).toLocaleDateString("en-GB") : "—"}
                                     </td>
                                     <td>
                                         <span className={`badge ${getVisitClass(hospital.visitType)}`}>
                                             {hospital.visitType || "N/A"}
                                         </span>
                                     </td>
-
                                     <td>
                                         <div className="d-flex">
-                                            <button
-                                                className="btn btn-sm me-2"
-                                                title="View"
-                                                onClick={() => handleView(hospital)}
-                                            >
-                                                <img src={viewIcon} alt="view" style={{ width: "18px", height: "18px", opacity: 0.7 }} />
+                                            <button className="btn btn-sm me-2" title="View" onClick={() => handleView(hospital)}>
+                                                <img src={viewIcon} alt="view" style={{ width: 18, height: 18, opacity: 0.8 }} />
                                             </button>
-                                            <button
-                                                className="btn btn-sm me-2"
-                                                title="Edit"
-                                                onClick={() => handleEdit(hospital)}
-                                            >
-                                                <img src={editIcon} alt="edit" style={{ width: "15px", height: "15px" }} />
+                                            <button className="btn btn-sm me-2" title="Edit" onClick={() => handleEdit(hospital)}>
+                                                <img src={editIcon} alt="edit" style={{ width: 15, height: 15 }} />
                                             </button>
-                                            <button
-                                                className="btn btn-sm"
-                                                title="Delete"
-                                                onClick={() => openDeleteConfirm(hospital)}
-                                            >
-                                                <img src={deleteIcon} alt="delete" style={{ width: "14px", height: "14px" }} />
+                                            <button className="btn btn-sm" title="Delete" onClick={() => openDeleteConfirm(hospital)}>
+                                                <img src={deleteIcon} alt="delete" style={{ width: 14, height: 14 }} />
                                             </button>
                                         </div>
                                     </td>
                                 </tr>
                             );
                         })}
+                        {currentHospitals.length === 0 && (
+                            <tr>
+                                <td colSpan="8">
+                                    <div className="alert alert-warning mb-0">No records match your filters.</div>
+                                </td>
+                            </tr>
+                        )}
                     </tbody>
                 </table>
             </div>
 
             {/* Pagination */}
-            {totalFilteredPages > 1 && (
+            {totalPages > 1 && (
                 <nav aria-label="Hospital pagination" className="pagination-wrapper">
                     <ul className="pagination justify-content-center">
-                        {Array.from({ length: totalFilteredPages }, (_, i) => i + 1).map((n) => (
-                            <li key={n} className={`page-item ${n === currentPage ? "active" : ""}`}>
-                                <button className="page-link" onClick={() => paginate(n)}>
-                                    {n}
-                                </button>
+                        <li className={`page-item ${safePage === 1 ? "disabled" : ""}`}>
+                            <button className="page-link" onClick={() => paginate(Math.max(1, safePage - 1))} disabled={safePage === 1}>
+                                Previous
+                            </button>
+                        </li>
+                        {Array.from({ length: totalPages }, (_, i) => i + 1).map((n) => (
+                            <li key={n} className={`page-item ${n === safePage ? "active" : ""}`}>
+                                <button className="page-link" onClick={() => paginate(n)}>{n}</button>
                             </li>
                         ))}
+                        <li className={`page-item ${safePage === totalPages ? "disabled" : ""}`}>
+                            <button className="page-link" onClick={() => paginate(Math.min(totalPages, safePage + 1))} disabled={safePage === totalPages}>
+                                Next
+                            </button>
+                        </li>
                     </ul>
                 </nav>
             )}
@@ -393,7 +462,7 @@ export default function DisplayHospital() {
                 />
             )}
 
-            {/* Delete Confirmation Modal */}
+            {/* Delete Confirmation */}
             {showDeleteConfirm && hospitalToDelete && (
                 <div className="modal fade show" style={{ display: "block", backgroundColor: "rgba(0,0,0,0.5)" }}>
                     <div className="modal-dialog modal-dialog-centered">
@@ -411,14 +480,10 @@ export default function DisplayHospital() {
                                 <small className="text-muted">
                                     This will move the record to the <strong>DeletedHospitalData</strong> section.
                                 </small>
-                                <div className="modal-footer">
-                                    <button type="button" className="btn btn-secondary" onClick={closeDeleteConfirm}>
-                                        Cancel
-                                    </button>
-                                    <button type="button" className="btn btn-danger" onClick={handleDeleteConfirmed}>
-                                        Yes, Move & Delete
-                                    </button>
-                                </div>
+                            </div>
+                            <div className="modal-footer">
+                                <button type="button" className="btn btn-secondary" onClick={closeDeleteConfirm}>Cancel</button>
+                                <button type="button" className="btn btn-danger" onClick={handleDeleteConfirmed}>Yes, Move & Delete</button>
                             </div>
                         </div>
                     </div>

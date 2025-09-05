@@ -302,7 +302,7 @@ table {
 
     .form-control,
     .form-select {
-        background-color: #7c7c7c;
+        background-color: #a8adb3;
         border-color: #7c7c7c;
         border-radius: 10px;
 
@@ -398,9 +398,52 @@ table {
         }
     }
 
+    .table-light {
+        td {
+            color: #198352 !important;
+        }
+
+        &:nth-child(even) {
+            td {
+                background-color: #e8f3f3 !important;
+            }
+        }
+    }
+
+}
 
 
+.petty-cash-years {
+    background-color: #4c586c;
+    border-top-right-radius: 5px;
+    border-top-left-radius: 5px;
+    border-bottom: 1px solid #6e7881;
 
+    .nav-link {
+        color: $sec-white;
+
+        &.active {
+            background-color: #557b97;
+            color: #fff;
+            border: none;
+        }
+    }
+}
+
+.pettycash-month {
+    background-color: #2b3c6c;
+    border-top-right-radius: 5px;
+    border-top-left-radius: 5px;
+
+    .nav-link {
+        color: #a9bec5;
+
+        &.active {
+            background-color: #526ead;
+            color: #fff;
+            border: none;
+        }
+    }
 }
 
 .hospital-filter {

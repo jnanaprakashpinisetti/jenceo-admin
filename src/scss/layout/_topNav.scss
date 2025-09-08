@@ -1,3 +1,22 @@
+.TopHeader {
+    background-color: #454647 !important;
+    border-bottom: 1px solid #666768;
+
+    .input-group {
+        padding: 0;
+
+        input {
+            border: none;
+        }
+
+    }
+
+    .flex-grow-1 {
+        max-width: 50%;
+
+    }
+}
+
 .top-nav {
     display: flex;
     align-items: center;

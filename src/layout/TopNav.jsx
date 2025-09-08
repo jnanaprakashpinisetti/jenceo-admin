@@ -133,10 +133,10 @@ export default function TopNav({
               onKeyDown={onKeyDown}
               aria-label="Global search"
             />
-            <button className="btn btn-outline-light btn-sm mb-0" type="button" onClick={clearQuery} title="Clear">
+            <button className="btn  btn-sm mb-0" type="button" onClick={clearQuery} title="Clear">
               ✕
             </button>
-            <button className="btn btn-primary btn-sm mb-0" type="submit" title="Search">
+            <button className="btn  btn-sm mb-0" type="submit" title="Search">
               Search
             </button>
           </form>

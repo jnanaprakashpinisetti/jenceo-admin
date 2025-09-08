@@ -12,11 +12,8 @@ import PropTypes from "prop-types";
  *  - onSearch: function(query) (optional, debounced local handler)
  *  - navigate: function (optional) - prefer useNavigate() from react-router
  *
- * Behavior:
- *  - typing updates internal query state
- *  - pressing Enter or clicking Search will:
- *     1) dispatch window CustomEvent 'performGlobalSearch' with { query }
- *     2) navigate to /search?q=<encoded query> (SPA via navigate prop if given)
+ * Visibility:
+ *  - Hidden on mobile via Bootstrap utility classes (d-none d-md-flex)
  */
 export default function TopNav({
   currentUser = {},
@@ -27,7 +24,7 @@ export default function TopNav({
 }) {
   const [query, setQuery] = useState("");
   const [showNotif, setShowNotif] = useState(false);
-  const [localNotifs, setLocalNotifs] = useState(notifications || []);
+  const [localNotifs, setLocalNotifs] = useState(Array.isArray(notifications) ? notifications : []);
   const [unreadCount, setUnreadCount] = useState((notifications || []).filter(n => !n.read).length);
   const [showProfile, setShowProfile] = useState(false);
   const profileRef = useRef(null);
@@ -75,7 +72,7 @@ export default function TopNav({
     try {
       window.dispatchEvent(new CustomEvent("performGlobalSearch", { detail: { query: q } }));
     } catch (err) {
-      // older browsers: fallback
+      // fallback for older browsers
       const ev = document.createEvent("CustomEvent");
       ev.initCustomEvent("performGlobalSearch", false, false, { query: q });
       window.dispatchEvent(ev);
@@ -116,14 +113,15 @@ export default function TopNav({
   const userRole = currentUser?.role || "Member";
 
   return (
-    <header className="TopHeader sticky-top navbar navbar-dark bg-dark px-3" style={{ zIndex: 1060 }}>
+    // hide on small devices, show from md+ (tablet/desktop)
+    <header className="TopHeader sticky-top d-none d-md-flex navbar navbar-dark bg-dark px-3" style={{ zIndex: 1060 }}>
       <div className="container-fluid d-flex align-items-center gap-3">
-        {/* Brand label (LeftNav controls mobile behavior) */}
+        {/* Brand label */}
         <div className="d-flex align-items-center">
           <span className="text-white fw-bold d-none d-md-inline">Admin Panel</span>
         </div>
 
-        {/* Search */}
+        {/* Search (flexible) */}
         <div className="flex-grow-1">
           <form className="input-group" onSubmit={submitSearch}>
             <input
@@ -134,18 +132,22 @@ export default function TopNav({
               onChange={(e) => setQuery(e.target.value)}
               onKeyDown={onKeyDown}
               aria-label="Global search"
-              autoComplete="off"
             />
-            <button type="button" className="btn btn-outline-light btn-sm" onClick={clearQuery}>Clear</button>
-            <button type="submit" className="btn btn-primary btn-sm">Search</button>
+            <button className="btn btn-outline-light btn-sm mb-0" type="button" onClick={clearQuery} title="Clear">
+              ✕
+            </button>
+            <button className="btn btn-primary btn-sm mb-0" type="submit" title="Search">
+              Search
+            </button>
           </form>
         </div>
 
-        {/* Buttons: pending / reports / notifications */}
+        {/* Quick action buttons (examples) */}
         <div className="d-flex align-items-center gap-2">
+          {/* Example quick-action (kept from your previous UI) */}
           <button
             className="btn btn-outline-light btn-sm d-none d-md-inline"
-            title="Pending approvals"
+            title="Pending"
             onClick={() => window.dispatchEvent(new CustomEvent("showPending"))}
           >
             <i className="bi bi-hourglass-split" />
@@ -159,9 +161,10 @@ export default function TopNav({
             <i className="bi bi-bar-chart-line" />
           </button>
 
+          {/* Notifications */}
           <div ref={notifRef} style={{ position: "relative" }}>
             <button
-              className="btn btn-outline-light position-relative"
+              className="btn btn-outline-light btn-sm position-relative"
               onClick={() => setShowNotif(s => !s)}
               title="Notifications"
               aria-expanded={showNotif}
@@ -214,33 +217,25 @@ export default function TopNav({
               <div style={{ width: 36, height: 36, borderRadius: 50, background: "#ffffff22", display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontWeight: 700 }}>
                 {currentUser?.avatarUrl ? <img src={currentUser.avatarUrl} alt="avatar" style={{ width: 36, height: 36, borderRadius: "50%" }} /> : (String(userName).slice(0, 1).toUpperCase())}
               </div>
-              <div className="d-none d-sm-block text-start">
-                <div style={{ fontSize: 13, fontWeight: 700 }}>{userName}</div>
-                <div className="small text-muted">{userRole}</div>
+              <div className="d-none d-lg-flex flex-column text-start">
+                <small className="text-white mb-0" style={{ lineHeight: 1 }}>{userName}</small>
+                <small className="text-muted" style={{ fontSize: 11 }}>{userRole}</small>
               </div>
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" className="ms-1" aria-hidden>
-                <path d="M6 9l6 6 6-6" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
             </button>
 
             {showProfile && (
               <div className="card shadow-sm" style={{ position: "absolute", right: 0, top: "110%", width: 220, zIndex: 2000 }}>
-                <ul className="list-group list-group-flush">
-                  <li className="list-group-item">
-                    <div style={{ fontWeight: 700 }}>{userName}</div>
-                    <div className="small text-muted">{currentUser?.email || ""}</div>
-                  </li>
-
-                  <li className="list-group-item"><button className="btn btn-link p-0" onClick={() => window.dispatchEvent(new CustomEvent("openProfile"))}>Edit Profile</button></li>
-                  <li className="list-group-item"><button className="btn btn-link p-0" onClick={() => window.dispatchEvent(new CustomEvent("uploadPhoto"))}>Upload Photo</button></li>
-                  <li className="list-group-item"><button className="btn btn-link p-0" onClick={() => window.dispatchEvent(new CustomEvent("editBiodata"))}>Edit Biodata</button></li>
-                  <li className="list-group-item d-flex justify-content-between align-items-center">
-                    <button className="btn btn-link p-0" onClick={() => window.dispatchEvent(new CustomEvent("openSettings"))}>Settings</button>
-                    <button className="btn btn-sm btn-outline-secondary" onClick={() => window.dispatchEvent(new CustomEvent("themeToggle", { detail: { dark: false } }))}>Theme</button>
-                  </li>
-
-                  <li className="list-group-item"><button className="btn btn-link text-danger p-0" onClick={handleSignOut}>Sign out</button></li>
-                </ul>
+                <div className="card-body p-2">
+                  <div className="mb-2">
+                    <strong>{userName}</strong>
+                    <div className="text-muted small">{userRole}</div>
+                  </div>
+                  <div className="d-grid gap-2">
+                    <button className="btn btn-sm btn-outline-secondary" onClick={() => doNavigate("/profile")}>Profile</button>
+                    <button className="btn btn-sm btn-outline-secondary" onClick={() => doNavigate("/settings")}>Settings</button>
+                    <button className="btn btn-sm btn-danger" onClick={handleSignOut}>Sign out</button>
+                  </div>
+                </div>
               </div>
             )}
           </div>

@@ -71,7 +71,7 @@ nav {
     @include mobile {
         position: fixed !important;
         left: 0;
-        top: 45px;
+        top: 0;
         overflow: auto;
         width: 100%;
     }

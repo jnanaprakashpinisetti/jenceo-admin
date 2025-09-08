@@ -1,3 +1,4 @@
+// LeftNav.jsx
 import React, { useState } from 'react';
 import { Routes, Route, NavLink, useLocation } from 'react-router-dom';
 
@@ -49,6 +50,8 @@ import HospitalDeleteList from '../pages/HospitalDeleteList';
 import WorkerCallsData from '../pages/WorkerCallsData';
 import Enquiry from '../pages/Enquiry';
 import EnquiryExit from '../pages/EnquiryExit';
+import SearchResults from '../pages/SearchResults';
+
 
 export default function LeftNav() {
   const [isActive, setIsActive] = useState(false);   // side collapse (arrow)
@@ -95,6 +98,23 @@ export default function LeftNav() {
 
         {/* Collapsible menu */}
         <div className={collapseClass} id="collapsibleNavbar">
+
+          {/* ===== MOBILE-ONLY: Profile + Notifications (shows only on small screens) ===== */}
+          <div className="mobile-top d-block d-md-none mb-3">
+            <div className="d-flex justify-content-between align-items-center px-2">
+              {/* If you have a Profile page/route, adjust the NavLink path below */}
+              <NavLink to='Profile' className="nav-link p-0" onClick={closeMobile} title="Profile">
+                <span style={{fontSize:14}}>👤 Profile</span>
+              </NavLink>
+
+              {/* If you have a Notifications page/route, adjust the NavLink path below */}
+              <NavLink to='Notifications' className="nav-link p-0" onClick={closeMobile} title="Notifications">
+                <span style={{fontSize:14}}>🔔 Notifications</span>
+              </NavLink>
+            </div>
+          </div>
+          {/* ============================================================================ */}
+
           <ul className="navbar-nav">
             <li className="nav-item">
               <NavLink to='/' className="nav-link" title='Dash Board' onClick={closeMobile}>
@@ -232,6 +252,7 @@ export default function LeftNav() {
         <Route path="Operations" element={<Operations />} />
         <Route path="HospitalList" element={<HospitalList />} />
         <Route path="HospitalDeleteList" element={<HospitalDeleteList />} />
+        <Route path="search" element={<SearchResults />} />
       </Routes>
     </>
   );

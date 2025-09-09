@@ -202,36 +202,44 @@ export default function TableInvestment({
     };
 
     // update acknowledge status on a single record
-    const setAcknowledgeForRecord = async (id, status) => {
-        if (!id) return;
-        const payload = {
-            acknowledge: status,
-            ackBy: currentUser,
-            ackAt: new Date().toISOString(),
-        };
-        try {
-            await firebaseDB.child(`Investments/${id}`).update(payload);
-
-            // if status is Acknowledge, optionally apply to all for same investor (keeps previous behavior)
-            if (status === "Acknowledge") {
-                const rec = records.find((r) => r.id === id);
-                if (rec) {
-                    const sameInvestor = records.filter((r) => String(r.investor || "").trim() === String(rec.investor || "").trim());
-                    const updates = {};
-                    sameInvestor.forEach((s) => {
-                        updates[`${s.id}/acknowledge`] = "Acknowledge";
-                        updates[`${s.id}/ackBy`] = currentUser;
-                        updates[`${s.id}/ackAt`] = new Date().toISOString();
-                    });
-                    // multi-path update; firebaseDB should support update at root
-                    await firebaseDB.update(updates);
-                }
-            }
-        } catch (err) {
-            console.error("Failed to update acknowledge:", err);
-            alert("Failed to update acknowledge. See console.");
-        }
+// replace setAcknowledgeForRecord in TableInvestment.jsx with this
+const setAcknowledgeForRecord = async (id, status) => {
+    if (!id) return;
+    const payload = {
+        acknowledge: status,
+        ackBy: currentUser,
+        ackAt: new Date().toISOString(),
     };
+    try {
+        // update single record correctly under Investments/<id>
+        await firebaseDB.child(`Investments/${id}`).update(payload);
+
+        // If status is Acknowledge, optionally apply to all for same investor
+        if (status === "Acknowledge") {
+            const rec = records.find((r) => r.id === id);
+            if (rec) {
+                const sameInvestor = records.filter(
+                    (r) => String(r.investor || "").trim() === String(rec.investor || "").trim()
+                );
+
+                // Build multi-path updates but prefix each path with 'Investments/'
+                const updates = {};
+                sameInvestor.forEach((s) => {
+                    updates[`Investments/${s.id}/acknowledge`] = "Acknowledge";
+                    updates[`Investments/${s.id}/ackBy`] = currentUser;
+                    updates[`Investments/${s.id}/ackAt`] = new Date().toISOString();
+                });
+
+                // perform multi-path update at root - ALL keys are inside Investments/
+                await firebaseDB.update(updates);
+            }
+        }
+    } catch (err) {
+        console.error("Failed to update acknowledge:", err);
+        alert("Failed to update acknowledge. See console.");
+    }
+};
+
 
     // submit clarification by investor (only investor can submit)
     const submitClarification = async (id, text) => {

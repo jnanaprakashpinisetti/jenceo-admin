@@ -322,10 +322,17 @@ $dark-table-text: #e6eef6;
         vertical-align: middle;
     }
 
-    tfoot tr.table-secondary td {
-        background: #2b3255;
+    tfoot tr {
+        td {
+        background-color: #2b3255 !important;
         color: $dark-table-text;
         font-weight: 700;
+    }
+        th {
+        background-color: #2b3255 !important;
+        color: $dark-table-text;
+        font-weight: 700;
+    }
     }
 
     tr {

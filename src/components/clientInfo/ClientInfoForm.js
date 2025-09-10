@@ -579,7 +579,7 @@ export default function ClientInfoForm({ isOpen, onClose }) {
               <div className="modal-body">
                 <p>Your form has been submitted successfully.</p>
                 {submittedClientData && (
-                  <div className="alert alert-info mt-3">
+                  <div className="alert mt-3">
                     <strong>Client Details:</strong>
                     <div className="mt-2"><strong>ID:</strong> {submittedClientData.idNo}</div>
                     <div><strong>Client Name:</strong> {submittedClientData.clientName}</div>

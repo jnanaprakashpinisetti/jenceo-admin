@@ -10,6 +10,7 @@ import React, { useEffect, useRef, useState } from "react";
  - ReminderDays auto-updates ReminderDate (relative to today)
  - Refund badge pulse animation, refund disable logic retained
  - Inline validation, unsaved confirmation, change logs, thank-you modal
+ - Print-optimized biodata: reduced margins (15px) and print styles to fit one page
  - Props:
     client, isOpen, onClose, onSave, onDelete, isEditMode, isAdmin, currentUserName
 */
@@ -596,19 +597,36 @@ export default function ClientModal({
         const totalBalance = (Array.isArray(formData.payments) ? formData.payments.reduce((s, p) => s + (Number(p.balance) || 0), 0) : 0);
         const totalRefund = (Array.isArray(formData.payments) ? formData.payments.reduce((s, p) => s + (p.refundAmount ? Number(p.refundAmount) : 0), 0) : 0);
 
+        // IMPORTANT: reduced page margins and print styles to fit one page where possible
         return `<!doctype html><html><head><meta charset="utf-8"><title>Client Biodata - ${fullName}</title>
       <style>
-        body{font-family:Arial,Helvetica,sans-serif;padding:14px;color:#111;background:#f5f7fb}
-        .page{max-width:1020px;margin:0 auto;background:#fff;padding:18px;border-radius:8px;box-shadow:0 6px 20px rgba(0,0,0,0.06)}
-        .header{display:flex;gap:12px;align-items:center}
-        .header img{max-width:1014px; width:100%}
-        h1{margin:0; margin-top:10px; color:#0b66a3;text-align:center}
-        h3{margin:0; margin-bottm:10px; }
-        .section{margin-top:14px;padding:12px;border-radius:6px;background:#fcfdff;border:1px solid #eef3fb}
-        table{width:100%;border-collapse:collapse}
-        th,td{padding:8px;border:1px solid #e6eef8;font-size:13px;text-align:left;vertical-align:top}
-        .muted{color:#666;font-size:13px}
-        .small{font-size:12px;color:#444}
+        /* ensure small margins in print */
+        @page { size: A4 portrait; margin: 15px; }
+        html,body { margin: 0; padding: 0; -webkit-print-color-adjust: exact; }
+        body{font-family:Arial,Helvetica,sans-serif;color:#111;background:#f5f7fb;margin:0;padding:0}
+        /* page uses full printable width minus page margins (15px left+right) */
+        .page{width:calc(100% - 30px); margin:0 auto; background:#fff; padding:12px; border-radius:6px; box-shadow:none;}
+        .header{display:flex;gap:12px;align-items:center; justify-content:center}
+        .header img{max-width:100%; height:auto; display:block}
+        h1{margin:6px 0 4px 0; color:#0b66a3;text-align:center; font-size:20px}
+        h3{margin:0 0 6px 0; font-size:14px}
+        .section{margin-top:12px;padding:10px;border-radius:4px;background:transparent;border:1px solid #eef3fb}
+        table{width:100%;border-collapse:collapse; font-size:12px}
+        th,td{padding:6px;border:1px solid #e6eef8;font-size:12px;text-align:left;vertical-align:top}
+        th{background:#f7fbff; font-weight:600}
+        .muted{color:#666;font-size:12px}
+        .small{font-size:11px;color:#444}
+        /* reduce table density for print */
+        .workers-table th, .workers-table td, .payments-table th, .payments-table td { font-size:11px; padding:6px }
+        /* make sure long text wraps */
+        td { word-break: break-word; white-space: normal; }
+        /* media print tweaks */
+        @media print {
+          body{background:#fff}
+          .page{box-shadow:none; border-radius:0; padding:8px}
+          h1{font-size:18px}
+          table, th, td { font-size:11px; }
+        }
       </style>
     </head><body>
     <div class="page">
@@ -634,7 +652,7 @@ export default function ClientModal({
       </div>
 
       <div class="section">
-        <h3>Care Recipient</h3>
+        <h3>Care Recipient Details</h3>
         <table>
           <tbody>
             ${renderPairs(careFields)}
@@ -644,13 +662,19 @@ export default function ClientModal({
 
       <div class="section">
         <h3>Workers</h3>
-        <table><thead><tr><th>#</th><th>ID</th><th>Name</th><th>Basic Salary</th><th>From</th><th>To</th><th>Total Days</th><th>Remarks</th></tr></thead><tbody>${workersRows}</tbody></table>
+        <table class="workers-table"><thead><tr><th>#</th><th>ID</th><th>Name</th><th>Basic Salary</th><th>From</th><th>To</th><th>Total Days</th><th>Remarks</th></tr></thead><tbody>${workersRows}</tbody></table>
       </div>
 
       <div class="section">
         <h3>Payments</h3>
-        <table><thead><tr><th>#</th><th>Date</th><th>Method</th><th>Paid</th><th>Balance</th><th>Receipt</th><th>Refund</th></tr></thead><tbody>${paymentsRows}</tbody></table>
-        <div style="margin-top:10px" class="small"><strong>Totals:</strong> Paid: ${formatINR(totalPaid)} — Balance: ${formatINR(totalBalance)} — Refund: ${formatINR(totalRefund)}</div>
+        <table class="payments-table"><thead><tr><th>#</th><th>Date</th><th>Method</th><th>Paid</th><th>Balance</th><th>Receipt</th><th>Refund</th></tr></thead><tbody>${paymentsRows}</tbody></table>
+        <div style="margin-top:8px" class="small"><strong>Totals:</strong> Paid: ${formatINR(totalPaid)} — Balance: ${formatINR(totalBalance)}</div>
+      </div>
+      <div class="section">
+        <h3>Management</h3>
+        <div style="margin-top:8px" class="small"><strong>Drooper Signature:</strong>________________________________  </div>
+        <br>
+        <div style="margin-top:8px" class="small"><strong>Executer Sign  Signature:</strong>___________________________  </div>
       </div>
     </div>
     </body></html>`;

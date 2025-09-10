@@ -550,59 +550,82 @@ export default function ClientModal({
             ["Pincode", safe(formData.pincode)],
         ];
 
-        const workersRows =
-            (Array.isArray(formData.workers) ? formData.workers : [])
-                .map(
-                    (w, i) =>
-                        `<tr><td>${i + 1}</td><td>${safe(w.workerIdNo)}</td><td>${safe(w.cName)}</td><td>${formatINR(
-                            w.basicSalary
-                        )}</td><td>${safe(w.startingDate)}</td><td>${safe(w.endingDate)}</td><td>${safe(w.totalDays)}</td><td>${safe(w.remarks)}</td></tr>`
-                )
-                .join("") || "<tr><td colspan='8'>No workers</td></tr>";
+            // helper to render rows in pairs (4 columns: th td th td)
+    // helper to render rows in pairs (4 columns: th td th td)
+    const renderPairs = (fields) => {
+      let html = "";
+      for (let i = 0; i < fields.length; i += 2) {
+        const first = fields[i];
+        const second = fields[i + 1];
+        if (second) {
+          html += `<tr><th style="width:15%">${first[0]}</th><td style="width:35%">${first[1]}</td><th style="width:15%">${second[0]}</th><td style="width:35%">${second[1]}</td></tr>`;
+        } else {
+          // if odd, show single pair and empty second pair
+          html += `<tr><th style="width:15%">${first[0]}</th><td style="width:35%">${first[1]}</td><th style="width:15%"></th><td style="width:35%"></td></tr>`;
+        }
+      }
+      return html;
+    };
 
-        const paymentsRows =
-            (Array.isArray(formData.payments) ? formData.payments : [])
-                .map((p, i) => {
-                    const d = p.date ? parseDateSafe(p.date) : null;
-                    const dateStr = d ? `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()}` : safe(p.date);
-                    return `<tr><td>${i + 1}</td><td>${dateStr}</td><td>${safe(p.paymentMethod)}</td><td>${formatINR(p.paidAmount)}</td><td>${formatINR(p.balance)}</td><td>${safe(
-                        p.receptNo
-                    )}</td><td>${p.refund ? formatINR(p.refundAmount) : "-"}</td></tr>`;
-                })
-                .join("") || "<tr><td colspan='7'>No payments</td></tr>";
+    const workersRows =
+      (Array.isArray(formData.workers) ? formData.workers : [])
+        .map(
+          (w, i) =>
+            `<tr><td>${i + 1}</td><td>${safe(w.workerIdNo)}</td><td>${safe(w.cName)}</td><td>${formatINR(
+              w.basicSalary
+            )}</td><td>${safe(w.startingDate)}</td><td>${safe(w.endingDate)}</td><td>${safe(w.totalDays)}</td><td>${safe(w.remarks)}</td></tr>`
+        )
+        .join("") || "<tr><td colspan='8'>No workers</td></tr>";
 
-        const totalPaid = (Array.isArray(formData.payments) ? formData.payments.reduce((s, p) => s + (Number(p.paidAmount) || 0), 0) : 0);
-        const totalBalance = (Array.isArray(formData.payments) ? formData.payments.reduce((s, p) => s + (Number(p.balance) || 0), 0) : 0);
-        const totalRefund = (Array.isArray(formData.payments) ? formData.payments.reduce((s, p) => s + (p.refundAmount ? Number(p.refundAmount) : 0), 0) : 0);
+    const paymentsRows =
+      (Array.isArray(formData.payments) ? formData.payments : [])
+        .map((p, i) => {
+          const d = p.date ? parseDateSafe(p.date) : null;
+          const dateStr = d ? `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()}` : safe(p.date);
+          return `<tr><td>${i + 1}</td><td>${dateStr}</td><td>${safe(p.paymentMethod)}</td><td>${formatINR(p.paidAmount)}</td><td>${formatINR(p.balance)}</td><td>${safe(
+            p.receptNo
+          )}</td><td>${p.refund ? formatINR(p.refundAmount) : "-"}</td></tr>`;
+        })
+        .join("") || "<tr><td colspan='7'>No payments</td></tr>";
 
-        return `<!doctype html><html><head><meta charset="utf-8"><title>Client Biodata - ${fullName}</title>
+    const totalPaid = (Array.isArray(formData.payments) ? formData.payments.reduce((s, p) => s + (Number(p.paidAmount) || 0), 0) : 0);
+    const totalBalance = (Array.isArray(formData.payments) ? formData.payments.reduce((s, p) => s + (Number(p.balance) || 0), 0) : 0);
+    const totalRefund = (Array.isArray(formData.payments) ? formData.payments.reduce((s, p) => s + (p.refundAmount ? Number(p.refundAmount) : 0), 0) : 0);
+
+    return `<!doctype html><html><head><meta charset="utf-8"><title>Client Biodata - ${fullName}</title>
       <style>
         body{font-family:Arial,Helvetica,sans-serif;padding:14px;color:#111;background:#f5f7fb}
-        .page{max-width:980px;margin:0 auto;background:#fff;padding:18px;border-radius:8px;box-shadow:0 6px 20px rgba(0,0,0,0.06)}
+        .page{max-width:1020px;margin:0 auto;background:#fff;padding:18px;border-radius:8px;box-shadow:0 6px 20px rgba(0,0,0,0.06)}
         .header{display:flex;gap:12px;align-items:center}
-        .header img{height:56px}
-        h1{margin:0;color:#0b66a3}
+        .header img{max-width:1014px; width:100%}
+        h1{margin:0; margin-top:10px; color:#0b66a3;text-align:center}
         .section{margin-top:14px;padding:12px;border-radius:6px;background:#fcfdff;border:1px solid #eef3fb}
         table{width:100%;border-collapse:collapse}
-        th,td{padding:8px;border:1px solid #e6eef8;font-size:13px;text-align:left}
+        th,td{padding:8px;border:1px solid #e6eef8;font-size:13px;text-align:left;vertical-align:top}
         .muted{color:#666;font-size:13px}
         .small{font-size:12px;color:#444}
       </style>
     </head><body>
     <div class="page">
-      <div class="header"><img src="${headerImage}" alt="Header" /><div><h1>Client Biodata</h1><div class="muted">${metaDate}</div></div></div>
+      <div class="header"><img src="${headerImage}" alt="Header" /></div>
+      <div><h1>Client Biodata</h1><div class="muted" style="text-align:center">${metaDate}</div></div>
+
       <div class="section">
         <h3>Basic Info</h3>
         <table>
           <tbody>
-            ${basicFields.map(([k, v]) => `<tr><th>${k}</th><td>${v}</td></tr>`).join("")}
+            ${renderPairs(basicFields)}
           </tbody>
         </table>
       </div>
 
       <div class="section">
         <h3>Address</h3>
-        <table><tbody>${addressFields.map(([k, v]) => `<tr><th>${k}</th><td>${v}</td></tr>`).join("")}</tbody></table>
+        <table>
+          <tbody>
+            ${renderPairs(addressFields)}
+          </tbody>
+        </table>
       </div>
 
       <div class="section">
@@ -617,7 +640,7 @@ export default function ClientModal({
       </div>
     </div>
     </body></html>`;
-    }
+  }
 
     // paymentsCount
     const paymentsCount = (Array.isArray(formData.payments) ? formData.payments.length : 0);

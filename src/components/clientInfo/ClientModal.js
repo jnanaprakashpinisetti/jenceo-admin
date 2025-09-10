@@ -2,14 +2,16 @@
 import React, { useEffect, useRef, useState } from "react";
 
 /**
- Updated ClientModal
- - Refund badge pulse animation
- - Disable refund checkbox when refundAmount > 0
- - Persistent paymentLogs: append user & timestamp on payment edits
- - Refunds table in Detail-Info tab
- - Worker table in Detail-Info updated to: ID No, Name, Basic Salary, From, To, Total Days, Remarks
- - Accepts optional currentUserName prop (default "System")
- - Keeps all previous behavior (validation, unsaved confirm, biodata, save/thankyou)
+ Full ClientModal.js (updated)
+ - Preserves payments / workers / locking / editMode behavior
+ - Adds Service Details and Care Recipient (patient) tabs rendering
+ - buildClientBiodataHTML renders 4-column Basic/Address layout (printable)
+ - Adds a Care Recipient section into the biodata iframe
+ - ReminderDays auto-updates ReminderDate (relative to today)
+ - Refund badge pulse animation, refund disable logic retained
+ - Inline validation, unsaved confirmation, change logs, thank-you modal
+ - Props:
+    client, isOpen, onClose, onSave, onDelete, isEditMode, isAdmin, currentUserName
 */
 
 const safeNumber = (v) => {
@@ -239,12 +241,10 @@ export default function ClientModal({
                     }
                     if (name === "date") row.date = value;
                     if (name === "refund") {
-                        // if user unchecks refund and refundAmount existed, we keep refundAmount but set refund=false (user asked to disable button if refund amount entered)
                         if (value) {
                             row.refundDate = row.refundDate || row.date || formatDateForInput(new Date());
                             row.refundAmount = row.refundAmount || 0;
                         } else {
-                            // if they explicitly unset and refundAmount is zero, clear fields
                             if (!row.refundAmount || Number(row.refundAmount) === 0) {
                                 row.refundDate = "";
                                 row.refundAmount = 0;
@@ -252,7 +252,6 @@ export default function ClientModal({
                                 row.refundRemarks = "";
                                 row.refund = false;
                             } else {
-                                // if refundAmount > 0, prevent unsetting by forcing refund true (checkbox will be disabled in UI anyway)
                                 row.refund = true;
                             }
                         }
@@ -260,7 +259,6 @@ export default function ClientModal({
                     if (name === "refundDate") row.refundDate = value;
                     if (name === "refundAmount") {
                         row.refundAmount = safeNumber(value);
-                        // if refund amount is entered and >0, ensure refund flag true
                         if (Number(row.refundAmount) > 0) row.refund = true;
                     }
                     if (name === "refundPaymentMethod") row.refundPaymentMethod = value;
@@ -522,7 +520,7 @@ export default function ClientModal({
         else onClose && onClose();
     };
 
-    // build biodata HTML (same as before but includes all fields)
+    // build biodata HTML (4-column Basic/Address + Care Recipient section)
     function buildClientBiodataHTML() {
         const safe = (v, d = "—") => (v == null || v === "" ? d : String(v));
         const fullName = safe(formData.clientName);
@@ -550,55 +548,62 @@ export default function ClientModal({
             ["Pincode", safe(formData.pincode)],
         ];
 
-            // helper to render rows in pairs (4 columns: th td th td)
-    // helper to render rows in pairs (4 columns: th td th td)
-    const renderPairs = (fields) => {
-      let html = "";
-      for (let i = 0; i < fields.length; i += 2) {
-        const first = fields[i];
-        const second = fields[i + 1];
-        if (second) {
-          html += `<tr><th style="width:15%">${first[0]}</th><td style="width:35%">${first[1]}</td><th style="width:15%">${second[0]}</th><td style="width:35%">${second[1]}</td></tr>`;
-        } else {
-          // if odd, show single pair and empty second pair
-          html += `<tr><th style="width:15%">${first[0]}</th><td style="width:35%">${first[1]}</td><th style="width:15%"></th><td style="width:35%"></td></tr>`;
-        }
-      }
-      return html;
-    };
+        const careFields = [
+            ["Care Recipient Name", safe(formData.patientName || formData.careRecipientName)],
+            ["Age", safe(formData.patientAge || formData.careRecipientAge)],
+            ["Service Status", safe(formData.patientServiceStatus || formData.serviceStatus)],
+            ["Dropper Name", safe(formData.dropperName)],
+            ["About Patient", safe(formData.aboutPatient)],
+            ["Care Notes", safe(formData.aboutWork)],
+        ];
 
-    const workersRows =
-      (Array.isArray(formData.workers) ? formData.workers : [])
-        .map(
-          (w, i) =>
-            `<tr><td>${i + 1}</td><td>${safe(w.workerIdNo)}</td><td>${safe(w.cName)}</td><td>${formatINR(
-              w.basicSalary
-            )}</td><td>${safe(w.startingDate)}</td><td>${safe(w.endingDate)}</td><td>${safe(w.totalDays)}</td><td>${safe(w.remarks)}</td></tr>`
-        )
-        .join("") || "<tr><td colspan='8'>No workers</td></tr>";
+        const renderPairs = (fields) => {
+            let html = "";
+            for (let i = 0; i < fields.length; i += 2) {
+                const first = fields[i];
+                const second = fields[i + 1];
+                if (second) {
+                    html += `<tr><th style="width:15%">${first[0]}</th><td style="width:35%">${first[1]}</td><th style="width:15%">${second[0]}</th><td style="width:35%">${second[1]}</td></tr>`;
+                } else {
+                    html += `<tr><th style="width:15%">${first[0]}</th><td style="width:35%">${first[1]}</td><th style="width:15%"></th><td style="width:35%"></td></tr>`;
+                }
+            }
+            return html;
+        };
 
-    const paymentsRows =
-      (Array.isArray(formData.payments) ? formData.payments : [])
-        .map((p, i) => {
-          const d = p.date ? parseDateSafe(p.date) : null;
-          const dateStr = d ? `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()}` : safe(p.date);
-          return `<tr><td>${i + 1}</td><td>${dateStr}</td><td>${safe(p.paymentMethod)}</td><td>${formatINR(p.paidAmount)}</td><td>${formatINR(p.balance)}</td><td>${safe(
-            p.receptNo
-          )}</td><td>${p.refund ? formatINR(p.refundAmount) : "-"}</td></tr>`;
-        })
-        .join("") || "<tr><td colspan='7'>No payments</td></tr>";
+        const workersRows =
+            (Array.isArray(formData.workers) ? formData.workers : [])
+                .map(
+                    (w, i) =>
+                        `<tr><td>${i + 1}</td><td>${safe(w.workerIdNo)}</td><td>${safe(w.cName)}</td><td>${formatINR(
+                            w.basicSalary
+                        )}</td><td>${safe(w.startingDate)}</td><td>${safe(w.endingDate)}</td><td>${safe(w.totalDays)}</td><td>${safe(w.remarks)}</td></tr>`
+                )
+                .join("") || "<tr><td colspan='8'>No workers</td></tr>";
 
-    const totalPaid = (Array.isArray(formData.payments) ? formData.payments.reduce((s, p) => s + (Number(p.paidAmount) || 0), 0) : 0);
-    const totalBalance = (Array.isArray(formData.payments) ? formData.payments.reduce((s, p) => s + (Number(p.balance) || 0), 0) : 0);
-    const totalRefund = (Array.isArray(formData.payments) ? formData.payments.reduce((s, p) => s + (p.refundAmount ? Number(p.refundAmount) : 0), 0) : 0);
+        const paymentsRows =
+            (Array.isArray(formData.payments) ? formData.payments : [])
+                .map((p, i) => {
+                    const d = p.date ? parseDateSafe(p.date) : null;
+                    const dateStr = d ? `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()}` : safe(p.date);
+                    return `<tr><td>${i + 1}</td><td>${dateStr}</td><td>${safe(p.paymentMethod)}</td><td>${formatINR(p.paidAmount)}</td><td>${formatINR(p.balance)}</td><td>${safe(
+                        p.receptNo
+                    )}</td><td>${p.refund ? formatINR(p.refundAmount) : "-"}</td></tr>`;
+                })
+                .join("") || "<tr><td colspan='7'>No payments</td></tr>";
 
-    return `<!doctype html><html><head><meta charset="utf-8"><title>Client Biodata - ${fullName}</title>
+        const totalPaid = (Array.isArray(formData.payments) ? formData.payments.reduce((s, p) => s + (Number(p.paidAmount) || 0), 0) : 0);
+        const totalBalance = (Array.isArray(formData.payments) ? formData.payments.reduce((s, p) => s + (Number(p.balance) || 0), 0) : 0);
+        const totalRefund = (Array.isArray(formData.payments) ? formData.payments.reduce((s, p) => s + (p.refundAmount ? Number(p.refundAmount) : 0), 0) : 0);
+
+        return `<!doctype html><html><head><meta charset="utf-8"><title>Client Biodata - ${fullName}</title>
       <style>
         body{font-family:Arial,Helvetica,sans-serif;padding:14px;color:#111;background:#f5f7fb}
         .page{max-width:1020px;margin:0 auto;background:#fff;padding:18px;border-radius:8px;box-shadow:0 6px 20px rgba(0,0,0,0.06)}
         .header{display:flex;gap:12px;align-items:center}
         .header img{max-width:1014px; width:100%}
         h1{margin:0; margin-top:10px; color:#0b66a3;text-align:center}
+        h3{margin:0; margin-bottm:10px; }
         .section{margin-top:14px;padding:12px;border-radius:6px;background:#fcfdff;border:1px solid #eef3fb}
         table{width:100%;border-collapse:collapse}
         th,td{padding:8px;border:1px solid #e6eef8;font-size:13px;text-align:left;vertical-align:top}
@@ -629,6 +634,15 @@ export default function ClientModal({
       </div>
 
       <div class="section">
+        <h3>Care Recipient</h3>
+        <table>
+          <tbody>
+            ${renderPairs(careFields)}
+          </tbody>
+        </table>
+      </div>
+
+      <div class="section">
         <h3>Workers</h3>
         <table><thead><tr><th>#</th><th>ID</th><th>Name</th><th>Basic Salary</th><th>From</th><th>To</th><th>Total Days</th><th>Remarks</th></tr></thead><tbody>${workersRows}</tbody></table>
       </div>
@@ -640,7 +654,7 @@ export default function ClientModal({
       </div>
     </div>
     </body></html>`;
-  }
+    }
 
     // paymentsCount
     const paymentsCount = (Array.isArray(formData.payments) ? formData.payments.length : 0);
@@ -673,13 +687,15 @@ export default function ClientModal({
     .payment-logs .entry:last-child { border-bottom: none }
   `;
 
+    const safe = (v, d = "") => (v === undefined || v === null || String(v).trim() === "" ? d : v);
+
     return (
         <>
             <style dangerouslySetInnerHTML={{ __html: extraStyles }} />
             <div className="modal fade show" style={{ display: "block", backgroundColor: "rgba(0,0,0,0.5)" }}>
                 <div className="modal-dialog modal-xl modal-dialog-centered display-client-modal" onClick={() => handleCloseAttempt()}>
                     <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-                        <div className="modal-header">
+                        <div className="modal-header bg-secondary text-white justify-content-between">
                             <div>
                                 <h5 className="modal-title">
                                     {editMode ? <strong>Edit Client</strong> : <strong>View Client</strong>} — {formData.idNo} — {formData.clientName}
@@ -694,7 +710,7 @@ export default function ClientModal({
                                     </button>
                                 )}
                                 {isAdmin && <button type="button" className="btn btn-danger btn-sm" onClick={() => setShowDeleteConfirm(true)}>Delete</button>}
-                                <button type="button" className="btn-close" onClick={() => handleCloseAttempt()} />
+                                <button type="button" className="btn-close btn-close-white" onClick={() => handleCloseAttempt()} />
                             </div>
                         </div>
 
@@ -707,8 +723,8 @@ export default function ClientModal({
                                     ["patient", "Care Recipients"],
                                     ["workers", `Workers (${formData.workers?.length || 0})`],
                                     ["payments", `Payments (${formData.payments?.length || 0})`],
-                                    ["biodata", "Biodata"],
                                     ["detailinfo", "Detail-Info"],
+                                    ["biodata", "Biodata"],
                                 ].map(([key, label]) => (
                                     <li key={key} className="nav-item" role="presentation">
                                         <button className={`nav-link ${activeTab === key ? "active" : ""}`} onClick={() => setActiveTab(key)}>
@@ -831,6 +847,108 @@ export default function ClientModal({
                                     </div>
                                 )}
 
+                                {/* Service Details */}
+                                {activeTab === "service" && (
+                                    <div>
+                                        <div className=" mb-3">
+                                            <div className="">
+                                                <div className="row mb-2">
+                                                    <div className="col-md-4">
+                                                        <label className="form-label"><strong>Type of Service</strong></label>
+                                                        <input className="form-control" name="typeOfService" value={formData.typeOfService || ""} onChange={handleChange} disabled={!editMode} />
+                                                    </div>
+                                                    <div className="col-md-4">
+                                                        <label className="form-label"><strong>Service Charges</strong></label>
+                                                        <input className="form-control" name="serviceCharges" value={formData.serviceCharges || ""} onChange={handleChange} disabled={!editMode} />
+                                                    </div>
+                                                    <div className="col-md-4">
+                                                        <label className="form-label"><strong>Service Period</strong></label>
+                                                        <input className="form-control" name="servicePeriod" value={formData.servicePeriod || ""} onChange={handleChange} disabled={!editMode} />
+                                                    </div>
+                                                </div>
+
+                                                <div className="row mb-2">
+                                                    <div className="col-md-4">
+                                                        <label className="form-label"><strong>Travelling Charges</strong></label>
+                                                        <input className="form-control" name="travellingCharges" value={formData.travellingCharges || ""} onChange={handleChange} disabled={!editMode} />
+                                                    </div>
+                                                    <div className="col-md-4">
+                                                        <label className="form-label"><strong>Service Status</strong></label>
+                                                        <input className="form-control" name="serviceStatus" value={formData.serviceStatus || ""} onChange={handleChange} disabled={!editMode} />
+                                                    </div>
+                                                    <div className="col-md-4">
+                                                        <label className="form-label"><strong>Gap If Any</strong></label>
+                                                        <input className="form-control" name="gapIfAny" value={formData.gapIfAny || ""} onChange={handleChange} disabled={!editMode} />
+                                                    </div>
+                                                </div>
+
+                                                <div className="row mb-2">
+                                                    <div className="col-md-4">
+                                                        <label className="form-label"><strong>Starting Date</strong></label>
+                                                        <input className="form-control" type="date" name="startingDate" value={formData.startingDate ? formatDateForInput(formData.startingDate) : ""} onChange={handleChange} disabled={!editMode} />
+                                                    </div>
+                                                    <div className="col-md-4">
+                                                        <label className="form-label"><strong>Ending Date</strong></label>
+                                                        <input className="form-control" type="date" name="endingDate" value={formData.endingDate ? formatDateForInput(formData.endingDate) : ""} onChange={handleChange} disabled={!editMode} />
+                                                    </div>
+                                                    <div className="col-md-4">
+                                                        <label className="form-label"><strong>Page No</strong></label>
+                                                        <input className="form-control" name="pageNo" value={formData.pageNo || ""} onChange={handleChange} disabled={!editMode} />
+                                                    </div>
+                                                </div>
+
+                                                <div className="row">
+                                                    <div className="col-12">
+                                                        <label className="form-label"><strong>Service Remarks</strong></label>
+                                                        <textarea className="form-control" name="serviceRemarks" rows="3" value={formData.serviceRemarks || ""} onChange={handleChange} disabled={!editMode} />
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* Care Recipient / Patient */}
+                                {activeTab === "patient" && (
+                                    <div>
+                                        <div className=" mb-3">
+                                            <div className="">
+                                                <div className="row mb-2">
+                                                    <div className="col-md-3">
+                                                        <label className="form-label"><strong>Care Recipient Name</strong></label>
+                                                        <input className="form-control" name="patientName" value={formData.patientName || formData.patientName || ""} onChange={handleChange} disabled={!editMode} />
+                                                    </div>
+                                                    <div className="col-md-3">
+                                                        <label className="form-label"><strong>Age</strong></label>
+                                                        <input className="form-control" name="patientAge" value={formData.patientAge || ""} onChange={handleChange} disabled={!editMode} />
+                                                    </div>
+                                                    <div className="col-md-3">
+                                                        <label className="form-label"><strong>Service Status</strong></label>
+                                                        <input className="form-control" name="patientServiceStatus" value={formData.patientServiceStatus || formData.serviceStatus || ""} onChange={handleChange} disabled={!editMode} />
+                                                    </div>
+                                                    <div className="col-md-3">
+                                                        <label className="form-label"><strong>Dropper Name</strong></label>
+                                                        <input className="form-control" name="dropperName" value={formData.dropperName || ""} onChange={handleChange} disabled={!editMode} />
+                                                    </div>
+                                                </div>
+
+                                                <div className="row mb-2">
+                                                    <div className="col-md-6">
+                                                        <label className="form-label"><strong>About Care Recipient</strong></label>
+                                                        <textarea className="form-control" name="aboutPatient" rows="3" value={formData.aboutPatient || ""} onChange={handleChange} disabled={!editMode} />
+                                                    </div>
+                                                    <div className="col-md-6">
+                                                        <label className="form-label"><strong>About Work / Care Notes</strong></label>
+                                                        <textarea className="form-control" name="aboutWork" rows="3" value={formData.aboutWork || ""} onChange={handleChange} disabled={!editMode} />
+                                                    </div>
+                                                </div>
+
+                                                <div className="row"></div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+
                                 {/* Workers */}
                                 {activeTab === "workers" && (
                                     <div>
@@ -886,8 +1004,6 @@ export default function ClientModal({
                                                         </div>
                                                     </div>
 
-
-
                                                     <div className="row mt-2">
                                                         <div className="col-md-4">
                                                             <label className="form-label"><strong>Starting Date</strong></label>
@@ -901,15 +1017,18 @@ export default function ClientModal({
                                                             <label className="form-label"><strong>Total Days</strong></label>
                                                             <input data-idx={idx} className="form-control" name="totalDays" type="number" value={worker.totalDays || ""} onChange={(e) => handleChange({ target: { name: "totalDays", value: e.target.value } }, "workers", idx)} disabled={!editMode} />
                                                         </div>
-                                                        <div className="col-md-3 d-flex align-items-end">
-                                                            {!worker.__locked && editMode && <button className="btn btn-danger btn-sm" onClick={() => removeWorker(idx)}>Remove</button>}
-                                                        </div>
                                                     </div>
 
                                                     <div className="row mt-2">
                                                         <div className="col-12">
                                                             <label className="form-label"><strong>Remarks</strong></label>
                                                             <textarea className="form-control" name="remarks" rows="2" value={worker.remarks || ""} onChange={(e) => handleChange(e, "workers", idx)} disabled={locked} />
+                                                        </div>
+                                                    </div>
+
+                                                    <div className="row mt-2">
+                                                        <div className="col-12 d-flex justify-content-end">
+                                                            {!worker.__locked && editMode && <button className="btn btn-danger btn-sm" onClick={() => removeWorker(idx)}>Remove</button>}
                                                         </div>
                                                     </div>
                                                 </div>
@@ -925,7 +1044,6 @@ export default function ClientModal({
                                     <div>
                                         {(formData.payments || []).map((p, idx) => {
                                             const locked = !!p.__locked && !editMode;
-                                            // disable refund switch if refundAmount > 0
                                             const refundDisabled = Number(p.refundAmount || 0) > 0;
                                             return (
                                                 <div key={idx} className="modal-card mb-3 p-3 border rounded">
@@ -983,8 +1101,6 @@ export default function ClientModal({
                                                             />
                                                             {errors[`payments.${idx}.paidAmount`] && <div className="invalid-feedback">{errors[`payments.${idx}.paidAmount`]}</div>}
                                                         </div>
-
-
                                                     </div>
 
                                                     <div className="row mt-2">
@@ -992,6 +1108,7 @@ export default function ClientModal({
                                                             <label className="form-label"><strong>Balance</strong></label>
                                                             <input data-idx={idx} className="form-control" name="balance" type="number" value={p.balance ?? ""} onChange={(e) => handleChange(e, "payments", idx)} disabled={locked} />
                                                         </div>
+
                                                         <div className="col-md-4">
                                                             <label className="form-label"><strong>Receipt No</strong></label>
                                                             <input data-idx={idx} className="form-control" name="receptNo" value={p.receptNo || ""} onChange={(e) => handleChange(e, "payments", idx)} disabled={locked} />
@@ -1009,6 +1126,7 @@ export default function ClientModal({
                                                             <input data-idx={idx} className="form-control" name="reminderDate" type="date" value={p.reminderDate ? formatDateForInput(p.reminderDate) : ""} onChange={(e) => handleChange(e, "payments", idx)} disabled={!editMode && !!p.__locked} />
                                                         </div>
                                                     </div>
+
                                                     {/* Remarks new row */}
                                                     <div className="row mt-2">
                                                         <div className="col-12">
@@ -1095,33 +1213,6 @@ export default function ClientModal({
                                                 ))}
                                             </div>
                                         </div>
-                                    </div>
-                                )}
-
-                                {/* Biodata */}
-                                {activeTab === "biodata" && (
-                                    <div>
-                                        <div className="d-flex justify-content-end gap-2 mb-2">
-                                            <button className="btn btn-outline-secondary btn-sm" onClick={() => {
-                                                const html = buildClientBiodataHTML();
-                                                const blob = new Blob([html], { type: "text/html;charset=utf-8" });
-                                                const url = URL.createObjectURL(blob);
-                                                const a = document.createElement("a");
-                                                a.href = url;
-                                                a.download = `${(formData.clientName || "client").replace(/\s+/g, "_")}_biodata.html`;
-                                                document.body.appendChild(a); a.click(); a.remove();
-                                                setTimeout(() => URL.revokeObjectURL(url), 2000);
-                                            }}>Download</button>
-                                            <button className="btn btn-primary btn-sm" onClick={() => {
-                                                const html = buildClientBiodataHTML();
-                                                const w = window.open("", "_blank");
-                                                w.document.write(html);
-                                                w.document.close();
-                                                w.print();
-                                            }}>Print</button>
-                                        </div>
-
-                                        <iframe ref={bioIframeRef} title="biodata" style={{ width: "100%", height: 520, border: "1px solid #e5e5e5", borderRadius: 6 }} />
                                     </div>
                                 )}
 
@@ -1228,6 +1319,32 @@ export default function ClientModal({
                                     </div>
                                 )}
 
+                                {/* Biodata */}
+                                {activeTab === "biodata" && (
+                                    <div>
+                                        <div className="d-flex justify-content-end gap-2 mb-2">
+                                            <button className="btn btn-outline-secondary btn-sm" onClick={() => {
+                                                const html = buildClientBiodataHTML();
+                                                const blob = new Blob([html], { type: "text/html;charset=utf-8" });
+                                                const url = URL.createObjectURL(blob);
+                                                const a = document.createElement("a");
+                                                a.href = url;
+                                                a.download = `${(formData.clientName || "client").replace(/\s+/g, "_")}_biodata.html`;
+                                                document.body.appendChild(a); a.click(); a.remove();
+                                                setTimeout(() => URL.revokeObjectURL(url), 2000);
+                                            }}>Download</button>
+                                            <button className="btn btn-primary btn-sm" onClick={() => {
+                                                const html = buildClientBiodataHTML();
+                                                const w = window.open("", "_blank");
+                                                w.document.write(html);
+                                                w.document.close();
+                                                w.print();
+                                            }}>Print</button>
+                                        </div>
+
+                                        <iframe ref={bioIframeRef} title="biodata" style={{ width: "100%", height: 520, border: "1px solid #e5e5e5", borderRadius: 6 }} />
+                                    </div>
+                                )}
                             </div>
                         </div>
 

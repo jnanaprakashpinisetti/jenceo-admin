@@ -1,4 +1,4 @@
-// src/pages/.../ClientInfoForm.js
+// ClientInfoForm.js
 import React, { useState } from "react";
 import Address from "../clientInfo/Address";
 import BasicInformation from "../clientInfo/BasicInformation";
@@ -8,6 +8,50 @@ import PaymentDetails from "../clientInfo/PaymentDetails";
 import PatientDetails from "../clientInfo/PatientDetails";
 import firebaseDB from "../../firebase";
 
+/* -------------------
+   Helpers
+   ------------------- */
+const formatDateForInput = (v) => {
+  if (!v && v !== 0) return "";
+  const d = new Date(v);
+  if (isNaN(d)) return "";
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  return `${yyyy}-${mm}-${dd}`;
+};
+const parseDateSafe = (v) => {
+  if (!v && v !== 0) return null;
+  if (v instanceof Date && !isNaN(v)) return v;
+  const d = new Date(v);
+  if (!isNaN(d)) return d;
+  // try dd/mm/yyyy
+  const s = String(v);
+  const m = s.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+  if (m) return new Date(Number(m[3]), Number(m[2]) - 1, Number(m[1]));
+  return null;
+};
+const addDaysToDate = (d, days) => {
+  const copy = new Date(d);
+  copy.setDate(copy.getDate() + Number(days || 0));
+  return copy;
+};
+
+const emptyPayment = () => ({
+  id: Date.now(),
+  paymentMethod: "cash",
+  paidAmount: "",
+  balance: "",
+  receptNo: "",
+  remarks: "",
+  reminderDays: "",
+  reminderDate: "",
+  date: formatDateForInput(new Date()),
+});
+
+/* -------------------
+   Initial Model
+   ------------------- */
 const getInitialFormData = () => ({
   idNo: "",
   clientName: "",
@@ -17,7 +61,7 @@ const getInitialFormData = () => ({
   location: "",
   mobileNo1: "",
   mobileNo2: "",
-  googleLocation: '',
+  googleLocation: "",
   dNo: "",
   landMark: "",
   street: "",
@@ -53,35 +97,20 @@ const getInitialFormData = () => ({
       remarks: "",
     },
   ],
-  payments: [
-    {
-      id: Date.now(),
-      paymentMethod: "cash",
-      paidAmount: "",
-      balance: "",
-      receptNo: "",
-      remarks: "",
-      reminderDate: "",
-    },
-  ],
+  payments: [emptyPayment()],
 });
 
 export default function ClientInfoForm({ isOpen, onClose }) {
   const [step, setStep] = useState(1);
   const totalSteps = 6;
   const [formData, setFormData] = useState(getInitialFormData());
+  // errors: top-level keys and arrays for workers/payments
   const [errors, setErrors] = useState({ workers: [{}], payments: [{}] });
 
-  // existing "thank you" modal after submit
   const [showModal, setShowModal] = useState(false);
   const [submittedClientData, setSubmittedClientData] = useState(null);
 
-  // NEW: duplicate-ID modal state
-  const [dupModal, setDupModal] = useState({
-    show: false,
-    idNo: "",
-    name: "",
-  });
+  const [dupModal, setDupModal] = useState({ show: false, idNo: "", name: "" });
 
   const stepTitles = [
     "",
@@ -93,23 +122,53 @@ export default function ClientInfoForm({ isOpen, onClose }) {
     "Payment Details",
   ];
 
+  /* -------------------
+     Change handler
+     - When editing payments.reminderDays auto-compute reminderDate
+     - When editing payments.date and reminderDays exists, recompute reminderDate
+     ------------------- */
   const handleChange = (e, section, index = null) => {
     const { name, value } = e.target;
 
-    if (index !== null) {
-      const updatedArray = [...formData[section]];
-      updatedArray[index] = { ...updatedArray[index], [name]: value };
-      setFormData({ ...formData, [section]: updatedArray });
+    if (index !== null && section) {
+      const updatedArray = Array.isArray(formData[section]) ? [...formData[section]] : [];
+      const row = { ...(updatedArray[index] || {}) };
+      // normalize receipt field possibly named 'receiptNo' by other UI
+      if (name === "receiptNo") row["receptNo"] = value;
+      else row[name] = value;
 
+      // payments special logic
+      if (section === "payments") {
+        // reminderDays changed -> recompute reminderDate
+        if (name === "reminderDays") {
+          const days = Number(value) || 0;
+          const base = parseDateSafe(row.date) || new Date();
+          if (days > 0) row.reminderDate = formatDateForInput(addDaysToDate(base, days));
+          else row.reminderDate = "";
+        }
+        // if date changed and reminderDays exists -> recompute
+        if (name === "date" && row.reminderDays) {
+          const days = Number(row.reminderDays) || 0;
+          const base = parseDateSafe(value) || new Date();
+          if (days > 0) row.reminderDate = formatDateForInput(addDaysToDate(base, days));
+          else row.reminderDate = "";
+        }
+      }
+
+      updatedArray[index] = row;
+      setFormData((prev) => ({ ...prev, [section]: updatedArray }));
+
+      // clear field-level error for this row
       if (section === "workers" || section === "payments") {
-        const arrErrs = (errors[section] || []).map((obj, i) =>
-          i === index ? { ...obj, [name]: "" } : obj
-        );
-        setErrors({ ...errors, [section]: arrErrs });
+        const arrErrs = (errors[section] || []).map((obj, i) => (i === index ? { ...(obj || {}), [name]: "" } : obj));
+        setErrors((prev) => ({ ...prev, [section]: arrErrs }));
+      } else {
+        setErrors((prev) => ({ ...prev, [name]: "" }));
       }
     } else {
-      setFormData({ ...formData, [name]: value });
-      setErrors({ ...errors, [name]: "" });
+      // top-level
+      setFormData((prev) => ({ ...prev, [name]: value }));
+      setErrors((prev) => ({ ...prev, [name]: "" }));
     }
   };
 
@@ -126,74 +185,44 @@ export default function ClientInfoForm({ isOpen, onClose }) {
       remarks: "",
     };
 
-    setFormData({
-      ...formData,
-      workers: [...formData.workers, newWorker],
-    });
-    setErrors({
-      ...errors,
-      workers: [...(errors.workers || []), {}],
-    });
+    setFormData((prev) => ({ ...prev, workers: [...(prev.workers || []), newWorker] }));
+    setErrors((prev) => ({ ...prev, workers: [...(prev.workers || []), {}] }));
   };
 
   const removeWorker = (index) => {
-    setFormData({
-      ...formData,
-      workers: formData.workers.filter((_, i) => i !== index),
-    });
-    setErrors({
-      ...errors,
-      workers: (errors.workers || []).filter((_, i) => i !== index),
-    });
+    setFormData((prev) => ({ ...prev, workers: (prev.workers || []).filter((_, i) => i !== index) }));
+    setErrors((prev) => ({ ...prev, workers: (prev.workers || []).filter((_, i) => i !== index) }));
   };
 
   const addPayment = () => {
-    const newPayment = {
-      id: Date.now(),
-      paymentMethod: "cash",
-      paidAmount: "",
-      balance: "",
-      receptNo: "",
-      remarks: "",
-      reminderDate: "",
-    };
-
-    setFormData({
-      ...formData,
-      payments: [...formData.payments, newPayment],
-    });
-    setErrors({
-      ...errors,
-      payments: [...(errors.payments || []), {}],
-    });
+    const newPayment = emptyPayment();
+    setFormData((prev) => ({ ...prev, payments: [...(prev.payments || []), newPayment] }));
+    setErrors((prev) => ({ ...prev, payments: [...(prev.payments || []), {}] }));
   };
 
   const removePayment = (index) => {
-    setFormData({
-      ...formData,
-      payments: formData.payments.filter((_, i) => i !== index),
-    });
-    setErrors({
-      ...errors,
-      payments: (errors.payments || []).filter((_, i) => i !== index),
-    });
+    setFormData((prev) => ({ ...prev, payments: (prev.payments || []).filter((_, i) => i !== index) }));
+    setErrors((prev) => ({ ...prev, payments: (prev.payments || []).filter((_, i) => i !== index) }));
   };
 
-  // COMPREHENSIVE VALIDATION FUNCTION (unchanged)
+  /* -------------------
+     Validation (step-specific)
+     - For payments: skip rows that are completely empty
+     ------------------- */
   const validateStep = (currentStep) => {
     let newErrors = { ...errors };
     let isValid = true;
 
-    // Step 1: Basic Info
+    // Step 1
     if (currentStep === 1) {
-      if (!formData.idNo.trim()) {
+      if (!formData.idNo || !formData.idNo.trim()) {
         newErrors.idNo = "ID No is required";
         isValid = false;
       } else if (!/^JC\d{5}$/.test(formData.idNo)) {
         newErrors.idNo = "ID No must be (e.g., JC00001)";
         isValid = false;
       }
-      if (!formData.clientName.trim()) {
+      if (!formData.clientName || !formData.clientName.trim()) {
         newErrors.clientName = "Client Name is required";
         isValid = false;
       }
@@ -212,31 +241,31 @@ export default function ClientInfoForm({ isOpen, onClose }) {
         newErrors.mobileNo2 = "Mobile No 2 must be exactly 10 digits";
         isValid = false;
       }
-      if (!formData.location.trim()) {
+      if (!formData.location || !formData.location.trim()) {
         newErrors.location = "Location is required";
         isValid = false;
       }
     }
 
-    // Step 2: Address
+    // Step 2
     if (currentStep === 2) {
-      if (!formData.dNo.trim()) {
+      if (!formData.dNo || !formData.dNo.trim()) {
         newErrors.dNo = "D.No is required";
         isValid = false;
       }
-      if (!formData.villageTown.trim()) {
+      if (!formData.villageTown || !formData.villageTown.trim()) {
         newErrors.villageTown = "Village/Town is required";
         isValid = false;
       }
-      if (!formData.mandal.trim()) {
+      if (!formData.mandal || !formData.mandal.trim()) {
         newErrors.mandal = "Mandal is required";
         isValid = false;
       }
-      if (!formData.district.trim()) {
+      if (!formData.district || !formData.district.trim()) {
         newErrors.district = "District is required";
         isValid = false;
       }
-      if (!formData.state.trim()) {
+      if (!formData.state || !formData.state.trim()) {
         newErrors.state = "State is required";
         isValid = false;
       }
@@ -249,13 +278,13 @@ export default function ClientInfoForm({ isOpen, onClose }) {
       }
     }
 
-    // Step 3: Service Details
+    // Step 3
     if (currentStep === 3) {
-      if (!formData.typeOfService.trim()) {
+      if (!formData.typeOfService || !formData.typeOfService.trim()) {
         newErrors.typeOfService = "Type of Service is required";
         isValid = false;
       }
-      if (!formData.servicePeriod.trim()) {
+      if (!formData.servicePeriod || !formData.servicePeriod.trim()) {
         newErrors.servicePeriod = "Service Period is required";
         isValid = false;
       }
@@ -270,49 +299,49 @@ export default function ClientInfoForm({ isOpen, onClose }) {
         newErrors.startingDate = "Starting Date is required";
         isValid = false;
       }
-      if (!formData.pageNo.trim()) {
+      if (!formData.pageNo || !formData.pageNo.trim()) {
         newErrors.pageNo = "Page No is required";
         isValid = false;
       }
     }
 
-    // Step 4: Care Recipients Details
+    // Step 4
     if (currentStep === 4) {
-      if (!formData.patientName.trim()) {
-        newErrors.patientName = "Care Recipients Name is required";
+      if (!formData.patientName || !formData.patientName.trim()) {
+        newErrors.patientName = "Care Recipient Name is required";
         isValid = false;
       }
       if (!formData.patentAge) {
-        newErrors.patentAge = "Care Recipients Age is required";
+        newErrors.patentAge = "Care Recipient Age is required";
         isValid = false;
       }
       if (!formData.serviceStatus) {
         newErrors.serviceStatus = "Service Status is required";
         isValid = false;
       }
-      if (!formData.dropperName.trim()) {
+      if (!formData.dropperName || !formData.dropperName.trim()) {
         newErrors.dropperName = "Dropper Name is required";
         isValid = false;
       }
-      if (!formData.aboutPatent.trim()) {
+      if (!formData.aboutPatent || !formData.aboutPatent.trim()) {
         newErrors.aboutPatent = "About Patient is required";
         isValid = false;
       }
-      if (!formData.aboutWork.trim()) {
+      if (!formData.aboutWork || !formData.aboutWork.trim()) {
         newErrors.aboutWork = "About Work is required";
         isValid = false;
       }
     }
 
-    // Step 5: Worker Details
+    // Step 5
     if (currentStep === 5) {
-      const workersErrors = formData.workers.map((w) => {
+      const workersErrors = (formData.workers || []).map((w) => {
         const e = {};
-        if (!w.workerIdNo.trim()) {
+        if (!w.workerIdNo || !w.workerIdNo.trim()) {
           e.workerIdNo = "Worker ID is required";
           isValid = false;
         }
-        if (!w.cName.trim()) {
+        if (!w.cName || !w.cName.trim()) {
           e.cName = "Worker Name is required";
           isValid = false;
         }
@@ -336,25 +365,33 @@ export default function ClientInfoForm({ isOpen, onClose }) {
       newErrors.workers = workersErrors;
     }
 
-    // Step 6: Payment Details
+    // Step 6 (Payments) — skip empty rows
     if (currentStep === 6) {
-      const paymentsErrors = formData.payments.map((p) => {
+      const payments = Array.isArray(formData.payments) ? formData.payments : [];
+      const paymentsErrors = payments.map((p) => {
         const e = {};
+        // treat row as empty if no significant fields
+        const hasValue =
+          (p.paidAmount && String(p.paidAmount).trim() !== "") ||
+          (p.receptNo && String(p.receptNo).trim() !== "") ||
+          (p.date && String(p.date).trim() !== "");
+        if (!hasValue) {
+          // leave e empty (no validation)
+          return e;
+        }
+
         if (!p.paymentMethod) {
           e.paymentMethod = "Payment Method is required";
           isValid = false;
         }
-        if (!p.paidAmount) {
+        if (p.paidAmount === "" || p.paidAmount === null || typeof p.paidAmount === "undefined") {
           e.paidAmount = "Paid Amount is required";
           isValid = false;
         } else if (isNaN(Number(p.paidAmount)) || Number(p.paidAmount) <= 0) {
           e.paidAmount = "Paid Amount must be a positive number";
           isValid = false;
-        } else if (p.paidAmount.length > 5) {
-          e.paidAmount = "Paid Amount must be 5 digits or less";
-          isValid = false;
         }
-        if (!p.receptNo.trim()) {
+        if (!p.receptNo || !String(p.receptNo).trim()) {
           e.receptNo = "Receipt No is required";
           isValid = false;
         }
@@ -363,74 +400,68 @@ export default function ClientInfoForm({ isOpen, onClose }) {
       newErrors.payments = paymentsErrors;
     }
 
-    setErrors(newErrors);
+    setErrors((prev) => ({ ...prev, ...newErrors }));
     return isValid;
   };
 
-  // UPDATED: nextStep checks duplicate ID when leaving Step 1
+  /* -------------------
+     nextStep: when entering step 6 clear payment errors and ensure payments exist
+     ------------------- */
   const nextStep = async () => {
-    // validate current step first
     if (!validateStep(step)) return;
 
-    // Only on first "Next" (leaving Step 1 -> Step 2), check for duplicate idNo
+    // duplicate ID check when leaving step 1
     if (step === 1) {
       try {
-        const idToCheck = formData.idNo.trim();
-        // Realtime Database query
-        const queryRef = firebaseDB
-          .child("ClientData")
-          .orderByChild("idNo")
-          .equalTo(idToCheck);
-
-        // v8-style once; if you're on modular SDK, swap to get(query)
+        const idToCheck = (formData.idNo || "").trim();
+        const queryRef = firebaseDB.child("ClientData").orderByChild("idNo").equalTo(idToCheck);
         const snap = await queryRef.once("value");
         if (snap.exists()) {
-          // take first match's name
           let foundName = "";
           const val = snap.val();
           if (val && typeof val === "object") {
             const firstKey = Object.keys(val)[0];
             if (firstKey) foundName = val[firstKey]?.clientName || "";
           }
-          setDupModal({
-            show: true,
-            idNo: idToCheck,
-            name: foundName,
-          });
-          return; // block navigation
+          setDupModal({ show: true, idNo: idToCheck, name: foundName });
+          return;
         }
       } catch (err) {
         console.error("Duplicate ID check failed:", err);
-        // (optional) You could still allow navigation even if check fails.
-        // For now we proceed to next step to avoid blocking users due to network blips.
+        // continue if check fails (don't block users)
       }
     }
 
-    // safe to go next
-    setStep(step + 1);
+    const next = Math.min(totalSteps, step + 1);
+
+    if (next === 6) {
+      // ensure payments exists
+      if (!Array.isArray(formData.payments) || formData.payments.length === 0) {
+        setFormData((prev) => ({ ...prev, payments: [emptyPayment()] }));
+      }
+      // clear payment errors so they don't show automatically
+      setErrors((prev) => ({ ...prev, payments: (formData.payments || []).map(() => ({})) }));
+    }
+
+    setStep(next);
   };
 
-  const prevStep = () => setStep(step - 1);
+  const prevStep = () => setStep((s) => Math.max(1, s - 1));
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!validateStep(step)) return;
 
     try {
-      // Remove temporary IDs before saving
       const dataToSave = {
         ...formData,
-        workers: formData.workers.map(({ id, ...worker }) => worker),
-        payments: formData.payments.map(({ id, ...payment }) => payment),
+        workers: (formData.workers || []).map(({ id, ...rest }) => rest),
+        payments: (formData.payments || []).map(({ id, ...rest }) => rest),
       };
 
       const newRef = await firebaseDB.child("ClientData").push(dataToSave);
       if (newRef && newRef.key) {
-        setSubmittedClientData({
-          idNo: formData.idNo,
-          clientName: formData.clientName,
-        });
-
+        setSubmittedClientData({ idNo: formData.idNo, clientName: formData.clientName });
         setShowModal(true);
         setFormData(getInitialFormData());
         setErrors({ workers: [{}], payments: [{}] });
@@ -438,72 +469,24 @@ export default function ClientInfoForm({ isOpen, onClose }) {
       }
     } catch (err) {
       console.error(err);
-      alert("Error saving to Firebase: " + err.message);
+      alert("Error saving to Firebase: " + (err.message || err));
     }
   };
 
   const renderStep = () => {
     switch (step) {
       case 1:
-        return (
-          <BasicInformation
-            formData={formData}
-            handleChange={handleChange}
-            errors={errors}
-            isViewMode={false}
-          />
-        );
+        return <BasicInformation formData={formData} handleChange={handleChange} errors={errors} isViewMode={false} />;
       case 2:
-        return (
-          <Address
-            formData={formData}
-            handleChange={handleChange}
-            errors={errors}
-            isViewMode={false}
-          />
-        );
+        return <Address formData={formData} handleChange={handleChange} errors={errors} isViewMode={false} />;
       case 3:
-        return (
-          <ServiceDetails
-            formData={formData}
-            handleChange={handleChange}
-            errors={errors}
-            setErrors={setErrors}
-            isViewMode={false}
-          />
-        );
+        return <ServiceDetails formData={formData} handleChange={handleChange} errors={errors} setErrors={setErrors} isViewMode={false} />;
       case 4:
-        return (
-          <PatientDetails
-            formData={formData}
-            handleChange={handleChange}
-            errors={errors}
-            isViewMode={false}
-          />
-        );
+        return <PatientDetails formData={formData} handleChange={handleChange} errors={errors} isViewMode={false} />;
       case 5:
-        return (
-          <WorkerDetails
-            formData={formData}
-            handleChange={handleChange}
-            addWorker={addWorker}
-            removeWorker={removeWorker}
-            errors={errors}
-            setErrors={setErrors}
-            isViewMode={false}
-          />
-        );
+        return <WorkerDetails formData={formData} handleChange={handleChange} addWorker={addWorker} removeWorker={removeWorker} errors={errors} setErrors={setErrors} isViewMode={false} />;
       case 6:
-        return (
-          <PaymentDetails
-            formData={formData}
-            handleChange={handleChange}
-            addPayment={addPayment}
-            removePayment={removePayment}
-            errors={errors}
-            isViewMode={false}
-          />
-        );
+        return <PaymentDetails formData={formData} handleChange={handleChange} addPayment={addPayment} removePayment={removePayment} errors={errors} isViewMode={false} />;
       default:
         return null;
     }
@@ -512,7 +495,7 @@ export default function ClientInfoForm({ isOpen, onClose }) {
   if (!isOpen) return null;
 
   return (
-    <div className="modal fade show" style={{ display: "block", backgroundColor: "rgba(3, 3, 3, 0.9)" }}>
+    <div className="modal fade show" style={{ display: "block", backgroundColor: "rgba(3,3,3,0.9)" }}>
       <div className="modal-dialog modal-xl modal-dialog-centered client-form">
         <div className="modal-content">
           <div className="modal-header">
@@ -522,15 +505,9 @@ export default function ClientInfoForm({ isOpen, onClose }) {
 
           <div className="modal-body">
             <div className="px-4 pt-3">
-              <p className="text-center steps">
-                Step {step} of {totalSteps}
-              </p>
+              <p className="text-center steps">Step {step} of {totalSteps}</p>
               <div className="progress mb-3">
-                <div
-                  className="progress-bar bg-primary"
-                  role="progressbar"
-                  style={{ width: `${(step / totalSteps) * 100}%` }}
-                />
+                <div className="progress-bar bg-primary" role="progressbar" style={{ width: `${(step / totalSteps) * 100}%` }} />
               </div>
               <h4 className="text-center mb-3 form-steps">{stepTitles[step]}</h4>
             </div>
@@ -539,112 +516,45 @@ export default function ClientInfoForm({ isOpen, onClose }) {
               <div className="card-body">{renderStep()}</div>
 
               <div className="card-footer d-flex justify-content-end w-100">
-                {step > 1 && (
-                  <button type="button" className="btn btn-secondary me-2" onClick={prevStep}>
-                    Previous
-                  </button>
-                )}
-                {step < totalSteps ? (
-                  <button type="button" className="btn btn-primary" onClick={nextStep}>
-                    Next
-                  </button>
-                ) : (
-                  <button type="submit" className="btn btn-success">
-                    Submit
-                  </button>
-                )}
+                {step > 1 && <button type="button" className="btn btn-secondary me-2" onClick={prevStep}>Previous</button>}
+                {step < totalSteps ? <button type="button" className="btn btn-primary" onClick={nextStep}>Next</button> : <button type="submit" className="btn btn-success">Submit</button>}
               </div>
             </form>
           </div>
         </div>
       </div>
 
-      {/* Submit-success modal (existing) */}
+      {/* Submit-success modal */}
       {showModal && (
         <div className="modal fade show" style={{ display: "block", background: "rgba(0,0,0,0.5)" }}>
           <div className="modal-dialog modal-dialog-centered">
             <div className="modal-content">
-              <div className="modal-header">
-                <h5 className="modal-title text-center">Thank you!</h5>
-                <button
-                  type="button"
-                  className="btn-close"
-                  onClick={() => {
-                    setShowModal(false);
-                    onClose();
-                  }}
-                  aria-label="Close"
-                />
-              </div>
+              <div className="modal-header"><h5 className="modal-title text-center">Thank you!</h5><button type="button" className="btn-close" onClick={() => { setShowModal(false); onClose(); }} /></div>
               <div className="modal-body">
                 <p>Your form has been submitted successfully.</p>
                 {submittedClientData && (
-                  <div className="alert mt-3">
-                    <strong>Client Details:</strong>
-                    <div className="mt-2"><strong>ID:</strong> {submittedClientData.idNo}</div>
-                    <div><strong>Client Name:</strong> {submittedClientData.clientName}</div>
-                  </div>
+                  <div className="alert mt-3"><strong>Client Details:</strong><div className="mt-2"><strong>ID:</strong> {submittedClientData.idNo}</div><div><strong>Client Name:</strong> {submittedClientData.clientName}</div></div>
                 )}
               </div>
-              <div className="modal-footer">
-                <button
-                  type="button"
-                  className="btn btn-primary"
-                  onClick={() => {
-                    setShowModal(false);
-                    onClose();
-                  }}
-                >
-                  OK
-                </button>
-              </div>
+              <div className="modal-footer"><button type="button" className="btn btn-primary" onClick={() => { setShowModal(false); onClose(); }}>OK</button></div>
             </div>
           </div>
         </div>
       )}
 
-      {/* NEW: Duplicate ID modal (shown only when clicking Next on Step 1) */}
+      {/* Duplicate ID modal */}
       {dupModal.show && (
         <div className="modal fade show" style={{ display: "block", background: "rgba(0,0,0,0.5)" }}>
           <div className="modal-dialog modal-dialog-centered">
             <div className="modal-content">
-              <div className="modal-header bg-danger">
-                <h5 className="modal-title text-white">Duplicate Client ID</h5>
-                <button
-                  type="button"
-                  className="btn-close btn-white"
-                  onClick={() => setDupModal({ show: false, idNo: "", name: "" })}
-                  aria-label="Close"
-                />
-              </div>
+              <div className="modal-header bg-danger"><h5 className="modal-title text-white">Duplicate Client ID</h5><button type="button" className="btn-close btn-white" onClick={() => setDupModal({ show: false, idNo: "", name: "" })} /></div>
               <div className="modal-body">
-                <p className="mb-0">
-                  Client ID <strong>{dupModal.idNo}</strong> already exists
-                  {dupModal.name ? <> with the name: <strong>{dupModal.name}</strong></> : ""}.
-                </p>
-                <p className=" mt-2 mb-0">
-                  Please enter a new Client ID to continue.
-                </p>
+                <p className="mb-0">Client ID <strong>{dupModal.idNo}</strong> already exists {dupModal.name ? <>with the name: <strong>{dupModal.name}</strong></> : ""}.</p>
+                <p className="mt-2 mb-0">Please enter a new Client ID to continue.</p>
               </div>
               <div className="modal-footer">
-                <button
-                  type="button"
-                  className="btn btn-secondary"
-                  onClick={() => setDupModal({ show: false, idNo: "", name: "" })}
-                >
-                  OK
-                </button>
-                {/* Optional: shortcut to clear the field */}
-                <button
-                  type="button"
-                  className="btn btn-outline-danger"
-                  onClick={() => {
-                    setFormData((prev) => ({ ...prev, idNo: "" }));
-                    setDupModal({ show: false, idNo: "", name: "" });
-                  }}
-                >
-                  Clear ID
-                </button>
+                <button type="button" className="btn btn-secondary" onClick={() => setDupModal({ show: false, idNo: "", name: "" })}>OK</button>
+                <button type="button" className="btn btn-outline-danger" onClick={() => { setFormData((prev) => ({ ...prev, idNo: "" })); setDupModal({ show: false, idNo: "", name: "" }); }}>Clear ID</button>
               </div>
             </div>
           </div>

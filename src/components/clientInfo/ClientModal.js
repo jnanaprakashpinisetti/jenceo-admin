@@ -1186,17 +1186,17 @@ export default function ClientModal({
 
                                                     {p.refund && (
                                                         <div className="row mt-2">
-                                                            <div className="col-md-3">
+                                                            <div className="col-md-4">
                                                                 <label className="form-label"><strong>Refund Date</strong> <span className="text-danger">*</span></label>
                                                                 <input data-idx={idx} className={`form-control ${errors[`payments.${idx}.refundDate`] ? "is-invalid" : ""}`} name="refundDate" type="date" value={p.refundDate ? formatDateForInput(p.refundDate) : ""} onChange={(e) => handleChange(e, "payments", idx)} disabled={!editMode && !!p.__locked} />
                                                                 {errors[`payments.${idx}.refundDate`] && <div className="invalid-feedback">{errors[`payments.${idx}.refundDate`]}</div>}
                                                             </div>
-                                                            <div className="col-md-3">
+                                                            <div className="col-md-4">
                                                                 <label className="form-label"><strong>Refund Amount</strong> <span className="text-danger">*</span></label>
                                                                 <input data-idx={idx} className={`form-control ${errors[`payments.${idx}.refundAmount`] ? "is-invalid" : ""}`} name="refundAmount" type="number" value={p.refundAmount ?? ""} onChange={(e) => handleChange(e, "payments", idx)} disabled={!editMode && !!p.__locked} />
                                                                 {errors[`payments.${idx}.refundAmount`] && <div className="invalid-feedback">{errors[`payments.${idx}.refundAmount`]}</div>}
                                                             </div>
-                                                            <div className="col-md-3">
+                                                            <div className="col-md-4">
                                                                 <label className="form-label"><strong>Refund Method</strong> <span className="text-danger">*</span></label>
                                                                 <select data-idx={idx} className={`form-control ${errors[`payments.${idx}.refundPaymentMethod`] ? "is-invalid" : ""}`} name="refundPaymentMethod" value={p.refundPaymentMethod || ""} onChange={(e) => handleChange(e, "payments", idx)} disabled={!editMode && !!p.__locked}>
                                                                     <option value="">Select</option>
@@ -1207,7 +1207,7 @@ export default function ClientModal({
                                                                 </select>
                                                                 {errors[`payments.${idx}.refundPaymentMethod`] && <div className="invalid-feedback">{errors[`payments.${idx}.refundPaymentMethod`]}</div>}
                                                             </div>
-                                                            <div className="col-md-3">
+                                                            <div className="col-md-12">
                                                                 <label className="form-label"><strong>Refund Remarks</strong> <span className="text-danger">*</span></label>
                                                                 <textarea data-idx={idx} className={`form-control ${errors[`payments.${idx}.refundRemarks`] ? "is-invalid" : ""}`} name="refundRemarks" rows="2" value={p.refundRemarks || ""} onChange={(e) => handleChange(e, "payments", idx)} disabled={!editMode && !!p.__locked}></textarea>
                                                                 {errors[`payments.${idx}.refundRemarks`] && <div className="invalid-feedback">{errors[`payments.${idx}.refundRemarks`]}</div>}

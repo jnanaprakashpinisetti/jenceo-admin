@@ -304,14 +304,14 @@ export default function InvestmentCard({ partners = ["Sudheer", "Suresh", "Praka
 
         <div className="invest-card__divider" />
 
-        <div className="invest-card__partners">
+        {/* <div className="invest-card__partners">
           {partners.map((p) => (
             <div key={p} className="invest-card__partner">
               <div className="invest-card__partner-name">{p}</div>
               <div className="invest-card__partner-val">{loading ? "..." : formatINR((overallInvestorTotals.find(i => i.investor === p) || { ack: 0 }).ack)}</div>
             </div>
           ))}
-        </div>
+        </div> */}
       </div>
 
       {/* Modal */}

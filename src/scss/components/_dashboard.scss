@@ -501,7 +501,7 @@ $dark-table-text: #e6eef6;
     padding: 14px;
     border-radius: 10px;
     cursor: pointer;
-    box-shadow: 0 10px 30px rgba(2, 6, 23, 0.5);
+    box-shadow: 3px 1px 7px 0px rgba(2, 6, 23, 0.5);
 }
 
 .card-role {
@@ -1000,3 +1000,80 @@ $dark-table-text: #e6eef6;
         display: none;
     }
 }
+
+// Client Payment Styles
+   .header-gradient {
+       color: #fff;
+       border-radius: .5rem;
+       padding: 10px;
+       min-width: 160px;
+   }
+
+   .grad-paid {
+       background: linear-gradient(120deg, #2cb67d, #00b894);
+       @include mobile {
+        width: 48%;
+        min-width: auto;
+       }
+   }
+
+   .grad-balance {
+       background: linear-gradient(120deg, #ffb454, #ff6b6b);
+   }
+
+   .grad-refund {
+       background: linear-gradient(120deg, #6a82fb, #fc5c7d);
+   }
+
+   .invest-header-pill {
+       box-shadow: 0 6px 18px rgba(0, 0, 0, 0.12);
+       border-radius: .5rem;
+       overflow: hidden;
+   }
+
+   .invest-card {
+       cursor: pointer;
+       border-radius: .5rem;
+       padding: 12px;
+       background: #0b1220;
+       color: #fff;
+
+       @include mobile {
+        width: 48%;
+       }
+   }
+
+   .invest-card__label {
+       font-size: 13px;
+       color: #cde3ff;
+   }
+
+   .invest-card__total {
+       font-size: 20px;
+       font-weight: 700;
+   }
+
+   .invest-modal-header {
+       padding: 18px;
+       border-bottom: 1px solid #e9ecef;
+   }
+
+   .invest-modal-content {
+       width: 100%;
+       max-width: 1200px;
+       border-radius: 8px;
+       overflow: hidden;
+   }
+
+   .invest-modal-body {
+       padding: 18px;
+       max-height: 70vh;
+       overflow: auto;
+   }
+
+   .overall-cards {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-bottom: 15px;
+   }

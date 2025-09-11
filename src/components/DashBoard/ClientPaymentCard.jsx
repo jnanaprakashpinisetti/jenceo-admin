@@ -460,20 +460,7 @@ export default function ClientPaymentCard({
 
   return (
     <>
-      {/* small inline styles for gradients — you can move these into SCSS */}
-      <style>{`
-        .header-gradient { color: #fff; border-radius: .5rem; padding: 10px; min-width: 160px; }
-        .grad-paid { background: linear-gradient(120deg, #2cb67d, #00b894); }
-        .grad-balance { background: linear-gradient(120deg, #ffb454, #ff6b6b); }
-        .grad-refund { background: linear-gradient(120deg, #6a82fb, #fc5c7d); }
-        .invest-header-pill { box-shadow: 0 6px 18px rgba(0,0,0,0.12); border-radius: .5rem; overflow: hidden; }
-        .invest-card { cursor: pointer; border-radius: .5rem; padding: 12px; background: #0b1220; color: #fff; }
-        .invest-card__label { font-size: 13px; color: #cde3ff; }
-        .invest-card__total { font-size: 20px; font-weight: 700; }
-        .invest-modal-header { padding: 18px; border-bottom: 1px solid #e9ecef; }
-        .invest-modal-content { width: 100%; max-width: 1200px; border-radius: 8px; overflow: hidden; }
-        .invest-modal-body { padding: 18px; max-height: 70vh; overflow:auto; }
-      `}</style>
+ 
 
       <div className="clinet-payment-card" onClick={() => setModalOpen(true)} role="button">
         <div className="invest-card__box" role="button">
@@ -499,7 +486,11 @@ export default function ClientPaymentCard({
                 <button className="btn-close invest-modal-top-close btn-close-white" onClick={() => setModalOpen(false)} />
               </div>
 
-              <div className="invest-modal-header">
+   
+
+              <div className="invest-modal-body">
+
+                           <div className="overall-cards">
 
                   {/* Overall header cards (now show overall sums across all years) */}
                     <div className="header-gradient grad-paid">
@@ -520,8 +511,6 @@ export default function ClientPaymentCard({
                       <div style={{ fontSize: 11, opacity: 0.85 }}>across all years</div>
                     </div>
               </div>
-
-              <div className="invest-modal-body">
 
                 <ul className="nav nav-tabs invest-year-tabs">
                   {yearKeys.length === 0 ? <li className="nav-item"><span className="nav-link active">No Data</span></li>
@@ -677,8 +666,8 @@ export default function ClientPaymentCard({
                       </div>
                     )}
 
-                    <div className="mt-3 d-flex justify-content-between align-items-center">
-                      <div className="small text-muted">Showing {currentMonthRows.length} payments</div>
+                    <div className="mt-3 d-flex justify-content-between align-items-center gap-3">
+                      <div className="small ">Showing {currentMonthRows.length} payments</div>
                       <div>
                         <button className="btn btn-sm btn-outline-secondary me-2" onClick={() => exportCSV("month")} disabled={!activeMonth}>CSV (month)</button>
                         <button className="btn btn-sm btn-outline-secondary me-2" onClick={() => exportCSV("year")} disabled={!activeYear}>CSV (year)</button>

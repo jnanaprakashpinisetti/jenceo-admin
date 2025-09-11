@@ -1,20 +1,6 @@
 // src/components/DashBoard/WorkerSalaryCard.jsx
 import React, { useEffect, useMemo, useState, useRef } from "react";
 
-/**
- WorkerSalaryCard
- - Reads EmployeeBioData and ExitEmployees from Realtime Firebase DB
- - Shows a single card (match InvestmentCard styles) with overall grand total
- - Modal:
-    - dynamic years (only years with data)
-    - clicking a year auto-selects an appropriate month (most recent; prefers filtered employee if set)
-    - month pills
-    - monthly table with columns: Photo, Employee ID, Employee Name, Employee Status, Type of Payment, Payment For, Receipt No, Salary Amount
-    - monthly/yearly/overall totals, CSV export, print
- - Employee pills clickable to filter month/year
- - Defensive checks added to avoid undefined errors
-*/
-
 async function importFirebaseDB() {
     try {
         const a = await import("../../firebase");
@@ -47,7 +33,6 @@ function formatINR(value) {
     }
 }
 
-/* Extract payments from an employee record (robust to different field names) */
 function extractPaymentsFromEmployeeRecord(employeeRecord, collectionPrefix = "") {
     const empId = employeeRecord.employeeId ?? employeeRecord.idNo ?? employeeRecord.id ?? employeeRecord.uid ?? "";
     const name =
@@ -106,7 +91,6 @@ function extractPaymentsFromEmployeeRecord(employeeRecord, collectionPrefix = ""
     return results;
 }
 
-/* Group payments into { year: { name, months: { monthIndex: { name, rows: [] }}}} */
 function groupPaymentsByYearMonth(payments) {
     const out = {};
     payments.forEach((p) => {
@@ -139,7 +123,6 @@ function groupPaymentsByYearMonth(payments) {
     return out;
 }
 
-/* Small SVG sparkline (uses currentColor) */
 function Sparkline({ points = [], width = 120, height = 30 }) {
     if (!points || points.length === 0) return <div className="invest-sparkline" />;
     const max = Math.max(...points);
@@ -230,7 +213,9 @@ export default function WorkerSalaryCard() {
         };
     }, []);
 
-    const paymentsCount = useMemo(() => allPayments.length, [allPayments]);
+    // === FIX: count only payments that have a positive amount ===
+    const paymentsCount = useMemo(() => allPayments.filter(p => Number(p.amount || 0) > 0).length, [allPayments]);
+
     const grouped = useMemo(() => groupPaymentsByYearMonth(allPayments), [allPayments]);
 
     const yearsList = useMemo(() => {
@@ -242,7 +227,6 @@ export default function WorkerSalaryCard() {
         return yrs;
     }, [grouped]);
 
-    // most recent payment's year & month
     const mostRecentYearMonth = useMemo(() => {
         const withDate = allPayments
             .filter(p => p.date)
@@ -254,7 +238,6 @@ export default function WorkerSalaryCard() {
         return { year: d.getFullYear(), month: d.getMonth() };
     }, [allPayments]);
 
-    // when modal opens, auto-select most recent year/month
     useEffect(() => {
         if (!modalOpen) return;
         if (mostRecentYearMonth) {
@@ -271,7 +254,6 @@ export default function WorkerSalaryCard() {
         setFilterEmployee(null);
     }, [modalOpen, mostRecentYearMonth, yearsList, grouped]);
 
-    // handle year click: set year and auto-select most relevant month
     const handleYearClick = (y) => {
         setActiveYear(y);
 
@@ -314,10 +296,10 @@ export default function WorkerSalaryCard() {
     }, [grouped, activeYear, filterEmployee]);
 
     const monthlyGrandTotal = useMemo(() => currentMonthRows.reduce((s, r) => s + Number(r.amount || 0), 0), [currentMonthRows]);
-    const monthlyCount = useMemo(() => currentMonthRows.length, [currentMonthRows]);
+    const monthlyCount = useMemo(() => currentMonthRows.filter(r => Number(r.amount || 0) > 0).length, [currentMonthRows]);
 
     const yearlyGrandTotal = useMemo(() => currentYearRows.reduce((s, r) => s + Number(r.amount || 0), 0), [currentYearRows]);
-    const yearlyCount = useMemo(() => currentYearRows.length, [currentYearRows]);
+    const yearlyCount = useMemo(() => currentYearRows.filter(r => Number(r.amount || 0) > 0).length, [currentYearRows]);
 
     const overallGrandTotal = useMemo(() => allPayments.reduce((s, p) => s + Number(p.amount || 0), 0), [allPayments]);
 
@@ -330,6 +312,8 @@ export default function WorkerSalaryCard() {
         });
         return Object.keys(map).map(k => ({ key: k, ...map[k] })).sort((a, b) => b.total - a.total);
     }, [allPayments]);
+
+    const topEmployees = employeeTotals.slice(0, 3);
 
     const sparkPoints = useMemo(() => {
         if (!activeYear || !grouped[activeYear]) return [];
@@ -391,7 +375,6 @@ export default function WorkerSalaryCard() {
         w.print();
     };
 
-    // filter pill click: toggle filter and auto-select most recent month for that employee
     const onPillClick = (employeeKey) => {
         if (filterEmployee === employeeKey) setFilterEmployee(null);
         else setFilterEmployee(employeeKey);
@@ -408,21 +391,17 @@ export default function WorkerSalaryCard() {
     const displayPaymentFor = (r) => {
         const parseToDate = (val) => {
             if (!val && val !== 0) return null;
-            // If it's a number or numeric string (epoch milliseconds)
             if (typeof val === "number" || (/^\d+$/.test(String(val).trim()))) {
                 const num = Number(val);
                 const d = new Date(num);
                 if (!isNaN(d)) return d;
             }
-            // Try Date constructor (ISO, short, etc.)
             const d = new Date(String(val));
             if (!isNaN(d)) return d;
             return null;
         };
 
-        // 1) Prefer explicit date field
         let d = parseToDate(r.date);
-        // 2) Fallback to paymentFor if it contains a parseable date
         if (!d) d = parseToDate(r.paymentFor);
 
         if (d && !isNaN(d)) {
@@ -432,25 +411,28 @@ export default function WorkerSalaryCard() {
             return `${dd}/${mm}/${yyyy}`;
         }
 
-        // 3) If paymentFor is present but not parseable, return it (keeps existing behaviour)
         if (r.paymentFor && String(r.paymentFor).trim()) return String(r.paymentFor);
-        // 4) otherwise fallback
         return "-";
     };
 
-
-    // default navigation to employee profile - change if you want modal instead
     const openEmployee = (employeeDbKey, employeeId) => {
         const encoded = encodeURIComponent(employeeId || employeeDbKey || "");
         window.location.href = `/employee-profile/${encoded}`;
     };
 
-    // safe retrieval of month name
     const safeMonthName = (year, mIdx) => {
         if (!year || mIdx === null || mIdx === undefined) return "";
         const months = grouped[year]?.months || {};
         return months[mIdx]?.name ?? new Date(Number(year), Number(mIdx)).toLocaleString("default", { month: "long" });
     };
+
+    // compute payments in the most recent month for a quick card
+    const paymentsThisMostRecentMonth = useMemo(() => {
+        if (!mostRecentYearMonth) return 0;
+        const mObj = grouped[mostRecentYearMonth.year]?.months?.[mostRecentYearMonth.month];
+        if (!mObj) return 0;
+        return (mObj.rows || []).filter(r => Number(r.amount || 0) > 0).length;
+    }, [mostRecentYearMonth, grouped]);
 
     return (
         <div className="worker-salary-card">
@@ -464,7 +446,8 @@ export default function WorkerSalaryCard() {
                     </div>
                 </div>
 
-                <div className="invest-card__divider" /></div>
+                <div className="invest-card__divider" />
+            </div>
 
             {modalOpen && (
                 <div className="invest-modal-backdrop" onClick={() => setModalOpen(false)}>
@@ -483,7 +466,7 @@ export default function WorkerSalaryCard() {
                                         <h5> Overall Grand Total: <strong>{formatINR(overallGrandTotal)}</strong></h5>
                                     </div>
                                     <div className="invest-modal-stats">
-                                        <span>Payments: {paymentsCount}</span>
+                                        <span>Payments: {paymentsCount} • Year payments: {yearlyCount}</span>
                                     </div>
                                     <div className="invest-modal-spark">
                                         <Sparkline points={sparkPoints} />

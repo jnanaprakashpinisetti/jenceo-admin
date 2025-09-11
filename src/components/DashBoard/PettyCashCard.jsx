@@ -474,7 +474,7 @@ export default function PettyCashCard({ pettyCollection = "PettyCash" }) {
 
                                 {/* Matrix table */}
                                 <div className="table-responsive summary-table-container">
-                                    <table className="table table-dark summary-table">
+                                    <table className="table table-dark summary-table table-hover">
                                         <thead>
                                             <tr>
                                                 <th style={{ width: 60 }}>S No</th>

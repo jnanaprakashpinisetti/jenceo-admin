@@ -17,9 +17,9 @@ $dark-table-head: #0b1220;
 $dark-table-text: #e6eef6;
 
 .invest-card {
-    font-family: $font-fallback;
 
     &__box {
+        font-family: $font-fallback;
         border-radius: 12px;
         padding: 18px;
         max-width: 420px;
@@ -28,6 +28,7 @@ $dark-table-text: #e6eef6;
         background: linear-gradient(135deg, $card-grad-start 0%, $card-grad-end 100%);
         box-shadow: 0 10px 30px rgba(2, 6, 23, 0.45);
         transition: transform 0.18s ease, box-shadow 0.18s ease;
+        margin-bottom: 15px;
 
         &:hover {
             transform: translateY(-4px);
@@ -90,6 +91,24 @@ $dark-table-text: #e6eef6;
     }
 }
 
+.clinet-payment-card {
+    .invest-card__box {
+        background: linear-gradient(135deg, #c09402 0%, #f7b603);
+    }
+}
+
+.petty-cash-card {
+    .invest-card__box {
+        background: linear-gradient(135deg, #b10362 0%, #960253);
+    }
+}
+
+.worker-salary-card {
+    .invest-card__box {
+        background: linear-gradient(135deg, #019621 0%, #02791c);
+    }
+}
+
 /* Modal */
 .invest-modal-backdrop {
     position: fixed;
@@ -126,6 +145,9 @@ $dark-table-text: #e6eef6;
     padding: 10px 16px;
     background: #21355f;
     color: #fff;
+    @include mobile {
+        flex-wrap: wrap;
+    }
 
     .invest-modal-investor-bar__title {
         font-weight: 700;
@@ -194,7 +216,10 @@ $dark-table-text: #e6eef6;
     color: #111827;
     display: flex;
     align-items: center;
-    justify-content: space-between;
+    gap: 15px;
+    @include mobile {
+        flex-wrap: wrap;
+    }
 }
 
 .invest-modal-sub {
@@ -271,6 +296,9 @@ $dark-table-text: #e6eef6;
     display: flex;
     gap: 12px;
     align-items: center;
+    @include mobile {
+        flex-wrap: wrap;
+    }
 }
 
 .invest-status-pill {
@@ -309,6 +337,9 @@ $dark-table-text: #e6eef6;
     justify-content: space-between;
     align-items: center;
     margin-bottom: 12px;
+    @include mobile {
+        margin-top: 15px;
+    }
 }
 
 /* table styles: dark header */
@@ -373,10 +404,12 @@ $dark-table-text: #e6eef6;
 @media (max-width: 768px) {
     .invest-year-top {
         flex-direction: column;
+        flex-wrap: wrap ;
     }
 
     .invest-year-investors-list {
         flex-direction: column;
+        gap: 0;
     }
 
     .invest-status-pill {
@@ -400,6 +433,9 @@ $dark-table-text: #e6eef6;
     text-align: center;
     border-radius: 10px;
     min-width: 100px;
+    @include mobile {
+        min-width: auto;
+    }
 }
 
 .petty-cat-badge {
@@ -426,4 +462,17 @@ $dark-table-text: #e6eef6;
             }
         }
     }
+}
+
+.action-btn-wrapper {
+    display: flex;
+    gap: 10px;
+    justify-content: space-between;
+    @include mobile {
+        flex-wrap: wrap;
+        justify-content: flex-end;
+        width: 100%;
+        
+    }
+
 }

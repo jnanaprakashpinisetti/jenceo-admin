@@ -453,7 +453,7 @@ export default function WorkerSalaryCard() {
     };
 
     return (
-        <div className="invest-card worker-salary-card">
+        <div className="worker-salary-card">
             <div className="invest-card__box" role="button" onClick={() => setModalOpen(true)}>
                 <div className="invest-card__head">
                     <div className="invest-card__icon">👷</div>

@@ -8,12 +8,12 @@ async function importFirebaseDB() {
     const a = await import("../../firebase");
     if (a && a.default) return a.default;
     if (a && a.firebaseDB) return a.firebaseDB;
-  } catch {}
+  } catch { }
   try {
     const b = await import("../firebase");
     if (b && b.default) return b.default;
     if (b && b.firebaseDB) return b.firebaseDB;
-  } catch {}
+  } catch { }
   return null;
 }
 
@@ -115,7 +115,7 @@ export default function InvestmentCard({ partners = ["Sudheer", "Suresh", "Praka
       mounted = false;
       try {
         if (ref && listener) ref.off("value", listener);
-      } catch {}
+      } catch { }
     };
   }, []);
 
@@ -290,7 +290,7 @@ export default function InvestmentCard({ partners = ["Sudheer", "Suresh", "Praka
   }, [modalOpen]);
 
   return (
-    <div className="invest-card">
+    <div className="">
       {/* Card */}
       <div className="invest-card__box" role="button" onClick={() => !error && setModalOpen(true)}>
         <div className="invest-card__head">
@@ -343,7 +343,7 @@ export default function InvestmentCard({ partners = ["Sudheer", "Suresh", "Praka
 
               <div className="invest-modal-header">
                 <div className="invest-modal-sub">
-                 <h3> Grand (Ack): <strong>{formatINR(grandTotalAck)}</strong> • Grand (All): <strong>{formatINR(grandTotalAll)}</strong></h3>
+                  <h3> Grand (Ack): <strong>{formatINR(grandTotalAck)}</strong> • Grand (All): <strong>{formatINR(grandTotalAll)}</strong></h3>
                 </div>
               </div>
 

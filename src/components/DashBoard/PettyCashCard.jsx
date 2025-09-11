@@ -420,7 +420,7 @@ export default function PettyCashCard({ pettyCollection = "PettyCash" }) {
         <>
 
             {/* Collapsed card */}
-            <div className="invest-card petty-card" onClick={() => setModalOpen(true)}>
+            <div className="petty-cash-card" onClick={() => setModalOpen(true)}>
                 <div className="invest-card__box" role="button">
                     <div className="invest-card__head">
                         <div className="invest-card__icon">I</div>
@@ -453,9 +453,9 @@ export default function PettyCashCard({ pettyCollection = "PettyCash" }) {
                                         <div style={{ fontWeight: 700 }}>{overallTotals.count}</div>
                                     </div>
                                 </div>
-                                <div>
-                                    <button className="btn btn-sm btn-outline-warning me-2" onClick={() => exportMatrixCSV("year")} disabled={!activeYear}>Export Year CSV</button>
-                                    <button className="btn btn-sm btn-outline-warning me-2" onClick={printMatrix}>Print</button>
+                                <div className="action-btn-wrapper">
+                                    <button className="btn btn-sm btn-outline-warning" onClick={() => exportMatrixCSV("year")} disabled={!activeYear}>Export Year CSV</button>
+                                    <button className="btn btn-sm btn-outline-warning" onClick={printMatrix}>Print</button>
                                     <button className="btn btn-sm btn-danger" onClick={() => { setModalOpen(false); setExpandedCategory(null); }}>Close</button>
                                 </div>
                             </div>

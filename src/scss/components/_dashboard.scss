@@ -94,7 +94,7 @@ $dark-table-text: #e6eef6;
 .invest-modal-backdrop {
     position: fixed;
     inset: 0;
-    background: rgba(0, 0, 0, 0.55);
+    background: rgba(0, 0, 0, 0.8);
     z-index: 2200;
     display: flex;
     align-items: center;
@@ -324,15 +324,16 @@ $dark-table-text: #e6eef6;
 
     tfoot tr {
         td {
-        background-color: #6f82df  !important;
-        color: $dark-table-text !important;
-        font-weight: 700;
-    }
+            background-color: #6f82df !important;
+            color: $dark-table-text !important;
+            font-weight: 700;
+        }
+
         th {
-        background-color: #6f82df  !important;
-        color: $dark-table-text !important;
-        font-weight: 700;
-    }
+            background-color: #6f82df !important;
+            color: $dark-table-text !important;
+            font-weight: 700;
+        }
     }
 
     tr {
@@ -390,4 +391,39 @@ $dark-table-text: #e6eef6;
 .invest-photo {
     max-width: 40px;
     border-radius: 50%;
+}
+
+.petty-header-card {
+    padding: 10px;
+    gap: 10px;
+    background-color: rgb(85, 138, 182);
+    text-align: center;
+    border-radius: 10px;
+    min-width: 100px;
+}
+
+.petty-cat-badge {
+    color: rgb(143, 133, 49);
+}
+
+.details-table {
+    border-color: #393e4d;
+
+    th {
+        background-color: #2d233b !important;
+    }
+
+    tr {
+        border-color: #4c5058;
+
+        td {
+            background-color: #373b46 !important;
+        }
+
+        &:nth-child(even) {
+            td {
+                background-color: #31343d !important;
+            }
+        }
+    }
 }

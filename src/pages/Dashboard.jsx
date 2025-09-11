@@ -2,6 +2,8 @@ import React from 'react'
 import InvestmentCard from '../components/DashBoard/InvestmentCard';
 import WorkerSalaryCard from '../components/DashBoard/WorkerSalaryCard';
 import ClientPaymentCard from '../components/DashBoard/ClientPaymentCard';
+import PettyCashCard from '../components/DashBoard/PettyCashCard';
+
 
 
 
@@ -21,6 +23,7 @@ export default function Dashboard() {
             <ClientPaymentCard />
           </div>
           <div className="col-md-3">
+            <PettyCashCard />
           </div>
         </div>
       </div>

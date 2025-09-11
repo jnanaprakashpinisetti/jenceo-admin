@@ -455,7 +455,7 @@ export default function InvestmentCard({ partners = ["Sudheer", "Suresh", "Praka
                     <div className="table-wrap">
                       {(!activeMonth && activeMonth !== 0) && <div className="muted small">No payments for selected month/year</div>}
                       {(activeMonth === 0 || activeMonth) && (
-                        <table className="table table-sm invest-table">
+                        <table className="table table-sm invest-table table-hover">
                           <thead>
                             <tr>
                               <th>#</th>

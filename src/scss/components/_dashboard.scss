@@ -17,6 +17,19 @@ $dark-table-head: #0b1220;
 $dark-table-text: #e6eef6;
 
 .invest-card {
+    background: linear-gradient(180deg, #071126 0%, #0b1220 100%);
+    color: #fff;
+    padding: 14px;
+    border-radius: 10px;
+    cursor: pointer;
+    box-shadow: 3px 1px 7px 0px rgba(2, 6, 23, 0.5);
+
+    @include mobile {
+        width: 48%;
+    }
+}
+
+.invest-card {
 
     &__box {
         font-family: $font-fallback;
@@ -91,6 +104,20 @@ $dark-table-text: #e6eef6;
     }
 }
 
+/* Card shell */
+.invest-card__box {
+    background: #ffffff;
+    border-radius: 10px;
+    padding: 12px;
+    box-shadow: 0 6px 18px rgba(16, 24, 40, 0.06);
+    transition: transform .12s ease, box-shadow .12s ease;
+}
+
+.invest-card__box[role="button"]:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 10px 24px rgba(16, 24, 40, 0.08);
+}
+
 .investments-card {
     .invest-card__box {
         background: linear-gradient(135deg, #0153b1 0%, #0755af);
@@ -110,10 +137,15 @@ $dark-table-text: #e6eef6;
 }
 
 .worker-salary-card {
+    font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
+    color: #222;
+
     .invest-card__box {
         background: linear-gradient(135deg, #019621 0%, #02791c);
     }
 }
+
+
 
 /* Modal */
 .invest-modal-backdrop {
@@ -133,14 +165,23 @@ $dark-table-text: #e6eef6;
     max-width: 1200px;
     outline: none;
     font-family: $font-fallback;
+
+    @include mobile {
+        max-width: 96%;
+    }
 }
 
 .invest-modal-content {
-    border-radius: 10px;
-    background: #fff;
     color: #111827;
-    box-shadow: 0 12px 40px rgba(2, 6, 23, 0.35);
+    background: #fff;
+    border-radius: 10px;
     overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    max-height: 92vh;
+    width: 100%;
+    box-shadow: 0 24px 60px rgba(2, 6, 23, 0.6);
+    max-width: 1200px;
 }
 
 /* TOP investor bar (new) */
@@ -157,9 +198,11 @@ $dark-table-text: #e6eef6;
     }
 
     .invest-modal-investor-bar__title {
-        font-weight: 700;
+        font-weight: 800;
         margin-right: 12px;
         min-width: 200px;
+        font-size: 18px;
+
     }
 
     .invest-modal-investor-list {
@@ -167,6 +210,10 @@ $dark-table-text: #e6eef6;
         gap: 10px;
         overflow-x: auto;
         padding-bottom: 6px;
+
+        @include mobile {
+            padding: 6px 0;
+        }
 
         &::-webkit-scrollbar {
             height: 6px;
@@ -217,7 +264,7 @@ $dark-table-text: #e6eef6;
 
 /* header below the pill area */
 .invest-modal-header {
-    padding: 12px 16px;
+    padding: 16px 18px;
     border-bottom: 1px solid #eef2f7;
     background: #fbfdff;
     color: #111827;
@@ -237,23 +284,52 @@ $dark-table-text: #e6eef6;
 
 /* body & footer */
 .invest-modal-body {
-    padding: 16px;
-    max-height: 68vh;
+    padding: 18px;
+    max-height: 72vh;
     overflow-y: auto;
     font-family: $font-fallback;
 }
 
+
+/* Footer */
 .invest-modal-footer {
     padding: 12px 16px;
     border-top: 1px solid #eef2f7;
     display: flex;
     justify-content: flex-end;
-    gap: 8px;
+    gap: 10px;
+    display: flex;
+    align-items: center;
+    background: #fff;
 }
 
-/* years, months, status cards */
-.invest-year-tabs .nav-link {
+/* year tabs */
+.invest-year-tabs {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-bottom: 8px;
     cursor: pointer;
+
+    .nav-link {
+        &.active {
+            background: #0b1220;
+            color: #fff;
+        }
+    }
+}
+
+/* month pills */
+.invest-month-pills {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-bottom: 8px;
+
+    .nav-link {
+        margin-right: 6px;
+        cursor: pointer;
+    }
 }
 
 .invest-year-block {
@@ -266,6 +342,11 @@ $dark-table-text: #e6eef6;
     gap: 16px;
     align-items: flex-start;
     margin-bottom: 12px;
+
+    @include mobile {
+        flex-direction: column;
+        flex-wrap: wrap;
+    }
 }
 
 .invest-year-investors {
@@ -277,6 +358,11 @@ $dark-table-text: #e6eef6;
     flex-wrap: wrap;
     gap: 12px;
     margin-top: 8px;
+
+    @include mobile {
+        flex-direction: column;
+        gap: 0;
+    }
 
     .invest-year-investor {
         display: flex;
@@ -334,16 +420,12 @@ $dark-table-text: #e6eef6;
     }
 }
 
-/* month pills */
-.invest-month-pills .nav-link {
-    margin-right: 6px;
-    cursor: pointer;
-}
+
 
 /* month toolbar */
 .invest-month-toolbar {
     display: flex;
-    justify-content: space-between;
+    justify-content: flex-end;
     align-items: center;
     margin-bottom: 12px;
     margin-top: 8px;
@@ -354,16 +436,26 @@ $dark-table-text: #e6eef6;
     }
 }
 
-
-/* table styles: dark header */
 .invest-table {
+    width: 100%;
+    border-collapse: collapse;
+
     thead th {
         background: $dark-table-head;
         color: $dark-table-text;
+        font-weight: 700;
+        border-bottom: 1px solid #f3f4f6;
+        vertical-align: middle;
+        padding: 8px;
+
     }
 
     tbody td {
         vertical-align: middle;
+        border-bottom: 1px solid #f3f4f6;
+        padding: 8px;
+
+
     }
 
     tfoot tr {
@@ -415,22 +507,10 @@ $dark-table-text: #e6eef6;
 
 /* responsive */
 @media (max-width: 768px) {
-    .invest-year-top {
-        flex-direction: column;
-        flex-wrap: wrap;
-    }
 
-    .invest-year-investors-list {
-        flex-direction: column;
-        gap: 0;
-    }
 
     .invest-status-pill {
         width: 100%;
-    }
-
-    .invest-modal-investor-list {
-        padding: 6px 0;
     }
 }
 
@@ -442,7 +522,7 @@ $dark-table-text: #e6eef6;
 .petty-header-card {
     padding: 10px;
     gap: 10px;
-    background-color: rgb(85, 138, 182);
+       background: linear-gradient(135deg, #eea403 0%, #ee4d03 100%);
     text-align: center;
     border-radius: 10px;
     min-width: 100px;
@@ -492,25 +572,9 @@ $dark-table-text: #e6eef6;
 
 }
 
-// Investor card styles
-
-// src/styles/_investment.scss
-
-// src/styles/_investment.scss
-
 .investment-card-root {
     font-family: Inter, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
     color: #1f2937;
-}
-
-/* Collapsed card - consistent class names with ClientPaymentCard */
-.invest-card {
-    background: linear-gradient(180deg, #071126 0%, #0b1220 100%);
-    color: #fff;
-    padding: 14px;
-    border-radius: 10px;
-    cursor: pointer;
-    box-shadow: 3px 1px 7px 0px rgba(2, 6, 23, 0.5);
 }
 
 .card-role {
@@ -666,47 +730,6 @@ $dark-table-text: #e6eef6;
     color: rgba(255, 255, 255, 0.75);
 }
 
-/* Modal backdrop & dialog */
-.invest-modal-backdrop {
-    position: fixed;
-    inset: 0;
-    background: rgb(3 6 10 / 88%);
-    ;
-    z-index: 1050;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: 24px;
-}
-
-.invest-modal-dialog {
-    width: 100%;
-    max-width: 1200px;
-    display: flex;
-    justify-content: center;
-}
-
-.invest-modal-content {
-    width: 100%;
-    border-radius: 10px;
-    overflow: hidden;
-    background: #fff;
-    box-shadow: 0 24px 60px rgba(2, 6, 23, 0.6);
-}
-
-
-
-.invest-modal-investor-bar__title {
-    font-weight: 800;
-    font-size: 18px;
-}
-
-/* header summary */
-.invest-modal-header {
-    padding: 16px 18px;
-    border-bottom: 1px solid #f1f5f9;
-}
-
 .invest-modal-summary {
     display: flex;
     justify-content: space-between;
@@ -738,12 +761,6 @@ $dark-table-text: #e6eef6;
     color: #fff;
 }
 
-/* modal body */
-.invest-modal-body {
-    padding: 18px;
-    max-height: 72vh;
-    overflow: auto;
-}
 
 /* layout: investors + year panel */
 .investors-year-section {
@@ -837,11 +854,6 @@ $dark-table-text: #e6eef6;
     min-width: 520px;
 }
 
-/* year tabs */
-.invest-year-tabs .nav-link.active {
-    background: #0b1220;
-    color: #fff;
-}
 
 /* Year quick status cards */
 .year-quick-status {
@@ -930,27 +942,7 @@ $dark-table-text: #e6eef6;
     margin-top: 12px;
 }
 
-.invest-table {
-    width: 100%;
-    border-collapse: collapse;
-}
 
-.invest-table th,
-.invest-table td {
-    padding: 8px 10px;
-    border-bottom: 1px solid #eef2f7;
-}
-
-.invest-table thead th {
-    background: #0b2430;
-    color: #fff;
-    font-weight: 700;
-}
-
-.invest-table tbody tr:hover {
-    background: #f9fafb;
-    cursor: pointer;
-}
 
 .status-pill {
     display: inline-block;
@@ -1022,10 +1014,10 @@ $dark-table-text: #e6eef6;
     border-radius: .5rem;
     padding: 10px;
     min-width: 160px;
-}
+    flex: 1 1 240px;
+    border-radius: 10px;
+    box-shadow: 0 6px 14px rgba(16, 24, 40, 0.06);
 
-.grad-balance {
-    background: linear-gradient(120deg, #ffb454, #ff6b6b);
 }
 
 .grad-refund {
@@ -1038,18 +1030,6 @@ $dark-table-text: #e6eef6;
     overflow: hidden;
 }
 
-.invest-card {
-    cursor: pointer;
-    border-radius: .5rem;
-    padding: 12px;
-    background: #0b1220;
-    color: #fff;
-
-    @include mobile {
-        width: 48%;
-    }
-}
-
 .invest-card__label {
     font-size: 13px;
     color: #cde3ff;
@@ -1060,24 +1040,6 @@ $dark-table-text: #e6eef6;
     font-weight: 700;
 }
 
-.invest-modal-header {
-    padding: 18px;
-    border-bottom: 1px solid #e9ecef;
-}
-
-.invest-modal-content {
-    width: 100%;
-    max-width: 1200px;
-    border-radius: 8px;
-    overflow: hidden;
-}
-
-.invest-modal-body {
-    padding: 18px;
-    max-height: 70vh;
-    overflow: auto;
-}
-
 .overall-cards {
     display: flex;
     flex-wrap: wrap;
@@ -1085,27 +1047,10 @@ $dark-table-text: #e6eef6;
     margin-bottom: 15px;
 }
 
-
-/* src/components/DashBoard/ClientPaymentCard.scss */
-
 /* Base */
 .clinet-payment-card {
     font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
     color: #222;
-}
-
-/* Card shell */
-.invest-card__box {
-    background: #ffffff;
-    border-radius: 10px;
-    padding: 12px;
-    box-shadow: 0 6px 18px rgba(16, 24, 40, 0.06);
-    transition: transform .12s ease, box-shadow .12s ease;
-}
-
-.invest-card__box[role="button"]:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 10px 24px rgba(16, 24, 40, 0.08);
 }
 
 .invest-card__head {
@@ -1119,69 +1064,6 @@ $dark-table-text: #e6eef6;
 }
 
 
-
-/* Modal backdrop + dialog */
-.invest-modal-backdrop {
-    position: fixed;
-    inset: 0;
-    background: rgba(2, 6, 23, 0.55);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    z-index: 1050;
-    padding: 18px;
-}
-
-.invest-modal-dialog {
-    width: 100%;
-    max-width: 1100px;
-    outline: none;
-}
-
-.invest-modal-content {
-    background: #fff;
-    border-radius: 10px;
-    overflow: hidden;
-    display: flex;
-    flex-direction: column;
-    max-height: 92vh;
-}
-
-
-
-/* Modal body */
-.invest-modal-body {
-    padding: 16px;
-    overflow: auto;
-}
-
-/* Footer */
-.invest-modal-footer {
-    display: flex;
-    gap: 12px;
-    align-items: center;
-    justify-content: space-between;
-    padding: 12px 16px;
-    border-top: 1px solid #f3f4f6;
-    background: #fff;
-}
-
-/* Overall header cards */
-.overall-cards {
-    display: flex;
-    gap: 12px;
-    margin-bottom: 14px;
-    flex-wrap: wrap;
-}
-
-.header-gradient {
-    flex: 1 1 240px;
-    border-radius: 10px;
-    padding: 12px;
-    color: #fff;
-    box-shadow: 0 6px 14px rgba(16, 24, 40, 0.06);
-}
-
 .header-label {
     font-size: 12px;
     opacity: 0.95;
@@ -1190,7 +1072,7 @@ $dark-table-text: #e6eef6;
 .header-value {
     font-size: 18px;
     font-weight: 800;
-    margin-top: 4px;
+    margin-top: 5px;
 }
 
 .header-sub {
@@ -1249,21 +1131,14 @@ $dark-table-text: #e6eef6;
 /* Distinctive gradients */
 .grad-paid {
     background: linear-gradient(135deg, #00C9FF 0%, #92FE9D 100%);
-    /* bright cyan -> mint */
-}
-
-.grad-refund {
-    background: linear-gradient(135deg, #FF7EB3 0%, #FF758C 100%);
-    /* rose / pink */
 }
 
 .grad-balance {
-    background: linear-gradient(135deg, #667EEA 0%, #764BA2 100%);
-    /* indigo -> purple */
+    background: linear-gradient(120deg, #ffb454, #ff6b6b);
 }
 
 .grad-pending {
-    background: linear-gradient(135deg, #FFD166 0%, #FF6B6B 100%);
+    background: linear-gradient(135deg, #a923e7 0%, #681191 100%);
     /* warm yellow -> coral */
 }
 
@@ -1293,24 +1168,6 @@ $dark-table-text: #e6eef6;
     background: #eef2f7;
 }
 
-/* Invest table tweaks */
-.invest-table {
-    width: 100%;
-    border-collapse: collapse;
-}
-
-.invest-table th,
-.invest-table td {
-    padding: 8px;
-    vertical-align: middle;
-    border-bottom: 1px solid #f3f4f6;
-}
-
-.invest-table thead th {
-    background: #fbfbfd;
-    font-weight: 700;
-    color: #374151;
-}
 
 /* small helpers */
 .month-heading {
@@ -1322,109 +1179,14 @@ $dark-table-text: #e6eef6;
     margin-bottom: 12px;
 }
 
-/* WorkerSalaryCard.scss - styles for WorkerSalaryCard component */
-
-.worker-salary-card {
-    font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
-    color: #222;
-}
-
-/* Card shell */
-.invest-card__box {
-    background: #ffffff;
-    border-radius: 10px;
-    padding: 12px;
-    box-shadow: 0 6px 18px rgba(16, 24, 40, 0.06);
-    transition: transform .12s ease, box-shadow .12s ease;
-}
-
-.invest-card__box[role="button"]:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 10px 24px rgba(16, 24, 40, 0.08);
-}
-
-.invest-card__head {
-    display: flex;
-    gap: 12px;
-    align-items: center;
-}
-
 .invest-card__icon {
     font-size: 22px;
-}
-
-.invest-card__meta .invest-card__label {
-    font-size: 13px;
-    color: #374151;
-    font-weight: 600;
-}
-
-.invest-card__meta .invest-card__total {
-    font-size: 20px;
-    font-weight: 700;
-    margin-top: 2px;
-    color: #0f172a;
-}
-
-.invest-card__meta .invest-card__small {
-    font-size: 12px;
-    color: #6b7280;
-    margin-top: 4px;
 }
 
 .invest-card__divider {
     height: 1px;
     background: linear-gradient(90deg, #f3f4f6, #ffffff);
     margin-top: 12px;
-}
-
-/* Modal backdrop + dialog */
-.invest-modal-backdrop {
-    position: fixed;
-    inset: 0;
-    background: rgba(2, 6, 23, 0.55);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    z-index: 1050;
-    padding: 18px;
-}
-
-.invest-modal-dialog {
-    width: 100%;
-    max-width: 1100px;
-    outline: none;
-}
-
-.invest-modal-content {
-    background: #fff;
-    border-radius: 10px;
-    overflow: hidden;
-    display: flex;
-    flex-direction: column;
-    max-height: 92vh;
-}
-
-/* Top bar */
-.invest-modal-investor-bar {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 14px 16px;
-    border-bottom: 1px solid #f3f4f6;
-    background: linear-gradient(180deg, rgba(255, 255, 255, 0.6), rgba(255, 255, 255, 0.4));
-}
-
-.invest-modal-investor-bar__title {
-    font-size: 16px;
-    font-weight: 700;
-    color: #0f172a;
-}
-
-/* Modal body */
-.invest-modal-body {
-    padding: 16px;
-    overflow: auto;
 }
 
 /* Category cards */
@@ -1435,55 +1197,11 @@ $dark-table-text: #e6eef6;
     flex-wrap: wrap;
 }
 
-.header-gradient {
-    flex: 1 1 220px;
-    border-radius: 10px;
-    padding: 12px;
-    color: #fff;
-    box-shadow: 0 6px 14px rgba(16, 24, 40, 0.06);
-}
-
-.header-label {
-    font-size: 12px;
-    opacity: 0.95;
-}
-
-.header-value {
-    font-size: 18px;
-    font-weight: 800;
-    margin-top: 6px;
-}
-
-.header-sub {
-    font-size: 12px;
-    opacity: 0.9;
-    margin-top: 6px;
-}
-
-/* Distinctive gradients */
-.grad-paid {
-    background: linear-gradient(135deg, #00C9FF 0%, #92FE9D 100%);
-}
-
-/* cyan -> mint */
-.grad-balance {
-    background: linear-gradient(135deg, #667EEA 0%, #764BA2 100%);
-}
-
-/* indigo -> purple */
-.grad-pending {
-    background: linear-gradient(135deg, #FFD166 0%, #FF6B6B 100%);
-}
-
-/* warm yellow -> coral */
-
-/* Month / Year navs */
-.invest-year-tabs,
-.invest-month-pills {
-    display: flex;
-    gap: 8px;
-    flex-wrap: wrap;
-    margin-bottom: 8px;
+/* responsive */
+@media (max-width: 1000px) {
+    .category-cards {
+        flex-direction: column;
+    }
 }
 
 .nav-link {
@@ -1492,31 +1210,13 @@ $dark-table-text: #e6eef6;
     border-radius: 6px;
     border: 1px solid transparent;
     background: transparent;
-}
 
-.nav-link.active {
-    background: #0f172a;
-    color: #fff;
-    border-color: #0f172a;
-}
+    &.active {
+        background: #0f172a;
+        color: #fff;
+        border-color: #0f172a;
 
-/* table / photo */
-.invest-table {
-    width: 100%;
-    border-collapse: collapse;
-}
-
-.invest-table th,
-.invest-table td {
-    padding: 8px;
-    vertical-align: middle;
-    border-bottom: 1px solid #f3f4f6;
-}
-
-.invest-table thead th {
-    background: #fbfbfd;
-    font-weight: 700;
-    color: #374151;
+    }
 }
 
 .month-heading {
@@ -1528,26 +1228,6 @@ $dark-table-text: #e6eef6;
     margin-bottom: 12px;
 }
 
-.invest-month-toolbar {
-    display: flex;
-    justify-content: flex-end;
-    gap: 8px;
-    margin-top: 8px;
-}
-
 .table-secondary {
     background: #fbfbfb;
-}
-
-/* responsive */
-@media (max-width: 1000px) {
-    .category-cards {
-        flex-direction: column;
-    }
-}
-
-@media (max-width: 520px) {
-    .invest-modal-dialog {
-        max-width: 96%;
-    }
 }

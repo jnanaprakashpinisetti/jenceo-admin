@@ -521,7 +521,7 @@ const EnquiriesDisplay = () => {
                     ))}
                 </ul>
                 <div className="table-responsive summary-table-container">
-                    <table className="table table-dark summary-table">
+                    <table className="table table-dark summary-table table-hover">
                         <thead className="summary-table-header">
                             <tr>
                                 <th>Through</th>

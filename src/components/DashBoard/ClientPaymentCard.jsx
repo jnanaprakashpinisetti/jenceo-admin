@@ -3,22 +3,18 @@ import React, { useEffect, useMemo, useState, useRef } from "react";
 import PropTypes from "prop-types";
 import { useNavigate } from "react-router-dom";
 
-/**
- ClientPaymentCard - header now shows overall totals (Paid / Balance / Refunds) with gradients
- Reads ClientData & ExitClients, groups by year/month, same UX as WorkerSalaryCard.
-*/
-
+/* ---------------------- Helpers ---------------------- */
 async function importFirebaseDB() {
   try {
     const a = await import("../../firebase");
     if (a && a.default) return a.default;
     if (a && a.firebaseDB) return a.firebaseDB;
-  } catch { }
+  } catch (e) {}
   try {
     const b = await import("../firebase");
     if (b && b.default) return b.default;
     if (b && b.firebaseDB) return b.firebaseDB;
-  } catch { }
+  } catch (e) {}
   if (typeof window !== "undefined" && window.firebaseDB) return window.firebaseDB;
   return null;
 }
@@ -34,8 +30,12 @@ function safeNumber(v) {
 function formatINR(value) {
   const n = Number(value || 0);
   try {
-    return new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 }).format(n);
-  } catch {
+    return new Intl.NumberFormat("en-IN", {
+      style: "currency",
+      currency: "INR",
+      maximumFractionDigits: 0,
+    }).format(n);
+  } catch (e) {
     return "\u20B9" + n.toLocaleString("en-IN");
   }
 }
@@ -46,12 +46,16 @@ function parseDateRobust(v) {
   const s = String(v).trim();
   if (/^\d{10,13}$/.test(s)) {
     const n = Number(s);
+    // if in seconds (10 digits) convert to ms
     return new Date(n < 1e12 ? n * 1000 : n);
   }
+  // ISO / standard date
   const d = new Date(s);
   if (!isNaN(d)) return d;
+  // dd/mm/yyyy or dd-mm-yyyy
   const m = s.match(/^(\d{1,2})[\/\-\s](\d{1,2})[\/\-\s](\d{4})$/);
   if (m) return new Date(Number(m[3]), Number(m[2]) - 1, Number(m[1]));
+  // Month YYYY
   const mm = s.match(/([A-Za-z]+)[,]?\s*(\d{4})/);
   if (mm) {
     const idx = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"].indexOf(mm[1].slice(0, 3).toLowerCase());
@@ -60,19 +64,13 @@ function parseDateRobust(v) {
   return null;
 }
 
-function formatDDMMYYYY(v) {
-  const d = parseDateRobust(v);
-  if (!d) return "-";
-  const dd = String(d.getDate()).padStart(2, "0");
-  const mm = String(d.getMonth() + 1).padStart(2, "0");
-  const yyyy = d.getFullYear();
-  return `${dd}/${mm}/${yyyy}`;
-}
-
-function extractPaymentsFromClient(clientRecord, collectionName = "") {
+/* Normalize client record into payment rows */
+function extractPaymentsFromClient(clientRecord = {}, collectionName = "") {
   const clientId = clientRecord.idNo ?? clientRecord.id ?? clientRecord.clientId ?? clientRecord.key ?? "";
   const clientName = clientRecord.clientName ?? clientRecord.cName ?? clientRecord.name ?? clientRecord.client_name ?? "Unknown";
-  const paymentsArr = Array.isArray(clientRecord.payments) ? clientRecord.payments
+
+  const paymentsArr = Array.isArray(clientRecord.payments)
+    ? clientRecord.payments
     : (clientRecord.payments && typeof clientRecord.payments === "object" ? Object.values(clientRecord.payments) : []);
 
   const results = [];
@@ -89,6 +87,8 @@ function extractPaymentsFromClient(clientRecord, collectionName = "") {
       const receipt = p.receptNo ?? p.receiptNo ?? p.receipt ?? p.receipt_number ?? "";
       const method = p.paymentMethod ?? p.type ?? p.mode ?? p.method ?? "";
       const date = p.date ?? p.paymentDate ?? p.createdAt ?? p.paymentFor ?? "";
+      const parsedDate = parseDateRobust(date);
+
       results.push({
         sourceCollection: collectionName,
         clientId: String(clientId || ""),
@@ -102,15 +102,16 @@ function extractPaymentsFromClient(clientRecord, collectionName = "") {
         receipt,
         method,
         date,
-        parsedDate: parseDateRobust(date),
-        raw: p
+        parsedDate,
+        raw: p,
       });
     });
   } else {
+    // fallback single record fields
     const singleAmount = safeNumber(clientRecord.paidAmount ?? clientRecord.amount ?? clientRecord.payment ?? 0);
-    if (singleAmount) {
-      const date = clientRecord.date ?? clientRecord.paymentDate ?? "";
+    if (singleAmount !== 0 || singleAmount === 0) {
       const travel = safeNumber(clientRecord.travel ?? clientRecord.travelCharges ?? 0);
+      const date = clientRecord.date ?? clientRecord.paymentDate ?? "";
       results.push({
         sourceCollection: collectionName,
         clientId: String(clientId || ""),
@@ -125,25 +126,31 @@ function extractPaymentsFromClient(clientRecord, collectionName = "") {
         method: clientRecord.paymentMethod ?? "",
         date,
         parsedDate: parseDateRobust(date),
-        raw: clientRecord
+        raw: clientRecord,
       });
     }
   }
+
   return results;
 }
 
+/* Group payments into { years: { [year]: { months: { [monthKey]: { rows, totals } }, totals } }, yearKeys: [] } */
 function groupPaymentsByYearMonth(payments) {
   const years = {};
-  payments.forEach((p) => {
+  (payments || []).forEach((p) => {
     let year = p.parsedDate ? p.parsedDate.getFullYear() : null;
     let monthIdx = p.parsedDate ? p.parsedDate.getMonth() : null;
     if (!year || monthIdx === null || monthIdx === undefined) {
       const alt = parseDateRobust(p.date || p.raw?.paymentFor || "");
-      if (alt) { year = alt.getFullYear(); monthIdx = alt.getMonth(); }
+      if (alt) {
+        year = alt.getFullYear();
+        monthIdx = alt.getMonth();
+      }
     }
     if (!year) year = "Unknown";
     const yKey = year;
     const mKey = (monthIdx === null || monthIdx === undefined) ? "Unknown" : String(monthIdx);
+
     if (!years[yKey]) years[yKey] = { months: {}, totals: { paid: 0, balance: 0, refunds: 0, pending: 0, count: 0 } };
     if (!years[yKey].months[mKey]) years[yKey].months[mKey] = { rows: [], totals: { paid: 0, balance: 0, refunds: 0, pending: 0, count: 0 } };
 
@@ -167,32 +174,36 @@ function groupPaymentsByYearMonth(payments) {
     return Number(b) - Number(a);
   });
 
-  yearKeys.forEach(y => {
-    const months = years[y].months;
+  // sort months for each year; keep keys as strings (e.g. "0".."11" or "Unknown")
+  yearKeys.forEach((y) => {
+    const months = years[y].months || {};
     const mKeys = Object.keys(months).sort((a, b) => {
       if (a === "Unknown") return 1;
       if (b === "Unknown") return -1;
       return Number(a) - Number(b);
     });
     const sorted = {};
-    mKeys.forEach(k => sorted[k] = months[k]);
+    mKeys.forEach((k) => (sorted[k] = months[k]));
     years[y].months = sorted;
   });
 
   return { years, yearKeys };
 }
 
+/* Simple sparkline */
 function Sparkline({ points = [], width = 120, height = 30 }) {
   if (!points || points.length === 0) return <div className="invest-sparkline" />;
   const max = Math.max(...points, 1);
   const min = Math.min(...points, 0);
   const range = max - min || 1;
   const stepX = width / (points.length - 1 || 1);
-  const coords = points.map((v, i) => {
-    const x = i * stepX;
-    const y = height - ((v - min) / range) * height;
-    return `${x},${y}`;
-  }).join(" ");
+  const coords = points
+    .map((v, i) => {
+      const x = i * stepX;
+      const y = height - ((v - min) / range) * height;
+      return `${x},${y}`;
+    })
+    .join(" ");
   return (
     <svg className="invest-sparkline" width={width} height={height} viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none">
       <polyline fill="none" stroke="currentColor" strokeWidth="1.5" points={coords} />
@@ -200,6 +211,7 @@ function Sparkline({ points = [], width = 120, height = 30 }) {
   );
 }
 
+/* ---------------------- Component ---------------------- */
 export default function ClientPaymentCard({
   clientCollections = { active: "ClientData", exit: "ExitClients" },
   openClientModal = null,
@@ -210,10 +222,11 @@ export default function ClientPaymentCard({
   const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
   const [activeYear, setActiveYear] = useState(null);
-  const [activeMonth, setActiveMonth] = useState(null);
+  const [activeMonth, setActiveMonth] = useState(null); // string like "0".."11" or "Unknown"
   const [filterClient, setFilterClient] = useState(null);
   const modalRef = useRef(null);
 
+  // listen Firebase nodes and build payments
   useEffect(() => {
     let listeners = [];
     let mounted = true;
@@ -229,6 +242,7 @@ export default function ClientPaymentCard({
 
       const snapshots = {};
       const paths = [clientCollections.active, clientCollections.exit];
+
       const attach = (path) => {
         try {
           const ref = fdb.child ? fdb.child(path) : fdb.ref(path);
@@ -245,23 +259,30 @@ export default function ClientPaymentCard({
 
       const rebuild = () => {
         const combined = [];
-        paths.forEach(p => {
+        paths.forEach((p) => {
           const node = snapshots[p] || {};
-          Object.keys(node).forEach(k => {
+          Object.keys(node).forEach((k) => {
             const client = node[k] || {};
             const payments = extractPaymentsFromClient(client, p);
-            payments.forEach(pm => {
+            payments.forEach((pm) => {
               pm._clientDbKey = `${p}/${k}`;
               pm.sourceCollection = p;
               combined.push(pm);
             });
           });
         });
+
+        // ensure parsedDate computed for any row that lacks it (fallback)
+        combined.forEach((r) => {
+          if (!r.parsedDate) r.parsedDate = parseDateRobust(r.date || r.raw?.paymentFor || r.raw?.createdAt || "");
+        });
+
         combined.sort((a, b) => {
           const da = a.parsedDate ? a.parsedDate.getTime() : 0;
           const db = b.parsedDate ? b.parsedDate.getTime() : 0;
           return db - da;
         });
+
         setAllPayments(combined);
         setLoading(false);
       };
@@ -271,16 +292,20 @@ export default function ClientPaymentCard({
 
     return () => {
       mounted = false;
-      try { listeners.forEach(({ ref, cb }) => ref.off("value", cb)); } catch { }
+      try {
+        listeners.forEach(({ ref, cb }) => ref.off("value", cb));
+      } catch (e) {}
     };
   }, [clientCollections.active, clientCollections.exit]);
 
+  // grouped structure
   const grouped = useMemo(() => groupPaymentsByYearMonth(allPayments), [allPayments]);
   const yearKeys = useMemo(() => grouped.yearKeys || [], [grouped]);
 
+  // client summaries & overall totals
   const clientSummaries = useMemo(() => {
     const map = {};
-    allPayments.forEach(p => {
+    allPayments.forEach((p) => {
       const id = p.clientId || "Unknown";
       const name = p.clientName || "Unknown";
       if (!map[id]) map[id] = { clientId: id, clientName: name, paid: 0, balance: 0, refunds: 0, count: 0 };
@@ -293,58 +318,78 @@ export default function ClientPaymentCard({
   }, [allPayments]);
 
   const overallTotals = useMemo(() => {
-    return allPayments.reduce((acc, p) => {
-      acc.paid += Number(p.paidAmount || 0);
-      acc.paidIncludingTravel = (acc.paidIncludingTravel || 0) + Number(p.totalForTotals || p.paidAmount || 0);
-      acc.balance += Number(p.balance || 0);
-      acc.refunds += Number(p.refundAmount || 0);
-      acc.count += 1;
-      if (Number(p.paidAmount || 0) === 0) acc.pendingCount += 1;
-      return acc;
-    }, { paid: 0, paidIncludingTravel: 0, balance: 0, refunds: 0, count: 0, pendingCount: 0 });
+    return allPayments.reduce(
+      (acc, p) => {
+        acc.paid += Number(p.paidAmount || 0);
+        acc.paidIncludingTravel += Number(p.totalForTotals || p.paidAmount || 0);
+        acc.balance += Number(p.balance || 0);
+        acc.refunds += Number(p.refundAmount || 0);
+        acc.count += 1;
+        if (Number(p.paidAmount || 0) === 0) acc.pendingCount += 1;
+        return acc;
+      },
+      { paid: 0, paidIncludingTravel: 0, balance: 0, refunds: 0, count: 0, pendingCount: 0 }
+    );
   }, [allPayments]);
 
+  // default active year/month when modal opens
   useEffect(() => {
     if (!modalOpen) return;
-    if (!yearKeys.length) { setActiveYear(null); setActiveMonth(null); return; }
+    if (!yearKeys.length) {
+      setActiveYear(null);
+      setActiveMonth(null);
+      return;
+    }
     const targetYear = yearKeys[0];
-    setActiveYear(prev => prev || targetYear);
+    setActiveYear((prev) => prev || targetYear);
 
-    const pickMonth = (y, clientId) => {
-      const monthsObj = grouped.years?.[y]?.months || {};
-      const keys = Object.keys(monthsObj);
-      if (!keys.length) return null;
-      if (clientId) {
-        const cand = keys.slice().reverse().find(k => (monthsObj[k].rows || []).some(r => (r.clientId || "").toString() === (clientId || "").toString()));
-        if (cand) return cand;
-      }
-      const cand2 = keys.slice().reverse().find(k => k !== "Unknown");
-      return cand2 || keys[0];
-    };
+    // choose latest month (not "Unknown") or first available
+    const monthsObj = grouped.years?.[targetYear]?.months || {};
+    const keys = Object.keys(monthsObj);
+    let pick = null;
+    if (keys.length) {
+      const nonUnknown = keys.slice().reverse().find((k) => k !== "Unknown");
+      pick = nonUnknown ?? keys[0];
+    }
+    setActiveMonth((prev) => (prev === null || prev === undefined ? pick : prev));
+    setFilterClient(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [modalOpen, yearKeys.join("," + "")]); // minor deps tweak to avoid excessive runs
 
-    const initialMonth = pickMonth(targetYear, filterClient);
-    setActiveMonth(prev => prev || initialMonth);
-  }, [modalOpen, yearKeys, grouped, filterClient]);
-
+  // when activeYear changes, pick a good activeMonth
   useEffect(() => {
-    if (!activeYear) return;
+    if (!activeYear) {
+      setActiveMonth(null);
+      return;
+    }
     const monthsObj = grouped.years?.[activeYear]?.months || {};
     const keys = Object.keys(monthsObj);
-    if (!keys.length) { setActiveMonth(null); return; }
-    if (filterClient) {
-      const candidate = keys.slice().reverse().find(k => (monthsObj[k].rows || []).some(p => (p.clientId || "").toString() === (filterClient || "").toString()));
-      if (candidate) { setActiveMonth(candidate); return; }
+    if (!keys.length) {
+      setActiveMonth(null);
+      return;
     }
-    const cand = keys.slice().reverse().find(k => k !== "Unknown");
+    if (filterClient) {
+      const candidate = keys.slice().reverse().find((k) => (monthsObj[k].rows || []).some((r) => (r.clientId || "").toString() === (filterClient || "").toString()));
+      if (candidate) {
+        setActiveMonth(candidate);
+        return;
+      }
+    }
+    const cand = keys.slice().reverse().find((k) => k !== "Unknown");
     setActiveMonth(cand || keys[0]);
-  }, [activeYear, grouped, filterClient]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeYear, filterClient]);
 
+  // current month/year rows (safely indexing keys as strings)
   const currentMonthRows = useMemo(() => {
-    if (!activeYear || !activeMonth) return [];
-    const mObj = grouped.years?.[activeYear]?.months?.[activeMonth];
+    if (activeYear === null || activeYear === undefined) return [];
+    if (activeMonth === null || activeMonth === undefined) return [];
+    const mKey = String(activeMonth);
+    const mObj = grouped.years?.[activeYear]?.months?.[mKey];
     if (!mObj) return [];
     let rows = mObj.rows || [];
-    if (filterClient) rows = rows.filter(r => (r.clientId || "").toString() === (filterClient || "").toString());
+    if (filterClient) rows = rows.filter((r) => (r.clientId || "").toString() === (filterClient || "").toString());
+    // sort newest first
     return rows.slice().sort((a, b) => {
       const da = a.parsedDate ? a.parsedDate.getTime() : 0;
       const db = b.parsedDate ? b.parsedDate.getTime() : 0;
@@ -353,13 +398,14 @@ export default function ClientPaymentCard({
   }, [activeYear, activeMonth, filterClient, grouped]);
 
   const currentYearRows = useMemo(() => {
-    if (!activeYear) return [];
+    if (activeYear === null || activeYear === undefined) return [];
     const months = grouped.years?.[activeYear]?.months || {};
     let rows = Object.keys(months).reduce((acc, k) => acc.concat(months[k].rows || []), []);
-    if (filterClient) rows = rows.filter(r => (r.clientId || "").toString() === (filterClient || "").toString());
+    if (filterClient) rows = rows.filter((r) => (r.clientId || "").toString() === (filterClient || "").toString());
     return rows;
   }, [activeYear, grouped, filterClient]);
 
+  // totals
   const monthlyTotals = useMemo(() => {
     const paid = currentMonthRows.reduce((s, r) => s + Number(r.paidAmount || 0), 0);
     const paidInclTravel = currentMonthRows.reduce((s, r) => s + Number(r.totalForTotals || r.paidAmount || 0), 0);
@@ -382,7 +428,7 @@ export default function ClientPaymentCard({
     if (!activeYear) return new Array(12).fill(0);
     const months = grouped.years?.[activeYear]?.months || {};
     const pts = new Array(12).fill(0);
-    Object.keys(months).forEach(k => {
+    Object.keys(months).forEach((k) => {
       if (k === "Unknown") return;
       const idx = Number(k);
       if (idx >= 0 && idx < 12) {
@@ -394,30 +440,40 @@ export default function ClientPaymentCard({
 
   const topClients = useMemo(() => clientSummaries.slice(0, 3), [clientSummaries]);
 
-  const arrayToCSV = (rows) => rows.map(r => r.map(c => {
-    if (c === null || c === undefined) return "";
-    const s = String(c);
-    if (s.includes(",") || s.includes('"') || s.includes("\n")) return `"${s.replace(/"/g, '""')}"`;
-    return s;
-  }).join(",")).join("\n");
+  const arrayToCSV = (rows) =>
+    rows
+      .map((r) =>
+        r
+          .map((c) => {
+            if (c === null || c === undefined) return "";
+            const s = String(c);
+            if (s.includes(",") || s.includes('"') || s.includes("\n")) return `"${s.replace(/"/g, '""')}"`;
+            return s;
+          })
+          .join(",")
+      )
+      .join("\n");
 
   const exportCSV = (scope = "month") => {
     const rows = [["#", "Client ID", "Client Name", "Method", "Date", "Receipt No", "Payment", "Balance"]];
     if (scope === "month") {
-      currentMonthRows.forEach((r, i) => rows.push([i + 1, r.clientId || "-", r.clientName || "-", r.method || "-", formatDDMMYYYY(r.date), r.receipt || "-", Number(r.totalForTotals || r.paidAmount || 0), Number(r.balance || 0)]));
+      currentMonthRows.forEach((r, i) => rows.push([i + 1, r.clientId || "-", r.clientName || "-", r.method || "-", r.date || "-", r.receipt || "-", Number(r.totalForTotals || r.paidAmount || 0), Number(r.balance || 0)]));
     } else if (scope === "year") {
       let idx = 0;
-      currentYearRows.forEach(r => rows.push([++idx, r.clientId || "-", r.clientName || "-", r.method || "-", formatDDMMYYYY(r.date), r.receipt || "-", Number(r.totalForTotals || r.paidAmount || 0), Number(r.balance || 0)]));
+      currentYearRows.forEach((r) => rows.push([++idx, r.clientId || "-", r.clientName || "-", r.method || "-", r.date || "-", r.receipt || "-", Number(r.totalForTotals || r.paidAmount || 0), Number(r.balance || 0)]));
     } else {
       let idx = 0;
-      allPayments.forEach(r => rows.push([++idx, r.clientId || "-", r.clientName || "-", r.method || "-", formatDDMMYYYY(r.date), r.receipt || "-", Number(r.totalForTotals || r.paidAmount || 0), Number(r.balance || 0)]));
+      allPayments.forEach((r) => rows.push([++idx, r.clientId || "-", r.clientName || "-", r.method || "-", r.date || "-", r.receipt || "-", Number(r.totalForTotals || r.paidAmount || 0), Number(r.balance || 0)]));
     }
     const csv = arrayToCSV(rows);
     const blob = new Blob([csv], { type: "text/csv" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
-    a.href = url; a.download = `client-payments-${scope}-${new Date().toISOString().slice(0, 10)}.csv`;
-    document.body.appendChild(a); a.click(); a.remove();
+    a.href = url;
+    a.download = `client-payments-${scope}-${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   };
 
@@ -425,16 +481,18 @@ export default function ClientPaymentCard({
     let html = `<html><head><title>Client Payments ${scope}</title><style>body{font-family:Arial;font-size:12px}table{border-collapse:collapse;width:100%}th,td{border:1px solid #ddd;padding:6px;text-align:left}th{background:#f4f4f4}</style></head><body>`;
     html += `<h3>Client Payments - ${scope}</h3><table><thead><tr><th>#</th><th>Client ID</th><th>Client Name</th><th>Method</th><th>Date</th><th>Receipt</th><th>Payment</th><th>Balance</th></tr></thead><tbody>`;
     if (scope === "month") {
-      currentMonthRows.forEach((r, i) => html += `<tr><td>${i + 1}</td><td>${r.clientId || ""}</td><td>${r.clientName || ""}</td><td>${r.method || ""}</td><td>${formatDDMMYYYY(r.date)}</td><td>${r.receipt || ""}</td><td>${Number(r.totalForTotals || r.paidAmount || 0)}</td><td>${Number(r.balance || 0)}</td></tr>`);
+      currentMonthRows.forEach((r, i) => (html += `<tr><td>${i + 1}</td><td>${r.clientId || ""}</td><td>${r.clientName || ""}</td><td>${r.method || ""}</td><td>${r.date || ""}</td><td>${r.receipt || ""}</td><td>${Number(r.totalForTotals || r.paidAmount || 0)}</td><td>${Number(r.balance || 0)}</td></tr>`));
     } else if (scope === "year") {
-      currentYearRows.forEach((r, i) => html += `<tr><td>${i + 1}</td><td>${r.clientId || ""}</td><td>${r.clientName || ""}</td><td>${r.method || ""}</td><td>${formatDDMMYYYY(r.date)}</td><td>${r.receipt || ""}</td><td>${Number(r.totalForTotals || r.paidAmount || 0)}</td><td>${Number(r.balance || 0)}</td></tr>`);
+      currentYearRows.forEach((r, i) => (html += `<tr><td>${i + 1}</td><td>${r.clientId || ""}</td><td>${r.clientName || ""}</td><td>${r.method || ""}</td><td>${r.date || ""}</td><td>${r.receipt || ""}</td><td>${Number(r.totalForTotals || r.paidAmount || 0)}</td><td>${Number(r.balance || 0)}</td></tr>`));
     } else {
-      allPayments.forEach((r, i) => html += `<tr><td>${i + 1}</td><td>${r.clientId || ""}</td><td>${r.clientName || ""}</td><td>${r.method || ""}</td><td>${formatDDMMYYYY(r.date)}</td><td>${r.receipt || ""}</td><td>${Number(r.totalForTotals || r.paidAmount || 0)}</td><td>${Number(r.balance || 0)}</td></tr>`);
+      allPayments.forEach((r, i) => (html += `<tr><td>${i + 1}</td><td>${r.clientId || ""}</td><td>${r.clientName || ""}</td><td>${r.method || ""}</td><td>${r.date || ""}</td><td>${r.receipt || ""}</td><td>${Number(r.totalForTotals || r.paidAmount || 0)}</td><td>${Number(r.balance || 0)}</td></tr>`));
     }
     html += `</tbody></table></body></html>`;
     const w = window.open("", "_blank");
     if (!w) return;
-    w.document.write(html); w.document.close(); w.print();
+    w.document.write(html);
+    w.document.close();
+    w.print();
   };
 
   const handleRowClick = (r) => {
@@ -455,24 +513,23 @@ export default function ClientPaymentCard({
     return () => document.body.classList.remove("modal-open");
   }, [modalOpen]);
 
-  const hasRefundsThisMonth = useMemo(() => (currentMonthRows || []).some(r => Number(r.refundAmount || 0) > 0), [currentMonthRows]);
+  const hasRefundsThisMonth = useMemo(() => (currentMonthRows || []).some((r) => Number(r.refundAmount || 0) > 0), [currentMonthRows]);
   const yearlyRefundTotal = useMemo(() => (yearlyTotals.refunds || 0), [yearlyTotals]);
 
+  /* ---------------------- Render ---------------------- */
   return (
     <>
- 
-
       <div className="clinet-payment-card" onClick={() => setModalOpen(true)} role="button">
         <div className="invest-card__box" role="button">
           <div className="invest-card__head">
-            <div >💳</div>
+            <div>💳</div>
             <div className="invest-card__meta">
               <div className="invest-card__label">Client Payments</div>
               <div className="invest-card__total">{loading ? "Loading..." : formatINR(overallTotals.paidIncludingTravel || overallTotals.paid)}</div>
               <div className="invest-card__small">{loading ? "" : `Payments: ${overallTotals.count}`}</div>
             </div>
           </div>
-          <div class="invest-card__divider"></div>
+          <div className="invest-card__divider" />
         </div>
       </div>
 
@@ -480,105 +537,150 @@ export default function ClientPaymentCard({
         <div className="invest-modal-backdrop" onClick={() => setModalOpen(false)}>
           <div className="invest-modal-dialog" ref={modalRef} onClick={(e) => e.stopPropagation()}>
             <div className="invest-modal-content">
-
               <div className="invest-modal-investor-bar">
                 <div className="invest-modal-investor-bar__title">Client Payments Report</div>
                 <button className="btn-close invest-modal-top-close btn-close-white" onClick={() => setModalOpen(false)} />
               </div>
 
-   
-
               <div className="invest-modal-body">
+                <div className="overall-cards">
+                  <div className="header-gradient grad-paid">
+                    <div className="header-label">Overall Paid</div>
+                    <div className="header-value">{formatINR(overallTotals.paidIncludingTravel ?? overallTotals.paid)}</div>
+                    <div className="header-sub">{overallTotals.count ?? 0} payments</div>
+                  </div>
 
-                           <div className="overall-cards">
+                  <div className="header-gradient grad-balance">
+                    <div className="header-label">Overall Balance</div>
+                    <div className="header-value">{formatINR(overallTotals.balance)}</div>
+                    <div className="header-sub">across all years</div>
+                  </div>
 
-                  {/* Overall header cards (now show overall sums across all years) */}
-                    <div className="header-gradient grad-paid">
-                      <div style={{ fontSize: 12, opacity: 0.9 }}>Overall Paid</div>
-                      <div style={{ fontWeight: 700, fontSize: 16 }}>{formatINR(overallTotals.paidIncludingTravel ?? overallTotals.paid)}</div>
-                      <div style={{ fontSize: 11, opacity: 0.85 }}>{overallTotals.count ?? 0} payments</div>
-                    </div>
-
-                    <div className="header-gradient grad-balance">
-                      <div style={{ fontSize: 12, opacity: 0.9 }}>Overall Balance</div>
-                      <div style={{ fontWeight: 700, fontSize: 16 }}>{formatINR(overallTotals.balance)}</div>
-                      <div style={{ fontSize: 11, opacity: 0.85 }}>across all years</div>
-                    </div>
-
-                    <div className="header-gradient grad-refund">
-                      <div style={{ fontSize: 12, opacity: 0.9 }}>Overall Refunds</div>
-                      <div style={{ fontWeight: 700, fontSize: 16 }}>{formatINR(overallTotals.refunds)}</div>
-                      <div style={{ fontSize: 11, opacity: 0.85 }}>across all years</div>
-                    </div>
-              </div>
+                  <div className="header-gradient grad-refund">
+                    <div className="header-label">Overall Refunds</div>
+                    <div className="header-value">{formatINR(overallTotals.refunds)}</div>
+                    <div className="header-sub">across all years</div>
+                  </div>
+                </div>
 
                 <ul className="nav nav-tabs invest-year-tabs">
-                  {yearKeys.length === 0 ? <li className="nav-item"><span className="nav-link active">No Data</span></li>
-                    : yearKeys.map((y) => (
+                  {yearKeys.length === 0 ? (
+                    <li className="nav-item">
+                      <span className="nav-link active">No Data</span>
+                    </li>
+                  ) : (
+                    yearKeys.map((y) => (
                       <li key={y} className="nav-item">
-                        <button className={`nav-link ${activeYear === y ? "active" : ""}`} onClick={() => { setActiveYear(y); setActiveMonth(null); }}>{y}</button>
+                        <button
+                          className={`nav-link ${activeYear === y ? "active" : ""}`}
+                          onClick={() => {
+                            setActiveYear(y);
+                            setActiveMonth(null);
+                          }}
+                        >
+                          {y}
+                        </button>
                       </li>
                     ))
-                  }
+                  )}
                 </ul>
 
-                <div className="mb-3 d-flex gap-2 flex-wrap mt-3">
-                  <div className="invest-card invest-summary-card">
-                    <div className="card-body py-2 px-3">
-                      <div className="small text-muted">Paid (month)</div>
-                      <div className="h5 mb-0">{formatINR(monthlyTotals.paidInclTravel ?? monthlyTotals.paid)}</div>
-                      <div className="small text-muted">{monthlyTotals.count ?? 0} payments</div>
-                    </div>
+                <div className="month-cards">
+                  <div className="summary-card grad-paid">
+                    <div className="card-label">Paid (month)</div>
+                    <div className="card-value">{formatINR(monthlyTotals.paidInclTravel ?? monthlyTotals.paid)}</div>
+                    <div className="card-sub">{monthlyTotals.count ?? 0} payments</div>
                   </div>
 
-                  <div className="invest-card invest-summary-card">
-                    <div className="card-body py-2 px-3">
-                      <div className="small text-muted">Refunds (month)</div>
-                      <div className="h5 mb-0">{formatINR(monthlyTotals.refunds)}</div>
-                      <div className="small text-muted">Year total: {formatINR(yearlyRefundTotal)}</div>
-                    </div>
+                  <div className="summary-card grad-refund">
+                    <div className="card-label">Refunds (month)</div>
+                    <div className="card-value">{formatINR(monthlyTotals.refunds)}</div>
+                    <div className="card-sub">Year total: {formatINR(yearlyRefundTotal)}</div>
                   </div>
 
-                  <div className="invest-card invest-summary-card">
-                    <div className="card-body py-2 px-3">
-                      <div className="small text-muted">Balance (month)</div>
-                      <div className="h5 mb-0">{formatINR(monthlyTotals.balance)}</div>
-                      <div className="small text-muted">{monthlyTotals.count ?? 0} records</div>
-                    </div>
+                  <div className="summary-card grad-balance">
+                    <div className="card-label">Balance (month)</div>
+                    <div className="card-value">{formatINR(monthlyTotals.balance)}</div>
+                    <div className="card-sub">{monthlyTotals.count ?? 0} records</div>
                   </div>
 
-                  <div className="invest-card invest-summary-card">
-                    <div className="card-body py-2 px-3">
-                      <div className="small text-muted">Pending (month)</div>
-                      <div className="h5 mb-0">{monthlyTotals.pending ?? 0}</div>
-                      <div className="small text-muted">items</div>
-                    </div>
+                  <div className="summary-card grad-pending">
+                    <div className="card-label">Pending (month)</div>
+                    <div className="card-value">{monthlyTotals.pending ?? 0}</div>
+                    <div className="card-sub">items</div>
                   </div>
                 </div>
 
                 {activeYear && (
+                  <div className="year-cards">
+                    <div className="summary-card grad-paid">
+                      <div className="card-label">Paid (year)</div>
+                      <div className="card-value">{formatINR(yearlyTotals.paidInclTravel ?? yearlyTotals.paid)}</div>
+                      <div className="card-sub">{yearlyTotals.count ?? 0} payments</div>
+                    </div>
+
+                    <div className="summary-card grad-refund">
+                      <div className="card-label">Refunds (year)</div>
+                      <div className="card-value">{formatINR(yearlyTotals.refunds)}</div>
+                      <div className="card-sub">across {activeYear}</div>
+                    </div>
+
+                    <div className="summary-card grad-balance">
+                      <div className="card-label">Balance (year)</div>
+                      <div className="card-value">{formatINR(yearlyTotals.balance)}</div>
+                      <div className="card-sub">cumulative</div>
+                    </div>
+
+                    <div className="summary-card grad-pending">
+                      <div className="card-label">Pending (year)</div>
+                      <div className="card-value">{yearlyTotals.pending ?? 0}</div>
+                      <div className="card-sub">items</div>
+                    </div>
+                  </div>
+                )}
+
+                {activeYear && (
                   <div className="invest-year-block">
                     <ul className="nav nav-pills invest-month-pills mb-2">
-                      {(grouped.years?.[activeYear] ? Object.keys(grouped.years[activeYear].months).map(k => k) : []).map((mk) => (
+                      {Object.keys(grouped.years?.[activeYear]?.months || {}).map((mk) => (
                         <li key={mk} className="nav-item">
-                          <button className={`nav-link ${String(activeMonth) === String(mk) ? "active" : ""}`} onClick={() => setActiveMonth(mk)}>
+                          <button
+                            className={`nav-link ${String(activeMonth) === String(mk) ? "active" : ""}`}
+                            onClick={() => setActiveMonth(mk)}
+                          >
                             {mk === "Unknown" ? "Unknown" : new Date(Number(activeYear), Number(mk), 1).toLocaleString("default", { month: "short" })}
                           </button>
                         </li>
                       ))}
                     </ul>
 
-                    <div className="invest-month-toolbar d-flex justify-content-between align-items-center mb-3">
+                    <div className="invest-month-toolbar">
                       <div className="small text-center">
-                        {activeMonth ? <>{new Date(Number(activeYear), Number(activeMonth), 1).toLocaleString("default", { month: "long" })} {activeYear}</> : "Select a month"}
+                        {activeMonth !== null && activeMonth !== undefined ? (
+                          <>
+                            {new Date(Number(activeYear), Number(activeMonth), 1).toLocaleString("default", { month: "long" })} {activeYear}
+                          </>
+                        ) : (
+                          "Select a month"
+                        )}
                       </div>
 
-                      <div className="btn-group ms-2">
-                        <button className="btn btn-sm btn-outline-primary" onClick={() => exportCSV("month")} disabled={!activeMonth}>Export Month CSV</button>
-                        <button className="btn btn-sm btn-outline-secondary" onClick={() => printScope("month")} disabled={!activeMonth}>Print Month</button>
-                        <button className="btn btn-sm btn-outline-success" onClick={() => exportCSV("year")} disabled={!activeYear}>Export Year CSV</button>
-                        <button className="btn btn-sm btn-outline-dark" onClick={() => printScope("year")} disabled={!activeYear}>Print Year</button>
-                        <button className="btn btn-sm btn-outline-info" onClick={() => exportCSV("all")}>Export All CSV</button>
+                      <div className="btn-group">
+                        <button className="btn btn-sm btn-outline-primary" onClick={() => exportCSV("month")} disabled={activeMonth === null || activeMonth === undefined}>
+                          Export Month CSV
+                        </button>
+                        <button className="btn btn-sm btn-outline-secondary" onClick={() => printScope("month")} disabled={activeMonth === null || activeMonth === undefined}>
+                          Print Month
+                        </button>
+                        <button className="btn btn-sm btn-outline-success" onClick={() => exportCSV("year")} disabled={!activeYear}>
+                          Export Year CSV
+                        </button>
+                        <button className="btn btn-sm btn-outline-dark" onClick={() => printScope("year")} disabled={!activeYear}>
+                          Print Year
+                        </button>
+                        <button className="btn btn-sm btn-outline-info" onClick={() => exportCSV("all")}>
+                          Export All CSV
+                        </button>
                       </div>
                     </div>
 
@@ -586,7 +688,7 @@ export default function ClientPaymentCard({
                       <table className="table table-sm table-hover invest-table">
                         <thead>
                           <tr>
-                            <th style={{ width: 40 }}>#</th>
+                            <th className="th-narrow">#</th>
                             <th>Client ID</th>
                             <th>Client Name</th>
                             <th>Method</th>
@@ -597,14 +699,20 @@ export default function ClientPaymentCard({
                           </tr>
                         </thead>
                         <tbody>
-                          {(!activeMonth || currentMonthRows.length === 0) && <tr><td colSpan={8} className="text-center small text-muted">No payments for selected month/year</td></tr>}
+                          {(!activeMonth || currentMonthRows.length === 0) && (
+                            <tr>
+                              <td colSpan={8} className="text-center small text-muted">
+                                No payments for selected month/year
+                              </td>
+                            </tr>
+                          )}
                           {currentMonthRows.map((r, i) => (
-                            <tr key={`${r._clientDbKey}_${i}`} className="invest-table-row" style={{ cursor: "pointer" }} onClick={() => handleRowClick(r)}>
+                            <tr key={`${r._clientDbKey}_${i}`} className="invest-table-row clickable-row" onClick={() => handleRowClick(r)}>
                               <td>{i + 1}</td>
                               <td>{r.clientId || "-"}</td>
                               <td>{r.clientName || "-"}</td>
                               <td>{r.method || "-"}</td>
-                              <td>{formatDDMMYYYY(r.date)}</td>
+                              <td>{r.parsedDate ? r.parsedDate.toLocaleDateString() : r.date || "-"}</td>
                               <td>{r.receipt || "-"}</td>
                               <td className="text-end">{formatINR(r.totalForTotals ?? r.paidAmount ?? 0)}</td>
                               <td className="text-end">{formatINR(r.balance ?? 0)}</td>
@@ -613,14 +721,26 @@ export default function ClientPaymentCard({
                         </tbody>
                         <tfoot>
                           <tr className="table-secondary">
-                            <td colSpan={6} className="text-end"><strong>Monthly Subtotal</strong></td>
-                            <td className="text-end"><strong>{formatINR(monthlyTotals.paidInclTravel ?? monthlyTotals.paid)}</strong></td>
-                            <td className="text-end"><strong>{formatINR(monthlyTotals.balance)}</strong></td>
+                            <td colSpan={6} className="text-end">
+                              <strong>Monthly Subtotal</strong>
+                            </td>
+                            <td className="text-end">
+                              <strong>{formatINR(monthlyTotals.paidInclTravel ?? monthlyTotals.paid)}</strong>
+                            </td>
+                            <td className="text-end">
+                              <strong>{formatINR(monthlyTotals.balance)}</strong>
+                            </td>
                           </tr>
                           <tr className="table-secondary">
-                            <td colSpan={6} className="text-end"><strong>Yearly Grand Total</strong></td>
-                            <td className="text-end"><strong>{formatINR(yearlyTotals.paidInclTravel ?? yearlyTotals.paid)}</strong></td>
-                            <td className="text-end"><strong>{formatINR(yearlyTotals.balance)}</strong></td>
+                            <td colSpan={6} className="text-end">
+                              <strong>Yearly Grand Total</strong>
+                            </td>
+                            <td className="text-end">
+                              <strong>{formatINR(yearlyTotals.paidInclTravel ?? yearlyTotals.paid)}</strong>
+                            </td>
+                            <td className="text-end">
+                              <strong>{formatINR(yearlyTotals.balance)}</strong>
+                            </td>
                           </tr>
                         </tfoot>
                       </table>
@@ -633,30 +753,44 @@ export default function ClientPaymentCard({
                           <table className="table table-sm table-hover invest-table">
                             <thead>
                               <tr>
-                                <th>#</th><th>Client ID</th><th>Client Name</th><th>Date</th><th className="text-end">Refund</th><th>Method</th><th>Receipt</th>
+                                <th>#</th>
+                                <th>Client ID</th>
+                                <th>Client Name</th>
+                                <th>Date</th>
+                                <th className="text-end">Refund</th>
+                                <th>Method</th>
+                                <th>Receipt</th>
                               </tr>
                             </thead>
                             <tbody>
-                              {currentMonthRows.filter(r => Number(r.refundAmount || 0) > 0).map((r, i) => (
-                                <tr key={`refund-${i}`}>
-                                  <td>{i + 1}</td>
-                                  <td>{r.clientId || "-"}</td>
-                                  <td>{r.clientName || "-"}</td>
-                                  <td>{formatDDMMYYYY(r.date)}</td>
-                                  <td className="text-end">{formatINR(r.refundAmount)}</td>
-                                  <td>{r.method || "-"}</td>
-                                  <td>{r.receipt || "-"}</td>
-                                </tr>
-                              ))}
+                              {currentMonthRows
+                                .filter((r) => Number(r.refundAmount || 0) > 0)
+                                .map((r, i) => (
+                                  <tr key={`refund-${i}`}>
+                                    <td>{i + 1}</td>
+                                    <td>{r.clientId || "-"}</td>
+                                    <td>{r.clientName || "-"}</td>
+                                    <td>{r.parsedDate ? r.parsedDate.toLocaleDateString() : r.date || "-"}</td>
+                                    <td className="text-end">{formatINR(r.refundAmount)}</td>
+                                    <td>{r.method || "-"}</td>
+                                    <td>{r.receipt || "-"}</td>
+                                  </tr>
+                                ))}
                             </tbody>
                             <tfoot>
                               <tr>
-                                <th colSpan={4} className="text-end">Monthly Refund Total</th>
-                                <th className="text-end">{formatINR((currentMonthRows || []).reduce((s, r) => s + Number(r.refundAmount || 0), 0))}</th>
+                                <th colSpan={4} className="text-end">
+                                  Monthly Refund Total
+                                </th>
+                                <th className="text-end">
+                                  {formatINR((currentMonthRows || []).reduce((s, r) => s + Number(r.refundAmount || 0), 0))}
+                                </th>
                                 <th colSpan={2}></th>
                               </tr>
                               <tr>
-                                <th colSpan={4} className="text-end">Yearly Refund Total</th>
+                                <th colSpan={4} className="text-end">
+                                  Yearly Refund Total
+                                </th>
                                 <th className="text-end">{formatINR(yearlyRefundTotal)}</th>
                                 <th colSpan={2}></th>
                               </tr>
@@ -669,22 +803,30 @@ export default function ClientPaymentCard({
                     <div className="mt-3 d-flex justify-content-between align-items-center gap-3">
                       <div className="small ">Showing {currentMonthRows.length} payments</div>
                       <div>
-                        <button className="btn btn-sm btn-outline-secondary me-2" onClick={() => exportCSV("month")} disabled={!activeMonth}>CSV (month)</button>
-                        <button className="btn btn-sm btn-outline-secondary me-2" onClick={() => exportCSV("year")} disabled={!activeYear}>CSV (year)</button>
-                        <button className="btn btn-sm btn-outline-secondary me-2" onClick={() => exportCSV("all")}>CSV (all)</button>
-                        <button className="btn btn-sm btn-primary" onClick={() => printScope("month")} disabled={!activeMonth}>Print</button>
+                        <button className="btn btn-sm btn-outline-secondary me-2" onClick={() => exportCSV("month")} disabled={activeMonth === null || activeMonth === undefined}>
+                          CSV (month)
+                        </button>
+                        <button className="btn btn-sm btn-outline-secondary me-2" onClick={() => exportCSV("year")} disabled={!activeYear}>
+                          CSV (year)
+                        </button>
+                        <button className="btn btn-sm btn-outline-secondary me-2" onClick={() => exportCSV("all")}>
+                          CSV (all)
+                        </button>
+                        <button className="btn btn-sm btn-primary" onClick={() => printScope("month")} disabled={activeMonth === null || activeMonth === undefined}>
+                          Print
+                        </button>
                       </div>
                     </div>
                   </div>
                 )}
-
               </div>
 
               <div className="invest-modal-footer">
                 <div className="me-auto small text-muted">Overall Grand Total: {formatINR(overallTotals.paidIncludingTravel || overallTotals.paid)}</div>
-                <button className="btn btn-secondary btn-sm" onClick={() => setModalOpen(false)}>Close</button>
+                <button className="btn btn-secondary btn-sm" onClick={() => setModalOpen(false)}>
+                  Close
+                </button>
               </div>
-
             </div>
           </div>
         </div>

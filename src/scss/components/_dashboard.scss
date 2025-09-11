@@ -145,6 +145,7 @@ $dark-table-text: #e6eef6;
     padding: 10px 16px;
     background: #21355f;
     color: #fff;
+
     @include mobile {
         flex-wrap: wrap;
     }
@@ -217,6 +218,7 @@ $dark-table-text: #e6eef6;
     display: flex;
     align-items: center;
     gap: 15px;
+
     @include mobile {
         flex-wrap: wrap;
     }
@@ -296,6 +298,7 @@ $dark-table-text: #e6eef6;
     display: flex;
     gap: 12px;
     align-items: center;
+
     @include mobile {
         flex-wrap: wrap;
     }
@@ -337,6 +340,7 @@ $dark-table-text: #e6eef6;
     justify-content: space-between;
     align-items: center;
     margin-bottom: 12px;
+
     @include mobile {
         margin-top: 15px;
     }
@@ -404,7 +408,7 @@ $dark-table-text: #e6eef6;
 @media (max-width: 768px) {
     .invest-year-top {
         flex-direction: column;
-        flex-wrap: wrap ;
+        flex-wrap: wrap;
     }
 
     .invest-year-investors-list {
@@ -433,6 +437,7 @@ $dark-table-text: #e6eef6;
     text-align: center;
     border-radius: 10px;
     min-width: 100px;
+
     @include mobile {
         min-width: auto;
     }
@@ -468,11 +473,528 @@ $dark-table-text: #e6eef6;
     display: flex;
     gap: 10px;
     justify-content: space-between;
+
     @include mobile {
         flex-wrap: wrap;
         justify-content: flex-end;
         width: 100%;
-        
+
     }
 
+}
+
+// Investor card styles
+
+// src/styles/_investment.scss
+
+// src/styles/_investment.scss
+
+.investment-card-root {
+    font-family: Inter, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    color: #1f2937;
+}
+
+/* Collapsed card - consistent class names with ClientPaymentCard */
+.invest-card {
+    background: linear-gradient(180deg, #071126 0%, #0b1220 100%);
+    color: #fff;
+    padding: 14px;
+    border-radius: 10px;
+    cursor: pointer;
+    box-shadow: 0 10px 30px rgba(2, 6, 23, 0.5);
+}
+
+.card-role {
+    border-radius: 10px;
+}
+
+.invest-card-head {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+}
+
+.invest-card-icon {
+    font-size: 28px;
+}
+
+.invest-card-meta {
+    display: flex;
+    flex-direction: column;
+}
+
+.invest-card-title {
+    color: #bcd6ff;
+    font-weight: 700;
+    font-size: 13px;
+}
+
+.invest-card-total {
+    font-size: 26px;
+    font-weight: 800;
+    margin-top: 2px;
+}
+
+.invest-card-sub {
+    font-size: 12px;
+    color: rgba(255, 255, 255, 0.75);
+    margin-top: 2px;
+}
+
+/* status row */
+.invest-card-status-row {
+    display: flex;
+    gap: 10px;
+    margin-top: 12px;
+    flex-wrap: wrap;
+}
+
+.invest-status-card {
+    min-width: 140px;
+    padding: 10px;
+    border-radius: 8px;
+    color: #fff;
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.12);
+}
+
+.invest-status-all {
+    background: linear-gradient(120deg, #940d77, #9b047a);
+    min-width: 140px;
+    padding: 10px;
+    border-radius: 8px;
+    color: #fff;
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.12);
+}
+
+.invest-status-acknowledge {
+    background: linear-gradient(120deg, #11998e, #38ef7d);
+}
+
+.invest-status-clarification {
+    background: linear-gradient(120deg, #f7971e, #ffd200);
+}
+
+.invest-status-pending {
+    background: linear-gradient(120deg, #00c6ff, #0072ff);
+}
+
+.invest-status-reject {
+    background: linear-gradient(120deg, #ff416c, #ff4b2b);
+}
+
+.status-label {
+    font-size: 13px;
+    opacity: 0.95;
+}
+
+.status-amount {
+    font-size: 18px;
+    font-weight: 800;
+    margin-top: 6px;
+}
+
+.status-count {
+    font-size: 12px;
+    opacity: 0.9;
+    margin-top: 4px;
+}
+
+/* investor pills - compact */
+.invest-card-pills {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-top: 12px;
+}
+
+.investor-pill {
+    background: rgba(255, 255, 255, 0.04);
+    padding: 8px 10px;
+    border-radius: 10px;
+    min-width: 120px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.investor-pill.compact {
+    min-width: 110px;
+    padding: 6px 8px;
+}
+
+.investor-name {
+    font-weight: 700;
+    font-size: 13px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 120px;
+}
+
+.investor-stats {
+    text-align: right;
+    margin-left: 8px;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+}
+
+.inv-total {
+    font-weight: 800;
+    font-size: 13px;
+}
+
+.inv-count {
+    font-size: 11px;
+    color: rgba(255, 255, 255, 0.75);
+}
+
+/* Modal backdrop & dialog */
+.invest-modal-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(3, 6, 10, 0.6);
+    z-index: 1050;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+}
+
+.invest-modal-dialog {
+    width: 100%;
+    max-width: 1200px;
+    display: flex;
+    justify-content: center;
+}
+
+.invest-modal-content {
+    width: 100%;
+    border-radius: 10px;
+    overflow: hidden;
+    background: #fff;
+    box-shadow: 0 24px 60px rgba(2, 6, 23, 0.6);
+}
+
+
+
+.invest-modal-investor-bar__title {
+    font-weight: 800;
+    font-size: 18px;
+}
+
+/* header summary */
+.invest-modal-header {
+    padding: 16px 18px;
+    border-bottom: 1px solid #f1f5f9;
+}
+
+.invest-modal-summary {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+}
+
+.summary-item {
+    margin-right: 12px;
+}
+
+.summary-label {
+    font-size: 12px;
+    color: #6b7280;
+}
+
+.summary-amount {
+    font-weight: 800;
+    font-size: 20px;
+    margin-top: 6px;
+}
+
+.small-cards {
+    display: flex;
+    gap: 8px;
+}
+
+.small-card {
+    padding: 8px 12px;
+    border-radius: 8px;
+    background: #0b1220;
+    color: #fff;
+}
+
+/* modal body */
+.invest-modal-body {
+    padding: 18px;
+    max-height: 72vh;
+    overflow: auto;
+}
+
+/* layout: investors + year panel */
+.investors-year-section {
+    display: flex;
+    gap: 20px;
+    align-items: flex-start;
+}
+
+/* investors left column smaller */
+.investors-list {
+    flex: 0 0 320px;
+    background: #fbfcfe;
+    border-radius: 8px;
+    padding: 12px;
+    border: 1px solid #eef3f8;
+}
+
+.investors-list.small {
+    flex: 0 0 260px;
+}
+
+/* even smaller variant */
+.investors-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 10px;
+    margin-top: 8px;
+}
+
+/* compact investor card */
+.investor-card {
+    background: linear-gradient(135deg, #fff, #fbfdff);
+    border-radius: 8px;
+    padding: 10px;
+    border: 1px solid #eef3f8;
+    box-shadow: 0 8px 20px rgba(2, 6, 23, 0.05);
+}
+
+.investor-card.compact {
+    padding: 8px;
+    font-size: 13px;
+}
+
+.inv-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.inv-name {
+    font-weight: 800;
+}
+
+.inv-count-tag {
+    background: #eef2ff;
+    color: #0b1220;
+    padding: 4px 8px;
+    border-radius: 12px;
+    font-weight: 700;
+    font-size: 12px;
+}
+
+.inv-body {
+    display: flex;
+    flex-wrap: wrap;
+}
+
+.inv-stat {
+    min-width: 100px;
+}
+
+.inv-body.compact-body {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 6px;
+}
+
+.inv-stat .label {
+    font-size: 12px;
+    color: #6b7280;
+}
+
+.inv-stat .val {
+    font-weight: 800;
+    margin-top: 4px;
+}
+
+.inv-total {
+    width: 100%;
+    border-top: 1px solid #d6d9dd;
+    padding-top: 10px;
+    background-color: #f5fbfd;
+
+}
+
+/* year panel bigger */
+.year-panel {
+    flex: 1 1 720px;
+    min-width: 520px;
+}
+
+/* year tabs */
+.invest-year-tabs .nav-link.active {
+    background: #0b1220;
+    color: #fff;
+}
+
+/* Year quick status cards */
+.year-quick-status {
+    display: flex;
+    gap: 10px;
+    margin-top: 12px;
+    margin-bottom: 12px;
+    flex-wrap: wrap;
+}
+
+.year-status-card {
+    min-width: 150px;
+    padding: 10px;
+    border-radius: 8px;
+    background: linear-gradient(120deg, #111827, #0b1220);
+    color: #fff;
+    box-shadow: 0 8px 20px rgba(2, 6, 23, 0.12);
+}
+
+.ystat-label {
+    font-size: 13px;
+    opacity: 0.9;
+}
+
+.ystat-amount {
+    font-weight: 800;
+    font-size: 18px;
+    margin-top: 6px;
+}
+
+.ystat-count {
+    font-size: 12px;
+    opacity: 0.85;
+}
+
+/* months row */
+.months-row {
+    margin-top: 10px;
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.month-pill {
+    border-radius: 6px;
+    background: #f1f5f9;
+    padding: 6px 10px;
+}
+
+/* toolbar */
+.invest-toolbar {
+    margin-top: 10px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+}
+
+.toolbar-actions {
+    @include mobile {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: space-between;
+    }
+
+    .btn {
+        margin-left: 6px;
+
+        @include mobile {
+            margin-bottom: 10px;
+        }
+    }
+}
+
+/* table */
+.table-wrap {
+    margin-top: 12px;
+}
+
+.invest-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.invest-table th,
+.invest-table td {
+    padding: 8px 10px;
+    border-bottom: 1px solid #eef2f7;
+}
+
+.invest-table thead th {
+    background: #0b2430;
+    color: #fff;
+    font-weight: 700;
+}
+
+.invest-table tbody tr:hover {
+    background: #f9fafb;
+    cursor: pointer;
+}
+
+.status-pill {
+    display: inline-block;
+    padding: 6px 10px;
+    border-radius: 14px;
+    color: #fff;
+    font-weight: 700;
+    font-size: 12px;
+}
+
+.status-acknowledge {
+    background: #16a34a;
+}
+
+.status-clarification {
+    background: #f59e0b;
+}
+
+.status-pending {
+    background: #2563eb;
+}
+
+.status-reject {
+    background: #ef4444;
+}
+
+.table-subtotal {
+    background: #f1f5f9;
+    font-weight: 700;
+}
+
+/* modal footer actions */
+.invest-modal-actions {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 14px;
+    padding-top: 10px;
+    border-top: 1px solid #eef3f8;
+}
+
+.muted {
+    color: #6b7280;
+}
+
+/* smaller screens */
+@media (max-width: 960px) {
+    .investors-year-section {
+        flex-direction: column;
+    }
+
+    .investors-list {
+        width: 100%;
+    }
+
+    .year-panel {
+        width: 100%;
+        min-width: unset;
+    }
+
+    .invest-card-pills {
+        display: none;
+    }
 }

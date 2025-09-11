@@ -642,6 +642,10 @@ $dark-table-text: #e6eef6;
 .inv-total {
     font-weight: 800;
     font-size: 13px;
+      width: 100%;
+    border-top: 1px solid #edf1f1;
+    padding-top: 10px;
+    background-color: #f5fbfd;
 }
 
 .inv-count {
@@ -653,7 +657,7 @@ $dark-table-text: #e6eef6;
 .invest-modal-backdrop {
     position: fixed;
     inset: 0;
-    background: rgba(3, 6, 10, 0.6);
+     background: rgb(3 6 10 / 88%);;
     z-index: 1050;
     display: flex;
     align-items: center;
@@ -780,6 +784,7 @@ $dark-table-text: #e6eef6;
 
 .inv-name {
     font-weight: 800;
+    font-size: 16px;
 }
 
 .inv-count-tag {
@@ -815,14 +820,6 @@ $dark-table-text: #e6eef6;
     margin-top: 4px;
 }
 
-.inv-total {
-    width: 100%;
-    border-top: 1px solid #d6d9dd;
-    padding-top: 10px;
-    background-color: #f5fbfd;
-
-}
-
 /* year panel bigger */
 .year-panel {
     flex: 1 1 720px;
@@ -851,6 +848,10 @@ $dark-table-text: #e6eef6;
     background: linear-gradient(120deg, #111827, #0b1220);
     color: #fff;
     box-shadow: 0 8px 20px rgba(2, 6, 23, 0.12);
+}
+
+.ystatus-total {
+  background: linear-gradient(120deg, #233a6b, #132f68);
 }
 
 .ystat-label {

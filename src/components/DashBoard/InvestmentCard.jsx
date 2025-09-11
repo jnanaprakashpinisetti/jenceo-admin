@@ -8,12 +8,12 @@ async function importFirebaseDB() {
     const a = await import("../../firebase");
     if (a && a.default) return a.default;
     if (a && a.firebaseDB) return a.firebaseDB;
-  } catch { }
+  } catch {}
   try {
     const b = await import("../firebase");
     if (b && b.default) return b.default;
     if (b && b.firebaseDB) return b.firebaseDB;
-  } catch { }
+  } catch {}
   if (typeof window !== "undefined" && window.firebaseDB) return window.firebaseDB;
   return null;
 }
@@ -21,7 +21,11 @@ async function importFirebaseDB() {
 function normalizeInvestmentRecord(key, it) {
   const investor = String(it.investor ?? it.name ?? it.Investor ?? "Unknown");
   const invest_date = String(it.invest_date ?? it.date ?? it.InvestDate ?? "");
-  const invest_amount = Number(isNaN(Number(it.invest_amount ?? it.amount ?? it.Amount ?? 0)) ? 0 : Number(it.invest_amount ?? it.amount ?? it.Amount ?? 0));
+  const invest_amount = Number(
+    isNaN(Number(it.invest_amount ?? it.amount ?? it.Amount ?? 0))
+      ? 0
+      : Number(it.invest_amount ?? it.amount ?? it.Amount ?? 0)
+  );
   const invest_to = String(it.invest_to ?? it.to ?? it.InvestTo ?? "");
   const invest_reference = String(it.invest_reference ?? it.refNo ?? it.ref ?? it.Reference ?? "");
   const invest_purpose = String(it.invest_purpose ?? it.purpose ?? it.Purpose ?? "");
@@ -93,7 +97,7 @@ export default function InvestmentCard({ partners = ["Sudheer", "Suresh", "Praka
         ref = fdb.child ? fdb.child("Investments") : fdb.ref("Investments");
         listener = (snap) => {
           const val = snap.val() || {};
-          const list = Object.keys(val).map(k => normalizeInvestmentRecord(k, val[k]));
+          const list = Object.keys(val).map((k) => normalizeInvestmentRecord(k, val[k]));
           list.sort((a, b) => {
             const da = a.invest_date ? new Date(a.invest_date) : new Date(0);
             const db = b.invest_date ? new Date(b.invest_date) : new Date(0);
@@ -111,14 +115,16 @@ export default function InvestmentCard({ partners = ["Sudheer", "Suresh", "Praka
     })();
     return () => {
       mounted = false;
-      try { if (ref && listener) ref.off("value", listener); } catch { }
+      try {
+        if (ref && listener) ref.off("value", listener);
+      } catch {}
     };
   }, []);
 
   // grouping
   const yearMonthGroups = useMemo(() => {
     const ym = {};
-    records.forEach(r => {
+    records.forEach((r) => {
       const d = r.invest_date ? new Date(r.invest_date) : null;
       if (!d || isNaN(d)) return;
       const y = d.getFullYear();
@@ -150,7 +156,7 @@ export default function InvestmentCard({ partners = ["Sudheer", "Suresh", "Praka
   // overall totals and per-status
   const overallStatusTotals = useMemo(() => {
     const out = { Acknowledge: { count: 0, amount: 0 }, Clarification: { count: 0, amount: 0 }, Pending: { count: 0, amount: 0 }, Reject: { count: 0, amount: 0 } };
-    records.forEach(r => {
+    records.forEach((r) => {
       const s = ["Acknowledge", "Clarification", "Pending", "Reject"].includes(r.acknowledge) ? r.acknowledge : "Pending";
       out[s].count += 1;
       out[s].amount += Number(r.invest_amount || 0);
@@ -162,7 +168,7 @@ export default function InvestmentCard({ partners = ["Sudheer", "Suresh", "Praka
 
   const statusSummaryByYear = useMemo(() => {
     const out = {};
-    records.forEach(r => {
+    records.forEach((r) => {
       const d = r.invest_date ? new Date(r.invest_date) : null;
       if (!d || isNaN(d)) return;
       const y = d.getFullYear();
@@ -177,7 +183,7 @@ export default function InvestmentCard({ partners = ["Sudheer", "Suresh", "Praka
   // investors totals with per-status
   const overallInvestorTotals = useMemo(() => {
     const map = {};
-    records.forEach(r => {
+    records.forEach((r) => {
       const name = r.investor || "Unknown";
       if (!map[name]) map[name] = { investor: name, total: 0, acknowledged: 0, pending: 0, clarification: 0, reject: 0, count: 0 };
       map[name].total += Number(r.invest_amount || 0);
@@ -192,7 +198,7 @@ export default function InvestmentCard({ partners = ["Sudheer", "Suresh", "Praka
 
   const investorTotalsByYear = useMemo(() => {
     const out = {};
-    records.forEach(r => {
+    records.forEach((r) => {
       const d = r.invest_date ? new Date(r.invest_date) : null;
       if (!d || isNaN(d)) return;
       const y = d.getFullYear();
@@ -221,23 +227,49 @@ export default function InvestmentCard({ partners = ["Sudheer", "Suresh", "Praka
   };
   const exportRowsToCSV = (rows, filename = "report.csv") => {
     const headers = ["Date", "Investor", "Amount", "To", "Ref", "Purpose", "Comments", "Acknowledge"];
-    const csv = [headers.join(",")].concat(rows.map(r => [csvEscape(r.invest_date), csvEscape(r.investor), r.invest_amount, csvEscape(r.invest_to), csvEscape(r.invest_reference), csvEscape(r.invest_purpose), csvEscape(r.comments), csvEscape(r.acknowledge)].join(","))).join("\n");
+    const csv = [headers.join(",")].concat(
+      rows.map((r) =>
+        [csvEscape(r.invest_date), csvEscape(r.investor), r.invest_amount, csvEscape(r.invest_to), csvEscape(r.invest_reference), csvEscape(r.invest_purpose), csvEscape(r.comments), csvEscape(r.acknowledge)].join(
+          ","
+        )
+      )
+    ).join("\n");
     const blob = new Blob([csv], { type: "text/csv" });
     const url = URL.createObjectURL(blob);
-    const a = document.createElement("a"); a.href = url; a.download = filename; a.click(); URL.revokeObjectURL(url);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(url);
   };
   const printCurrentView = (rows, title = "") => {
-    const w = window.open("", "_blank"); if (!w) return;
-    const tableRows = rows.map((r, idx) => `<tr><td>${idx + 1}</td><td>${r.invest_date}</td><td>${r.investor}</td><td style="text-align:right">${formatINR(r.invest_amount)}</td><td>${r.invest_to}</td><td>${r.invest_reference}</td><td>${r.invest_purpose}</td><td>${r.acknowledge}</td></tr>`).join("");
+    const w = window.open("", "_blank");
+    if (!w) return;
+    const tableRows = rows
+      .map(
+        (r, idx) =>
+          `<tr><td>${idx + 1}</td><td>${r.invest_date}</td><td>${r.investor}</td><td style="text-align:right">${formatINR(
+            r.invest_amount
+          )}</td><td>${r.invest_to}</td><td>${r.invest_reference}</td><td>${r.invest_purpose}</td><td>${r.acknowledge}</td></tr>`
+      )
+      .join("");
     const html = `<!doctype html><html><head><meta charset="utf-8"><title>${title}</title><style>body{font-family:Arial;padding:20px}table{width:100%;border-collapse:collapse}th,td{border:1px solid #ddd;padding:6px}</style></head><body><h2>${title}</h2><table><thead><tr><th>#</th><th>Date</th><th>Investor</th><th>Amount</th><th>To</th><th>Ref</th><th>Purpose</th><th>Status</th></tr></thead><tbody>${tableRows}</tbody></table></body></html>`;
-    w.document.write(html); w.document.close(); w.print();
+    w.document.write(html);
+    w.document.close();
+    w.print();
   };
 
   useEffect(() => {
-    if (modalOpen) document.body.classList.add("modal-open"); else document.body.classList.remove("modal-open");
-    const onKey = (e) => { if (e.key === "Escape" && modalOpen) setModalOpen(false); };
+    if (modalOpen) document.body.classList.add("modal-open");
+    else document.body.classList.remove("modal-open");
+    const onKey = (e) => {
+      if (e.key === "Escape" && modalOpen) setModalOpen(false);
+    };
     window.addEventListener("keydown", onKey);
-    return () => { document.body.classList.remove("modal-open"); window.removeEventListener("keydown", onKey); };
+    return () => {
+      document.body.classList.remove("modal-open");
+      window.removeEventListener("keydown", onKey);
+    };
   }, [modalOpen]);
 
   // year quick status for UI
@@ -246,29 +278,27 @@ export default function InvestmentCard({ partners = ["Sudheer", "Suresh", "Praka
     return statusSummaryByYear[activeYear] || { Acknowledge: { count: 0, amount: 0 }, Clarification: { count: 0, amount: 0 }, Pending: { count: 0, amount: 0 }, Reject: { count: 0, amount: 0 } };
   }, [activeYear, statusSummaryByYear]);
 
+  // compute year total (sum of four statuses) for the selected year
+  const yearTotalForSelected = useMemo(() => {
+    if (!yearQuickStatus) return { amount: 0, count: 0 };
+    const amt = (yearQuickStatus.Acknowledge?.amount || 0) + (yearQuickStatus.Clarification?.amount || 0) + (yearQuickStatus.Pending?.amount || 0) + (yearQuickStatus.Reject?.amount || 0);
+    const cnt = (yearQuickStatus.Acknowledge?.count || 0) + (yearQuickStatus.Clarification?.count || 0) + (yearQuickStatus.Pending?.count || 0) + (yearQuickStatus.Reject?.count || 0);
+    return { amount: amt, count: cnt };
+  }, [yearQuickStatus]);
+
   return (
-    <div className="investment-card-root">
-      {/* collapsed card */}
-      <div className="invest-card card-role" onClick={() => setModalOpen(true)} role="button">
-        <div className="invest-card-head">
-          <div className="invest-card-icon">💼</div>
-          <div className="invest-card-meta">
-            <div className="invest-card-title">Investment</div>
-            <div className="invest-card-total">{loading ? "Loading..." : formatINR(grandTotalAll)}</div>
-            <div className="invest-card-sub">Records: {records.length}</div>
+    <div className="investments-card">
+      {/* collapsed card using requested structure & classes */}
+      <div className="invest-card__box card-role" role="button" onClick={() => setModalOpen(true)}>
+        <div className="invest-card__head">
+          <div className="invest-card__icon">💼</div>
+          <div className="invest-card__meta">
+            <div className="invest-card__label">Investment</div>
+            <div className="invest-card__total">{loading ? "Loading..." : formatINR(grandTotalAll)}</div>
+            <div className="invest-card__small">Payments: {records.length}</div>
           </div>
         </div>
-        {/* <div className="invest-card-pills">
-          {overallInvestorTotals.slice(0,8).map(inv => (
-            <div key={inv.investor} className="investor-pill compact">
-              <div className="investor-name" style={{ color: colorForName(inv.investor) }}>{inv.investor}</div>
-              <div className="investor-stats">
-                <span className="inv-total">{formatINR(inv.total)}</span>
-                <span className="inv-count">{inv.count} inv</span>
-              </div>
-            </div>
-          ))}
-        </div> */}
+        <div className="invest-card__divider" />
       </div>
 
       {/* modal */}
@@ -283,10 +313,7 @@ export default function InvestmentCard({ partners = ["Sudheer", "Suresh", "Praka
 
               <div className="invest-modal-header">
                 <div className="invest-modal-summary">
-
-
                   <div className="summary-item small-cards">
-                    {/* small placeholder cards (kept for additional quick actions) */}
                     <div className="invest-card-status-row">
                       {["Acknowledge", "Clarification", "Pending", "Reject"].map((s, idx) => {
                         const st = overallStatusTotals[s] || { count: 0, amount: 0 };
@@ -299,6 +326,7 @@ export default function InvestmentCard({ partners = ["Sudheer", "Suresh", "Praka
                         );
                       })}
 
+                      {/* Grand total card (overall) - retained */}
                       <div className="invest-status-all">
                         <div className="status-label">Grand Total</div>
                         <div className="status-amount">{formatINR(grandTotalAll)}</div>
@@ -314,33 +342,66 @@ export default function InvestmentCard({ partners = ["Sudheer", "Suresh", "Praka
                   <div className="investors-list small">
                     <h6>Investors</h6>
                     <div className="investors-grid compact-grid">
-                      {overallInvestorTotals.length === 0 ? <div className="muted">No investors</div> :
-                        overallInvestorTotals.map(inv => (
+                      {overallInvestorTotals.length === 0 ? (
+                        <div className="muted">No investors</div>
+                      ) : (
+                        overallInvestorTotals.map((inv) => (
                           <div key={inv.investor} className="investor-card compact">
                             <div className="inv-header">
-                              <div className="inv-name" style={{ color: colorForName(inv.investor) }}>{inv.investor}</div>
+                              <div className="inv-name" style={{ color: colorForName(inv.investor) }}>
+                                {inv.investor}
+                              </div>
                               <div className="inv-count-tag">{inv.count}</div>
                             </div>
                             <div className="inv-body compact-body">
-                              <div className="inv-stat"><div className="label">Ack</div><div className="val">{formatINR(inv.acknowledged)}</div></div>
-                              <div className="inv-stat"><div className="label">Pend</div><div className="val">{formatINR(inv.pending)}</div></div>
-                              <div className="inv-stat"><div className="label">Clar</div><div className="val">{formatINR(inv.clarification)}</div></div>
-                              <div className="inv-stat"><div className="label">Rej</div><div className="val">{formatINR(inv.reject)}</div></div>
-                              <div className="inv-stat inv-total"><div className="label">Total</div><div className="val">{formatINR(inv.total)}</div></div>
+                              <div className="inv-stat">
+                                <div className="label">Ack</div>
+                                <div className="val">{formatINR(inv.acknowledged)}</div>
+                              </div>
+                              <div className="inv-stat">
+                                <div className="label">Pend</div>
+                                <div className="val">{formatINR(inv.pending)}</div>
+                              </div>
+                              <div className="inv-stat">
+                                <div className="label">Clar</div>
+                                <div className="val">{formatINR(inv.clarification)}</div>
+                              </div>
+                              <div className="inv-stat">
+                                <div className="label">Rej</div>
+                                <div className="val">{formatINR(inv.reject)}</div>
+                              </div>
+                              <div className="inv-stat inv-total">
+                                <div className="label">Total</div>
+                                <div className="val">{formatINR(inv.total)}</div>
+                              </div>
                             </div>
                           </div>
                         ))
-                      }
+                      )}
                     </div>
                   </div>
 
                   <div className="year-panel expanded">
                     <ul className="nav nav-tabs invest-year-tabs">
-                      {years.length === 0 ? <li className="nav-item"><span className="nav-link active">No Data</span></li> : years.map(y => (
-                        <li key={y} className="nav-item">
-                          <button className={`nav-link ${activeYear === y ? "active" : ""}`} onClick={() => { setActiveYear(y); setActiveMonth(null); }}>{y}</button>
+                      {years.length === 0 ? (
+                        <li className="nav-item">
+                          <span className="nav-link active">No Data</span>
                         </li>
-                      ))}
+                      ) : (
+                        years.map((y) => (
+                          <li key={y} className="nav-item">
+                            <button
+                              className={`nav-link ${activeYear === y ? "active" : ""}`}
+                              onClick={() => {
+                                setActiveYear(y);
+                                setActiveMonth(null);
+                              }}
+                            >
+                              {y}
+                            </button>
+                          </li>
+                        ))
+                      )}
                     </ul>
 
                     {/* Year quick status cards (for selected year) */}
@@ -356,24 +417,41 @@ export default function InvestmentCard({ partners = ["Sudheer", "Suresh", "Praka
                             </div>
                           );
                         })}
+
+                        {/* New: Year total card (sum of the above four statuses) */}
+                        <div className="year-status-card ystatus-total">
+                          <div className="ystat-label">Year Total</div>
+                          <div className="ystat-amount">{formatINR(yearTotalForSelected.amount)}</div>
+                          <div className="ystat-count">{yearTotalForSelected.count} items</div>
+                        </div>
                       </div>
                     )}
 
                     <div className="months-row">
-                      {(activeYear && yearMonthGroups[activeYear]) ? Object.keys(yearMonthGroups[activeYear]).map(k => (
-                        <button key={k} className={`btn btn-sm month-pill ${String(activeMonth) === String(k) ? "active" : ""}`} onClick={() => setActiveMonth(Number(k))}>
-                          {k === "Unknown" ? "Unknown" : new Date(Number(activeYear), Number(k), 1).toLocaleString("default", { month: "short" })}
-                        </button>
-                      )) : <div className="muted">Select a year to see months</div>}
+                      {activeYear && yearMonthGroups[activeYear]
+                        ? Object.keys(yearMonthGroups[activeYear]).map((k) => (
+                            <button key={k} className={`btn btn-sm month-pill ${String(activeMonth) === String(k) ? "active" : ""}`} onClick={() => setActiveMonth(Number(k))}>
+                              {k === "Unknown" ? "Unknown" : new Date(Number(activeYear), Number(k), 1).toLocaleString("default", { month: "short" })}
+                            </button>
+                          ))
+                        : <div className="muted">Select a year to see months</div>}
                     </div>
 
                     <div className="invest-toolbar">
                       <div className="current-selection">{activeMonth || activeMonth === 0 ? `${yearMonthGroups[activeYear][activeMonth].name} ${activeYear}` : "Select month"}</div>
                       <div className="toolbar-actions">
-                        <button className="btn btn-sm btn-outline-primary" onClick={() => exportRowsToCSV((currentMonthRows || []), `${activeYear}-${activeMonth ?? "all"}-investments.csv`)} disabled={!activeMonth && activeMonth !== 0}>Export Month CSV</button>
-                        <button className="btn btn-sm btn-outline-secondary" onClick={() => printCurrentView((currentMonthRows || []), `Investments - ${activeYear} - ${activeMonth ?? ""}`)} disabled={!activeMonth && activeMonth !== 0}>Print Month</button>
-                        <button className="btn btn-sm btn-outline-success" onClick={() => exportRowsToCSV(currentYearRows, `${activeYear}-investments.csv`)} disabled={!activeYear}>Export Year CSV</button>
-                        <button className="btn btn-sm btn-outline-dark" onClick={() => printCurrentView(currentYearRows, `Investments - ${activeYear}`)} disabled={!activeYear}>Print Year</button>
+                        <button className="btn btn-sm btn-outline-primary" onClick={() => exportRowsToCSV((currentMonthRows || []), `${activeYear}-${activeMonth ?? "all"}-investments.csv`)} disabled={!activeMonth && activeMonth !== 0}>
+                          Export Month CSV
+                        </button>
+                        <button className="btn btn-sm btn-outline-secondary" onClick={() => printCurrentView((currentMonthRows || []), `Investments - ${activeYear} - ${activeMonth ?? ""}`)} disabled={!activeMonth && activeMonth !== 0}>
+                          Print Month
+                        </button>
+                        <button className="btn btn-sm btn-outline-success" onClick={() => exportRowsToCSV(currentYearRows, `${activeYear}-investments.csv`)} disabled={!activeYear}>
+                          Export Year CSV
+                        </button>
+                        <button className="btn btn-sm btn-outline-dark" onClick={() => printCurrentView(currentYearRows, `Investments - ${activeYear}`)} disabled={!activeYear}>
+                          Print Year
+                        </button>
                       </div>
                     </div>
 
@@ -383,7 +461,14 @@ export default function InvestmentCard({ partners = ["Sudheer", "Suresh", "Praka
                         <table className="table table-sm invest-table">
                           <thead>
                             <tr>
-                              <th>#</th><th>Date</th><th>Investor</th><th className="text-end">Amount</th><th>To</th><th>Ref</th><th>Purpose</th><th>Status</th>
+                              <th>#</th>
+                              <th>Date</th>
+                              <th>Investor</th>
+                              <th className="text-end">Amount</th>
+                              <th>To</th>
+                              <th>Ref</th>
+                              <th>Purpose</th>
+                              <th>Status</th>
                             </tr>
                           </thead>
                           <tbody>
@@ -396,13 +481,31 @@ export default function InvestmentCard({ partners = ["Sudheer", "Suresh", "Praka
                                 <td>{r.invest_to}</td>
                                 <td>{r.invest_reference}</td>
                                 <td className="text-wrap">{r.invest_purpose}</td>
-                                <td><span className={`status-pill status-${r.acknowledge?.toLowerCase()}`}>{r.acknowledge}</span></td>
+                                <td>
+                                  <span className={`status-pill status-${r.acknowledge?.toLowerCase()}`}>{r.acknowledge}</span>
+                                </td>
                               </tr>
                             ))}
                           </tbody>
                           <tfoot>
-                            <tr className="table-subtotal"><td colSpan={3}><strong>Month Subtotal</strong></td><td className="text-end"><strong>{formatINR(currentMonthRows.reduce((s, r) => s + (r.invest_amount || 0), 0))}</strong></td><td colSpan={4}></td></tr>
-                            <tr className="table-subtotal table-year"><td colSpan={3}><strong>Year Grand Total</strong></td><td className="text-end"><strong>{formatINR(currentYearRows.reduce((s, r) => s + (r.invest_amount || 0), 0))}</strong></td><td colSpan={4}></td></tr>
+                            <tr className="table-subtotal">
+                              <td colSpan={3}>
+                                <strong>Month Subtotal</strong>
+                              </td>
+                              <td className="text-end">
+                                <strong>{formatINR(currentMonthRows.reduce((s, r) => s + (r.invest_amount || 0), 0))}</strong>
+                              </td>
+                              <td colSpan={4} />
+                            </tr>
+                            <tr className="table-subtotal table-year">
+                              <td colSpan={3}>
+                                <strong>Year Grand Total</strong>
+                              </td>
+                              <td className="text-end">
+                                <strong>{formatINR(currentYearRows.reduce((s, r) => s + (r.invest_amount || 0), 0))}</strong>
+                              </td>
+                              <td colSpan={4} />
+                            </tr>
                           </tfoot>
                         </table>
                       )}
@@ -413,13 +516,15 @@ export default function InvestmentCard({ partners = ["Sudheer", "Suresh", "Praka
                 <div className="invest-modal-actions">
                   <div className="left-note">Showing {currentMonthRows.length} items</div>
                   <div className="right-actions">
-                    <button className="btn btn-sm btn-outline-secondary" onClick={() => exportRowsToCSV(currentMonthRows, `investments-${activeYear}-${activeMonth}.csv`)} disabled={!activeMonth && activeMonth !== 0}>Export Month</button>
-                    <button className="btn btn-sm btn-secondary ms-2" onClick={() => setModalOpen(false)}>Close</button>
+                    <button className="btn btn-sm btn-outline-secondary" onClick={() => exportRowsToCSV(currentMonthRows, `investments-${activeYear}-${activeMonth}.csv`)} disabled={!activeMonth && activeMonth !== 0}>
+                      Export Month
+                    </button>
+                    <button className="btn btn-sm btn-secondary ms-2" onClick={() => setModalOpen(false)}>
+                      Close
+                    </button>
                   </div>
                 </div>
-
               </div>
-
             </div>
           </div>
         </div>
@@ -429,5 +534,5 @@ export default function InvestmentCard({ partners = ["Sudheer", "Suresh", "Praka
 }
 
 InvestmentCard.propTypes = {
-  partners: PropTypes.arrayOf(PropTypes.string)
+  partners: PropTypes.arrayOf(PropTypes.string),
 };

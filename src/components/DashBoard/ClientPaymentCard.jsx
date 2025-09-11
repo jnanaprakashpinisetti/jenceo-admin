@@ -475,14 +475,17 @@ export default function ClientPaymentCard({
         .invest-modal-body { padding: 18px; max-height: 70vh; overflow:auto; }
       `}</style>
 
-      <div className="invest-card worker-salary-card" onClick={() => setModalOpen(true)} role="button">
-        <div className="invest-card__head d-flex align-items-center">
-          <div style={{ marginRight: 12 }}>💳</div>
-          <div>
-            <div className="invest-card__label">Client Payments</div>
-            <div className="invest-card__total">{loading ? "Loading..." : formatINR(overallTotals.paidIncludingTravel || overallTotals.paid)}</div>
-            <div className="invest-card__small">{loading ? "" : `Payments: ${overallTotals.count}`}</div>
+      <div className="clinet-payment-card" onClick={() => setModalOpen(true)} role="button">
+        <div className="invest-card__box" role="button">
+          <div className="invest-card__head">
+            <div >💳</div>
+            <div className="invest-card__meta">
+              <div className="invest-card__label">Client Payments</div>
+              <div className="invest-card__total">{loading ? "Loading..." : formatINR(overallTotals.paidIncludingTravel || overallTotals.paid)}</div>
+              <div className="invest-card__small">{loading ? "" : `Payments: ${overallTotals.count}`}</div>
+            </div>
           </div>
+          <div class="invest-card__divider"></div>
         </div>
       </div>
 
@@ -497,11 +500,8 @@ export default function ClientPaymentCard({
               </div>
 
               <div className="invest-modal-header">
-                <div className="d-flex justify-content-between align-items-center">
-
 
                   {/* Overall header cards (now show overall sums across all years) */}
-                  <div className="d-flex gap-2 align-items-center">
                     <div className="header-gradient grad-paid">
                       <div style={{ fontSize: 12, opacity: 0.9 }}>Overall Paid</div>
                       <div style={{ fontWeight: 700, fontSize: 16 }}>{formatINR(overallTotals.paidIncludingTravel ?? overallTotals.paid)}</div>
@@ -519,8 +519,6 @@ export default function ClientPaymentCard({
                       <div style={{ fontWeight: 700, fontSize: 16 }}>{formatINR(overallTotals.refunds)}</div>
                       <div style={{ fontSize: 11, opacity: 0.85 }}>across all years</div>
                     </div>
-                  </div>
-                </div>
               </div>
 
               <div className="invest-modal-body">
@@ -536,7 +534,7 @@ export default function ClientPaymentCard({
                 </ul>
 
                 <div className="mb-3 d-flex gap-2 flex-wrap mt-3">
-                  <div className="card invest-summary-card">
+                  <div className="invest-card invest-summary-card">
                     <div className="card-body py-2 px-3">
                       <div className="small text-muted">Paid (month)</div>
                       <div className="h5 mb-0">{formatINR(monthlyTotals.paidInclTravel ?? monthlyTotals.paid)}</div>
@@ -544,7 +542,7 @@ export default function ClientPaymentCard({
                     </div>
                   </div>
 
-                  <div className="card invest-summary-card">
+                  <div className="invest-card invest-summary-card">
                     <div className="card-body py-2 px-3">
                       <div className="small text-muted">Refunds (month)</div>
                       <div className="h5 mb-0">{formatINR(monthlyTotals.refunds)}</div>
@@ -552,7 +550,7 @@ export default function ClientPaymentCard({
                     </div>
                   </div>
 
-                  <div className="card invest-summary-card">
+                  <div className="invest-card invest-summary-card">
                     <div className="card-body py-2 px-3">
                       <div className="small text-muted">Balance (month)</div>
                       <div className="h5 mb-0">{formatINR(monthlyTotals.balance)}</div>
@@ -560,7 +558,7 @@ export default function ClientPaymentCard({
                     </div>
                   </div>
 
-                  <div className="card invest-summary-card">
+                  <div className="invest-card invest-summary-card">
                     <div className="card-body py-2 px-3">
                       <div className="small text-muted">Pending (month)</div>
                       <div className="h5 mb-0">{monthlyTotals.pending ?? 0}</div>
@@ -582,11 +580,11 @@ export default function ClientPaymentCard({
                     </ul>
 
                     <div className="invest-month-toolbar d-flex justify-content-between align-items-center mb-3">
-                      <div className="small text-muted">
+                      <div className="small text-center">
                         {activeMonth ? <>{new Date(Number(activeYear), Number(activeMonth), 1).toLocaleString("default", { month: "long" })} {activeYear}</> : "Select a month"}
                       </div>
 
-                      <div className="btn-group">
+                      <div className="btn-group ms-2">
                         <button className="btn btn-sm btn-outline-primary" onClick={() => exportCSV("month")} disabled={!activeMonth}>Export Month CSV</button>
                         <button className="btn btn-sm btn-outline-secondary" onClick={() => printScope("month")} disabled={!activeMonth}>Print Month</button>
                         <button className="btn btn-sm btn-outline-success" onClick={() => exportCSV("year")} disabled={!activeYear}>Export Year CSV</button>

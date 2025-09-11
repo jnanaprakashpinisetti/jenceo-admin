@@ -435,6 +435,8 @@ export default function WorkerSalaryCard() {
     }, [mostRecentYearMonth, grouped]);
 
     return (
+
+        
         <div className="worker-salary-card">
             <div className="invest-card__box" role="button" onClick={() => setModalOpen(true)}>
                 <div className="invest-card__head">

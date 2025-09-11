@@ -8,12 +8,12 @@ async function importFirebaseDB() {
     const a = await import("../../firebase");
     if (a && a.default) return a.default;
     if (a && a.firebaseDB) return a.firebaseDB;
-  } catch {}
+  } catch { }
   try {
     const b = await import("../firebase");
     if (b && b.default) return b.default;
     if (b && b.firebaseDB) return b.firebaseDB;
-  } catch {}
+  } catch { }
   if (typeof window !== "undefined" && window.firebaseDB) return window.firebaseDB;
   return null;
 }
@@ -117,7 +117,7 @@ export default function InvestmentCard({ partners = ["Sudheer", "Suresh", "Praka
       mounted = false;
       try {
         if (ref && listener) ref.off("value", listener);
-      } catch {}
+      } catch { }
     };
   }, []);
 
@@ -311,33 +311,30 @@ export default function InvestmentCard({ partners = ["Sudheer", "Suresh", "Praka
                 <button className="btn-close btn-close-white invest-modal-top-close" onClick={() => setModalOpen(false)} />
               </div>
 
-              <div className="invest-modal-header">
-                <div className="invest-modal-summary">
-                  <div className="summary-item small-cards">
-                    <div className="invest-card-status-row">
-                      {["Acknowledge", "Clarification", "Pending", "Reject"].map((s, idx) => {
-                        const st = overallStatusTotals[s] || { count: 0, amount: 0 };
-                        return (
-                          <div key={s} className={`invest-status-card invest-status-${s.toLowerCase()} grad-${idx}`}>
-                            <div className="status-label">{s}</div>
-                            <div className="status-amount">{formatINR(st.amount)}</div>
-                            <div className="status-count">{st.count} items</div>
-                          </div>
-                        );
-                      })}
+              <div className="invest-modal-body">
+                  <div className="invest-modal-summary">
+                    <div className="summary-item small-cards">
+                      <div className="invest-card-status-row">
+                        {["Acknowledge", "Clarification", "Pending", "Reject"].map((s, idx) => {
+                          const st = overallStatusTotals[s] || { count: 0, amount: 0 };
+                          return (
+                            <div key={s} className={`invest-status-card invest-status-${s.toLowerCase()} grad-${idx}`}>
+                              <div className="status-label">{s}</div>
+                              <div className="status-amount">{formatINR(st.amount)}</div>
+                              <div className="status-count">{st.count} items</div>
+                            </div>
+                          );
+                        })}
 
-                      {/* Grand total card (overall) - retained */}
-                      <div className="invest-status-all">
-                        <div className="status-label">Grand Total</div>
-                        <div className="status-amount">{formatINR(grandTotalAll)}</div>
-                        <div className="status-count">Records: {records.length}</div>
+                        {/* Grand total card (overall) - retained */}
+                        <div className="invest-status-all">
+                          <div className="status-label">Grand Total</div>
+                          <div className="status-amount">{formatINR(grandTotalAll)}</div>
+                          <div className="status-count">Records: {records.length}</div>
+                        </div>
                       </div>
                     </div>
                   </div>
-                </div>
-              </div>
-
-              <div className="invest-modal-body">
                 <div className="investors-year-section">
                   <div className="investors-list small">
                     <h6>Investors</h6>
@@ -430,10 +427,10 @@ export default function InvestmentCard({ partners = ["Sudheer", "Suresh", "Praka
                     <div className="months-row">
                       {activeYear && yearMonthGroups[activeYear]
                         ? Object.keys(yearMonthGroups[activeYear]).map((k) => (
-                            <button key={k} className={`btn btn-sm month-pill ${String(activeMonth) === String(k) ? "active" : ""}`} onClick={() => setActiveMonth(Number(k))}>
-                              {k === "Unknown" ? "Unknown" : new Date(Number(activeYear), Number(k), 1).toLocaleString("default", { month: "short" })}
-                            </button>
-                          ))
+                          <button key={k} className={`btn btn-sm month-pill ${String(activeMonth) === String(k) ? "active" : ""}`} onClick={() => setActiveMonth(Number(k))}>
+                            {k === "Unknown" ? "Unknown" : new Date(Number(activeYear), Number(k), 1).toLocaleString("default", { month: "short" })}
+                          </button>
+                        ))
                         : <div className="muted">Select a year to see months</div>}
                     </div>
 

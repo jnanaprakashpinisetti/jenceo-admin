@@ -545,7 +545,7 @@ $dark-table-text: #e6eef6;
 .invest-card-status-row {
     display: flex;
     gap: 10px;
-    margin-top: 12px;
+    margin-bottom: 15px;
     flex-wrap: wrap;
 }
 
@@ -555,6 +555,9 @@ $dark-table-text: #e6eef6;
     border-radius: 8px;
     color: #fff;
     box-shadow: 0 6px 18px rgba(0, 0, 0, 0.12);
+    @include mobile {
+        width: 48%;
+    }
 }
 
 .invest-status-all {
@@ -700,9 +703,6 @@ $dark-table-text: #e6eef6;
     gap: 12px;
 }
 
-.summary-item {
-    margin-right: 12px;
-}
 
 .summary-label {
     font-size: 12px;
@@ -839,6 +839,7 @@ $dark-table-text: #e6eef6;
     margin-top: 12px;
     margin-bottom: 12px;
     flex-wrap: wrap;
+    justify-content: space-between;
 }
 
 .year-status-card {

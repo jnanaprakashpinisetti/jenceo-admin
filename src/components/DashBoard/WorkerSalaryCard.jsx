@@ -1,6 +1,7 @@
 // src/components/DashBoard/WorkerSalaryCard.jsx
 import React, { useEffect, useMemo, useState, useRef } from "react";
 
+/* ---------------- Helpers ---------------- */
 async function importFirebaseDB() {
     try {
         const a = await import("../../firebase");
@@ -33,13 +34,36 @@ function formatINR(value) {
     }
 }
 
-function extractPaymentsFromEmployeeRecord(employeeRecord, collectionPrefix = "") {
+function parseDateRobust(v) {
+    if (!v && v !== 0) return null;
+    try {
+        if (v instanceof Date && !isNaN(v)) return v;
+    } catch { }
+    const s = String(v).trim();
+    if (/^\d{10,13}$/.test(s)) {
+        const n = Number(s);
+        return new Date(n < 1e12 ? n * 1000 : n);
+    }
+    const d = new Date(s);
+    if (!isNaN(d)) return d;
+    const m = s.match(/^(\d{1,2})[\/\-\s](\d{1,2})[\/\-\s](\d{4})$/);
+    if (m) return new Date(Number(m[3]), Number(m[2]) - 1, Number(m[1]));
+    const mm = s.match(/([A-Za-z]+)[,]?\s*(\d{4})/);
+    if (mm) {
+        const idx = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"].indexOf(mm[1].slice(0, 3).toLowerCase());
+        if (idx >= 0) return new Date(Number(mm[2]), idx, 1);
+    }
+    return null;
+}
+
+/* normalize employee record -> payment rows */
+function extractPaymentsFromEmployeeRecord(employeeRecord = {}, collectionPrefix = "") {
     const empId = employeeRecord.employeeId ?? employeeRecord.idNo ?? employeeRecord.id ?? employeeRecord.uid ?? "";
     const name =
         (employeeRecord.firstName && employeeRecord.lastName)
             ? `${employeeRecord.firstName} ${employeeRecord.lastName}`
             : employeeRecord.employeeName ?? employeeRecord.name ?? employeeRecord.displayName ?? "Unknown";
-    const photo = employeeRecord.employeePhoto || employeeRecord.employeePhotoUrl || null;
+    const photo = employeeRecord.employeePhoto || employeeRecord.employeePhotoUrl || employeeRecord.photo || null;
 
     const paymentsArray = Array.isArray(employeeRecord.payments)
         ? employeeRecord.payments
@@ -50,104 +74,103 @@ function extractPaymentsFromEmployeeRecord(employeeRecord, collectionPrefix = ""
     if (paymentsArray && paymentsArray.length) {
         paymentsArray.forEach((p) => {
             if (!p) return;
-            const amount = safeNumber(p.amount ?? p.salary ?? p.paidAmount ?? p.Amount ?? p.pay_amount ?? 0);
+            // treat positive amounts as paid; ignore negatives (refunds removed)
+            const paidAmount = safeNumber(p.amount ?? p.salary ?? p.paidAmount ?? p.Amount ?? p.pay_amount ?? 0);
             const paymentFor = p.paymentFor ?? p.for ?? p.payment_of ?? "";
-            const receiptNo = p.receiptNo ?? p.receipt_no ?? p.bookNo ?? p.bookno ?? "";
+            const receiptNo = p.receptNo ?? p.receiptNo ?? p.receipt_no ?? p.bookNo ?? p.bookno ?? "";
             const typeOfPayment = p.typeOfPayment ?? p.paymentMode ?? p.payment_type ?? p.mode ?? p.type ?? "";
             const dateRaw = p.date ?? p.pay_date ?? p.paymentDate ?? p.paidOn ?? p.createdAt ?? "";
-            const date = dateRaw ? String(dateRaw) : "";
+            const parsedDate = parseDateRobust(dateRaw);
 
             results.push({
                 sourceCollection: collectionPrefix || "",
                 employeeId: String(empId || ""),
                 employeeName: String(name || "Unknown"),
                 employeePhoto: photo,
-                amount,
+                paidAmount: paidAmount > 0 ? paidAmount : 0,
                 paymentFor: String(paymentFor || ""),
                 receiptNo: String(receiptNo || ""),
                 typeOfPayment: String(typeOfPayment || ""),
-                date,
+                date: dateRaw ? String(dateRaw) : "",
+                parsedDate,
                 raw: p,
             });
         });
     } else {
-        const singleAmount = safeNumber(employeeRecord.amount ?? employeeRecord.salary ?? 0);
-        if (singleAmount) {
-            const dateRaw = employeeRecord.pay_date ?? employeeRecord.paymentDate ?? employeeRecord.date ?? "";
-            results.push({
-                sourceCollection: collectionPrefix || "",
-                employeeId: String(empId || ""),
-                employeeName: String(name || "Unknown"),
-                employeePhoto: photo,
-                amount: singleAmount,
-                paymentFor: employeeRecord.paymentFor ?? "",
-                receiptNo: employeeRecord.receiptNo ?? "",
-                typeOfPayment: employeeRecord.typeOfPayment ?? "",
-                date: dateRaw ? String(dateRaw) : "",
-                raw: employeeRecord,
-            });
-        }
+        // fallback single fields
+        const singlePaid = safeNumber(employeeRecord.amount ?? employeeRecord.salary ?? 0);
+        const dateRaw = employeeRecord.pay_date ?? employeeRecord.paymentDate ?? employeeRecord.date ?? "";
+        results.push({
+            sourceCollection: collectionPrefix || "",
+            employeeId: String(empId || ""),
+            employeeName: String(name || "Unknown"),
+            employeePhoto: photo,
+            paidAmount: singlePaid > 0 ? singlePaid : 0,
+            paymentFor: employeeRecord.paymentFor ?? "",
+            receiptNo: employeeRecord.receptNo ?? employeeRecord.receiptNo ?? "",
+            typeOfPayment: employeeRecord.typeOfPayment ?? "",
+            date: dateRaw ? String(dateRaw) : "",
+            parsedDate: parseDateRobust(dateRaw),
+            raw: employeeRecord,
+        });
     }
+
     return results;
 }
 
-function groupPaymentsByYearMonth(payments) {
+/* Group payments into years -> months (months as numbers 0..11 or 'Unknown') */
+function groupPaymentsByYearMonth(payments = []) {
     const out = {};
-    payments.forEach((p) => {
-        let d = null;
-        if (p.date) {
-            const cand = new Date(p.date);
-            if (!isNaN(cand)) d = cand;
-            else {
-                const tryIso = new Date(String(p.date));
-                if (!isNaN(tryIso)) d = tryIso;
-            }
+    (payments || []).forEach((p) => {
+        let d = p.parsedDate ?? null;
+        if (!d && p.date) {
+            const cand = parseDateRobust(p.date);
+            if (cand) d = cand;
         }
-        if (!d && p.paymentFor) {
-            const tryP = new Date(p.paymentFor);
-            if (!isNaN(tryP)) d = tryP;
-        }
-        const year = d ? d.getFullYear() : null;
-        const month = d ? d.getMonth() : null;
+        const year = d ? d.getFullYear() : "Unknown";
+        const month = d ? d.getMonth() : "Unknown";
+        const yKey = year;
+        const mKey = month === "Unknown" ? "Unknown" : String(month);
+        if (!out[yKey]) out[yKey] = { months: {}, totals: { paid: 0, count: 0 } };
+        if (!out[yKey].months[mKey]) out[yKey].months[mKey] = { rows: [], totals: { paid: 0, count: 0 } };
 
-        if (year === null) {
-            if (!out["unknown"]) out["unknown"] = { name: "Unknown", months: {} };
-            out["unknown"].months["unknown"] = out["unknown"].months["unknown"] || { name: "Unknown", rows: [] };
-            out["unknown"].months["unknown"].rows.push(p);
-        } else {
-            out[year] = out[year] || { name: String(year), months: {} };
-            out[year].months[month] = out[year].months[month] || { name: d.toLocaleString("default", { month: "long" }), rows: [] };
-            out[year].months[month].rows.push(p);
-        }
+        out[yKey].months[mKey].rows.push(p);
+        out[yKey].months[mKey].totals.paid += Number(p.paidAmount || 0);
+        out[yKey].months[mKey].totals.count += 1;
+
+        out[yKey].totals.paid += Number(p.paidAmount || 0);
+        out[yKey].totals.count += 1;
     });
-    return out;
+
+    // sort keys (years descending, months ascending)
+    const yearKeys = Object.keys(out).sort((a, b) => {
+        if (a === "Unknown") return 1;
+        if (b === "Unknown") return -1;
+        return Number(b) - Number(a);
+    });
+
+    yearKeys.forEach(y => {
+        const months = out[y].months;
+        const mKeys = Object.keys(months).sort((a, b) => {
+            if (a === "Unknown") return 1;
+            if (b === "Unknown") return -1;
+            return Number(a) - Number(b);
+        });
+        const sorted = {};
+        mKeys.forEach(k => sorted[k] = months[k]);
+        out[y].months = sorted;
+    });
+
+    return { years: out, yearKeys };
 }
 
-function Sparkline({ points = [], width = 120, height = 30 }) {
-    if (!points || points.length === 0) return <div className="invest-sparkline" />;
-    const max = Math.max(...points);
-    const min = Math.min(...points);
-    const range = max - min || 1;
-    const stepX = width / (points.length - 1 || 1);
-    const coords = points.map((v, i) => {
-        const x = i * stepX;
-        const y = height - ((v - min) / range) * height;
-        return `${x},${y}`;
-    }).join(" ");
-    return (
-        <svg className="invest-sparkline" width={width} height={height} viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none">
-            <polyline fill="none" stroke="currentColor" strokeWidth="1.5" points={coords} />
-        </svg>
-    );
-}
-
+/* ---------------- Component ---------------- */
 export default function WorkerSalaryCard() {
     const [allPayments, setAllPayments] = useState([]);
     const [loading, setLoading] = useState(true);
     const [modalOpen, setModalOpen] = useState(false);
     const [activeYear, setActiveYear] = useState(null);
-    const [activeMonth, setActiveMonth] = useState(null);
-    const [filterEmployee, setFilterEmployee] = useState(null);
+    const [activeMonth, setActiveMonth] = useState(null); // "0".."11" or "Unknown"
     const modalRef = useRef(null);
 
     useEffect(() => {
@@ -165,6 +188,7 @@ export default function WorkerSalaryCard() {
 
             const snapshots = {};
             const paths = ["EmployeeBioData", "ExitEmployees"];
+
             const attach = (path) => {
                 try {
                     const ref = fdb.child ? fdb.child(path) : fdb.ref(path);
@@ -180,25 +204,25 @@ export default function WorkerSalaryCard() {
             };
 
             const rebuild = () => {
-                const combinedPayments = [];
-                paths.forEach((p) => {
+                const combined = [];
+                paths.forEach(p => {
                     const node = snapshots[p] || {};
-                    Object.keys(node).forEach((k) => {
+                    Object.keys(node).forEach(k => {
                         const emp = node[k] || {};
                         const payments = extractPaymentsFromEmployeeRecord(emp, p);
-                        payments.forEach((pm) => {
+                        payments.forEach(pm => {
                             pm._employeeDbKey = `${p}/${k}`;
-                            pm.sourceCollection = p;
-                            combinedPayments.push(pm);
+                            combined.push(pm);
                         });
                     });
                 });
-                combinedPayments.sort((a, b) => {
-                    const da = a.date ? new Date(a.date) : new Date(0);
-                    const db = b.date ? new Date(b.date) : new Date(0);
-                    return db - da;
+
+                combined.forEach(r => {
+                    if (!r.parsedDate && r.date) r.parsedDate = parseDateRobust(r.date);
                 });
-                setAllPayments(combinedPayments);
+
+                combined.sort((a, b) => (b.parsedDate?.getTime() || 0) - (a.parsedDate?.getTime() || 0));
+                setAllPayments(combined);
                 setLoading(false);
             };
 
@@ -207,244 +231,97 @@ export default function WorkerSalaryCard() {
 
         return () => {
             mounted = false;
-            try {
-                listeners.forEach(({ ref, cb }) => ref.off("value", cb));
-            } catch (e) { }
+            try { listeners.forEach(({ ref, cb }) => ref.off("value", cb)); } catch { }
         };
     }, []);
 
-    // === FIX: count only payments that have a positive amount ===
-    const paymentsCount = useMemo(() => allPayments.filter(p => Number(p.amount || 0) > 0).length, [allPayments]);
-
     const grouped = useMemo(() => groupPaymentsByYearMonth(allPayments), [allPayments]);
+    const yearKeys = useMemo(() => grouped.yearKeys || [], [grouped]);
 
-    const yearsList = useMemo(() => {
-        const yrs = Object.keys(grouped)
-            .filter((k) => k !== "unknown")
-            .map(Number)
-            .filter((n) => !Number.isNaN(n))
-            .sort((a, b) => b - a);
-        return yrs;
-    }, [grouped]);
-
-    const mostRecentYearMonth = useMemo(() => {
-        const withDate = allPayments
-            .filter(p => p.date)
-            .map(p => ({ d: new Date(p.date), p }))
-            .filter(x => !isNaN(x.d));
-        if (withDate.length === 0) return null;
-        withDate.sort((a, b) => b.d - a.d);
-        const d = withDate[0].d;
-        return { year: d.getFullYear(), month: d.getMonth() };
-    }, [allPayments]);
-
+    // when modal opens pick defaults (most recent year/month)
     useEffect(() => {
         if (!modalOpen) return;
-        if (mostRecentYearMonth) {
-            setActiveYear(mostRecentYearMonth.year);
-            setActiveMonth(mostRecentYearMonth.month);
-        } else if (yearsList.length) {
-            setActiveYear(yearsList[0]);
-            const months = Object.keys(grouped[yearsList[0]]?.months || {}).map(Number).sort((a, b) => b - a);
-            setActiveMonth(months.length ? months[0] : null);
-        } else {
-            setActiveYear(null);
-            setActiveMonth(null);
-        }
-        setFilterEmployee(null);
-    }, [modalOpen, mostRecentYearMonth, yearsList, grouped]);
+        if (!yearKeys.length) { setActiveYear(null); setActiveMonth(null); return; }
+        const y = yearKeys[0];
+        setActiveYear(prev => prev ?? y);
 
-    const handleYearClick = (y) => {
+        // pick latest month for that year (prefer numeric months, latest)
+        const months = Object.keys(grouped.years[y].months || {});
+        const pick = months.slice().reverse().find(k => k !== "Unknown") || months[0];
+        setActiveMonth(prev => prev ?? (pick === undefined ? null : pick));
+    }, [modalOpen, yearKeys, grouped]);
+
+    // helper: when user clicks a year we now auto-select that year's most recent month
+    const handleYearSelect = (y) => {
         setActiveYear(y);
-
-        const monthsObj = grouped[y] && grouped[y].months ? grouped[y].months : null;
-        if (!monthsObj) {
+        const monthsObj = grouped.years?.[y]?.months || {};
+        const months = Object.keys(monthsObj || []);
+        if (!months.length) {
             setActiveMonth(null);
             return;
         }
-        const monthKeys = Object.keys(monthsObj).map(Number).filter(n => !isNaN(n)).sort((a, b) => b - a);
-
-        if (filterEmployee) {
-            const empMonths = monthKeys.filter(m => (monthsObj[m].rows || []).some(r => (r.employeeId || r._employeeDbKey || "").toString() === filterEmployee.toString()));
-            if (empMonths.length) {
-                setActiveMonth(empMonths[0]);
-                return;
-            }
-        }
-
-        setActiveMonth(monthKeys.length ? monthKeys[0] : null);
+        const pick = months.slice().reverse().find(k => k !== "Unknown") || months[0];
+        setActiveMonth(pick === undefined ? null : pick);
     };
 
-    const monthsForActiveYear = useMemo(() => {
-        if (!activeYear || !grouped[activeYear]) return [];
-        return Object.keys(grouped[activeYear].months).map(Number).sort((a, b) => a - b);
-    }, [activeYear, grouped]);
-
+    // rows for current month/year
     const currentMonthRows = useMemo(() => {
         if (!activeYear || activeMonth === null || activeMonth === undefined) return [];
-        const monthObj = (grouped[activeYear] && grouped[activeYear].months && grouped[activeYear].months[activeMonth]) || null;
-        if (!monthObj) return [];
-        return filterEmployee ? monthObj.rows.filter(r => (r.employeeId || r._employeeDbKey || "").toString() === filterEmployee.toString()) : monthObj.rows;
-    }, [grouped, activeYear, activeMonth, filterEmployee]);
+        const mObj = grouped.years?.[activeYear]?.months?.[String(activeMonth)];
+        if (!mObj) return [];
+        return mObj.rows.slice().sort((a, b) => (b.parsedDate?.getTime() || 0) - (a.parsedDate?.getTime() || 0));
+    }, [activeYear, activeMonth, grouped]);
 
     const currentYearRows = useMemo(() => {
-        if (!activeYear || !grouped[activeYear]) return [];
-        const months = grouped[activeYear].months || {};
-        let rows = Object.keys(months).reduce((acc, k) => acc.concat(months[k].rows || []), []);
-        if (filterEmployee) rows = rows.filter(r => (r.employeeId || r._employeeDbKey || "").toString() === filterEmployee.toString());
-        return rows;
-    }, [grouped, activeYear, filterEmployee]);
+        if (!activeYear) return [];
+        const months = grouped.years?.[activeYear]?.months || {};
+        return Object.keys(months).reduce((acc, k) => acc.concat(months[k].rows || []), []).sort((a, b) => (b.parsedDate?.getTime() || 0) - (a.parsedDate?.getTime() || 0));
+    }, [activeYear, grouped]);
 
-    const monthlyGrandTotal = useMemo(() => currentMonthRows.reduce((s, r) => s + Number(r.amount || 0), 0), [currentMonthRows]);
-    const monthlyCount = useMemo(() => currentMonthRows.filter(r => Number(r.amount || 0) > 0).length, [currentMonthRows]);
+    // totals: only paid
+    const monthlyTotals = useMemo(() => {
+        const paid = currentMonthRows.reduce((s, r) => s + Number(r.paidAmount || 0), 0);
+        const count = currentMonthRows.length;
+        return { paid, count };
+    }, [currentMonthRows]);
 
-    const yearlyGrandTotal = useMemo(() => currentYearRows.reduce((s, r) => s + Number(r.amount || 0), 0), [currentYearRows]);
-    const yearlyCount = useMemo(() => currentYearRows.filter(r => Number(r.amount || 0) > 0).length, [currentYearRows]);
+    const yearlyTotals = useMemo(() => {
+        const paid = currentYearRows.reduce((s, r) => s + Number(r.paidAmount || 0), 0);
+        const count = currentYearRows.length;
+        return { paid, count };
+    }, [currentYearRows]);
 
-    const overallGrandTotal = useMemo(() => allPayments.reduce((s, p) => s + Number(p.amount || 0), 0), [allPayments]);
-
-    const employeeTotals = useMemo(() => {
-        const map = {};
-        allPayments.forEach(p => {
-            const key = p.employeeId || p._employeeDbKey || p.employeeName;
-            if (!map[key]) map[key] = { name: p.employeeName, employeeId: p.employeeId, total: 0, photo: p.employeePhoto };
-            map[key].total += Number(p.amount || 0);
-        });
-        return Object.keys(map).map(k => ({ key: k, ...map[k] })).sort((a, b) => b.total - a.total);
+    const overallTotals = useMemo(() => {
+        const paid = allPayments.reduce((s, r) => s + Number(r.paidAmount || 0), 0);
+        const count = allPayments.length;
+        return { paid, count };
     }, [allPayments]);
 
-    const topEmployees = employeeTotals.slice(0, 3);
-
-    const sparkPoints = useMemo(() => {
-        if (!activeYear || !grouped[activeYear]) return [];
-        const months = grouped[activeYear].months || {};
-        const pts = [];
-        for (let m = 0; m < 12; m++) {
-            const rows = months[m] ? months[m].rows : [];
-            const sum = rows.reduce((s, r) => s + Number(r.amount || 0), 0);
-            pts.push(sum);
-        }
-        return pts;
-    }, [grouped, activeYear]);
-
-    const csvEscape = (s) => {
-        if (s === null || s === undefined) return '""';
-        return `"${String(s).replace(/"/g, '""')}"`;
-    };
-    const exportRowsToCSV = (rows, filename = "worker-salary.csv") => {
-        const headers = ["#", "Date", "EmployeeID", "Employee", "TypeOfPayment", "PaymentFor", "ReceiptNo", "Amount"];
-        const csv = [headers.join(",")].concat(rows.map((r, idx) =>
-            [
-                idx + 1,
-                csvEscape(r.date),
-                csvEscape(r.employeeId),
-                csvEscape(r.employeeName),
-                csvEscape(r.typeOfPayment),
-                csvEscape(r.paymentFor),
-                csvEscape(r.receiptNo),
-                Number(r.amount || 0),
-            ].join(",")
-        )).join("\n");
-        const blob = new Blob([csv], { type: "text/csv" });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = filename;
-        a.click();
-        URL.revokeObjectURL(url);
-    };
-    const printView = (rows, title = "") => {
-        const w = window.open("", "_blank");
-        if (!w) return;
-        const htmlRows = rows.map((r, idx) => `<tr>
-      <td style="padding:6px;border:1px solid #ddd">${idx + 1}</td>
-      <td style="padding:6px;border:1px solid #ddd">${r.date || "-"}</td>
-      <td style="padding:6px;border:1px solid #ddd">${r.employeeId}</td>
-      <td style="padding:6px;border:1px solid #ddd">${r.employeeName}</td>
-      <td style="padding:6px;border:1px solid #ddd">${r.typeOfPayment}</td>
-      <td style="padding:6px;border:1px solid #ddd">${r.paymentFor || (r.date ? new Date(r.date).toLocaleString("default", { month: "long", year: "numeric" }) : "-")}</td>
-      <td style="padding:6px;border:1px solid #ddd">${r.receiptNo}</td>
-      <td style="padding:6px;border:1px solid #ddd;text-align:right">${formatINR(r.amount)}</td>
-    </tr>`).join("\n");
-
-        const html = `<!doctype html><html><head><meta charset="utf-8"><title>${title}</title>
-      <style>body{font-family:Arial,Helvetica,sans-serif;padding:20px}table{border-collapse:collapse;width:100%}th,td{border:1px solid #ddd;padding:6px;text-align:left}th{background:#f4f4f4}</style>
-      </head><body><h2>${title}</h2><table><thead><tr><th>#</th><th>Date</th><th>EmployeeID</th><th>Employee</th><th>Type</th><th>Payment For</th><th>Receipt No</th><th>Amount</th></tr></thead><tbody>${htmlRows}</tbody></table></body></html>`;
-        w.document.write(html);
-        w.document.close();
-        w.print();
+    const safeMonthLabel = (y, mKey) => {
+        if (mKey === "Unknown") return "Unknown";
+        return new Date(Number(y), Number(mKey), 1).toLocaleString("default", { month: "long" });
     };
 
-    const onPillClick = (employeeKey) => {
-        if (filterEmployee === employeeKey) setFilterEmployee(null);
-        else setFilterEmployee(employeeKey);
-
-        const rows = allPayments.filter(p => (p.employeeId || p._employeeDbKey || "").toString() === employeeKey.toString());
-        const withDate = rows.map(r => ({ d: r.date ? new Date(r.date) : null, r })).filter(x => x.d && !isNaN(x.d));
-        if (withDate.length) {
-            withDate.sort((a, b) => b.d - a.d);
-            setActiveYear(withDate[0].d.getFullYear());
-            setActiveMonth(withDate[0].d.getMonth());
-        }
+    const formatDateCell = (r) => {
+        if (r.parsedDate) return r.parsedDate.toLocaleDateString();
+        return r.date || "-";
     };
 
-    const displayPaymentFor = (r) => {
-        const parseToDate = (val) => {
-            if (!val && val !== 0) return null;
-            if (typeof val === "number" || (/^\d+$/.test(String(val).trim()))) {
-                const num = Number(val);
-                const d = new Date(num);
-                if (!isNaN(d)) return d;
-            }
-            const d = new Date(String(val));
-            if (!isNaN(d)) return d;
-            return null;
-        };
-
-        let d = parseToDate(r.date);
-        if (!d) d = parseToDate(r.paymentFor);
-
-        if (d && !isNaN(d)) {
-            const dd = String(d.getDate()).padStart(2, "0");
-            const mm = String(d.getMonth() + 1).padStart(2, "0");
-            const yyyy = d.getFullYear();
-            return `${dd}/${mm}/${yyyy}`;
-        }
-
-        if (r.paymentFor && String(r.paymentFor).trim()) return String(r.paymentFor);
-        return "-";
-    };
-
-    const openEmployee = (employeeDbKey, employeeId) => {
-        const encoded = encodeURIComponent(employeeId || employeeDbKey || "");
-        window.location.href = `/employee-profile/${encoded}`;
-    };
-
-    const safeMonthName = (year, mIdx) => {
-        if (!year || mIdx === null || mIdx === undefined) return "";
-        const months = grouped[year]?.months || {};
-        return months[mIdx]?.name ?? new Date(Number(year), Number(mIdx)).toLocaleString("default", { month: "long" });
-    };
-
-    // compute payments in the most recent month for a quick card
-    const paymentsThisMostRecentMonth = useMemo(() => {
-        if (!mostRecentYearMonth) return 0;
-        const mObj = grouped[mostRecentYearMonth.year]?.months?.[mostRecentYearMonth.month];
-        if (!mObj) return 0;
-        return (mObj.rows || []).filter(r => Number(r.amount || 0) > 0).length;
-    }, [mostRecentYearMonth, grouped]);
+    useEffect(() => {
+        if (modalOpen) document.body.classList.add("modal-open");
+        else document.body.classList.remove("modal-open");
+        return () => document.body.classList.remove("modal-open");
+    }, [modalOpen]);
 
     return (
-
-        
         <div className="worker-salary-card">
             <div className="invest-card__box" role="button" onClick={() => setModalOpen(true)}>
                 <div className="invest-card__head">
                     <div className="invest-card__icon">👷</div>
                     <div className="invest-card__meta">
                         <div className="invest-card__label">Worker Salaries</div>
-                        <div className="invest-card__total">{loading ? "Loading..." : formatINR(overallGrandTotal)}</div>
-                        <div className="invest-card__small">{loading ? "" : `Payments: ${paymentsCount}`}</div>
+                        <div className="invest-card__total">{loading ? "Loading..." : formatINR(overallTotals.paid)}</div>
+                        <div className="invest-card__small">{loading ? "" : `Payments: ${overallTotals.count}`}</div>
                     </div>
                 </div>
 
@@ -455,133 +332,124 @@ export default function WorkerSalaryCard() {
                 <div className="invest-modal-backdrop" onClick={() => setModalOpen(false)}>
                     <div className="invest-modal-dialog" ref={modalRef} onClick={(e) => e.stopPropagation()}>
                         <div className="invest-modal-content">
-
                             <div className="invest-modal-investor-bar">
                                 <div className="invest-modal-investor-bar__title">Worker Salary Report</div>
-
                                 <button className="btn-close invest-modal-top-close btn-close-white" onClick={() => setModalOpen(false)} />
                             </div>
 
-                            <div className="invest-modal-header">
-                                <div className="invest-modal-sub">
-                                    <div className="invest-modal-grand">
-                                        <h5> Overall Grand Total: <strong>{formatINR(overallGrandTotal)}</strong></h5>
+                            <div className="invest-modal-body">
+                                <div className="category-cards">
+                                    <div className="header-gradient grad-paid">
+                                        <div className="header-label">Overall (All Years)</div>
+                                        <div className="header-value">{formatINR(overallTotals.paid)}</div>
+                                        <div className="header-sub">{overallTotals.count} payments</div>
                                     </div>
-                                    <div className="invest-modal-stats">
-                                        <span>Payments: {paymentsCount} • Year payments: {yearlyCount}</span>
+
+                                    <div className="header-gradient grad-balance">
+                                        <div className="header-label">Year-wise {activeYear ? `(${activeYear})` : ""}</div>
+                                        <div className="header-value">{formatINR((yearlyTotals && activeYear) ? yearlyTotals.paid : 0)}</div>
+                                        <div className="header-sub">{activeYear ? `${yearlyTotals.count} payments` : "select year"}</div>
                                     </div>
-                                    <div className="invest-modal-spark">
-                                        <Sparkline points={sparkPoints} />
+
+                                    <div className="header-gradient grad-pending">
+                                        <div className="header-label">Month-wise {activeMonth !== null && activeMonth !== undefined ? `(${safeMonthLabel(activeYear, activeMonth)})` : ""}</div>
+                                        <div className="header-value">{formatINR((monthlyTotals && activeMonth !== null && activeMonth !== undefined) ? monthlyTotals.paid : 0)}</div>
+                                        <div className="header-sub">{(activeMonth !== null && activeMonth !== undefined) ? `${monthlyTotals.count} payments` : "select month"}</div>
                                     </div>
                                 </div>
-                            </div>
-
-                            <div className="invest-modal-body">
 
                                 <ul className="nav nav-tabs invest-year-tabs">
-                                    {yearsList.length === 0 ? <li className="nav-item"><span className="nav-link active">No Data</span></li> : yearsList.map((y) => (
+                                    {yearKeys.length === 0 ? (
+                                        <li className="nav-item"><span className="nav-link active">No Data</span></li>
+                                    ) : yearKeys.map((y) => (
                                         <li key={y} className="nav-item">
-                                            <button className={`nav-link ${activeYear === y ? "active" : ""}`} onClick={() => handleYearClick(y)}>{y}</button>
+                                            <button className={`nav-link ${activeYear === y ? "active" : ""}`} onClick={() => handleYearSelect(y)}>{y}</button>
                                         </li>
                                     ))}
                                 </ul>
 
                                 {activeYear && (
                                     <div className="invest-year-block">
-
-                                        <ul className="nav nav-pills invest-month-pills">
-                                            {(grouped[activeYear] ? Object.keys(grouped[activeYear].months).map(Number).sort((a, b) => a - b) : []).map((mIdx) => (
-                                                <li key={mIdx} className="nav-item">
-                                                    <button className={`nav-link ${activeMonth === mIdx ? "active" : ""}`} onClick={() => setActiveMonth(mIdx)}>
-                                                        {safeMonthName(activeYear, mIdx)}
+                                        <ul className="nav nav-pills invest-month-pills mb-2">
+                                            {(grouped.years?.[activeYear] ? Object.keys(grouped.years[activeYear].months).map(k => k) : []).map((mKey) => (
+                                                <li key={mKey} className="nav-item">
+                                                    <button className={`nav-link ${String(activeMonth) === String(mKey) ? "active" : ""}`} onClick={() => setActiveMonth(mKey)}>
+                                                        {mKey === "Unknown" ? "Unknown" : new Date(Number(activeYear), Number(mKey), 1).toLocaleString("default", { month: "short" })}
                                                     </button>
                                                 </li>
                                             ))}
                                         </ul>
 
-                                        <div className="invest-month-toolbar">
-                                            <div />
-                                            <div className="btn-group">
-                                                <button className="btn btn-sm btn-outline-primary" onClick={() => exportRowsToCSV(currentMonthRows, `${activeYear}-${activeMonth ?? "all"}-worker-salary.csv`)} disabled={!activeMonth}>Export Month CSV</button>
-                                                <button className="btn btn-sm btn-outline-secondary" onClick={() => printView(currentMonthRows, `Worker Salary - ${activeYear} - ${activeMonth ?? ""}`)} disabled={!activeMonth}>Print Month</button>
-                                                <button className="btn btn-sm btn-outline-success" onClick={() => exportRowsToCSV(currentYearRows, `${activeYear}-worker-salary.csv`)} disabled={!activeYear}>Export Year CSV</button>
-                                                <button className="btn btn-sm btn-outline-dark" onClick={() => printView(currentYearRows, `Worker Salary - ${activeYear}`)} disabled={!activeYear}>Print Year</button>
+                                        <div className="invest-month-toolbar d-flex justify-content-between align-items-center mb-3">
+                                            <div className="small text-center">
+                                                {activeMonth !== null && activeMonth !== undefined ? <>{safeMonthLabel(activeYear, activeMonth)} {activeYear}</> : "Select a month"}
+                                            </div>
+
+                                            <div className="btn-group ms-2">
+                                                {/* Export / Print buttons can be added if needed */}
                                             </div>
                                         </div>
 
-                                        {!activeMonth ? (
-                                            <div className="alert alert-info">Select a month to view the monthly report</div>
-                                        ) : (
-                                            <div>
-                                                <div className="month-heading">
-                                                    <strong>{safeMonthName(activeYear, activeMonth)} {activeYear}</strong>
-                                                    <div className="small text-muted">
-                                                        {monthlyCount} payments • Month total: {formatINR(monthlyGrandTotal)}
-                                                    </div>
-                                                </div>
+                                        <div className="table-responsive">
+                                            <table className="table table-sm table-hover invest-table">
+                                                <thead>
+                                                    <tr>
+                                                        <th style={{ width: 40 }}>#</th>
+                                                        <th style={{ width: 56 }}>Photo</th>
+                                                        <th>Employee ID</th>
+                                                        <th>Employee Name</th>
+                                                        <th>Payment Type</th>
+                                                        <th>Date</th>
+                                                        <th>Receipt No</th>
+                                                        <th className="text-end">Paid</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    {(!activeMonth || currentMonthRows.length === 0) && (
+                                                        <tr><td colSpan={8} className="text-center small text-muted">No payments for selected month/year</td></tr>
+                                                    )}
+                                                    {currentMonthRows.map((r, i) => (
+                                                        <tr key={`${r._employeeDbKey}_${i}`}>
+                                                            <td>{i + 1}</td>
+                                                            <td>
+                                                                {r.employeePhoto ? (
+                                                                    <img src={r.employeePhoto} alt="photo" className="invest-photo" />
+                                                                ) : (
+                                                                    <div className="invest-photo-placeholder" />
+                                                                )}
+                                                            </td>
+                                                            <td>{r.employeeId || "-"}</td>
+                                                            <td>{r.employeeName || "-"}</td>
+                                                            <td>{r.typeOfPayment || "-"}</td>
+                                                            <td>{formatDateCell(r)}</td>
+                                                            <td>{r.receiptNo || "-"}</td>
+                                                            <td className="text-end">{formatINR(r.paidAmount)}</td>
+                                                        </tr>
+                                                    ))}
+                                                </tbody>
+                                                <tfoot>
+                                                    <tr className="table-secondary">
+                                                        <td colSpan={7} className="text-end"><strong>Monthly Subtotal</strong></td>
+                                                        <td className="text-end"><strong>{formatINR(monthlyTotals.paid)}</strong></td>
+                                                    </tr>
+                                                    <tr className="table-secondary">
+                                                        <td colSpan={7} className="text-end"><strong>Yearly Grand Total</strong></td>
+                                                        <td className="text-end"><strong>{formatINR(yearlyTotals.paid)}</strong></td>
+                                                    </tr>
+                                                </tfoot>
+                                            </table>
+                                        </div>
 
-                                                <div className="table-responsive">
-                                                    <table className="table table-sm table-hover invest-table">
-                                                        <thead>
-                                                            <tr>
-                                                                <th>#</th>
-                                                                <th>Photo</th>
-                                                                <th>ID</th>
-                                                                <th>Name</th>
-                                                                <th>Status</th>
-                                                                <th>Payment Type</th>
-                                                                <th>Date</th>
-                                                                <th>Receipt No</th>
-                                                                <th className="text-end">Salary Amount</th>
-                                                            </tr>
-                                                        </thead>
-                                                        <tbody>
-                                                            {currentMonthRows.map((r, idx) => {
-                                                                const statusLabel = (r.sourceCollection || "").toLowerCase().includes("exit") ? "Existing" : "Current";
-                                                                return (
-                                                                    <tr key={`${r._employeeDbKey || r.employeeId}_${idx}`} className="invest-table-row" onClick={() => openEmployee(r._employeeDbKey, r.employeeId)}>
-                                                                        <td>{idx + 1}</td>
-                                                                        <td>{r.employeePhoto ? <img src={r.employeePhoto} alt="photo" className="invest-photo" /> : <div className="invest-photo-placeholder" />}</td>
-                                                                        <td>{r.employeeId || "-"}</td>
-                                                                        <td>{r.employeeName}</td>
-                                                                        <td>{statusLabel}</td>
-                                                                        <td>{r.typeOfPayment || "-"}</td>
-                                                                        <td>{displayPaymentFor(r)}</td>
-                                                                        <td>{r.receiptNo || "-"}</td>
-                                                                        <td className="text-end">{formatINR(r.amount)}</td>
-                                                                    </tr>
-                                                                );
-                                                            })}
-                                                        </tbody>
-                                                        <tfoot>
-                                                            <tr className="table-secondary">
-                                                                <td colSpan={8}><strong>Month Subtotal ({monthlyCount} payments)</strong></td>
-                                                                <td className="text-end"><strong>{formatINR(monthlyGrandTotal)}</strong></td>
-                                                            </tr>
-                                                        </tfoot>
-                                                    </table>
-                                                </div>
-
-                                                <div className="year-totals mt-3">
-                                                    <div className="year-total-item">
-                                                        <div>Year Grand Total</div>
-                                                        <div className="year-total-value">{formatINR(yearlyGrandTotal)}</div>
-                                                    </div>
-                                                    <div className="year-total-item">
-                                                        <div>Year Count</div>
-                                                        <div className="year-total-value">{yearlyCount}</div>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        )}
                                     </div>
                                 )}
+
                             </div>
 
                             <div className="invest-modal-footer">
-                                <div className="me-auto small text-muted">Overall Grand Total: {formatINR(overallGrandTotal)}</div>
+                                <div className="me-auto small text-muted">Overall Grand Total: {formatINR(overallTotals.paid)}</div>
                                 <button className="btn btn-secondary btn-sm" onClick={() => setModalOpen(false)}>Close</button>
                             </div>
+
                         </div>
                     </div>
                 </div>

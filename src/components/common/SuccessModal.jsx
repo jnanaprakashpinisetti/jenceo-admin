@@ -9,7 +9,7 @@ export default function SuccessModal({ show, title, message, onClose }) {
       style={{ display: "block", backgroundColor: "rgba(0,0,0,0.6)" }}
     >
       <div className="modal-dialog modal-dialog-centered">
-        <div className="modal-content shadow-lg border-0 rounded-4">
+        <div className="modal-content shadow-lg border-0 rounded-4 bg-white">
           <div className="modal-header bg-success text-white">
             <span className="me-2 fs-3">✔️</span>
             <h5 className="modal-title">{title}</h5>

@@ -6,7 +6,7 @@ import SuccessModal from "../common/SuccessModal";
 export default function PettyCashForm() {
   const today = new Date();
   const minDate = new Date(today);
-  minDate.setDate(today.getDate() - 5);
+  minDate.setDate(today.getDate() - 1000);
 
   const [formData, setFormData] = useState({
     mainCategory: "",
@@ -110,6 +110,9 @@ export default function PettyCashForm() {
       "Software",
       "Advances",
     ],
+
+    // NEW top-level "Others" main category requested by user
+    Others: [],
   };
 
   /* -------------------------
@@ -202,6 +205,8 @@ export default function PettyCashForm() {
     const newErrors = {};
 
     if (!formData.mainCategory) newErrors.mainCategory = "Main Category is required";
+
+    // For mainCategory === "Others" we expect the subCategory text input to be filled.
     if (!formData.subCategory) newErrors.subCategory = "Sub Category is required";
 
     if (!formData.date) newErrors.date = "Date is required";
@@ -345,28 +350,51 @@ export default function PettyCashForm() {
           </div>
 
           <div className="col-md-6 mb-3">
-            <label>
-              <strong>
-                Sub Category <span className="star">*</span>
-              </strong>
-            </label>
-            <select
-              name="subCategory"
-              className={`form-select ${errors.subCategory ? "is-invalid" : ""}`}
-              value={formData.subCategory}
-              onChange={handleChange}
-              onBlur={handleBlur}
-              disabled={!formData.mainCategory}
-            >
-              <option value="">Select Sub Category</option>
-              {formData.mainCategory &&
-                (categories[formData.mainCategory] || []).map((sub, idx) => (
-                  <option key={idx} value={sub}>
-                    {sub}
-                  </option>
-                ))}
-            </select>
-            {errors.subCategory && <div className="invalid-feedback">{errors.subCategory}</div>}
+            {/* If main category is "Others" show a text input for subcategory name */}
+            {formData.mainCategory === "Others" ? (
+              <>
+                <label>
+                  <strong>
+                    Sub Category Name <span className="star">*</span>
+                  </strong>
+                </label>
+                <input
+                  type="text"
+                  name="subCategory"
+                  value={formData.subCategory}
+                  onChange={handleChange}
+                  onBlur={handleBlur}
+                  className={`form-control ${errors.subCategory ? "is-invalid" : ""}`}
+                  placeholder="Enter sub category name"
+                />
+                {errors.subCategory && <div className="invalid-feedback">{errors.subCategory}</div>}
+              </>
+            ) : (
+              <>
+                <label>
+                  <strong>
+                    Sub Category <span className="star">*</span>
+                  </strong>
+                </label>
+                <select
+                  name="subCategory"
+                  className={`form-select ${errors.subCategory ? "is-invalid" : ""}`}
+                  value={formData.subCategory}
+                  onChange={handleChange}
+                  onBlur={handleBlur}
+                  disabled={!formData.mainCategory}
+                >
+                  <option value="">Select Sub Category</option>
+                  {formData.mainCategory &&
+                    (categories[formData.mainCategory] || []).map((sub, idx) => (
+                      <option key={idx} value={sub}>
+                        {sub}
+                      </option>
+                    ))}
+                </select>
+                {errors.subCategory && <div className="invalid-feedback">{errors.subCategory}</div>}
+              </>
+            )}
           </div>
         </div>
 
@@ -488,6 +516,9 @@ export default function PettyCashForm() {
               </p>
               <p>
                 <strong>Price:</strong> ₹{savedExpense.price}
+              </p>
+              <p>
+                <strong>Total:</strong> ₹{savedExpense.total}
               </p>
             </>
           ) : (

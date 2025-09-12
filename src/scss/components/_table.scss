@@ -410,6 +410,28 @@ table {
         }
     }
 
+    .table-category-total-others {
+        td {
+            background-color: #f1e1a9;
+            color: #D3AE3B !important;
+
+        }
+    }
+
+    .table-success.sticky-grand-total {
+        td {
+            background-color: #63706b !important;
+            color: #fff !important;
+        }
+    }
+}
+
+.petty-tabs {
+    margin-bottom: 15px;
+
+    .nav-item {
+        margin-bottom: 10px;
+    }
 }
 
 

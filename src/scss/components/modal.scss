@@ -327,3 +327,8 @@
     font-size: 0.9rem;
     padding: 0.5rem 0.25rem;
 }
+
+.action-comments { border-left: 6px solid #e6e6e6; }
+.action-comments.removal { border-left-color: #dc2626; background: #fff6f6; }
+.action-comments.return { border-left-color: #16a34a; background: #f6fffa; }
+

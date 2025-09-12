@@ -1,6 +1,9 @@
 import React, { useState, useEffect, useRef } from "react";
 import { storageRef, uploadFile, getDownloadURL } from "../../firebase";
 
+
+const headerImage =
+    "https://firebasestorage.googleapis.com/v0/b/jenceo-admin.firebasestorage.app/o/OfficeFiles%2FHeadder.svg?alt=media&token=fa65a3ab-ba03-4959-bc36-e293c6db48ae";
 /* ----------------------------- Lightweight Modals ----------------------------- */
 const BaseModal = ({ open, title, children, onClose, footer }) => {
     if (!open) return null;
@@ -80,6 +83,10 @@ const WorkerModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode }
     const [activeTab, setActiveTab] = useState("basic");
     const [alertState, setAlertState] = useState({ open: false, title: "", variant: "info", body: null });
     const [confirmState, setConfirmState] = useState({ open: false, title: "", message: "", onConfirm: null });
+    const [deleteReasonOpen, setDeleteReasonOpen] = useState(false);
+    const [returnReasonOpen, setReturnReasonOpen] = useState(false);
+    const [reasonForm, setReasonForm] = useState({ reasonType: "", comment: "", for: "" });
+
 
     // validation errors (array per row)
     const [paymentErrors, setPaymentErrors] = useState([{}]);
@@ -639,6 +646,8 @@ const WorkerModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode }
   .photo-box{display:flex;align-items:center;justify-content:center}
   .photo-box img{width:120px;height:120px;object-fit:cover;border-radius:6px;border:1px solid #ccc}
   .photo-box .no-photo{width:120px;height:120px;border:1px solid #ccc;border-radius:6px;display:flex;align-items:center;justify-content:center;color:#888;font-size:12px}
+  .heaerImg {margin: -21px -20px 10px -20px}
+  .heaerImg img {width:100%}
   
   @media only screen and (max-width: 767px) {
         .biodataHeader {display:none}
@@ -660,17 +669,9 @@ const WorkerModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode }
 </head>
 <body>
 <div class="page">
-<div class ="biodataHeader">
-<div class ="logoSection">
-    <h1>Jen<span class="blue">Ceo</h1>
-    <span class="subText">HOME CARE</span>
-</div>
-<div class ="dataSection">
-    <h1>Cell: <strong> 9888 55 99 55</strong></h1>
-    <h5>Web: <strong>www.jenceo.com</strong> | Mail: <strong>jenceohomecare.com</strong></h5>
-    <span>Address: #15-102/A, Road No-6, Vandhanapuri Colony Phase-1, Ameenpur Village & Mandal <br> Hyderabad, Telangana, Pin: 502 032</span>
-    </div>
-</div>
+<div class="heaerImg"><img src="${headerImage}" alt="Header" /></div>
+ 
+ 
   <div class="header">
     <div class="h-left">
       <h1 class="title">EMPLOYEE BIO-DATA</h1>
@@ -747,7 +748,7 @@ const WorkerModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode }
         <div class="kv-value">${chips(otherSkills)}</div>
       </div>
       <div class="kv-row">
-        <div class="kv-label">Experince</div><div class="kv-colon">:</div>
+        <div class="kv-label">Experience</div><div class="kv-colon">:</div>
         <div class="kv-value blue"><strong>${safe(formData.workExperince)}</strong></div>
       </div>
 
@@ -843,20 +844,82 @@ const WorkerModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode }
     };
 
     const handleDelete = () => {
+        // first confirm
         openConfirm(
             "Delete Employee",
-            "Are you sure you want to delete this employee? This action cannot be undone.",
+            "Do you want to delete the Worker ?",
             () => {
                 closeConfirm();
-                onDelete && onDelete(formData.id || formData.employeeId);
-                openAlert("Deleted", <span>Employee has been deleted successfully.</span>, "success");
-                setTimeout(() => {
-                    closeAlert();
-                    onClose && onClose();
-                }, 800);
+                // open reason modal (mandatory comment + dropdown)
+                setReasonForm({ reasonType: "", comment: "", for: "delete" });
+                setDeleteReasonOpen(true);
             }
         );
     };
+
+    const submitDeleteWithReason = () => {
+        // validate
+        if (!reasonForm.reasonType) {
+            openAlert("Validation", "Please select a reason for removing.", "danger");
+            return;
+        }
+        if (!reasonForm.comment || !String(reasonForm.comment).trim()) {
+            openAlert("Validation", "Please provide a comment (reason) - mandatory.", "danger");
+            return;
+        }
+        // call onDelete with meta
+        closeConfirm();
+        setDeleteReasonOpen(false);
+        onDelete && onDelete(formData.id || formData.employeeId, { reasonType: reasonForm.reasonType, comment: reasonForm.comment });
+        openAlert("Deleted", <span>Worker has been removed.</span>, "success");
+        setTimeout(() => {
+            closeAlert();
+            onClose && onClose();
+        }, 800);
+    };
+
+    // Return / Revert flow: when user wants to return/reactivate worker
+    const handleReturn = () => {
+        openConfirm(
+            "Confirm Return",
+            "Do you want to return/reactivate this worker?",
+            () => {
+                closeConfirm();
+                setReasonForm({ reasonType: "", comment: "", for: "return" });
+                setReturnReasonOpen(true);
+            }
+        );
+    };
+
+    const submitReturnWithReason = async () => {
+        if (!reasonForm.reasonType) {
+            openAlert("Validation", "Please select a reason for return.", "danger");
+            return;
+        }
+        if (!reasonForm.comment || !String(reasonForm.comment).trim()) {
+            openAlert("Validation", "Please provide a comment (reason) - mandatory.", "danger");
+            return;
+        }
+        // attach return info to payload and call onSave to revert status
+        const payload = {
+            ...formData,
+            status: "On Duty",
+            __returnInfo: { reasonType: reasonForm.reasonType, comment: reasonForm.comment },
+        };
+        // close modal then call onSave
+        setReturnReasonOpen(false);
+        try {
+            await Promise.resolve(onSave && onSave(payload));
+            openAlert("Returned", <span>Worker has been returned/reactivated.</span>, "success");
+            setTimeout(() => {
+                closeAlert();
+                onClose && onClose();
+            }, 800);
+        } catch (err) {
+            openAlert("Error", <span>Failed to return worker: {err.message}</span>, "danger");
+        }
+    };
+
 
     /* ------------------------------ render helpers ----------------------------- */
     const Err = ({ msg }) => (msg ? <div className="text-danger mt-1" style={{ fontSize: ".85rem" }}>{msg}</div> : null);
@@ -1117,6 +1180,46 @@ const WorkerModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode }
                 }}
             />
 
+            <BaseModal open={deleteReasonOpen} title={"Reason for Removing Worker"} onClose={() => setDeleteReasonOpen(false)} footer={<><button className="btn btn-secondary" onClick={() => setDeleteReasonOpen(false)}>Cancel</button><button className="btn btn-danger" onClick={submitDeleteWithReason}>Remove</button></>}>
+                <div>
+                    <div className="mb-2">
+                        <label className="form-label"><strong>Reason</strong></label>
+                        <select className="form-select" value={reasonForm.reasonType} onChange={(e) => setReasonForm((prev) => ({ ...prev, reasonType: e.target.value }))}>
+                            <option value="">Select Reason</option>
+                            <option value="Resign">Resign</option>
+                            <option value="Termination">Termination</option>
+                            <option value="Absconder">Absconder</option>
+                        </select>
+                    </div>
+                    <div className="mb-2">
+                        <label className="form-label"><strong>Comment (mandatory)</strong></label>
+                        <textarea className="form-control" rows="4" value={reasonForm.comment} onChange={(e) => setReasonForm((prev) => ({ ...prev, comment: e.target.value }))} />
+                    </div>
+                    <div className="text-muted">Please provide reason for removing the worker.</div>
+                </div>
+            </BaseModal>
+
+            <BaseModal open={returnReasonOpen} title={"Reason for Returning Worker"} onClose={() => setReturnReasonOpen(false)} footer={<><button className="btn btn-secondary" onClick={() => setReturnReasonOpen(false)}>Cancel</button><button className="btn btn-success" onClick={submitReturnWithReason}>Submit</button></>}>
+                <div>
+                    <div className="mb-2">
+                        <label className="form-label"><strong>Reason</strong></label>
+                        <select className="form-select" value={reasonForm.reasonType} onChange={(e) => setReasonForm((prev) => ({ ...prev, reasonType: e.target.value }))}>
+                            <option value="">Select Reason</option>
+                            <option value="Re-Join">Re-Join</option>
+                            <option value="Return">Return</option>
+                            <option value="Good attutude">Good attutude</option>
+                            <option value="One more chance">One more chance</option>
+                            <option value="Recomandation">Recomandation</option>
+                        </select>
+                    </div>
+                    <div className="mb-2">
+                        <label className="form-label"><strong>Comment (mandatory)</strong></label>
+                        <textarea className="form-control" rows="4" value={reasonForm.comment} onChange={(e) => setReasonForm((prev) => ({ ...prev, comment: e.target.value }))} />
+                    </div>
+                    <div className="text-muted">Please provide reason for returning the worker.</div>
+                </div>
+            </BaseModal>
+
             {/* Main Modal */}
             <div className={`modal fade show ${modalClass}`} style={{ display: "block", backgroundColor: "rgba(0, 0, 0, 0.81)" }}>
                 <div className="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
@@ -1142,6 +1245,7 @@ const WorkerModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode }
                                     ["bank", "Bank Details"],
                                     ["payment", "Payment"],
                                     ["working", "Working"],
+                                    ["full-info", "Full Info"],
                                     ["biodata", "Biodata"],
                                 ].map(([key, label]) => (
                                     <li className="nav-item" role="presentation" key={key}>
@@ -1755,7 +1859,7 @@ const WorkerModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode }
 
                                             {isEditMode && (
                                                 <div className="d-flex justify-content-end">
-                                                    <button className="btn btn-outline-primary btn-sm" onClick={addPaymentSection}>
+                                                    <button className="btn btn-outline-primary btn-sm mt-2" onClick={addPaymentSection}>
                                                         + Add Payment
                                                     </button>
                                                 </div>
@@ -1946,11 +2050,96 @@ const WorkerModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode }
 
                                             {isEditMode && (
                                                 <div className="d-flex justify-content-end">
-                                                    <button className="btn btn-outline-primary btn-sm" onClick={addWorkSection}>
+                                                    <button className="btn btn-outline-primary btn-sm mt-2" onClick={addWorkSection}>
                                                         + Add Work
                                                     </button>
                                                 </div>
                                             )}
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* Full Info */}
+                                {activeTab === "full-info" && (
+                                    <div className="modal-card ">
+                                        <div className="modal-card-header">
+                                            <h4 className="mb-0">Full Info</h4>
+                                        </div>
+                                        <div className="modal-card-body">
+                                            <h5>Payment Details</h5>
+                                            <div className="table-responsive mb-3">
+                                                <table className="table table-sm table-bordered table-dark table-hover">
+                                                    <thead>
+                                                        <tr>
+                                                            <th>Date</th>
+                                                            <th>Amount</th>
+                                                            <th>Type of Payment</th>
+                                                            <th>Days</th>
+                                                            <th>Rec No</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody>
+                                                        {(formData.payments || []).map((p, i) => (
+                                                            <tr key={i}>
+                                                                <td>{p.date || "N/A"}</td>
+                                                                <td>{p.amount || "N/A"}</td>
+                                                                <td>{p.typeOfPayment || "N/A"}</td>
+                                                                <td>{p.days || "N/A"}</td>
+                                                                <td>{p.receiptNo || p.recieptNo || p.recNo || "N/A"}</td>
+                                                            </tr>
+                                                        ))}
+                                                    </tbody>
+                                                    <tfoot>
+                                                        <tr>
+                                                            <td className="bg-secondary text-white" colSpan="1"><strong>Total</strong></td>
+                                                            <td className="bg-secondary text-white" >
+                                                                <strong>
+                                                                    {(
+                                                                        (formData.payments || []).reduce(
+                                                                            (sum, p) => sum + (parseFloat(p.amount) || 0),
+                                                                            0
+                                                                        )
+                                                                    ).toLocaleString("en-IN")}
+                                                                </strong>
+                                                            </td>
+                                                            <td className="bg-secondary" colSpan="3">
+
+                                                            </td>
+                                                        </tr>
+                                                    </tfoot>
+                                                </table>
+                                            </div>
+
+
+                                            <h5>Worker Detail</h5>
+                                            <div className="table-responsive">
+                                                <table className="table table-sm table-bordered table-dark table-hover">
+                                                    <thead>
+                                                        <tr>
+                                                            <th>Client ID</th>
+                                                            <th>Client Name</th>
+                                                            <th>Location</th>
+                                                            <th>From</th>
+                                                            <th>To</th>
+                                                            <th>Days</th>
+                                                            <th>Service Type</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody>
+                                                        {(formData.workDetails || []).map((w, i) => (
+                                                            <tr key={i}>
+                                                                <td>{w.clientId || "N/A"}</td>
+                                                                <td>{w.clientName || "N/A"}</td>
+                                                                <td>{w.location || "N/A"}</td>
+                                                                <td>{w.fromDate || "N/A"}</td>
+                                                                <td>{w.toDate || "N/A"}</td>
+                                                                <td>{w.days || "N/A"}</td>
+                                                                <td>{w.serviceType || "N/A"}</td>
+                                                            </tr>
+                                                        ))}
+                                                    </tbody>
+                                                </table>
+                                            </div>
                                         </div>
                                     </div>
                                 )}
@@ -1991,11 +2180,11 @@ const WorkerModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode }
 
                             {/* Footer buttons */}
                             <div className="d-flex gap-2 justify-content-end hideInView">
-                                {/* {onDelete && isEditMode && (
-                                    <button type="button" className="btn btn-outline-danger" onClick={handleDelete}>
+                                {onDelete && isEditMode && (
+                                    <button type="button" className="btn btn-danger" onClick={handleDelete}>
                                         Delete
                                     </button>
-                                )} */}
+                                )}
                                 <button type="button" className="btn btn-secondary" onClick={onClose}>
                                     Close
                                 </button>

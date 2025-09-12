@@ -1,5 +1,5 @@
 // ClientInfoForm.js
-import React, { useState } from "react";
+import React, { useState, useRef } from "react";
 import Address from "../clientInfo/Address";
 import BasicInformation from "../clientInfo/BasicInformation";
 import ServiceDetails from "../clientInfo/ServiceDetails";
@@ -122,10 +122,13 @@ export default function ClientInfoForm({ isOpen, onClose }) {
     "Payment Details",
   ];
 
+  // capture last clicked button (fallback for submit detection)
+  const lastClickedButtonRef = useRef(null);
+
   /* -------------------
      Change handler
-     - When editing payments.reminderDays auto-compute reminderDate
-     - When editing payments.date and reminderDays exists, recompute reminderDate
+     - When editing payments.reminderDays auto-compute reminderDate (subtract 1)
+     - When editing payments.date and reminderDays exists -> recompute reminderDate
      ------------------- */
   const handleChange = (e, section, index = null) => {
     const { name, value } = e.target;
@@ -139,18 +142,20 @@ export default function ClientInfoForm({ isOpen, onClose }) {
 
       // payments special logic
       if (section === "payments") {
-        // reminderDays changed -> recompute reminderDate
+        // reminderDays changed -> recompute reminderDate (subtract 1 day)
         if (name === "reminderDays") {
           const days = Number(value) || 0;
           const base = parseDateSafe(row.date) || new Date();
-          if (days > 0) row.reminderDate = formatDateForInput(addDaysToDate(base, days));
+          const adjusted = days - 1; // subtract 1 as requested
+          if (adjusted >= 0) row.reminderDate = formatDateForInput(addDaysToDate(base, adjusted));
           else row.reminderDate = "";
         }
-        // if date changed and reminderDays exists -> recompute
+        // if date changed and reminderDays exists -> recompute (subtract 1)
         if (name === "date" && row.reminderDays) {
           const days = Number(row.reminderDays) || 0;
           const base = parseDateSafe(value) || new Date();
-          if (days > 0) row.reminderDate = formatDateForInput(addDaysToDate(base, days));
+          const adjusted = days - 1;
+          if (adjusted >= 0) row.reminderDate = formatDateForInput(addDaysToDate(base, adjusted));
           else row.reminderDate = "";
         }
       }
@@ -448,8 +453,51 @@ export default function ClientInfoForm({ isOpen, onClose }) {
 
   const prevStep = () => setStep((s) => Math.max(1, s - 1));
 
+  /* -------------------
+     handleSubmit (final save)
+     - Only the explicit final submit button (id="client-submit-button") is allowed to persist.
+     - Any other submit (enter key or a child button lacking type) will be treated as Next (or ignored).
+     ------------------- */
   const handleSubmit = async (e) => {
     e.preventDefault();
+
+    // identify submitter (modern browsers expose nativeEvent.submitter)
+    const submitter = (e && e.nativeEvent && e.nativeEvent.submitter) || null;
+    const lastClicked = lastClickedButtonRef.current || null;
+    const active = (typeof document !== "undefined" && document.activeElement) ? document.activeElement : null;
+
+    const finalSubmitId = "client-submit-button";
+    const triggeredByFinalButton = (
+      (submitter && submitter.id === finalSubmitId) ||
+      (lastClicked && lastClicked.id === finalSubmitId) ||
+      (active && active.id === finalSubmitId)
+    );
+
+    // If not triggered by final submit control, treat as Next (prevent accidental saves).
+    if (!triggeredByFinalButton && step < totalSteps) {
+      if (!validateStep(step)) return;
+      const next = Math.min(totalSteps, step + 1);
+      if (next === 6) {
+        if (!Array.isArray(formData.payments) || formData.payments.length === 0) {
+          setFormData((prev) => ({ ...prev, payments: [emptyPayment()] }));
+        }
+        setErrors((prev) => ({ ...prev, payments: (formData.payments || []).map(() => ({})) }));
+      }
+      setStep(next);
+      return;
+    }
+
+    // If we reached here and it's not triggered by final button, block (safety).
+    if (!triggeredByFinalButton) {
+      return;
+    }
+
+    // Only when final submit button triggered and on last step do we save.
+    if (step < totalSteps) {
+      // final button somehow triggered before reaching last step — block it.
+      return;
+    }
+
     if (!validateStep(step)) return;
 
     try {
@@ -473,6 +521,9 @@ export default function ClientInfoForm({ isOpen, onClose }) {
     }
   };
 
+  // NOTE: Worker data pulling logic removed as previously requested.
+  // WorkerDetails will receive the same props, except no onWorkerIdBlur.
+
   const renderStep = () => {
     switch (step) {
       case 1:
@@ -484,6 +535,7 @@ export default function ClientInfoForm({ isOpen, onClose }) {
       case 4:
         return <PatientDetails formData={formData} handleChange={handleChange} errors={errors} isViewMode={false} />;
       case 5:
+        // removed onWorkerIdBlur per your request
         return <WorkerDetails formData={formData} handleChange={handleChange} addWorker={addWorker} removeWorker={removeWorker} errors={errors} setErrors={setErrors} isViewMode={false} />;
       case 6:
         return <PaymentDetails formData={formData} handleChange={handleChange} addPayment={addPayment} removePayment={removePayment} errors={errors} isViewMode={false} />;
@@ -512,12 +564,64 @@ export default function ClientInfoForm({ isOpen, onClose }) {
               <h4 className="text-center mb-3 form-steps">{stepTitles[step]}</h4>
             </div>
 
-            <form onSubmit={handleSubmit}>
+            {/* capture click events to remember the last clicked button (fallback detection)
+                and prevent Enter key accidental submit when on intermediate steps */}
+            <form
+              onSubmit={handleSubmit}
+              onClickCapture={(e) => {
+                try {
+                  const btn = e.target.closest && e.target.closest("button");
+                  if (btn) lastClickedButtonRef.current = btn;
+                } catch (err) {
+                  // ignore
+                }
+              }}
+              onKeyDown={(e) => {
+                // Prevent Enter from submitting the form when user is on intermediate steps.
+                // Allow Enter in textarea inputs.
+                if (e.key === "Enter" && step < totalSteps) {
+                  const tag = (e.target && e.target.tagName) ? e.target.tagName.toLowerCase() : "";
+                  if (tag !== "textarea") {
+                    e.preventDefault();
+                    // don't auto-advance on Enter; user should click Next.
+                  }
+                }
+              }}
+            >
               <div className="card-body">{renderStep()}</div>
 
               <div className="card-footer d-flex justify-content-end w-100">
-                {step > 1 && <button type="button" className="btn btn-secondary me-2" onClick={prevStep}>Previous</button>}
-                {step < totalSteps ? <button type="button" className="btn btn-primary" onClick={nextStep}>Next</button> : <button type="submit" className="btn btn-success">Submit</button>}
+                {step > 1 && (
+                  <button
+                    type="button"
+                    className="btn btn-secondary me-2"
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      prevStep();
+                    }}
+                  >
+                    Previous
+                  </button>
+                )}
+
+                {step < totalSteps ? (
+                  // Defensive Next button: prevents default before navigating so it can never trigger a submit.
+                  <button
+                    type="button"
+                    className="btn btn-primary"
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      // ensure navigation only
+                      nextStep();
+                    }}
+                  >
+                    Next
+                  </button>
+                ) : (
+                  <button id="client-submit-button" type="submit" className="btn btn-success">Submit</button>
+                )}
               </div>
             </form>
           </div>

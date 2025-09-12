@@ -74,11 +74,11 @@ export default function DisplayWorkers() {
     // Filter employees based on search term and filters
     useEffect(() => {
         let filtered = employees;
-        
+
         // Apply search filter
         if (searchTerm) {
             const term = searchTerm.toLowerCase();
-            filtered = filtered.filter(employee => 
+            filtered = filtered.filter(employee =>
                 (employee.firstName && employee.firstName.toLowerCase().includes(term)) ||
                 (employee.lastName && employee.lastName.toLowerCase().includes(term)) ||
                 (employee.idNo && employee.idNo.toLowerCase().includes(term)) ||
@@ -91,7 +91,7 @@ export default function DisplayWorkers() {
         // Apply gender filters
         const activeGenderFilters = Object.keys(genderFilters).filter(key => genderFilters[key]);
         if (activeGenderFilters.length > 0) {
-            filtered = filtered.filter(employee => 
+            filtered = filtered.filter(employee =>
                 employee.gender && activeGenderFilters.includes(employee.gender)
             );
         }
@@ -99,7 +99,7 @@ export default function DisplayWorkers() {
         // Apply skill filters
         const activeSkillFilters = Object.keys(skillFilters).filter(key => skillFilters[key]);
         if (activeSkillFilters.length > 0) {
-            filtered = filtered.filter(employee => 
+            filtered = filtered.filter(employee =>
                 employee.primarySkill && activeSkillFilters.includes(employee.primarySkill)
             );
         }
@@ -205,6 +205,81 @@ export default function DisplayWorkers() {
         setIsEditMode(true);
         setIsModalOpen(true);
     };
+
+    // Add near other useState() declarations
+    const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+    const [employeeToDelete, setEmployeeToDelete] = useState(null);
+    const [showDeleteReasonModal, setShowDeleteReasonModal] = useState(false);
+    const [showDeleteSuccessModal, setShowDeleteSuccessModal] = useState(false);
+    const [deleteError, setDeleteError] = useState(null);
+    const [deleteReasonForm, setDeleteReasonForm] = useState({ reasonType: "", comment: "" });
+
+
+    // call to open confirmation first
+    const openDeleteConfirm = (employee) => {
+        setEmployeeToDelete(employee);
+        setShowDeleteConfirm(true);
+    };
+
+    const closeDeleteConfirm = () => {
+        setShowDeleteConfirm(false);
+        // keep employeeToDelete until modal closed/handled
+    };
+
+    // When user confirms on the first confirm -> open reason modal
+    const handleDeleteConfirmProceed = () => {
+        setShowDeleteConfirm(false);
+        setDeleteReasonForm({ reasonType: "", comment: "" });
+        setShowDeleteReasonModal(true);
+    };
+
+    // When user submits reason -> actually perform delete / move
+    const handleDeleteSubmitWithReason = async () => {
+        if (!deleteReasonForm.reasonType) {
+            alert("Please select a reason.");
+            return;
+        }
+        if (!deleteReasonForm.comment || !deleteReasonForm.comment.trim()) {
+            alert("Please enter a comment (mandatory).");
+            return;
+        }
+
+        if (!employeeToDelete) return;
+
+        const { id } = employeeToDelete;
+        try {
+            // read employee data
+            const snapshot = await firebaseDB.child(`EmployeeBioData/${id}`).once("value");
+            const employeeData = snapshot.val();
+            if (!employeeData) {
+                alert("Employee data not found");
+                setShowDeleteReasonModal(false);
+                return;
+            }
+
+            // attach removal metadata
+            const payloadToExit = {
+                ...employeeData,
+                removedAt: new Date().toISOString(),
+                removedBy: "UI", // optional, change if you have user context
+                removalReason: deleteReasonForm.reasonType,
+                removalComment: deleteReasonForm.comment.trim(),
+            };
+
+            await firebaseDB.child(`ExitEmployees/${id}`).set(payloadToExit);
+            await firebaseDB.child(`EmployeeBioData/${id}`).remove();
+
+            setShowDeleteReasonModal(false);
+            setEmployeeToDelete(null);
+            setShowDeleteSuccessModal(true);
+            setDeleteError(null);
+        } catch (err) {
+            console.error(err);
+            setDeleteError('Error deleting employee: ' + err.message); setShowDeleteReasonModal(false);
+        }
+    };
+
+
 
     const handleDelete = async (employeeId) => {
         try {
@@ -402,10 +477,14 @@ export default function DisplayWorkers() {
                                             <button
                                                 className="btn btn-sm"
                                                 title="Delete"
-                                                onClick={() => handleDelete(employee.id)}
+                                                onClick={() => {
+                                                    setEmployeeToDelete(employee);
+                                                    setShowDeleteConfirm(true);
+                                                }}
                                             >
                                                 <img src={deleteIcon} alt="delete Icon" style={{ width: '14px', height: '14px' }} />
                                             </button>
+
                                         </div>
                                     </td>
                                 </tr>
@@ -466,7 +545,33 @@ export default function DisplayWorkers() {
                 </nav>
             )}
 
-            {selectedEmployee && (
+
+      {/* Delete Success Modal */}
+      {showDeleteSuccessModal && (
+        <div className="modal fade show" style={{ display: 'block', backgroundColor: 'rgba(0,0,0,0.5)' }} tabIndex="-1" role="dialog" aria-modal="true">
+          <div className="modal-dialog modal-dialog-centered">
+            <div className="modal-content">
+              <div className="modal-header bg-success text-white">
+                <h5 className="modal-title">Deleted</h5>
+                <button type="button" className="btn-close" onClick={() => setShowDeleteSuccessModal(false)}></button>
+              </div>
+              <div className="modal-body">
+                Employee moved to ExitEmployees successfully.
+              </div>
+              <div className="modal-footer">
+                <button className="btn btn-success" onClick={() => setShowDeleteSuccessModal(false)}>Done</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Error Inline */}
+      {deleteError && (
+        <div className="alert alert-danger mt-2">{deleteError}</div>
+      )}
+    
+                        {selectedEmployee && (
                 <WorkerModal
                     employee={selectedEmployee}
                     isOpen={isModalOpen}
@@ -476,6 +581,63 @@ export default function DisplayWorkers() {
                     isEditMode={isEditMode}
                 />
             )}
+
+            {/* Delete Confirm Modal */}
+            {showDeleteConfirm && employeeToDelete && (
+                <div className="modal fade show" style={{ display: 'block', backgroundColor: 'rgba(0,0,0,0.5)' }} tabIndex="-1" role="dialog" aria-modal="true">
+                    <div className="modal-dialog modal-dialog-centered">
+                        <div className="modal-content">
+                            <div className="modal-header">
+                                <h5 className="modal-title">Confirm Delete</h5>
+                                <button type="button" className="btn-close" onClick={() => setShowDeleteConfirm(false)}></button>
+                            </div>
+                            <div className="modal-body">
+                                <p>Do you want to delete the Worker ?</p>
+                                <p><strong>ID:</strong> {employeeToDelete.employeeId || employeeToDelete.idNo || employeeToDelete.id}</p>
+                                <p><strong>Name:</strong> {employeeToDelete.firstName} {employeeToDelete.lastName}</p>
+                            </div>
+                            <div className="modal-footer">
+                                <button className="btn btn-secondary" onClick={() => setShowDeleteConfirm(false)}>Cancel</button>
+                                <button className="btn btn-danger" onClick={handleDeleteConfirmProceed}>Yes</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Delete Reason Modal (mandatory comment + dropdown) */}
+            {showDeleteReasonModal && employeeToDelete && (
+                <div className="modal fade show" style={{ display: 'block', backgroundColor: 'rgba(0,0,0,0.5)' }} tabIndex="-1" role="dialog" aria-modal="true">
+                    <div className="modal-dialog modal-dialog-centered">
+                        <div className="modal-content">
+                            <div className="modal-header">
+                                <h5 className="modal-title">Reason for Removing Worker</h5>
+                                <button type="button" className="btn-close" onClick={() => setShowDeleteReasonModal(false)}></button>
+                            </div>
+                            <div className="modal-body">
+                                <div className="mb-3">
+                                    <label className="form-label"><strong>Reason</strong></label>
+                                    <select className="form-select" value={deleteReasonForm.reasonType} onChange={(e) => setDeleteReasonForm(prev => ({ ...prev, reasonType: e.target.value }))}>
+                                        <option value="">Select Reason</option>
+                                        <option value="Resign">Resign</option>
+                                        <option value="Termination">Termination</option>
+                                        <option value="Absconder">Absconder</option>
+                                    </select>
+                                </div>
+                                <div className="mb-3">
+                                    <label className="form-label"><strong>Comment (mandatory)</strong></label>
+                                    <textarea className="form-control" rows={4} value={deleteReasonForm.comment} onChange={(e) => setDeleteReasonForm(prev => ({ ...prev, comment: e.target.value }))} />
+                                </div>
+                            </div>
+                            <div className="modal-footer">
+                                <button className="btn btn-secondary" onClick={() => setShowDeleteReasonModal(false)}>Cancel</button>
+                                <button className="btn btn-danger" onClick={handleDeleteSubmitWithReason}>Remove Worker</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
         </div>
     );
 }

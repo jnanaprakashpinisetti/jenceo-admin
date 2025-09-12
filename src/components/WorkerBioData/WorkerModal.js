@@ -50,6 +50,7 @@ const ConfirmModal = ({
     open,
     title = "Confirm",
     message,
+    error,
     confirmText = "Yes",
     cancelText = "No",
     onConfirm,
@@ -72,6 +73,7 @@ const ConfirmModal = ({
     >
         <div className="alert alert-warning mb-0">
             <div style={{ paddingLeft: "1.25rem" }}>{message}</div>
+            {error && <div className="text-danger mt-2" style={{ paddingLeft: '1.25rem' }}>{error}</div>}
         </div>
     </BaseModal>
 );
@@ -97,7 +99,7 @@ const WorkerModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode }
     const openAlert = (title, body, variant = "info") => setAlertState({ open: true, title, body, variant });
     const closeAlert = () => setAlertState((s) => ({ ...s, open: false }));
 
-    const openConfirm = (title, message, onConfirm) => setConfirmState({ open: true, title, message, onConfirm });
+    const openConfirm = (title, message, onConfirm, error = null) => setConfirmState({ open: true, title, message, onConfirm, error });
     const closeConfirm = () => setConfirmState((s) => ({ ...s, open: false }));
 
     // date helpers
@@ -857,7 +859,7 @@ const WorkerModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode }
         );
     };
 
-    const submitDeleteWithReason = () => {
+    const submitDeleteWithReason = async () => {
         // validate
         if (!reasonForm.reasonType) {
             openAlert("Validation", "Please select a reason for removing.", "danger");
@@ -870,7 +872,12 @@ const WorkerModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode }
         // call onDelete with meta
         closeConfirm();
         setDeleteReasonOpen(false);
-        onDelete && onDelete(formData.id || formData.employeeId, { reasonType: reasonForm.reasonType, comment: reasonForm.comment });
+        onDelete && onDelete(formData.id || formData.employeeId, {
+            reasonType: reasonForm.reasonType,
+            comment: reasonForm.comment,
+            userStamp: (formData.updatedBy || 'System'),
+            timestamp: new Date().toISOString()
+        });
         openAlert("Deleted", <span>Worker has been removed.</span>, "success");
         setTimeout(() => {
             closeAlert();
@@ -904,7 +911,12 @@ const WorkerModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode }
         const payload = {
             ...formData,
             status: "On Duty",
-            __returnInfo: { reasonType: reasonForm.reasonType, comment: reasonForm.comment },
+            __returnInfo: {
+                reasonType: reasonForm.reasonType,
+                comment: reasonForm.comment,
+                userStamp: (formData.updatedBy || 'System'),
+                timestamp: new Date().toISOString()
+            },
         };
         // close modal then call onSave
         setReturnReasonOpen(false);
@@ -1220,6 +1232,24 @@ const WorkerModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode }
                 </div>
             </BaseModal>
 
+            {/* Removed / Returned Comments */}
+            <div className="mb-3">
+                <h5>Removed / Returned Comments</h5>
+                {(formData.removalReason || formData.removalComment || formData.removedBy || formData.revertReason || formData.revertComment || formData.revertedBy || formData.__returnInfo) ? (
+                    <div className="card p-2 mb-3">
+                        {formData.removalReason && <div><strong>Removal Reason:</strong> {formData.removalReason}</div>}
+                        {formData.removalComment && <div><strong>Removal Comment:</strong> {formData.removalComment}</div>}
+                        {formData.removedBy && <div><strong>Removed By:</strong> {formData.removedBy} at {formData.removedAt ? new Date(formData.removedAt).toLocaleString() : ''}</div>}
+                        {formData.revertReason && <div><strong>Revert Reason:</strong> {formData.revertReason}</div>}
+                        {formData.revertComment && <div><strong>Revert Comment:</strong> {formData.revertComment}</div>}
+                        {formData.revertedBy && <div><strong>Reverted By:</strong> {formData.revertedBy} at {formData.revertedAt ? new Date(formData.revertedAt).toLocaleString() : ''}</div>}
+                        {formData.__returnInfo && <div><strong>Return Info:</strong> {formData.__returnInfo.reasonType} — {formData.__returnInfo.comment} <br /><small>By: {formData.__returnInfo.returnedBy || formData.__returnInfo.userStamp || ''} at {formData.__returnInfo.returnedAt || formData.__returnInfo.timestamp || ''}</small></div>}
+                    </div>
+                ) : (
+                    <div className="text-muted">No removal or return comments.</div>
+                )}
+            </div>
+
             {/* Main Modal */}
             <div className={`modal fade show ${modalClass}`} style={{ display: "block", backgroundColor: "rgba(0, 0, 0, 0.81)" }}>
                 <div className="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
@@ -1433,6 +1463,77 @@ const WorkerModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode }
                                                             <div className="form-control bg-light">{String(formData.aboutEmployeee || "N/A")}</div>
                                                         )}
                                                     </div>
+                                                </div>
+                                                <div className="row">
+                                                    <h5>Return / Remove comments</h5>
+                                                    {/* Action comments block — each comment rendered in its own .action-comments parent */}
+                                                    <div className="action-comments-wrapper">
+                                                        {(() => {
+                                                            // Build an ordered list of comment entries (preserve original fields)
+                                                            const entries = [];
+
+                                                            if (formData.removalReason || formData.removalComment || formData.removedBy) {
+                                                                entries.push({
+                                                                    type: "Removal",
+                                                                    reason: formData.removalReason,
+                                                                    comment: formData.removalComment,
+                                                                    user: formData.removedBy,
+                                                                    time: formData.removedAt,
+                                                                });
+                                                            }
+
+                                                            if (formData.revertReason || formData.revertComment || formData.revertedBy) {
+                                                                entries.push({
+                                                                    type: "Revert",
+                                                                    reason: formData.revertReason,
+                                                                    comment: formData.revertComment,
+                                                                    user: formData.revertedBy,
+                                                                    time: formData.revertedAt,
+                                                                });
+                                                            }
+
+                                                            if (formData.__returnInfo) {
+                                                                entries.push({
+                                                                    type: "Return",
+                                                                    reason: formData.__returnInfo.reasonType,
+                                                                    comment: formData.__returnInfo.comment,
+                                                                    user: formData.__returnInfo.returnedBy || formData.__returnInfo.userStamp,
+                                                                    time: formData.__returnInfo.returnedAt || formData.__returnInfo.timestamp,
+                                                                });
+                                                            }
+
+                                                            if (entries.length === 0) {
+                                                                return <div className="no-comments">No removed or returned comments.</div>;
+                                                            }
+
+                                                            return entries.map((e, idx) => (
+                                                                <div className="action-comments" key={`${e.type}-${idx}`}>
+                                                                    <div className="action-comments-header">
+                                                                        <strong className="action-type">{e.type}</strong>
+                                                                        {e.user && <span className="action-user">by {e.user}</span>}
+                                                                        {e.time && <span className="action-time">{new Date(e.time).toLocaleString()}</span>}
+                                                                    </div>
+
+                                                                    <div className="action-comments-body">
+                                                                        {e.reason && (
+                                                                            <div className="action-row">
+                                                                                <span className="label">Reason:</span>
+                                                                                <span className="value">{e.reason}</span>
+                                                                            </div>
+                                                                        )}
+
+                                                                        {e.comment && (
+                                                                            <div className="">
+                                                                                <span className="label">Comment:</span>
+                                                                                <div className="value comment-text">{e.comment}</div>
+                                                                            </div>
+                                                                        )}
+                                                                    </div>
+                                                                </div>
+                                                            ));
+                                                        })()}
+                                                    </div>
+
                                                 </div>
                                             </div>
                                         </div>

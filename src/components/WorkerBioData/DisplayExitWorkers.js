@@ -39,6 +39,8 @@ export default function DisplayExitWorkers() {
   const [showReturnConfirm, setShowReturnConfirm] = useState(false);
   const [employeeToReturn, setEmployeeToReturn] = useState(null);
   const [showReturnedModal, setShowReturnedModal] = useState(false);
+  const [showReturnReasonModal, setShowReturnReasonModal] = useState(false);
+  const [returnReasonForm, setReturnReasonForm] = useState({ reasonType: "", comment: "" });
 
   // Save success modal
   const [showSaveModal, setShowSaveModal] = useState(false);
@@ -207,24 +209,50 @@ export default function DisplayExitWorkers() {
     setEmployeeToReturn(null);
   };
 
-  // Confirm → Move ExitEmployees/<id> -> EmployeeBioData/<id>, then remove from ExitEmployees
+  // Confirm → instead of immediate move, open reason modal to collect return comment
   const handleReturnConfirmed = async () => {
+    // open reason modal to collect reason and comment
     if (!employeeToReturn) return;
-    const { id, ...payload } = employeeToReturn;
+    setShowReturnConfirm(false);
+    setReturnReasonForm({ reasonType: "", comment: "" });
+    setShowReturnReasonModal(true);
+  };
 
+  // Submit return with reason: move back to EmployeeBioData and save comment
+  const submitReturnWithReason = async () => {
+    if (!employeeToReturn) return;
+    if (!returnReasonForm.reasonType) {
+      setError('Please select a reason for return.');
+      return;
+    }
+    if (!returnReasonForm.comment || !String(returnReasonForm.comment).trim()) {
+      setError('Please enter a comment for return (mandatory).');
+      return;
+    }
+
+    const { id, ...payload } = employeeToReturn;
     try {
       const returnedAt = new Date().toISOString();
-
-      await firebaseDB.child(`EmployeeBioData/${id}`).set({
+      const payloadToActive = {
         ...payload,
         status: 'On Duty',
         returnedAt,
-      });
+        __returnInfo: {
+          reasonType: returnReasonForm.reasonType,
+          comment: returnReasonForm.comment.trim(),
+          returnedAt,
+        }
+      };
+
+      await firebaseDB.child(`EmployeeBioData/${id}`).set(payloadToActive);
+      // also update ExitEmployees node to keep history (store revert info)
+      await firebaseDB.child(`ExitEmployees/${id}`).update({ revertedAt: returnedAt, revertReason: returnReasonForm.reasonType, revertComment: returnReasonForm.comment.trim() });
 
       await firebaseDB.child(`ExitEmployees/${id}`).remove();
 
-      setShowReturnConfirm(false);
+      setShowReturnReasonModal(false);
       setShowReturnedModal(true);
+      setError(null);
     } catch (err) {
       setError('Error returning employee: ' + err.message);
     }
@@ -529,10 +557,46 @@ export default function DisplayExitWorkers() {
                 <small className="text-muted">
                   This will move the record from <strong>ExitEmployees</strong> to <strong>EmployeeBioData</strong>.
                 </small>
-              </div>
+              
+                {error && <div className="text-danger mt-2">{error}</div>}</div>
               <div className="modal-footer">
                 <button className="btn btn-secondary" onClick={closeReturnConfirm}>Cancel</button>
                 <button className="btn btn-primary" onClick={handleReturnConfirmed}>Yes, Return</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Return Reason Modal */}
+      {showReturnReasonModal && employeeToReturn && (
+        <div className="modal fade show" style={{ display: 'block', backgroundColor: 'rgba(0,0,0,0.5)' }} tabIndex="-1" role="dialog" aria-modal="true">
+          <div className="modal-dialog modal-dialog-centered">
+            <div className="modal-content">
+              <div className="modal-header">
+                <h5 className="modal-title">Reason for Returning Worker</h5>
+                <button type="button" className="btn-close" onClick={() => setShowReturnReasonModal(false)}></button>
+              </div>
+              <div className="modal-body">
+                <div className="mb-3">
+                  <label className="form-label"><strong>Reason</strong></label>
+                  <select className="form-select" value={returnReasonForm.reasonType} onChange={(e)=>setReturnReasonForm(prev=>({...prev, reasonType: e.target.value}))}>
+                    <option value="">Select Reason</option>
+                    <option value="Re-Join">Re-Join</option>
+                    <option value="Return">Return</option>
+                    <option value="Good attitude">Good attitude</option>
+                    <option value="One more chance">One more chance</option>
+                    <option value="Recommendation">Recommendation</option>
+                  </select>
+                </div>
+                <div className="mb-3">
+                  <label className="form-label"><strong>Comment (mandatory)</strong></label>
+                  <textarea className="form-control" rows={4} value={returnReasonForm.comment} onChange={(e)=>setReturnReasonForm(prev=>({...prev, comment: e.target.value}))} />
+                </div>
+              </div>
+              <div className="modal-footer">
+                <button className="btn btn-secondary" onClick={() => setShowReturnReasonModal(false)}>Cancel</button>
+                <button className="btn btn-primary" onClick={submitReturnWithReason}>Submit</button>
               </div>
             </div>
           </div>

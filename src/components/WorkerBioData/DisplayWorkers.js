@@ -3,9 +3,9 @@ import firebaseDB from '../../firebase';
 import editIcon from '../../assets/eidt.svg';
 import viewIcon from '../../assets/view.svg';
 import deleteIcon from '../../assets/delete.svg';
-import EmployeeModal from './EmployeeModal';
+import WorkerModal from './WorkerModal';
 
-export default function DisplayEmployee() {
+export default function DisplayWorkers() {
     const [employees, setEmployees] = useState([]);
     const [filteredEmployees, setFilteredEmployees] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -467,7 +467,7 @@ export default function DisplayEmployee() {
             )}
 
             {selectedEmployee && (
-                <EmployeeModal
+                <WorkerModal
                     employee={selectedEmployee}
                     isOpen={isModalOpen}
                     onClose={handleCloseModal}

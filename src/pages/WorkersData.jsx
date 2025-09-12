@@ -1,6 +1,6 @@
 import React from 'react';
-import EmployeeBioDataForm from '../components/WorkerBioData/EmployeeBioDataForm'
-import DisplayEmployee from '../components/WorkerBioData/DisplayEmployee'
+import WorkerBioDataForm from '../components/WorkerBioData/WorkerBioDataForm'
+import DisplayWorkers from '../components/WorkerBioData/DisplayWorkers'
 
 export default function Employees() {
   return (
@@ -8,10 +8,10 @@ export default function Employees() {
       <div className="container-fulid">
         <div className="row">
           <div className="col-md-4">
-            <EmployeeBioDataForm />
+            <WorkerBioDataForm />
           </div>
           <div className="col-md-8">
-            <DisplayEmployee />
+            <DisplayWorkers />
           </div>
         </div>
       </div>

@@ -1,6 +1,6 @@
 import React from 'react';
-import EmployeeBioDataForm from '../components/employeeBioData/EmployeeBioDataForm'
-import DisplayEmployee from '../components/employeeBioData/DisplayEmployee'
+import EmployeeBioDataForm from '../components/WorkerBioData/EmployeeBioDataForm'
+import DisplayEmployee from '../components/WorkerBioData/DisplayEmployee'
 
 export default function Employees() {
   return (

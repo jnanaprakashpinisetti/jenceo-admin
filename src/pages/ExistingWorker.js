@@ -1,5 +1,5 @@
 import React from 'react'
-import DisplayExitEmployee from '../components/employeeBioData/DisplayExitEmployee'
+import DisplayExitEmployee from '../components/WorkerBioData/DisplayExitEmployee'
 
 export default function ExistingWorker() {
   return (

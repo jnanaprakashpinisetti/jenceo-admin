@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import firebaseDB from '../../firebase';
 import editIcon from '../../assets/eidt.svg';
 import viewIcon from '../../assets/view.svg';
@@ -69,7 +69,7 @@ export default function DisplayWorkers() {
         return () => {
             firebaseDB.child("EmployeeBioData").off('value');
         };
-    }, []);
+    }, []); // eslint-disable-line
 
     // Filter employees based on search term and filters
     useEffect(() => {
@@ -206,14 +206,19 @@ export default function DisplayWorkers() {
         setIsModalOpen(true);
     };
 
-    // Add near other useState() declarations
+    // Delete states + inline validation states
     const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
     const [employeeToDelete, setEmployeeToDelete] = useState(null);
     const [showDeleteReasonModal, setShowDeleteReasonModal] = useState(false);
     const [showDeleteSuccessModal, setShowDeleteSuccessModal] = useState(false);
-    const [deleteError, setDeleteError] = useState(null);
+    const [deleteError, setDeleteError] = useState(null); // server/general error
+    const [reasonError, setReasonError] = useState(null); // inline for select
+    const [commentError, setCommentError] = useState(null); // inline for textarea
     const [deleteReasonForm, setDeleteReasonForm] = useState({ reasonType: "", comment: "" });
 
+    // refs for validation focusing
+    const reasonSelectRef = useRef(null);
+    const commentRef = useRef(null);
 
     // call to open confirmation first
     const openDeleteConfirm = (employee) => {
@@ -227,24 +232,77 @@ export default function DisplayWorkers() {
     };
 
     // When user confirms on the first confirm -> open reason modal
-    const handleDeleteConfirmProceed = () => {
+    const handleDeleteConfirmProceed = (e) => {
+        if (e && e.preventDefault) e.preventDefault();
         setShowDeleteConfirm(false);
         setDeleteReasonForm({ reasonType: "", comment: "" });
+        setDeleteError(null); // CLEAR previous server errors when opening reason modal
+        setReasonError(null);
+        setCommentError(null);
         setShowDeleteReasonModal(true);
+
+        // focus the select (reason) short delay to ensure element mounted
+        setTimeout(() => {
+            if (reasonSelectRef.current) reasonSelectRef.current.focus();
+        }, 50);
+    };
+
+    // Validate locally and show inline errors
+    const validateDeleteForm = () => {
+        let ok = true;
+        setReasonError(null);
+        setCommentError(null);
+
+        if (!deleteReasonForm.reasonType) {
+            setReasonError("Please select a reason.");
+            ok = false;
+        }
+        if (!deleteReasonForm.comment || !deleteReasonForm.comment.trim()) {
+            setCommentError("Comment is mandatory.");
+            ok = false;
+        }
+
+        // focus first invalid field and scroll into view
+        setTimeout(() => {
+            if (!ok) {
+                if (reasonError && reasonSelectRef.current) {
+                    reasonSelectRef.current.focus();
+                    reasonSelectRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    return;
+                }
+                if (commentError && commentRef.current) {
+                    commentRef.current.focus();
+                    commentRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    return;
+                }
+                // If errors set in this tick, choose based on current form fields:
+                if (!deleteReasonForm.reasonType && reasonSelectRef.current) {
+                    reasonSelectRef.current.focus();
+                    reasonSelectRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                } else if ((!deleteReasonForm.comment || !deleteReasonForm.comment.trim()) && commentRef.current) {
+                    commentRef.current.focus();
+                    commentRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                }
+            }
+        }, 0);
+
+        return ok;
     };
 
     // When user submits reason -> actually perform delete / move
-    const handleDeleteSubmitWithReason = async () => {
-        if (!deleteReasonForm.reasonType) {
-            alert("Please select a reason.");
-            return;
-        }
-        if (!deleteReasonForm.comment || !deleteReasonForm.comment.trim()) {
-            alert("Please enter a comment (mandatory).");
+    const handleDeleteSubmitWithReason = async (e) => {
+        if (e && e.preventDefault) e.preventDefault();
+
+        // local validation first
+        const ok = validateDeleteForm();
+        if (!ok) {
             return;
         }
 
-        if (!employeeToDelete) return;
+        if (!employeeToDelete) {
+            setDeleteError("No employee selected for deletion.");
+            return;
+        }
 
         const { id } = employeeToDelete;
         try {
@@ -252,8 +310,8 @@ export default function DisplayWorkers() {
             const snapshot = await firebaseDB.child(`EmployeeBioData/${id}`).once("value");
             const employeeData = snapshot.val();
             if (!employeeData) {
-                alert("Employee data not found");
-                setShowDeleteReasonModal(false);
+                setDeleteError("Employee data not found");
+                // keep modal open for user
                 return;
             }
 
@@ -269,17 +327,19 @@ export default function DisplayWorkers() {
             await firebaseDB.child(`ExitEmployees/${id}`).set(payloadToExit);
             await firebaseDB.child(`EmployeeBioData/${id}`).remove();
 
+            // success -> close modal, clear states and show success modal
             setShowDeleteReasonModal(false);
             setEmployeeToDelete(null);
             setShowDeleteSuccessModal(true);
             setDeleteError(null);
+            setReasonError(null);
+            setCommentError(null);
         } catch (err) {
             console.error(err);
-            setDeleteError('Error deleting employee: ' + err.message); setShowDeleteReasonModal(false);
+            // keep the reason modal open and show server error (and allow retry)
+            setDeleteError('Error deleting employee: ' + (err.message || err));
         }
     };
-
-
 
     const handleDelete = async (employeeId) => {
         try {
@@ -461,6 +521,7 @@ export default function DisplayWorkers() {
                                     <td>
                                         <div className="d-flex">
                                             <button
+                                                type="button"
                                                 className="btn btn-sm me-2"
                                                 title="View"
                                                 onClick={() => handleView(employee)}
@@ -468,6 +529,7 @@ export default function DisplayWorkers() {
                                                 <img src={viewIcon} alt="view Icon" style={{ opacity: 0.6, width: '18px', height: '18px' }} />
                                             </button>
                                             <button
+                                                type="button"
                                                 className="btn btn-sm me-2"
                                                 title="Edit"
                                                 onClick={() => handleEdit(employee)}
@@ -475,6 +537,7 @@ export default function DisplayWorkers() {
                                                 <img src={editIcon} alt="edit Icon" style={{ width: '15px', height: '15px' }} />
                                             </button>
                                             <button
+                                                type="button"
                                                 className="btn btn-sm"
                                                 title="Delete"
                                                 onClick={() => {
@@ -506,6 +569,7 @@ export default function DisplayWorkers() {
                     <ul className="pagination justify-content-center">
                         <li className={`page-item ${currentPage === 1 ? 'disabled' : ''}`}>
                             <button
+                                type="button"
                                 className="page-link"
                                 onClick={() => paginate(currentPage - 1)}
                                 disabled={currentPage === 1}
@@ -523,6 +587,7 @@ export default function DisplayWorkers() {
                                     <span className="page-link">...</span>
                                 ) : (
                                     <button
+                                        type="button"
                                         className="page-link"
                                         onClick={() => paginate(number)}
                                     >
@@ -534,6 +599,7 @@ export default function DisplayWorkers() {
 
                         <li className={`page-item ${currentPage === totalPages ? 'disabled' : ''}`}>
                             <button
+                                type="button"
                                 className="page-link"
                                 onClick={() => paginate(currentPage + 1)}
                                 disabled={currentPage === totalPages}
@@ -559,28 +625,28 @@ export default function DisplayWorkers() {
                 Employee moved to ExitEmployees successfully.
               </div>
               <div className="modal-footer">
-                <button className="btn btn-success" onClick={() => setShowDeleteSuccessModal(false)}>Done</button>
+                <button type="button" className="btn btn-success" onClick={() => setShowDeleteSuccessModal(false)}>Done</button>
               </div>
             </div>
           </div>
         </div>
       )}
 
-      {/* Delete Error Inline */}
-      {deleteError && (
+      {/* Global delete/server error (keeps showing outside modals) */}
+      {deleteError && !showDeleteReasonModal && (
         <div className="alert alert-danger mt-2">{deleteError}</div>
       )}
     
-                        {selectedEmployee && (
-                <WorkerModal
-                    employee={selectedEmployee}
-                    isOpen={isModalOpen}
-                    onClose={handleCloseModal}
-                    onSave={handleSave}
-                    onDelete={handleDelete}
-                    isEditMode={isEditMode}
-                />
-            )}
+      {selectedEmployee && (
+        <WorkerModal
+            employee={selectedEmployee}
+            isOpen={isModalOpen}
+            onClose={handleCloseModal}
+            onSave={handleSave}
+            onDelete={handleDelete}
+            isEditMode={isEditMode}
+        />
+      )}
 
             {/* Delete Confirm Modal */}
             {showDeleteConfirm && employeeToDelete && (
@@ -597,8 +663,8 @@ export default function DisplayWorkers() {
                                 <p><strong>Name:</strong> {employeeToDelete.firstName} {employeeToDelete.lastName}</p>
                             </div>
                             <div className="modal-footer">
-                                <button className="btn btn-secondary" onClick={() => setShowDeleteConfirm(false)}>Cancel</button>
-                                <button className="btn btn-danger" onClick={handleDeleteConfirmProceed}>Yes</button>
+                                <button type="button" className="btn btn-secondary" onClick={() => setShowDeleteConfirm(false)}>Cancel</button>
+                                <button type="button" className="btn btn-danger" onClick={handleDeleteConfirmProceed}>Yes</button>
                             </div>
                         </div>
                     </div>
@@ -615,23 +681,45 @@ export default function DisplayWorkers() {
                                 <button type="button" className="btn-close" onClick={() => setShowDeleteReasonModal(false)}></button>
                             </div>
                             <div className="modal-body">
+                                {/* show server/general error at top of modal if exists */}
+                                {deleteError && <div className="alert alert-danger">{deleteError}</div>}
+
                                 <div className="mb-3">
                                     <label className="form-label"><strong>Reason</strong></label>
-                                    <select className="form-select" value={deleteReasonForm.reasonType} onChange={(e) => setDeleteReasonForm(prev => ({ ...prev, reasonType: e.target.value }))}>
+                                    <select
+                                        ref={reasonSelectRef}
+                                        className={`form-select ${reasonError ? 'is-invalid' : ''}`}
+                                        value={deleteReasonForm.reasonType}
+                                        onChange={(e) => {
+                                            setDeleteReasonForm(prev => ({ ...prev, reasonType: e.target.value }));
+                                            setReasonError(null);
+                                        }}
+                                    >
                                         <option value="">Select Reason</option>
                                         <option value="Resign">Resign</option>
                                         <option value="Termination">Termination</option>
                                         <option value="Absconder">Absconder</option>
                                     </select>
+                                    {reasonError && <div className="invalid-feedback" style={{ display: 'block' }}>{reasonError}</div>}
                                 </div>
                                 <div className="mb-3">
                                     <label className="form-label"><strong>Comment (mandatory)</strong></label>
-                                    <textarea className="form-control" rows={4} value={deleteReasonForm.comment} onChange={(e) => setDeleteReasonForm(prev => ({ ...prev, comment: e.target.value }))} />
+                                    <textarea
+                                        ref={commentRef}
+                                        className={`form-control ${commentError ? 'is-invalid' : ''}`}
+                                        rows={4}
+                                        value={deleteReasonForm.comment}
+                                        onChange={(e) => {
+                                            setDeleteReasonForm(prev => ({ ...prev, comment: e.target.value }));
+                                            setCommentError(null);
+                                        }}
+                                    />
+                                    {commentError && <div className="invalid-feedback" style={{ display: 'block' }}>{commentError}</div>}
                                 </div>
                             </div>
                             <div className="modal-footer">
-                                <button className="btn btn-secondary" onClick={() => setShowDeleteReasonModal(false)}>Cancel</button>
-                                <button className="btn btn-danger" onClick={handleDeleteSubmitWithReason}>Remove Worker</button>
+                                <button type="button" className="btn btn-secondary" onClick={() => setShowDeleteReasonModal(false)}>Cancel</button>
+                                <button type="button" className="btn btn-danger" onClick={handleDeleteSubmitWithReason}>Remove Worker</button>
                             </div>
                         </div>
                     </div>

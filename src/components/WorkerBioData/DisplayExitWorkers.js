@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import firebaseDB from '../../firebase';
 import editIcon from '../../assets/eidt.svg';
 import viewIcon from '../../assets/view.svg';
@@ -15,15 +15,15 @@ export default function DisplayExitWorkers() {
   // Search and filters
   const [searchTerm, setSearchTerm] = useState('');
   const [genderFilters, setGenderFilters] = useState({
-      Male: false,
-      Female: false
+    Male: false,
+    Female: false
   });
   const [skillFilters, setSkillFilters] = useState({
-      Nursing: false,
-      Diaper: false,
-      'Patent Care': false,
-      'Baby Care': false,
-      Cook: false
+    Nursing: false,
+    Diaper: false,
+    'Patent Care': false,
+    'Baby Care': false,
+    Cook: false
   });
 
   const [selectedEmployee, setSelectedEmployee] = useState(null);
@@ -35,15 +35,23 @@ export default function DisplayExitWorkers() {
   const [rowsPerPage, setRowsPerPage] = useState(10);
   const [totalPages, setTotalPages] = useState(1);
 
-  // Return flow modals
+  // Return flow modals & validation
   const [showReturnConfirm, setShowReturnConfirm] = useState(false);
   const [employeeToReturn, setEmployeeToReturn] = useState(null);
   const [showReturnedModal, setShowReturnedModal] = useState(false);
   const [showReturnReasonModal, setShowReturnReasonModal] = useState(false);
   const [returnReasonForm, setReturnReasonForm] = useState({ reasonType: "", comment: "" });
 
+  const [returnError, setReturnError] = useState(null); // server/general error shown at top of modal
+  const [reasonError, setReasonError] = useState(null); // inline validation for select
+  const [commentError, setCommentError] = useState(null); // inline validation for textarea
+
   // Save success modal
   const [showSaveModal, setShowSaveModal] = useState(false);
+
+  // refs for focusing invalid controls
+  const reasonSelectRef = useRef(null);
+  const commentRef = useRef(null);
 
   useEffect(() => {
     const fetchEmployees = () => {
@@ -80,16 +88,16 @@ export default function DisplayExitWorkers() {
     return () => {
       firebaseDB.child('ExitEmployees').off('value');
     };
-  }, []);
+  }, []); // eslint-disable-line
 
   // Filter employees based on search term and filters
   useEffect(() => {
     let filtered = employees;
-    
+
     // Apply search filter
     if (searchTerm) {
       const term = searchTerm.toLowerCase();
-      filtered = filtered.filter(employee => 
+      filtered = filtered.filter(employee =>
         (employee.firstName && employee.firstName.toLowerCase().includes(term)) ||
         (employee.lastName && employee.lastName.toLowerCase().includes(term)) ||
         (employee.idNo && employee.idNo.toLowerCase().includes(term)) ||
@@ -102,7 +110,7 @@ export default function DisplayExitWorkers() {
     // Apply gender filters
     const activeGenderFilters = Object.keys(genderFilters).filter(key => genderFilters[key]);
     if (activeGenderFilters.length > 0) {
-      filtered = filtered.filter(employee => 
+      filtered = filtered.filter(employee =>
         employee.gender && activeGenderFilters.includes(employee.gender)
       );
     }
@@ -110,7 +118,7 @@ export default function DisplayExitWorkers() {
     // Apply skill filters
     const activeSkillFilters = Object.keys(skillFilters).filter(key => skillFilters[key]);
     if (activeSkillFilters.length > 0) {
-      filtered = filtered.filter(employee => 
+      filtered = filtered.filter(employee =>
         employee.primarySkill && activeSkillFilters.includes(employee.primarySkill)
       );
     }
@@ -207,26 +215,72 @@ export default function DisplayExitWorkers() {
   const closeReturnConfirm = () => {
     setShowReturnConfirm(false);
     setEmployeeToReturn(null);
+    setReturnError(null);
+    setReasonError(null);
+    setCommentError(null);
   };
 
   // Confirm → instead of immediate move, open reason modal to collect return comment
-  const handleReturnConfirmed = async () => {
-    // open reason modal to collect reason and comment
+  const handleReturnConfirmed = (e) => {
+    if (e && e.preventDefault) e.preventDefault();
     if (!employeeToReturn) return;
     setShowReturnConfirm(false);
     setReturnReasonForm({ reasonType: "", comment: "" });
+    setReturnError(null);
+    setReasonError(null);
+    setCommentError(null);
     setShowReturnReasonModal(true);
+
+    // focus the select after a tiny delay to ensure mounted
+    setTimeout(() => {
+      if (reasonSelectRef.current) reasonSelectRef.current.focus();
+    }, 50);
+  };
+
+  // local validation for return reason modal
+  const validateReturnForm = () => {
+    let ok = true;
+    setReasonError(null);
+    setCommentError(null);
+
+    if (!returnReasonForm.reasonType) {
+      setReasonError('Please select a reason for return.');
+      ok = false;
+    }
+    if (!returnReasonForm.comment || !String(returnReasonForm.comment).trim()) {
+      setCommentError('Please enter a comment for return (mandatory).');
+      ok = false;
+    }
+
+    // focus first invalid
+    setTimeout(() => {
+      if (!ok) {
+        if (!returnReasonForm.reasonType && reasonSelectRef.current) {
+          reasonSelectRef.current.focus();
+          reasonSelectRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          return;
+        }
+        if ((!returnReasonForm.comment || !String(returnReasonForm.comment).trim()) && commentRef.current) {
+          commentRef.current.focus();
+          commentRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+      }
+    }, 0);
+
+    return ok;
   };
 
   // Submit return with reason: move back to EmployeeBioData and save comment
-  const submitReturnWithReason = async () => {
-    if (!employeeToReturn) return;
-    if (!returnReasonForm.reasonType) {
-      setError('Please select a reason for return.');
+  const submitReturnWithReason = async (e) => {
+    if (e && e.preventDefault) e.preventDefault();
+
+    if (!employeeToReturn) {
+      setReturnError('No employee selected to return.');
       return;
     }
-    if (!returnReasonForm.comment || !String(returnReasonForm.comment).trim()) {
-      setError('Please enter a comment for return (mandatory).');
+
+    if (!validateReturnForm()) {
+      // keep modal open, inline errors are set
       return;
     }
 
@@ -252,9 +306,14 @@ export default function DisplayExitWorkers() {
 
       setShowReturnReasonModal(false);
       setShowReturnedModal(true);
-      setError(null);
+      setReturnError(null);
+      setReasonError(null);
+      setCommentError(null);
+      setEmployeeToReturn(null);
     } catch (err) {
-      setError('Error returning employee: ' + err.message);
+      console.error(err);
+      // show server error at top and keep modal open for retry
+      setReturnError('Error returning employee: ' + (err.message || err));
     }
   };
 
@@ -285,6 +344,7 @@ export default function DisplayExitWorkers() {
     return <div className="container py-4">Loading...</div>;
   }
 
+  // Note: keep the top-level error behavior (you can change to inline banner if you prefer)
   if (error) {
     return <div className="container py-4 text-danger">Error: {error}</div>;
   }
@@ -355,7 +415,7 @@ export default function DisplayExitWorkers() {
         </div>
       </div>
 
-      <hr></hr>
+      <hr />
 
       <div className="d-flex justify-content-between align-items-center mb-3">
         <h4 className="mb-0">Exit Employees</h4>
@@ -444,6 +504,7 @@ export default function DisplayExitWorkers() {
                   <td>
                     <div className="d-flex">
                       <button
+                        type="button"
                         className="btn btn-sm me-2"
                         title="View"
                         onClick={() => handleView(employee)}
@@ -451,6 +512,7 @@ export default function DisplayExitWorkers() {
                         <img src={viewIcon} alt="view Icon" style={{ opacity: 0.6, width: '18px', height: '18px' }} />
                       </button>
                       <button
+                        type="button"
                         className="btn btn-sm me-2"
                         title="Edit"
                         onClick={() => handleEdit(employee)}
@@ -458,6 +520,7 @@ export default function DisplayExitWorkers() {
                         <img src={editIcon} alt="edit Icon" style={{ width: '15px', height: '15px' }} />
                       </button>
                       <button
+                        type="button"
                         className="btn btn-sm"
                         title="Return Back"
                         onClick={() => openReturnConfirm(employee)}
@@ -484,6 +547,7 @@ export default function DisplayExitWorkers() {
         <ul className="pagination justify-content-center">
           <li className={`page-item ${currentPage === 1 ? 'disabled' : ''}`}>
             <button
+              type="button"
               className="page-link"
               onClick={() => paginate(currentPage - 1)}
               disabled={currentPage === 1}
@@ -501,6 +565,7 @@ export default function DisplayExitWorkers() {
                 <span className="page-link">...</span>
               ) : (
                 <button
+                  type="button"
                   className="page-link"
                   onClick={() => paginate(number)}
                 >
@@ -512,6 +577,7 @@ export default function DisplayExitWorkers() {
 
           <li className={`page-item ${currentPage === totalPages ? 'disabled' : ''}`}>
             <button
+              type="button"
               className="page-link"
               onClick={() => paginate(currentPage + 1)}
               disabled={currentPage === totalPages}
@@ -557,11 +623,13 @@ export default function DisplayExitWorkers() {
                 <small className="text-muted">
                   This will move the record from <strong>ExitEmployees</strong> to <strong>EmployeeBioData</strong>.
                 </small>
-              
-                {error && <div className="text-danger mt-2">{error}</div>}</div>
+
+                {/* show top-level return/server error inside confirm modal if present */}
+                {returnError && <div className="text-danger mt-2">{returnError}</div>}
+              </div>
               <div className="modal-footer">
-                <button className="btn btn-secondary" onClick={closeReturnConfirm}>Cancel</button>
-                <button className="btn btn-primary" onClick={handleReturnConfirmed}>Yes, Return</button>
+                <button type="button" className="btn btn-secondary" onClick={closeReturnConfirm}>Cancel</button>
+                <button type="button" className="btn btn-primary" onClick={handleReturnConfirmed}>Yes, Return</button>
               </div>
             </div>
           </div>
@@ -578,9 +646,17 @@ export default function DisplayExitWorkers() {
                 <button type="button" className="btn-close" onClick={() => setShowReturnReasonModal(false)}></button>
               </div>
               <div className="modal-body">
+                {/* server/general error at top of modal */}
+                {returnError && <div className="alert alert-danger">{returnError}</div>}
+
                 <div className="mb-3">
                   <label className="form-label"><strong>Reason</strong></label>
-                  <select className="form-select" value={returnReasonForm.reasonType} onChange={(e)=>setReturnReasonForm(prev=>({...prev, reasonType: e.target.value}))}>
+                  <select
+                    ref={reasonSelectRef}
+                    className={`form-select ${reasonError ? 'is-invalid' : ''}`}
+                    value={returnReasonForm.reasonType}
+                    onChange={(e) => { setReturnReasonForm(prev => ({ ...prev, reasonType: e.target.value })); setReasonError(null); setReturnError(null); }}
+                  >
                     <option value="">Select Reason</option>
                     <option value="Re-Join">Re-Join</option>
                     <option value="Return">Return</option>
@@ -588,15 +664,23 @@ export default function DisplayExitWorkers() {
                     <option value="One more chance">One more chance</option>
                     <option value="Recommendation">Recommendation</option>
                   </select>
+                  {reasonError && <div className="invalid-feedback" style={{ display: 'block' }}>{reasonError}</div>}
                 </div>
                 <div className="mb-3">
                   <label className="form-label"><strong>Comment (mandatory)</strong></label>
-                  <textarea className="form-control" rows={4} value={returnReasonForm.comment} onChange={(e)=>setReturnReasonForm(prev=>({...prev, comment: e.target.value}))} />
+                  <textarea
+                    ref={commentRef}
+                    className={`form-control ${commentError ? 'is-invalid' : ''}`}
+                    rows={4}
+                    value={returnReasonForm.comment}
+                    onChange={(e) => { setReturnReasonForm(prev => ({ ...prev, comment: e.target.value })); setCommentError(null); setReturnError(null); }}
+                  />
+                  {commentError && <div className="invalid-feedback" style={{ display: 'block' }}>{commentError}</div>}
                 </div>
               </div>
               <div className="modal-footer">
-                <button className="btn btn-secondary" onClick={() => setShowReturnReasonModal(false)}>Cancel</button>
-                <button className="btn btn-primary" onClick={submitReturnWithReason}>Submit</button>
+                <button type="button" className="btn btn-secondary" onClick={() => setShowReturnReasonModal(false)}>Cancel</button>
+                <button type="button" className="btn btn-primary" onClick={submitReturnWithReason}>Submit</button>
               </div>
             </div>
           </div>
@@ -622,7 +706,7 @@ export default function DisplayExitWorkers() {
                 Employee moved back to <strong>Existing Employees</strong>.
               </div>
               <div className="modal-footer">
-                <button className="btn btn-success" onClick={closeReturnedModal}>Done</button>
+                <button type="button" className="btn btn-success" onClick={closeReturnedModal}>Done</button>
               </div>
             </div>
           </div>
@@ -646,7 +730,7 @@ export default function DisplayExitWorkers() {
               </div>
               <div className="modal-body">Employee details updated successfully.</div>
               <div className="modal-footer">
-                <button className="btn btn-success" onClick={() => setShowSaveModal(false)}>Done</button>
+                <button type="button" className="btn btn-success" onClick={() => setShowSaveModal(false)}>Done</button>
               </div>
             </div>
           </div>

@@ -4,9 +4,9 @@ import editIcon from '../../assets/eidt.svg';
 import viewIcon from '../../assets/view.svg';
 import deleteIcon from '../../assets/delete.svg'; // (not used but kept if you use elsewhere)
 import returnIcon from '../../assets/return.svg';
-import EmployeeModal from './EmployeeModal';
+import WorkerModal from './WorkerModal';
 
-export default function DisplayExitEmployee() {
+export default function DisplayExitWorkers() {
   const [employees, setEmployees] = useState([]);
   const [filteredEmployees, setFilteredEmployees] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -496,7 +496,7 @@ export default function DisplayExitEmployee() {
 
       {/* View/Edit Modal */}
       {isModalOpen && (
-        <EmployeeModal
+        <WorkerModal
           employee={selectedEmployee}
           isOpen={isModalOpen}
           onClose={handleCloseModal}

@@ -74,7 +74,7 @@ const ConfirmModal = ({
 );
 
 /* --------------------------------- Component --------------------------------- */
-const EmployeeModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode }) => {
+const WorkerModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode }) => {
     const [formData, setFormData] = useState({});
     const [status, setStatus] = useState("On Duty");
     const [activeTab, setActiveTab] = useState("basic");
@@ -2011,4 +2011,4 @@ const EmployeeModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode
     );
 };
 
-export default EmployeeModal;
+export default WorkerModal;

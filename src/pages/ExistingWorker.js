@@ -1,10 +1,10 @@
 import React from 'react'
-import DisplayExitEmployee from '../components/WorkerBioData/DisplayExitEmployee'
+import DisplayExitWorkers from '../components/WorkerBioData/DisplayExitWorkers'
 
 export default function ExistingWorker() {
   return (
     <div className="layout-body">
-    <DisplayExitEmployee/>
+    <DisplayExitWorkers/>
     </div>
   )
 }

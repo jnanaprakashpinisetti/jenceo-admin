@@ -32,7 +32,7 @@ import enquiry from "../assets/enquiry.svg";
 
 import Dashboard from '../pages/Dashboard';
 // Employee Data
-import Employees from '../pages/Employees';
+import WorkersData from '../pages/WorkersData';
 import EmployeeAggrement from '../pages/WorkerAggrement';
 import ExistingEmployees from '../pages/ExistingWorker';
 
@@ -131,7 +131,7 @@ export default function LeftNav() {
             <hr />
 
             <li className="nav-item">
-              <NavLink to='Employees' className="nav-link" title='Worker Data' onClick={closeMobile}>
+              <NavLink to='WorkersData' className="nav-link" title='Worker Data' onClick={closeMobile}>
                 <img src={workerData} alt="" /> Worker Data
               </NavLink>
             </li>
@@ -235,7 +235,7 @@ export default function LeftNav() {
       {/* Routes */}
       <Routes>
         <Route path="/" element={<Dashboard />} />
-        <Route path="Employees" element={<Employees />} />
+        <Route path="WorkersData" element={<WorkersData />} />
         <Route path="EmployeeAggrement" element={<EmployeeAggrement />} />
         <Route path="WorkerCallsData" element={<WorkerCallsData />} />
         <Route path="ExistingEmployees" element={<ExistingEmployees />} />

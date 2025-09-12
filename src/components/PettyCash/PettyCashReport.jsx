@@ -1,25 +1,19 @@
-// src/.../PettyCashReport.jsx
+// src/components/PettyCash/PettyCashReport.jsx
 import React, { useEffect, useState, useRef, useMemo } from "react";
 import firebaseDB from "../../firebase";
 import { Tabs, Tab } from "react-bootstrap";
 import * as XLSX from "xlsx";
 
 /**
- * PettyCashReport.jsx (with monthly Main-Category cards)
+ * PettyCashReport.jsx
  *
- * - Year tabs (2024..2035), Month tabs (Jan..Dec)
- * - Monthly cards: show main category totals + top subcategory lines
- * - Manager-only approval + Employee clarifications (existing)
+ * - Dynamic years
+ * - Includes Transport & Travel and Others in category summary
+ * - Reset filters button before Export
+ * - Page total + Filtered total rows in table footer
+ * - Slightly improved Tabs usage (mountOnEnter / unmountOnExit) so styling behaves better
  *
- * UI suggestions:
- *  - Cards are for quick scan; table below for details (implemented)
- *  - Add "Pending approvals" quick filter for managers (optional)
- *  - Consider sparkline or small trend chart inside cards (optional)
- *  - Consider caching aggregates in server / cloud function when dataset grows
- *
- * Props:
- *  - currentUser (string) optional, default "Admin"
- *  - currentUserRole ("employee" | "manager") optional, default "employee"
+ * NOTE: keep file path / imports consistent with your project layout.
  */
 
 export default function PettyCashReport({ currentUser = "Admin", currentUserRole = "employee" }) {
@@ -41,9 +35,6 @@ export default function PettyCashReport({ currentUser = "Admin", currentUserRole
     "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"
   ];
 
-  // Years 2024..2035
-  const years = Array.from({ length: 2035 - 2024 + 1 }, (_, i) => String(2024 + i));
-
   // Fetch Data from Realtime DB
   useEffect(() => {
     const ref = firebaseDB.child("PettyCash/admin");
@@ -51,10 +42,12 @@ export default function PettyCashReport({ currentUser = "Admin", currentUserRole
       if (snapshot.exists()) {
         const records = [];
         snapshot.forEach((child) => {
-          records.push({ id: child.key, ...child.val() });
+          const val = child.val();
+          records.push({ id: child.key, ...val });
         });
         records.sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0));
         setData(records);
+        // sensible defaults if not set
         if (!activeYear) setActiveYear(String(new Date().getFullYear()));
         if (!activeMonth) setActiveMonth(months[new Date().getMonth()]);
       } else {
@@ -66,6 +59,21 @@ export default function PettyCashReport({ currentUser = "Admin", currentUserRole
     return () => ref.off("value", onValue);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // derive years dynamically from data
+  const years = useMemo(() => {
+    const set = new Set();
+    data.forEach((d) => {
+      if (d && d.date) {
+        const dt = new Date(d.date);
+        if (!isNaN(dt)) set.add(String(dt.getFullYear()));
+      }
+    });
+    if (set.size === 0) {
+      return [String(new Date().getFullYear())];
+    }
+    return Array.from(set).sort((a, b) => Number(b) - Number(a));
+  }, [data]);
 
   // Records for selected year and month (unfiltered)
   const recordsForYearMonth = useMemo(() => {
@@ -85,9 +93,9 @@ export default function PettyCashReport({ currentUser = "Admin", currentUserRole
     return filteredByYear;
   }, [data, activeYear, activeMonth]);
 
-  // Apply UI filters on top of selected year/month
+  // Filters
   const applyFilters = (records) => {
-    let recordsFiltered = [...records];
+    let recordsFiltered = records.slice();
 
     if (search) {
       const q = search.toLowerCase();
@@ -107,7 +115,7 @@ export default function PettyCashReport({ currentUser = "Admin", currentUserRole
     return recordsFiltered;
   };
 
-  const filteredRecords = applyFilters(recordsForYearMonth);
+  const filteredRecords = useMemo(() => applyFilters(recordsForYearMonth), [recordsForYearMonth, search, mainCategory, subCategory, dateFrom, dateTo]);
 
   // pagination helpers
   const totalPages = Math.max(1, Math.ceil(filteredRecords.length / rowsPerPage));
@@ -118,7 +126,7 @@ export default function PettyCashReport({ currentUser = "Admin", currentUserRole
 
   useEffect(() => { setCurrentPage(1); }, [search, mainCategory, subCategory, dateFrom, dateTo, activeYear, activeMonth, rowsPerPage]);
 
-  // Export Excel (include PurchasedBy, Approval, Clarification Response)
+  // Export Excel (single function)
   const exportExcel = (records, label) => {
     const exportData = records.map((r) => ({
       Date: r.date,
@@ -141,7 +149,7 @@ export default function PettyCashReport({ currentUser = "Admin", currentUserRole
     XLSX.writeFile(wb, `${label}-PettyCash.xlsx`);
   };
 
-  // Summary: include Assets
+  // Category summary definitions (add Transport & Travel and Others)
   const categoryColors = {
     Food: "table-success",
     "Office Maintenance": "table-warning",
@@ -150,414 +158,321 @@ export default function PettyCashReport({ currentUser = "Admin", currentUserRole
     Medical: "table-danger",
     Welfare: "table-primary",
     Assets: "table-light",
+    "Transport & Travel": "table-info",
+    Others: "table-dark",
   };
 
-  // Subcategories including Assets
+  // Subcategories including Transport & Travel and Others placeholder
   const subCategories = [
-    { cat: "Food", items: ["Groceries", "Vegetables", "Non-Veg", "Curd / Milk", "Tiffins", "Meals", "Curries", "Water Cans", "Client Food", "Snacks"] },
+    { cat: "Food", items: ["Groceries", "Vegetables", "Fruits", "Non-Veg", "Curd / Milk", "Tiffins", "Meals", "Curries", "Rice Bag", "Water Cans", "Client Food", "Snacks"] },
+    { cat: "Transport & Travel", items: ["Petrol", "Staff Transport", "Worker Transport", "Business Trips", "Vehicle Maintenance", "Vehicle Insurance", "Vehicle Documents", "Vehicle Fine"] },
     { cat: "Office Maintenance", items: ["Office Rent", "Electricity Bill", "Water Bill", "Internet Bill", "Mobile Bill", "Repairs & Maintenance", "Waste Disposal"] },
     { cat: "Marketing", items: ["Apana Fee", "Worker India Fee", "Lamination Covers", "Printings", "Digital Marketing", "Offline Marketing", "Adds", "Off-Food", "Off-Snacks", "Off-Breakfast", "Off-Lunch", "Off-Dinner", "Off-Staying", "Petrol", "Transport", "Health", "Others"] },
     { cat: "Stationery", items: ["Books", "Files", "Papers", "Stationery", "Office Equipment", "IT Accessories", "Others"] },
     { cat: "Medical", items: ["For Staff", "For Workers", "First Aid", "Tablets", "Insurance"] },
     { cat: "Welfare", items: ["Team Outings", "Team Lunch", "Movies", "Gifts", "Festivals", "Entertainment"] },
-    {
-      cat: "Assets", items: [
-        "Furniture",
-        "Electronics",
-        "IT Equipment",
-        "Kitchen Items",
-        "Vehicles",
-        "Lands",
-        "Properties",
-        "Domain",
-        "Investments",
-        "Software",
-        "Advances",
-      ]
-    },
+    { cat: "Assets", items: ["Furniture", "Electronics", "IT Equipment", "Kitchen Items", "Vehicles", "Lands", "Properties", "Domain", "Investments", "Software", "Advances"] },
+    // Others: free-form subcategories will be added dynamically
+    { cat: "Others", items: [] },
   ];
 
-  // Build summary totals across years/months (global)
-  const buildSummary = () => {
+  // Build a map for summary with months + total
+  const summaryData = useMemo(() => {
     const summary = {};
-    subCategories.forEach((block) => {
-      block.items.forEach((sub) => {
-        summary[sub] = {};
-        months.forEach((m) => (summary[sub][m] = 0));
-        summary[sub]["Total"] = 0;
-      });
-    });
-
-    data.forEach((d) => {
-      const dateStr = d.date;
-      if (!dateStr) return;
-      const dt = new Date(dateStr);
-      if (isNaN(dt.getTime())) return;
-      const m = months[dt.getMonth()];
-      const sub = d.subCategory;
-      if (!sub) return;
-      if (summary[sub]) {
-        const amt = Number(d.total || 0);
-        summary[sub][m] += amt;
-        summary[sub]["Total"] += amt;
+    // initialize known subcategories
+    subCategories.forEach(block => {
+      if (block.items && block.items.length) {
+        block.items.forEach(sub => {
+          summary[sub] = {};
+          months.forEach(m => summary[sub][m] = 0);
+          summary[sub]["Total"] = 0;
+        });
       }
     });
-    return summary;
-  };
 
-  const summaryData = buildSummary();
+    // We'll also collect "Others" free-form subcategories
+    const othersMap = {}; // subCategoryText -> initialized row
 
-  const monthTotals = {};
-  months.forEach((m) => (monthTotals[m] = 0));
-  let grandTotal = 0;
-  Object.values(summaryData).forEach((row) => {
-    months.forEach((m) => (monthTotals[m] += row[m]));
-    grandTotal += row.Total;
-  });
+    data.forEach((rec) => {
+      const dt = rec.date ? new Date(rec.date) : null;
+      const m = (dt && !isNaN(dt)) ? months[dt.getMonth()] : "Unknown";
+      const t = Number(rec.total || rec.price || 0) || 0;
+      const main = rec.mainCategory || "Unspecified";
+      const sub = rec.subCategory || "Unspecified";
 
-  /* -------------------------
-     Approval and Clarification logic
-     ------------------------- */
+      // handle Others mainCategory specially
+      if (main === "Others") {
+        if (!othersMap[sub]) {
+          othersMap[sub] = {};
+          months.forEach(mm => othersMap[sub][mm] = 0);
+          othersMap[sub]["Total"] = 0;
+        }
+        othersMap[sub][m] = (othersMap[sub][m] || 0) + t;
+        othersMap[sub]["Total"] += t;
+        return;
+      }
 
-  // Manager only: can change approval. Employee: cannot change (disabled).
-  // Employee (who created) gets a red textarea when approval === 'Need Clarification' or 'Reject'
-  // Employee submits clarification -> saved to DB under clarificationResponse { text, responseBy, responseAt }
-  // Manager can then change approval after clarificationResponse exists.
-
-  const handleApprovalChange = async (id, value) => {
-    if (!id) return;
-    // enforce role: only manager can change
-    if (currentUserRole !== "manager") {
-      alert("Only managers can change approval.");
-      return;
-    }
-    try {
-      await firebaseDB.child(`PettyCash/admin/${id}`).update({
-        approval: value,
-        approvalBy: currentUser,
-        approvalAt: new Date().toISOString(),
-      });
-      setData((prev) => prev.map((r) => (r.id === id ? { ...r, approval: value, approvalBy: currentUser, approvalAt: new Date().toISOString() } : r)));
-    } catch (err) {
-      console.error("Failed to update approval:", err);
-      alert("Failed to update approval. See console for details.");
-    }
-  };
-
-  const handleEmployeeClarificationSubmit = async (id, text) => {
-    if (!id) return;
-    if (!text || !text.trim()) { alert("Please enter clarification text"); return; }
-    // ensure employee owns the record
-    const rec = data.find((d) => d.id === id);
-    if (!rec) return;
-    if ((rec.employeeName || "").toLowerCase() !== (currentUser || "").toLowerCase()) {
-      alert("You can only respond to clarifications for your own entries.");
-      return;
-    }
-    try {
-      const payload = {
-        clarificationResponse: {
-          text: text.trim(),
-          responseBy: currentUser,
-          responseAt: new Date().toISOString(),
-        },
-        // optionally set approval to Pending so manager will review
-        approval: "Pending",
-      };
-      await firebaseDB.child(`PettyCash/admin/${id}`).update(payload);
-      setData((prev) => prev.map((r) => (r.id === id ? { ...r, ...payload } : r)));
-    } catch (err) {
-      console.error("Failed to submit clarification:", err);
-      alert("Failed to submit clarification. See console for details.");
-    }
-  };
-
-  // Unique options for main/sub category filters from loaded data
-  const mainOptions = [...new Set(data.map((d) => d.mainCategory).filter(Boolean))];
-  const subOptions = mainCategory ? [...new Set(data.filter((d) => d.mainCategory === mainCategory).map((d) => d.subCategory).filter(Boolean))] : [];
-
-  // small helper to check if employee should show clarif textarea
-  const shouldShowClarificationBox = (item) => {
-    const status = (item.approval || "Pending");
-    const isClarOrReject = status === "Need Clarification" || status === "Reject";
-    const employeeOwns = (item.employeeName || "").toLowerCase() === (currentUser || "").toLowerCase();
-    return isClarOrReject && currentUserRole === "employee" && employeeOwns;
-  };
-
-  /* -------------------------
-     Monthly main-category totals (for the selected month)
-     ------------------------- */
-  const monthMainCategoryTotals = useMemo(() => {
-    // use recordsForYearMonth (unfiltered by search/main/sub) because cards should reflect month totals
-    const totals = {};
-    recordsForYearMonth.forEach((r) => {
-      const main = r.mainCategory || "Uncategorized";
-      totals[main] = totals[main] || { total: 0, sub: {} };
-      totals[main].total += Number(r.total || 0);
-
-      const sub = r.subCategory || "Other";
-      totals[main].sub[sub] = (totals[main].sub[sub] || 0) + Number(r.total || 0);
+      // find if sub is known -> add
+      if (summary[sub]) {
+        summary[sub][m] = (summary[sub][m] || 0) + t;
+        summary[sub]["Total"] = (summary[sub]["Total"] || 0) + t;
+      } else {
+        // a subcategory not pre-registered — create one (helps include dynamic Transport etc)
+        summary[sub] = {};
+        months.forEach(mm => summary[sub][mm] = 0);
+        summary[sub]["Total"] = 0;
+        summary[sub][m] = (summary[sub][m] || 0) + t;
+        summary[sub]["Total"] += t;
+      }
     });
-    return totals; // { main: { total: Number, sub: { subName: Number } } }
-  }, [recordsForYearMonth]);
 
-  // Helper to format number
-  const fmt = (n) => Number(n || 0).toLocaleString();
+    // merge othersMap entries into summary under their own keys
+    Object.keys(othersMap).forEach((key) => {
+      summary[key] = othersMap[key];
+    });
+
+    return summary;
+  }, [data, months, subCategories]);
+
+  // compute month totals & grand total
+  const monthTotals = useMemo(() => {
+    const mTotals = {};
+    months.forEach(m => { mTotals[m] = 0; });
+    Object.keys(summaryData).forEach(sub => {
+      months.forEach(m => {
+        mTotals[m] += summaryData[sub][m] || 0;
+      });
+    });
+    return mTotals;
+  }, [summaryData, months]);
+
+  const grandTotal = useMemo(() => {
+    return Object.keys(summaryData).reduce((acc, sub) => acc + (summaryData[sub]["Total"] || 0), 0);
+  }, [summaryData]);
+
+  // totals for table (page total & filtered total)
+  const pageTotal = useMemo(() => {
+    return pageItems.reduce((s, r) => s + (Number(r.total || 0) || 0), 0);
+  }, [pageItems]);
+
+  const filteredTotal = useMemo(() => {
+    return filteredRecords.reduce((s, r) => s + (Number(r.total || 0) || 0), 0);
+  }, [filteredRecords]);
+
+  // Reset filters helper
+  const resetFilters = () => {
+    setSearch("");
+    setMainCategory("");
+    setSubCategory("");
+    setDateFrom("");
+    setDateTo("");
+    setCurrentPage(1);
+  };
+
+  // handle Export click (reset main/sub as requested, then export)
+  const handleExportClick = (records) => {
+    // Reset main/sub filters (per your earlier request)
+    setMainCategory("");
+    setSubCategory("");
+    const label = `${activeYear}-${activeMonth || "all"}`;
+    exportExcel(records, label);
+  };
+
+  // UI options for main/sub dropdowns
+  const mainOptions = useMemo(() => {
+    const set = new Set();
+    data.forEach(d => { if (d.mainCategory) set.add(d.mainCategory); });
+    set.add("Others"); // ensure Others available
+    return Array.from(set).sort();
+  }, [data]);
+
+  const subOptions = useMemo(() => {
+    if (!mainCategory) return [];
+    const set = new Set();
+    data.forEach(d => {
+      if (d.mainCategory === mainCategory && d.subCategory) set.add(d.subCategory);
+    });
+    return Array.from(set).sort();
+  }, [data, mainCategory]);
+
+  // compute others keys (sub-keys that are not part of known subCategories arrays)
+  const othersKeys = useMemo(() => {
+    const knownSet = new Set();
+    subCategories.forEach(block => (block.items || []).forEach(i => knownSet.add(i)));
+    // keys in summaryData not present in knownSet are 'others' (freeform subs + newly created)
+    return Object.keys(summaryData).filter(k => !knownSet.has(k));
+  }, [summaryData, subCategories]);
+
+  // compute totals for Others block
+  const othersTotals = useMemo(() => {
+    const totals = {};
+    months.forEach(m => totals[m] = 0);
+    totals["Total"] = 0;
+    othersKeys.forEach(key => {
+      months.forEach(m => { totals[m] += summaryData[key][m] || 0; });
+      totals["Total"] += summaryData[key]["Total"] || 0;
+    });
+    return totals;
+  }, [othersKeys, summaryData, months]);
 
   return (
-    <div className="container-fluid mt-4 pettyCash-report">
-      <h3 className="mb-3 opacity-85">Petty Cash Report</h3>
+    <div className="pettyCashReport">
+      <div className="d-flex justify-content-between align-items-center mb-3">
+        <h3>Petty Cash Report</h3>
+      </div>
 
-      {/* Year Tabs (2024..2035) */}
+      {/* Year tabs */}
       <Tabs
-        id="petty-cash-years"
         activeKey={activeYear}
-        onSelect={(k) => {
-          setActiveYear(k);
-          const curYear = String(new Date().getFullYear());
-          if (k === curYear) setActiveMonth(months[new Date().getMonth()]);
-          else setActiveMonth("");
-          setCurrentPage(1);
-        }}
-        className="mb-3 petty-cash-years"
+        onSelect={(k) => { setActiveYear(String(k)); setActiveMonth(""); setCurrentPage(1); }}
+        mountOnEnter
+        unmountOnExit
+        className="petty-tabs"
       >
         {years.map((y) => (
           <Tab eventKey={y} title={y} key={y}>
-            <Tabs
-              id={`months-${y}`}
-              activeKey={activeMonth}
-              onSelect={(m) => { setActiveMonth(m); setCurrentPage(1); }}
-              className="mb-3 pettycash-month"
-            >
-              {months.map((m) => {
-                // records for this y+m
-                const records = data.filter((d) => {
-                  if (!d.date) return false;
-                  const dt = new Date(d.date);
-                  return String(dt.getFullYear()) === y && months[dt.getMonth()] === m;
-                });
+            {/* month tabs inside each year */}
+            <div className="mb-3">
+              <div className="d-flex gap-2 flex-wrap">
+                {months.map((m) => (
+                  <button
+                    key={m}
+                    className={`btn btn-sm ${activeMonth === m ? "btn-primary" : "btn-outline-secondary"}`}
+                    onClick={() => { setActiveMonth(m); setCurrentPage(1); }}
+                  >
+                    {m}
+                  </button>
+                ))}
+                <button
+                  className={`btn btn-sm ${activeMonth === "" ? "btn-primary" : "btn-outline-secondary"}`}
+                  onClick={() => { setActiveMonth(""); setCurrentPage(1); }}
+                >
+                  All months
+                </button>
+              </div>
+            </div>
 
-                // filteredRecords scoped to this month+year and current UI filters
-                const filteredRecords = applyFilters(records);
+            {/* Filters row + reset + export */}
+            <div className="row mb-3 g-2 align-items-center">
+              <div className="col-md-4">
+                <input type="text" className="form-control" placeholder="Search." value={search} onChange={(e) => setSearch(e.target.value)} />
+              </div>
+              <div className="col-md-2">
+                <select className="form-select" value={mainCategory} onChange={(e) => { setMainCategory(e.target.value); setSubCategory(""); }}>
+                  <option value="">All Main Categories</option>
+                  {mainOptions.map((cat) => <option key={cat} value={cat}>{cat}</option>)}
+                </select>
+              </div>
+              <div className="col-md-2">
+                <select className="form-select" value={subCategory} onChange={(e) => setSubCategory(e.target.value)} disabled={!mainCategory}>
+                  <option value="">All Sub Categories</option>
+                  {subOptions.map((sub) => <option key={sub} value={sub}>{sub}</option>)}
+                </select>
+              </div>
+              <div className="col-md-1">
+                <input type="date" className="form-control" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} />
+              </div>
+              <div className="col-md-1">
+                <input type="date" className="form-control" value={dateTo} onChange={(e) => setDateTo(e.target.value)} />
+              </div>
 
-                return (
-                  <Tab eventKey={m} title={`${m} (${records.length})`} key={m}>
-                    {/* --- Monthly cards (main category totals) --- */}
-                    <div className="mb-3">
-                      <h6 className="mb-2 opacity-75">Monthly Overview — Main Category Totals</h6>
-                      <div className="row g-3">
-                        {Object.keys(monthMainCategoryTotals).length === 0 && (
-                          <div className="col-12">
-                            <div className="alert alert-secondary mb-0">No data for this month</div>
-                          </div>
-                        )}
-                        {Object.entries(monthMainCategoryTotals).map(([main, info]) => (
-                          <div className="col-12 col-md-3 col-lg-2" key={main}>
-                            <div className="card h-100 shadow-sm">
-                              <div className="card-body">
-                                <div className="d-flex justify-content-between align-items-start">
-                                  <div>
-                                    <h6 className="card-title mb-1">{main}</h6>
-                                    <div className="text-muted small opacity-75">Category total (this month)</div>
+              {/* Reset + Export buttons column */}
+              <div className="col-md-1 d-flex flex-row gap-2">
+                <button
+                  className="btn btn-outline-secondary btn-sm"
+                  onClick={() => resetFilters()}
+                  title="Reset filters"
+                >
+                  Reset
+                </button>
 
-                                  </div>
-                                  <div>
-                                    <h4 className="mb-0">{fmt(info.total)}</h4>
-                                  </div>
-                                </div>
-                                <hr></hr>
-                                {/* top subcategory breakdown (up to 5 rows) */}
-                                <div className="mt-3">
-                                  {Object.entries(info.sub)
-                                    .sort((a, b) => b[1] - a[1])
-                                    .slice(0, 5)
-                                    .map(([subName, subAmt]) => (
-                                      <div className="d-flex justify-content-between small" key={subName}>
-                                        <div className="text-muted">{subName}</div>
-                                        <div><strong>{fmt(subAmt)}</strong></div>
-                                      </div>
-                                    ))}
+                <button
+                  className="btn btn-primary btn-sm"
+                  onClick={() => handleExportClick(filteredRecords)}
+                  title="Export visible records"
+                >
+                  Export
+                </button>
+              </div>
+            </div>
 
-                                  {/* if more than 5 subcats, show indicator */}
-                                  {Object.keys(info.sub).length > 5 && (
-                                    <div className="small text-muted mt-1">+{Object.keys(info.sub).length - 5} more</div>
-                                  )}
-                                </div>
-                              </div>
-                              <div className="card-footer bg-transparent">
-                                <small className="text-muted opacity-75">Click the category in the filters to view details in the table.</small>
-                              </div>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-
-                    {/* Filters row + export */}
-                    <div className="row mb-3">
-                      <div className="col-md-3">
-                        <input type="text" className="form-control" placeholder="Search..." value={search} onChange={(e) => setSearch(e.target.value)} />
-                      </div>
-                      <div className="col-md-2">
-                        <select className="form-select" value={mainCategory} onChange={(e) => { setMainCategory(e.target.value); setSubCategory(""); }}>
-                          <option value="">All Main Categories</option>
-                          {mainOptions.map((cat) => <option key={cat} value={cat}>{cat}</option>)}
+            {/* Table */}
+            <div className="table-responsive" ref={tableRef}>
+              <table className="table table-dark table-hover table-sm align-middle">
+                <thead>
+                  <tr>
+                    <th>S.No</th>
+                    <th>Date</th>
+                    <th>Main Category</th>
+                    <th>Sub Category</th>
+                    <th>Description</th>
+                    <th>Quantity</th>
+                    <th>Price</th>
+                    <th>Total</th>
+                    <th>Comments</th>
+                    <th>Purchased By</th>
+                    <th>Approval</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {pageItems.map((item, idx) => (
+                    <tr key={item.id}>
+                      <td>{indexOfFirst + idx + 1}</td>
+                      <td>{item.date}</td>
+                      <td>{item.mainCategory}</td>
+                      <td>{item.subCategory}</td>
+                      <td>{item.description}</td>
+                      <td>{item.quantity}</td>
+                      <td>{item.price}</td>
+                      <td>{item.total}</td>
+                      <td style={{ maxWidth: 220, whiteSpace: "pre-wrap" }}>{item.comments}</td>
+                      <td>{item.employeeName || "—"}</td>
+                      <td style={{ minWidth: 220 }}>
+                        <select
+                          className="form-select form-select-sm"
+                          value={item.approval || "Pending"}
+                          onChange={(e) => {
+                            try {
+                              firebaseDB.child(`PettyCash/admin/${item.id}`).update({ approval: e.target.value });
+                            } catch (err) {
+                              console.error("Error updating approval", err);
+                            }
+                          }}
+                        >
+                          <option value="Pending">Pending</option>
+                          <option value="Approved">Approved</option>
+                          <option value="Rejected">Rejected</option>
                         </select>
-                      </div>
-                      <div className="col-md-2">
-                        <select className="form-select" value={subCategory} onChange={(e) => setSubCategory(e.target.value)} disabled={!mainCategory}>
-                          <option value="">All Sub Categories</option>
-                          {subOptions.map((sub) => <option key={sub} value={sub}>{sub}</option>)}
-                        </select>
-                      </div>
-                      <div className="col-md-2">
-                        <input type="date" className="form-control" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} />
-                      </div>
-                      <div className="col-md-2">
-                        <input type="date" className="form-control" value={dateTo} onChange={(e) => setDateTo(e.target.value)} />
-                      </div>
-                      <div className="col-md-1">
-                        <button className="btn btn-primary w-100" onClick={() => exportExcel(filteredRecords, `${y}-${m}`)}>Export</button>
-                      </div>
-                    </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
 
-                    {/* Table */}
-                    <div className="table-responsive" ref={tableRef}>
-                      <table className="table table-dark table-hover">
-                        <thead>
-                          <tr>
-                            <th>S.No</th>
-                            <th>Date</th>
-                            <th>Main Category</th>
-                            <th>Sub Category</th>
-                            <th>Description</th>
-                            <th>Quantity</th>
-                            <th>Price</th>
-                            <th>Total</th>
-                            <th>Comments</th>
-                            <th>Purchased By</th>
-                            <th>Approval</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {pageItems.map((item, idx) => (
-                            <React.Fragment key={item.id}>
-                              <tr>
-                                <td>{indexOfFirst + idx + 1}</td>
-                                <td>{item.date}</td>
-                                <td>{item.mainCategory}</td>
-                                <td>{item.subCategory}</td>
-                                <td>{item.description}</td>
-                                <td>{item.quantity}</td>
-                                <td>{item.price}</td>
-                                <td>{item.total}</td>
-                                <td style={{ maxWidth: 220, whiteSpace: "pre-wrap" }}>{item.comments}</td>
-                                <td>{item.employeeName || "—"}</td>
-                                <td style={{ minWidth: 220 }}>
-                                  {/* Approval dropdown – enabled only for manager */}
-                                  <select
-                                    className="form-select form-select-sm"
-                                    value={item.approval || "Pending"}
-                                    onChange={(e) => handleApprovalChange(item.id, e.target.value)}
-                                    disabled={currentUserRole !== "manager"}
-                                  >
-                                    <option value="Approve">Approve</option>
-                                    <option value="Pending">Pending</option>
-                                    <option value="Reject">Reject</option>
-                                    <option value="Need Clarification">Need Clarification</option>
-                                  </select>
+                {/* table footer: page total + filtered total */}
+                <tfoot>
+                  <tr className="table-secondary">
+                    <td colSpan={7} className="text-end"><strong>Page Total</strong></td>
+                    <td><strong>{pageTotal.toLocaleString()}</strong></td>
+                    <td colSpan={3}></td>
+                  </tr>
+                  <tr className="table-secondary">
+                    <td colSpan={7} className="text-end"><strong>Filtered Total</strong></td>
+                    <td><strong>{filteredTotal.toLocaleString()}</strong></td>
+                    <td colSpan={3}></td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
 
-                                  {/* approval meta */}
-                                  {item.approvalAt && (
-                                    <div><small className="text-muted">By {item.approvalBy || "Manager"} • {new Date(item.approvalAt).toLocaleString()}</small></div>
-                                  )}
-                                </td>
-                              </tr>
-
-                              {/* If Need Clarification or Reject AND current user is the employee who created record -> show red textarea */}
-                              {shouldShowClarificationBox(item) && (
-                                <tr>
-                                  <td colSpan={11}>
-                                    <div style={{ border: "1px solid #f5c6cb", background: "#fff5f5", padding: 12 }}>
-                                      <label className="form-label">
-                                        <strong className="text-danger">Clarification required — please explain</strong>
-                                      </label>
-                                      {/* Show existing response if any */}
-                                      {item.clarificationResponse?.text ? (
-                                        <div className="mb-2">
-                                          <div style={{ background: "#fff", padding: 8, borderRadius: 4 }}>
-                                            <div style={{ fontSize: 12, color: "#6c757d" }}>
-                                              <strong>{item.clarificationResponse.responseBy}</strong> • {new Date(item.clarificationResponse.responseAt).toLocaleString()}
-                                            </div>
-                                            <div style={{ marginTop: 6 }}>{item.clarificationResponse.text}</div>
-                                          </div>
-                                        </div>
-                                      ) : null}
-
-                                      {/* If no response yet, show textarea */}
-                                      {!item.clarificationResponse?.text && (
-                                        <EmployeeClarificationBox
-                                          recordId={item.id}
-                                          onSubmit={(text) => handleEmployeeClarificationSubmit(item.id, text)}
-                                        />
-                                      )}
-                                    </div>
-                                  </td>
-                                </tr>
-                              )}
-                            </React.Fragment>
-                          ))}
-
-                          {/* totals row for visible records */}
-                          <tr className="table-success">
-                            <td colSpan={7}><strong>Page Total</strong></td>
-                            <td>
-                              <strong>
-                                {pageItems.reduce((a, b) => a + Number(b.total || 0), 0).toLocaleString()}
-                              </strong>
-                            </td>
-                            <td colSpan={3}></td>
-                          </tr>
-
-                          {/* overall total for this year+month (filteredRecords) */}
-                          <tr className="table-info">
-                            <td colSpan={7}><strong>Filtered Total</strong></td>
-                            <td>
-                              <strong>
-                                {filteredRecords.reduce((a, b) => a + Number(b.total || 0), 0).toLocaleString()}
-                              </strong>
-                            </td>
-                            <td colSpan={3}></td>
-                          </tr>
-                        </tbody>
-                      </table>
-                    </div>
-
-                    {/* Pagination controls */}
-                    <div className="d-flex justify-content-between align-items-center mt-3">
-                      <div>
-                        Show{" "}
-                        <select value={rowsPerPage} onChange={(e) => setRowsPerPage(Number(e.target.value))}>
-                          <option value={10}>10</option>
-                          <option value={20}>20</option>
-                          <option value={30}>30</option>
-                          <option value={50}>50</option>
-                          <option value={100}>100</option>
-                          <option value={150}>150</option>
-                          <option value={200}>200</option>
-                        </select>{" "}
-                        entries
-                      </div>
-                      <div>
-                        Page {safePage} of {totalPages || 1}
-                        <button className="btn btn-sm btn-secondary ms-2" disabled={safePage === 1} onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}>Prev</button>
-                        <button className="btn btn-sm btn-secondary ms-2" disabled={safePage === totalPages} onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}>Next</button>
-                      </div>
-                    </div>
-                  </Tab>
-                );
-              })}
-            </Tabs>
+            {/* pagination */}
+            <div className="d-flex justify-content-between align-items-center mt-3">
+              <div>Showing {filteredRecords.length} items</div>
+              <div className="d-flex gap-2 align-items-center">
+                <button className="btn btn-sm btn-outline-secondary" onClick={() => setCurrentPage(p => Math.max(1, p - 1))}>Prev</button>
+                <div>Page {safePage} / {totalPages}</div>
+                <button className="btn btn-sm btn-outline-secondary" onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}>Next</button>
+              </div>
+            </div>
           </Tab>
         ))}
       </Tabs>
@@ -568,13 +483,13 @@ export default function PettyCashReport({ currentUser = "Admin", currentUserRole
       </div>
 
       <div className="table-responsive">
-        <table className="table table-bordered table-hover pettyCash-Category">
-          <thead>
+        <table className="table table-bordered table-hover pettyCash-Category table-sm table-striped align-middle">
+          <thead className="table-light">
             <tr>
               <th>Main Category</th>
               <th>Sub Category</th>
-              {months.map((m) => <th key={m}>{m}</th>)}
-              <th>Grand Total</th>
+              {months.map((m) => <th key={m} className="text-end">{m}</th>)}
+              <th className="text-end">Grand Total</th>
             </tr>
           </thead>
           <tbody>
@@ -585,83 +500,70 @@ export default function PettyCashReport({ currentUser = "Admin", currentUserRole
 
               block.items.forEach((sub) => {
                 months.forEach((m) => {
-                  blockTotals[m] += summaryData[sub][m] || 0;
+                  blockTotals[m] += (summaryData[sub] && summaryData[sub][m]) ? summaryData[sub][m] : 0;
                 });
-                blockGrand += summaryData[sub]["Total"] || 0;
+                blockGrand += (summaryData[sub] && summaryData[sub]["Total"]) ? summaryData[sub]["Total"] : 0;
               });
 
-              return (
-                <React.Fragment key={block.cat}>
-                  {block.items.map((sub, idx) => (
-                    <tr key={sub} className={categoryColors[block.cat] || ""}>
-                      {idx === 0 && (
-                        <td rowSpan={block.items.length + 1}>
-                          <strong>{block.cat}</strong>
-                        </td>
-                      )}
-                      <td>{sub}</td>
-                      {months.map((m) => (
-                        <td key={m}>
-                          {summaryData[sub][m] ? summaryData[sub][m].toLocaleString() : ""}
-                        </td>
-                      ))}
-                      <td><strong>{summaryData[sub]["Total"] ? summaryData[sub]["Total"].toLocaleString() : ""}</strong></td>
+              if (block.cat !== "Others") {
+                return (
+                  <React.Fragment key={block.cat}>
+                    {block.items.map((sub, idx) => (
+                      <tr key={block.cat + "-" + sub} className={categoryColors[block.cat] || ""}>
+                        {idx === 0 && (
+                          <td rowSpan={block.items.length + 1} style={{ verticalAlign: "middle" }}>
+                            <strong>{block.cat}</strong>
+                          </td>
+                        )}
+                        <td>{sub}</td>
+                        {months.map((m) => (
+                          <td key={m} className="text-end">
+                            {summaryData[sub] && summaryData[sub][m] ? summaryData[sub][m].toLocaleString() : ""}
+                          </td>
+                        ))}
+                        <td className="text-end"><strong>{summaryData[sub] && summaryData[sub]["Total"] ? summaryData[sub]["Total"].toLocaleString() : ""}</strong></td>
+                      </tr>
+                    ))}
+                    <tr className={`table-category-total ${categoryColors[block.cat] || ""}`}>
+                      <td><strong>{block.cat} Total</strong></td>
+                      {months.map((m) => <td key={m} className="text-end"><strong>{blockTotals[m].toLocaleString()}</strong></td>)}
+                      <td className="text-end"><strong>{blockGrand.toLocaleString()}</strong></td>
                     </tr>
-                  ))}
-                  <tr className={`table-category-total ${categoryColors[block.cat] || ""}`}>
-                    <td><strong>{block.cat} Total</strong></td>
-                    {months.map((m) => <td key={m}><strong>{blockTotals[m].toLocaleString()}</strong></td>)}
-                    <td><strong>{blockGrand.toLocaleString()}</strong></td>
-                  </tr>
-                </React.Fragment>
-              );
+                  </React.Fragment>
+                );
+              }
+
+              return null;
             })}
+
+            {/* Render "Others" entries (free-form sub categories that don't belong to the above lists) */}
+            {othersKeys.map((subKey, idx) => (
+              <tr key={"other-" + subKey} className="table-warning">
+                <td>{idx === 0 ? <strong>Others</strong> : ""}</td>
+                <td>{subKey}</td>
+                {months.map((m) => <td key={m} className="text-end">{summaryData[subKey][m] ? summaryData[subKey][m].toLocaleString() : ""}</td>)}
+                <td className="text-end"><strong>{summaryData[subKey]["Total"] ? summaryData[subKey]["Total"].toLocaleString() : ""}</strong></td>
+              </tr>
+            ))}
+
+            {/* Others total row (only if there are othersKeys) */}
+            {othersKeys.length > 0 && (
+              <tr className= "table-category-total-others" >
+                <td colSpan={1}><strong>Others Total</strong></td>
+                <td></td>
+                {months.map((m) => <td key={m} className="text-end"><strong>{othersTotals[m].toLocaleString()}</strong></td>)}
+                <td className="text-end"><strong>{othersTotals["Total"].toLocaleString()}</strong></td>
+              </tr>
+            )}
 
             {/* Grand Totals */}
             <tr className="table-success sticky-grand-total">
               <td colSpan={2}><strong>Grand Total</strong></td>
-              {months.map((m) => <td key={m}><strong>{monthTotals[m].toLocaleString()}</strong></td>)}
-              <td><strong>{grandTotal.toLocaleString()}</strong></td>
+              {months.map((m) => <td key={m} className="text-end"><strong>{monthTotals[m].toLocaleString()}</strong></td>)}
+              <td className="text-end"><strong>{grandTotal.toLocaleString()}</strong></td>
             </tr>
           </tbody>
         </table>
-      </div>
-    </div>
-  );
-}
-
-/* -------------------------
-   EmployeeClarificationBox component
-   ------------------------- */
-function EmployeeClarificationBox({ recordId, onSubmit }) {
-  const [text, setText] = useState("");
-  const [sending, setSending] = useState(false);
-
-  const handleSend = async () => {
-    if (!text.trim()) return;
-    setSending(true);
-    try {
-      await onSubmit(text);
-      setText("");
-    } finally {
-      setSending(false);
-    }
-  };
-
-  return (
-    <div>
-      <textarea
-        className="form-control"
-        rows={3}
-        value={text}
-        onChange={(e) => setText(e.target.value)}
-        placeholder="Please provide explanation or supporting info..."
-        style={{ borderColor: "#dc3545", background: "#fff5f5" }}
-      />
-      <div className="d-flex justify-content-end mt-2">
-        <button className="btn btn-sm btn-danger" onClick={handleSend} disabled={sending || !text.trim()}>
-          {sending ? "Submitting..." : "Submit Clarification"}
-        </button>
       </div>
     </div>
   );

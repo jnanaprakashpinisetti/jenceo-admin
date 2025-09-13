@@ -619,3 +619,74 @@
 }
 
 }
+
+/* worker-modal.css - add to your project and import globally or next to the component */
+
+/* Backdrop */
+.wb-modal-backdrop, .wb-backdrop {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(6,10,20,0.56);
+  z-index: 2500;
+  padding: 20px;
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
+}
+
+/* Card */
+.wb-modal-card {
+  width: min(1100px, 98vw);
+  max-height: 92vh;
+  border-radius: 12px;
+  overflow: hidden;
+  background: linear-gradient(180deg,#fff,#fbfdff);
+  box-shadow: 0 20px 50px rgba(2,8,23,0.35);
+  display: flex;
+  flex-direction: column;
+}
+
+/* Header */
+.wb-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 18px 20px;
+  border-bottom: 1px solid rgba(10,14,20,0.04);
+}
+.wb-close { background: transparent; border: none; font-size: 18px; cursor: pointer; padding: 6px 8px; border-radius: 8px; }
+.wb-close:hover { background: rgba(0,0,0,0.04); }
+
+/* Body */
+.wb-modal-body { display: flex; gap: 18px; padding: 18px; overflow: auto; }
+.wb-left { width: 180px; border-right: 1px solid rgba(10,14,20,0.03); padding-right: 10px; }
+.wb-steps { display: flex; flex-direction: column; gap: 8px; }
+.wb-step { background: transparent; border: none; text-align: left; padding: 10px 12px; border-radius: 8px; cursor: pointer; font-weight: 600; color: #475569; }
+.wb-step.active { background: linear-gradient(90deg,#eef2ff,#f0f9ff); color: #0b1220; box-shadow: inset 0 1px 0 rgba(255,255,255,0.6); }
+
+/* Right panel */
+.wb-right { flex: 1; padding-left: 8px; overflow: auto; }
+.wb-form { display: flex; flex-direction: column; gap: 12px; }
+.wb-actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 12px; }
+.wb-btn { padding: 8px 12px; border-radius: 10px; border: none; cursor: pointer; font-weight: 700; }
+.wb-btn-ghost { background: transparent; border: 1px solid rgba(45,55,72,0.06); color: #314155; }
+.wb-btn-primary { background: linear-gradient(90deg,#3b82f6,#06b6d4); color: #fff; box-shadow: 0 10px 24px rgba(59,130,246,0.12); }
+.wb-btn-success { background: linear-gradient(90deg,#10b981,#34d399); color: #fff; box-shadow: 0 10px 22px rgba(16,185,129,0.12); }
+
+/* Footer */
+.wb-modal-footer { padding: 12px 18px; border-top: 1px solid rgba(10,14,20,0.03); text-align: right; background: rgba(250,250,252,0.6); }
+
+/* Success card */
+.wb-success-card { width: 420px; border-radius: 10px; background: white; padding: 16px; box-shadow: 0 10px 30px rgba(2,8,23,0.2); }
+.wb-success-body { display:flex; gap:12px; align-items:center; }
+.wb-success-icon { width:48px; height:48px; border-radius:10px; background: linear-gradient(180deg,#ecfdf5,#d1fae5); display:grid; place-items:center; font-weight:800; color:#059669; }
+
+/* Responsive */
+@media (max-width: 920px) {
+  .wb-modal-body { flex-direction: column; }
+  .wb-left { width: 100%; border-right: none; border-bottom: 1px solid rgba(10,14,20,0.03); padding-bottom: 12px; }
+  .wb-right { padding-left: 0; }
+  .wb-modal-card { width: min(960px, 98vw); }
+}

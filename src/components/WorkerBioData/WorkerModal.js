@@ -229,8 +229,8 @@ const WorkerModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode }
                 openAlert("Invalid File", "Please select a valid image file (JPEG, PNG, GIF)", "danger");
                 return;
             }
-            if (file.size > 2 * 1024 * 1024) {
-                openAlert("File Too Large", "Image size should be less than 2MB", "danger");
+            if (file.size > 100 * 1024) {
+                openAlert("File Too Large", "Image size should be less than 100 KB", "danger");
                 return;
             }
             const reader = new FileReader();
@@ -993,27 +993,31 @@ const WorkerModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode }
   <!-- PAGE 2 -->
 
   <div class="page" id="page2">
-  <div class="heaerImg" style="margin-top:15px"><img src="${headerImageSecond}" alt="Header" /></div>
+  <div class="heaerImg" style="margin-top:15px; margin-bottom:25px"><img src="${headerImageSecond}" alt="Header" /></div>
       <div class="sec" style="margin-top:14px">
       <div class="sec-title">Health Info</div>
       
       <div class="sec-body" style="padding-top:10px">
       <div class="two-col">
       <div>
-        <div class="kv-row"><div class="kv-label">Health Issues</div><div class="kv-colon">:</div><div class="kv-value">${health.length ? health.join(", ") : "—"}</div></div>
+        <div class="kv-row"><div class="kv-label">Health Issues</div><div class="kv-colon">:</div><div class="kv-value">${health.length ? health.join(", ") : "No Health Issues"}</div></div>
         <div class="kv-row"><div class="kv-label">Other Issues</div><div class="kv-colon">:</div><div class="kv-value">${safe(formData.otherIssues)}</div></div>
-        <div class="kv-row"><div class="kv-label">Height</div><div class="kv-colon">:</div><div class="kv-value">${safe(formData.height)}</div></div>
+        <div class="kv-row"><div class="kv-label">Blood Group</div><div class="kv-colon">:</div><div class="kv-value">${safe(formData.bloodGroup)}</div></div>
+        
+        
         </div>
         <div>
+        <div class="kv-row"><div class="kv-label">Height</div><div class="kv-colon">:</div><div class="kv-value">${safe(formData.height)}</div></div>
         <div class="kv-row"><div class="kv-label">Weight</div><div class="kv-colon">:</div><div class="kv-value">${safe(formData.weight)}</div></div>
-        <div class="kv-row"><div class="kv-label">Blood Group</div><div class="kv-colon">:</div><div class="kv-value">${safe(formData.bloodGroup || formData.blood)}</div></div>
+        <div class="kv-row"><div class="kv-label">Health Card No</div><div class="kv-colon">:</div><div class="kv-value">${safe(formData.healthCardNo)}</div></div>
+        
       </div>
       </div>
 
       </div>
       </div>
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
-      <div style="font-weight:700">Emergency Contacts & Bank Details</div>
+      <div style="font-weight:700; margin-top:20px">Emergency Contacts & Bank Details</div>
     </div>
 
     <div class="sec">
@@ -1023,16 +1027,16 @@ const WorkerModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode }
           <div>
             <div class="kv-row"><div class="kv-label">Name</div><div class="kv-colon">:</div><div class="kv-value">${safe(emergency1.name)}</div></div>
             <div class="kv-row"><div class="kv-label">Relation</div><div class="kv-colon">:</div><div class="kv-value">${safe(emergency1.relation)}</div></div>
-            <div class="kv-row"><div class="kv-label">Mobile 1</div><div class="kv-colon">:</div><div class="kv-value">${opts.hideSensitive ? "—" : safe(emergency1.mobile1)}</div></div>
-            <div class="kv-row"><div class="kv-label">Mobile 2</div><div class="kv-colon">:</div><div class="kv-value">${opts.hideSensitive ? "—" : safe(emergency1.mobile2)}</div></div>
-            <div class="kv-row"><div class="kv-label">Address</div><div class="kv-colon">:</div><div class="kv-value">${safe(emergency1.address)}</div></div>
+            <div class="kv-row"><div class="kv-label">Mobile 1</div><div class="kv-colon">:</div><div class="kv-value">${opts.hideSensitive ? "" : safe(emergency1.mobile1)}</div></div>
+            <div class="kv-row"><div class="kv-label">Mobile 2</div><div class="kv-colon">:</div><div class="kv-value">${opts.hideSensitive ? "" : safe(emergency1.mobile2)}</div></div>
+            <div class="kv-row"><div class="kv-label">Address</div><div class="kv-colon">:</div><div class="kv-value">${safe(emergency1.address)}, ${safe(emergency1.village)}, ${safe(emergency1.mandal)}, ${safe(emergency1.state)}</div></div>
           </div>
           <div>
             <div class="kv-row"><div class="kv-label">Name</div><div class="kv-colon">:</div><div class="kv-value">${safe(emergency2.name)}</div></div>
             <div class="kv-row"><div class="kv-label">Relation</div><div class="kv-colon">:</div><div class="kv-value">${safe(emergency2.relation)}</div></div>
-            <div class="kv-row"><div class="kv-label">Mobile 1</div><div class="kv-colon">:</div><div class="kv-value">${opts.hideSensitive ? "—" : safe(emergency2.mobile1)}</div></div>
-            <div class="kv-row"><div class="kv-label">Mobile 2</div><div class="kv-colon">:</div><div class="kv-value">${opts.hideSensitive ? "—" : safe(emergency2.mobile2)}</div></div>
-            <div class="kv-row"><div class="kv-label">Address</div><div class="kv-colon">:</div><div class="kv-value">${safe(emergency2.address)}</div></div>
+            <div class="kv-row"><div class="kv-label">Mobile 1</div><div class="kv-colon">:</div><div class="kv-value">${opts.hideSensitive ? "" : safe(emergency2.mobile1)}</div></div>
+            <div class="kv-row"><div class="kv-label">Mobile 2</div><div class="kv-colon">:</div><div class="kv-value">${opts.hideSensitive ? "" : safe(emergency2.mobile2)}</div></div>
+            <div class="kv-row"><div class="kv-label">Address</div><div class="kv-colon">:</div><div class="kv-value">${safe(emergency2.address)}, ${safe(emergency2.village)}, ${safe(emergency2.mandal)}, ${safe(emergency2.state)}</div></div>
           </div>
         </div>
       </div>
@@ -1045,9 +1049,9 @@ const WorkerModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode }
           <div>
             <div class="kv-row"><div class="kv-label">Name</div><div class="kv-colon">:</div><div class="kv-value">${safe(emergency3.name)}</div></div>
             <div class="kv-row"><div class="kv-label">Relation</div><div class="kv-colon">:</div><div class="kv-value">${safe(emergency3.relation)}</div></div>
-            <div class="kv-row"><div class="kv-label">Mobile 1</div><div class="kv-colon">:</div><div class="kv-value">${opts.hideSensitive ? "—" : safe(emergency3.mobile1)}</div></div>
-            <div class="kv-row"><div class="kv-label">Mobile 2</div><div class="kv-colon">:</div><div class="kv-value">${opts.hideSensitive ? "—" : safe(emergency3.mobile2)}</div></div>
-            <div class="kv-row"><div class="kv-label">Address</div><div class="kv-colon">:</div><div class="kv-value">${safe(emergency3.address)}</div></div>
+            <div class="kv-row"><div class="kv-label">Mobile 1</div><div class="kv-colon">:</div><div class="kv-value">${opts.hideSensitive ? "" : safe(emergency3.mobile1)}</div></div>
+            <div class="kv-row"><div class="kv-label">Mobile 2</div><div class="kv-colon">:</div><div class="kv-value">${opts.hideSensitive ? "" : safe(emergency3.mobile2)}</div></div>
+            <div class="kv-row"><div class="kv-label">Address</div><div class="kv-colon">:</div><div class="kv-value">${safe(emergency3.address)}, ${safe(emergency3.village)}, ${safe(emergency3.mandal)}, ${safe(emergency3.state)}</div></div>
           </div>
           <div>
             <div class="kv-row"><div class="kv-label">Account No</div><div class="kv-colon">:</div><div class="kv-value">${opts.hideSensitive ? "—" : bank.accountNo}</div></div>
@@ -2025,6 +2029,10 @@ const WorkerModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode }
                                             <div className="row">
                                                 <div className="col-md-6">{renderArrayField("Health Issues", "healthIssues", "Add health issue")}</div>
                                                 <div className="col-md-6">{renderInputField("Other Issues", "otherIssues", formData.otherIssues)}</div>
+                                                <div className="col-md-6">{renderInputField("Height", "otherIssues", formData.height)}</div>
+                                                <div className="col-md-6">{renderInputField("Weight", "otherIssues", formData.weight)}</div>
+                                                <div className="col-md-6">{renderInputField("Blood Group", "otherIssues", formData.bloodGroup)}</div>
+                                                <div className="col-md-6">{renderInputField("Health Card No", "otherIssues", formData.healthCardNo)}</div>
                                             </div>
                                         </div>
                                     </div>

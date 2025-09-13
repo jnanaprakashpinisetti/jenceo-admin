@@ -41,15 +41,62 @@ const HealthDetails = ({ formData, handleChange, nextStep, prevStep }) => {
             ))}
           </div>
         </div>
-        <div className="col-12">
-          <label className="form-label">Other Issues</label>
+
+        <div className="col-md-6">
+          <label className="form-label">Blood Group</label>
           <input
+            className="form-control"
+            type="text"
+            name="bloodGroup"
+            id="bloodGroup"
+            value={formData.bloodGroup}
+            onChange={handleChange}
+          />
+        </div>
+        <div className="col-md-6">
+          <label className="form-label">Health Card No</label>
+          <input
+            className="form-control"
+            type="text"
+            name="healthCardNo"
+            id="healthCardNo"
+            value={formData.healthCardNo}
+            onChange={handleChange}
+          />
+        </div>
+        <div className="col-md-6">
+          <label className="form-label">Height</label>
+          <input
+            className="form-control"
+            type="text"
+            name="height"
+            id="height"
+            value={formData.height}
+            onChange={handleChange}
+          />
+        </div>
+        <div className="col-md-6">
+          <label className="form-label">Weight</label>
+          <input
+            className="form-control"
+            type="text"
+            name="weight"
+            id="weight"
+            value={formData.weight}
+            onChange={handleChange}
+          />
+        </div>
+
+          <div className="col-md-12">
+          <label className="form-label">Other Issues</label>
+          <textarea
             className="form-control"
             type="text"
             name="otherIssues"
             id="otherIssues"
             value={formData.otherIssues}
             onChange={handleChange}
+            rows={3}
           />
         </div>
 

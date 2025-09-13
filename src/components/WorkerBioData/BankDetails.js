@@ -167,7 +167,7 @@ const BankDetails = ({
         <div className="col-md-6">
           <label htmlFor="basicSalary" className="form-label">Basic Salary</label>
           <input
-            type="number"
+            type="tel"
             className={`form-control ${errors.basicSalary ? "is-invalid" : ""}`}
             id="basicSalary"
             name="basicSalary"
@@ -175,6 +175,7 @@ const BankDetails = ({
             onChange={handleChange}
             onBlur={handleBlur}
             placeholder="Enter salary"
+            maxLength={5}
           />
           {errors.basicSalary && <div className="invalid-feedback">{errors.basicSalary}</div>}
         </div>
@@ -182,7 +183,7 @@ const BankDetails = ({
         <div className="col-md-6">
           <label htmlFor="pageNo" className="form-label">Page No</label>
           <input
-            type="text"
+            type="tel"
             className={`form-control ${errors.pageNo ? "is-invalid" : ""}`}
             id="pageNo"
             name="pageNo"
@@ -190,6 +191,7 @@ const BankDetails = ({
             onChange={handleChange}
             onBlur={handleBlur}
             placeholder="Enter page no"
+            maxLength={3}
           />
           {errors.pageNo && <div className="invalid-feedback">{errors.pageNo}</div>}
         </div>

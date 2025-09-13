@@ -1,3 +1,4 @@
+// WorkerBioDataForm.js
 import React, { useState } from "react";
 
 import { storageRef, uploadFile, getDownloadURL } from "../../firebase";
@@ -18,57 +19,94 @@ import BankDetails from "./BankDetails";
 const SuccessModal = ({ open, onClose, info }) => {
   if (!open) return null;
   const { idNo, name, recordId } = info || {};
+
   return (
     <div
-      className="fixed-top d-flex align-items-center justify-content-center"
-      style={{ inset: 0, background: "rgba(0,0,0,.6)", zIndex: 1060 }}
+      className="success-modal-backdrop"
       role="dialog"
       aria-modal="true"
+      aria-labelledby="successModalTitle"
     >
-      <div className="alert-card shadow-lg" style={{ width: "min(520px, 92vw)" }}>
-        <div className="card-header bg-success text-white">
-          <strong>Employee Saved</strong>
-        </div>
-        <div className="card-body">
-          <div className="alert mb-3">
-            <div className="d-flex align-items-center gap-2">
-              <span className="bi bi-check2-circle" aria-hidden="true" />
-              <div>
-                <div className="fw-bold">Form submitted successfully!</div>
-                <small className="text-muted">The record has been created in the database.</small>
-              </div>
+      <div className="success-modal-card" role="document">
+        <div className="success-modal-header">
+          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            {/* Small white tick badge */}
+            <div style={{
+              width: 42,
+              height: 42,
+              borderRadius: 10,
+              display: "grid",
+              placeItems: "center",
+              background: "rgba(255,255,255,0.12)"
+            }}>
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden>
+                <path d="M20 6L9 17l-5-5" stroke="white" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </div>
+            <div>
+              <div id="successModalTitle" className="success-modal-title">Employee Saved</div>
+              <div style={{ fontSize: 12.5, opacity: 0.95 }}>Record created successfully</div>
             </div>
           </div>
 
-          <div className="row g-2">
-            <div className="col-12">
-              <div className="d-flex justify-content-between">
-                <span className="text-muted">Employee ID (idNo)</span>
-                <strong>{idNo || "N/A"}</strong>
-              </div>
+          <button
+            className="success-modal-close"
+            aria-label="Close"
+            onClick={onClose}
+            title="Close"
+          >
+            ✕
+          </button>
+        </div>
+
+        <div className="success-modal-body">
+          <div className="success-alert" role="status" aria-live="polite">
+            <div className="success-icon" aria-hidden>
+              {/* Large green check — decorative */}
+              <svg width="28" height="28" viewBox="0 0 24 24" fill="none">
+                <circle cx="12" cy="12" r="12" fill="#ecfdf5"/>
+                <path d="M18.4 7.4L10 16 6 12.3" stroke="#16a085" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
             </div>
-            <div className="col-12">
-              <div className="d-flex justify-content-between">
-                <span className="text-muted">Employee Name</span>
-                <strong>{name || "N/A"}</strong>
-              </div>
+
+            <div className="success-message">
+              <h4>Form submitted successfully!</h4>
+              <p className="muted"><span className="value">{name || "N/A"}</span> has been saved.</p>
             </div>
-            <div className="col-12">
-              <div className="d-flex justify-content-between">
-                <span className="text-muted">Database Record ID</span>
-                <code className="small">{recordId || "N/A"}</code>
-              </div>
+          </div>
+
+          <div className="success-info" aria-hidden={false}>
+            <div className="info-row">
+              <span className="label">Employee ID (idNo)</span>
+              <span className="value">{idNo || "N/A"}</span>
+            </div>
+            <div className="info-row">
+              <span className="label">Employee Name</span>
+              <span className="value">{name || "N/A"}</span>
             </div>
           </div>
         </div>
-        <div className="card-footer d-flex justify-content-end">
-          <button className="btn btn-success" onClick={onClose}>Done</button>
+
+        <div className="success-modal-footer">
+          <button className="btn btn-ghost" onClick={onClose}>Close</button>
+          <button
+            className="btn btn-primary"
+            onClick={() => {
+              // primary action (close for now)
+              onClose?.();
+            }}
+          >
+            Done
+          </button>
         </div>
       </div>
     </div>
   );
 };
+
 /* -------------------------------------------------------------------- */
+
+const DEFAULT_PHOTO_URL = "https://firebasestorage.googleapis.com/v0/b/jenceo-admin.firebasestorage.app/o/OfficeFiles%2FSample-Photo.jpg?alt=media&token=01855b47-c9c2-490e-b400-05851192dde7";
 
 const MultiStepForm = () => {
   const [step, setStep] = useState(1);
@@ -130,6 +168,10 @@ const MultiStepForm = () => {
     // Health Details
     healthIssues: [],
     otherIssues: "",
+    healthCardNo: "",
+    bloodGroup: "",
+    height: "",
+    weight: "",
     // Emergency Contacts
     emergencyContact1: {
       name: "",
@@ -195,14 +237,15 @@ const MultiStepForm = () => {
 
   const validatePincode = (pincode) => /^\d{6}$/.test(pincode);
 
+  // Photo validation: now optional — return true when file is not provided
   const validateImage = (file) => {
-    if (!file) return "Employee photo is required";
+    if (!file) return true; // optional now
     const validTypes = ["image/jpeg", "image/jpg", "image/png", "image/gif"];
     if (!validTypes.includes(file.type)) {
       return "Only JPG, PNG, or GIF images are allowed.";
     }
-    if (file.size > 200 * 1024) {
-      return "Image size must be less than 200KB.";
+    if (file.size > 100 * 1024) {
+      return "Image size must be less than 100KB.";
     }
     return true;
   };
@@ -232,11 +275,13 @@ const MultiStepForm = () => {
         if (formData.mobileNo2 && !validateMobileNumber(formData.mobileNo2))
           newErrors.mobileNo2 = "Mobile number must be 10 digits";
 
-        // Photo validation (Step 1)
+        // Photo validation (Step 1) — now optional
         const imageValidation = validateImage(formData.employeePhotoFile);
         if (imageValidation !== true) newErrors.employeePhoto = imageValidation;
         break;
       }
+
+      // ... rest of validation cases remain unchanged (omitted for brevity) ...
 
       case 2:
         if (!formData.permanentAddress.trim()) newErrors.permanentAddress = "Address is required";
@@ -486,6 +531,10 @@ const MultiStepForm = () => {
       languages: "",
       healthIssues: [],
       otherIssues: "",
+       bloodGroup: "",
+       healthCardNo: "",
+       height: "",
+       weight: "",
       emergencyContact1: {
         name: "",
         relation: "",
@@ -548,6 +597,9 @@ const MultiStepForm = () => {
         const fileRef = storageRef.child(fileName);
         const snapshot = await uploadFile(fileRef, formData.employeePhotoFile);
         photoURL = await getDownloadURL(snapshot.ref);
+      } else {
+        // Use default sample photo when none uploaded
+        photoURL = DEFAULT_PHOTO_URL;
       }
 
       const submitData = {
@@ -571,14 +623,15 @@ const MultiStepForm = () => {
       // Reset the form
       resetForm();
     } catch (error) {
-      alert("Error submitting form: " + error.message);
+      alert("Error submitting form: " + (error.message || error));
       console.error(error);
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  // ------------ Step renderer ------------
+  // ... rest of component (renderStep, return) is unchanged ...
+  // (Keep your existing renderStep switch and return; unchanged)
   const renderStep = () => {
     switch (step) {
       case 1:
@@ -697,15 +750,15 @@ const MultiStepForm = () => {
 
   return (
     <>
-    <div className="form-card shadow mb-3">
-      <form onSubmit={handleSubmit}>{renderStep()}</form>
+      <div className="form-card shadow mb-3">
+        <form onSubmit={handleSubmit}>{renderStep()}</form>
 
-      {/* Success modal */}
-      <SuccessModal
-        open={successOpen}
-        info={successInfo}
-        onClose={() => setSuccessOpen(false)}
-      />
+        {/* Success modal */}
+        <SuccessModal
+          open={successOpen}
+          info={successInfo}
+          onClose={() => setSuccessOpen(false)}
+        />
       </div>
     </>
   );

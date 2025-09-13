@@ -299,11 +299,12 @@ export default function DisplayExitWorkers() {
       };
 
       await firebaseDB.child(`EmployeeBioData/${id}`).set(payloadToActive);
-      // also update ExitEmployees node to keep history (store revert info)
+      // append a return entry to ExitEmployeesHistory so history is preserved
+      await firebaseDB.child(`ExitEmployeesHistory/${id}`).push({ action: 'returned', reason: returnReasonForm.reasonType, comment: returnReasonForm.comment.trim(), returnedAt: returnedAt });
+      // update the ExitEmployees node with revert metadata (non-destructive) and then remove the live record
       await firebaseDB.child(`ExitEmployees/${id}`).update({ revertedAt: returnedAt, revertReason: returnReasonForm.reasonType, revertComment: returnReasonForm.comment.trim() });
 
       await firebaseDB.child(`ExitEmployees/${id}`).remove();
-
       setShowReturnReasonModal(false);
       setShowReturnedModal(true);
       setReturnError(null);
@@ -452,7 +453,7 @@ export default function DisplayExitWorkers() {
           <tbody>
             {currentEmployees.length > 0 ? (
               currentEmployees.map((employee) => (
-                <tr key={employee.id}>
+                <tr key={employee.id} onClick={() => handleView(employee)} style={{ cursor: 'pointer' }}>
                   {/* Photo column */}
                   <td>
                     {employee.employeePhoto ? (
@@ -515,7 +516,7 @@ export default function DisplayExitWorkers() {
                         type="button"
                         className="btn btn-sm me-2"
                         title="Edit"
-                        onClick={() => handleEdit(employee)}
+                        onClick={(e)=>{e.stopPropagation(); handleEdit(employee);}}
                       >
                         <img src={editIcon} alt="edit Icon" style={{ width: '15px', height: '15px' }} />
                       </button>
@@ -523,7 +524,7 @@ export default function DisplayExitWorkers() {
                         type="button"
                         className="btn btn-sm"
                         title="Return Back"
-                        onClick={() => openReturnConfirm(employee)}
+                        onClick={(e)=>{e.stopPropagation(); openReturnConfirm(employee);}}
                       >
                         <img src={returnIcon} alt="return Icon" style={{ width: '14px', height: '18px' }} />
                       </button>

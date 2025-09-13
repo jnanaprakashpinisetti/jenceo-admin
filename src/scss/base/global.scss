@@ -42,3 +42,23 @@ body {
         }
     }
 }
+
+@include res {
+
+    .col-md-3 {
+        width: 100%;
+    }
+
+    .col-md-4 {
+        width: 100%;
+    }
+
+    .col-md-6 {
+        width: 100%;
+    }
+
+    .col-md-8 {
+        width: 100%;
+    }
+
+}

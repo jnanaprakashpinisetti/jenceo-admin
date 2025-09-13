@@ -324,9 +324,9 @@ const setAcknowledgeForRecord = async (id, status) => {
                     </div>
                 ) : (
                     groups.map((g, idx) => (
-                        <div key={g.investor} className="col-sm-12 col-md-4">
+                        <div key={g.investor} className="invest-wrapper">
                             <div
-                                className="card invest-card h-100 text-dark"
+                                className="invest-card h-100 text-dark"
                                 role="button"
                                 onClick={() => openInvestorModal(g.investor)}
                                 title={`Click to view ${g.investor} investments`}

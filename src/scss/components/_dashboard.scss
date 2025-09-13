@@ -16,6 +16,17 @@ $muted: #6b7280;
 $dark-table-head: #0b1220;
 $dark-table-text: #e6eef6;
 
+.invest-wrapper {
+    @include res {
+        max-width:50%;
+
+        .invest-card {
+            width: 100%;
+        }
+    }
+
+}
+
 .invest-card {
     background: linear-gradient(180deg, #071126 0%, #0b1220 100%);
     color: #fff;
@@ -28,6 +39,7 @@ $dark-table-text: #e6eef6;
         width: 48%;
     }
 }
+
 
 .invest-card {
 
@@ -1018,6 +1030,10 @@ $dark-table-text: #e6eef6;
     border-radius: 10px;
     box-shadow: 0 6px 14px rgba(16, 24, 40, 0.06);
 
+    @include res {
+        margin-bottom: 15px;
+    }
+
 }
 
 .grad-refund {
@@ -1045,6 +1061,9 @@ $dark-table-text: #e6eef6;
     flex-wrap: wrap;
     gap: 10px;
     margin-bottom: 15px;
+    @include res {
+        gap: 0
+    }
 }
 
 /* Base */
@@ -1195,14 +1214,14 @@ $dark-table-text: #e6eef6;
     gap: 12px;
     margin-bottom: 12px;
     flex-wrap: wrap;
+@media (max-width: 767) {
+        display: block;
+
 }
 
-/* responsive */
-@media (max-width: 1000px) {
-    .category-cards {
-        flex-direction: column;
-    }
+
 }
+
 
 .nav-link {
     cursor: pointer;

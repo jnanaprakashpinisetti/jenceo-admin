@@ -658,7 +658,7 @@ const WorkerModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode }
   .heaerImg {margin: -21px -20px 10px -20px}
   .heaerImg img {width:100%}
   
-  @media only screen and (max-width: 767px) {
+  @media only screen and (max-width: 992px) {
         .biodataHeader {display:none}
         .header {display:block}
         .header .h-left {text-align:center; margin-top:10px}
@@ -892,6 +892,7 @@ const WorkerModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode }
   .heaerImg {margin:-15px -15px 15px -15px}
   .decleration {margin-top:20px; font-size:13px; padding:15px}
   .blue {color:#02acf2; font-weight:700}
+  .hedder-inner {display:flex;flex-direction:column;justify-content:center}
  
   @media print {
     body{background:#fff}
@@ -899,6 +900,15 @@ const WorkerModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode }
     .container{max-width:100%;margin:0}
     .page{border:none;margin:0;padding:6mm;border-radius:0}
   }
+
+ @media (max-width: 992px) {
+
+  .header {display:block; text-align:center; padding-top:10px}
+  .header-inner {display:block}
+  .two-col {display:block}
+  
+  }
+
 </style>
 </head>
 <body>
@@ -913,7 +923,7 @@ const WorkerModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode }
   <div class="page" id="page1">
   <div class="heaerImg"><img src="${headerImage}" alt="Header" /></div>
     <div class="header">
-      <div style="display:flex;flex-direction:column;justify-content:center">
+      <div class="header-inner">
         <div class="title">EMPLOYEE INFORMATION</div>
         <div class="subtitle">H.R Department (Reg No: SEA/HYD/ALO/26/1040178/2025)</div>
         <div class="meta"><strong>ID:</strong> ${safe(formData.idNo || formData.employeeId)} &nbsp; | &nbsp; <strong>Date:</strong> ${metaDate}</div>
@@ -1711,7 +1721,7 @@ const WorkerModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode }
                                                             )}
 
                                                             {isEditMode && (
-                                                                <div className="d-flex flex-column align-items-center gap-2">
+                                                                <div className="d-flex flex-column align-items-center gap-2 mt-3">
                                                                     <input
                                                                         type="file"
                                                                         accept="image/*"
@@ -1820,7 +1830,7 @@ const WorkerModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode }
                                                         )}
                                                     </div>
                                                 </div>
-                                                <div className="row">
+                                                <div className="row mt-3">
                                                     <h5>Return / Remove comments</h5>
                                                     {/* Action comments block — each comment rendered in its own .action-comments parent */}
                                                     <div className="action-comments-wrapper">

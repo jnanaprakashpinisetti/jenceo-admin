@@ -1,13 +1,18 @@
-import React, { useMemo } from "react";
+// BasicInformation.js
+import React, { useMemo, useState } from "react";
+import firebaseDB from "../../firebase"; // <-- added
 
 const BasicInformation = ({
   formData,
   errors,
   handleChange,
   handleBlur,
-  handleFileChange,   // <-- fixed: now accepted as prop
+  handleFileChange,
   nextStep,
 }) => {
+  const [showIdExistsModal, setShowIdExistsModal] = useState(false);
+  const [existingEmployee, setExistingEmployee] = useState(null);
+
   // Calculate max date for 18 years ago
   const maxDateString = useMemo(() => {
     const maxDate = new Date();
@@ -15,19 +20,156 @@ const BasicInformation = ({
     return maxDate.toISOString().split("T")[0];
   }, []);
 
+  // Auto-calculate years based on date of birth
+  const calculateAge = (dob) => {
+    if (!dob) return "";
+    const birthDate = new Date(dob);
+    const today = new Date();
+    let age = today.getFullYear() - birthDate.getFullYear();
+    const monthDiff = today.getMonth() - birthDate.getMonth();
+    if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
+      age--;
+    }
+    return age.toString();
+  };
+
+  // Handle date of birth change
+  const handleDobChange = (e) => {
+    handleChange(e); // Update dateOfBirth in parent form data
+    // Auto-update years field
+    const years = calculateAge(e.target.value);
+    handleChange({
+      target: {
+        name: "years",
+        value: years,
+      },
+    });
+  };
+
+  // Real ID check using Firebase Realtime Database
+  // Returns an object { name, ... } if found, otherwise null
+  const checkIdExists = async (idNo) => {
+    if (!idNo) return null;
+    try {
+      const snapshot = await firebaseDB
+        .child("EmployeeBioData")
+        .orderByChild("idNo")
+        .equalTo(idNo)
+        .once("value");
+      if (snapshot.exists()) {
+        const val = snapshot.val();
+        // take the first match
+        const firstKey = Object.keys(val)[0];
+        const existing = val[firstKey];
+        const name = `${existing.firstName || ""} ${existing.lastName || ""}`.trim() || existing.name || "";
+        return { name, recordId: firstKey, ...existing };
+      }
+      return null;
+    } catch (err) {
+      console.error("Error checking ID existence:", err);
+      return null;
+    }
+  };
+
+  // Handle next step with ID validation
+  const handleNextStep = async () => {
+    if (formData.idNo) {
+      const existingEmployeeData = await checkIdExists(formData.idNo);
+      if (existingEmployeeData) {
+        setExistingEmployee(existingEmployeeData);
+        setShowIdExistsModal(true);
+        return;
+      }
+    }
+    nextStep();
+  };
+
   return (
     <div>
+      {/* ID Exists Modal */}
+      {showIdExistsModal && (
+        <div className="id-exists-backdrop">
+          <div className="id-exists-card">
+            <div className="id-exists-head">
+              <div>
+                <div className="id-exists-title">ID Already Exists</div>
+                <div className="id-exists-sub">The provided ID number matches an existing employee</div>
+              </div>
 
+              <button
+                className="id-exists-close"
+                onClick={() => setShowIdExistsModal(false)}
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="id-exists-body">
+              <div className="id-exists-warning">
+                <div className="id-exists-icon">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+                    <path
+                      d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"
+                      fill="#fff"
+                      opacity="0.06"
+                    />
+                    <path
+                      d="M12 9v4"
+                      stroke="#ff6b6b"
+                      strokeWidth="1.6"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                    <path
+                      d="M12 17h.01"
+                      stroke="#ff6b6b"
+                      strokeWidth="1.6"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                  </svg>
+                </div>
+
+                <div className="id-exists-text">
+                  <p>
+                    This ID number <strong>{existingEmployee?.idNo || "-"}</strong> is
+                    already associated with an existing employee. Please check the
+                    details below.
+                  </p>
+                </div>
+              </div>
+
+              <div className=" text-center">
+                <p className="label mb-0">Employee Name</p>
+                <p className="val"><strong>{existingEmployee?.name || "N/A"}</strong></p>
+
+              </div>
+            </div>
+
+            <div className="id-exists-footer">
+              <button
+                className="btn-danger"
+                onClick={() => setShowIdExistsModal(false)}
+              >
+                Close
+              </button>
+
+
+            </div>
+          </div>
+        </div>
+
+      )}
 
       <div className="form-card-header mb-4">
         <h3 className="text-center">Basic Information</h3>
       </div>
-      <hr></hr>
+      <hr />
       <div className="row g-3">
-        {/* Employee Photo */}
+        {/* Employee Photo - Optional */}
         <div className="col-12">
           <label htmlFor="employeePhoto" className="form-label">
-            Employee Photo <span className="text-danger">*</span>
+            Employee Photo <small className="text-muted">(optional)</small>
           </label>
           <input
             type="file"
@@ -37,9 +179,18 @@ const BasicInformation = ({
             onChange={handleFileChange}
             accept=".jpg,.jpeg,.png,.gif"
           />
-          {errors.employeePhoto && (
-            <div className="invalid-feedback">{errors.employeePhoto}</div>
-          )}
+          <div style={{ fontSize: "9px", color: "#f2f2f2", marginTop: "5px" }}>
+            Default photo will be used if not provided:
+            <a
+              href="https://firebasestorage.googleapis.com/v0/b/jenceo-admin.firebasestorage.app/o/OfficeFiles%2FSample-Photo.jpg?alt=media&token=01855b47-c9c2-490e-b400-05851192dde7"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="ms-1"
+            >
+              View sample photo
+            </a>
+          </div>
+          {errors.employeePhoto && <div className="invalid-feedback">{errors.employeePhoto}</div>}
         </div>
 
         <div className="col-md-6">
@@ -90,9 +241,7 @@ const BasicInformation = ({
             onChange={handleChange}
             onBlur={handleBlur}
           />
-          {errors.firstName && (
-            <div className="invalid-feedback">{errors.firstName}</div>
-          )}
+          {errors.firstName && <div className="invalid-feedback">{errors.firstName}</div>}
         </div>
 
         <div className="col-md-6">
@@ -108,9 +257,7 @@ const BasicInformation = ({
             onChange={handleChange}
             onBlur={handleBlur}
           />
-          {errors.lastName && (
-            <div className="invalid-feedback">{errors.lastName}</div>
-          )}
+          {errors.lastName && <div className="invalid-feedback">{errors.lastName}</div>}
         </div>
 
         <div className="col-md-6">
@@ -130,9 +277,7 @@ const BasicInformation = ({
             <option value="Female">Female</option>
             <option value="Other">Other</option>
           </select>
-          {errors.gender && (
-            <div className="invalid-feedback">{errors.gender}</div>
-          )}
+          {errors.gender && <div className="invalid-feedback">{errors.gender}</div>}
         </div>
 
         <div className="col-md-6">
@@ -145,13 +290,11 @@ const BasicInformation = ({
             id="dateOfBirth"
             name="dateOfBirth"
             value={formData.dateOfBirth}
-            onChange={handleChange}
+            onChange={handleDobChange}
             onBlur={handleBlur}
             max={maxDateString}
           />
-          {errors.dateOfBirth && (
-            <div className="invalid-feedback">{errors.dateOfBirth}</div>
-          )}
+          {errors.dateOfBirth && <div className="invalid-feedback">{errors.dateOfBirth}</div>}
         </div>
 
         <div className="col-md-6">
@@ -159,7 +302,7 @@ const BasicInformation = ({
             Years <span className="star">*</span>
           </label>
           <input
-            type="number"
+            type="tel"
             className={`form-control ${errors.years ? "is-invalid" : ""}`}
             id="years"
             name="years"
@@ -168,6 +311,8 @@ const BasicInformation = ({
             onBlur={handleBlur}
             min={18}
             max={55}
+            maxLength={2}
+            readOnly
           />
           {errors.years && <div className="invalid-feedback">{errors.years}</div>}
         </div>
@@ -204,12 +349,10 @@ const BasicInformation = ({
               maxLength={10}
             />
           </div>
-          {errors.mobileNo1 && (
-            <div className="invalid-feedback">{errors.mobileNo1}</div>
-          )}
+          {errors.mobileNo1 && <div className="invalid-feedback">{errors.mobileNo1}</div>}
         </div>
 
-        {/* Mobile No-2 (optional, validate only if provided) */}
+        {/* Mobile No-2 (optional) */}
         <div className="col-md-6">
           <label htmlFor="mobileNo2" className="form-label">
             Mobile No-2 <small className="text-muted">(optional)</small>
@@ -230,14 +373,12 @@ const BasicInformation = ({
               placeholder="Optional"
             />
           </div>
-          {errors.mobileNo2 && (
-            <div className="invalid-feedback">{errors.mobileNo2}</div>
-          )}
+          {errors.mobileNo2 && <div className="invalid-feedback">{errors.mobileNo2}</div>}
         </div>
       </div>
 
       <div className="d-flex justify-content-end mt-3">
-        <button type="button" className="btn btn-primary" onClick={nextStep}>
+        <button type="button" className="btn btn-primary" onClick={handleNextStep}>
           Next
         </button>
       </div>

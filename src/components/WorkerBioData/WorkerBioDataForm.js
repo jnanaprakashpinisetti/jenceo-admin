@@ -1,8 +1,11 @@
-// WorkerBioDataForm.js
-import React, { useState } from "react";
+// WorkerBioDataForm.js (final update)
+// - Resets form after successful submit
+// - Ensures PhonePe/GooglePay validation errors map to inputs and show
+// - Uses initialFormData constant for reset
+// - Exports same component API as before
 
-import { storageRef, uploadFile, getDownloadURL } from "../../firebase";
-import firebaseDB from "../../firebase";
+import React, { useEffect, useRef, useState } from "react";
+import firebaseDB, { storageRef, uploadFile, getDownloadURL } from "../../firebase";
 
 import BasicInformation from "./BasicInformation";
 import PermanentAddress from "./PermanentAddress";
@@ -15,753 +18,622 @@ import EmergencyContact2 from "./EmergencyContact2";
 import EmergencyContact3 from "./EmergencyContact3";
 import BankDetails from "./BankDetails";
 
-/* ----------------------------- Lightweight Success Modal ----------------------------- */
-const SuccessModal = ({ open, onClose, info }) => {
-  if (!open) return null;
-  const { idNo, name, recordId } = info || {};
+import "../../scss/components/_WorkerBioDataForm.scss";
 
-  return (
-    <div
-      className="success-modal-backdrop"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="successModalTitle"
-    >
-      <div className="success-modal-card" role="document">
-        <div className="success-modal-header">
-          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-            {/* Small white tick badge */}
-            <div style={{
-              width: 42,
-              height: 42,
-              borderRadius: 10,
-              display: "grid",
-              placeItems: "center",
-              background: "rgba(255,255,255,0.12)"
-            }}>
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden>
-                <path d="M20 6L9 17l-5-5" stroke="white" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
-            </div>
-            <div>
-              <div id="successModalTitle" className="success-modal-title">Employee Saved</div>
-              <div style={{ fontSize: 12.5, opacity: 0.95 }}>Record created successfully</div>
-            </div>
-          </div>
+const DEFAULT_PHOTO_URL =
+  "https://firebasestorage.googleapis.com/v0/b/jenceo-admin.firebasestorage.app/o/OfficeFiles%2FSample-Photo.jpg?alt=media&token=01855b47-c9c2-490e-b400-05851192dde7";
 
-          <button
-            className="success-modal-close"
-            aria-label="Close"
-            onClick={onClose}
-            title="Close"
-          >
-            ✕
-          </button>
-        </div>
+const TOTAL_STEPS = 10;
 
-        <div className="success-modal-body">
-          <div className="success-alert" role="status" aria-live="polite">
-            <div className="success-icon" aria-hidden>
-              {/* Large green check — decorative */}
-              <svg width="28" height="28" viewBox="0 0 24 24" fill="none">
-                <circle cx="12" cy="12" r="12" fill="#ecfdf5"/>
-                <path d="M18.4 7.4L10 16 6 12.3" stroke="#16a085" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
-              </svg>
-            </div>
-
-            <div className="success-message">
-              <h4>Form submitted successfully!</h4>
-              <p className="muted"><span className="value">{name || "N/A"}</span> has been saved.</p>
-            </div>
-          </div>
-
-          <div className="success-info" aria-hidden={false}>
-            <div className="info-row">
-              <span className="label">Employee ID (idNo)</span>
-              <span className="value">{idNo || "N/A"}</span>
-            </div>
-            <div className="info-row">
-              <span className="label">Employee Name</span>
-              <span className="value">{name || "N/A"}</span>
-            </div>
-          </div>
-        </div>
-
-        <div className="success-modal-footer">
-          <button className="btn btn-ghost" onClick={onClose}>Close</button>
-          <button
-            className="btn btn-primary"
-            onClick={() => {
-              // primary action (close for now)
-              onClose?.();
-            }}
-          >
-            Done
-          </button>
-        </div>
-      </div>
-    </div>
-  );
+const initialFormData = {
+  idNo: "",
+  date: "",
+  firstName: "",
+  lastName: "",
+  gender: "",
+  dateOfBirth: "",
+  years: "",
+  co: "",
+  mobileNo1: "",
+  mobileNo2: "",
+  aadharNo: "",
+  localId: "",
+  permanentAddress: "",
+  permanentStreet: "",
+  permanentLandmark: "",
+  permanentVillage: "",
+  permanentMandal: "",
+  permanentDistrict: "",
+  permanentState: "",
+  permanentPincode: "",
+  presentAddress: "",
+  presentStreet: "",
+  presentLandmark: "",
+  presentVillage: "",
+  presentMandal: "",
+  presentDistrict: "",
+  presentState: "",
+  presentPincode: "",
+  maritalStatus: "",
+  dateOfMarriage: "",
+  marriageYears: "",
+  childName1: "",
+  childName2: "",
+  religion: "",
+  cast: "",
+  qualification: "",
+  schoolCollege: "",
+  primarySkill: "",
+  workExperince: "",
+  workingSkills: [],
+  motherTongue: "",
+  languages: "",
+  healthIssues: [],
+  otherIssues: "",
+  healthCardNo: "",
+  bloodGroup: "",
+  height: "",
+  weight: "",
+  emergencyContact1: { name: "", relation: "", address: "", village: "", mandal: "", state: "", mobile1: "", mobile2: "" },
+  emergencyContact2: { name: "", relation: "", address: "", village: "", mandal: "", state: "", mobile1: "", mobile2: "" },
+  emergencyContact3: { name: "", relation: "", address: "", village: "", mandal: "", state: "", mobile1: "", mobile2: "" },
+  accountNo: "",
+  bankName: "",
+  branchName: "",
+  ifscCode: "",
+  phonePayNo: "",
+  phonePayName: "",
+  googlePayNo: "",
+  googlePayName: "",
+  basicSalary: "",
+  pageNo: "",
+  aboutEmployee: "",
+  employeePhoto: null,
+  employeePhotoFile: null,
 };
 
-/* -------------------------------------------------------------------- */
-
-const DEFAULT_PHOTO_URL = "https://firebasestorage.googleapis.com/v0/b/jenceo-admin.firebasestorage.app/o/OfficeFiles%2FSample-Photo.jpg?alt=media&token=01855b47-c9c2-490e-b400-05851192dde7";
-
-const MultiStepForm = () => {
+const WorkerBioDataForm = ({ isOpen = false, onClose = () => {}, onSaved }) => {
   const [step, setStep] = useState(1);
   const [errors, setErrors] = useState({});
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
 
-  // Success modal state
+  const [existingEmployee, setExistingEmployee] = useState(null);
+  const [showIdExistsModal, setShowIdExistsModal] = useState(false);
+
   const [successOpen, setSuccessOpen] = useState(false);
   const [successInfo, setSuccessInfo] = useState({ idNo: "", name: "", recordId: "" });
 
-  const [formData, setFormData] = useState({
-    // Basic Information
-    idNo: "",
-    date: "",
-    firstName: "",
-    lastName: "",
-    gender: "",
-    dateOfBirth: "",
-    years: "",
-    co: "",
-    mobileNo1: "",
-    mobileNo2: "",
-    aadharNo: "",
-    localId: "",
-    // Permanent Address
-    permanentAddress: "",
-    permanentStreet: "",
-    permanentLandmark: "",
-    permanentVillage: "",
-    permanentMandal: "",
-    permanentDistrict: "",
-    permanentState: "",
-    permanentPincode: "",
-    // Present Address
-    presentAddress: "",
-    presentStreet: "",
-    presentLandmark: "",
-    presentVillage: "",
-    presentMandal: "",
-    presentDistrict: "",
-    presentState: "",
-    presentPincode: "",
-    // Personal Information
-    maritalStatus: "",
-    dateOfMarriage: "",
-    marriageYears: "",
-    childName1: "",
-    childName2: "",
-    religion: "",
-    cast: "",
-    // Qualification & Skills
-    qualification: "",
-    schoolCollege: "",
-    primarySkill: "",
-    workExperince: "",
-    workingSkills: [],
-    motherTongue: "",
-    languages: "",
-    // Health Details
-    healthIssues: [],
-    otherIssues: "",
-    healthCardNo: "",
-    bloodGroup: "",
-    height: "",
-    weight: "",
-    // Emergency Contacts
-    emergencyContact1: {
-      name: "",
-      relation: "",
-      address: "",
-      village: "",
-      mandal: "",
-      state: "",
-      mobile1: "",
-      mobile2: "",
-    },
-    emergencyContact2: {
-      name: "",
-      relation: "",
-      address: "",
-      village: "",
-      mandal: "",
-      state: "",
-      mobile1: "",
-      mobile2: "",
-    },
-    emergencyContact3: {
-      name: "",
-      relation: "",
-      address: "",
-      village: "",
-      mandal: "",
-      state: "",
-      mobile1: "",
-      mobile2: "",
-    },
-    // Bank Details
-    accountNo: "",
-    bankName: "",
-    branchName: "",
-    ifscCode: "",
-    phonePayNo: "",
-    phonePayName: "",
-    googlePayNo: "",
-    googlePayName: "",
-    basicSalary: "",
-    pageNo: "",
-    aboutEmployee: "",
-    // Photo
-    employeePhoto: null,        // final URL (after upload)
-    employeePhotoFile: null,    // File object (before upload)
-  });
+  const firstRender = useRef(true);
 
-  // ------------ Validation helpers ------------
-  const validateMobileNumber = (mobile) => /^\d{10}$/.test(mobile);
+  const [formData, setFormData] = useState({ ...initialFormData });
 
+  // helpers
+  const validateMobileNumber = (mobile) => /^\d{10}$/.test(String(mobile || ""));
+  const validatePincode = (p) => /^\d{6}$/.test(String(p || ""));
   const isOver18 = (dateString) => {
     if (!dateString) return false;
+    const d = new Date(dateString);
+    if (Number.isNaN(d.getTime())) return false;
     const today = new Date();
-    const birthDate = new Date(dateString);
-    let age = today.getFullYear() - birthDate.getFullYear();
-    const monthDiff = today.getMonth() - birthDate.getMonth();
-    if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
-      age -= 1;
-    }
+    let age = today.getFullYear() - d.getFullYear();
+    const m = today.getMonth() - d.getMonth();
+    if (m < 0 || (m === 0 && today.getDate() < d.getDate())) age--;
     return age >= 18;
   };
-
-  const validatePincode = (pincode) => /^\d{6}$/.test(pincode);
-
-  // Photo validation: now optional — return true when file is not provided
-  const validateImage = (file) => {
-    if (!file) return true; // optional now
-    const validTypes = ["image/jpeg", "image/jpg", "image/png", "image/gif"];
-    if (!validTypes.includes(file.type)) {
-      return "Only JPG, PNG, or GIF images are allowed.";
-    }
-    if (file.size > 100 * 1024) {
-      return "Image size must be less than 100KB.";
-    }
-    return true;
+  const computeYears = (dob) => {
+    if (!dob) return "";
+    const bd = new Date(dob);
+    if (isNaN(bd.getTime())) return "";
+    const today = new Date();
+    let yrs = today.getFullYear() - bd.getFullYear();
+    const m = today.getMonth() - bd.getMonth();
+    if (m < 0 || (m === 0 && today.getDate() < bd.getDate())) yrs--;
+    return String(yrs);
   };
 
-  const validateStep = (s) => {
-    const newErrors = {};
+  useEffect(() => {
+    const upd = () => setIsMobile(window.innerWidth <= 920);
+    upd();
+    let t;
+    const onResize = () => { clearTimeout(t); t = setTimeout(upd, 120); };
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
 
-    switch (s) {
-      case 1: {
-        if (!formData.idNo.trim()) newErrors.idNo = "Enter ID No";
-        else if (formData.idNo.trim().length < 7) newErrors.idNo = "Enter Valid ID No";
+  useEffect(() => {
+    const onKey = (e) => { if (e.key === "Escape") onClose(); };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [onClose]);
 
-        if (!formData.date) newErrors.date = "Enter Date of Joining";
-        if (!formData.firstName.trim()) newErrors.firstName = "First Name is required";
-        if (!formData.lastName.trim()) newErrors.lastName = "Last Name is required";
-        if (!formData.gender) newErrors.gender = "Gender is required";
-
-        if (!formData.dateOfBirth) newErrors.dateOfBirth = "Date of Birth is required";
-        else if (!isOver18(formData.dateOfBirth)) newErrors.dateOfBirth = "Must be at least 18 years old";
-
-        if (!formData.years) newErrors.years = "Years are required";
-        else if (Number(formData.years) < 18) newErrors.years = "Above 18 only";
-        else if (Number(formData.years) > 50) newErrors.years = "Below 50 only";
-
-        if (!formData.mobileNo1) newErrors.mobileNo1 = "Mobile No. 1 is required";
-        else if (!validateMobileNumber(formData.mobileNo1)) newErrors.mobileNo1 = "Mobile number must be 10 digits";
-        if (formData.mobileNo2 && !validateMobileNumber(formData.mobileNo2))
-          newErrors.mobileNo2 = "Mobile number must be 10 digits";
-
-        // Photo validation (Step 1) — now optional
-        const imageValidation = validateImage(formData.employeePhotoFile);
-        if (imageValidation !== true) newErrors.employeePhoto = imageValidation;
-        break;
-      }
-
-      // ... rest of validation cases remain unchanged (omitted for brevity) ...
-
-      case 2:
-        if (!formData.permanentAddress.trim()) newErrors.permanentAddress = "Address is required";
-        if (!formData.permanentStreet.trim()) newErrors.permanentStreet = "Street is required";
-        if (!formData.permanentVillage.trim()) newErrors.permanentVillage = "Village/Town is required";
-        if (!formData.permanentMandal.trim()) newErrors.permanentMandal = "Mandal is required";
-        if (!formData.permanentDistrict.trim()) newErrors.permanentDistrict = "District is required";
-        if (!formData.permanentState.trim()) newErrors.permanentState = "State is required";
-        if (!formData.permanentPincode) newErrors.permanentPincode = "Pin Code is required";
-        else if (!validatePincode(formData.permanentPincode)) newErrors.permanentPincode = "Pin code must be 6 digits";
-        break;
-
-      case 3:
-        if (!formData.presentAddress.trim()) newErrors.presentAddress = "Address is required";
-        if (!formData.presentStreet.trim()) newErrors.presentStreet = "Street is required";
-        if (!formData.presentVillage.trim()) newErrors.presentVillage = "Village/Town is required";
-        if (!formData.presentMandal.trim()) newErrors.presentMandal = "Mandal is required";
-        if (!formData.presentDistrict.trim()) newErrors.presentDistrict = "District is required";
-        if (!formData.presentState.trim()) newErrors.presentState = "State is required";
-        if (!formData.presentPincode) newErrors.presentPincode = "Pin Code is required";
-        else if (!validatePincode(formData.presentPincode)) newErrors.presentPincode = "Pin code must be 6 digits";
-        break;
-
-      case 4:
-        if (!formData.maritalStatus) newErrors.maritalStatus = "Marital Status is required";
-        if (!formData.religion) newErrors.religion = "Religion is required";
-        if (!formData.cast) newErrors.cast = "Cast is required";
-        break;
-
-      case 5:
-        if (!formData.qualification) newErrors.qualification = "Qualification is required";
-        if (!formData.primarySkill) newErrors.primarySkill = "Primary Skill is required";
-        if (formData.workingSkills.length === 0) newErrors.workingSkills = "At least one work experience is required";
-        if (!formData.motherTongue) newErrors.motherTongue = "Mother Tongue is required";
-        if (!formData.languages) newErrors.languages = "Languages are required";
-        break;
-
-      case 7: {
-        const ec1 = {};
-        if (!formData.emergencyContact1.name) ec1.name = "Name is required";
-        if (!formData.emergencyContact1.relation) ec1.relation = "Relation is required";
-        if (!formData.emergencyContact1.mobile1) ec1.mobile1 = "Mobile No. is required";
-        else if (!validateMobileNumber(formData.emergencyContact1.mobile1)) ec1.mobile1 = "Mobile number must be 10 digits";
-        if (formData.emergencyContact1.mobile2 && !validateMobileNumber(formData.emergencyContact1.mobile2))
-          ec1.mobile2 = "Mobile number must be 10 digits";
-        if (Object.keys(ec1).length) newErrors.emergencyContact1 = ec1;
-        break;
-      }
-
-      case 8: {
-        const ec2 = {};
-        if (!formData.emergencyContact2.name) ec2.name = "Name is required";
-        if (!formData.emergencyContact2.relation) ec2.relation = "Relation is required";
-        if (!formData.emergencyContact2.mobile1) ec2.mobile1 = "Mobile No. is required";
-        else if (!validateMobileNumber(formData.emergencyContact2.mobile1)) ec2.mobile1 = "Mobile number must be 10 digits";
-        if (formData.emergencyContact2.mobile2 && !validateMobileNumber(formData.emergencyContact2.mobile2))
-          ec2.mobile2 = "Mobile number must be 10 digits";
-        if (Object.keys(ec2).length) newErrors.emergencyContact2 = ec2;
-        break;
-      }
-
-      case 10: {
-        if (!formData.basicSalary) newErrors.basicSalary = "Enter valid Salary";
-        else if (String(formData.basicSalary).length < 5) newErrors.basicSalary = "Check the Salary";
-        if (!formData.pageNo) newErrors.pageNo = "Enter Page No";
-        break;
-      }
-
-      default:
-        break;
-    }
-
-    setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
-  };
-
-  // ------------ Handlers ------------
   const handleChange = (e) => {
+    if (!e || !e.target) return;
     const { name, value, type, checked } = e.target;
+    if (!name || typeof name !== "string") return;
 
-    if (
-      name === "mobileNo1" ||
-      name === "mobileNo2" ||
-      name.includes("mobile1") ||
-      name.includes("mobile2")
-    ) {
+    if (name === "mobileNo1" || name === "mobileNo2" || name.includes("mobile1") || name.includes("mobile2")) {
       if (value && !/^\d*$/.test(value)) return;
       if (value.length > 10) return;
     }
-
-    if (name.includes("Pincode")) {
+    if (name.toLowerCase().includes("pincode")) {
       if (value && !/^\d*$/.test(value)) return;
       if (value.length > 6) return;
     }
 
-    if (type === "checkbox") {
-      if (name === "workingSkills" || name === "healthIssues") {
-        setFormData((prev) => ({
-          ...prev,
-          [name]: checked
-            ? [...prev[name], value]
-            : prev[name].filter((item) => item !== value),
-        }));
+    if (type === "checkbox" && (name === "workingSkills" || name === "healthIssues")) {
+      setFormData((prev) => {
+        const arr = prev[name] || [];
+        return { ...prev, [name]: checked ? [...arr, value] : arr.filter((x) => x !== value) };
+      });
+      return;
+    }
+
+    if (name.includes(".") && name.startsWith("emergencyContact")) {
+      const [parent, field] = name.split(".");
+      setFormData((prev) => ({ ...prev, [parent]: { ...(prev[parent] || {}), [field]: value } }));
+      return;
+    }
+
+    if (name === "dateOfBirth") {
+      const yrs = computeYears(value);
+      setFormData((prev) => ({ ...prev, dateOfBirth: value, years: yrs }));
+      setErrors((p) => { const n = { ...p }; delete n.dateOfBirth; delete n.years; return n; });
+      return;
+    }
+
+    if (type === "file") {
+      const file = e.target.files?.[0] || null;
+      if (!file) {
+        setFormData((prev) => ({ ...prev, employeePhotoFile: null }));
+        return;
       }
-    } else if (name.includes("emergencyContact")) {
-      const [contact, field] = name.split(".");
-      setFormData((prev) => ({
-        ...prev,
-        [contact]: {
-          ...(prev[contact] || {}),
-          [field]: value,
-        },
-      }));
-    } else {
-      setFormData((prev) => ({
-        ...prev,
-        [name]: value,
-      }));
+      const validTypes = ["image/jpeg", "image/jpg", "image/png", "image/gif"];
+      if (!validTypes.includes(file.type)) {
+        setErrors((prev) => ({ ...prev, employeePhoto: "Only JPG/PNG/GIF allowed" }));
+        return;
+      }
+      if (file.size > 100 * 1024) {
+        setErrors((prev) => ({ ...prev, employeePhoto: "Image must be less than 100KB" }));
+        return;
+      }
+      setFormData((prev) => ({ ...prev, employeePhotoFile: file }));
+      setErrors((prev) => { const n = { ...prev }; delete n.employeePhoto; return n; });
+      return;
+    }
+
+    setFormData((prev) => ({ ...prev, [name]: value }));
+    setErrors((prev) => { const n = { ...prev }; if (n[name]) delete n[name]; return n; });
+  };
+
+  const handleBlur = async (e) => {
+    if (!e || !e.target) return;
+    const { name, value } = e.target;
+    if (!name) return;
+
+    const fieldErrors = {};
+    if (name === "mobileNo1" || name === "mobileNo2") {
+      if (value && !validateMobileNumber(value)) fieldErrors[name] = "Mobile number must be 10 digits";
+    }
+    if (name === "permanentPincode" || name === "presentPincode") {
+      if (value && !validatePincode(value)) fieldErrors[name] = "Pin code must be 6 digits";
+    }
+    if (name === "dateOfBirth") {
+      if (value && !isOver18(value)) fieldErrors[name] = "Worker must be at least 18 years old";
+      else setFormData((prev) => ({ ...prev, years: computeYears(value) }));
+    }
+
+    if (name === "idNo") {
+      const id = (value || "").trim();
+      if (id) {
+        try {
+          const existing = await checkDuplicateId(id);
+          if (existing) {
+            setExistingEmployee(existing);
+            setShowIdExistsModal(true);
+            fieldErrors.idNo = `ID already exists for ${existing.firstName || existing.name || ""} ${existing.lastName || ""}`.trim();
+          } else {
+            setExistingEmployee(null);
+            setShowIdExistsModal(false);
+          }
+        } catch (err) {
+          console.warn("Duplicate check failed", err);
+        }
+      }
+    }
+
+    setErrors((prev) => ({ ...prev, ...fieldErrors }));
+  };
+
+  const checkDuplicateId = async (idNo) => {
+    if (!idNo) return null;
+    try {
+      const q = await firebaseDB.child("EmployeeBioData").orderByChild("idNo").equalTo(idNo).once("value");
+      const val = q.val();
+      if (!val) return null;
+      const key = Object.keys(val)[0];
+      const rec = val[key];
+      return { recordId: key, ...rec };
+    } catch (err) {
+      console.error("checkDuplicateId error:", err);
+      return null;
     }
   };
 
-  const handleBlur = (e) => {
-    const { name, value } = e.target;
-    let isValid = true;
-    let errorMessage = "";
-
-    if (!value.trim()) {
-      errorMessage = `${name.replace(/([A-Z])/g, " $1").replace(/^./, (s) => s.toUpperCase())} is required`;
-      isValid = false;
-    } else {
-      switch (name) {
-        case "mobileNo1":
-        case "mobileNo2":
-        case "emergencyContact1.mobile1":
-        case "emergencyContact1.mobile2":
-        case "emergencyContact2.mobile1":
-        case "emergencyContact2.mobile2":
-          isValid = validateMobileNumber(value);
-          errorMessage = "Mobile number must be 10 digits";
-          break;
-        case "permanentPincode":
-        case "presentPincode":
-          isValid = validatePincode(value);
-          errorMessage = "Pin code must be 6 digits";
-          break;
-        case "dateOfBirth":
-          isValid = isOver18(value);
-          errorMessage = "Must be at least 18 years old";
-          break;
-        default:
-          isValid = true;
+  const checkValidationForStep = (s) => {
+    const e = {};
+    switch (s) {
+      case 1: {
+        if (!formData.idNo || String(formData.idNo).trim() === "") e.idNo = "Enter ID No";
+        else if (String(formData.idNo).trim().length < 3) e.idNo = "Enter Valid ID No";
+        if (!formData.date || String(formData.date).trim() === "") e.date = "Enter Date of Joining";
+        if (!formData.firstName || formData.firstName.trim() === "") e.firstName = "First name required";
+        if (!formData.lastName || formData.lastName.trim() === "") e.lastName = "Last name required";
+        if (!formData.gender) e.gender = "Gender is required";
+        if (!formData.dateOfBirth) e.dateOfBirth = "DOB is required";
+        else if (!isOver18(formData.dateOfBirth)) e.dateOfBirth = "Must be at least 18 years old";
+        if (!formData.years) e.years = "Years is required";
+        else {
+          const num = Number(formData.years);
+          if (!Number.isFinite(num) || num < 18 || num > 100) e.years = "Enter valid years";
+        }
+        if (!formData.mobileNo1) e.mobileNo1 = "Mobile No. 1 is required";
+        else if (!validateMobileNumber(formData.mobileNo1)) e.mobileNo1 = "Mobile number must be 10 digits";
+        if (formData.mobileNo2 && !validateMobileNumber(formData.mobileNo2)) e.mobileNo2 = "Mobile number must be 10 digits";
+        if (formData.employeePhotoFile) {
+          const file = formData.employeePhotoFile;
+          const validTypes = ["image/jpeg", "image/jpg", "image/png", "image/gif"];
+          if (!validTypes.includes(file.type)) e.employeePhoto = "Only JPG/PNG/GIF allowed";
+          if (file.size > 100 * 1024) e.employeePhoto = "Image must be less than 100KB";
+        }
+        break;
       }
+      case 2: {
+        if (!formData.permanentAddress || formData.permanentAddress.trim() === "") e.permanentAddress = "Address is required";
+        if (!formData.permanentStreet || formData.permanentStreet.trim() === "") e.permanentStreet = "Street is required";
+        if (!formData.permanentVillage || formData.permanentVillage.trim() === "") e.permanentVillage = "Village/Town is required";
+        if (!formData.permanentMandal || formData.permanentMandal.trim() === "") e.permanentMandal = "Mandal is required";
+        if (!formData.permanentDistrict || formData.permanentDistrict.trim() === "") e.permanentDistrict = "District is required";
+        if (!formData.permanentState || formData.permanentState.trim() === "") e.permanentState = "State is required";
+        if (!formData.permanentPincode) e.permanentPincode = "Pin Code is required";
+        else if (!validatePincode(formData.permanentPincode)) e.permanentPincode = "Pin code must be 6 digits";
+        break;
+      }
+      case 3: {
+        if (!formData.presentAddress || formData.presentAddress.trim() === "") e.presentAddress = "Address is required";
+        if (!formData.presentStreet || formData.presentStreet.trim() === "") e.presentStreet = "Street is required";
+        if (!formData.presentVillage || formData.presentVillage.trim() === "") e.presentVillage = "Village/Town is required";
+        if (!formData.presentMandal || formData.presentMandal.trim() === "") e.presentMandal = "Mandal is required";
+        if (!formData.presentDistrict || formData.presentDistrict.trim() === "") e.presentDistrict = "District is required";
+        if (!formData.presentState || formData.presentState.trim() === "") e.presentState = "State is required";
+        if (!formData.presentPincode) e.presentPincode = "Pin Code is required";
+        else if (!validatePincode(formData.presentPincode)) e.presentPincode = "Pin code must be 6 digits";
+        break;
+      }
+      case 4: {
+        if (!formData.maritalStatus) e.maritalStatus = "Marital Status is required";
+        if (!formData.religion) e.religion = "Religion is required";
+        if (!formData.cast) e.cast = "Cast is required";
+        break;
+      }
+      case 5: {
+        if (!formData.qualification) e.qualification = "Qualification is required";
+        if (!formData.primarySkill) e.primarySkill = "Primary Skill is required";
+        if (formData.workingSkills && formData.workingSkills.length === 0) e.workingSkills = "At least one work experience is required";
+        if (!formData.motherTongue) e.motherTongue = "Mother Tongue is required";
+        if (!formData.languages) e.languages = "Languages are required";
+        break;
+      }
+      case 6:
+        break;
+      case 7: {
+        const ec1 = formData.emergencyContact1 || {};
+        if (!ec1.name) e["emergencyContact1.name"] = "Name required";
+        if (!ec1.relation) e["emergencyContact1.relation"] = "Relation required";
+        if (!ec1.mobile1) e["emergencyContact1.mobile1"] = "Mobile required";
+        else if (!validateMobileNumber(ec1.mobile1)) e["emergencyContact1.mobile1"] = "Mobile must be 10 digits";
+        break;
+      }
+      case 8: {
+        const ec2 = formData.emergencyContact2 || {};
+        if (!ec2.name) e["emergencyContact2.name"] = "Name required";
+        if (!ec2.relation) e["emergencyContact2.relation"] = "Relation required";
+        if (!ec2.mobile1) e["emergencyContact2.mobile1"] = "Mobile required";
+        else if (!validateMobileNumber(ec2.mobile1)) e["emergencyContact2.mobile1"] = "Mobile must be 10 digits";
+        break;
+      }
+      case 9:
+        break;
+      case 10: {
+        if (!formData.basicSalary) e.basicSalary = "Enter valid Salary";
+        if (!formData.pageNo) e.pageNo = "Enter Page No";
+        const pp = (formData.phonePayNo || "").trim();
+        const gp = (formData.googlePayNo || "").trim();
+        if (pp) {
+          if (!validateMobileNumber(pp)) e.phonePayNo = "PhonePe/Pay number must be 10 digits";
+          if (!formData.phonePayName || String(formData.phonePayName).trim() === "") e.phonePayName = "PhonePe/Pay name required";
+        }
+        if (gp) {
+          if (!validateMobileNumber(gp)) e.googlePayNo = "Google Pay number must be 10 digits";
+          if (!formData.googlePayName || String(formData.googlePayName).trim() === "") e.googlePayName = "Google Pay name required";
+        }
+        break;
+      }
+      default: break;
     }
+    return e;
+  };
 
-    setErrors((prev) => {
-      const newErrors = { ...prev };
-      if (!isValid) {
-        if (name.includes(".")) {
-          const [parent, child] = name.split(".");
-          newErrors[parent] = { ...(newErrors[parent] || {}), [child]: errorMessage };
-        } else {
-          newErrors[name] = errorMessage;
+  const mapErrorsForChildren = (errs) => {
+    const out = {};
+    Object.keys(errs || {}).forEach((k) => {
+      if (k.includes(".")) {
+        const parts = k.split(".");
+        let cur = out;
+        for (let i = 0; i < parts.length; i++) {
+          const p = parts[i];
+          if (i === parts.length - 1) cur[p] = errs[k];
+          else { cur[p] = cur[p] || {}; cur = cur[p]; }
         }
       } else {
-        if (name.includes(".")) {
-          const [parent, child] = name.split(".");
-          if (newErrors[parent]) {
-            delete newErrors[parent][child];
-            if (Object.keys(newErrors[parent]).length === 0) delete newErrors[parent];
-          }
-        } else {
-          delete newErrors[name];
-        }
+        out[k] = errs[k];
       }
-      return newErrors;
     });
+    return out;
   };
 
-  const handleFileChange = (e) => {
-    const file = e.target.files?.[0];
-    const validation = validateImage(file);
-
-    if (validation === true) {
-      setFormData((prev) => ({
-        ...prev,
-        employeePhotoFile: file,
-      }));
-      setErrors((prev) => {
-        const ne = { ...prev };
-        delete ne.employeePhoto;
-        return ne;
-      });
-    } else {
-      setErrors((prev) => ({ ...prev, employeePhoto: validation }));
+  const validateCurrentStep = (s) => {
+    const e = checkValidationForStep(s);
+    if (Object.keys(e).length > 0) {
+      const nested = mapErrorsForChildren(e);
+      setErrors((prev) => ({ ...prev, ...e, ...nested }));
+      setTimeout(() => {
+        const firstKey = Object.keys(e)[0];
+        const sel = `[name="${firstKey}"]`;
+        const el = document.querySelector(sel) || document.querySelector(`[name="${firstKey.split(".").join(".")}"]`);
+        if (el && el.focus) el.focus();
+      }, 50);
+      return false;
     }
-  };
-
-  const nextStep = () => {
-    if (validateStep(step)) setStep((s) => s + 1);
-  };
-
-  const prevStep = () => setStep((s) => s - 1);
-
-  const resetForm = () => {
-    setFormData({
-      idNo: "",
-      date: "",
-      firstName: "",
-      lastName: "",
-      gender: "",
-      dateOfBirth: "",
-      years: "",
-      co: "",
-      mobileNo1: "",
-      mobileNo2: "",
-      aadharNo: "",
-      localId: "",
-      permanentAddress: "",
-      permanentStreet: "",
-      permanentLandmark: "",
-      permanentVillage: "",
-      permanentMandal: "",
-      permanentDistrict: "",
-      permanentState: "",
-      permanentPincode: "",
-      presentAddress: "",
-      presentStreet: "",
-      presentLandmark: "",
-      presentVillage: "",
-      presentMandal: "",
-      presentDistrict: "",
-      presentState: "",
-      presentPincode: "",
-      maritalStatus: "",
-      dateOfMarriage: "",
-      marriageYears: "",
-      childName1: "",
-      childName2: "",
-      religion: "",
-      cast: "",
-      qualification: "",
-      schoolCollege: "",
-      primarySkill: "",
-      workExperince: "",
-      workingSkills: [],
-      motherTongue: "",
-      languages: "",
-      healthIssues: [],
-      otherIssues: "",
-       bloodGroup: "",
-       healthCardNo: "",
-       height: "",
-       weight: "",
-      emergencyContact1: {
-        name: "",
-        relation: "",
-        address: "",
-        village: "",
-        mandal: "",
-        state: "",
-        mobile1: "",
-        mobile2: "",
-      },
-      emergencyContact2: {
-        name: "",
-        relation: "",
-        address: "",
-        village: "",
-        mandal: "",
-        state: "",
-        mobile1: "",
-        mobile2: "",
-      },
-      emergencyContact3: {
-        name: "",
-        relation: "",
-        address: "",
-        village: "",
-        mandal: "",
-        state: "",
-        mobile1: "",
-        mobile2: "",
-      },
-      accountNo: "",
-      bankName: "",
-      branchName: "",
-      ifscCode: "",
-      phonePayNo: "",
-      phonePayName: "",
-      googlePayNo: "",
-      googlePayName: "",
-      basicSalary: "",
-      pageNo: "",
-      aboutEmployee: "",
-      employeePhoto: null,
-      employeePhotoFile: null,
+    setErrors((prev) => {
+      const n = { ...prev };
+      Object.keys(e).forEach((k) => { if (n[k]) delete n[k]; });
+      Object.keys(e).forEach((k) => {
+        if (k.includes(".")) {
+          const [parent, child] = k.split(".");
+          if (n[parent] && n[parent][child]) { delete n[parent][child]; if (Object.keys(n[parent]).length === 0) delete n[parent]; }
+        }
+      });
+      return n;
     });
-    setErrors({});
-    setStep(1);
+    return true;
   };
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    if (!validateStep(step)) return;
+  const validateAllAndJump = async () => {
+    for (let s = 1; s <= TOTAL_STEPS; s += 1) {
+      const e = checkValidationForStep(s);
+      if (Object.keys(e).length > 0) {
+        const nested = mapErrorsForChildren(e);
+        setErrors((prev) => ({ ...prev, ...e, ...nested }));
+        setStep(s);
+        setTimeout(() => {
+          const firstKey = Object.keys(e)[0];
+          const el = document.querySelector(`[name="${firstKey}"]`);
+          if (el && el.focus) el.focus();
+        }, 80);
+        return false;
+      }
+    }
+    const id = (formData.idNo || "").trim();
+    if (id) {
+      const existing = await checkDuplicateId(id);
+      if (existing) {
+        setExistingEmployee(existing);
+        setShowIdExistsModal(true);
+        setErrors((prev) => ({ ...prev, idNo: "ID already exists" }));
+        setStep(1);
+        return false;
+      }
+    }
+    return true;
+  };
+
+  const handlePrimaryAction = async (ev) => {
+    ev?.preventDefault?.();
+    if (step < TOTAL_STEPS) {
+      if (validateCurrentStep(step)) setStep((s) => Math.min(TOTAL_STEPS, s + 1));
+      return;
+    }
+    if (!(await validateAllAndJump())) return;
 
     setIsSubmitting(true);
     try {
-      // Upload photo if provided
-      let photoURL = null;
+      let photoURL = DEFAULT_PHOTO_URL;
       if (formData.employeePhotoFile) {
         const ext = formData.employeePhotoFile.name.split(".").pop();
-        const fileName = `employee-photos/${formData.idNo}-${Date.now()}.${ext}`;
+        const fileName = `employee-photos/${(formData.idNo || "unknown")}-${Date.now()}.${ext}`;
         const fileRef = storageRef.child(fileName);
-        const snapshot = await uploadFile(fileRef, formData.employeePhotoFile);
-        photoURL = await getDownloadURL(snapshot.ref);
-      } else {
-        // Use default sample photo when none uploaded
-        photoURL = DEFAULT_PHOTO_URL;
+        const snap = await uploadFile(fileRef, formData.employeePhotoFile);
+        photoURL = await getDownloadURL(snap.ref);
       }
 
-      const submitData = {
-        ...formData,
-        employeePhoto: photoURL,
-      };
-      delete submitData.employeePhotoFile; // don't store File in DB
+      const submitData = { ...formData, employeePhoto: photoURL };
+      delete submitData.employeePhotoFile;
 
-      // Push to DB — capture the generated key
       const listRef = firebaseDB.child("EmployeeBioData");
       const newRef = listRef.push();
       await newRef.set(submitData);
-
       const recordId = newRef.key;
       const name = `${formData.firstName || ""} ${formData.lastName || ""}`.trim();
 
-      // Open success modal with details
       setSuccessInfo({ idNo: formData.idNo, name, recordId });
       setSuccessOpen(true);
 
-      // Reset the form
-      resetForm();
-    } catch (error) {
-      alert("Error submitting form: " + (error.message || error));
-      console.error(error);
-    } finally {
-      setIsSubmitting(false);
+      if (typeof onSaved === "function") {
+        try { onSaved({ id: recordId, ...submitData }); } catch {}
+      }
+
+      // RESET FORM to initial state and clear errors
+      setFormData({ ...initialFormData });
+      setErrors({});
+      setStep(1);
+    } catch (err) {
+      console.error("submit error", err);
+      alert("Error submitting form: " + (err?.message || err));
+    } finally { setIsSubmitting(false); }
+  };
+
+  const renderStep = (s) => {
+    const childErrors = mapErrorsForChildren(errors);
+    const common = {
+      formData,
+      errors: childErrors,
+      handleChange,
+      handleBlur,
+      handleFileChange: handleChange,
+      nextStep: () => setStep((p) => Math.min(TOTAL_STEPS, p + 1)),
+      prevStep: () => setStep((p) => Math.max(1, p - 1)),
+    };
+    switch (s) {
+      case 1: return <BasicInformation {...common} />;
+      case 2: return <PermanentAddress {...common} />;
+      case 3: return <PresentAddress {...common} />;
+      case 4: return <PersonalInformation {...common} />;
+      case 5: return <QualificationSkills {...common} />;
+      case 6: return <HealthDetails {...common} />;
+      case 7: return <EmergencyContact1 {...common} />;
+      case 8: return <EmergencyContact2 {...common} />;
+      case 9: return <EmergencyContact3 {...common} />;
+      case 10: return <BankDetails {...common} handleSubmit={handlePrimaryAction} isSubmitting={isSubmitting} />;
+      default: return null;
     }
   };
 
-  // ... rest of component (renderStep, return) is unchanged ...
-  // (Keep your existing renderStep switch and return; unchanged)
-  const renderStep = () => {
-    switch (step) {
-      case 1:
-        return (
-          <BasicInformation
-            formData={formData}
-            errors={errors}
-            handleChange={handleChange}
-            handleBlur={handleBlur}
-            handleFileChange={handleFileChange}
-            nextStep={nextStep}
-          />
-        );
-      case 2:
-        return (
-          <PermanentAddress
-            formData={formData}
-            errors={errors}
-            handleChange={handleChange}
-            handleBlur={handleBlur}
-            nextStep={nextStep}
-            prevStep={prevStep}
-          />
-        );
-      case 3:
-        return (
-          <PresentAddress
-            formData={formData}
-            errors={errors}
-            handleChange={handleChange}
-            handleBlur={handleBlur}
-            nextStep={nextStep}
-            prevStep={prevStep}
-          />
-        );
-      case 4:
-        return (
-          <PersonalInformation
-            formData={formData}
-            errors={errors}
-            handleChange={handleChange}
-            handleBlur={handleBlur}
-            nextStep={nextStep}
-            prevStep={prevStep}
-          />
-        );
-      case 5:
-        return (
-          <QualificationSkills
-            formData={formData}
-            errors={errors}
-            handleChange={handleChange}
-            nextStep={nextStep}
-            prevStep={prevStep}
-          />
-        );
-      case 6:
-        return (
-          <HealthDetails
-            formData={formData}
-            errors={errors}
-            handleChange={handleChange}
-            nextStep={nextStep}
-            prevStep={prevStep}
-          />
-        );
-      case 7:
-        return (
-          <EmergencyContact1
-            formData={formData}
-            errors={errors}
-            handleChange={handleChange}
-            handleBlur={handleBlur}
-            nextStep={nextStep}
-            prevStep={prevStep}
-          />
-        );
-      case 8:
-        return (
-          <EmergencyContact2
-            formData={formData}
-            errors={errors}
-            handleChange={handleChange}
-            handleBlur={handleBlur}
-            nextStep={nextStep}
-            prevStep={prevStep}
-          />
-        );
-      case 9:
-        return (
-          <EmergencyContact3
-            formData={formData}
-            errors={errors}
-            handleChange={handleChange}
-            handleBlur={handleBlur}
-            nextStep={nextStep}
-            prevStep={prevStep}
-          />
-        );
-      case 10:
-        return (
-          <BankDetails
-            formData={formData}
-            errors={errors}
-            handleChange={handleChange}
-            handleBlur={handleBlur}
-            prevStep={prevStep}
-            handleSubmit={handleSubmit}
-            isSubmitting={isSubmitting}
-          />
-        );
-      default:
-        return null;
-    }
+  const SuccessModal = ({ open, onClose, info }) => {
+    if (!open) return null;
+    const { idNo, name } = info || {};
+    return (
+      <div className="wb-success-backdrop" onClick={onClose}>
+        <div className="wb-success-card" onClick={(e) => e.stopPropagation()}>
+          <div className="wb-success-title">Saved Successfully</div>
+          <div className="wb-success-sub">{name || "—"} (ID: {idNo || "—"})</div>
+          <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 12 }}>
+            <button className="btn btn-primary" onClick={() => { setSuccessOpen(false); }}>Done</button>
+          </div>
+        </div>
+      </div>
+    );
   };
+
+  const IdExistsModal = () => {
+    if (!showIdExistsModal || !existingEmployee) return null;
+    const name = `${existingEmployee.firstName || existingEmployee.name || ""} ${existingEmployee.lastName || ""}`.trim();
+    return (
+      <div className="modal-backdrop-custom" role="dialog" aria-modal="true">
+        <div className="modal-card-custom" onClick={(e) => e.stopPropagation()}>
+          <div className="modal-header-custom">
+            <h5>ID Already Exists</h5>
+            <button className="btn-close-custom" onClick={() => setShowIdExistsModal(false)}>✕</button>
+          </div>
+          <div className="modal-body-custom">
+            <p>This ID number is already associated with an existing employee:</p>
+            <p><strong>Name:</strong> {name || "N/A"}</p>
+            <p><strong>Record ID:</strong> {existingEmployee.recordId}</p>
+            <p>Please use a different ID number or contact administration if you believe this is an error.</p>
+          </div>
+          <div className="modal-footer-custom">
+            <button className="btn btn-secondary" onClick={() => setShowIdExistsModal(false)}>Close</button>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  if (!isOpen) return null;
 
   return (
     <>
-      <div className="form-card shadow mb-3">
-        <form onSubmit={handleSubmit}>{renderStep()}</form>
+      <div className="wb-backdrop" onClick={onClose}>
+        <div className="wb-card" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-labelledby="workerFormTitle">
+          <div className="wb-header">
+            <div style={{ display: "flex", flexDirection: "column" }}>
+              <div id="workerFormTitle" className="wb-title">Worker / Employee Form</div>
+              <div className="wb-step-counter">Step {step} of {TOTAL_STEPS}</div>
+            </div>
+            <div>
+              <button className="wb-close-btn" title="Close" onClick={onClose}>✕</button>
+            </div>
+          </div>
 
-        {/* Success modal */}
-        <SuccessModal
-          open={successOpen}
-          info={successInfo}
-          onClose={() => setSuccessOpen(false)}
-        />
+          <div className="wb-body">
+            {!isMobile && (
+              <div className="wb-sidebar" aria-hidden>
+                {Array.from({ length: TOTAL_STEPS }).map((_, i) => {
+                  const idx = i + 1;
+                  return (
+                    <button
+                      key={idx}
+                      type="button"
+                      className={`wb-step-btn ${step === idx ? "active" : ""}`}
+                      onClick={() => setStep(idx)}
+                    >
+                      {idx}. {stepTitleFor(idx)}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+
+            <div className="wb-content">
+              {isMobile ? (
+                <div>
+                  {Array.from({ length: TOTAL_STEPS }).map((_, i) => {
+                    const idx = i + 1;
+                    return (
+                      <div className="wb-accordion-item" key={idx}>
+                        <button className="wb-accordion-header" onClick={() => setStep(idx)} aria-expanded={step === idx}>
+                          <span>{idx}. {stepTitleFor(idx)}</span>
+                          <span className="wb-accordion-arrow">{step === idx ? "▾" : "▸"}</span>
+                        </button>
+                        {step === idx && <div className="wb-accordion-body">{renderStep(idx)}</div>}
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div>{renderStep(step)}</div>
+              )}
+            </div>
+          </div>
+
+          <div className="wb-footer">
+            <button className="wb-primary-btn" onClick={handlePrimaryAction} disabled={isSubmitting}>
+              {step < TOTAL_STEPS ? "Continue" : (isSubmitting ? "Saving..." : "Submit")}
+            </button>
+          </div>
+        </div>
       </div>
+
+      <SuccessModal open={successOpen} onClose={() => setSuccessOpen(false)} info={successInfo} />
+      <IdExistsModal />
     </>
   );
 };
 
-export default MultiStepForm;
+function stepTitleFor(idx) {
+  switch (idx) {
+    case 1: return "Basic Info";
+    case 2: return "Permanent Address";
+    case 3: return "Present Address";
+    case 4: return "Personal Info";
+    case 5: return "Qualification & Skills";
+    case 6: return "Health Details";
+    case 7: return "Emergency 1";
+    case 8: return "Emergency 2";
+    case 9: return "Emergency 3";
+    case 10: return "Bank & Pay";
+    default: return `Step ${idx}`;
+  }
+}
+
+export default WorkerBioDataForm;

@@ -325,7 +325,8 @@ export default function DisplayWorkers() {
             };
 
             await firebaseDB.child(`ExitEmployees/${id}`).set(payloadToExit);
-            // keep an append-only history for this removal so repeated actions don't overwrite previous records
+            await firebaseDB.child(`ExitEmployeesHistory/${id}`).push({ ...payloadToExit, action: 'removed', actionAt: new Date().toISOString() });
+// keep an append-only history for this removal so repeated actions don't overwrite previous records
             await firebaseDB.child(`ExitEmployeesHistory/${id}`).push({ ...payloadToExit, action: 'removed', actionAt: new Date().toISOString() });
             await firebaseDB.child(`EmployeeBioData/${id}`).remove();
             // success -> close modal, clear states and show success modal
@@ -542,7 +543,8 @@ export default function DisplayWorkers() {
                                                 type="button"
                                                 className="btn btn-sm"
                                                 title="Delete"
-                                                onClick={() => {
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
                                                     setEmployeeToDelete(employee);
                                                     setShowDeleteConfirm(true);
                                                 }}

@@ -325,8 +325,9 @@ export default function DisplayWorkers() {
             };
 
             await firebaseDB.child(`ExitEmployees/${id}`).set(payloadToExit);
+            // keep an append-only history for this removal so repeated actions don't overwrite previous records
+            await firebaseDB.child(`ExitEmployeesHistory/${id}`).push({ ...payloadToExit, action: 'removed', actionAt: new Date().toISOString() });
             await firebaseDB.child(`EmployeeBioData/${id}`).remove();
-
             // success -> close modal, clear states and show success modal
             setShowDeleteReasonModal(false);
             setEmployeeToDelete(null);
@@ -349,6 +350,7 @@ export default function DisplayWorkers() {
 
             if (employeeData) {
                 await firebaseDB.child(`ExitEmployees/${employeeId}`).set(employeeData);
+                await firebaseDB.child(`ExitEmployeesHistory/${employeeId}`).push({ ...employeeData, action: 'removed', actionAt: new Date().toISOString() });
                 await employeeRef.remove();
                 alert('Employee moved to ExitEmployees successfully!');
             }
@@ -483,7 +485,7 @@ export default function DisplayWorkers() {
                     <tbody>
                         {currentEmployees.length > 0 ? (
                             currentEmployees.map((employee) => (
-                                <tr key={employee.id}>
+                                <tr key={employee.id} onClick={(e)=>{e.stopPropagation(); handleView(employee);}} style={{ cursor: 'pointer' }}>
                                     <td>
                                         {employee.employeePhoto ? (
                                             <img
@@ -524,7 +526,7 @@ export default function DisplayWorkers() {
                                                 type="button"
                                                 className="btn btn-sm me-2"
                                                 title="View"
-                                                onClick={() => handleView(employee)}
+                                                onClick={(e)=>{e.stopPropagation(); handleView(employee);}}
                                             >
                                                 <img src={viewIcon} alt="view Icon" style={{ opacity: 0.6, width: '18px', height: '18px' }} />
                                             </button>
@@ -532,7 +534,7 @@ export default function DisplayWorkers() {
                                                 type="button"
                                                 className="btn btn-sm me-2"
                                                 title="Edit"
-                                                onClick={() => handleEdit(employee)}
+                                                onClick={(e)=>{e.stopPropagation(); handleEdit(employee);}}
                                             >
                                                 <img src={editIcon} alt="edit Icon" style={{ width: '15px', height: '15px' }} />
                                             </button>

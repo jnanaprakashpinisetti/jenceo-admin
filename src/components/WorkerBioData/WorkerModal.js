@@ -149,6 +149,10 @@ const WorkerModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode }
     const hasAnyValue = (row) =>
         Object.entries(row).some(([k, v]) => k !== "__locked" && v !== null && v !== undefined && String(v).trim() !== "");
 
+// helpers to detect if payments/work have real data
+    const hasPayments = () => Array.isArray(formData.payments) && formData.payments.some(p => hasAnyValue(p));
+    const hasWorkDetails = () => Array.isArray(formData.workDetails) && formData.workDetails.some(w => hasAnyValue(w));
+
     // Lock only rows that have data; keep empty rows editable
     const lockIfFilled = (arr = []) =>
         Array.isArray(arr) ? arr.map((r) => (hasAnyValue(r) ? { ...r, __locked: true } : { ...r, __locked: false })) : [];
@@ -1140,9 +1144,12 @@ const WorkerModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode }
                             {errs.map((m, i) => (
                                 <li key={i}>{m}</li>
                             ))}
+
                         </ul>
                     )}
                     {activeTab === "payment" || activeTab === "working" ? summarizeErrors() : null}
+                        <p>Please enter All Payment Details </p>
+
                 </>,
                 "danger"
             );
@@ -2156,6 +2163,7 @@ const WorkerModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode }
                                                                         value={p.balanceAmount || ""}
                                                                         onChange={(e) => handleArrayChange("payments", i, "balanceAmount", e.target.value)}
                                                                         disabled={locked}
+                                                                        maxLength={5}
                                                                     />
                                                                 ) : (
                                                                     <div className="form-control form-control-sm bg-light">{p.balanceAmount || "N/A"}</div>
@@ -2220,11 +2228,12 @@ const WorkerModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode }
                                                                 </label>
                                                                 {isEditMode ? (
                                                                     <input
-                                                                        type="text"
+                                                                        type="tel"
                                                                         className="form-control form-control-sm"
                                                                         value={p.receiptNo || ""}
                                                                         onChange={(e) => handleArrayChange("payments", i, "receiptNo", e.target.value)}
                                                                         disabled={locked}
+                                                                        maxLength={3}
                                                                     />
                                                                 ) : (
                                                                     <div className="form-control form-control-sm bg-light">{p.receiptNo || "N/A"}</div>
@@ -2259,11 +2268,12 @@ const WorkerModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode }
                                                                 </label>
                                                                 {isEditMode ? (
                                                                     <input
-                                                                        type="number"
+                                                                        type="tel"
                                                                         className={`form-control form-control-sm${invalidClass("days")}`}
                                                                         value={p.days || ""}
                                                                         onChange={(e) => handleArrayChange("payments", i, "days", e.target.value)}
                                                                         disabled={locked}
+                                                                        maxLength={2}
                                                                     />
                                                                 ) : (
                                                                     <div className="form-control form-control-sm bg-light">{p.days || "N/A"}</div>
@@ -2277,11 +2287,12 @@ const WorkerModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode }
                                                                 </label>
                                                                 {isEditMode ? (
                                                                     <input
-                                                                        type="text"
+                                                                        type="tel"
                                                                         className="form-control form-control-sm"
                                                                         value={p.bookNo || ""}
                                                                         onChange={(e) => handleArrayChange("payments", i, "bookNo", e.target.value)}
                                                                         disabled={locked}
+                                                                        maxLength={3}
                                                                     />
                                                                 ) : (
                                                                     <div className="form-control form-control-sm bg-light">{p.bookNo || "N/A"}</div>
@@ -2521,79 +2532,49 @@ const WorkerModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode }
                                         </div>
                                         <div className="modal-card-body">
                                             <h5>Payment Details</h5>
-                                            <div className="table-responsive mb-3">
-                                                <table className="table table-sm table-bordered table-dark table-hover">
-                                                    <thead>
-                                                        <tr>
-                                                            <th>Date</th>
-                                                            <th>Amount</th>
-                                                            <th>Type of Payment</th>
-                                                            <th>Days</th>
-                                                            <th>Rec No</th>
-                                                        </tr>
-                                                    </thead>
-                                                    <tbody>
+                                            { hasPayments() ? (
+                                              <div className="table-responsive mb-3">
+                                                  <table className="table table-sm table-bordered table-dark table-hover">
+                                                      <thead><tr><th>Date</th><th>Client</th><th>Days</th><th>Amount</th><th>Balance</th><th>Type</th><th>Receipt</th><th>Remarks</th></tr></thead>
+                                                      <tbody>
                                                         {(formData.payments || []).map((p, i) => (
-                                                            <tr key={i}>
-                                                                <td>{p.date || "N/A"}</td>
-                                                                <td>{p.amount || "N/A"}</td>
-                                                                <td>{p.typeOfPayment || "N/A"}</td>
-                                                                <td>{p.days || "N/A"}</td>
-                                                                <td>{p.receiptNo || p.recieptNo || p.recNo || "N/A"}</td>
-                                                            </tr>
+                                                          <tr key={i}>
+                                                            <td>{p.date || 'N/A'}</td>
+                                                            <td>{p.clientName || 'N/A'}</td>
+                                                            <td>{p.days || 'N/A'}</td>
+                                                            <td>{p.amount || 'N/A'}</td>
+                                                            <td>{p.balanceAmount || 'N/A'}</td>
+                                                            <td>{p.typeOfPayment || 'N/A'}</td>
+                                                            <td>{p.receiptNo || 'N/A'}</td>
+                                                            <td>{p.remarks || 'N/A'}</td>
+                                                          </tr>
                                                         ))}
-                                                    </tbody>
-                                                    <tfoot>
-                                                        <tr>
-                                                            <td className="bg-secondary text-white" colSpan="1"><strong>Total</strong></td>
-                                                            <td className="bg-secondary text-white" >
-                                                                <strong>
-                                                                    {(
-                                                                        (formData.payments || []).reduce(
-                                                                            (sum, p) => sum + (parseFloat(p.amount) || 0),
-                                                                            0
-                                                                        )
-                                                                    ).toLocaleString("en-IN")}
-                                                                </strong>
-                                                            </td>
-                                                            <td className="bg-secondary" colSpan="3">
+                                                      </tbody>
+                                                  </table>
+                                              </div>
+                                            ) : (<div className="text-muted">No payment records available.</div>)}
 
-                                                            </td>
-                                                        </tr>
-                                                    </tfoot>
-                                                </table>
-                                            </div>
-
-
-                                            <h5>Worker Detail</h5>
-                                            <div className="table-responsive">
-                                                <table className="table table-sm table-bordered table-dark table-hover">
-                                                    <thead>
-                                                        <tr>
-                                                            <th>Client ID</th>
-                                                            <th>Client Name</th>
-                                                            <th>Location</th>
-                                                            <th>From</th>
-                                                            <th>To</th>
-                                                            <th>Days</th>
-                                                            <th>Service Type</th>
-                                                        </tr>
-                                                    </thead>
-                                                    <tbody>
+                                            <h5>Work Details</h5>
+                                            { hasWorkDetails() ? (
+                                              <div className="table-responsive mb-3">
+                                                  <table className="table table-sm table-bordered table-dark table-hover">
+                                                      <thead><tr><th>Client ID</th><th>Client Name</th><th>Location</th><th>From</th><th>To</th><th>Days</th><th>Service</th></tr></thead>
+                                                      <tbody>
                                                         {(formData.workDetails || []).map((w, i) => (
-                                                            <tr key={i}>
-                                                                <td>{w.clientId || "N/A"}</td>
-                                                                <td>{w.clientName || "N/A"}</td>
-                                                                <td>{w.location || "N/A"}</td>
-                                                                <td>{w.fromDate || "N/A"}</td>
-                                                                <td>{w.toDate || "N/A"}</td>
-                                                                <td>{w.days || "N/A"}</td>
-                                                                <td>{w.serviceType || "N/A"}</td>
-                                                            </tr>
+                                                          <tr key={i}>
+                                                            <td>{w.clientId || 'N/A'}</td>
+                                                            <td>{w.clientName || 'N/A'}</td>
+                                                            <td>{w.location || 'N/A'}</td>
+                                                            <td>{w.fromDate || 'N/A'}</td>
+                                                            <td>{w.toDate || 'N/A'}</td>
+                                                            <td>{w.days || 'N/A'}</td>
+                                                            <td>{w.serviceType || 'N/A'}</td>
+                                                          </tr>
                                                         ))}
-                                                    </tbody>
-                                                </table>
-                                            </div>
+                                                      </tbody>
+                                                  </table>
+                                              </div>
+                                            ) : (<div className="text-muted">No work records available.</div>)}
                                         </div>
                                     </div>
                                 )}

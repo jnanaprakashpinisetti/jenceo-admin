@@ -906,6 +906,7 @@ const WorkerModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode }
   .header {display:block; text-align:center; padding-top:10px}
   .header-inner {display:block}
   .two-col {display:block}
+  .kv-row {grid-template-columns:80px 12px 1fr}
   
   }
 

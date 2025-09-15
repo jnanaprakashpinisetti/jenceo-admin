@@ -135,7 +135,7 @@ const PersonalInformation = ({ formData, errors, handleChange, handleBlur, nextS
           {errors.cast && <div className="invalid-feedback">{errors.cast}</div>}
         </div>
 
-        <div className="col-12 mt-4">
+        {/* <div className="col-12 mt-4">
           <button type="button" className="btn btn-primary float-end" onClick={nextStep}>
             Next <i className="bi bi-arrow-right"></i>
           </button>
@@ -143,7 +143,7 @@ const PersonalInformation = ({ formData, errors, handleChange, handleBlur, nextS
             <i className="bi bi-arrow-left"></i> Previous
           </button>
 
-        </div>
+        </div> */}
       </div>
     </div>
   );

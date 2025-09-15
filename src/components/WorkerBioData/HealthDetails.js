@@ -100,7 +100,7 @@ const HealthDetails = ({ formData, handleChange, nextStep, prevStep }) => {
           />
         </div>
 
-        <div className="col-12 mt-4">
+        {/* <div className="col-12 mt-4">
           <button
             type="button"
             className="btn btn-primary float-end"
@@ -115,7 +115,7 @@ const HealthDetails = ({ formData, handleChange, nextStep, prevStep }) => {
           >
             <i className="bi bi-arrow-left"></i> Previous
           </button>
-        </div>
+        </div> */}
       </div>
     </div>
   );

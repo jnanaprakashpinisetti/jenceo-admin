@@ -111,6 +111,7 @@ const EmergencyContact3 = ({ formData, handleChange, handleBlur, nextStep, prevS
               className="form-control"
               id="emergencyContact3.mobile2"
               name="emergencyContact3.mobile2"
+              placeholder="Optional"
               value={formData.emergencyContact3.mobile2}
               onChange={(e) => {
                 if (/^\d{0,10}$/.test(e.target.value)) {
@@ -123,7 +124,7 @@ const EmergencyContact3 = ({ formData, handleChange, handleBlur, nextStep, prevS
           </div>
         </div>
 
-        <div className="col-12 mt-4">
+        {/* <div className="col-12 mt-4">
           <button type="button" className="btn btn-primary float-end" onClick={nextStep}>
             Next <i className="bi bi-arrow-right"></i>
           </button>
@@ -131,7 +132,7 @@ const EmergencyContact3 = ({ formData, handleChange, handleBlur, nextStep, prevS
             <i className="bi bi-arrow-left"></i> Previous
           </button>
 
-        </div>
+        </div> */}
       </div>
     </div>
   );

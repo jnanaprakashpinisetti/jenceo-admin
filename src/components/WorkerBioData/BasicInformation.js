@@ -186,6 +186,7 @@ const BasicInformation = ({
               target="_blank"
               rel="noopener noreferrer"
               className="ms-1"
+               style={{ fontSize: "9px", color: "#f2f2f2", marginTop: "5px" }}
             >
               View sample photo
             </a>
@@ -377,11 +378,11 @@ const BasicInformation = ({
         </div>
       </div>
 
-      <div className="d-flex justify-content-end mt-3">
+      {/* <div className="d-flex justify-content-end mt-3">
         <button type="button" className="btn btn-primary" onClick={handleNextStep}>
           Next
         </button>
-      </div>
+      </div> */}
     </div>
   );
 };

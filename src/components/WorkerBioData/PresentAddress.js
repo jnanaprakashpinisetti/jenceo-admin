@@ -43,9 +43,9 @@ const PresentAddress = ({ formData, errors, handleChange, handleBlur, nextStep, 
       <hr></hr>
 
       {/* Same as Permanent Address Checkbox */}
-      <div className="row mb-4">
-        <div className="col-12">
-          <div className="form-check">
+      <div className="row mb-4" style={{maxWidth:"50%"}}>
+        <div className="col-12" >
+          <div className="form-check" >
             <input
               className="form-check-input"
               type="checkbox"
@@ -184,14 +184,14 @@ const PresentAddress = ({ formData, errors, handleChange, handleBlur, nextStep, 
           {errors.presentPincode && <div className="invalid-feedback">{errors.presentPincode}</div>}
         </div>
 
-        <div className="col-12 mt-4">
+        {/* <div className="col-12 mt-4">
           <button type="button" className="btn btn-primary float-end" onClick={nextStep}>
             Next <i className="bi bi-arrow-right"></i>
           </button>
           <button type="button" className="btn btn-secondary me-2" onClick={prevStep}>
             <i className="bi bi-arrow-left"></i> Previous
           </button>
-        </div>
+        </div> */}
       </div>
     </div>
   );

@@ -114,7 +114,8 @@ const EmergencyContact1 = ({ formData, errors, handleChange, handleBlur, nextSte
             type="tel" 
             className={`form-control ${errors.emergencyContact1?.mobile2 ? 'is-invalid' : ''}`}
             id="emergencyContact1.mobile2" 
-            name="emergencyContact1.mobile2" 
+            name="emergencyContact1.mobile2"
+            placeholder="Optional" 
             value={formData.emergencyContact1.mobile2} 
             onChange={(e) => {
               if (/^\d{0,10}$/.test(e.target.value)) {
@@ -128,7 +129,7 @@ const EmergencyContact1 = ({ formData, errors, handleChange, handleBlur, nextSte
         </div>
         </div>
         
-        <div className="col-12 mt-4">
+        {/* <div className="col-12 mt-4">
                     <button type="button" className="btn btn-primary float-end" onClick={nextStep}>
             Next <i className="bi bi-arrow-right"></i>
           </button>
@@ -136,7 +137,7 @@ const EmergencyContact1 = ({ formData, errors, handleChange, handleBlur, nextSte
             <i className="bi bi-arrow-left"></i> Previous
           </button>
 
-        </div>
+        </div> */}
       </div>
     </div>
   );

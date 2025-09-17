@@ -287,23 +287,18 @@ export default function DisplayExitWorkers() {
     const { id, ...payload } = employeeToReturn;
     try {
       const returnedAt = new Date().toISOString();
-      const payloadToActive = {
-        ...payload,
-        status: 'On Duty',
-        returnedAt,
-        __returnInfo: {
-          reasonType: returnReasonForm.reasonType,
-          comment: returnReasonForm.comment.trim(),
-          returnedAt,
-        }
+            const payloadToActive = { ...payload };
+      // attach returnInfo to the active record (kept under __returnInfo)
+      const returnInfo = {
+        reasonType: returnReasonForm.reasonType,
+        comment: returnReasonForm.comment.trim(),
+        returnedAt: returnedAt,
+        returnedBy: 'UI'
       };
-
-      await firebaseDB.child(`EmployeeBioData/${id}`).set(payloadToActive);
-      // create a return entry and append to item-level returnHistory and global history (single push)
+      await firebaseDB.child(`EmployeeBioData/${id}`).set({ ...payloadToActive, __returnInfo: returnInfo });
+      // push return entry into ExitEmployees/{id}/returnHistory
       const returnEntry = { returnedAt: returnedAt, returnedBy: 'UI', reason: returnReasonForm.reasonType, comment: returnReasonForm.comment.trim() };
       await firebaseDB.child(`ExitEmployees/${id}/returnHistory`).push(returnEntry);
-      await firebaseDB.child(`ExitEmployeesHistory/${id}`).push({ action: 'returned', meta: returnEntry, actionAt: returnedAt });
-      // remove the live ExitEmployees record (we preserved history in returnHistory + ExitEmployeesHistory)
       await firebaseDB.child(`ExitEmployees/${id}`).remove();
 setShowReturnReasonModal(false);
       setShowReturnedModal(true);

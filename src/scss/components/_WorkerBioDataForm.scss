@@ -309,7 +309,16 @@
 
 .action-comments {
     width: 48%;
+ 
 }
+
+@media (max-width:767px) {
+    .action-comments {
+        width: 100%;
+    }
+}
+
+
  
 .history-list {
   list-style: none;

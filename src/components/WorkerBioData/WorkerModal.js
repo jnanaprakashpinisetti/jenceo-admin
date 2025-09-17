@@ -149,7 +149,7 @@ const WorkerModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode }
     const hasAnyValue = (row) =>
         Object.entries(row).some(([k, v]) => k !== "__locked" && v !== null && v !== undefined && String(v).trim() !== "");
 
-// helpers to detect if payments/work have real data
+    // helpers to detect if payments/work have real data
     const hasPayments = () => Array.isArray(formData.payments) && formData.payments.some(p => hasAnyValue(p));
     const hasWorkDetails = () => Array.isArray(formData.workDetails) && formData.workDetails.some(w => hasAnyValue(w));
 
@@ -1159,7 +1159,7 @@ const WorkerModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode }
                         </ul>
                     )}
                     {activeTab === "payment" || activeTab === "working" ? summarizeErrors() : null}
-                        <p>Please enter All Payment Details </p>
+                    <p>Please enter All Payment Details </p>
 
                 </>,
                 "danger"
@@ -1833,13 +1833,40 @@ const WorkerModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode }
                                                 </div>
                                                 <div className="row mt-3">
                                                     <h5>Return / Remove comments</h5>
-                                                    {/* Action comments block — each comment rendered in its own .action-comments parent */}
-                                                    <div className="action-comments-wrapper">
+                                                    <div className="history-section">
                                                         {(() => {
-                                                            // Build an ordered list of comment entries (preserve original fields)
                                                             const entries = [];
 
-                                                            if (formData.removalReason || formData.removalComment || formData.removedBy) {
+                                                            // ✅ 1. Load history arrays if present
+                                                            const removalHistory = employee?.removalHistory
+                                                                ? Object.values(employee.removalHistory)
+                                                                : [];
+                                                            const returnHistory = employee?.returnHistory
+                                                                ? Object.values(employee.returnHistory)
+                                                                : [];
+
+                                                            removalHistory.forEach((h) =>
+                                                                entries.push({
+                                                                    type: "Removal",
+                                                                    reason: h.removalReason,
+                                                                    comment: h.removalComment,
+                                                                    user: h.removedBy,
+                                                                    time: h.removedAt,
+                                                                })
+                                                            );
+
+                                                            returnHistory.forEach((h) =>
+                                                                entries.push({
+                                                                    type: "Return",
+                                                                    reason: h.reason,
+                                                                    comment: h.comment,
+                                                                    user: h.returnedBy || h.userStamp,
+                                                                    time: h.returnedAt || h.timestamp,
+                                                                })
+                                                            );
+
+                                                            // ✅ 2. Fallback to legacy formData (for older records)
+                                                            if (formData?.removalReason || formData?.removalComment || formData?.removedBy) {
                                                                 entries.push({
                                                                     type: "Removal",
                                                                     reason: formData.removalReason,
@@ -1849,7 +1876,7 @@ const WorkerModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode }
                                                                 });
                                                             }
 
-                                                            if (formData.revertReason || formData.revertComment || formData.revertedBy) {
+                                                            if (formData?.revertReason || formData?.revertComment || formData?.revertedBy) {
                                                                 entries.push({
                                                                     type: "Revert",
                                                                     reason: formData.revertReason,
@@ -1859,7 +1886,7 @@ const WorkerModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode }
                                                                 });
                                                             }
 
-                                                            if (formData.__returnInfo) {
+                                                            if (formData?.__returnInfo) {
                                                                 entries.push({
                                                                     type: "Return",
                                                                     reason: formData.__returnInfo.reasonType,
@@ -1869,6 +1896,9 @@ const WorkerModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode }
                                                                 });
                                                             }
 
+                                                            // ✅ 3. Sort entries by time (latest first)
+                                                            entries.sort((a, b) => new Date(b.time) - new Date(a.time));
+
                                                             if (entries.length === 0) {
                                                                 return <div className="no-comments">No removed or returned comments.</div>;
                                                             }
@@ -1876,9 +1906,23 @@ const WorkerModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode }
                                                             return entries.map((e, idx) => (
                                                                 <div className="action-comments" key={`${e.type}-${idx}`}>
                                                                     <div className="action-comments-header">
-                                                                        <strong className="action-type">{e.type}</strong>
+                                                                        <strong
+                                                                            className={`action-type ${e.type === "Removal"
+                                                                                ? "action-type-removal"
+                                                                                : e.type === "Return"
+                                                                                    ? "action-type-return"
+                                                                                    : "action-type-revert"
+                                                                                }`}
+                                                                        >
+                                                                            {e.type}
+                                                                        </strong>
+
                                                                         {e.user && <span className="action-user">by {e.user}</span>}
-                                                                        {e.time && <span className="action-time">{new Date(e.time).toLocaleString()}</span>}
+                                                                        {e.time && (
+                                                                            <span className="action-time">
+                                                                                {new Date(e.time).toLocaleString()}
+                                                                            </span>
+                                                                        )}
                                                                     </div>
 
                                                                     <div className="action-comments-body">
@@ -1890,7 +1934,7 @@ const WorkerModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode }
                                                                         )}
 
                                                                         {e.comment && (
-                                                                            <div className="">
+                                                                            <div className="action-row">
                                                                                 <span className="label">Comment:</span>
                                                                                 <div className="value comment-text">{e.comment}</div>
                                                                             </div>
@@ -1900,8 +1944,8 @@ const WorkerModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode }
                                                             ));
                                                         })()}
                                                     </div>
-
                                                 </div>
+
                                             </div>
                                         </div>
                                     </div>
@@ -2543,48 +2587,71 @@ const WorkerModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode }
                                         </div>
                                         <div className="modal-card-body">
                                             <h5>Payment Details</h5>
-                                            { hasPayments() ? (
-                                              <div className="table-responsive mb-3">
-                                                  <table className="table table-sm table-bordered table-dark table-hover">
-                                                      <thead><tr><th>Date</th><th>Client</th><th>Days</th><th>Amount</th><th>Balance</th><th>Type</th><th>Receipt</th><th>Remarks</th></tr></thead>
-                                                      <tbody>
-                                                        {(formData.payments || []).map((p, i) => (
-                                                          <tr key={i}>
-                                                            <td>{p.date || 'N/A'}</td>
-                                                            <td>{p.clientName || 'N/A'}</td>
-                                                            <td>{p.days || 'N/A'}</td>
-                                                            <td>{p.amount || 'N/A'}</td>
-                                                            <td>{p.balanceAmount || 'N/A'}</td>
-                                                            <td>{p.typeOfPayment || 'N/A'}</td>
-                                                            <td>{p.receiptNo || 'N/A'}</td>
-                                                            <td>{p.remarks || 'N/A'}</td>
-                                                          </tr>
-                                                        ))}
-                                                      </tbody>
-                                                  </table>
-                                              </div>
+                                            {hasPayments() ? (
+                                                <div className="table-responsive mb-3">
+                                                    <table className="table table-sm table-bordered table-dark table-hover">
+                                                        <thead><tr><th>Date</th><th>Client</th><th>Days</th><th>Amount</th><th>Balance</th><th>Type</th><th>Receipt</th><th>Remarks</th></tr></thead>
+                                                        <tbody>
+                                                            {(formData.payments || []).map((p, i) => (
+                                                                <tr key={i}>
+                                                                    <td>{p.date || "N/A"}</td>
+                                                                    <td>{p.clientName || "N/A"}</td>
+                                                                    <td>{p.days || "N/A"}</td>
+                                                                    <td>{p.amount || 0}</td>
+                                                                    <td>{p.balanceAmount || 0}</td>
+                                                                    <td>{p.typeOfPayment || "N/A"}</td>
+                                                                    <td>{p.receiptNo || "N/A"}</td>
+                                                                    <td>{p.remarks || "N/A"}</td>
+                                                                </tr>
+                                                            ))}
+
+                                                            {/* Totals Row */}
+                                                            {(formData.payments || []).length > 0 && (() => {
+                                                                const totalAmount = (formData.payments || []).reduce(
+                                                                    (sum, p) => sum + (parseFloat(p.amount) || 0),
+                                                                    0
+                                                                );
+                                                                const totalBalance = (formData.payments || []).reduce(
+                                                                    (sum, p) => sum + (parseFloat(p.balanceAmount) || 0),
+                                                                    0
+                                                                );
+                                                                const count = (formData.payments || []).length;
+
+                                                                return (
+                                                                    <tr className="fw-bold">
+                                                                        <td colSpan="3" className="text-end">Totals:</td>
+                                                                        <td>{totalAmount}</td>
+                                                                        <td>{totalBalance}</td>
+                                                                        <td colSpan="3">Payments Count: {count}</td>
+                                                                    </tr>
+                                                                );
+                                                            })()}
+                                                        </tbody>
+
+                                                    </table>
+                                                </div>
                                             ) : (<div className="text-muted">No payment records available.</div>)}
 
                                             <h5>Work Details</h5>
-                                            { hasWorkDetails() ? (
-                                              <div className="table-responsive mb-3">
-                                                  <table className="table table-sm table-bordered table-dark table-hover">
-                                                      <thead><tr><th>Client ID</th><th>Client Name</th><th>Location</th><th>From</th><th>To</th><th>Days</th><th>Service</th></tr></thead>
-                                                      <tbody>
-                                                        {(formData.workDetails || []).map((w, i) => (
-                                                          <tr key={i}>
-                                                            <td>{w.clientId || 'N/A'}</td>
-                                                            <td>{w.clientName || 'N/A'}</td>
-                                                            <td>{w.location || 'N/A'}</td>
-                                                            <td>{w.fromDate || 'N/A'}</td>
-                                                            <td>{w.toDate || 'N/A'}</td>
-                                                            <td>{w.days || 'N/A'}</td>
-                                                            <td>{w.serviceType || 'N/A'}</td>
-                                                          </tr>
-                                                        ))}
-                                                      </tbody>
-                                                  </table>
-                                              </div>
+                                            {hasWorkDetails() ? (
+                                                <div className="table-responsive mb-3">
+                                                    <table className="table table-sm table-bordered table-dark table-hover">
+                                                        <thead><tr><th>Client ID</th><th>Client Name</th><th>Location</th><th>From</th><th>To</th><th>Days</th><th>Service</th></tr></thead>
+                                                        <tbody>
+                                                            {(formData.workDetails || []).map((w, i) => (
+                                                                <tr key={i}>
+                                                                    <td>{w.clientId || 'N/A'}</td>
+                                                                    <td>{w.clientName || 'N/A'}</td>
+                                                                    <td>{w.location || 'N/A'}</td>
+                                                                    <td>{w.fromDate || 'N/A'}</td>
+                                                                    <td>{w.toDate || 'N/A'}</td>
+                                                                    <td>{w.days || 'N/A'}</td>
+                                                                    <td>{w.serviceType || 'N/A'}</td>
+                                                                </tr>
+                                                            ))}
+                                                        </tbody>
+                                                    </table>
+                                                </div>
                                             ) : (<div className="text-muted">No work records available.</div>)}
                                         </div>
                                     </div>

@@ -292,3 +292,59 @@
     font-size: 13px;
     margin-top: 6px;
 }
+
+/* WorkerHistory.scss */
+/* Styles for displaying removal and return history entries */
+
+.history-section {
+  margin-top: 1rem;
+  padding: 0.75rem;
+  border-radius: 8px;
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  display: flex;
+  justify-content: space-between;
+  flex-wrap: wrap;
+}
+
+.action-comments {
+    width: 48%;
+}
+ 
+.history-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  font-size: 0.85rem;
+  color: #374151;
+}
+ .action-type {
+    padding: 0;
+
+ }
+
+ .comment-text {
+    padding: 0;
+ }
+
+.action-type {
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-weight: 600;
+  font-size: 0.85rem;
+}
+
+.action-type-removal {
+  background-color: #fee2e2;
+  color: #dc2626; /* red */
+}
+
+.action-type-return {
+  background-color: #d1fae5;
+  color: #059669; /* green */
+}
+
+.action-type-revert {
+  background-color: #e0f2fe;
+  color: #0284c7; /* blue */
+}

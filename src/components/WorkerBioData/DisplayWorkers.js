@@ -194,11 +194,86 @@ export default function DisplayWorkers() {
         return [1, '...', currentPage - 1, currentPage, currentPage + 1, '...', totalPages];
     };
 
-    const handleView = (employee) => {
-        setSelectedEmployee(employee);
-        setIsEditMode(false);
-        setIsModalOpen(true);
+// Replace existing handleView with this async version
+const handleView = async (employee) => {
+  try {
+    // Defensive - ensure we have id
+    const id = employee?.id || employee?.recordId || employee?.employeeId;
+    // If no id in employee object, just open modal with provided object
+    if (!id) {
+      setSelectedEmployee(employee);
+      setIsEditMode(false);
+      setIsModalOpen(true);
+      return;
+    }
+
+    // Fetch per-item global history node ExitEmployeesHistory/{id}
+    // This node contains pushes like { action: 'removed'|'returned', meta: {...}, actionAt: <iso> }
+    let historySnapshot = null;
+    try {
+      historySnapshot = await firebaseDB.child(`ExitEmployeesHistory/${id}`).once('value');
+    } catch (err) {
+      console.warn('Failed to fetch ExitEmployeesHistory for', id, err);
+      historySnapshot = null;
+    }
+
+    const historyObj = historySnapshot && historySnapshot.val() ? historySnapshot.val() : null;
+    const historyEntries = historyObj ? Object.values(historyObj) : [];
+
+    // Build arrays for removalHistory and returnHistory using the meta stored in history entries
+    const removalHistoryFromGlobal = historyEntries
+      .filter(h => (h && h.action === 'removed'))
+      .map(h => h.meta ? ({ ...h.meta, actionAt: h.actionAt || h.meta.removedAt }) : h);
+
+    const returnHistoryFromGlobal = historyEntries
+      .filter(h => (h && h.action === 'returned'))
+      .map(h => h.meta ? ({ ...h.meta, actionAt: h.actionAt || h.meta.returnedAt }) : h);
+
+    // Also check for item-level arrays inside the active employee object (if present)
+    // e.g., employee.removalHistory / employee.returnHistory saved at ExitEmployees when removed
+    const removalHistoryFromEmployee = employee?.removalHistory
+      ? (Array.isArray(employee.removalHistory) ? employee.removalHistory : Object.values(employee.removalHistory))
+      : [];
+
+    const returnHistoryFromEmployee = employee?.returnHistory
+      ? (Array.isArray(employee.returnHistory) ? employee.returnHistory : Object.values(employee.returnHistory))
+      : [];
+
+    // Merge arrays, dedupe by timestamp+user+comment to prevent accidental dupes
+    const mergeAndDedupe = (arrs) => {
+      const merged = [].concat(...arrs);
+      const seen = new Set();
+      return merged.filter(item => {
+        if (!item) return false;
+        const sig = `${item.removedAt || item.returnedAt || item.actionAt || ''}::${item.removedBy || item.returnedBy || item.user || ''}::${String(item.removalComment || item.comment || '')}`;
+        if (seen.has(sig)) return false;
+        seen.add(sig);
+        return true;
+      });
     };
+
+    const mergedRemovalHistory = mergeAndDedupe([removalHistoryFromEmployee, removalHistoryFromGlobal]);
+    const mergedReturnHistory = mergeAndDedupe([returnHistoryFromEmployee, returnHistoryFromGlobal]);
+
+    // Build a new employee object to pass to the modal (do not mutate original)
+    const employeeWithHistory = {
+      ...employee,
+      removalHistory: mergedRemovalHistory,
+      returnHistory: mergedReturnHistory,
+    };
+
+    setSelectedEmployee(employeeWithHistory);
+    setIsEditMode(false);
+    setIsModalOpen(true);
+  } catch (err) {
+    console.error("handleView error", err);
+    // Fallback - open modal with the original employee object
+    setSelectedEmployee(employee);
+    setIsEditMode(false);
+    setIsModalOpen(true);
+  }
+};
+
 
     const handleEdit = (employee) => {
         setSelectedEmployee(employee);
@@ -325,11 +400,17 @@ export default function DisplayWorkers() {
             };
 
             await firebaseDB.child(`ExitEmployees/${id}`).set(payloadToExit);
-            await firebaseDB.child(`ExitEmployeesHistory/${id}`).push({ ...payloadToExit, action: 'removed', actionAt: new Date().toISOString() });
-// keep an append-only history for this removal so repeated actions don't overwrite previous records
-            await firebaseDB.child(`ExitEmployeesHistory/${id}`).push({ ...payloadToExit, action: 'removed', actionAt: new Date().toISOString() });
+            // append removal entry to the item's removalHistory (array) and to the global ExitEmployeesHistory (single push)
+            const removalEntry = {
+                removedAt: payloadToExit.removedAt,
+                removedBy: payloadToExit.removedBy,
+                removalReason: payloadToExit.removalReason,
+                removalComment: payloadToExit.removalComment,
+            };
+            await firebaseDB.child(`ExitEmployees/${id}/removalHistory`).push(removalEntry);
+            await firebaseDB.child(`ExitEmployeesHistory/${id}`).push({ action: 'removed', meta: removalEntry, actionAt: new Date().toISOString() });
             await firebaseDB.child(`EmployeeBioData/${id}`).remove();
-            // success -> close modal, clear states and show success modal
+// success -> close modal, clear states and show success modal
             setShowDeleteReasonModal(false);
             setEmployeeToDelete(null);
             setShowDeleteSuccessModal(true);
@@ -351,7 +432,9 @@ export default function DisplayWorkers() {
 
             if (employeeData) {
                 await firebaseDB.child(`ExitEmployees/${employeeId}`).set(employeeData);
-                await firebaseDB.child(`ExitEmployeesHistory/${employeeId}`).push({ ...employeeData, action: 'removed', actionAt: new Date().toISOString() });
+                const removalEntrySimple = { removedAt: new Date().toISOString(), removedBy: 'UI', removalReason: '', removalComment: '' };
+                await firebaseDB.child(`ExitEmployees/${employeeId}/removalHistory`).push(removalEntrySimple);
+                await firebaseDB.child(`ExitEmployeesHistory/${employeeId}`).push({ action: 'removed', meta: removalEntrySimple, actionAt: new Date().toISOString() });
                 await employeeRef.remove();
                 alert('Employee moved to ExitEmployees successfully!');
             }

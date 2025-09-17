@@ -299,13 +299,13 @@ export default function DisplayExitWorkers() {
       };
 
       await firebaseDB.child(`EmployeeBioData/${id}`).set(payloadToActive);
-      // append a return entry to ExitEmployeesHistory so history is preserved
-      await firebaseDB.child(`ExitEmployeesHistory/${id}`).push({ action: 'returned', reason: returnReasonForm.reasonType, comment: returnReasonForm.comment.trim(), returnedAt: returnedAt });
-      // update the ExitEmployees node with revert metadata (non-destructive) and then remove the live record
-      await firebaseDB.child(`ExitEmployees/${id}`).update({ revertedAt: returnedAt, revertReason: returnReasonForm.reasonType, revertComment: returnReasonForm.comment.trim() });
-
+      // create a return entry and append to item-level returnHistory and global history (single push)
+      const returnEntry = { returnedAt: returnedAt, returnedBy: 'UI', reason: returnReasonForm.reasonType, comment: returnReasonForm.comment.trim() };
+      await firebaseDB.child(`ExitEmployees/${id}/returnHistory`).push(returnEntry);
+      await firebaseDB.child(`ExitEmployeesHistory/${id}`).push({ action: 'returned', meta: returnEntry, actionAt: returnedAt });
+      // remove the live ExitEmployees record (we preserved history in returnHistory + ExitEmployeesHistory)
       await firebaseDB.child(`ExitEmployees/${id}`).remove();
-      setShowReturnReasonModal(false);
+setShowReturnReasonModal(false);
       setShowReturnedModal(true);
       setReturnError(null);
       setReasonError(null);

@@ -51,6 +51,8 @@ import WorkerCallsData from '../pages/WorkerCallsData';
 import Enquiry from '../pages/Enquiry';
 import EnquiryExit from '../pages/EnquiryExit';
 import SearchResults from '../pages/SearchResults';
+import StaffData from '../pages/StaffData';
+import ExistingStaff from '../pages/ExistingStaff';
 
 
 export default function LeftNav() {
@@ -73,7 +75,7 @@ export default function LeftNav() {
     <>
       <nav className={isActive ? 'navbar navbar-expand-sm toggle' : 'navbar navbar-expand-sm'}>
         {/* Brand / Logo */}
-        <button type="button" className="navbar-brand" onClick={() => {}}>
+        <button type="button" className="navbar-brand" onClick={() => { }}>
           <img src={isActive ? logoicon : logo} alt="JenCeo Logo" />
         </button>
 
@@ -104,12 +106,12 @@ export default function LeftNav() {
             <div className="d-flex justify-content-between align-items-center px-2">
               {/* If you have a Profile page/route, adjust the NavLink path below */}
               <NavLink to='Profile' className="nav-link p-0" onClick={closeMobile} title="Profile">
-                <span style={{fontSize:14}}>👤 Profile</span>
+                <span style={{ fontSize: 14 }}>👤 Profile</span>
               </NavLink>
 
               {/* If you have a Notifications page/route, adjust the NavLink path below */}
               <NavLink to='Notifications' className="nav-link p-0" onClick={closeMobile} title="Notifications">
-                <span style={{fontSize:14}}>🔔 Notifications</span>
+                <span style={{ fontSize: 14 }}>🔔 Notifications</span>
               </NavLink>
             </div>
           </div>
@@ -129,6 +131,17 @@ export default function LeftNav() {
             </li>
 
             <hr />
+            <li className="nav-item">
+              <NavLink to='StaffData' className="nav-link" title='Staff' onClick={closeMobile}>
+                <img src={invest} alt="" /> Staff
+              </NavLink>
+            </li>
+            <li className="nav-item">
+              <NavLink to='ExistingStaff' className="nav-link" title='Exist Staff' onClick={closeMobile}>
+                <img src={invest} alt="" /> Exist Staff
+              </NavLink>
+            </li>
+            <hr></hr>
 
             <li className="nav-item">
               <NavLink to='WorkersData' className="nav-link" title='Worker Data' onClick={closeMobile}>
@@ -143,7 +156,7 @@ export default function LeftNav() {
             </li>
             <li className="nav-item">
               <NavLink to='WorkerCallsData' className="nav-link" title='Worker Call Data' onClick={closeMobile}>
-                <img src={cell} alt="Worker Call Data"/> Worker Call Data
+                <img src={cell} alt="Worker Call Data" /> Worker Call Data
               </NavLink>
             </li>
 
@@ -236,6 +249,8 @@ export default function LeftNav() {
       <Routes>
         <Route path="/" element={<Dashboard />} />
         <Route path="WorkersData" element={<WorkersData />} />
+        <Route path="StaffData" element={<StaffData />} />
+        <Route path="ExistingStaff" element={<ExistingStaff />} />
         <Route path="EmployeeAggrement" element={<EmployeeAggrement />} />
         <Route path="WorkerCallsData" element={<WorkerCallsData />} />
         <Route path="ExistingEmployees" element={<ExistingEmployees />} />

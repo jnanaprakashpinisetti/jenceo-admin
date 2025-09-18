@@ -1,25 +1,19 @@
 // ClientModal.js
-import React, { useEffect, useRef, useState } from "react";
+// Fully-contained Client modal component with removal confirm -> removal details flow,
+// payment tables with totals, rupee formatting, audit-summary & full-audit display,
+// biodata download/print, and small removalHistory rendering.
+//
+// NOTE: adjust the `firebaseDB` import to match your project (this assumes a default export).
+// Place any required SCSS file (ClientUpdates.scss) and adjust import path if needed.
 
-/**
- Updated ClientModal.js
- - Keeps last 10 summary logs in paymentLogs (UI)
- - Persists fullAuditLogs (detailed per-field changes) to Firebase
- - Friendly labels in summary: payments[0].paidAmount -> "Payment #1 — Paid Amount"
- - Toggle to view summarized logs (default) or full audit logs
- - Detail-Info tables now include totals rows
- - ReminderDays auto-updates reminderDate
- - Remarks in payments moved to own row
- - Refund badge pulse animation
- - Unsaved changes confirmation + Thank-you modal
- *
- * Props:
- *  - client: existing client object (if editing/view)
- *  - isOpen, onClose
- *  - onSave(payload) => should save payload to Firebase (returns Promise)
- *  - onDelete
- *  - isEditMode, isAdmin, currentUserName
- */
+import React, { useEffect, useRef, useState } from "react";
+import firebaseDB from "../../firebase"; // <-- adjust this path if your firebase util is elsewhere
+
+const removalReasonOptions = [
+  "Contract Closed",
+  "Contract Terminated",
+  "Contract Stopped",
+];
 
 const safeNumber = (v) => {
   if (v === null || v === undefined || v === "") return 0;
@@ -246,16 +240,19 @@ const getInitialFormData = () => ({
   fullAuditLogs: [],
 });
 
-export default function ClientModal({
-  client,
-  isOpen,
-  onClose,
-  onSave, // should return Promise
-  onDelete,
+// ClientModal component
+const ClientModal = ({
+  isOpen = false,
+  onClose = () => { },
+  client = null,
+  onSave = null, // function that returns a Promise to persist payload
+  onDelete = null,
   isEditMode = false,
   isAdmin = false,
   currentUserName = "System",
-}) {
+  onRemoved = () => { },
+}) => {
+  // refs & state
   const [formData, setFormData] = useState(getInitialFormData());
   const [activeTab, setActiveTab] = useState("basic");
   const [errors, setErrors] = useState({});
@@ -268,12 +265,17 @@ export default function ClientModal({
   const bioIframeRef = useRef(null);
   const initialSnapshotRef = useRef(null);
 
+  // Removal-specific UI flow
+  const [showRemovalConfirm, setShowRemovalConfirm] = useState(false);
+  const [showRemovalModal, setShowRemovalModal] = useState(false);
+  const [removalForm, setRemovalForm] = useState({ reason: "", comment: "" });
+  const [removalErrors, setRemovalErrors] = useState({});
+
   const headerImage =
     "https://firebasestorage.googleapis.com/v0/b/jenceo-admin.firebasestorage.app/o/OfficeFiles%2FHeadder.svg?alt=media&token=fa65a3ab-ba03-4959-bc36-e293c6db48ae";
 
   useEffect(() => setEditMode(Boolean(isEditMode)), [isEditMode]);
 
-  // load client into formData when client prop changes
   useEffect(() => {
     if (!client) {
       setFormData(getInitialFormData());
@@ -537,8 +539,8 @@ export default function ClientModal({
     }
     if (!el) el = document.querySelector(`[name="${last}"]`);
     if (el) {
-      try { el.scrollIntoView({ behavior: "smooth", block: "center" }); } catch {}
-      try { el.focus(); } catch {}
+      try { el.scrollIntoView({ behavior: "smooth", block: "center" }); } catch { }
+      try { el.focus(); } catch { }
     }
   };
 
@@ -739,11 +741,6 @@ export default function ClientModal({
         <table><tbody>${renderPairs(careFields)}</tbody></table>
       </div>
 
-      <div class="section">
-        <h3>Workers</h3>
-        <table class="workers-table"><thead><tr><th>#</th><th>ID</th><th>Name</th><th>Basic Salary</th><th>From</th><th>To</th><th>Total Days</th><th>Remarks</th></tr></thead><tbody>${workersRows}</tbody>
-        <tfoot><tr><th colspan="3">Totals</th><th>${formatINR(totalBasicSalary)}</th><th colspan="2"></th><th>${totalWorkDays}</th><th></th></tr></tfoot></table>
-      </div>
 
       <div class="section">
         <h3>Payments</h3>
@@ -773,6 +770,50 @@ export default function ClientModal({
     .payment-logs .entry:last-child { border-bottom: none }
   `;
 
+  // Removal flow handlers
+  const handleStartRemoval = () => {
+    setShowRemovalConfirm(false);
+    setShowRemovalModal(true);
+    setRemovalForm({ reason: "", comment: "" });
+    setRemovalErrors({});
+  };
+
+  const handleDoRemove = async () => {
+    const errs = {};
+    if (!removalForm.reason) errs.reason = "Select reason";
+    if (!removalForm.comment || !removalForm.comment.trim()) errs.comment = "Enter comment";
+    setRemovalErrors(errs);
+    if (Object.keys(errs).length > 0) return;
+
+    try {
+      const id = formData?.id || formData?.recordId || formData?.clientId;
+      const removalEntry = {
+        removedAt: new Date().toISOString(),
+        removedBy: currentUserName || "System",
+        removalReason: removalForm.reason,
+        removalComment: removalForm.comment.trim(),
+      };
+
+      if (id) {
+        // push into ExitClients/{id}/removalHistory (firebase structure expected)
+        await firebaseDB.child(`ExitClients/${id}/removalHistory`).push(removalEntry);
+        // remove from ClientData
+        await firebaseDB.child(`ClientData/${id}`).remove();
+      } else {
+        // fallback: if no id, still attempt to create an ExitClients node by generated key
+        const newRef = firebaseDB.child(`ExitClients`).push();
+        await newRef.set({ removalHistory: { [newRef.key]: removalEntry }, movedAt: new Date().toISOString() });
+      }
+
+      setShowRemovalModal(false);
+      onRemoved && onRemoved(id);
+    } catch (err) {
+      console.error("remove client error", err);
+      alert("Remove failed");
+    }
+  };
+
+  // UI rendering
   return (
     <>
       <style dangerouslySetInnerHTML={{ __html: extraStyles }} />
@@ -830,7 +871,7 @@ export default function ClientModal({
 
                       <div className="col-md-4">
                         <label className="form-label"><strong>Client Name</strong> <span className="text-danger">*</span></label>
-                        <input className={`form-control ${errors.clientName ? "is-invalid" : ""}`} name="clientName" value={formData.clientName || ""} onChange={handleChange} onBlur={() => { if (!formData.clientName) setErrors((p)=>({...p, clientName: "Client name is required"})); }} disabled={!editMode} />
+                        <input className={`form-control ${errors.clientName ? "is-invalid" : ""}`} name="clientName" value={formData.clientName || ""} onChange={handleChange} onBlur={() => { if (!formData.clientName) setErrors((p) => ({ ...p, clientName: "Client name is required" })); }} disabled={!editMode} />
                         {errors.clientName && <div className="invalid-feedback">{errors.clientName}</div>}
                       </div>
 
@@ -863,6 +904,90 @@ export default function ClientModal({
                         <input className="form-control" name="mobileNo2" value={formData.mobileNo2 || ""} onChange={handleChange} disabled={!editMode} maxLength="10" />
                       </div>
                     </div>
+
+                    {/* removal history block */}
+                    {/* --- Removal & Return history (insert after mobile inputs) --- */}
+                    <div className="row mt-3">
+                      <h5>Return / Remove comments</h5>
+
+                      <div className="action-comments-wrapper">
+                        {(() => {
+                          // Normalize arrays (support both array and keyed object)
+                          const removalArr = formData?.removalHistory
+                            ? (Array.isArray(formData.removalHistory) ? formData.removalHistory : Object.values(formData.removalHistory))
+                            : [];
+
+                          // support both returnInfo or returnHistory names
+                          const returnArrRaw = formData?.returnInfo || formData?.returnHistory || [];
+                          const returnArr = Array.isArray(returnArrRaw) ? returnArrRaw : Object.values(returnArrRaw || {});
+
+                          // build entries preserving important fields and friendly names
+                          const entries = [];
+
+                          removalArr.forEach((r) => {
+                            if (!r) return;
+                            entries.push({
+                              type: "Removal",
+                              reason: r.removalReason || r.reasonType || r.reason || "",
+                              comment: r.removalComment || r.comment || "",
+                              user: r.removedBy || r.userStamp || r.user || r.removedByName || "",
+                              time: r.removedAt || r.removalAt || r.actionAt || r.timestamp || "",
+                            });
+                          });
+
+                          returnArr.forEach((t) => {
+                            if (!t) return;
+                            entries.push({
+                              type: "Return",
+                              reason: t.reasonType || t.reason || "",
+                              comment: t.comment || t.returnComment || "",
+                              user: t.returnedBy || t.userStamp || t.user || t.revertedBy || "",
+                              time: t.returnedAt || t.returnAt || t.timestamp || "",
+                            });
+                          });
+
+                          // sort by time descending (newest first) if time exists
+                          entries.sort((a, b) => {
+                            const ta = a.time ? new Date(a.time).getTime() : 0;
+                            const tb = b.time ? new Date(b.time).getTime() : 0;
+                            return tb - ta;
+                          });
+
+                          if (entries.length === 0) {
+                            return <div className="no-comments text-muted">No removed or returned comments.</div>;
+                          }
+
+                          return entries.map((e, idx) => (
+                            <div className={`action-comments ${e.type === "Removal" ? "removal" : "return"}`} key={`${e.type}-${idx}`}>
+                              <div className="action-comments-header d-flex align-items-center justify-content-between">
+                                <div className="d-flex align-items-center gap-2">
+                                  <strong className="action-type">{e.type}</strong>
+                                  {e.user ? <span className="action-user">by {e.user}</span> : null}
+                                </div>
+                                {e.time ? <span className="action-time text-muted small">{new Date(e.time).toLocaleString()}</span> : null}
+                              </div>
+
+                              <div className="action-comments-body mt-2">
+                                {e.reason ? (
+                                  <div className="action-row mb-1 d-flex">
+                                    <span className="label me-2">Reason:</span>
+                                    <span className="value">{e.reason}</span>
+                                  </div>
+                                ) : null}
+
+                                {e.comment ? (
+                                  <div className="mb-1">
+                                    <span className="label me-2">Comment:</span>
+                                    <div className="value comment-text" style={{ whiteSpace: "pre-wrap" }}>{e.comment}</div>
+                                  </div>
+                                ) : null}
+                              </div>
+                            </div>
+                          ));
+                        })()}
+                      </div>
+                    </div>
+
                   </div>
                 )}
 
@@ -1320,6 +1445,56 @@ export default function ClientModal({
         </div>
       </div>
 
+      {/* Removal confirmation dialog (first modal) */}
+      {showRemovalConfirm && (
+        <div className="modal-backdrop-custom" id="removal-confirm-modal" role="dialog" aria-modal="true">
+          <div className="modal-card-custom" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header-custom">
+              <h5>Confirm Remove</h5>
+              <button className="btn-close-custom" onClick={() => setShowRemovalConfirm(false)}>✕</button>
+            </div>
+            <div className="modal-body-custom">
+              <p>Are you sure you want to remove this client?</p>
+              <div className="d-flex gap-2 justify-content-end">
+                <button className="btn btn-secondary" onClick={() => setShowRemovalConfirm(false)}>No</button>
+                <button className="btn btn-danger" onClick={handleStartRemoval}>Yes</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Removal details modal (reason + comment mandatory) */}
+      {showRemovalModal && (
+        <div className="modal-backdrop-custom" role="dialog" aria-modal="true">
+          <div className="modal-card-custom">
+            <div className="modal-header-custom">
+              <h5>Removal Details</h5>
+              <button className="btn-close-custom" onClick={() => setShowRemovalModal(false)}>✕</button>
+            </div>
+            <div className="modal-body-custom">
+              <div className="mb-2">
+                <label className="form-label">Reason</label>
+                <select className="form-select" value={removalForm.reason} onChange={(e) => setRemovalForm(prev => ({ ...prev, reason: e.target.value }))}>
+                  <option value="">-- Select reason --</option>
+                  {removalReasonOptions.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+                </select>
+                {removalErrors.reason && <div className="text-danger small mt-1">{removalErrors.reason}</div>}
+              </div>
+              <div className="mb-2">
+                <label className="form-label">Comment</label>
+                <textarea className="form-control" rows="4" value={removalForm.comment} onChange={(e) => setRemovalForm(prev => ({ ...prev, comment: e.target.value }))} />
+                {removalErrors.comment && <div className="text-danger small mt-1">{removalErrors.comment}</div>}
+              </div>
+            </div>
+            <div className="modal-footer-custom">
+              <button className="btn btn-secondary" onClick={() => setShowRemovalModal(false)}>Close</button>
+              <button className="btn btn-danger" onClick={handleDoRemove}>Remove Client</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Delete confirm */}
       {showDeleteConfirm && (
         <div className="modal fade show" style={{ display: "block", backgroundColor: "rgba(0,0,0,0.5)" }}>
@@ -1354,4 +1529,6 @@ export default function ClientModal({
       )}
     </>
   );
-}
+};
+
+export default ClientModal;

@@ -11,7 +11,7 @@ import ClientModal from './ClientModal';
  * - Reminder badges with counts (overdue/today/tomorrow/upcoming) + clickable filter
  * - Search, Status filter, Sort, Reset
  * - Urgency classes on rows (reminder-overdue, reminder-today, reminder-tomorrow, reminder-upcoming)
- * 
+ *
  * Data model differences handled:
  * - Reminder date comes from the most recent payment's `reminderDate`
  * - Status uses `serviceStatus`
@@ -41,6 +41,11 @@ export default function DisplayClient() {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [clientToDelete, setClientToDelete] = useState(null);
   const [showMovedModal, setShowMovedModal] = useState(false);
+
+  // Removal details modal state (second step)
+  const [showRemovalDetailsModal, setShowRemovalDetailsModal] = useState(false);
+  const [removalForm, setRemovalForm] = useState({ reason: '', comment: '' });
+  const [removalErrors, setRemovalErrors] = useState({});
 
   // Save flow
   const [showSaveModal, setShowSaveModal] = useState(false);
@@ -294,24 +299,14 @@ export default function DisplayClient() {
     setClientToDelete(null);
   };
 
+  // Previously: handleDeleteConfirmed moved record immediately.
+  // Now we open the second modal (removal details) and perform the move only after reason/comment provided.
   const handleDeleteConfirmed = async () => {
-    if (!clientToDelete) return;
-    const { id, ...payload } = clientToDelete;
-
-    try {
-      const movedAt = new Date().toISOString();
-      await firebaseDB.child(`ExitClients/${id}`).set({
-        ...payload,
-        originalId: id,
-        movedAt,
-      });
-      await firebaseDB.child(`ClientData/${id}`).remove();
-      closeDeleteConfirm();
-      setShowMovedModal(true);
-    } catch (err) {
-      setError('Error moving client: ' + err.message);
-      closeDeleteConfirm();
-    }
+    // This function is no longer invoked directly from the "Yes, Move & Delete" button;
+    // that button now opens the removal details modal (see markup).
+    // A legacy path kept here for safety:
+    setShowDeleteConfirm(false);
+    setShowRemovalDetailsModal(true);
   };
 
   const handleSave = async (updatedClient) => {
@@ -431,15 +426,6 @@ export default function DisplayClient() {
         </div>
       </div>
 
-      {/* Header summary line */}
-      {/* <div className="d-flex justify-content-between align-items-center mb-3 flex-wrap" style={{ gap: '10px' }}>
-        <div className="reminder-pill">Reminder Clients (≤ 2 days): {reminderCount}</div>
-        <div>
-          Showing {indexOfFirst + 1} to {Math.min(indexOfLast, filteredSorted.length)} of {filteredSorted.length} entries
-        </div>
-      </div> */}
-
-      {/* Table */}
       <div className="table-responsive running-client">
         <table className="table table-dark table-hover">
           <thead className="table-dark">
@@ -469,7 +455,7 @@ export default function DisplayClient() {
               })();
 
               return (
-                <tr key={client.id} className={rClass}>
+                <tr key={client.id} className={rClass} onClick={() => handleView(client)} style={{ cursor: 'pointer' }}>
                   <td><strong>{client.idNo || 'N/A'}</strong></td>
                   <td>{client.clientName || 'N/A'}</td>
                   <td>{client.location || 'N/A'}</td>
@@ -482,7 +468,7 @@ export default function DisplayClient() {
                     {client.mobileNo1 ? (
                       <span>
                         {client.mobileNo1} &nbsp;&nbsp;
-                        <a href={`tel:${client.mobileNo1}`} className="btn btn-sm btn-info">Call</a>
+                        <a href={`tel:${client.mobileNo1}`} className="btn btn-sm btn-info" onClick={(e) => e.stopPropagation()}>Call</a>
                         <a
                           className="btn btn-sm btn-warning ms-1"
                           href={`https://wa.me/${client.mobileNo1.replace(/\D/g, '')}?text=${encodeURIComponent(
@@ -490,6 +476,7 @@ export default function DisplayClient() {
                           )}`}
                           target="_blank"
                           rel="noopener noreferrer"
+                          onClick={(e) => e.stopPropagation()}
                         >
                           WAP
                         </a>
@@ -503,13 +490,13 @@ export default function DisplayClient() {
                   </td>
                   <td>
                     <div className="d-flex">
-                      <button className="btn btn-sm me-2" title="View" onClick={() => handleView(client)}>
+                      <button className="btn btn-sm me-2" title="View" onClick={(e) => { e.stopPropagation(); handleView(client); }}>
                         <img src={viewIcon} alt="view Icon" width="18" height="18" />
                       </button>
-                      <button className="btn btn-sm me-2" title="Edit" onClick={() => handleEdit(client)}>
+                      <button className="btn btn-sm me-2" title="Edit" onClick={(e) => { e.stopPropagation(); handleEdit(client); }}>
                         <img src={editIcon} alt="edit Icon" width="15" height="15" />
                       </button>
-                      <button className="btn btn-sm" title="Delete" onClick={() => openDeleteConfirm(client)}>
+                      <button className="btn btn-sm" title="Delete" onClick={(e) => { e.stopPropagation(); openDeleteConfirm(client); }}>
                         <img src={deleteIcon} alt="delete Icon" width="14" height="14" />
                       </button>
                     </div>
@@ -584,7 +571,71 @@ export default function DisplayClient() {
               </div>
               <div className="modal-footer">
                 <button type="button" className="btn btn-secondary" onClick={closeDeleteConfirm}>Cancel</button>
-                <button type="button" className="btn btn-danger" onClick={handleDeleteConfirmed}>Yes, Move & Delete</button>
+                {/* open the second modal that requests reason/comment */}
+                <button type="button" className="btn btn-danger" onClick={() => { setShowDeleteConfirm(false); setShowRemovalDetailsModal(true); }}>Yes, Move & Delete</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Removal Details Modal (after confirming delete) */}
+      {showRemovalDetailsModal && clientToDelete && (
+        <div className="modal fade show" style={{ display: 'block', backgroundColor: 'rgba(0,0,0,0.5)' }}>
+          <div className="modal-dialog modal-dialog-centered">
+            <div className="modal-content">
+              <div className="modal-header">
+                <h5 className="modal-title">Removal Details</h5>
+                <button type="button" className="btn-close" onClick={() => setShowRemovalDetailsModal(false)}></button>
+              </div>
+              <div className="modal-body">
+                <p>Please provide a reason and comment for removal. Both fields are mandatory.</p>
+                <div className="mb-2">
+                  <label className="form-label">Reason</label>
+                  <select className="form-select" value={removalForm.reason} onChange={(e)=>setRemovalForm(prev=>({...prev, reason: e.target.value}))}>
+                    <option value="">-- Select reason --</option>
+                    <option value="Contract Closed">Contract Closed</option>
+                    <option value="Contract Terminated">Contract Terminated</option>
+                    <option value="Contract Stopped">Contract Stopped</option>
+                  </select>
+                  {removalErrors.reason && <div className="text-danger small mt-1">{removalErrors.reason}</div>}
+                </div>
+                <div className="mb-2">
+                  <label className="form-label">Comment</label>
+                  <textarea className="form-control" rows={4} value={removalForm.comment} onChange={(e)=>setRemovalForm(prev=>({...prev, comment: e.target.value}))} />
+                  {removalErrors.comment && <div className="text-danger small mt-1">{removalErrors.comment}</div>}
+                </div>
+              </div>
+              <div className="modal-footer">
+                <button type="button" className="btn btn-secondary" onClick={() => setShowRemovalDetailsModal(false)}>Cancel</button>
+                <button type="button" className="btn btn-danger" onClick={async ()=>{
+                  const errs = {};
+                  if(!removalForm.reason) errs.reason = 'Select reason';
+                  if(!removalForm.comment || !removalForm.comment.trim()) errs.comment = 'Enter comment';
+                  setRemovalErrors(errs);
+                  if(Object.keys(errs).length>0) return;
+
+                  try {
+                    const client = clientToDelete;
+                    const { id, ...payload } = client;
+                    const movedAt = new Date().toISOString();
+                    const removalEntry = { removedAt: movedAt, removedBy: (window?.CURRENT_USER_NAME || 'System'), removalReason: removalForm.reason, removalComment: removalForm.comment.trim() };
+
+                    await firebaseDB.child(`ExitClients/${id}`).set({ ...payload, originalId: id, movedAt });
+                    await firebaseDB.child(`ExitClients/${id}/removalHistory`).push(removalEntry);
+                    await firebaseDB.child(`ClientData/${id}`).remove();
+
+                    setShowRemovalDetailsModal(false);
+                    setShowMovedModal(true);
+                    setClientToDelete(null);
+                    // reset removal form
+                    setRemovalForm({ reason: '', comment: '' });
+                    setRemovalErrors({});
+                  } catch (err) {
+                    console.error('Error moving client with removal', err);
+                    alert('Remove failed: ' + (err.message || err));
+                  }
+                }}>Remove & Move</button>
               </div>
             </div>
           </div>

@@ -8,6 +8,27 @@ import PaymentDetails from "../clientInfo/PaymentDetails";
 import PatientDetails from "../clientInfo/PatientDetails";
 import firebaseDB from "../../firebase";
 
+// Helper to fetch last client ID and increment (e.g. JC00089 -> JC00090)
+async function fetchLastClientId(firebaseDB) {
+  try {
+    const snap = await firebaseDB.child('ClientData').orderByChild('clientId').limitToLast(1).once('value');
+    const val = snap.val();
+    if (!val) return 'JC00001';
+    const key = Object.keys(val)[0];
+    const lastId = val[key].clientId || 'JC00000';
+    const m = lastId.match(/^([A-Za-z]*)(\d+)$/);
+    if (!m) return 'JC00001';
+    const prefix = m[1] || 'JC';
+    const num = parseInt(m[2], 10) + 1;
+    const padded = String(num).padStart(m[2].length, '0');
+    return `${prefix}${padded}`;
+  } catch (err) {
+    console.warn('fetchLastClientId error', err);
+    return 'JC00001';
+  }
+}
+
+
 /* -------------------
    Helpers
    ------------------- */

@@ -441,6 +441,7 @@ export default function PettyCashReport({ currentUser = "Admin", currentUserRole
                         >
                           <option value="Pending">Pending</option>
                           <option value="Approved">Approved</option>
+                          <option value="Clarification">Clarification</option>
                           <option value="Rejected">Rejected</option>
                         </select>
                       </td>

@@ -4,13 +4,8 @@ import PropTypes from "prop-types";
 import firebaseDB from "../../firebase";
 
 /**
- * PettyCashCard.jsx - Updated:
- *  - Adds Transport & Travel as main category and better mapping heuristics
- *  - Ensures fields like quantity/price/total/subCategory show in details
- *  - Adds `summary-row-active` class for active/expanded row
- *  - Computes overall totals/counts from the same "admin" firebase path when available
- *    (so it matches PettyCashReport which reads PettyCash/admin)
- *  - Keeps original functionality and exports/prints
+ * PettyCashCard.jsx - Updated classification logic for status detection
+ * Added "Active" card which is grand total of Acknowledge + Pending + Clarification.
  */
 
 const MAIN_CATEGORIES = [
@@ -84,7 +79,7 @@ function detectCategoryKey(rawCategory) {
     const s = String(rawCategory).toLowerCase();
     // mapping keywords for transport
     const mapping = {
-        "Transport & Travel": ["transport", "travel", "petrol", "vehicle", "bus", "train", "taxi", "uber", "ola", "diesel", "petrol", "trip"],
+        "Transport & Travel": ["transport", "travel", "petrol", "vehicle", "bus", "train", "taxi", "uber", "ola", "diesel", "trip"],
         Food: ["food", "tiffin", "meal", "lunch", "dinner", "snack", "grocer", "rice", "curd", "milk"],
         Marketing: ["marketing", "apana", "adds", "ads", "laminat", "print", "digital", "offline"],
         Stationery: ["book", "file", "paper", "stationery", "it accessory", "pen", "office equipment"],
@@ -112,6 +107,104 @@ function detectCategoryKey(rawCategory) {
     return "Others";
 }
 
+/* Robust classifyStatus:
+   - Explicitly checks common exact fields such as `approval` (string),
+     nested `approval.status`, boolean `acknowledged` flags, numeric codes.
+   - Returns one of: 'acknowledge', 'pending', 'clarification', 'reject', 'unknown'
+*/
+function classifyStatus(raw) {
+    if (!raw) return "unknown";
+
+    // helper to normalize a candidate into lowercase string
+    const norm = (v) => {
+        if (v === undefined || v === null) return "";
+        if (typeof v === "boolean") return v ? "true" : "false";
+        return String(v).trim();
+    };
+
+    // 1) Check most explicit/likely fields first (strings)
+    const primaryCandidates = [
+        norm(raw.approval), // common in PettyCashReport: "Pending"/"Approved"/"Rejected"
+        norm(raw.approvalStatus),
+        norm(raw.approval_state || raw.approvalState || (raw.approval && raw.approval.status) || ""),
+        norm(raw.status),
+        norm(raw.state),
+        norm(raw.paymentStatus),
+        norm(raw.action),
+        norm(raw.statusText || raw.status_name || raw.statusValue),
+    ].filter(Boolean);
+
+    // direct string matches (handle capitalization)
+    for (const s of primaryCandidates) {
+        const low = s.toLowerCase();
+        if (/(^approved$|^approve$|^accepted$|^approved by|^approved_by|^approved$|^acknowledge|^acknowledged|^confirmed$|^yes$)/i.test(low)) return "acknowledge";
+        if (/(^pending$|^awaiting$|^inprogress$|^in-progress$|^in progress$|^todo$|^submitted$|^to be$|^waiting)/i.test(low)) return "pending";
+        if (/(clarif|clarification|query|queries|need info|info required|more info|question|ask|asked)/i.test(low)) return "clarification";
+        if (/(^rejected$|^reject$|^declined$|^decline$|^denied$)/i.test(low)) return "reject";
+        // some apps use 'closed' or 'paid' to mean approved
+        if (/(^closed$|^paid$|^completed$)/i.test(low)) return "acknowledge";
+    }
+
+    // 2) Check boolean flags (explicit ack booleans)
+    const boolFields = ["acknowledged", "acknowledge", "isAcknowledged", "approved", "isApproved"];
+    for (const f of boolFields) {
+        if (f in raw) {
+            const v = raw[f];
+            if (v === true || String(v).toLowerCase() === "true") return "acknowledge";
+            if (v === false || String(v).toLowerCase() === "false") return "pending";
+        }
+    }
+
+    // 3) Check numeric codes (some systems use 1=approved, 0=pending, 2=rejected, 3=clarification)
+    const numericCandidates = [raw.status, raw.state, raw.statusCode, raw.status_id, raw.code, raw.paymentStatus];
+    for (const nc of numericCandidates) {
+        if (nc === undefined || nc === null) continue;
+        const n = Number(nc);
+        if (!Number.isNaN(n)) {
+            if (n === 1) return "acknowledge";
+            if (n === 0) return "pending";
+            if (n === 2) return "reject";
+            if (n === 3) return "clarification";
+            // ignore other numeric codes
+        }
+    }
+
+    // 4) Deep nested checks: sometimes approval is nested object { status: 'Approved' } or { approval: { state: 'Pending' } }
+    try {
+        if (raw.approval && typeof raw.approval === "object") {
+            const nested = raw.approval.status || raw.approval.state || raw.approval.name || raw.approval.value;
+            if (nested) {
+                const low = String(nested).toLowerCase();
+                if (/(approved|approve|acknowledge|confirmed|paid)/i.test(low)) return "acknowledge";
+                if (/(pending|awaiting|submitted|waiting)/i.test(low)) return "pending";
+                if (/(clarif|clarification|query|question)/i.test(low)) return "clarification";
+                if (/(reject|rejected|declined|denied)/i.test(low)) return "reject";
+            }
+        }
+    } catch (err) {
+        // ignore
+    }
+
+    // 5) Fallback token search across many fields for loose matches
+    const allValues = Object.keys(raw).map(k => {
+        try {
+            const v = raw[k];
+            if (v === undefined || v === null) return "";
+            if (typeof v === "object") return JSON.stringify(v).toLowerCase();
+            return String(v).toLowerCase();
+        } catch (e) {
+            return "";
+        }
+    }).join(" ");
+
+    if (/(acknowledge|acknowledged|approved|accept|confirmed)/i.test(allValues)) return "acknowledge";
+    if (/(pending|awaiting|inprogress|in progress|submitted|waiting)/i.test(allValues)) return "pending";
+    if (/(clarif|clarification|query|queries|need info|more info)/i.test(allValues)) return "clarification";
+    if (/(reject|rejected|decline|declined|denied)/i.test(allValues)) return "reject";
+
+    return "unknown";
+}
+
 export default function PettyCashCard({ pettyCollection = "PettyCash" }) {
     const [entries, setEntries] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -120,8 +213,14 @@ export default function PettyCashCard({ pettyCollection = "PettyCash" }) {
     const [expandedCategory, setExpandedCategory] = useState(null); // { key, category, monthIndex }
     const modalRef = useRef(null);
 
-    // new: overallTotals state (prefer totals from admin-like path for parity with PettyCashReport)
-    const [overallTotals, setOverallTotals] = useState({ total: 0, count: 0 });
+    // totals by status
+    const [statusTotals, setStatusTotals] = useState({
+        acknowledge: { total: 0, count: 0 },
+        pending: { total: 0, count: 0 },
+        clarification: { total: 0, count: 0 },
+        reject: { total: 0, count: 0 },
+        unknown: { total: 0, count: 0 },
+    });
 
     useEffect(() => {
         let mounted = true;
@@ -207,8 +306,32 @@ export default function PettyCashCard({ pettyCollection = "PettyCash" }) {
             setEntries(normalized);
             setLoading(false);
 
-            // --- NEW: compute overall totals in a way that matches PettyCashReport
-            // Prefer to use the top-level admin path if present (so counts/totals match).
+            // --- compute status totals (acknowledge / pending / clarification / reject)
+            const statusAcc = {
+                acknowledge: { total: 0, count: 0 },
+                pending: { total: 0, count: 0 },
+                clarification: { total: 0, count: 0 },
+                reject: { total: 0, count: 0 },
+                unknown: { total: 0, count: 0 },
+            };
+
+            normalized.forEach((rec) => {
+                const st = classifyStatus(rec.raw);
+                const amt = Number(rec.amountNum || 0);
+                if (!statusAcc[st]) statusAcc[st] = { total: 0, count: 0 };
+                statusAcc[st].total += amt;
+                statusAcc[st].count += 1;
+            });
+
+            // Ensure numbers are rounded/converted
+            Object.keys(statusAcc).forEach(k => {
+                statusAcc[k].total = Number(statusAcc[k].total || 0);
+                statusAcc[k].count = Number(statusAcc[k].count || 0);
+            });
+
+            setStatusTotals(statusAcc);
+
+            // --- overall totals: prefer admin path data if provided (but only count acknowledged amounts)
             const adminPathCandidates = [
                 `${pettyCollection}/admin`,
                 `PettyCash/admin`,
@@ -225,23 +348,24 @@ export default function PettyCashCard({ pettyCollection = "PettyCash" }) {
             if (foundAdminPath) {
                 try {
                     const adminRecords = pathDataMap[foundAdminPath] || [];
-                    // compute sum using fields used by report: total, price, amount
-                    const totalSum = adminRecords.reduce((s, rec) => {
-                        const t = safeNumber(rec.total ?? rec.price ?? rec.amount ?? rec.value ?? 0);
-                        return s + t;
-                    }, 0);
-                    setOverallTotals({ total: totalSum, count: adminRecords.length });
+                    // compute sum but only for records that classify as acknowledge
+                    const adminStatusAcc = { acknowledge: 0, count: 0 };
+                    adminRecords.forEach(rec => {
+                        const amt = safeNumber(rec.total ?? rec.price ?? rec.amount ?? rec.value ?? 0);
+                        const st = classifyStatus(rec);
+                        if (st === "acknowledge") {
+                            adminStatusAcc.acknowledge += amt;
+                            adminStatusAcc.count += 1;
+                        }
+                    });
+                    setStatusTotals(prev => ({ ...prev, acknowledge: { total: adminStatusAcc.acknowledge, count: adminStatusAcc.count }, }));
                 } catch (e) {
-                    // fallback to normalized entries if something odd happens
-                    const fallbackTotal = normalized.reduce((s, r) => s + Number(r.amountNum || 0), 0);
-                    setOverallTotals({ total: fallbackTotal, count: normalized.length });
+                    // fallback handled below
                 }
-            } else {
-                // fallback: use normalized expanded entries (previous behavior)
-                const fallbackTotal = normalized.reduce((s, r) => s + Number(r.amountNum || 0), 0);
-                setOverallTotals({ total: fallbackTotal, count: normalized.length });
             }
-            // --- END NEW
+
+            // Note: The UI will show the separate status totals; the "card overall total" uses the acknowledged total:
+            // setOverallTotals is represented by statusTotals.acknowledge when rendering.
         };
 
         (async () => {
@@ -424,20 +548,22 @@ export default function PettyCashCard({ pettyCollection = "PettyCash" }) {
 
     const exportExpandedCSV = () => {
         if (!expandedRows || expandedRows.length === 0) return;
-        const rows = [["#", "Date", "Category", "SubCategory", "Description", "Qty", "Price", "Total", "Receipt", "Origin"]];
+        const rows = [["#", "Date", "Category", "SubCategory", "Description", "Qty", "Price", "Total", "Receipt", "Origin", "Status"]];
         expandedRows.forEach((r, i) => {
             const dt = r.dateParsed ? `${String(r.dateParsed.getDate()).padStart(2, "0")}/${String(r.dateParsed.getMonth() + 1).padStart(2, "0")}/${r.dateParsed.getFullYear()}` : (r.dateRaw || "-");
+            const st = classifyStatus(r.raw);
             rows.push([
                 i + 1,
                 dt,
                 r.mainCategory || detectCategoryKey(r.categoryNormalized) || "-",
                 r.subCategory || "-",
-                r.description || "-",
+                r.description || r.raw?.description || "-",
                 r.quantity ?? "",
                 r.price ?? "",
                 r.total ?? r.amountNum ?? "",
                 r.receipt || "-",
                 stringifyKey(r.__origin),
+                st,
             ]);
         });
         const csv = rows.map(r => r.map(c => {
@@ -480,6 +606,10 @@ export default function PettyCashCard({ pettyCollection = "PettyCash" }) {
         return () => document.body.classList.remove("modal-open");
     }, [modalOpen]);
 
+    // compute Active (Ack + Pending + Clarification) totals for display
+    const activeTotal = (statusTotals.acknowledge?.total || 0) + (statusTotals.pending?.total || 0) + (statusTotals.clarification?.total || 0);
+    const activeCount = (statusTotals.acknowledge?.count || 0) + (statusTotals.pending?.count || 0) + (statusTotals.clarification?.count || 0);
+
     /* ---------------- Render ---------------- */
     return (
         <>
@@ -490,8 +620,17 @@ export default function PettyCashCard({ pettyCollection = "PettyCash" }) {
                         <div className="invest-card__icon">💸</div>
                         <div className="invest-card__meta">
                             <div className="invest-card__label">Petty Cash</div>
-                            <div className="invest-card__total">{loading ? "Loading..." : formatINR(overallTotals.total)}</div>
-                            <div className="invest-card__small">Entries: {overallTotals.count}</div>
+                            {/* overall total = acknowledged total */}
+                            <div className="invest-card__total">{loading ? "Loading..." : formatINR(statusTotals.acknowledge?.total || 0)}</div>
+
+                            {/* show small status totals inline */}
+                            <div style={{ display: "flex", gap: 8, marginTop: 8, flexWrap: "wrap" }}>
+
+                                {/* New Active card inline: Ack + Pending + Clarification */}
+                                <div style={{ fontSize: 12, textAlign: "center", borderLeft: "1px solid rgba(255,255,255,0.06)", paddingLeft: 8 }}>
+                                    <div style={{ fontSize: 11 }}>{activeCount} Entries</div>
+                                </div>
+                            </div>
                         </div>
                     </div>
                     <div className="invest-card__divider" />
@@ -505,16 +644,37 @@ export default function PettyCashCard({ pettyCollection = "PettyCash" }) {
                         <div className="invest-modal-content" style={{ backgroundColor: "#202c38" }}>
                             <div className="invest-modal-investor-bar bg-secondary text-white justify-content-between">
                                 <div style={{ fontWeight: 700 }}>Petty Cash Report</div>
-                                <div className="d-flex justify-content-between gap-3">
-                                    <div className="petty-header-card grad-spent">
-                                        <div style={{ fontSize: 12 }}>Overall Spent</div>
-                                        <div style={{ fontWeight: 700 }}>{formatINR(overallTotals.total)}</div>
+                                <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
+                                    {/* Active (Ack + Pending + Clarification) */}
+                                    <div className="petty-header-card" style={{ background: "#0b84a8", padding: 10 }}>
+                                        <div style={{ fontSize: 12 }}>Active (Ack+Pend+Clarify)</div>
+                                        <div style={{ fontWeight: 700 }}>{formatINR(activeTotal)}</div>
+                                        <div style={{ fontSize: 11 }}>{activeCount} entries</div>
                                     </div>
-                                    <div className="petty-header-card grad-count">
-                                        <div style={{ fontSize: 12 }}>Entries</div>
-                                        <div style={{ fontWeight: 700 }}>{overallTotals.count}</div>
+
+                                    {/* Four status cards */}
+                                    <div className="petty-header-card" style={{ background: "#0b6b3a", padding: 10 }}>
+                                        <div style={{ fontSize: 12 }}>Acknowledged</div>
+                                        <div style={{ fontWeight: 700 }}>{formatINR(statusTotals.acknowledge?.total || 0)}</div>
+                                        <div style={{ fontSize: 11 }}>{statusTotals.acknowledge?.count || 0} entries</div>
+                                    </div>
+                                    <div className="petty-header-card" style={{ background: "#6b5e00", padding: 10 }}>
+                                        <div style={{ fontSize: 12 }}>Pending</div>
+                                        <div style={{ fontWeight: 700 }}>{formatINR(statusTotals.pending?.total || 0)}</div>
+                                        <div style={{ fontSize: 11 }}>{statusTotals.pending?.count || 0} entries</div>
+                                    </div>
+                                    <div className="petty-header-card" style={{ background: "#6b3a9b", padding: 10 }}>
+                                        <div style={{ fontSize: 12 }}>Clarification</div>
+                                        <div style={{ fontWeight: 700 }}>{formatINR(statusTotals.clarification?.total || 0)}</div>
+                                        <div style={{ fontSize: 11 }}>{statusTotals.clarification?.count || 0} entries</div>
+                                    </div>
+                                    <div className="petty-header-card" style={{ background: "#8b2b2b", padding: 10 }}>
+                                        <div style={{ fontSize: 12 }}>Rejected</div>
+                                        <div style={{ fontWeight: 700 }}>{formatINR(statusTotals.reject?.total || 0)}</div>
+                                        <div style={{ fontSize: 11 }}>{statusTotals.reject?.count || 0} entries</div>
                                     </div>
                                 </div>
+
                                 <div className="action-btn-wrapper">
                                     <button className="btn btn-sm btn-warning" onClick={() => exportMatrixCSV("year")} disabled={!activeYear}>Export Year CSV</button>
                                     <button className="btn btn-sm btn-warning" onClick={printMatrix}>Print</button>
@@ -600,6 +760,7 @@ export default function PettyCashCard({ pettyCollection = "PettyCash" }) {
                                                                                     <th>Total</th>
                                                                                     <th>Receipt</th>
                                                                                     <th>Origin</th>
+                                                                                    <th>Status</th>
                                                                                 </tr>
                                                                             </thead>
                                                                             <tbody>
@@ -615,10 +776,11 @@ export default function PettyCashCard({ pettyCollection = "PettyCash" }) {
                                                                                         <td>{er.total ?? (er.amountNum ? formatINR(er.amountNum) : "-")}</td>
                                                                                         <td>{er.receipt || "-"}</td>
                                                                                         <td style={{ fontSize: 12 }}>{stringifyKey(er.__origin)}</td>
+                                                                                        <td style={{ fontSize: 12 }}>{classifyStatus(er.raw)}</td>
                                                                                     </tr>
                                                                                 ))}
                                                                                 {expandedRows.length === 0 && (
-                                                                                    <tr><td colSpan={10} className="text-center small text-muted">No details for this selection</td></tr>
+                                                                                    <tr><td colSpan={11} className="text-center small text-muted">No details for this selection</td></tr>
                                                                                 )}
                                                                             </tbody>
                                                                         </table>
@@ -659,6 +821,7 @@ export default function PettyCashCard({ pettyCollection = "PettyCash" }) {
                                                                                         <th>Total</th>
                                                                                         <th>Receipt</th>
                                                                                         <th>Origin</th>
+                                                                                        <th>Status</th>
                                                                                     </tr>
                                                                                 </thead>
                                                                                 <tbody>
@@ -674,6 +837,7 @@ export default function PettyCashCard({ pettyCollection = "PettyCash" }) {
                                                                                             <td>{er.total ?? (er.amountNum ? formatINR(er.amountNum) : "-")}</td>
                                                                                             <td>{er.receipt || "-"}</td>
                                                                                             <td style={{ fontSize: 12 }}>{stringifyKey(er.__origin)}</td>
+                                                                                            <td style={{ fontSize: 12 }}>{classifyStatus(er.raw)}</td>
                                                                                         </tr>
                                                                                     ))}
                                                                                 </tbody>
@@ -703,7 +867,7 @@ export default function PettyCashCard({ pettyCollection = "PettyCash" }) {
                                     </table>
                                 </div>
 
-                                <div className="mt-3 small text-muted">Matrix shows main category totals (monthly); click a category or month cell to view detailed petty cash entries.</div>
+                                <div className="mt-3 small text-muted">Matrix shows main category totals (monthly); click a category or month cell to view detailed petty cash entries. Status totals (Ack/Pending/Clarify/Reject) are shown at the top — only <strong>Acknowledged</strong> amounts are added to the main card total.</div>
                             </div>
 
                         </div>

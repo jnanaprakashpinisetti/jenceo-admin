@@ -1,14 +1,12 @@
 import React from "react";
 
-export default function BasicInformation({ formData, handleChange, errors = {}, isViewMode = false }) {
+export default function BasicInformation({ formData, handleChange, errors = {}, isViewMode = false, idDisabled = false }) {
   // Function to get current location
   const getCurrentLocation = () => {
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
         (position) => {
           const { latitude, longitude } = position.coords;
-          // Reverse geocode to get address (you might want to use Google Maps Geocoding API)
-          // For now, we'll just store the coordinates
           handleChange({
             target: {
               name: "googleLocation",
@@ -26,18 +24,14 @@ export default function BasicInformation({ formData, handleChange, errors = {}, 
     }
   };
 
-  // Function to open Google Maps with directions
   const openGoogleMaps = () => {
     if (formData.googleLocation) {
-      // If we have coordinates, use them directly
       if (formData.googleLocation.includes(',')) {
         window.open(`https://www.google.com/maps/dir/?api=1&destination=${formData.googleLocation}`);
       } else {
-        // Otherwise use the address
         window.open(`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(formData.googleLocation)}`);
       }
     } else if (formData.location) {
-      // Fallback to the location field
       window.open(`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(formData.location)}`);
     }
   };
@@ -46,7 +40,6 @@ export default function BasicInformation({ formData, handleChange, errors = {}, 
     <>
       <div className="row">
         <div className="col-md-6">
-          {/* ID No */}
           <div className="form-group ">
             <label>ID No<span className="text-danger">*</span></label>
             <input
@@ -56,14 +49,15 @@ export default function BasicInformation({ formData, handleChange, errors = {}, 
               value={formData.idNo}
               onChange={handleChange}
               placeholder="JC00001"
-              maxLength={7}
-              readOnly={isViewMode}
+              maxLength={12}
+              readOnly={isViewMode || idDisabled}
+              disabled={idDisabled}
             />
             {errors.idNo && <div className="invalid-feedback">{errors.idNo}</div>}
+            {idDisabled && !isViewMode && <small className="text-muted">ID auto-generated — clear to edit.</small>}
           </div>
         </div>
         <div className="col-md-6">
-          {/* Client Name */}
           <div className="form-group ">
             <label>Client Name<span className="text-danger">*</span></label>
             <input
@@ -78,9 +72,10 @@ export default function BasicInformation({ formData, handleChange, errors = {}, 
           </div>
         </div>
       </div>
+
+      {/* rest of your fields unchanged */}
       <div className="row">
         <div className="col-md-6">
-          {/* Gender */}
           <div className="form-group ">
             <label>Gender<span className="text-danger">*</span></label>
             <select
@@ -99,7 +94,6 @@ export default function BasicInformation({ formData, handleChange, errors = {}, 
           </div>
         </div>
         <div className="col-md-6">
-          {/* Care Of */}
           <div className="form-group ">
             <label>Care Of</label>
             <input
@@ -113,9 +107,10 @@ export default function BasicInformation({ formData, handleChange, errors = {}, 
           </div>
         </div>
       </div>
+
+      {/* rest of file unchanged (location, mobile, google location etc.) */}
       <div className="row">
         <div className="col-md-6">
-          {/* Relation */}
           <div className="form-group ">
             <label>Relation</label>
             <input
@@ -129,7 +124,6 @@ export default function BasicInformation({ formData, handleChange, errors = {}, 
           </div>
         </div>
         <div className="col-md-6">
-          {/* Location */}
           <div className="form-group ">
             <label>Location<span className="text-danger">*</span></label>
             <input
@@ -145,9 +139,9 @@ export default function BasicInformation({ formData, handleChange, errors = {}, 
         </div>
       </div>
 
+      {/* mobile inputs */}
       <div className="row">
         <div className="col-md-6">
-          {/* Mobile No 1 */}
           <div className="form-group ">
             <label>Mobile No 1<span className="text-danger">*</span></label>
             <input
@@ -164,7 +158,6 @@ export default function BasicInformation({ formData, handleChange, errors = {}, 
         </div>
 
         <div className="col-md-6">
-          {/* Mobile No 2 */}
           <div className="form-group ">
             <label>Mobile No 2</label>
             <input
@@ -181,7 +174,7 @@ export default function BasicInformation({ formData, handleChange, errors = {}, 
         </div>
       </div>
 
-      {/* Google Location Field */}
+      {/* Google Location */}
       <div className="row">
         <div className="col-md-12">
           <div className="form-group ">

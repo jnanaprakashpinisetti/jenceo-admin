@@ -17,6 +17,7 @@ export default function PettyCashForm() {
     price: "",
     total: "",
     comments: "",
+    approval: "pending",
     // support up to 4 extra fields for flexible asset types
     extraField1: "",
     extraField2: "",

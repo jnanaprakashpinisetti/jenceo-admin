@@ -152,6 +152,11 @@ $dark-table-text: #e6eef6;
         background: linear-gradient(135deg, #b10362 0%, #960253);
     }
 }
+.assets-card {
+    .invest-card__box {
+        background: linear-gradient(135deg, #01a72b 0%, #02691c);
+    }
+}
 
 .worker-salary-card {
     font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;

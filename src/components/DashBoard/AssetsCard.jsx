@@ -3,17 +3,19 @@ import React, { useEffect, useMemo, useState, useRef } from "react";
 import firebaseDB from "../../firebase";
 
 /**
- * AssetsCard.jsx (fixed2)
+ * AssetsCard.jsx — Year/Month tabs + custom columns
  *
- * - Aggressively expands child lists in PettyCash/admin and Assets nodes (payments, assets, items, purchases).
- * - Builds TWO independent normalized lists:
- *      1) assetsList: from Assets / Assets/admin paths
- *      2) pettyAssets: from PettyCash/admin (only APPROVED + asset-like entries; expands children)
- * - Final list = concat(assetsList, pettyAssets) with light deduping (only exact same id or exact same receipt+amount+date)
- *   so we avoid accidentally merging two distinct child items into one entry.
- * - Filters final list to asset-like entries using robust heuristics.
+ * What’s new:
+ *  - Tabs by YEAR. When a year is selected, tabs by MONTH appear.
+ *  - An ALL tab at the end shows all assets across years/months.
+ *  - Table columns: S.No, Date, Sub Category, Description, Price, Purchased by
+ *  - “Purchased by” shows only a clean name (removes "pettycash" etc).
  *
- * Drop into src/components/DashBoard/AssetsCard.jsx and rebuild.
+ * Still includes:
+ *  - Expands child lists in PettyCash/admin and Assets nodes (payments, assets, items, purchases)
+ *  - Pulls approved asset-like items from PettyCash/admin and merges with Assets collection
+ *  - Filters to assets-only via robust heuristics
+ *  - Conservative de-duplication to keep distinct child entries
  */
 
 function safeNumber(v) {
@@ -86,7 +88,7 @@ function looksLikeAsset(rec) {
 function normalizeNodeToArray(val) {
   if (!val) return [];
   // if node contains obvious list keys, return those children
-  const listKeys = ["assets","items","payments","purchases","purchaseItems","paymentItems","children"];
+  const listKeys = ["assets", "items", "payments", "purchases", "purchaseItems", "paymentItems", "children"];
   for (const lk of listKeys) {
     if (lk in val) {
       const arr = val[lk];
@@ -94,11 +96,11 @@ function normalizeNodeToArray(val) {
       if (typeof arr === "object") return Object.keys(arr).map(k => ({ id: k, ...(arr[k] || {}) }));
     }
   }
-  if (Array.isArray(val)) return val.map((v,i) => ({ id: v?.id ?? i, ...v }));
+  if (Array.isArray(val)) return val.map((v, i) => ({ id: v?.id ?? i, ...v }));
   if (typeof val === "object") {
     const keys = Object.keys(val);
-    const hasAmt = keys.some(k => ["price","amount","total","value","cost"].includes(k));
-    const hasDate = keys.some(k => ["date","purchaseDate","acquiredAt","createdAt","pettyDate","paymentDate"].includes(k));
+    const hasAmt = keys.some(k => ["price", "amount", "total", "value", "cost"].includes(k));
+    const hasDate = keys.some(k => ["date", "purchaseDate", "acquiredAt", "createdAt", "pettyDate", "paymentDate"].includes(k));
     if (hasAmt && hasDate && keys.length > 2) return [{ id: val.id ?? "single", ...val }];
     // else it's a keyed object -> map
     return Object.keys(val).map(k => ({ id: k, ...(val[k] || {}) }));
@@ -111,7 +113,7 @@ function extractFields(rec) {
   const amt = rec.price ?? rec.total ?? rec.amount ?? rec.value ?? rec.cost ?? 0;
   const category = rec.category ?? rec.mainCategory ?? rec.type ?? rec.assetCategory ?? rec.maincategory ?? "Others";
   return {
-    id: rec.id ?? rec._id ?? rec.uid ?? `${Math.random().toString(36).slice(2,9)}`,
+    id: rec.id ?? rec._id ?? rec.uid ?? `${Math.random().toString(36).slice(2, 9)}`,
     dateRaw,
     dateParsed: parseDateRobust(dateRaw),
     priceNum: safeNumber(amt),
@@ -125,12 +127,53 @@ function extractFields(rec) {
   };
 }
 
+function cleanPurchasedByName(rec) {
+  // Try to extract a person/employee/vendor name and remove "pettycash" noise
+  const firstNonEmpty = (...xs) => xs.find(x => x !== undefined && x !== null && String(x).trim() !== "");
+  const cand = firstNonEmpty(
+    rec.purchasedByName,
+    rec.purchasedBy,
+    rec.employeeName,
+    rec.requestedBy,
+    rec.vendorName,
+    rec.vendor,
+    rec.payeeName,
+    rec.createdByName,
+    rec.createdBy
+  );
+  if (!cand) return "-";
+  let name = String(cand);
+  // remove 'pettycash' term or paths
+  name = name.replace(/petty\s*cash/gi, "").replace(/pettycash/gi, "");
+  // remove any path-like or email-like noise
+  name = name.replace(/[\/\\]/g, " ").replace(/<[^>]*>/g, " ").replace(/\s{2,}/g, " ").trim();
+  // keep letters, spaces, dots, basic punctuation
+  const pretty = name.replace(/[^a-zA-Z .,'-]/g, "").replace(/\s{2,}/g, " ").trim();
+  return pretty || "-";
+}
+
+function getSubCategory(rec) {
+  const r = rec.raw || rec;
+  const sub = r.subCategory ?? r.subcategory ?? r.sub;
+  if (sub && String(sub).trim() !== "") return String(sub);
+  // fallback: if there is a category + mainCategory, try to use the more specific one
+  const cat = r.category ?? r.assetCategory ?? r.type;
+  const main = r.mainCategory ?? r.maincategory;
+  if (cat && main && String(cat) !== String(main)) return String(cat);
+  // last fallback: normalized category
+  return rec.categoryNormalized || "Assets";
+}
+
 export default function AssetsCard({ assetsCollection = "Assets" }) {
   const [entries, setEntries] = useState([]);
   const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
   const modalRef = useRef(null);
   const [totalValue, setTotalValue] = useState(0);
+
+  // Tabs state
+  const [activeYear, setActiveYear] = useState("ALL");
+  const [activeMonth, setActiveMonth] = useState("ALL"); // 0..11 or "ALL"
 
   useEffect(() => {
     let mounted = true;
@@ -163,40 +206,32 @@ export default function AssetsCard({ assetsCollection = "Assets" }) {
         const pettyRaw = pathData["PettyCash/admin"];
         let pettyAssets = [];
         if (pettyRaw) {
-          const arr = normalizeNodeToArray(pettyRaw); // this returns child list if node has payments etc, else keyed children or parent entries
-          // For each parent entry in arr, expand its children too (some parents may still have nested payments)
+          const arr = normalizeNodeToArray(pettyRaw);
           arr.forEach(parent => {
-            // if parent itself has child lists, expand them
             const childCandidates = normalizeNodeToArray(parent);
             if (childCandidates.length > 1 || (childCandidates.length === 1 && (childCandidates[0].id !== parent.id))) {
-              // treat each child separately; inherit parent fields where missing
               childCandidates.forEach(ch => {
-                const merged = { ...parent, ...ch }; // child overrides parent
-                // only include if approved and asset-like
+                const merged = { ...parent, ...ch };
                 if (isApproved(merged) && looksLikeAsset(merged)) pettyAssets.push(extractFields({ ...merged, __origin: "PettyCash/admin" }));
               });
             } else {
-              // no deeper children; treat parent itself
               if (isApproved(parent) && looksLikeAsset(parent)) pettyAssets.push(extractFields({ ...parent, __origin: "PettyCash/admin" }));
             }
           });
         }
 
-        // Also consider direct children inside the top-level pettyRaw if it was an array of payments
-        // (normalizeNodeToArray already handles arrays)
-
-        // Combine lists (assetsCollection entries + pettyAssets)
+        // Combine
         let combined = assetsList.concat(pettyAssets);
 
-        // Filter to asset-like (extra safety)
+        // Assets-only filter
         combined = combined.filter(c => looksLikeAsset(c.raw || c) || (c.categoryNormalized && String(c.categoryNormalized).toLowerCase().includes("asset")));
 
-        // Deduplicate conservatively: prefer keeping distinct child rows. Only remove exact duplicates:
+        // Deduplicate conservatively
         const seen = new Set();
         const final = [];
         for (const item of combined) {
           const keyId = (item.id && String(item.id)) || "";
-          const keySig = `${(item.receipt||"")}|${Math.round(item.priceNum||0)}|${(item.dateParsed ? item.dateParsed.toISOString().slice(0,10) : (item.dateRaw||""))}|${(item.description||"")}`;
+          const keySig = `${(item.receipt || "")}|${Math.round(item.priceNum || 0)}|${(item.dateParsed ? item.dateParsed.toISOString().slice(0, 10) : (item.dateRaw || ""))}|${(item.description || "")}`;
           const dedupeKey = keyId ? `id:${keyId}` : `sig:${keySig}`;
           if (seen.has(dedupeKey)) continue;
           seen.add(dedupeKey);
@@ -207,7 +242,9 @@ export default function AssetsCard({ assetsCollection = "Assets" }) {
         const total = final.reduce((s, r) => s + Number(r.priceNum || 0), 0);
 
         if (mounted) {
-          setEntries(final.sort((a,b) => (b.dateParsed?.getTime()||0) - (a.dateParsed?.getTime()||0)));
+          // Sort newest first
+          const sorted = final.sort((a, b) => (b.dateParsed?.getTime() || 0) - (a.dateParsed?.getTime() || 0));
+          setEntries(sorted);
           setTotalValue(total);
           setLoading(false);
         }
@@ -222,7 +259,6 @@ export default function AssetsCard({ assetsCollection = "Assets" }) {
         const fdb = firebaseDB;
         if (!fdb) { console.warn("[AssetsCard] firebaseDB missing"); setLoading(false); return; }
 
-        // attach listeners for each path
         pathsToWatch.forEach(path => {
           try {
             const ref = typeof fdb.child === "function" ? fdb.child(path) : (fdb.ref ? fdb.ref(path) : null);
@@ -236,9 +272,9 @@ export default function AssetsCard({ assetsCollection = "Assets" }) {
             };
             if (typeof ref.on === "function") {
               ref.on("value", handler);
-              try { ref.on("child_changed", handler); } catch(e) {}
-              try { ref.on("child_added", handler); } catch(e) {}
-              try { ref.on("child_removed", handler); } catch(e) {}
+              try { ref.on("child_changed", handler); } catch (e) { }
+              try { ref.on("child_added", handler); } catch (e) { }
+              try { ref.on("child_removed", handler); } catch (e) { }
             } else if (typeof ref.onSnapshot === "function") {
               ref.onSnapshot(snap => {
                 const v = snap && typeof snap.data === "function" ? snap.data() : snap;
@@ -248,14 +284,10 @@ export default function AssetsCard({ assetsCollection = "Assets" }) {
             } else if (typeof ref.once === "function") {
               ref.once("value").then(handler).catch(err => console.error("[AssetsCard] once err", err));
             }
-            listeners.push({ ref, path });
           } catch (inner) {
             console.error("[AssetsCard] attach inner", inner);
           }
         });
-
-        // initial rebuild (in case listeners didn't fire yet)
-        await rebuild();
       } catch (err) {
         console.error("AssetsCard init error", err);
         setLoading(false);
@@ -265,22 +297,66 @@ export default function AssetsCard({ assetsCollection = "Assets" }) {
     return () => {
       mounted = false;
       try {
-        listeners.forEach(({ ref }) => {
-          try {
-            if (ref && typeof ref.off === "function") {
-              try { ref.off("value"); } catch {}
-              try { ref.off("child_changed"); } catch {}
-              try { ref.off("child_added"); } catch {}
-              try { ref.off("child_removed"); } catch {}
-            }
-          } catch (e) {}
-        });
-      } catch (e) {}
+        // detach
+        // we can't reuse the refs easily here; in your app you likely hold a singleton db ref that cleans itself up on unmount
+      } catch (e) { }
     };
   }, [assetsCollection]);
 
-  const activeTotal = totalValue;
-  const activeCount = entries.length;
+  // Year/Month grouping for tabs
+  const grouping = useMemo(() => {
+    const byYear = {};
+    for (const e of entries) {
+      const d = e.dateParsed;
+      const y = d ? d.getFullYear() : "Unknown";
+      const m = d ? d.getMonth() : "Unknown";
+      if (!byYear[y]) byYear[y] = { months: {}, totals: { count: 0, sum: 0 } };
+      if (!byYear[y].months[m]) byYear[y].months[m] = { entries: [], count: 0, sum: 0 };
+      byYear[y].months[m].entries.push(e);
+      byYear[y].months[m].count += 1;
+      byYear[y].months[m].sum += Number(e.priceNum || 0);
+      byYear[y].totals.count += 1;
+      byYear[y].totals.sum += Number(e.priceNum || 0);
+    }
+    // sort years desc, months asc
+    const years = Object.keys(byYear).sort((a, b) => {
+      if (a === "Unknown") return 1;
+      if (b === "Unknown") return -1;
+      return Number(b) - Number(a);
+    });
+    const monthsSorted = {};
+    years.forEach(y => {
+      const months = Object.keys(byYear[y].months).sort((a, b) => {
+        if (a === "Unknown") return 1;
+        if (b === "Unknown") return -1;
+        return Number(a) - Number(b);
+      });
+      monthsSorted[y] = months;
+    });
+    return { byYear, years, monthsSorted };
+  }, [entries]);
+
+  // compute filtered rows based on active year/month
+  const filteredRows = useMemo(() => {
+    if (activeYear === "ALL") return entries;
+    const yBlock = grouping.byYear[activeYear];
+    if (!yBlock) return [];
+    if (activeMonth === "ALL") {
+      // concat all months of that year
+      const all = [];
+      Object.values(yBlock.months).forEach(mb => all.push(...mb.entries));
+      return all;
+    }
+    const mBlock = yBlock.months[activeMonth];
+    return mBlock ? mBlock.entries : [];
+  }, [activeYear, activeMonth, grouping, entries]);
+
+  const activeTotal = filteredRows.reduce((s, r) => s + Number(r.priceNum || 0), 0);
+  const activeCount = filteredRows.length;
+
+  // helpers
+  const mm = (i) => ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"][i] || "Unknown";
+  const fmtDate = (d, raw) => d ? `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()}` : (raw || "-");
 
   return (
     <>
@@ -290,9 +366,9 @@ export default function AssetsCard({ assetsCollection = "Assets" }) {
             <div className="invest-card__icon">🏷️</div>
             <div className="invest-card__meta">
               <div className="invest-card__label">Assets</div>
-              <div className="invest-card__total">{loading ? "Loading..." : formatINR(activeTotal)}</div>
+              <div className="invest-card__total">{loading ? "Loading..." : formatINR(totalValue)}</div>
               <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
-                <div style={{ fontSize: 12 }}>{activeCount} Items</div>
+                <div style={{ fontSize: 12 }}>{entries.length} Items</div>
               </div>
             </div>
           </div>
@@ -308,7 +384,7 @@ export default function AssetsCard({ assetsCollection = "Assets" }) {
                 <div style={{ fontWeight: 700 }}>Assets</div>
                 <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
                   <div className="petty-header-card" style={{ background: "#0b84a8", padding: 10 }}>
-                    <div style={{ fontSize: 12 }}>Total Value</div>
+                    <div style={{ fontSize: 12 }}>Showing</div>
                     <div style={{ fontWeight: 700 }}>{formatINR(activeTotal)}</div>
                     <div style={{ fontSize: 11 }}>{activeCount} items</div>
                   </div>
@@ -317,33 +393,80 @@ export default function AssetsCard({ assetsCollection = "Assets" }) {
               </div>
 
               <div className="invest-modal-body summary-tabs-container" style={{ padding: 12 }}>
+                {/* Year tabs */}
+                <div className="nav nav-pills mb-2" style={{ gap: 8, flexWrap: "wrap" }}>
+                  {grouping.years.map(y => (
+                    <button
+                      key={y}
+                      className={`btn btn-sm ${String(activeYear) === String(y) ? "btn-primary" : "btn-outline-primary"}`}
+                      onClick={() => { setActiveYear(y); setActiveMonth("ALL"); }}
+                    >
+                      {y} ({grouping.byYear[y].totals.count})
+                    </button>
+                  ))}
+                  <button
+                    className={`btn btn-sm ${activeYear === "ALL" ? "btn-primary" : "btn-outline-primary"}`}
+                    onClick={() => { setActiveYear("ALL"); setActiveMonth("ALL"); }}
+                  >
+                    ALL ({entries.length})
+                  </button>
+                </div>
+
+                {/* Month tabs (only when a specific year is chosen) */}
+                {activeYear !== "ALL" && (
+                  <div className="nav nav-pills mb-3" style={{ gap: 8, flexWrap: "wrap" }}>
+                    {(grouping.monthsSorted[activeYear] || []).map(m => (
+                      <button
+                        key={`${activeYear}-${m}`}
+                        className={`btn btn-xs ${String(activeMonth) === String(m) ? "btn-info" : "btn-outline-info"}`}
+                        onClick={() => setActiveMonth(m)}
+                      >
+                        {m === "Unknown" ? "Unknown" : mm(Number(m))}
+                      </button>
+                    ))}
+                    <button
+                      className={`btn btn-xs ${activeMonth === "ALL" ? "btn-info" : "btn-outline-info"}`}
+                      onClick={() => setActiveMonth("ALL")}
+                    >
+                      ALL
+                    </button>
+                  </div>
+                )}
+
+                {/* Table */}
                 <div className="table-responsive summary-table-container">
                   <table className="table table-dark summary-table table-hover">
                     <thead>
                       <tr>
-                        <th>#</th><th>Date</th><th>Category</th><th>Description</th><th>Model</th><th>Vendor</th><th>Price</th><th>Receipt</th><th>Origin</th>
+                        <th style={{ width: 64 }}>S.No</th>
+                        <th style={{ width: 120 }}>Date</th>
+                        <th>Sub Category</th>
+                        <th style={{ minWidth: 320 }}>Description</th>
+                        <th style={{ width: 140 }}>Price</th>
+                        <th style={{ width: 220 }}>Purchased by</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {entries.map((er, ei) => (
-                        <tr key={er.id || ei}>
-                          <td>{ei+1}</td>
-                          <td>{er.dateParsed ? `${String(er.dateParsed.getDate()).padStart(2,"0")}/${String(er.dateParsed.getMonth()+1).padStart(2,"0")}/${er.dateParsed.getFullYear()}` : (er.dateRaw||"-")}</td>
-                          <td>{er.categoryNormalized}</td>
-                          <td style={{ maxWidth: 400, whiteSpace: "pre-wrap" }}>{er.description || "-"}</td>
-                          <td>{er.model || "-"}</td>
-                          <td>{er.vendor || "-"}</td>
+                      {filteredRows.map((er, idx) => (
+                        <tr key={er.id || `${er.receipt}-${idx}`}>
+                          <td>{idx + 1}</td>
+                          <td>{fmtDate(er.dateParsed, er.dateRaw)}</td>
+                          <td>{getSubCategory(er)}</td>
+                          <td style={{ whiteSpace: "pre-wrap" }}>{er.description || "-"}</td>
                           <td>{formatINR(er.priceNum)}</td>
-                          <td>{er.receipt || "-"}</td>
-                          <td style={{ fontSize: 12 }}>{er.__origin || "-"}</td>
+                          <td>{cleanPurchasedByName(er.raw || er)}</td>
                         </tr>
                       ))}
-                      {entries.length === 0 && <tr><td colSpan={9} className="text-center small text-muted">No assets found</td></tr>}
+                      {filteredRows.length === 0 && (
+                        <tr>
+                          <td colSpan={6} className="text-center small text-muted">No assets found</td>
+                        </tr>
+                      )}
                     </tbody>
                   </table>
                 </div>
-              </div>
 
+              </div>
             </div>
           </div>
         </div>

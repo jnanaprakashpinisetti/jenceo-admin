@@ -1,4 +1,4 @@
-// LeftNav.jsx
+// src/layout/LeftNav.jsx
 import React, { useState } from 'react';
 import { Routes, Route, NavLink, useLocation } from 'react-router-dom';
 
@@ -54,13 +54,11 @@ import SearchResults from '../pages/SearchResults';
 import StaffData from '../pages/StaffData';
 import ExistingStaff from '../pages/ExistingStaff';
 
-
 export default function LeftNav() {
-  const [isActive, setIsActive] = useState(false);   // side collapse (arrow)
-  const [isShow, setIsShow] = useState(false);       // mobile collapse (hamburger)
+  const [isActive, setIsActive] = useState(false);
+  const [isShow, setIsShow] = useState(false);
   const location = useLocation();
 
-  // Close the mobile menu automatically on route change
   React.useEffect(() => {
     setIsShow(false);
   }, [location.pathname]);
@@ -74,19 +72,16 @@ export default function LeftNav() {
   return (
     <>
       <nav className={isActive ? 'navbar navbar-expand-sm toggle' : 'navbar navbar-expand-sm'}>
-        {/* Brand / Logo */}
         <button type="button" className="navbar-brand" onClick={() => { }}>
           <img src={isActive ? logoicon : logo} alt="JenCeo Logo" />
         </button>
 
-        {/* Side slide toggle (desktop) */}
         <button className='slide' type="button" onClick={toggleSide} aria-label="Toggle sidebar">
           <img src={arrow} alt="arrow" />
         </button>
 
         <hr />
 
-        {/* Mobile toggler (React-controlled) */}
         <button
           className="navbar-toggler"
           type="button"
@@ -98,24 +93,17 @@ export default function LeftNav() {
           <img src={isShow ? close : toggle} alt="toggle button" />
         </button>
 
-        {/* Collapsible menu */}
         <div className={collapseClass} id="collapsibleNavbar">
-
-          {/* ===== MOBILE-ONLY: Profile + Notifications (shows only on small screens) ===== */}
           <div className="mobile-top d-block d-md-none mb-3">
             <div className="d-flex justify-content-between align-items-center px-2">
-              {/* If you have a Profile page/route, adjust the NavLink path below */}
               <NavLink to='Profile' className="nav-link p-0" onClick={closeMobile} title="Profile">
                 <span style={{ fontSize: 14 }}>👤 Profile</span>
               </NavLink>
-
-              {/* If you have a Notifications page/route, adjust the NavLink path below */}
               <NavLink to='Notifications' className="nav-link p-0" onClick={closeMobile} title="Notifications">
                 <span style={{ fontSize: 14 }}>🔔 Notifications</span>
               </NavLink>
             </div>
           </div>
-          {/* ============================================================================ */}
 
           <ul className="navbar-nav">
             <li className="nav-item">
@@ -245,7 +233,7 @@ export default function LeftNav() {
         </div>
       </nav>
 
-      {/* Routes */}
+      {/* Routes for pages */}
       <Routes>
         <Route path="/" element={<Dashboard />} />
         <Route path="WorkersData" element={<WorkersData />} />

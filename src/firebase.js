@@ -20,53 +20,48 @@ const firebaseConfig = {
 const app = firebase.initializeApp(firebaseConfig);
 
 /* ----------------------------- Services ----------------------------- */
-const database = app.database();
+const auth = app.auth();
+const db = app.database();
 const storage = app.storage();
 
-/* ------------------------- Realtime Database ------------------------ */
-export const firebaseDB = database.ref("JenCeo-DataBase");
+/* ------------------------- Realtime Database (compat) ------------------------ */
+// export default firebaseDB for backwards compatibility with components that import a default
+export const firebaseDB = db.ref("JenCeo-DataBase");
 
 /* ------------------------------ Storage ----------------------------- */
 export const firebaseStorage = storage;
 export const storageRef = storage.ref();
 
-// Fixed uploadFile function
+// upload helpers (kept from your file)
 export const uploadFile = async (filePath, file) => {
   try {
-    console.log("Uploading file:", file.name);
-    
-    // Handle both string paths and StorageReference objects
     let fileRef;
     if (typeof filePath === 'string') {
       fileRef = storageRef.child(filePath);
     } else if (filePath && typeof filePath.child === 'function') {
-      // It's already a StorageReference
       fileRef = filePath;
     } else {
-      throw new Error("Invalid filePath parameter. Expected string path or StorageReference.");
+      throw new Error("Invalid filePath parameter.");
     }
-    
     const snapshot = await fileRef.put(file);
-    console.log("Upload completed successfully");
     return snapshot;
   } catch (error) {
     console.error("Upload error:", error);
-    throw new Error(`Upload failed: ${error.message}`);
+    throw error;
   }
 };
 
-// Get download URL
 export const getDownloadURL = async (refOrSnapshot) => {
   try {
     const fileRef = refOrSnapshot?.ref ? refOrSnapshot.ref : refOrSnapshot;
     const url = await fileRef.getDownloadURL();
-    console.log("Download URL obtained");
     return url;
   } catch (error) {
     console.error("Get download URL error:", error);
-    throw new Error(`Failed to get download URL: ${error.message}`);
+    throw error;
   }
 };
 
 /* --------------------------- Default Export -------------------------- */
 export default firebaseDB;
+export { auth, db };

@@ -131,6 +131,39 @@ function extractPaymentsFromClient(clientRecord = {}, collectionName = "") {
     }
   }
 
+  // parse paymentLogs / refunds if present
+  const logsNode = clientRecord.paymentLogs ?? clientRecord.paymentLog ?? clientRecord.payment_logs ?? clientRecord.paymentLogsList ?? null;
+  const logsArr = Array.isArray(logsNode)
+    ? logsNode
+    : (logsNode && typeof logsNode === "object" ? Object.values(logsNode) : []);
+
+  if (logsArr && logsArr.length) {
+    logsArr.forEach((lg) => {
+      if (!lg) return;
+      const refundAmount = safeNumber(lg.refundAmount ?? lg.amount ?? lg.paidAmount ?? lg.refund ?? 0);
+      if (!refundAmount) return;
+      const dateLg = lg.date ?? lg.logDate ?? lg.createdAt ?? clientRecord.date ?? null;
+      const parsedLg = parseDateRobust(dateLg);
+
+      results.push({
+        sourceCollection: collectionName,
+        clientId: String(clientId || ""),
+        clientName: String(clientName || ""),
+        paidAmount: 0,
+        travel: 0,
+        totalForTotals: 0,
+        balance: safeNumber(lg.balance ?? clientRecord.balance ?? 0),
+        refundAmount,
+        isRefund: true,
+        receipt: lg.receptNo ?? lg.receiptNo ?? lg.receipt ?? "",
+        method: lg.method ?? lg.type ?? lg.mode ?? "",
+        date: dateLg,
+        parsedDate: parsedLg,
+        raw: lg,
+      });
+    });
+  }
+
   return results;
 }
 
@@ -318,18 +351,22 @@ export default function ClientPaymentCard({
   }, [allPayments]);
 
   const overallTotals = useMemo(() => {
-    return allPayments.reduce(
-      (acc, p) => {
-        acc.paid += Number(p.paidAmount || 0);
-        acc.paidIncludingTravel += Number(p.totalForTotals || p.paidAmount || 0);
-        acc.balance += Number(p.balance || 0);
-        acc.refunds += Number(p.refundAmount || 0);
-        acc.count += 1;
-        if (Number(p.paidAmount || 0) === 0) acc.pendingCount += 1;
-        return acc;
+    const acc = allPayments.reduce(
+      (acc2, p) => {
+        acc2.paid += Number(p.paidAmount || 0);
+        acc2.paidIncludingTravel += Number(p.totalForTotals || p.paidAmount || 0);
+        acc2.balance += Number(p.balance || 0);
+        acc2.refunds += Number(p.refundAmount || 0);
+        acc2.count += 1;
+        if (Number(p.paidAmount || 0) === 0) acc2.pendingCount += 1;
+        return acc2;
       },
       { paid: 0, paidIncludingTravel: 0, balance: 0, refunds: 0, count: 0, pendingCount: 0 }
     );
+
+    // NEW: net paid after subtracting refunds
+    acc.netPaid = Number(acc.paidIncludingTravel || 0) - Number(acc.refunds || 0);
+    return acc;
   }, [allPayments]);
 
   // default active year/month when modal opens
@@ -412,7 +449,8 @@ export default function ClientPaymentCard({
     const balance = currentMonthRows.reduce((s, r) => s + Number(r.balance || 0), 0);
     const refunds = currentMonthRows.reduce((s, r) => s + Number(r.refundAmount || 0), 0);
     const pending = currentMonthRows.reduce((s, r) => s + (Number(r.paidAmount || 0) === 0 ? 1 : 0), 0);
-    return { paid, paidInclTravel, balance, refunds, pending, count: currentMonthRows.length };
+    const net = paidInclTravel - refunds; // NEW: net = paid - refunds
+    return { paid, paidInclTravel, balance, refunds, pending, count: currentMonthRows.length, net };
   }, [currentMonthRows]);
 
   const yearlyTotals = useMemo(() => {
@@ -421,7 +459,8 @@ export default function ClientPaymentCard({
     const balance = currentYearRows.reduce((s, r) => s + Number(r.balance || 0), 0);
     const refunds = currentYearRows.reduce((s, r) => s + Number(r.refundAmount || 0), 0);
     const pending = currentYearRows.reduce((s, r) => s + (Number(r.paidAmount || 0) === 0 ? 1 : 0), 0);
-    return { paid, paidInclTravel, balance, refunds, pending, count: currentYearRows.length };
+    const net = paidInclTravel - refunds; // NEW
+    return { paid, paidInclTravel, balance, refunds, pending, count: currentYearRows.length, net };
   }, [currentYearRows]);
 
   const sparklinePoints = useMemo(() => {
@@ -457,13 +496,19 @@ export default function ClientPaymentCard({
   const exportCSV = (scope = "month") => {
     const rows = [["#", "Client ID", "Client Name", "Method", "Date", "Receipt No", "Payment", "Balance"]];
     if (scope === "month") {
-      currentMonthRows.forEach((r, i) => rows.push([i + 1, r.clientId || "-", r.clientName || "-", r.method || "-", r.date || "-", r.receipt || "-", Number(r.totalForTotals || r.paidAmount || 0), Number(r.balance || 0)]));
+      currentMonthRows.forEach((r, i) =>
+        rows.push([i + 1, r.clientId || "-", r.clientName || "-", r.method || "-", r.date || "-", r.receipt || "-", Number(r.totalForTotals || r.paidAmount || 0) - Number(r.refundAmount || 0), Number(r.balance || 0)])
+      );
     } else if (scope === "year") {
       let idx = 0;
-      currentYearRows.forEach((r) => rows.push([++idx, r.clientId || "-", r.clientName || "-", r.method || "-", r.date || "-", r.receipt || "-", Number(r.totalForTotals || r.paidAmount || 0), Number(r.balance || 0)]));
+      currentYearRows.forEach((r) =>
+        rows.push([++idx, r.clientId || "-", r.clientName || "-", r.method || "-", r.date || "-", r.receipt || "-", Number(r.totalForTotals || r.paidAmount || 0) - Number(r.refundAmount || 0), Number(r.balance || 0)])
+      );
     } else {
       let idx = 0;
-      allPayments.forEach((r) => rows.push([++idx, r.clientId || "-", r.clientName || "-", r.method || "-", r.date || "-", r.receipt || "-", Number(r.totalForTotals || r.paidAmount || 0), Number(r.balance || 0)]));
+      allPayments.forEach((r) =>
+        rows.push([++idx, r.clientId || "-", r.clientName || "-", r.method || "-", r.date || "-", r.receipt || "-", Number(r.totalForTotals || r.paidAmount || 0) - Number(r.refundAmount || 0), Number(r.balance || 0)])
+      );
     }
     const csv = arrayToCSV(rows);
     const blob = new Blob([csv], { type: "text/csv" });
@@ -481,11 +526,11 @@ export default function ClientPaymentCard({
     let html = `<html><head><title>Client Payments ${scope}</title><style>body{font-family:Arial;font-size:12px}table{border-collapse:collapse;width:100%}th,td{border:1px solid #ddd;padding:6px;text-align:left}th{background:#f4f4f4}</style></head><body>`;
     html += `<h3>Client Payments - ${scope}</h3><table><thead><tr><th>#</th><th>Client ID</th><th>Client Name</th><th>Method</th><th>Date</th><th>Receipt</th><th>Payment</th><th>Balance</th></tr></thead><tbody>`;
     if (scope === "month") {
-      currentMonthRows.forEach((r, i) => (html += `<tr><td>${i + 1}</td><td>${r.clientId || ""}</td><td>${r.clientName || ""}</td><td>${r.method || ""}</td><td>${r.date || ""}</td><td>${r.receipt || ""}</td><td>${Number(r.totalForTotals || r.paidAmount || 0)}</td><td>${Number(r.balance || 0)}</td></tr>`));
+      currentMonthRows.forEach((r, i) => (html += `<tr><td>${i + 1}</td><td>${r.clientId || ""}</td><td>${r.clientName || ""}</td><td>${r.method || ""}</td><td>${r.date || ""}</td><td>${r.receipt || ""}</td><td>${Number(r.totalForTotals || r.paidAmount || 0) - Number(r.refundAmount || 0)}</td><td>${Number(r.balance || 0)}</td></tr>`));
     } else if (scope === "year") {
-      currentYearRows.forEach((r, i) => (html += `<tr><td>${i + 1}</td><td>${r.clientId || ""}</td><td>${r.clientName || ""}</td><td>${r.method || ""}</td><td>${r.date || ""}</td><td>${r.receipt || ""}</td><td>${Number(r.totalForTotals || r.paidAmount || 0)}</td><td>${Number(r.balance || 0)}</td></tr>`));
+      currentYearRows.forEach((r, i) => (html += `<tr><td>${i + 1}</td><td>${r.clientId || ""}</td><td>${r.clientName || ""}</td><td>${r.method || ""}</td><td>${r.date || ""}</td><td>${r.receipt || ""}</td><td>${Number(r.totalForTotals || r.paidAmount || 0) - Number(r.refundAmount || 0)}</td><td>${Number(r.balance || 0)}</td></tr>`));
     } else {
-      allPayments.forEach((r, i) => (html += `<tr><td>${i + 1}</td><td>${r.clientId || ""}</td><td>${r.clientName || ""}</td><td>${r.method || ""}</td><td>${r.date || ""}</td><td>${r.receipt || ""}</td><td>${Number(r.totalForTotals || r.paidAmount || 0)}</td><td>${Number(r.balance || 0)}</td></tr>`));
+      allPayments.forEach((r, i) => (html += `<tr><td>${i + 1}</td><td>${r.clientId || ""}</td><td>${r.clientName || ""}</td><td>${r.method || ""}</td><td>${r.date || ""}</td><td>${r.receipt || ""}</td><td>${Number(r.totalForTotals || r.paidAmount || 0) - Number(r.refundAmount || 0)}</td><td>${Number(r.balance || 0)}</td></tr>`));
     }
     html += `</tbody></table></body></html>`;
     const w = window.open("", "_blank");
@@ -525,7 +570,7 @@ export default function ClientPaymentCard({
             <div>💳</div>
             <div className="invest-card__meta">
               <div className="invest-card__label">Client Payments</div>
-              <div className="invest-card__total">{loading ? "Loading..." : formatINR(overallTotals.paidIncludingTravel || overallTotals.paid)}</div>
+              <div className="invest-card__total">{loading ? "Loading..." : formatINR(overallTotals.netPaid ?? overallTotals.paidIncludingTravel ?? overallTotals.paid)}</div>
               <div className="invest-card__small">{loading ? "" : `Payments: ${overallTotals.count}`}</div>
             </div>
           </div>
@@ -545,8 +590,8 @@ export default function ClientPaymentCard({
               <div className="invest-modal-body">
                 <div className="overall-cards">
                   <div className="header-gradient grad-paid">
-                    <div className="header-label">Overall Paid</div>
-                    <div className="header-value">{formatINR(overallTotals.paidIncludingTravel ?? overallTotals.paid)}</div>
+                    <div className="header-label">Overall Paid (net)</div>
+                    <div className="header-value">{formatINR(overallTotals.netPaid ?? overallTotals.paidIncludingTravel ?? overallTotals.paid)}</div>
                     <div className="header-sub">{overallTotals.count ?? 0} payments</div>
                   </div>
 
@@ -587,8 +632,8 @@ export default function ClientPaymentCard({
 
                 <div className="month-cards">
                   <div className="summary-card grad-paid">
-                    <div className="card-label">Paid (month)</div>
-                    <div className="card-value">{formatINR(monthlyTotals.paidInclTravel ?? monthlyTotals.paid)}</div>
+                    <div className="card-label">Paid (month - net)</div>
+                    <div className="card-value">{formatINR(monthlyTotals.net ?? monthlyTotals.paidInclTravel ?? monthlyTotals.paid)}</div>
                     <div className="card-sub">{monthlyTotals.count ?? 0} payments</div>
                   </div>
 
@@ -614,20 +659,20 @@ export default function ClientPaymentCard({
                 {activeYear && (
                   <div className="year-cards">
                     <div className="summary-card grad-paid">
-                      <div className="card-label">Paid (year)</div>
-                      <div className="card-value">{formatINR(yearlyTotals.paidInclTravel ?? yearlyTotals.paid)}</div>
+                      <div className="card-label">Paid (year - net)</div>
+                      <div className="card-value">{formatINR(yearlyTotals.net ?? yearlyTotals.paidInclTravel ?? yearlyTotals.paid)}</div>
                       <div className="card-sub">{yearlyTotals.count ?? 0} payments</div>
                     </div>
 
                     <div className="summary-card grad-refund">
                       <div className="card-label">Refunds (year)</div>
-                      <div className="card-value">{formatINR(yearlyTotals.refunds)}</div>
+                      <div className="card-value">{formatINR(yearlyTotals.refunds ?? 0)}</div>
                       <div className="card-sub">across {activeYear}</div>
                     </div>
 
                     <div className="summary-card grad-balance">
                       <div className="card-label">Balance (year)</div>
-                      <div className="card-value">{formatINR(yearlyTotals.balance)}</div>
+                      <div className="card-value">{formatINR(yearlyTotals.balance ?? 0)}</div>
                       <div className="card-sub">cumulative</div>
                     </div>
 
@@ -714,7 +759,8 @@ export default function ClientPaymentCard({
                               <td>{r.method || "-"}</td>
                               <td>{r.parsedDate ? r.parsedDate.toLocaleDateString() : r.date || "-"}</td>
                               <td>{r.receipt || "-"}</td>
-                              <td className="text-end">{formatINR(r.totalForTotals ?? r.paidAmount ?? 0)}</td>
+                              {/* show row payment as totalForTotals - refundAmount so each row reflects net effect */}
+                              <td className="text-end">{formatINR((Number(r.totalForTotals || r.paidAmount || 0) - Number(r.refundAmount || 0)))}</td>
                               <td className="text-end">{formatINR(r.balance ?? 0)}</td>
                             </tr>
                           ))}
@@ -722,10 +768,10 @@ export default function ClientPaymentCard({
                         <tfoot>
                           <tr className="table-secondary">
                             <td colSpan={6} className="text-end">
-                              <strong>Monthly Subtotal</strong>
+                              <strong>Monthly Subtotal (net)</strong>
                             </td>
                             <td className="text-end">
-                              <strong>{formatINR(monthlyTotals.paidInclTravel ?? monthlyTotals.paid)}</strong>
+                              <strong>{formatINR(monthlyTotals.net ?? monthlyTotals.paidInclTravel ?? monthlyTotals.paid)}</strong>
                             </td>
                             <td className="text-end">
                               <strong>{formatINR(monthlyTotals.balance)}</strong>
@@ -733,10 +779,10 @@ export default function ClientPaymentCard({
                           </tr>
                           <tr className="table-secondary">
                             <td colSpan={6} className="text-end">
-                              <strong>Yearly Grand Total</strong>
+                              <strong>Yearly Grand Total (net)</strong>
                             </td>
                             <td className="text-end">
-                              <strong>{formatINR(yearlyTotals.paidInclTravel ?? yearlyTotals.paid)}</strong>
+                              <strong>{formatINR(yearlyTotals.net ?? yearlyTotals.paidInclTravel ?? yearlyTotals.paid)}</strong>
                             </td>
                             <td className="text-end">
                               <strong>{formatINR(yearlyTotals.balance)}</strong>
@@ -822,7 +868,7 @@ export default function ClientPaymentCard({
               </div>
 
               <div className="invest-modal-footer">
-                <div className="me-auto small text-muted">Overall Grand Total: {formatINR(overallTotals.paidIncludingTravel || overallTotals.paid)}</div>
+                <div className="me-auto small text-muted">Overall Grand Total (net): {formatINR(overallTotals.netPaid ?? overallTotals.paidIncludingTravel ?? overallTotals.paid)}</div>
                 <button className="btn btn-secondary btn-sm" onClick={() => setModalOpen(false)}>
                   Close
                 </button>

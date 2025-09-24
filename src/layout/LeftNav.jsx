@@ -53,6 +53,7 @@ import EnquiryExit from '../pages/EnquiryExit';
 import SearchResults from '../pages/SearchResults';
 import StaffData from '../pages/StaffData';
 import ExistingStaff from '../pages/ExistingStaff';
+ import AdminUsers from '../pages/AdminUsers';
 
 export default function LeftNav() {
   const [isActive, setIsActive] = useState(false);
@@ -249,13 +250,14 @@ export default function LeftNav() {
         <Route path="EnquiryExit" element={<EnquiryExit />} />
         <Route path="Expenses" element={<Expenses />} />
         <Route path="Task" element={<Task />} />
-        <Route path="Admin" element={<Admin />} />
+        {/* <Route path="Admin" element={<Admin />} /> */}
         <Route path="HR" element={<Hr />} />
         <Route path="Accounts" element={<Accounts />} />
         <Route path="Operations" element={<Operations />} />
         <Route path="HospitalList" element={<HospitalList />} />
         <Route path="HospitalDeleteList" element={<HospitalDeleteList />} />
         <Route path="search" element={<SearchResults />} />
+        <Route path="Admin" element={<AdminUsers />} />
       </Routes>
     </>
   );

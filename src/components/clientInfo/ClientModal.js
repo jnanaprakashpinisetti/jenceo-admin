@@ -1,13 +1,14 @@
+
 // ClientModal.js
-// Fully-contained Client modal component with removal confirm -> removal details flow,
-// payment tables with totals, rupee formatting, audit-summary & full-audit display,
-// biodata download/print, and small removalHistory rendering.
-//
-// NOTE: adjust the `firebaseDB` import to match your project (this assumes a default export).
-// Place any required SCSS file (ClientUpdates.scss) and adjust import path if needed.
+// Updated per user request:
+// 1) Existing payments are locked (not editable). In edit mode payments remain disabled for locked rows;
+//    only newly added payment rows (without __locked) can be edited.
+// 2) Improved UI for Change Log (badges, timestamps, expandable messages)
+// 3) In view mode inputs are replaced with readable tables/labels (no inputs shown)
+// 4) Full file ready for download
 
 import React, { useEffect, useRef, useState } from "react";
-import firebaseDB from "../../firebase"; // <-- adjust this path if your firebase util is elsewhere
+import firebaseDB from "../../firebase"; // adjust path if needed
 
 const removalReasonOptions = [
   "Contract Closed",
@@ -79,9 +80,8 @@ const stripLocks = (obj) => {
   return clone;
 };
 
-// friendly label generator
+// friendly label generator (used in audit summarization)
 const friendlyLabel = (path) => {
-  // payments[0].paidAmount => Payment #1 — Paid Amount
   const mPay = path.match(/^payments\[(\d+)\]\.(.+)$/);
   if (mPay) {
     const idx = Number(mPay[1]) + 1;
@@ -116,7 +116,6 @@ const friendlyLabel = (path) => {
     };
     return `Worker #${idx} — ${labelMap[key] || key}`;
   }
-  // top-level fields friendly mapping
   const topMap = {
     clientName: "Client Name",
     idNo: "ID No",
@@ -126,12 +125,6 @@ const friendlyLabel = (path) => {
   return topMap[path] || path;
 };
 
-/**
- * buildChangeSummaryAndFullAudit(oldObj, newObj)
- * - returns { summaryChanges, fullChanges }
- * - summaryChanges: array of { path, before, after, friendly }
- * - fullChanges: array of { path, before, after, friendly, type:'field' }
- */
 function buildChangeSummaryAndFullAudit(oldObj = {}, newObj = {}) {
   const summary = [];
   const full = [];
@@ -146,7 +139,6 @@ function buildChangeSummaryAndFullAudit(oldObj = {}, newObj = {}) {
     }
   };
 
-  // top-level primitives
   const keys = new Set([...Object.keys(oldObj || {}), ...Object.keys(newObj || {})]);
   keys.forEach((k) => {
     if (k === "payments" || k === "workers" || k === "paymentLogs" || k === "fullAuditLogs") return;
@@ -157,7 +149,6 @@ function buildChangeSummaryAndFullAudit(oldObj = {}, newObj = {}) {
     pushDiff(k, a, b);
   });
 
-  // workers by index
   const oldWorkers = Array.isArray(oldObj.workers) ? oldObj.workers : [];
   const newWorkers = Array.isArray(newObj.workers) ? newObj.workers : [];
   const maxW = Math.max(oldWorkers.length, newWorkers.length);
@@ -171,7 +162,6 @@ function buildChangeSummaryAndFullAudit(oldObj = {}, newObj = {}) {
     });
   }
 
-  // payments by index
   const oldPayments = Array.isArray(oldObj.payments) ? oldObj.payments : [];
   const newPayments = Array.isArray(newObj.payments) ? newObj.payments : [];
   const maxP = Math.max(oldPayments.length, newPayments.length);
@@ -240,19 +230,17 @@ const getInitialFormData = () => ({
   fullAuditLogs: [],
 });
 
-// ClientModal component
 const ClientModal = ({
   isOpen = false,
-  onClose = () => { },
+  onClose = () => {},
   client = null,
-  onSave = null, // function that returns a Promise to persist payload
+  onSave = null,
   onDelete = null,
   isEditMode = false,
   isAdmin = false,
   currentUserName = "System",
-  onRemoved = () => { },
+  onRemoved = () => {},
 }) => {
-  // refs & state
   const [formData, setFormData] = useState(getInitialFormData());
   const [activeTab, setActiveTab] = useState("basic");
   const [errors, setErrors] = useState({});
@@ -265,7 +253,8 @@ const ClientModal = ({
   const bioIframeRef = useRef(null);
   const initialSnapshotRef = useRef(null);
 
-  // Removal-specific UI flow
+  const [expandedLogIndex, setExpandedLogIndex] = useState(null);
+
   const [showRemovalConfirm, setShowRemovalConfirm] = useState(false);
   const [showRemovalModal, setShowRemovalModal] = useState(false);
   const [removalForm, setRemovalForm] = useState({ reason: "", comment: "" });
@@ -303,7 +292,7 @@ const ClientModal = ({
       refundDate: p.refundDate ?? "",
       refundPaymentMethod: p.refundPaymentMethod ?? "",
       refundRemarks: p.refundRemarks ?? "",
-      __locked: true,
+      __locked: true, // lock existing payments to prevent editing
       ...p,
     }));
 
@@ -357,6 +346,7 @@ const ClientModal = ({
 
   const toggleEditMode = () => {
     if (!isAdmin) return;
+    // when toggling edit mode we do NOT unlock existing payments — they remain read-only
     setEditMode((v) => !v);
   };
 
@@ -378,9 +368,10 @@ const ClientModal = ({
         const list = Array.isArray(prev[section]) ? [...prev[section]] : [];
         const row = { ...(list[index] || {}) };
         const locked = !!row.__locked;
-        if (locked && !editMode) return prev;
+        // IMPORTANT: existing locked rows should NOT be editable even in edit mode
+        if (locked) return prev;
 
-        const prevVal = row[name];
+        // update value
         row[name] = value;
 
         // payments special logic
@@ -403,13 +394,12 @@ const ClientModal = ({
           }
           if (name === "refund") {
             if (!value) {
-              // turning refund off: clear refund fields only if refundAmount is zero
               if (!row.refundAmount || Number(row.refundAmount) === 0) {
                 row.refundDate = "";
                 row.refundPaymentMethod = "";
                 row.refundRemarks = "";
               } else {
-                row.refund = true; // keep true if amount exists
+                row.refund = true;
               }
             } else {
               row.refund = true;
@@ -435,7 +425,6 @@ const ClientModal = ({
       return;
     }
 
-    // top-level field
     setField(name, value);
   };
 
@@ -463,7 +452,7 @@ const ClientModal = ({
     setFormData((prev) => {
       const list = Array.isArray(prev.workers) ? [...prev.workers] : [];
       const row = list[i];
-      if (row?.__locked && !editMode) return prev;
+      if (row?.__locked) return prev;
       list.splice(i, 1);
       const next = { ...prev, workers: list };
       markDirty(next);
@@ -484,7 +473,7 @@ const ClientModal = ({
     setFormData((prev) => {
       const list = Array.isArray(prev.payments) ? [...prev.payments] : [];
       const row = list[i];
-      if (row?.__locked && !editMode) return prev;
+      if (row?.__locked) return prev;
       list.splice(i, 1);
       const next = { ...prev, payments: list };
       markDirty(next);
@@ -492,7 +481,6 @@ const ClientModal = ({
     });
   };
 
-  // basic validation (keeps same behavior)
   const validateAll = () => {
     const v = {};
     if (editMode) {
@@ -503,8 +491,6 @@ const ClientModal = ({
 
     const payments = Array.isArray(formData.payments) ? formData.payments : [];
     payments.forEach((p, i) => {
-      const locked = !!p.__locked;
-      // skip empty row
       const hasValue = (p.paidAmount && String(p.paidAmount).trim() !== "") || (p.receptNo && String(p.receptNo).trim() !== "");
       if (!hasValue) return;
       if (!p.paymentMethod) v[`payments.${i}.paymentMethod`] = "Payment method is required";
@@ -544,7 +530,6 @@ const ClientModal = ({
     }
   };
 
-  // handle submit: build summary + full audit, persist both (paymentLogs limited to 10)
   const handleSubmit = async (ev) => {
     ev && ev.preventDefault && ev.preventDefault();
     if (!validateAll()) {
@@ -569,7 +554,6 @@ const ClientModal = ({
       type: "summary",
     } : null;
 
-    // full audit entry (store all field-level diffs)
     const fullEntry = fullChanges.length > 0 ? {
       date: now.toISOString(),
       dateLabel,
@@ -578,16 +562,13 @@ const ClientModal = ({
       type: "full",
     } : null;
 
-    // prepare payload: strip locks and set logs
     const payload = stripLocks(formData);
 
-    // persist logs into payload: maintain existing logs and append new ones
     payload.paymentLogs = Array.isArray(payload.paymentLogs) ? payload.paymentLogs : [];
     payload.fullAuditLogs = Array.isArray(payload.fullAuditLogs) ? payload.fullAuditLogs : [];
 
     if (summaryEntry) {
       payload.paymentLogs = [...payload.paymentLogs.filter(l => l.type === "initial" || l.type === "summary"), summaryEntry];
-      // keep last 10 summaries only
       const summariesOnly = payload.paymentLogs.filter(l => l.type === "summary" || l.type === "initial");
       const nonSummaries = payload.paymentLogs.filter(l => l.type !== "summary" && l.type !== "initial");
       const keepSummaries = summariesOnly.slice(-10);
@@ -595,15 +576,12 @@ const ClientModal = ({
     }
     if (fullEntry) {
       payload.fullAuditLogs = [...payload.fullAuditLogs, fullEntry];
-      // optionally cap full audits? We will keep all since user asked to save them.
     }
 
     try {
-      // call onSave to persist to Firebase (or your handler)
       const res = onSave && onSave(payload);
       if (res && typeof res.then === "function") await res;
 
-      // Update local UI to include logs and mark clean
       setFormData((prev) => {
         const next = { ...prev, paymentLogs: payload.paymentLogs, fullAuditLogs: payload.fullAuditLogs };
         initialSnapshotRef.current = JSON.stringify(next);
@@ -624,7 +602,6 @@ const ClientModal = ({
     else onClose && onClose();
   };
 
-  // build biodata HTML (like previous)
   function buildClientBiodataHTML() {
     const safe = (v, d = "—") => (v == null || v === "" ? d : String(v));
     const fullName = safe(formData.clientName);
@@ -699,8 +676,6 @@ const ClientModal = ({
     const totalPaid = (Array.isArray(formData.payments) ? formData.payments.reduce((s, p) => s + (Number(p.paidAmount) || 0), 0) : 0);
     const totalBalance = (Array.isArray(formData.payments) ? formData.payments.reduce((s, p) => s + (Number(p.balance) || 0), 0) : 0);
     const totalRefund = (Array.isArray(formData.payments) ? formData.payments.reduce((s, p) => s + (p.refundAmount ? Number(p.refundAmount) : 0), 0) : 0);
-    const totalBasicSalary = (Array.isArray(formData.workers) ? formData.workers.reduce((s, w) => s + (Number(w.basicSalary) || 0), 0) : 0);
-    const totalWorkDays = (Array.isArray(formData.workers) ? formData.workers.reduce((s, w) => s + (Number(w.totalDays) || 0), 0) : 0);
 
     return `<!doctype html><html><head><meta charset="utf-8"><title>Client Biodata - ${fullName}</title>
       <style>
@@ -714,7 +689,7 @@ const ClientModal = ({
         .section{margin-top:12px;padding:10px;border-radius:4px;background:transparent;border:1px solid #eef3fb}
         table{width:100%;border-collapse:collapse; font-size:12px}
         th,td{padding:6px;border:1px solid #e6eef8;font-size:12px;text-align:left;vertical-align:top}
-        th{background:#f7fbff; font-weight:600}
+        th{background:#eef6ffd9; font-weight:600}
         td { word-break: break-word; white-space: normal; }
         .workers-table th, .workers-table td, .payments-table th, .payments-table td { font-size:11px; padding:6px }
         @media print {
@@ -752,68 +727,35 @@ const ClientModal = ({
     </body></html>`;
   }
 
-  // helper for adding days
   const addDaysToDate = (d, days) => {
     const copy = new Date(d);
     copy.setDate(copy.getDate() + Number(days || 0));
     return copy;
   };
 
-  // UI rendering
-  // small inline styles and animation CSS
+  // improved styles for change-log & view-mode tables
   const extraStyles = `
     .refund-badge { display:inline-block; padding:6px 10px; border-radius:10px; background:#f1f1f1; color:#444; border:1px solid #ddd; transition: background .22s ease, color .22s ease, transform .18s ease;}
     .refund-badge.pulse { animation: pulse 900ms ease-in-out infinite; background: #fff1f1; color: #b80000; transform: translateY(-1px); box-shadow: 0 3px 8px rgba(184,0,0,0.06); }
     @keyframes pulse { 0% { transform: scale(1); opacity: 1; } 50% { transform: scale(1.03); opacity: 0.85; } 100% { transform: scale(1); opacity: 1; } }
-    .payment-logs { max-height: 220px; overflow:auto; border:1px solid #eee; padding:8px; border-radius:6px; background:#fafafa; font-size:13px }
-    .payment-logs .entry { padding:6px 8px; border-bottom:1px dashed #eee }
-    .payment-logs .entry:last-child { border-bottom: none }
+
+    /* Change log */
+    .payment-logs { max-height: 320px; overflow:auto; border:1px solid #eee; padding:8px; border-radius:8px; background:#fff; font-size:13px; }
+    .payment-logs .entry { padding:10px; border-radius:6px; margin-bottom:8px; background: linear-gradient(180deg, #fafbfd, #ffffff); box-shadow: 0 1px 0 rgba(0,0,0,0.02); }
+    .payment-logs .entry .header { display:flex; justify-content:space-between; gap:12px; align-items:center; margin-bottom:6px; }
+    .payment-logs .entry .user { font-weight:700; }
+    .payment-logs .entry .meta { font-size:12px; color:#666; }
+    .payment-logs .entry .msg { white-space:pre-wrap; font-size:13px; color:#222; margin-top:6px; }
+    .payment-logs .badge-type { display:inline-block; padding:4px 8px; border-radius:999px; font-size:11px; background:#eef6ff; color:#0b66a3; border:1px solid #d8eafc; margin-left:8px; }
+
+    /* View-mode tables (make inputs disappear and look like table rows) */
+    .readonly-table { width:100%; border-collapse:collapse; background:transparent; }
+    .readonly-table th, .readonly-table td { padding:8px; border:1px solid #eee; text-align:left; vertical-align:top; }
+    .readonly-row-label { width:25%; font-weight:600; background:#fafafa; }
   `;
 
-  // Removal flow handlers
-  const handleStartRemoval = () => {
-    setShowRemovalConfirm(false);
-    setShowRemovalModal(true);
-    setRemovalForm({ reason: "", comment: "" });
-    setRemovalErrors({});
-  };
+  const hasPayments = (Array.isArray(formData.payments) ? formData.payments.length > 0 : false);
 
-  const handleDoRemove = async () => {
-    const errs = {};
-    if (!removalForm.reason) errs.reason = "Select reason";
-    if (!removalForm.comment || !removalForm.comment.trim()) errs.comment = "Enter comment";
-    setRemovalErrors(errs);
-    if (Object.keys(errs).length > 0) return;
-
-    try {
-      const id = formData?.id || formData?.recordId || formData?.clientId;
-      const removalEntry = {
-        removedAt: new Date().toISOString(),
-        removedBy: currentUserName || "System",
-        removalReason: removalForm.reason,
-        removalComment: removalForm.comment.trim(),
-      };
-
-      if (id) {
-        // push into ExitClients/{id}/removalHistory (firebase structure expected)
-        await firebaseDB.child(`ExitClients/${id}/removalHistory`).push(removalEntry);
-        // remove from ClientData
-        await firebaseDB.child(`ClientData/${id}`).remove();
-      } else {
-        // fallback: if no id, still attempt to create an ExitClients node by generated key
-        const newRef = firebaseDB.child(`ExitClients`).push();
-        await newRef.set({ removalHistory: { [newRef.key]: removalEntry }, movedAt: new Date().toISOString() });
-      }
-
-      setShowRemovalModal(false);
-      onRemoved && onRemoved(id);
-    } catch (err) {
-      console.error("remove client error", err);
-      alert("Remove failed");
-    }
-  };
-
-  // UI rendering
   return (
     <>
       <style dangerouslySetInnerHTML={{ __html: extraStyles }} />
@@ -863,228 +805,181 @@ const ClientModal = ({
                 {/* Basic */}
                 {activeTab === "basic" && (
                   <div>
-                    <div className="row">
-                      <div className="col-md-4">
-                        <label className="form-label"><strong>ID No</strong></label>
-                        <input type="text" className="form-control" name="idNo" value={formData.idNo || ""} onChange={handleChange} disabled />
+                    {editMode ? (
+                      <div className="row">
+                        <div className="col-md-4">
+                          <label className="form-label"><strong>ID No</strong></label>
+                          <input type="text" className="form-control" name="idNo" value={formData.idNo || ""} onChange={handleChange} disabled />
+                        </div>
+
+                        <div className="col-md-4">
+                          <label className="form-label"><strong>Client Name</strong> <span className="text-danger">*</span></label>
+                          <input className={`form-control ${errors.clientName ? "is-invalid" : ""}`} name="clientName" value={formData.clientName || ""} onChange={handleChange} disabled={!editMode} />
+                          {errors.clientName && <div className="invalid-feedback">{errors.clientName}</div>}
+                        </div>
+
+                        <div className="col-md-4">
+                          <label className="form-label"><strong>Gender</strong></label>
+                          <select className="form-control" name="gender" value={formData.gender || ""} onChange={handleChange} disabled={!editMode}>
+                            <option value="">Select</option>
+                            <option value="Male">Male</option>
+                            <option value="Female">Female</option>
+                            <option value="Other">Other</option>
+                          </select>
+                        </div>
                       </div>
-
-                      <div className="col-md-4">
-                        <label className="form-label"><strong>Client Name</strong> <span className="text-danger">*</span></label>
-                        <input className={`form-control ${errors.clientName ? "is-invalid" : ""}`} name="clientName" value={formData.clientName || ""} onChange={handleChange} onBlur={() => { if (!formData.clientName) setErrors((p) => ({ ...p, clientName: "Client name is required" })); }} disabled={!editMode} />
-                        {errors.clientName && <div className="invalid-feedback">{errors.clientName}</div>}
-                      </div>
-
-                      <div className="col-md-4">
-                        <label className="form-label"><strong>Gender</strong></label>
-                        <select className="form-control" name="gender" value={formData.gender || ""} onChange={handleChange} disabled={!editMode}>
-                          <option value="">Select</option>
-                          <option value="Male">Male</option>
-                          <option value="Female">Female</option>
-                          <option value="Other">Other</option>
-                        </select>
-                      </div>
-                    </div>
-
-                    <div className="row mt-3">
-                      <div className="col-md-4">
-                        <label className="form-label"><strong>Location</strong> <span className="text-danger">*</span></label>
-                        <input className={`form-control ${errors.location ? "is-invalid" : ""}`} name="location" value={formData.location || ""} onChange={handleChange} disabled={!editMode} />
-                        {errors.location && <div className="invalid-feedback">{errors.location}</div>}
-                      </div>
-
-                      <div className="col-md-4">
-                        <label className="form-label"><strong>Mobile No 1</strong> <span className="text-danger">*</span></label>
-                        <input className={`form-control ${errors.mobileNo1 ? "is-invalid" : ""}`} name="mobileNo1" value={formData.mobileNo1 || ""} onChange={handleChange} disabled={!editMode} maxLength="10" />
-                        {errors.mobileNo1 && <div className="invalid-feedback">{errors.mobileNo1}</div>}
-                      </div>
-
-                      <div className="col-md-4">
-                        <label className="form-label"><strong>Mobile No 2</strong></label>
-                        <input className="form-control" name="mobileNo2" value={formData.mobileNo2 || ""} onChange={handleChange} disabled={!editMode} maxLength="10" />
-                      </div>
-                    </div>
-
-                    {/* removal history block */}
-                    {/* --- Removal & Return history (insert after mobile inputs) --- */}
-                    <div className="row mt-3">
-                      <h5>Return / Remove comments</h5>
-
-                      <div className="action-comments-wrapper">
-                        {(() => {
-                          // Normalize arrays (support both array and keyed object)
-                          const removalArr = formData?.removalHistory
-                            ? (Array.isArray(formData.removalHistory) ? formData.removalHistory : Object.values(formData.removalHistory))
-                            : [];
-
-                          // support both returnInfo or returnHistory names
-                          const returnArrRaw = formData?.returnInfo || formData?.returnHistory || [];
-                          const returnArr = Array.isArray(returnArrRaw) ? returnArrRaw : Object.values(returnArrRaw || {});
-
-                          // build entries preserving important fields and friendly names
-                          const entries = [];
-
-                          removalArr.forEach((r) => {
-                            if (!r) return;
-                            entries.push({
-                              type: "Removal",
-                              reason: r.removalReason || r.reasonType || r.reason || "",
-                              comment: r.removalComment || r.comment || "",
-                              user: r.removedBy || r.userStamp || r.user || r.removedByName || "",
-                              time: r.removedAt || r.removalAt || r.actionAt || r.timestamp || "",
-                            });
-                          });
-
-                          returnArr.forEach((t) => {
-                            if (!t) return;
-                            entries.push({
-                              type: "Return",
-                              reason: t.reasonType || t.reason || "",
-                              comment: t.comment || t.returnComment || "",
-                              user: t.returnedBy || t.userStamp || t.user || t.revertedBy || "",
-                              time: t.returnedAt || t.returnAt || t.timestamp || "",
-                            });
-                          });
-
-                          // sort by time descending (newest first) if time exists
-                          entries.sort((a, b) => {
-                            const ta = a.time ? new Date(a.time).getTime() : 0;
-                            const tb = b.time ? new Date(b.time).getTime() : 0;
-                            return tb - ta;
-                          });
-
-                          if (entries.length === 0) {
-                            return <div className="no-comments text-muted">No removed or returned comments.</div>;
-                          }
-
-                          return entries.map((e, idx) => (
-                            <div className={`action-comments ${e.type === "Removal" ? "removal" : "return"}`} key={`${e.type}-${idx}`}>
-                              <div className="action-comments-header d-flex align-items-center justify-content-between">
-                                <div className="d-flex align-items-center gap-2">
-                                  <strong className="action-type">{e.type}</strong>
-                                  {e.user ? <span className="action-user">by {e.user}</span> : null}
-                                </div>
-                                {e.time ? <span className="action-time text-muted small">{new Date(e.time).toLocaleString()}</span> : null}
-                              </div>
-
-                              <div className="action-comments-body mt-2">
-                                {e.reason ? (
-                                  <div className="action-row mb-1 d-flex">
-                                    <span className="label me-2">Reason:</span>
-                                    <span className="value">{e.reason}</span>
-                                  </div>
-                                ) : null}
-
-                                {e.comment ? (
-                                  <div className="mb-1">
-                                    <span className="label me-2">Comment:</span>
-                                    <div className="value comment-text" style={{ whiteSpace: "pre-wrap" }}>{e.comment}</div>
-                                  </div>
-                                ) : null}
-                              </div>
-                            </div>
-                          ));
-                        })()}
-                      </div>
-                    </div>
-
+                    ) : (
+                      // view mode: show table-like read-only rows
+                      <table className="readonly-table">
+                        <tbody>
+                          <tr>
+                            <th className="readonly-row-label">ID No</th>
+                            <td>{formData.idNo || "—"}</td>
+                            <th className="readonly-row-label">Client Name</th>
+                            <td>{formData.clientName || "—"}</td>
+                          </tr>
+                          <tr>
+                            <th className="readonly-row-label">Gender</th>
+                            <td>{formData.gender || "—"}</td>
+                            <th className="readonly-row-label">Location</th>
+                            <td>{formData.location || "—"}</td>
+                          </tr>
+                          <tr>
+                            <th className="readonly-row-label">Mobile 1</th>
+                            <td>{formData.mobileNo1 || "—"}</td>
+                            <th className="readonly-row-label">Mobile 2</th>
+                            <td>{formData.mobileNo2 || "—"}</td>
+                          </tr>
+                        </tbody>
+                      </table>
+                    )}
                   </div>
                 )}
 
                 {/* Address */}
                 {activeTab === "address" && (
                   <div>
-                    <div className="row">
-                      <div className="col-md-4">
-                        <label className="form-label"><strong>Door No</strong></label>
-                        <input className="form-control" name="dNo" value={formData.dNo || ""} onChange={handleChange} disabled={!editMode} />
+                    {editMode ? (
+                      <div className="row">
+                        <div className="col-md-4">
+                          <label className="form-label"><strong>Door No</strong></label>
+                          <input className="form-control" name="dNo" value={formData.dNo || ""} onChange={handleChange} disabled={!editMode} />
+                        </div>
+                        <div className="col-md-4">
+                          <label className="form-label"><strong>Landmark</strong></label>
+                          <input className="form-control" name="landMark" value={formData.landMark || ""} onChange={handleChange} disabled={!editMode} />
+                        </div>
+                        <div className="col-md-4">
+                          <label className="form-label"><strong>Street</strong></label>
+                          <input className="form-control" name="street" value={formData.street || ""} onChange={handleChange} disabled={!editMode} />
+                        </div>
                       </div>
-                      <div className="col-md-4">
-                        <label className="form-label"><strong>Landmark</strong></label>
-                        <input className="form-control" name="landMark" value={formData.landMark || ""} onChange={handleChange} disabled={!editMode} />
-                      </div>
-                      <div className="col-md-4">
-                        <label className="form-label"><strong>Street</strong></label>
-                        <input className="form-control" name="street" value={formData.street || ""} onChange={handleChange} disabled={!editMode} />
-                      </div>
-                    </div>
-
-                    <div className="row mt-3">
-                      <div className="col-md-4">
-                        <label className="form-label"><strong>Village/Town</strong></label>
-                        <input className="form-control" name="villageTown" value={formData.villageTown || ""} onChange={handleChange} disabled={!editMode} />
-                      </div>
-                      <div className="col-md-4">
-                        <label className="form-label"><strong>Mandal</strong></label>
-                        <input className="form-control" name="mandal" value={formData.mandal || ""} onChange={handleChange} disabled={!editMode} />
-                      </div>
-                      <div className="col-md-4">
-                        <label className="form-label"><strong>District</strong></label>
-                        <input className="form-control" name="district" value={formData.district || ""} onChange={handleChange} disabled={!editMode} />
-                      </div>
-                    </div>
+                    ) : (
+                      <table className="readonly-table">
+                        <tbody>
+                          <tr>
+                            <th className="readonly-row-label">Door No</th>
+                            <td>{formData.dNo || "—"}</td>
+                            <th className="readonly-row-label">Landmark</th>
+                            <td>{formData.landMark || "—"}</td>
+                          </tr>
+                          <tr>
+                            <th className="readonly-row-label">Street</th>
+                            <td>{formData.street || "—"}</td>
+                            <th className="readonly-row-label">Village/Town</th>
+                            <td>{formData.villageTown || "—"}</td>
+                          </tr>
+                          <tr>
+                            <th className="readonly-row-label">Mandal</th>
+                            <td>{formData.mandal || "—"}</td>
+                            <th className="readonly-row-label">District</th>
+                            <td>{formData.district || "—"}</td>
+                          </tr>
+                        </tbody>
+                      </table>
+                    )}
                   </div>
                 )}
 
                 {/* Service */}
                 {activeTab === "service" && (
                   <div>
-                    <div className="row mb-2">
-                      <div className="col-md-4">
-                        <label className="form-label"><strong>Type of Service</strong></label>
-                        <input className="form-control" name="typeOfService" value={formData.typeOfService || ""} onChange={handleChange} disabled={!editMode} />
+                    {editMode ? (
+                      <div className="row mb-2">
+                        <div className="col-md-4">
+                          <label className="form-label"><strong>Type of Service</strong></label>
+                          <input className="form-control" name="typeOfService" value={formData.typeOfService || ""} onChange={handleChange} disabled={!editMode} />
+                        </div>
+                        <div className="col-md-4">
+                          <label className="form-label"><strong>Service Charges</strong></label>
+                          <input className="form-control" name="serviceCharges" value={formData.serviceCharges || ""} onChange={handleChange} disabled={!editMode} />
+                        </div>
+                        <div className="col-md-4">
+                          <label className="form-label"><strong>Service Period</strong></label>
+                          <input className="form-control" name="servicePeriod" value={formData.servicePeriod || ""} onChange={handleChange} disabled={!editMode} />
+                        </div>
                       </div>
-                      <div className="col-md-4">
-                        <label className="form-label"><strong>Service Charges</strong></label>
-                        <input className="form-control" name="serviceCharges" value={formData.serviceCharges || ""} onChange={handleChange} disabled={!editMode} />
-                      </div>
-                      <div className="col-md-4">
-                        <label className="form-label"><strong>Service Period</strong></label>
-                        <input className="form-control" name="servicePeriod" value={formData.servicePeriod || ""} onChange={handleChange} disabled={!editMode} />
-                      </div>
-                    </div>
-
-                    <div className="row">
-                      <div className="col-12">
-                        <label className="form-label"><strong>Service Remarks</strong></label>
-                        <textarea className="form-control" name="serviceRemarks" rows="3" value={formData.serviceRemarks || ""} onChange={handleChange} disabled={!editMode} />
-                      </div>
-                    </div>
+                    ) : (
+                      <table className="readonly-table">
+                        <tbody>
+                          <tr>
+                            <th className="readonly-row-label">Type of Service</th>
+                            <td>{formData.typeOfService || "—"}</td>
+                            <th className="readonly-row-label">Service Charges</th>
+                            <td>{formData.serviceCharges || "—"}</td>
+                          </tr>
+                          <tr>
+                            <th className="readonly-row-label">Service Period</th>
+                            <td>{formData.servicePeriod || "—"}</td>
+                            <th className="readonly-row-label">Service Remarks</th>
+                            <td>{formData.serviceRemarks || "—"}</td>
+                          </tr>
+                        </tbody>
+                      </table>
+                    )}
                   </div>
                 )}
 
                 {/* Patient */}
                 {activeTab === "patient" && (
                   <div>
-                    <div className="row mb-2">
-                      <div className="col-md-3">
-                        <label className="form-label"><strong>Care Recipient Name</strong></label>
-                        <input className="form-control" name="patientName" value={formData.patientName || ""} onChange={handleChange} disabled={!editMode} />
+                    {editMode ? (
+                      <div className="row mb-2">
+                        <div className="col-md-3">
+                          <label className="form-label"><strong>Care Recipient Name</strong></label>
+                          <input className="form-control" name="patientName" value={formData.patientName || ""} onChange={handleChange} disabled={!editMode} />
+                        </div>
+                        <div className="col-md-3">
+                          <label className="form-label"><strong>Age</strong></label>
+                          <input className="form-control" name="patientAge" value={formData.patientAge || ""} onChange={handleChange} disabled={!editMode} />
+                        </div>
+                        <div className="col-md-3">
+                          <label className="form-label"><strong>Service Status</strong></label>
+                          <input className="form-control" name="serviceStatus" value={formData.serviceStatus || ""} onChange={handleChange} disabled={!editMode} />
+                        </div>
+                        <div className="col-md-3">
+                          <label className="form-label"><strong>Dropper Name</strong></label>
+                          <input className="form-control" name="dropperName" value={formData.dropperName || ""} onChange={handleChange} disabled={!editMode} />
+                        </div>
                       </div>
-                      <div className="col-md-3">
-                        <label className="form-label"><strong>Age</strong></label>
-                        <input className="form-control" name="patientAge" value={formData.patientAge || ""} onChange={handleChange} disabled={!editMode} />
-                      </div>
-                      <div className="col-md-3">
-                        <label className="form-label"><strong>Service Status</strong></label>
-                        <input className="form-control" name="serviceStatus" value={formData.serviceStatus || ""} onChange={handleChange} disabled={!editMode} />
-                      </div>
-                      <div className="col-md-3">
-                        <label className="form-label"><strong>Dropper Name</strong></label>
-                        <input className="form-control" name="dropperName" value={formData.dropperName || ""} onChange={handleChange} disabled={!editMode} />
-                      </div>
-                    </div>
-
-                    <div className="row">
-                      <div className="col-md-6">
-                        <label className="form-label"><strong>About Care Recipient</strong></label>
-                        <textarea className="form-control" name="aboutPatient" rows="3" value={formData.aboutPatient || ""} onChange={handleChange} disabled={!editMode} />
-                      </div>
-                      <div className="col-md-6">
-                        <label className="form-label"><strong>About Work / Care Notes</strong></label>
-                        <textarea className="form-control" name="aboutWork" rows="3" value={formData.aboutWork || ""} onChange={handleChange} disabled={!editMode} />
-                      </div>
-                    </div>
+                    ) : (
+                      <table className="readonly-table">
+                        <tbody>
+                          <tr>
+                            <th className="readonly-row-label">Care Recipient</th>
+                            <td>{formData.patientName || "—"}</td>
+                            <th className="readonly-row-label">Age</th>
+                            <td>{formData.patientAge || "—"}</td>
+                          </tr>
+                          <tr>
+                            <th className="readonly-row-label">Service Status</th>
+                            <td>{formData.serviceStatus || "—"}</td>
+                            <th className="readonly-row-label">Dropper Name</th>
+                            <td>{formData.dropperName || "—"}</td>
+                          </tr>
+                        </tbody>
+                      </table>
+                    )}
                   </div>
                 )}
 
@@ -1092,7 +987,7 @@ const ClientModal = ({
                 {activeTab === "workers" && (
                   <div>
                     {(formData.workers || []).map((w, i) => {
-                      const locked = !!w.__locked && !editMode;
+                      const locked = !!w.__locked;
                       return (
                         <div key={i} className="modal-card mb-3 p-3 border rounded">
                           <div className="d-flex justify-content-between align-items-center mb-2">
@@ -1100,31 +995,56 @@ const ClientModal = ({
                             {locked && <span className="badge bg-secondary">Existing</span>}
                           </div>
 
-                          <div className="row">
-                            <div className="col-md-3">
-                              <label className="form-label"><strong>ID No</strong></label>
-                              <input data-idx={i} className="form-control" name="workerIdNo" value={w.workerIdNo || ""} onChange={(e) => handleChange(e, "workers", i)} disabled={locked} />
-                            </div>
-                            <div className="col-md-3">
-                              <label className="form-label"><strong>Name</strong></label>
-                              <input data-idx={i} className="form-control" name="cName" value={w.cName || ""} onChange={(e) => handleChange(e, "workers", i)} disabled={locked} />
-                            </div>
-                            <div className="col-md-3">
-                              <label className="form-label"><strong>Basic Salary</strong></label>
-                              <input data-idx={i} className="form-control" name="basicSalary" type="number" value={w.basicSalary ?? ""} onChange={(e) => handleChange(e, "workers", i)} disabled={!editMode && !!w.__locked} />
-                            </div>
-                            <div className="col-md-3">
-                              <label className="form-label"><strong>Total Days</strong></label>
-                              <input data-idx={i} className="form-control" name="totalDays" value={w.totalDays || ""} onChange={(e) => handleChange(e, "workers", i)} disabled={!editMode} />
-                            </div>
-                          </div>
+                          {editMode ? (
+                            <div>
+                              <div className="row">
+                                <div className="col-md-3">
+                                  <label className="form-label"><strong>ID No</strong></label>
+                                  <input data-idx={i} className="form-control" name="workerIdNo" value={w.workerIdNo || ""} onChange={(e) => handleChange(e, "workers", i)} disabled={locked} />
+                                </div>
+                                <div className="col-md-3">
+                                  <label className="form-label"><strong>Name</strong></label>
+                                  <input data-idx={i} className="form-control" name="cName" value={w.cName || ""} onChange={(e) => handleChange(e, "workers", i)} disabled={locked} />
+                                </div>
+                                <div className="col-md-3">
+                                  <label className="form-label"><strong>Basic Salary</strong></label>
+                                  <input data-idx={i} className="form-control" name="basicSalary" type="number" value={w.basicSalary ?? ""} onChange={(e) => handleChange(e, "workers", i)} disabled={locked} />
+                                </div>
+                                <div className="col-md-3">
+                                  <label className="form-label"><strong>Total Days</strong></label>
+                                  <input data-idx={i} className="form-control" name="totalDays" value={w.totalDays || ""} onChange={(e) => handleChange(e, "workers", i)} disabled={!editMode} />
+                                </div>
+                              </div>
 
-                          <div className="row mt-2">
-                            <div className="col-12">
-                              <label className="form-label"><strong>Remarks</strong></label>
-                              <textarea className="form-control" name="remarks" rows="2" value={w.remarks || ""} onChange={(e) => handleChange(e, "workers", i)} disabled={locked} />
+                              <div className="row mt-2">
+                                <div className="col-12">
+                                  <label className="form-label"><strong>Remarks</strong></label>
+                                  <textarea className="form-control" name="remarks" rows="2" value={w.remarks || ""} onChange={(e) => handleChange(e, "workers", i)} disabled={locked} />
+                                </div>
+                              </div>
                             </div>
-                          </div>
+                          ) : (
+                            <table className="readonly-table mb-0">
+                              <tbody>
+                                <tr>
+                                  <th className="readonly-row-label">ID No</th>
+                                  <td>{w.workerIdNo || "—"}</td>
+                                  <th className="readonly-row-label">Name</th>
+                                  <td>{w.cName || "—"}</td>
+                                </tr>
+                                <tr>
+                                  <th className="readonly-row-label">Basic Salary</th>
+                                  <td>{formatINR(w.basicSalary)}</td>
+                                  <th className="readonly-row-label">Total Days</th>
+                                  <td>{w.totalDays || "—"}</td>
+                                </tr>
+                                <tr>
+                                  <th className="readonly-row-label">Remarks</th>
+                                  <td colSpan={3}>{w.remarks || "—"}</td>
+                                </tr>
+                              </tbody>
+                            </table>
+                          )}
 
                           <div className="mt-2 d-flex justify-content-end">
                             {!w.__locked && editMode && <button className="btn btn-danger btn-sm" onClick={() => removeWorker(i)}>Remove</button>}
@@ -1141,109 +1061,133 @@ const ClientModal = ({
                 {activeTab === "payments" && (
                   <div>
                     {(formData.payments || []).map((p, idx) => {
-                      const locked = !!p.__locked && !editMode;
+                      const locked = !!p.__locked;
                       const refundDisabled = Number(p.refundAmount || 0) > 0;
                       return (
                         <div key={idx} className="modal-card mb-3 p-3 border rounded">
                           <div className="d-flex justify-content-between align-items-center mb-2">
                             <strong>Payment #{idx + 1}</strong>
-                            {locked && <span className="badge bg-secondary">Existing</span>}
+                            {locked ? <span className="badge bg-secondary">Existing</span> : <span className="badge bg-info">New</span>}
                           </div>
 
-                          <div className="row">
-                            <div className="col-md-4">
-                              <label className="form-label"><strong>Payment Method</strong></label>
-                              <select data-idx={idx} className="form-control" name="paymentMethod" value={p.paymentMethod || "cash"} onChange={(e) => handleChange(e, "payments", idx)} disabled={locked}>
-                                <option value="cash">Cash</option>
-                                <option value="online">Online</option>
-                                <option value="check">Check</option>
-                                <option value="other">Other</option>
-                              </select>
-                            </div>
+                          {editMode ? (
+                            // In edit mode: payment rows are disabled if locked. New rows are editable.
+                            <div>
+                              <div className="row">
+                                <div className="col-md-4">
+                                  <label className="form-label"><strong>Payment Method</strong></label>
+                                  <select data-idx={idx} className="form-control" name="paymentMethod" value={p.paymentMethod || "cash"} onChange={(e) => handleChange(e, "payments", idx)} disabled={locked}>
+                                    <option value="cash">Cash</option>
+                                    <option value="online">Online</option>
+                                    <option value="check">Check</option>
+                                    <option value="other">Other</option>
+                                  </select>
+                                </div>
 
-                            <div className="col-md-4">
-                              <label className="form-label"><strong>Date</strong></label>
-                              <input data-idx={idx} className="form-control" name="date" type="date" value={p.date ? formatDateForInput(p.date) : ""} onChange={(e) => handleChange(e, "payments", idx)} disabled={locked} />
-                            </div>
+                                <div className="col-md-4">
+                                  <label className="form-label"><strong>Date</strong></label>
+                                  <input data-idx={idx} className="form-control" name="date" type="date" value={p.date ? formatDateForInput(p.date) : ""} onChange={(e) => handleChange(e, "payments", idx)} disabled={locked} />
+                                </div>
 
-                            <div className="col-md-4">
-                              <label className="form-label"><strong>Paid Amount</strong></label>
-                              <input data-idx={idx} className="form-control" name="paidAmount" type="number" value={p.paidAmount ?? ""} onChange={(e) => handleChange(e, "payments", idx)} disabled={locked} />
-                            </div>
-                          </div>
-
-                          <div className="row mt-2">
-                            <div className="col-md-4">
-                              <label className="form-label"><strong>Balance</strong></label>
-                              <input data-idx={idx} className="form-control" name="balance" type="number" value={p.balance ?? ""} onChange={(e) => handleChange(e, "payments", idx)} disabled={locked} />
-                            </div>
-
-                            <div className="col-md-4">
-                              <label className="form-label"><strong>Receipt No</strong></label>
-                              <input data-idx={idx} className="form-control" name="receptNo" value={p.receptNo || ""} onChange={(e) => handleChange(e, "payments", idx)} disabled={locked} />
-                            </div>
-
-                            <div className="col-md-4">
-                              <label className="form-label"><strong>Reminder Days</strong></label>
-                              <input data-idx={idx} className="form-control" name="reminderDays" type="number" value={p.reminderDays ?? ""} onChange={(e) => handleChange(e, "payments", idx)} disabled={!editMode && !!p.__locked} />
-                            </div>
-                          </div>
-
-                          <div className="row mt-2">
-                            <div className="col-md-4">
-                              <label className="form-label"><strong>Reminder Date</strong></label>
-                              <input data-idx={idx} className="form-control" name="reminderDate" type="date" value={p.reminderDate ? formatDateForInput(p.reminderDate) : ""} onChange={(e) => handleChange(e, "payments", idx)} disabled={!editMode && !!p.__locked} />
-                            </div>
-                          </div>
-
-                          {/* Remarks full-width */}
-                          <div className="row mt-2">
-                            <div className="col-12">
-                              <label className="form-label"><strong>Remarks</strong></label>
-                              <textarea data-idx={idx} className="form-control" name="remarks" rows="3" value={p.remarks || ""} onChange={(e) => handleChange(e, "payments", idx)} disabled={locked} />
-                            </div>
-                          </div>
-
-                          {/* Refund toggle */}
-                          <div className="row mt-2">
-                            <div className="col-12 d-flex align-items-center" style={{ gap: 10 }}>
-                              <input id={`refundSwitch-${idx}`} data-idx={idx} className="form-check-input" type="checkbox" name="refund" checked={!!p.refund} onChange={(e) => handleChange(e, "payments", idx)} disabled={refundDisabled || (!editMode && !!p.__locked)} />
-                              <label htmlFor={`refundSwitch-${idx}`} style={{ fontWeight: 600, margin: 0 }}>
-                                <span className={`refund-badge ${p.refund ? "pulse" : ""}`}>Refund</span>
-                              </label>
-                              {refundDisabled && <div className="text-muted small">Refund amount present — refund toggle disabled</div>}
-                            </div>
-                          </div>
-
-                          {p.refund && (
-                            <div className="row mt-2">
-                              <div className="col-md-4">
-                                <label className="form-label"><strong>Refund Date</strong></label>
-                                <input data-idx={idx} className="form-control" name="refundDate" type="date" value={p.refundDate ? formatDateForInput(p.refundDate) : ""} onChange={(e) => handleChange(e, "payments", idx)} disabled={!editMode && !!p.__locked} />
+                                <div className="col-md-4">
+                                  <label className="form-label"><strong>Paid Amount</strong></label>
+                                  <input data-idx={idx} className="form-control" name="paidAmount" type="number" value={p.paidAmount ?? ""} onChange={(e) => handleChange(e, "payments", idx)} disabled={locked} />
+                                </div>
                               </div>
-                              <div className="col-md-4">
-                                <label className="form-label"><strong>Refund Amount</strong></label>
-                                <input data-idx={idx} className="form-control" name="refundAmount" type="tel" value={p.refundAmount ?? ""} onChange={(e) => handleChange(e, "payments", idx)} disabled={!editMode && !!p.__locked}  maxLength={5} />
+
+                              <div className="row mt-2">
+                                <div className="col-md-4">
+                                  <label className="form-label"><strong>Balance</strong></label>
+                                  <input data-idx={idx} className="form-control" name="balance" type="number" value={p.balance ?? ""} onChange={(e) => handleChange(e, "payments", idx)} disabled={locked} />
+                                </div>
+
+                                <div className="col-md-4">
+                                  <label className="form-label"><strong>Receipt No</strong></label>
+                                  <input data-idx={idx} className="form-control" name="receptNo" value={p.receptNo || ""} onChange={(e) => handleChange(e, "payments", idx)} disabled={locked} />
+                                </div>
+
+                                <div className="col-md-4">
+                                  <label className="form-label"><strong>Reminder Days</strong></label>
+                                  <input data-idx={idx} className="form-control" name="reminderDays" type="number" value={p.reminderDays ?? ""} onChange={(e) => handleChange(e, "payments", idx)} disabled={locked} />
+                                </div>
                               </div>
-                              <div className="col-md-4">
-                                <label className="form-label"><strong>Refund Method</strong></label>
-                                <select data-idx={idx} className="form-control" name="refundPaymentMethod" value={p.refundPaymentMethod || ""} onChange={(e) => handleChange(e, "payments", idx)} disabled={!editMode && !!p.__locked}>
-                                  <option value="">Select</option>
-                                  <option value="cash">Cash</option>
-                                  <option value="online">Online</option>
-                                  <option value="check">Check</option>
-                                </select>
+
+                              <div className="row mt-2">
+                                <div className="col-12">
+                                  <label className="form-label"><strong>Remarks</strong></label>
+                                  <textarea data-idx={idx} className="form-control" name="remarks" rows="2" value={p.remarks || ""} onChange={(e) => handleChange(e, "payments", idx)} disabled={locked} />
+                                </div>
                               </div>
-                              <div className="col-12 mt-2">
-                                <label className="form-label"><strong>Refund Remarks</strong></label>
-                                <textarea data-idx={idx} className="form-control" name="refundRemarks" rows="2" value={p.refundRemarks || ""} onChange={(e) => handleChange(e, "payments", idx)} disabled={!editMode && !!p.__locked} />
+
+                              <div className="row mt-2">
+                                <div className="col-12 d-flex align-items-center" style={{ gap: 10 }}>
+                                  <input id={`refundSwitch-${idx}`} data-idx={idx} className="form-check-input" type="checkbox" name="refund" checked={!!p.refund} onChange={(e) => handleChange(e, "payments", idx)} disabled={refundDisabled || locked} />
+                                  <label htmlFor={`refundSwitch-${idx}`} style={{ fontWeight: 600, margin: 0 }}>
+                                    <span className={`refund-badge ${p.refund ? "pulse" : ""}`}>Refund</span>
+                                  </label>
+                                  {refundDisabled && <div className="text-muted small">Refund amount present — refund toggle disabled</div>}
+                                </div>
+                              </div>
+
+                              {p.refund && (
+                                <div className="row mt-2">
+                                  <div className="col-md-4">
+                                    <label className="form-label"><strong>Refund Date</strong></label>
+                                    <input data-idx={idx} className="form-control" name="refundDate" type="date" value={p.refundDate ? formatDateForInput(p.refundDate) : ""} onChange={(e) => handleChange(e, "payments", idx)} disabled={locked} />
+                                  </div>
+                                  <div className="col-md-4">
+                                    <label className="form-label"><strong>Refund Amount</strong></label>
+                                    <input data-idx={idx} className="form-control" name="refundAmount" type="tel" value={p.refundAmount ?? ""} onChange={(e) => handleChange(e, "payments", idx)} disabled={locked} maxLength={12} />
+                                  </div>
+                                  <div className="col-md-4">
+                                    <label className="form-label"><strong>Refund Method</strong></label>
+                                    <select data-idx={idx} className="form-control" name="refundPaymentMethod" value={p.refundPaymentMethod || ""} onChange={(e) => handleChange(e, "payments", idx)} disabled={locked}>
+                                      <option value="">Select</option>
+                                      <option value="cash">Cash</option>
+                                      <option value="online">Online</option>
+                                      <option value="check">Check</option>
+                                    </select>
+                                  </div>
+                                  <div className="col-12 mt-2">
+                                    <label className="form-label"><strong>Refund Remarks</strong></label>
+                                    <textarea data-idx={idx} className="form-control" name="refundRemarks" rows="2" value={p.refundRemarks || ""} onChange={(e) => handleChange(e, "payments", idx)} disabled={locked} />
+                                  </div>
+                                </div>
+                              )}
+
+                              <div className="mt-2 d-flex justify-content-end">
+                                {!p.__locked && editMode && <button className="btn btn-danger btn-sm" onClick={() => removePayment(idx)}>Remove</button>}
                               </div>
                             </div>
+                          ) : (
+                            // view mode: show payment as read-only table
+                            <table className="readonly-table mb-0">
+                              <tbody>
+                                <tr>
+                                  <th className="readonly-row-label">Method</th>
+                                  <td>{p.paymentMethod || "—"}</td>
+                                  <th className="readonly-row-label">Date</th>
+                                  <td>{p.date ? new Date(p.date).toLocaleDateString() : "—"}</td>
+                                </tr>
+                                <tr>
+                                  <th className="readonly-row-label">Paid Amount</th>
+                                  <td>{formatINR(p.paidAmount)}</td>
+                                  <th className="readonly-row-label">Balance</th>
+                                  <td>{formatINR(p.balance)}</td>
+                                </tr>
+                                <tr>
+                                  <th className="readonly-row-label">Receipt</th>
+                                  <td>{p.receptNo || "—"}</td>
+                                  <th className="readonly-row-label">Refund</th>
+                                  <td>{p.refund ? formatINR(p.refundAmount) : "—"}</td>
+                                </tr>
+                                <tr>
+                                  <th className="readonly-row-label">Remarks</th>
+                                  <td colSpan={3}>{p.remarks || "—"}</td>
+                                </tr>
+                              </tbody>
+                            </table>
                           )}
-
-                          <div className="mt-2 d-flex justify-content-end">
-                            {!p.__locked && editMode && <button className="btn btn-danger btn-sm" onClick={() => removePayment(idx)}>Remove</button>}
-                          </div>
                         </div>
                       );
                     })}
@@ -1263,16 +1207,28 @@ const ClientModal = ({
                         {(!showFullAudit && (formData.paymentLogs || []).length === 0) && <div className="text-muted small">No changes yet</div>}
                         {!showFullAudit && (formData.paymentLogs || []).map((L, i) => (
                           <div className="entry" key={i}>
-                            <div style={{ fontSize: 12 }}><strong>{L.user}</strong> — <span className="text-muted small">{L.dateLabel || new Date(L.date).toLocaleString()}</span></div>
-                            <div style={{ fontSize: 13, whiteSpace: "pre-wrap" }}>{L.message || (Array.isArray(L.changes) ? L.changes.map(c => `${c.friendly}: '${String(c.before)}' → '${String(c.after)}'`).join("\n") : "-")}</div>
+                            <div className="header">
+                              <div>
+                                <div className="user">{L.user || "System"} <span className="badge-type">{L.type || "summary"}</span></div>
+                                <div className="meta">{L.dateLabel || (L.date ? new Date(L.date).toLocaleString() : "")}</div>
+                              </div>
+                              <div className="meta small">{(L.changes || []).length} changes</div>
+                            </div>
+                            <div className="msg">{L.message || (Array.isArray(L.changes) ? L.changes.map(c => `${c.friendly}: '${String(c.before)}' → '${String(c.after)}'`).join("\n") : "-")}</div>
                           </div>
                         ))}
 
                         {showFullAudit && (formData.fullAuditLogs || []).length === 0 && <div className="text-muted small">No detailed audit entries</div>}
                         {showFullAudit && (formData.fullAuditLogs || []).map((L, i) => (
                           <div className="entry" key={i}>
-                            <div style={{ fontSize: 12 }}><strong>{L.user}</strong> — <span className="text-muted small">{L.dateLabel || new Date(L.date).toLocaleString()}</span></div>
-                            <div style={{ fontSize: 13, whiteSpace: "pre-wrap" }}>{Array.isArray(L.changes) ? L.changes.map(c => `${c.friendly} (${c.path}): '${String(c.before)}' → '${String(c.after)}'`).join("\n") : (L.message || "-")}</div>
+                            <div className="header">
+                              <div>
+                                <div className="user">{L.user || "System"} <span className="badge-type">full</span></div>
+                                <div className="meta">{L.dateLabel || (L.date ? new Date(L.date).toLocaleString() : "")}</div>
+                              </div>
+                              <div className="meta small">{(L.changes || []).length} items</div>
+                            </div>
+                            <div className="msg">{Array.isArray(L.changes) ? L.changes.map(c => `${c.friendly} (${c.path}): '${String(c.before)}' → '${String(c.after)}'`).join("\n") : (L.message || "-")}</div>
                           </div>
                         ))}
                       </div>
@@ -1457,7 +1413,7 @@ const ClientModal = ({
               <p>Are you sure you want to remove this client?</p>
               <div className="d-flex gap-2 justify-content-end">
                 <button className="btn btn-secondary" onClick={() => setShowRemovalConfirm(false)}>No</button>
-                <button className="btn btn-danger" onClick={handleStartRemoval}>Yes</button>
+                <button className="btn btn-danger" onClick={() => { setShowRemovalConfirm(false); setShowRemovalModal(true); }}>Yes</button>
               </div>
             </div>
           </div>
@@ -1489,7 +1445,34 @@ const ClientModal = ({
             </div>
             <div className="modal-footer-custom">
               <button className="btn btn-secondary" onClick={() => setShowRemovalModal(false)}>Close</button>
-              <button className="btn btn-danger" onClick={handleDoRemove}>Remove Client</button>
+              <button className="btn btn-danger" onClick={async () => {
+                const errs = {};
+                if (!removalForm.reason) errs.reason = "Select reason";
+                if (!removalForm.comment || !removalForm.comment.trim()) errs.comment = "Enter comment";
+                setRemovalErrors(errs);
+                if (Object.keys(errs).length > 0) return;
+                try {
+                  const id = formData?.id || formData?.recordId || formData?.clientId;
+                  const removalEntry = {
+                    removedAt: new Date().toISOString(),
+                    removedBy: currentUserName || "System",
+                    removalReason: removalForm.reason,
+                    removalComment: removalForm.comment.trim(),
+                  };
+                  if (id) {
+                    await firebaseDB.child(`ExitClients/${id}/removalHistory`).push(removalEntry);
+                    await firebaseDB.child(`ClientData/${id}`).remove();
+                  } else {
+                    const newRef = firebaseDB.child(`ExitClients`).push();
+                    await newRef.set({ removalHistory: { [newRef.key]: removalEntry }, movedAt: new Date().toISOString() });
+                  }
+                  setShowRemovalModal(false);
+                  onRemoved && onRemoved(id);
+                } catch (err) {
+                  console.error("remove client error", err);
+                  alert("Remove failed");
+                }
+              }}>Remove Client</button>
             </div>
           </div>
         </div>

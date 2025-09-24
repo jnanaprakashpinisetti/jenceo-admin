@@ -1223,7 +1223,7 @@ const ClientModal = ({
                               </div>
                               <div className="col-md-4">
                                 <label className="form-label"><strong>Refund Amount</strong></label>
-                                <input data-idx={idx} className="form-control" name="refundAmount" type="number" value={p.refundAmount ?? ""} onChange={(e) => handleChange(e, "payments", idx)} disabled={!editMode && !!p.__locked} />
+                                <input data-idx={idx} className="form-control" name="refundAmount" type="tel" value={p.refundAmount ?? ""} onChange={(e) => handleChange(e, "payments", idx)} disabled={!editMode && !!p.__locked}  maxLength={5} />
                               </div>
                               <div className="col-md-4">
                                 <label className="form-label"><strong>Refund Method</strong></label>

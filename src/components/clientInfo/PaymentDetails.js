@@ -69,10 +69,10 @@ const PaymentDetails = ({ formData, handleChange, addPayment, removePayment, err
             <div className="col-md-6">
               <div className="form-group">
                 <label><strong>Paid Amount</strong> <span className="text-danger">*</span></label>
-                <input type="text" inputMode="numeric"
+                <input type="tel" inputMode="numeric"
                   className={`form-control ${getErr(index, "paidAmount") ? "is-invalid" : ""}`}
                   name="paidAmount" value={payment.paidAmount || ""} onChange={(e) => handleAmountChange(e, index, "paidAmount")}
-                  id={`paidAmount-${index}`} placeholder="Enter amount" readOnly={isViewMode} />
+                  id={`paidAmount-${index}`} placeholder="Enter amount" readOnly={isViewMode} maxLength={5} />
                 {getErr(index, "paidAmount") && <div className="invalid-feedback">{getErr(index, "paidAmount")}</div>}
               </div>
             </div>
@@ -83,7 +83,7 @@ const PaymentDetails = ({ formData, handleChange, addPayment, removePayment, err
                 <input type="text" inputMode="numeric"
                   className={`form-control ${getErr(index, "balance") ? "is-invalid" : ""}`}
                   name="balance" value={payment.balance || ""} onChange={(e) => handleAmountChange(e, index, "balance")}
-                  id={`balance-${index}`} placeholder="Enter balance" readOnly={isViewMode} />
+                  id={`balance-${index}`} placeholder="Enter balance" readOnly={isViewMode} maxLength={5} />
                 {getErr(index, "balance") && <div className="invalid-feedback">{getErr(index, "balance")}</div>}
               </div>
             </div>
@@ -97,7 +97,7 @@ const PaymentDetails = ({ formData, handleChange, addPayment, removePayment, err
                 <input type="text" inputMode="numeric"
                   className={`form-control ${getErr(index, "receptNo") ? "is-invalid" : ""}`}
                   name="receptNo" value={payment.receptNo || ""} onChange={(e) => handleChange(e, "payments", index)}
-                  id={`receptNo-${index}`} placeholder="Enter receipt number" readOnly={isViewMode} />
+                  id={`receptNo-${index}`} placeholder="Enter receipt number" readOnly={isViewMode} maxLength={2} />
                 {getErr(index, "receptNo") && <div className="invalid-feedback">{getErr(index, "receptNo")}</div>}
               </div>
             </div>

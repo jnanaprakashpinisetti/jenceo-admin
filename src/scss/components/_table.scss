@@ -831,3 +831,16 @@ table {
     font-weight: 700;
     background: rgba(255, 255, 255, 0.03);
 }
+
+.readonly-table {
+    .readonly-row-label, td {
+        background-color: transparent !important;
+        color: #444 !important;
+    }
+
+    tr {
+        &:nth-child(even) {
+            background-color: #f2f2f2 !important;
+        }
+    }
+}

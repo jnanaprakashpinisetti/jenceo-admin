@@ -98,14 +98,16 @@ export default function TopNav({
 
   const handleSignOut = async () => {
     try {
-      if (typeof onSignOut === "function") await onSignOut();
-      else {
+      if (typeof onSignOut === "function") {
+        await onSignOut();
+      } else {
         localStorage.clear();
         sessionStorage.clear();
-        window.location.reload();
       }
+      doNavigate("/login");
     } catch (err) {
       console.error("Sign out error:", err);
+      try { doNavigate("/login"); } catch { window.location.href = "/login"; }
     }
   };
 
@@ -133,10 +135,10 @@ export default function TopNav({
               onKeyDown={onKeyDown}
               aria-label="Global search"
             />
-            <button className="btn  btn-sm mb-0" type="button" onClick={clearQuery} title="Clear">
+            <button className="btn btn-outline-light btn-sm mb-0" type="button" onClick={clearQuery} title="Clear">
               ✕
             </button>
-            <button className="btn  btn-sm mb-0" type="submit" title="Search">
+            <button className="btn btn-outline-light btn-sm mb-0" type="submit" title="Search">
               Search
             </button>
           </form>
@@ -148,7 +150,7 @@ export default function TopNav({
           <button
             className="btn btn-outline-light btn-sm d-none d-md-inline"
             title="Pending"
-            onClick={() => window.dispatchEvent(new CustomEvent("showPending"))}
+            onClick={() => { try { window.dispatchEvent(new CustomEvent("showPending")); } catch {} doNavigate("/pending"); }}
           >
             <i className="bi bi-hourglass-split" />
           </button>

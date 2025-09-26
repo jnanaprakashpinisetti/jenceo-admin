@@ -255,7 +255,44 @@ const ClientModal = ({
 
   const [expandedLogIndex, setExpandedLogIndex] = useState(null);
 
-  const [showRemovalConfirm, setShowRemovalConfirm] = useState(false);
+  
+  // --- Quick Actions state (Refund + Balance Paid) ---
+  const [quickRefund, setQuickRefund] = useState({
+    enabled: false,
+    date: formatDateForInput(new Date()),
+    amount: "",
+    method: "cash",
+    remarks: ""
+  });
+  const [balancePay, setBalancePay] = useState({
+    enabled: false,
+    date: formatDateForInput(new Date()),
+    amount: "",
+    method: "cash",
+    remarks: ""
+  });
+
+  const [selectedAction, setSelectedAction] = useState("");
+
+  const getLastVisiblePaymentIndex = () => {
+    const arr = Array.isArray(formData.payments) ? formData.payments : [];
+    for (let i = arr.length - 1; i >= 0; i--) {
+      if (!arr[i]?.__adjustment) return i;
+    }
+    return -1;
+  };
+
+  const getLastBalance = () => {
+    const arr = Array.isArray(formData.payments) ? formData.payments : [];
+    for (let i = arr.length - 1; i >= 0; i--) {
+      if (!arr[i]?.__adjustment) {
+        const b = Number(arr[i]?.balance ?? 0);
+        if (!Number.isNaN(b)) return b;
+      }
+    }
+    return 0;
+  };
+const [showRemovalConfirm, setShowRemovalConfirm] = useState(false);
   const [showRemovalModal, setShowRemovalModal] = useState(false);
   const [removalForm, setRemovalForm] = useState({ reason: "", comment: "" });
   const [removalErrors, setRemovalErrors] = useState({});
@@ -667,9 +704,9 @@ const ClientModal = ({
         .map((p, i) => {
           const d = p.date ? parseDateSafe(p.date) : null;
           const dateStr = d ? `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()}` : safe(p.date);
-          return `<tr><td>${i + 1}</td><td>${dateStr}</td><td>${safe(p.paymentMethod)}</td><td>${formatINR(p.paidAmount)}</td><td>${formatINR(p.balance)}</td><td>${safe(
+          return `<tr><td>${i + 1}</td><td>${dateStr}</td><td>${safe(p.paymentMethod)}</td><td>${formatINR(p.paidAmount).replace('\u20B9','&#8377;')}</td><td>${formatINR(p.balance).replace('\u20B9','&#8377;')}</td><td>${safe(
             p.receptNo
-          )}</td><td>${p.refund ? formatINR(p.refundAmount) : "-"}</td></tr>`;
+          )}</td><td><span style="color:#b00020;font-weight:600;">${p.refund ? formatINR(p.refundAmount).replace('\u20B9', '&#8377;') : "-"}</span></span></span></td></tr>`;
         })
         .join("") || "<tr><td colspan='7'>No payments</td></tr>";
 
@@ -720,10 +757,15 @@ const ClientModal = ({
       <div class="section">
         <h3>Payments</h3>
         <table class="payments-table"><thead><tr><th>#</th><th>Date</th><th>Method</th><th>Paid</th><th>Balance</th><th>Receipt</th><th>Refund</th></tr></thead><tbody>${paymentsRows}</tbody>
-        <tfoot><tr><th colspan="3">Totals</th><th>${formatINR(totalPaid)}</th><th>${formatINR(totalBalance)}</th><th></th><th>${formatINR(totalRefund)}</th></tr></tfoot></table>
+        <tfoot><tr><th colspan="3">Totals</th><th>${formatINR(totalPaid).replace('\u20B9','&#8377;')}</th><th>${formatINR(totalBalance).replace('\u20B9','&#8377;')}</th><th></th><th>${formatINR(totalRefund).replace('\u20B9','&#8377;')}</th></tr></tfoot></table>
       </div>
 
     </div>
+    
+      <div class="biodata-footer" style="position:fixed;left:0;right:0;bottom:0;width:100%;background:#05b6ff;color:#fff;font-size:10px;padding:6px 8px;text-align:center;">
+        Doc Ref: JC-HR-06 &nbsp;&nbsp;|&nbsp;&nbsp; Revision: 1 &nbsp;&nbsp;|&nbsp;&nbsp; Date: 1<sup>st</sup> May 2025 &nbsp;&nbsp;|&nbsp;&nbsp; Page 1 of 1
+      </div>
+    
     </body></html>`;
   }
 
@@ -752,7 +794,10 @@ const ClientModal = ({
     .readonly-table { width:100%; border-collapse:collapse; background:transparent; }
     .readonly-table th, .readonly-table td { padding:8px; border:1px solid #eee; text-align:left; vertical-align:top; }
     .readonly-row-label { width:25%; font-weight:600; background:#fafafa; }
-  `;
+  
+    /* Refund amounts */
+    .refund-amount { color:#b00020 !important; font-weight:600; }
+    `;
 
   const hasPayments = (Array.isArray(formData.payments) ? formData.payments.length > 0 : false);
 
@@ -1053,14 +1098,14 @@ const ClientModal = ({
                       );
                     })}
 
-                    {editMode && <button className="btn btn-primary" onClick={addWorker}>Add Worker</button>}
+                    {editMode && <div className="actions-right"><button className="btn btn-primary" onClick={addWorker}>Add Worker</button></div>}
                   </div>
                 )}
 
                 {/* Payments */}
                 {activeTab === "payments" && (
                   <div>
-                    {(formData.payments || []).map((p, idx) => {
+                    {( (formData.payments || []).filter(p => !p?.__adjustment) ).map((p, idx) => {
                       const locked = !!p.__locked;
                       const refundDisabled = Number(p.refundAmount || 0) > 0;
                       return (
@@ -1119,17 +1164,7 @@ const ClientModal = ({
                                 </div>
                               </div>
 
-                              <div className="row mt-2">
-                                <div className="col-12 d-flex align-items-center" style={{ gap: 10 }}>
-                                  <input id={`refundSwitch-${idx}`} data-idx={idx} className="form-check-input" type="checkbox" name="refund" checked={!!p.refund} onChange={(e) => handleChange(e, "payments", idx)} disabled={refundDisabled || locked} />
-                                  <label htmlFor={`refundSwitch-${idx}`} style={{ fontWeight: 600, margin: 0 }}>
-                                    <span className={`refund-badge ${p.refund ? "pulse" : ""}`}>Refund</span>
-                                  </label>
-                                  {refundDisabled && <div className="text-muted small">Refund amount present — refund toggle disabled</div>}
-                                </div>
-                              </div>
-
-                              {p.refund && (
+                              {false && (
                                 <div className="row mt-2">
                                   <div className="col-md-4">
                                     <label className="form-label"><strong>Refund Date</strong></label>
@@ -1179,7 +1214,7 @@ const ClientModal = ({
                                   <th className="readonly-row-label">Receipt</th>
                                   <td>{p.receptNo || "—"}</td>
                                   <th className="readonly-row-label">Refund</th>
-                                  <td>{p.refund ? formatINR(p.refundAmount) : "—"}</td>
+                                  <td><span className="refund-amount">{p.refund ? formatINR(p.refundAmount) : "—"}</span></td>
                                 </tr>
                                 <tr>
                                   <th className="readonly-row-label">Remarks</th>
@@ -1192,9 +1227,188 @@ const ClientModal = ({
                       );
                     })}
 
-                    {editMode && <button className="btn btn-primary" onClick={addPayment}>Add Payment</button>}
+                    {editMode && <div className="actions-right mb-3"><button className="btn btn-primary" onClick={addPayment}>Add Payment</button></div>}
 
-                    {/* Change Log */}
+                    
+                    {/* Quick Actions: Refund + Balance Paid (outside of payments list) */}
+                    
+                    <div className="mb-3 p-2 border rounded" style={{background:"#d3d5d9"}}>
+                      
+                      <div className="row g-2 align-items-center radio-row">
+                        <div className="col-md-6 d-flex align-items-center" style={{gap:12}}>
+                          <input
+                            id="actionRefund"
+                            type="radio"
+                            name="quickAction"
+                            className="form-check-input"
+                            checked={selectedAction === "refund"}
+                            disabled={!editMode}
+                            onChange={() => { 
+                              setSelectedAction("refund"); 
+                              setQuickRefund(prev => ({...prev, enabled:true})); 
+                              setBalancePay(prev => ({...prev, enabled:false})); 
+                            }}
+                          />
+                          <label htmlFor="actionRefund" className="mb-0"><strong>Refund</strong></label>
+                        </div>
+                        <div className="col-md-6 d-flex align-items-center" style={{gap:12}}>
+                          <input
+                            id="actionBalance"
+                            type="radio"
+                            name="quickAction"
+                            className="form-check-input"
+                            checked={selectedAction === "balance"}
+                            disabled={!editMode}
+                            onChange={() => { 
+                              setSelectedAction("balance"); 
+                              setBalancePay(prev => ({...prev, enabled:true})); 
+                              setQuickRefund(prev => ({...prev, enabled:false})); 
+                            }}
+                          />
+                          <label htmlFor="actionBalance" className="mb-0"><strong>Balance Paid</strong></label>
+                          {getLastBalance() > 0 && <span className="badge bg-light text-dark">Last Balance: {formatINR(getLastBalance())}</span>}
+                        </div>
+                      </div>
+{(selectedAction === "refund" || selectedAction === "balance") && (
+                        <div className="row g-2 mt-2"  style={{background: selectedAction === "balance" ? "#d5f5c7ff" : "#fad3d3ff", borderRadius:6, padding:5}}>
+                          <div className="col-md-4">
+                            <label className="form-label"><strong>Date</strong></label>
+                            <input
+                              type="date"
+                              className="form-control"
+                              disabled={!editMode}
+                              value={(selectedAction === "refund" ? quickRefund.date : balancePay.date) || ""}
+                              onChange={e => {
+                                if (selectedAction === "refund") setQuickRefund(prev => ({...prev, date: e.target.value }));
+                                if (selectedAction === "balance") setBalancePay(prev => ({...prev, date: e.target.value }));
+                              }}
+                            />
+                          </div>
+                          <div className="col-md-4">
+                            <label className="form-label"><strong>Amount</strong></label>
+                            <input
+                              type="number"
+                              className={`form-control ${selectedAction === "refund" ? "refund-amount" : ""}`}
+                              disabled={!editMode}
+                              value={(selectedAction === "refund" ? (quickRefund.amount ?? "") : (balancePay.amount ?? ""))}
+                              onChange={e => {
+                                if (selectedAction === "refund") setQuickRefund(prev => ({...prev, amount: e.target.value }));
+                                if (selectedAction === "balance") setBalancePay(prev => ({...prev, amount: e.target.value }));
+                              }}
+                            />
+                          </div>
+                          <div className="col-md-4">
+                            <label className="form-label"><strong>Method</strong></label>
+                            <select
+                              className="form-control"
+                              disabled={!editMode}
+                              value={(selectedAction === "refund" ? quickRefund.method : balancePay.method) || "cash"}
+                              onChange={e => {
+                                if (selectedAction === "refund") setQuickRefund(prev => ({...prev, method: e.target.value }));
+                                if (selectedAction === "balance") setBalancePay(prev => ({...prev, method: e.target.value }));
+                              }}
+                            >
+                              <option value="cash">Cash</option>
+                              <option value="online">Online</option>
+                              <option value="check">Check</option>
+                            </select>
+                          </div>
+                          <div className="col-md-12">
+                            <label className="form-label"><strong>Comment</strong></label>
+                            <textarea
+                              className="form-control"
+                              rows={1}
+                              disabled={!editMode}
+                              placeholder={selectedAction === "refund" ? "Refund remarks" : "Balance pay remarks"}
+                              value={(selectedAction === "refund" ? (quickRefund.remarks || "") : (balancePay.remarks || ""))}
+                              onChange={e => {
+                                if (selectedAction === "refund") setQuickRefund(prev => ({...prev, remarks: e.target.value }));
+                                if (selectedAction === "balance") setBalancePay(prev => ({...prev, remarks: e.target.value }));
+                              }}
+                            />
+                          </div>
+                          <div className="col-12 d-flex justify-content-end">
+                            <button
+                              type="button"
+                              className="btn btn-success btn-sm"
+                              disabled={!editMode}
+                              onClick={() => {
+                                const isRefund = selectedAction === "refund";
+                                const dt = isRefund ? quickRefund.date : balancePay.date;
+                                const amt = Number(isRefund ? quickRefund.amount : balancePay.amount) || 0;
+                                const mth = isRefund ? quickRefund.method : balancePay.method;
+                                const rem = isRefund ? quickRefund.remarks : balancePay.remarks;
+                                if (amt <= 0) { alert("Amount should be greater than zero."); return; }
+
+                                setFormData(prev => {
+                                  const list = Array.isArray(prev.payments) ? [...prev.payments] : [];
+                                  const adj = {
+                                    __adjustment: true,
+                                    __type: isRefund ? "refund" : "balance",
+                                    date: dt || formatDateForInput(new Date()),
+                                    paymentMethod: mth || "cash",
+                                    paidAmount: isRefund ? 0 : amt,
+                                    balance: isRefund ? (list.length ? Number(list[list.length-1]?.balance||0) : 0) : Math.max(0, (getLastBalance() || 0) - amt),
+                                    receptNo: "",
+                                    remarks: rem || (isRefund ? "Refund (quick)" : "Balance Paid (quick)"),
+                                    refund: isRefund,
+                                    refundAmount: isRefund ? amt : 0,
+                                    refundDate: isRefund ? (dt || formatDateForInput(new Date())) : "",
+                                    refundPaymentMethod: isRefund ? (mth || "cash") : "",
+                                    refundRemarks: isRefund ? (rem || "Quick refund") : "",
+                                  };
+                                  if (!isRefund) {
+                                    const idx = getLastVisiblePaymentIndex();
+                                    if (idx >= 0) {
+                                      const clone = { ...list[idx] };
+                                      const newBal = Math.max(0, Number(clone.balance || 0) - amt);
+                                      clone.balance = newBal;
+                                      list[idx] = clone;
+                                    }
+                                  }
+                                  list.push(adj);
+                                  const next = { ...prev, payments: list };
+                                  return next;
+                                });
+
+                                // reset but keep radio selection
+                                if (isRefund) setQuickRefund(prev => ({...prev, amount:"", remarks:""}));
+                                else setBalancePay(prev => ({...prev, amount:"", remarks:""}));
+                              }}
+                            >
+                              Save Adjustment
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+    
+
+                    {/* Hidden adjustments mini-view */}
+                    {Array.isArray(formData.payments) && formData.payments.some(x => x?.__adjustment) && (
+                      <div className="mb-3 p-2 border rounded" style={{background:"#f9fbff"}}>
+                        <div className="d-flex justify-content-between align-items-center mb-2">
+                          <h6 className="mb-0"><strong>Adjustments</strong></h6>
+                          <small className="text-muted">Hidden from payment rows</small>
+                        </div>
+                        <div className="table-responsive">
+                          <table className="table table-sm mb-0">
+                            <thead><tr><th>#</th><th>Type</th><th>Date</th><th>Amount</th><th>Method</th><th>Remarks</th></tr></thead>
+                            <tbody>
+                              {formData.payments.filter(x => x?.__adjustment).map((a,i) => {
+                                const d = a.date ? parseDateSafe(a.date) : null;
+                                const dateStr = d ? `${String(d.getDate()).padStart(2,"0")}/${String(d.getMonth()+1).padStart(2,"0")}/${d.getFullYear()}` : (a.date||"—");
+                                const type = a.__type === "refund" ? "Refund" : "Balance Paid";
+                                const amt = a.__type === "refund" ? a.refundAmount : a.paidAmount;
+                                const mth = a.__type === "refund" ? (a.refundPaymentMethod||"") : (a.paymentMethod||"");
+                                return (<tr key={i}><td>{i+1}</td><td>{type}</td><td>{dateStr}</td><td>{a.__type === "refund" ? <span className="refund-amount">{formatINR(amt)}</span> : formatINR(amt)}</td><td>{mth||"—"}</td><td>{a.remarks||"—"}</td></tr>)
+                              })}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    )}
+{/* Change Log */}
                     <div className="mt-3">
                       <div className="d-flex justify-content-between align-items-center mb-2">
                         <h6><strong>Change Log</strong></h6>
@@ -1253,17 +1467,21 @@ const ClientModal = ({
                           </tr>
                         </thead>
                         <tbody>
-                          {(formData.payments || []).map((p, i) => {
+                          {((formData.payments || []).filter(p => !p?.__adjustment || p?.__type === "balance")).map((p, i) => {
                             const d = p.date ? parseDateSafe(p.date) : null;
                             const dateStr = d ? `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()}` : (p.date || "-");
+                            const method = p.paymentMethod || "-";
+                            const paid = Number(p.paidAmount) || 0;
+                            const bal = Number(p.balance) || 0;
+                            const receipt = p.receptNo || "-";
                             return (
                               <tr key={i}>
                                 <td>{i + 1}</td>
                                 <td>{dateStr}</td>
-                                <td>{formatINR(p.paidAmount)}</td>
-                                <td>{formatINR(p.balance)}</td>
-                                <td>{p.paymentMethod || "-"}</td>
-                                <td>{p.receptNo || "-"}</td>
+                                <td>{formatINR(paid)}</td>
+                                <td>{formatINR(bal)}</td>
+                                <td>{method}</td>
+                                <td>{receipt}</td>
                               </tr>
                             );
                           })}
@@ -1302,7 +1520,7 @@ const ClientModal = ({
                                 <td>{i + 1}</td>
                                 <td>{(formData.payments || []).indexOf(p) + 1}</td>
                                 <td>{dateStr}</td>
-                                <td>{formatINR(p.refundAmount)}</td>
+                                <td><span className="refund-amount">{formatINR(p.refundAmount)}</span></td>
                                 <td>{p.refundPaymentMethod || "-"}</td>
                                 <td>{p.refundRemarks || "-"}</td>
                                 <td>{p.receptNo || "-"}</td>

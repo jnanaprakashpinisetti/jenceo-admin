@@ -18,7 +18,7 @@ $dark-table-text: #e6eef6;
 
 .invest-wrapper {
     @include res {
-        max-width:50%;
+        max-width: 50%;
 
         .invest-card {
             width: 100%;
@@ -141,6 +141,7 @@ $dark-table-text: #e6eef6;
         background: linear-gradient(135deg, #c09402 0%, #f7b603);
     }
 }
+
 .staff-salary-card {
     .invest-card__box {
         background: linear-gradient(135deg, #02c4ca 0%, #028a8f);
@@ -152,6 +153,7 @@ $dark-table-text: #e6eef6;
         background: linear-gradient(135deg, #b10362 0%, #960253);
     }
 }
+
 .assets-card {
     .invest-card__box {
         background: linear-gradient(135deg, #01a72b 0%, #02691c);
@@ -1071,6 +1073,7 @@ $dark-table-text: #e6eef6;
     flex-wrap: wrap;
     gap: 10px;
     margin-bottom: 15px;
+
     @include res {
         gap: 0
     }
@@ -1224,10 +1227,11 @@ $dark-table-text: #e6eef6;
     gap: 12px;
     margin-bottom: 12px;
     flex-wrap: wrap;
-@media (max-width: 767) {
+
+    @media (max-width: 767) {
         display: block;
 
-}
+    }
 
 
 }
@@ -1263,73 +1267,275 @@ $dark-table-text: #e6eef6;
 
 // ------------------ Overall Cards (Yellow / Gold Family) ------------------
 .overall-cards {
-  .summary-card,
-  .header-gradient {
-    color: #1a1a1a; // dark text works better on yellow/gold
-  }
 
-  .grad-paid {
-    background: linear-gradient(135deg, #FFD700, #FFA500); // Gold to Orange
-  }
-  .grad-balance {
-    background: linear-gradient(135deg, #F9D423, #c99a02); // Yellow to Warm Gold
-  }
-  .grad-refund {
-    background: linear-gradient(135deg, #F7971E, #FFD200); // Amber to Bright Gold
-  }
-  .grad-pending {
-    background: linear-gradient(135deg, #FFB75E, #ED8F03); // Light Gold to Deep Gold
-  }
+    .summary-card,
+    .header-gradient {
+        color: #1a1a1a; // dark text works better on yellow/gold
+    }
+
+    .grad-paid {
+        background: linear-gradient(135deg, #FFD700, #FFA500); // Gold to Orange
+    }
+
+    .grad-balance {
+        background: linear-gradient(135deg, #F9D423, #c99a02); // Yellow to Warm Gold
+    }
+
+    .grad-refund {
+        background: linear-gradient(135deg, #F7971E, #FFD200); // Amber to Bright Gold
+    }
+
+    .grad-pending {
+        background: linear-gradient(135deg, #FFB75E, #ED8F03); // Light Gold to Deep Gold
+    }
 }
 
 // ------------------ Monthly Cards (Violet / Blue Family) ------------------
 .month-cards {
-  .summary-card {
-    color: #fff;
-  }
+    .summary-card {
+        color: #fff;
+    }
 
-  .grad-paid {
-    background: linear-gradient(135deg, #6A11CB, #2575FC); // Violet to Blue
-  }
-  .grad-balance {
-    background: linear-gradient(135deg, #7F00FF, #dd42f1); // Deep Violet
-  }
-  .grad-refund {
-    background: linear-gradient(135deg, #628dce, #4286f4); // Charcoal to Blue
-  }
-  .grad-pending {
-    background: linear-gradient(135deg, #3a1c71, #d76d77, #ffaf7b); // Violet mix
-  }
+    .grad-paid {
+        background: linear-gradient(135deg, #6A11CB, #2575FC); // Violet to Blue
+    }
+
+    .grad-balance {
+        background: linear-gradient(135deg, #7F00FF, #dd42f1); // Deep Violet
+    }
+
+    .grad-refund {
+        background: linear-gradient(135deg, #628dce, #4286f4); // Charcoal to Blue
+    }
+
+    .grad-pending {
+        background: linear-gradient(135deg, #3a1c71, #d76d77, #ffaf7b); // Violet mix
+    }
 }
 
 // ------------------ Yearly Cards (Green / Dark Green Family) ------------------
 .year-cards {
-  .summary-card {
-    color: #fff;
-  }
+    .summary-card {
+        color: #fff;
+    }
 
-  .grad-paid {
-    background: linear-gradient(135deg, #56ab2f, #5a8624); // Green to Light Green
-  }
-  .grad-balance {
-    background: linear-gradient(135deg, #11998e, #347a4f); // Teal Green
-  }
-  .grad-refund {
-    background: linear-gradient(135deg, #006400, #228B22); // Dark Greens
-  }
-  .grad-pending {
-    background: linear-gradient(135deg, #1D976C, #427756); // Emerald to Mint
-  }
+    .grad-paid {
+        background: linear-gradient(135deg, #56ab2f, #5a8624); // Green to Light Green
+    }
+
+    .grad-balance {
+        background: linear-gradient(135deg, #11998e, #347a4f); // Teal Green
+    }
+
+    .grad-refund {
+        background: linear-gradient(135deg, #006400, #228B22); // Dark Greens
+    }
+
+    .grad-pending {
+        background: linear-gradient(135deg, #1D976C, #427756); // Emerald to Mint
+    }
 }
 
 // ------------------ Table Negative Amounts ------------------
 .invest-table {
-  .text-danger {
-    font-weight: 600;
-  }
+    .text-danger {
+        font-weight: 600;
+    }
 }
 
-    .refund-amount { color:#b00020 !important; font-weight:600; }
-    .actions-right { display:flex; justify-content:flex-end; gap:8px; }
-    .radio-row label { margin:0 8px 0 4px; }
-    
+.refund-amount {
+    color: #b00020 !important;
+    font-weight: 600;
+}
+
+.actions-right {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+}
+
+.radio-row label {
+    margin: 0 8px 0 4px;
+}
+
+
+// Colors
+$white: #fff;
+$black: #000;
+$text-muted: #e2e8f0;
+
+// Gradients
+$grad-sky: linear-gradient(135deg, #38bdf8, #0ea5e9, #2563eb);
+$grad-rose: linear-gradient(135deg, #fb7185, #f43f5e, #be123c);
+$grad-emerald: linear-gradient(135deg, #34d399, #10b981, #059669);
+$grad-amber: linear-gradient(135deg, #f59e0b, #fbbf24, #d97706);
+
+.bg-surface {
+    background: #0b1220;
+    color: $text-muted;
+}
+
+.results-card {
+    background: linear-gradient(135deg, #0ea5e9, #4338ca, #7c3aed);
+    color: $white;
+    border: none;
+    padding: 16px 18px;
+}
+
+.hover-rise {
+    transition: transform .18s ease, box-shadow .18s ease;
+
+    &:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 10px 24px rgba(2, 6, 23, .35);
+    }
+}
+
+.gradient-header {
+    background: linear-gradient(135deg, #0ea5e9, #22c55e);
+    border-bottom: none;
+}
+
+.neo-card {
+    border-radius: 16px;
+    padding: 16px;
+    color: $white;
+    position: relative;
+    overflow: hidden;
+    box-shadow: 0 8px 24px rgba(2, 6, 23, .35);
+
+    &::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        background: radial-gradient(1200px 300px at -10% -10%, rgba($white, .12), transparent 40%);
+        pointer-events: none;
+    }
+
+    .icon-bubble {
+        width: 42px;
+        height: 42px;
+        border-radius: 999px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: 800;
+        background: rgba($white, .18);
+        color: $white;
+        box-shadow: inset 0 0 0 1px rgba($white, .2);
+    }
+}
+
+.text-white-80 {
+    color: rgba($white, .85);
+}
+
+.text-shadow {
+    text-shadow: 0 1px 0 rgba($black, .25);
+}
+
+.display-7 {
+    font-size: 1.6rem;
+}
+
+// Gradient families
+.grad-sky {
+    background: $grad-sky;
+}
+
+.grad-rose {
+    background: $grad-rose;
+}
+
+.grad-emerald {
+    background: $grad-emerald;
+}
+
+.grad-amber {
+    background: $grad-amber;
+}
+
+// Glass cards
+.glass-card {
+    background: linear-gradient(180deg, rgba($white, .06), rgba($white, .02));
+    border: 1px solid rgba(148, 163, 184, .2);
+    border-radius: 16px;
+    padding: 14px 16px;
+    box-shadow: 0 6px 18px rgba($black, .25);
+}
+
+// Modern table
+.table-modern {
+    thead th {
+        background: linear-gradient(180deg, rgba($white, .06), rgba($white, .02));
+        color: $text-muted;
+        border-bottom: 1px solid rgba(148, 163, 184, .25);
+    }
+
+    tbody tr:hover {
+        background: rgba(148, 163, 184, .06);
+    }
+}
+
+.tiny {
+    font-size: 12px;
+}
+
+.legend-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 999px;
+    display: inline-block;
+}
+
+// Subtle badges
+.bg-success-subtle {
+    background: rgba(16, 185, 129, .15) !important;
+}
+
+.bg-danger-subtle {
+    background: rgba(244, 63, 94, .15) !important;
+}
+
+.bg-violet-subtle {
+    background: rgba(139, 92, 246, .15) !important;
+}
+
+.bg-sky-subtle {
+    background: rgba(56, 189, 248, .15) !important;
+}
+
+.bg-amber-subtle {
+    background: rgba(245, 158, 11, .15) !important;
+}
+
+.text-violet {
+    color: #8b5cf6 !important;
+}
+
+.text-sky {
+    color: #38bdf8 !important;
+}
+
+.text-amber {
+    color: #f59e0b !important;
+}
+
+.table-modern {
+    border-color: #42474c;
+    tr {
+        border-color: #42474c;
+        td {
+            background-color: #383838;
+        }
+        &:nth-child(even) {
+            td {
+            background-color: #353535;
+        }
+        }
+    }
+
+    .tiny {
+        color: #9f9f9f !important;
+    }
+}

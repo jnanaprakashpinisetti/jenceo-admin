@@ -6,6 +6,8 @@ import ClientPaymentCard from '../components/DashBoard/ClientPaymentCard';
 import PettyCashCard from '../components/DashBoard/PettyCashCard';
 import StaffSalaryCard from '../components/DashBoard/StaffSalaryCard';
 import AssetsCard from '../components/DashBoard/AssetsCard';
+import ResultsCard from '../components/DashBoard/ResultsCard';
+
 
 
 
@@ -34,6 +36,9 @@ export default function Dashboard() {
           </div>
           <div className="col-md-4">
             <AssetsCard />
+          </div>
+          <div className="col-md-6">
+            <ResultsCard />
           </div>
         </div>
       </div>

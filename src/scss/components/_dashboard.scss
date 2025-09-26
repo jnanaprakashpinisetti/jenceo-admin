@@ -1260,3 +1260,76 @@ $dark-table-text: #e6eef6;
 .table-secondary {
     background: #fbfbfb;
 }
+
+// ------------------ Overall Cards (Yellow / Gold Family) ------------------
+.overall-cards {
+  .summary-card,
+  .header-gradient {
+    color: #1a1a1a; // dark text works better on yellow/gold
+  }
+
+  .grad-paid {
+    background: linear-gradient(135deg, #FFD700, #FFA500); // Gold to Orange
+  }
+  .grad-balance {
+    background: linear-gradient(135deg, #F9D423, #c99a02); // Yellow to Warm Gold
+  }
+  .grad-refund {
+    background: linear-gradient(135deg, #F7971E, #FFD200); // Amber to Bright Gold
+  }
+  .grad-pending {
+    background: linear-gradient(135deg, #FFB75E, #ED8F03); // Light Gold to Deep Gold
+  }
+}
+
+// ------------------ Monthly Cards (Violet / Blue Family) ------------------
+.month-cards {
+  .summary-card {
+    color: #fff;
+  }
+
+  .grad-paid {
+    background: linear-gradient(135deg, #6A11CB, #2575FC); // Violet to Blue
+  }
+  .grad-balance {
+    background: linear-gradient(135deg, #7F00FF, #dd42f1); // Deep Violet
+  }
+  .grad-refund {
+    background: linear-gradient(135deg, #628dce, #4286f4); // Charcoal to Blue
+  }
+  .grad-pending {
+    background: linear-gradient(135deg, #3a1c71, #d76d77, #ffaf7b); // Violet mix
+  }
+}
+
+// ------------------ Yearly Cards (Green / Dark Green Family) ------------------
+.year-cards {
+  .summary-card {
+    color: #fff;
+  }
+
+  .grad-paid {
+    background: linear-gradient(135deg, #56ab2f, #5a8624); // Green to Light Green
+  }
+  .grad-balance {
+    background: linear-gradient(135deg, #11998e, #347a4f); // Teal Green
+  }
+  .grad-refund {
+    background: linear-gradient(135deg, #006400, #228B22); // Dark Greens
+  }
+  .grad-pending {
+    background: linear-gradient(135deg, #1D976C, #427756); // Emerald to Mint
+  }
+}
+
+// ------------------ Table Negative Amounts ------------------
+.invest-table {
+  .text-danger {
+    font-weight: 600;
+  }
+}
+
+    .refund-amount { color:#b00020 !important; font-weight:600; }
+    .actions-right { display:flex; justify-content:flex-end; gap:8px; }
+    .radio-row label { margin:0 8px 0 4px; }
+    

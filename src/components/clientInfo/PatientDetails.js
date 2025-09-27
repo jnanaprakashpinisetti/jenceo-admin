@@ -24,9 +24,10 @@ export default function PatientDetails({ formData, handleChange, errors = {}, is
           <div className="form-group">
             <label>Care Recipients Age<span className="text-danger">*</span></label>
             <input
-              type="text"
+              type="tel"
               className={`form-control ${errors.patentAge ? "is-invalid" : ""}`}
               name="patentAge"
+              maxLength={2}
               value={formData.patentAge}
               onChange={handleChange}
               readOnly={isViewMode}

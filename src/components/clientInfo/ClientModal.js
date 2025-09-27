@@ -851,18 +851,18 @@ const [showRemovalConfirm, setShowRemovalConfirm] = useState(false);
                   <div>
                     {editMode ? (
                       <div className="row">
-                        <div className="col-md-4">
+                        <div className="col-md-4 mb-3">
                           <label className="form-label"><strong>ID No</strong></label>
                           <input type="text" className="form-control" name="idNo" value={formData.idNo || ""} onChange={handleChange} disabled />
                         </div>
 
-                        <div className="col-md-4">
+                        <div className="col-md-4 mb-3">
                           <label className="form-label"><strong>Client Name</strong> <span className="text-danger">*</span></label>
                           <input className={`form-control ${errors.clientName ? "is-invalid" : ""}`} name="clientName" value={formData.clientName || ""} onChange={handleChange} disabled={!editMode} />
                           {errors.clientName && <div className="invalid-feedback">{errors.clientName}</div>}
                         </div>
 
-                        <div className="col-md-4">
+                        <div className="col-md-4 mb-3">
                           <label className="form-label"><strong>Gender</strong></label>
                           <select className="form-control" name="gender" value={formData.gender || ""} onChange={handleChange} disabled={!editMode}>
                             <option value="">Select</option>
@@ -871,6 +871,39 @@ const [showRemovalConfirm, setShowRemovalConfirm] = useState(false);
                             <option value="Other">Other</option>
                           </select>
                         </div>
+
+                        <div className="col-md-4 mb-3">
+                          <label className="form-label"><strong>Care Of</strong></label>
+                          <input className={`form-control`} name="careOf" value={formData.careOf || ""} onChange={handleChange} disabled={!editMode} />
+                        </div>
+
+                        <div className="col-md-4 mb-3">
+                          <label className="form-label"><strong>Relation</strong></label>
+                          <input className={`form-control`} name="relation" value={formData.relation || ""} onChange={handleChange} disabled={!editMode} />
+                        </div>
+
+                        <div className="col-md-4 mb-3">
+                          <label className="form-label"><strong>Location</strong></label>
+                          <input className={`form-control`} name="location" value={formData.location || ""} onChange={handleChange} disabled={!editMode} />
+                        </div>
+                        
+                        <div className="col-md-4 mb-3">
+                          <label className="form-label"><strong>MobileNo-1</strong></label>
+                          <input className={`form-control`} name="mobileNo1" value={formData.mobileNo1 || ""} onChange={handleChange} disabled={!editMode} />
+                        </div>
+
+                        <div className="col-md-4 mb-3">
+                          <label className="form-label"><strong>MobileNo-2</strong></label>
+                          <input className={`form-control`} name="mobileNo2" value={formData.mobileNo2 || ""} onChange={handleChange} disabled={!editMode} />
+                        </div>
+
+                        <div className="col-md-4 mb-3">
+                          <label className="form-label"><strong>Google Location</strong></label>
+                          <input className={`form-control`} name="googleLocation" value={formData.googleLocation || ""} onChange={handleChange} disabled />
+                        </div>
+ 
+
+
                       </div>
                     ) : (
                       // view mode: show table-like read-only rows
@@ -885,14 +918,21 @@ const [showRemovalConfirm, setShowRemovalConfirm] = useState(false);
                           <tr>
                             <th className="readonly-row-label">Gender</th>
                             <td>{formData.gender || "—"}</td>
-                            <th className="readonly-row-label">Location</th>
-                            <td>{formData.location || "—"}</td>
+                              <th className="readonly-row-label">Care Of</th>
+                            <td>{formData.careOf || "—"}</td>
+                          
                           </tr>
                           <tr>
                             <th className="readonly-row-label">Mobile 1</th>
                             <td>{formData.mobileNo1 || "—"}</td>
                             <th className="readonly-row-label">Mobile 2</th>
                             <td>{formData.mobileNo2 || "—"}</td>
+                          </tr>
+                          <tr>
+                            <th className="readonly-row-label">Location</th>
+                            <td>{formData.location || "—"}</td>
+                            <th className="readonly-row-label">Google Location</th>
+                            <td>{formData.googleLocation || "—"}</td>
                           </tr>
                         </tbody>
                       </table>
@@ -905,17 +945,37 @@ const [showRemovalConfirm, setShowRemovalConfirm] = useState(false);
                   <div>
                     {editMode ? (
                       <div className="row">
-                        <div className="col-md-4">
+                        <div className="col-md-4 mb-3">
                           <label className="form-label"><strong>Door No</strong></label>
                           <input className="form-control" name="dNo" value={formData.dNo || ""} onChange={handleChange} disabled={!editMode} />
                         </div>
-                        <div className="col-md-4">
+                        <div className="col-md-4 mb-3">
                           <label className="form-label"><strong>Landmark</strong></label>
                           <input className="form-control" name="landMark" value={formData.landMark || ""} onChange={handleChange} disabled={!editMode} />
                         </div>
-                        <div className="col-md-4">
+                        <div className="col-md-4 mb-3">
                           <label className="form-label"><strong>Street</strong></label>
                           <input className="form-control" name="street" value={formData.street || ""} onChange={handleChange} disabled={!editMode} />
+                        </div>
+                        <div className="col-md-4 mb-3">
+                          <label className="form-label"><strong>Village/Town</strong></label>
+                          <input className="form-control" name="villageTown" value={formData.villageTown || ""} onChange={handleChange} disabled={!editMode} />
+                        </div>
+                        <div className="col-md-4 mb-3">
+                          <label className="form-label"><strong>Mandal</strong></label>
+                          <input className="form-control" name="mandal" value={formData.mandal || ""} onChange={handleChange} disabled={!editMode} />
+                        </div>
+                        <div className="col-md-4 mb-3">
+                          <label className="form-label"><strong>District</strong></label>
+                          <input className="form-control" name="district" value={formData.district || ""} onChange={handleChange} disabled={!editMode} />
+                        </div>
+                        <div className="col-md-4 mb-3">
+                          <label className="form-label"><strong>State</strong></label>
+                          <input className="form-control" name="state" value={formData.state || ""} onChange={handleChange} disabled={!editMode} />
+                        </div>
+                        <div className="col-md-4 mb-3">
+                          <label className="form-label"><strong>Pincode</strong></label>
+                          <input className="form-control" name="pincode" value={formData.pincode || ""} onChange={handleChange} disabled={!editMode} />
                         </div>
                       </div>
                     ) : (
@@ -939,6 +999,12 @@ const [showRemovalConfirm, setShowRemovalConfirm] = useState(false);
                             <th className="readonly-row-label">District</th>
                             <td>{formData.district || "—"}</td>
                           </tr>
+                          <tr>
+                            <th className="readonly-row-label">State</th>
+                            <td>{formData.state || "—"}</td>
+                            <th className="readonly-row-label">Pin Code</th>
+                            <td>{formData.pincode || "—"}</td>
+                          </tr>
                         </tbody>
                       </table>
                     )}
@@ -950,17 +1016,41 @@ const [showRemovalConfirm, setShowRemovalConfirm] = useState(false);
                   <div>
                     {editMode ? (
                       <div className="row mb-2">
-                        <div className="col-md-4">
+                        <div className="col-md-4 mb-3">
                           <label className="form-label"><strong>Type of Service</strong></label>
                           <input className="form-control" name="typeOfService" value={formData.typeOfService || ""} onChange={handleChange} disabled={!editMode} />
                         </div>
-                        <div className="col-md-4">
-                          <label className="form-label"><strong>Service Charges</strong></label>
-                          <input className="form-control" name="serviceCharges" value={formData.serviceCharges || ""} onChange={handleChange} disabled={!editMode} />
-                        </div>
-                        <div className="col-md-4">
+                            <div className="col-md-4 mb-3">
                           <label className="form-label"><strong>Service Period</strong></label>
                           <input className="form-control" name="servicePeriod" value={formData.servicePeriod || ""} onChange={handleChange} disabled={!editMode} />
+                        </div>
+                        <div className="col-md-4 mb-3">
+                          <label className="form-label"><strong>Service Charges</strong></label>
+                          <input className="form-control" name="serviceCharges" value={formData.serviceCharges || ""} onChange={handleChange} disabled/>
+                        </div>
+
+                        <div className="col-md-4 mb-3">
+                          <label className="form-label"><strong>Travelling Charges</strong></label>
+                          <input className="form-control" name="travellingCharges" value={formData.travellingCharges || ""} onChange={handleChange} disabled />
+                        </div>
+
+                        <div className="col-md-4 mb-3">
+                          <label className="form-label"><strong>Starting Date</strong></label>
+                          <input className="form-control" name="startingDate" value={formData.startingDate || ""} onChange={handleChange} disabled={!editMode} />
+                        </div>
+
+                        <div className="col-md-4 mb-3">
+                          <label className="form-label"><strong>Ending Date</strong></label>
+                          <input className="form-control" name="endingDate" value={formData.endingDate || ""} onChange={handleChange} disabled={!editMode} />
+                        </div>
+
+                        <div className="col-md-4 mb-3">
+                          <label className="form-label"><strong>Page No</strong></label>
+                          <input className="form-control" name="pageNo" value={formData.pageNo || ""} onChange={handleChange} disabled={!editMode} />
+                        </div>
+                        <div className="col-md-4 mb-3">
+                          <label className="form-label"><strong>Gap if Any</strong></label>
+                          <input className="form-control" name="gapIfAny" value={formData.gapIfAny || ""} onChange={handleChange} disabled={!editMode} />
                         </div>
                       </div>
                     ) : (
@@ -978,6 +1068,18 @@ const [showRemovalConfirm, setShowRemovalConfirm] = useState(false);
                             <th className="readonly-row-label">Service Remarks</th>
                             <td>{formData.serviceRemarks || "—"}</td>
                           </tr>
+                          <tr>
+                            <th className="readonly-row-label">Starting Date</th>
+                            <td>{formData.startingDate || "—"}</td>
+                            <th className="readonly-row-label">Ending Date</th>
+                            <td>{formData.endingDate || "—"}</td>
+                          </tr>
+                          <tr>
+                            <th className="readonly-row-label">Page No</th>
+                            <td>{formData.pageNo || "—"}</td>
+                            <th className="readonly-row-label">Gap If Any</th>
+                            <td>{formData.gapIfAny || "—"}</td>
+                          </tr>
                         </tbody>
                       </table>
                     )}
@@ -989,21 +1091,38 @@ const [showRemovalConfirm, setShowRemovalConfirm] = useState(false);
                   <div>
                     {editMode ? (
                       <div className="row mb-2">
-                        <div className="col-md-3">
+                        <div className="col-md-3 mb-3">
                           <label className="form-label"><strong>Care Recipient Name</strong></label>
                           <input className="form-control" name="patientName" value={formData.patientName || ""} onChange={handleChange} disabled={!editMode} />
                         </div>
-                        <div className="col-md-3">
+                        <div className="col-md-3 mb-3">
                           <label className="form-label"><strong>Age</strong></label>
                           <input className="form-control" name="patientAge" value={formData.patientAge || ""} onChange={handleChange} disabled={!editMode} />
                         </div>
-                        <div className="col-md-3">
+                        <div className="col-md-3 mb-3">
                           <label className="form-label"><strong>Service Status</strong></label>
-                          <input className="form-control" name="serviceStatus" value={formData.serviceStatus || ""} onChange={handleChange} disabled={!editMode} />
+
+                          <select className="form-control" name="serviceStatus" value={formData.serviceStatus || ""} onChange={handleChange} disabled={!editMode} >
+                              <option value="running">Running</option>
+                              <option value="closed">Closed</option>
+                              <option value="stop">Stop</option>
+                              <option value="re-open">Re-open</option>
+                              <option value="re-start">Re-start</option>
+                              <option value="re-place">Re-place</option>
+                          </select>
+
                         </div>
-                        <div className="col-md-3">
+                        <div className="col-md-3 mb-3">
                           <label className="form-label"><strong>Dropper Name</strong></label>
                           <input className="form-control" name="dropperName" value={formData.dropperName || ""} onChange={handleChange} disabled={!editMode} />
+                        </div>
+                        <div className="col-md-6 mb-3">
+                          <label className="form-label"><strong>About Care Recipient</strong></label>
+                          <input className="form-control" name="aboutPatent" value={formData.aboutPatent || ""} onChange={handleChange} disabled={!editMode} />
+                        </div>
+                        <div className="col-md-6 mb-3">
+                          <label className="form-label"><strong>About Work</strong></label>
+                          <input className="form-control" name="aboutWork" value={formData.aboutWork || ""} onChange={handleChange} disabled={!editMode} />
                         </div>
                       </div>
                     ) : (
@@ -1021,6 +1140,13 @@ const [showRemovalConfirm, setShowRemovalConfirm] = useState(false);
                             <th className="readonly-row-label">Dropper Name</th>
                             <td>{formData.dropperName || "—"}</td>
                           </tr>
+                          <tr>
+                            <th className="readonly-row-label">About Care Recipient</th>
+                            <td>{formData.aboutPatent || "—"}</td>
+                            <th className="readonly-row-label">About Wokr</th>
+                            <td>{formData.aboutWork || "—"}</td>
+                          </tr>
+                      
                         </tbody>
                       </table>
                     )}
@@ -1042,28 +1168,45 @@ const [showRemovalConfirm, setShowRemovalConfirm] = useState(false);
                           {editMode ? (
                             <div>
                               <div className="row">
-                                <div className="col-md-3">
+                                <div className="col-md-3 mb-3">
                                   <label className="form-label"><strong>ID No</strong></label>
                                   <input data-idx={i} className="form-control" name="workerIdNo" value={w.workerIdNo || ""} onChange={(e) => handleChange(e, "workers", i)} disabled={locked} />
                                 </div>
-                                <div className="col-md-3">
+                                <div className="col-md-3 mb-3">
                                   <label className="form-label"><strong>Name</strong></label>
-                                  <input data-idx={i} className="form-control" name="cName" value={w.cName || ""} onChange={(e) => handleChange(e, "workers", i)} disabled={locked} />
+                                  <input data-idx={i} className="form-control" name="cName" value={w.cName || ""} onChange={(e) => handleChange(e, "workers", i)} disabled={!editMode} />
                                 </div>
-                                <div className="col-md-3">
+                                <div className="col-md-3 mb-3">
                                   <label className="form-label"><strong>Basic Salary</strong></label>
-                                  <input data-idx={i} className="form-control" name="basicSalary" type="number" value={w.basicSalary ?? ""} onChange={(e) => handleChange(e, "workers", i)} disabled={locked} />
+                                  <input data-idx={i} className="form-control" name="basicSalary" type="number" value={w.basicSalary ?? ""} onChange={(e) => handleChange(e, "workers", i)} disabled={!editMode} />
                                 </div>
-                                <div className="col-md-3">
+                                <div className="col-md-3 mb-3">
+                                  <label className="form-label"><strong>Mobile-1</strong></label>
+                                  <input data-idx={i} className="form-control" name="mobile1" type="number" value={w.mobile1 ?? ""} onChange={(e) => handleChange(e, "workers", i)} disabled={!editMode} />
+                                </div>
+                               
+                              </div>
+                              <div className="row">
+                                <div className="col-md-4 mb-3">
+                                  <label className="form-label"><strong>Starting Date</strong></label>
+                                  <input type="date" data-idx={i} className="form-control" name="startingDate" value={w.startingDate || ""} onChange={(e) => handleChange(e, "workers", i)} disabled={!editMode} />
+                                </div>
+                                <div className="col-md-4 mb-3">
+                                  <label className="form-label"><strong>Ending Date</strong></label>
+                                  <input type="date" data-idx={i} className="form-control" name="endingDate" value={w.endingDate || ""} onChange={(e) => handleChange(e, "workers", i)} disabled={!editMode} />
+                                </div>
+
+                                 <div className="col-md-4 mb-3">
                                   <label className="form-label"><strong>Total Days</strong></label>
-                                  <input data-idx={i} className="form-control" name="totalDays" value={w.totalDays || ""} onChange={(e) => handleChange(e, "workers", i)} disabled={!editMode} />
+                                  <input type="tel" maxLength={2} data-idx={i} className="form-control" name="totalDays" value={w.totalDays || ""} onChange={(e) => handleChange(e, "workers", i)} disabled={!editMode} />
                                 </div>
+                            
                               </div>
 
                               <div className="row mt-2">
                                 <div className="col-12">
                                   <label className="form-label"><strong>Remarks</strong></label>
-                                  <textarea className="form-control" name="remarks" rows="2" value={w.remarks || ""} onChange={(e) => handleChange(e, "workers", i)} disabled={locked} />
+                                  <textarea className="form-control" name="remarks" rows="2" value={w.remarks || ""} onChange={(e) => handleChange(e, "workers", i)} disabled={!editMode} />
                                 </div>
                               </div>
                             </div>
@@ -1081,6 +1224,18 @@ const [showRemovalConfirm, setShowRemovalConfirm] = useState(false);
                                   <td>{formatINR(w.basicSalary)}</td>
                                   <th className="readonly-row-label">Total Days</th>
                                   <td>{w.totalDays || "—"}</td>
+                                </tr>
+                                <tr>
+                                  <th className="readonly-row-label">Starting Date</th>
+                                  <td>{(w.startingDate)}</td>
+                                  <th className="readonly-row-label">Ending Date</th>
+                                  <td>{w.endingDate || "—"}</td>
+                                </tr>
+                                <tr>
+                                  <th className="readonly-row-label">Mobile-1</th>
+                                  <td>{(w.mobile1)}</td>
+                                  <th className="readonly-row-label">Mobile-2</th>
+                                  <td>{w.mobile2 || "—"}</td>
                                 </tr>
                                 <tr>
                                   <th className="readonly-row-label">Remarks</th>

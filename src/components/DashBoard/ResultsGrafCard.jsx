@@ -707,7 +707,7 @@ export default function ResultsGrafCard({
                       ].map((t) => (
                         <div key={t.k} className="p-3 rounded-3" style={{ background: "#0b1220", color: "#e2e8f0", border: `1px solid ${t.color}30` }}>
                           <div className="d-flex align-items-center justify-content-between">
-                            <div className="fw-semibold">{t.label}</div>
+                            {/* <div className="fw-semibold">{t.label}</div> */}
                             <span className="badge" style={{ background: t.color }}>{t.k.toUpperCase()}</span>
                           </div>
                           <div className="fs-5 mt-1">{fmtINR(t.val)}</div>

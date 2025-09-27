@@ -541,11 +541,11 @@ export default function ResultsCard({
         </div>
       </div>
 
-      {modalOpen && (
-        <div className="modal fade show" style={{ display: "block", background: "rgba(2,6,23,0.55)" }} onClick={() => setModalOpen(false)}>
-          <div className="modal-dialog modal-xl modal-dialog-centered" onClick={(e) => e.stopPropagation()} ref={modalRef}>
+         {modalOpen && (
+        <div className="modal fade show" style={{ display: "block", background: "rgba(2,6,23,0.55)", zIndex: 2000 }} onClick={() => setModalOpen(false)}>
+          <div className="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable" style={{ zIndex: 2001 }} onClick={(e) => e.stopPropagation()} ref={modalRef}>
             <div className="modal-content overflow-hidden">
-              <div className="modal-header gradient-header text-white">
+              <div className="modal-header gradient-header text-white" style={{ position: "sticky", top: 0, zIndex: 2002 }}>
                 <h5 className="modal-title">Profit Report</h5>
                 <button className="btn-close btn-close-white" onClick={() => setModalOpen(false)} />
               </div>

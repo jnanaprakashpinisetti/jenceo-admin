@@ -57,6 +57,8 @@ function parseDateRobust(v) {
   return null;
 }
 
+
+function monthKey(d){ const dt = d instanceof Date ? d : parseDateRobust(d); if(!dt) return 'Unknown'; return `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,'0')}`; }
 /* ---------------------- Normalizers ---------------------- */
 function extractClientPayments(clientRecord = {}) {
   const paymentsArr = Array.isArray(clientRecord.payments)
@@ -115,65 +117,107 @@ function extractInvestments(raw = {}) {
   });
 }
 
+
+
 function extractPettyCash(raw = {}) {
-  const arr = Array.isArray(raw) ? raw : (raw && typeof raw === "object" ? Object.values(raw) : []);
   const rows = [];
-  (arr || []).forEach((r) => {
-    if (!r) return;
-    if (r.payments && typeof r.payments === "object") {
-      const sub = Array.isArray(r.payments) ? r.payments : Object.values(r.payments);
-      sub.forEach((p) => rows.push({ ...p }));
-    } else {
-      rows.push(r);
+  const isPlain = (x) => x && typeof x === "object" && !Array.isArray(x);
+
+  const hasAmount = (obj) => {
+    if (!isPlain(obj)) return false;
+    const keys = ["total","amount","pettyAmount","value","price"];
+    return keys.some((k) => obj[k] !== undefined && obj[k] !== null && safeNumber(obj[k]) !== 0);
+  };
+
+  const hasChildAmount = (obj) => {
+    if (!isPlain(obj)) return false;
+    for (const v of Object.values(obj)) {
+      if (isPlain(v)) {
+        if (hasAmount(v) || hasChildAmount(v)) return true;
+      } else if (Array.isArray(v)) {
+        for (const it of v) {
+          if (isPlain(it) && (hasAmount(it) || hasChildAmount(it))) return true;
+        }
+      }
     }
-  });
-  return rows.map((it) => {
-    const date = it.date ?? it.pettyDate ?? it.paymentDate ?? it.createdAt ?? "";
-    const amount = safeNumber(it.total ?? it.amount ?? it.pettyAmount ?? it.value ?? it.price ?? 0);
-    return { type: "petty", date, parsedDate: parseDateRobust(date), amount, raw: it };
-  });
+    return false;
+  };
+
+  const pushLeaf = (obj) => {
+    const date = obj.date ?? obj.pettyDate ?? obj.paymentDate ?? obj.createdAt ?? "";
+    const amount = safeNumber(obj.total ?? obj.amount ?? obj.pettyAmount ?? obj.value ?? obj.price ?? 0);
+    const category = obj.mainCategory ?? obj.category ?? obj.head ?? obj.type ?? "Petty";
+    if (amount) rows.push({ type: "petty", date, parsedDate: parseDateRobust(date), amount, category, raw: obj });
+  };
+
+  const walk = (obj) => {
+    if (!isPlain(obj)) return;
+    // Only count leaf nodes with amounts to avoid parent+child double
+    if (hasAmount(obj) && !hasChildAmount(obj)) pushLeaf(obj);
+    // Recurse
+    Object.values(obj).forEach((v) => {
+      if (Array.isArray(v)) v.forEach((it) => walk(it));
+      else if (isPlain(v)) walk(v);
+    });
+  };
+
+  walk(raw);
+  return rows;
 }
 
+
+
 function extractStaffSalaries(staffNode = {}) {
-  const arr = Array.isArray(staffNode) ? staffNode : (staffNode && typeof staffNode === "object" ? Object.values(staffNode) : []);
   const out = [];
-  (arr || []).forEach((emp) => {
-    const pays = Array.isArray(emp.payments) ? emp.payments : (emp.payments && typeof emp.payments === "object" ? Object.values(emp.payments) : []);
-    if (pays.length) {
+  const isPlain = (x) => x && typeof x === "object" && !Array.isArray(x);
+  const employees = isPlain(staffNode) && !Array.isArray(staffNode)
+    ? Object.values(staffNode)
+    : (Array.isArray(staffNode) ? staffNode : []);
+
+  const visitEmp = (emp) => {
+    if (!isPlain(emp)) return;
+    const pays = Array.isArray(emp.payments) ? emp.payments : (isPlain(emp.payments) ? Object.values(emp.payments) : []);
+    if (pays && pays.length) {
       pays.forEach((p) => {
+        if (!p) return;
         const date = p.date ?? p.paymentDate ?? p.paidOn ?? emp.createdAt ?? "";
         const amount = safeNumber(p.amount ?? p.salary ?? p.paidAmount ?? 0);
-        out.push({ type: "staff", date, parsedDate: parseDateRobust(date), amount, raw: p });
+        if (amount) out.push({ type: "staff", date, parsedDate: parseDateRobust(date), amount, raw: p });
       });
-    } else {
-      const date = emp.pay_date ?? emp.date ?? "";
-      const amount = safeNumber(emp.amount ?? emp.salary ?? 0);
-      if (amount) out.push({ type: "staff", date, parsedDate: parseDateRobust(date), amount, raw: emp });
     }
-  });
+  };
+
+  if (employees.length) employees.forEach(visitEmp);
+  else visitEmp(staffNode);
+
   return out;
 }
 
 function extractWorkerSalaries(node = {}) {
-  const arr = Array.isArray(node) ? node : (node && typeof node === "object" ? Object.values(node) : []);
   const out = [];
-  (arr || []).forEach((emp) => {
-    const pays = Array.isArray(emp.payments) ? emp.payments : (emp.payments && typeof emp.payments === "object" ? Object.values(emp.payments) : []);
-    if (pays.length) {
+  const isPlain = (x) => x && typeof x === "object" && !Array.isArray(x);
+  const employees = isPlain(node) && !Array.isArray(node)
+    ? Object.values(node)
+    : (Array.isArray(node) ? node : []);
+
+  const visitEmp = (emp) => {
+    if (!isPlain(emp)) return;
+    const pays = Array.isArray(emp.payments) ? emp.payments : (isPlain(emp.payments) ? Object.values(emp.payments) : []);
+    if (pays && pays.length) {
       pays.forEach((p) => {
+        if (!p) return;
         const date = p.date ?? p.paymentDate ?? p.paidOn ?? emp.createdAt ?? "";
         const amount = safeNumber(p.amount ?? p.salary ?? p.paidAmount ?? 0);
-        out.push({ type: "worker", date, parsedDate: parseDateRobust(date), amount, raw: p });
+        if (amount) out.push({ type: "worker", date, parsedDate: parseDateRobust(date), amount, raw: p });
       });
-    } else {
-      const date = emp.pay_date ?? emp.date ?? "";
-      const amount = safeNumber(emp.amount ?? emp.salary ?? 0);
-      if (amount) out.push({ type: "worker", date, parsedDate: parseDateRobust(date), amount, raw: emp });
     }
-  });
+  };
+
+  if (employees.length) employees.forEach(visitEmp);
+  else visitEmp(node);
+
   return out;
 }
-
 /* ---------------------- SVG Charts (No external deps) ---------------------- */
 function BarChart({ data = [], width = 520, height = 150, pad = 30, color = "url(#gradProfit)" }) {
   const max = Math.max(...data.map(d => d.value), 1);
@@ -299,7 +343,9 @@ export default function ResultsCard({
       attach(clientCollections.active, "clientsActive");
       attach(clientCollections.exit, "clientsExit");
       attach(investmentsCollection, "investments");
-      attach(pettyCollection, "petty");
+      attach(pettyCollection, "petty")
+      attach(`${pettyCollection}/Admin`, "pettyAdmin")
+      attach(`${pettyCollection}/admin`, "pettyAdminLower");
       attach(staffCollections.active, "staffActive");
       attach(staffCollections.exit, "staffExit");
       attach(workerCollections.active, "workerActive");
@@ -318,21 +364,32 @@ export default function ResultsCard({
         pushClients(snapshots.clientsExit || {});
 
         extractInvestments(snapshots.investments || {}).forEach((r) => rows.push(r));
-        extractPettyCash(snapshots.petty || {}).forEach((r) => rows.push(r));
+        
+// Collect petty from root/Admin/admin then de-duplicate by (id?) else amount+category+month
+{
+  const pettyCollected = [];
+  extractPettyCash(snapshots.petty || {}).forEach((r) => pettyCollected.push(r));
+  extractPettyCash(snapshots.pettyAdmin || {}).forEach((r) => pettyCollected.push(r));
+  extractPettyCash(snapshots.pettyAdminLower || {}).forEach((r) => pettyCollected.push(r));
+  const seen = new Set();
+  pettyCollected.forEach((r) => {
+    const raw = r.raw || {};
+    const id = raw.id ?? raw.ID ?? raw.key ?? raw.uid ?? raw.billNo ?? raw.invoiceNo ?? raw.refNo ?? "";
+    const cat = String((r.category || raw.mainCategory || raw.category || raw.head || "Petty")).toLowerCase();
+    const mon = monthKey(r.parsedDate || r.date);
+    const sig = id ? `id:${id}` : `amt:${Number(r.amount||0)}|cat:${cat}|mon:${mon}`;
+    if (seen.has(sig)) return;
+    seen.add(sig);
+    rows.push(r);
+  });
+}
 
-        const pushStaff = (node) => {
-          Object.keys(node || {}).forEach((k) => {
-            extractStaffSalaries(node[k]).forEach((r) => rows.push(r));
-          });
-        };
+
+        const pushStaff = (node) => { extractStaffSalaries(node || {}).forEach((r) => rows.push(r)); };
         pushStaff(snapshots.staffActive || {});
         pushStaff(snapshots.staffExit || {});
 
-        const pushWorkers = (node) => {
-          Object.keys(node || {}).forEach((k) => {
-            extractWorkerSalaries(node[k]).forEach((r) => rows.push(r));
-          });
-        };
+        const pushWorkers = (node) => { extractWorkerSalaries(node || {}).forEach((r) => rows.push(r)); };
         pushWorkers(snapshots.workerActive || {});
         pushWorkers(snapshots.workerExit || {});
 

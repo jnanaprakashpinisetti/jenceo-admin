@@ -233,14 +233,14 @@ const getInitialFormData = () => ({
 
 const ClientModal = ({
   isOpen = false,
-  onClose = () => {},
+  onClose = () => { },
   client = null,
   onSave = null,
   onDelete = null,
   isEditMode = false,
   isAdmin = false,
   currentUserName = "System",
-  onRemoved = () => {},
+  onRemoved = () => { },
 }) => {
   const [formData, setFormData] = useState(getInitialFormData());
   const [activeTab, setActiveTab] = useState("basic");
@@ -256,7 +256,7 @@ const ClientModal = ({
 
   const [expandedLogIndex, setExpandedLogIndex] = useState(null);
 
-  
+
   // --- Quick Actions state (Refund + Balance Paid) ---
   const [quickRefund, setQuickRefund] = useState({
     enabled: false,
@@ -293,7 +293,7 @@ const ClientModal = ({
     }
     return 0;
   };
-const [showRemovalConfirm, setShowRemovalConfirm] = useState(false);
+  const [showRemovalConfirm, setShowRemovalConfirm] = useState(false);
   const [showRemovalModal, setShowRemovalModal] = useState(false);
   const [removalForm, setRemovalForm] = useState({ reason: "", comment: "" });
   const [removalErrors, setRemovalErrors] = useState({});
@@ -354,7 +354,7 @@ const [showRemovalConfirm, setShowRemovalConfirm] = useState(false);
 
     const snapshot = {
       ...client,
-      workers: lockRows(workers),
+      workers: workers,
       payments: lockRows(payments),
       paymentLogs: logs || [],
       fullAuditLogs: fullLogs || [],
@@ -407,7 +407,7 @@ const [showRemovalConfirm, setShowRemovalConfirm] = useState(false);
         const row = { ...(list[index] || {}) };
         const locked = !!row.__locked;
         // IMPORTANT: existing locked rows should NOT be editable even in edit mode
-        if (locked) return prev;
+        if (section === "payments" && locked) return prev;
 
         // update value
         row[name] = value;
@@ -498,7 +498,8 @@ const [showRemovalConfirm, setShowRemovalConfirm] = useState(false);
     });
   };
 
-  const addPayment = () => { const np = emptyPayment(); setEditMode(true); setFormData((prev) => {
+  const addPayment = () => {
+    const np = emptyPayment(); setEditMode(true); setFormData((prev) => {
       const next = { ...prev, payments: [...(prev.payments || []), np] };
       markDirty(next);
       return next;
@@ -703,7 +704,7 @@ const [showRemovalConfirm, setShowRemovalConfirm] = useState(false);
         .map((p, i) => {
           const d = p.date ? parseDateSafe(p.date) : null;
           const dateStr = d ? `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()}` : safe(p.date);
-          return `<tr><td>${i + 1}</td><td>${dateStr}</td><td>${safe(p.paymentMethod)}</td><td>${formatINR(p.paidAmount).replace('\u20B9','&#8377;')}</td><td>${formatINR(p.balance).replace('\u20B9','&#8377;')}</td><td>${safe(
+          return `<tr><td>${i + 1}</td><td>${dateStr}</td><td>${safe(p.paymentMethod)}</td><td>${formatINR(p.paidAmount).replace('\u20B9', '&#8377;')}</td><td>${formatINR(p.balance).replace('\u20B9', '&#8377;')}</td><td>${safe(
             p.receptNo
           )}</td><td><span style="color:#b00020;font-weight:600;">${p.refund ? formatINR(p.refundAmount).replace('\u20B9', '&#8377;') : "-"}</span></span></span></td></tr>`;
         })
@@ -756,7 +757,7 @@ const [showRemovalConfirm, setShowRemovalConfirm] = useState(false);
       <div class="section">
         <h3>Payments</h3>
         <table class="payments-table"><thead><tr><th>#</th><th>Date</th><th>Method</th><th>Paid</th><th>Balance</th><th>Receipt</th><th>Refund</th></tr></thead><tbody>${paymentsRows}</tbody>
-        <tfoot><tr><th colspan="3">Totals</th><th>${formatINR(totalPaid).replace('\u20B9','&#8377;')}</th><th>${formatINR(totalBalance).replace('\u20B9','&#8377;')}</th><th></th><th>${formatINR(totalRefund).replace('\u20B9','&#8377;')}</th></tr></tfoot></table>
+        <tfoot><tr><th colspan="3">Totals</th><th>${formatINR(totalPaid).replace('\u20B9', '&#8377;')}</th><th>${formatINR(totalBalance).replace('\u20B9', '&#8377;')}</th><th></th><th>${formatINR(totalRefund).replace('\u20B9', '&#8377;')}</th></tr></tfoot></table>
       </div>
 
     </div>
@@ -886,7 +887,7 @@ const [showRemovalConfirm, setShowRemovalConfirm] = useState(false);
                           <label className="form-label"><strong>Location</strong></label>
                           <input className={`form-control`} name="location" value={formData.location || ""} onChange={handleChange} disabled={!editMode} />
                         </div>
-                        
+
                         <div className="col-md-4 mb-3">
                           <label className="form-label"><strong>MobileNo-1</strong></label>
                           <input className={`form-control`} name="mobileNo1" value={formData.mobileNo1 || ""} onChange={handleChange} disabled={!editMode} />
@@ -901,7 +902,7 @@ const [showRemovalConfirm, setShowRemovalConfirm] = useState(false);
                           <label className="form-label"><strong>Google Location</strong></label>
                           <input className={`form-control`} name="googleLocation" value={formData.googleLocation || ""} onChange={handleChange} disabled />
                         </div>
- 
+
 
 
                       </div>
@@ -918,9 +919,9 @@ const [showRemovalConfirm, setShowRemovalConfirm] = useState(false);
                           <tr>
                             <th className="readonly-row-label">Gender</th>
                             <td>{formData.gender || "—"}</td>
-                              <th className="readonly-row-label">Care Of</th>
+                            <th className="readonly-row-label">Care Of</th>
                             <td>{formData.careOf || "—"}</td>
-                          
+
                           </tr>
                           <tr>
                             <th className="readonly-row-label">Mobile 1</th>
@@ -1020,13 +1021,13 @@ const [showRemovalConfirm, setShowRemovalConfirm] = useState(false);
                           <label className="form-label"><strong>Type of Service</strong></label>
                           <input className="form-control" name="typeOfService" value={formData.typeOfService || ""} onChange={handleChange} disabled={!editMode} />
                         </div>
-                            <div className="col-md-4 mb-3">
+                        <div className="col-md-4 mb-3">
                           <label className="form-label"><strong>Service Period</strong></label>
                           <input className="form-control" name="servicePeriod" value={formData.servicePeriod || ""} onChange={handleChange} disabled={!editMode} />
                         </div>
                         <div className="col-md-4 mb-3">
                           <label className="form-label"><strong>Service Charges</strong></label>
-                          <input className="form-control" name="serviceCharges" value={formData.serviceCharges || ""} onChange={handleChange} disabled/>
+                          <input className="form-control" name="serviceCharges" value={formData.serviceCharges || ""} onChange={handleChange} disabled />
                         </div>
 
                         <div className="col-md-4 mb-3">
@@ -1103,12 +1104,12 @@ const [showRemovalConfirm, setShowRemovalConfirm] = useState(false);
                           <label className="form-label"><strong>Service Status</strong></label>
 
                           <select className="form-control" name="serviceStatus" value={formData.serviceStatus || ""} onChange={handleChange} disabled={!editMode} >
-                              <option value="running">Running</option>
-                              <option value="closed">Closed</option>
-                              <option value="stop">Stop</option>
-                              <option value="re-open">Re-open</option>
-                              <option value="re-start">Re-start</option>
-                              <option value="re-place">Re-place</option>
+                            <option value="running">Running</option>
+                            <option value="closed">Closed</option>
+                            <option value="stop">Stop</option>
+                            <option value="re-open">Re-open</option>
+                            <option value="re-start">Re-start</option>
+                            <option value="re-place">Re-place</option>
                           </select>
 
                         </div>
@@ -1146,7 +1147,7 @@ const [showRemovalConfirm, setShowRemovalConfirm] = useState(false);
                             <th className="readonly-row-label">About Wokr</th>
                             <td>{formData.aboutWork || "—"}</td>
                           </tr>
-                      
+
                         </tbody>
                       </table>
                     )}
@@ -1162,7 +1163,7 @@ const [showRemovalConfirm, setShowRemovalConfirm] = useState(false);
                         <div key={i} className="modal-card mb-3 p-3 border rounded">
                           <div className="d-flex justify-content-between align-items-center mb-2">
                             <strong>Worker #{i + 1}</strong>
-                            {locked && <span className="badge bg-secondary">Existing</span>}
+
                           </div>
 
                           {editMode ? (
@@ -1170,7 +1171,7 @@ const [showRemovalConfirm, setShowRemovalConfirm] = useState(false);
                               <div className="row">
                                 <div className="col-md-3 mb-3">
                                   <label className="form-label"><strong>ID No</strong></label>
-                                  <input data-idx={i} className="form-control" name="workerIdNo" value={w.workerIdNo || ""} onChange={(e) => handleChange(e, "workers", i)} disabled={locked} />
+                                  <input data-idx={i} className="form-control" name="workerIdNo" value={w.workerIdNo || ""} onChange={(e) => handleChange(e, "workers", i)} disabled={!editMode} />
                                 </div>
                                 <div className="col-md-3 mb-3">
                                   <label className="form-label"><strong>Name</strong></label>
@@ -1178,13 +1179,13 @@ const [showRemovalConfirm, setShowRemovalConfirm] = useState(false);
                                 </div>
                                 <div className="col-md-3 mb-3">
                                   <label className="form-label"><strong>Basic Salary</strong></label>
-                                  <input data-idx={i} className="form-control" name="basicSalary" type="number" value={w.basicSalary ?? ""} onChange={(e) => handleChange(e, "workers", i)} disabled={!editMode} />
+                                  <input data-idx={i} className="form-control" name="basicSalary" type="tel" maxLength={5} value={w.basicSalary ?? ""} onChange={(e) => handleChange(e, "workers", i)} disabled={!editMode} />
                                 </div>
                                 <div className="col-md-3 mb-3">
                                   <label className="form-label"><strong>Mobile-1</strong></label>
-                                  <input data-idx={i} className="form-control" name="mobile1" type="number" value={w.mobile1 ?? ""} onChange={(e) => handleChange(e, "workers", i)} disabled={!editMode} />
+                                  <input data-idx={i} className="form-control" name="mobile1" type="text" value={w.mobile1 ?? ""} onChange={(e) => handleChange(e, "workers", i)} disabled={!editMode} />
                                 </div>
-                               
+
                               </div>
                               <div className="row">
                                 <div className="col-md-4 mb-3">
@@ -1196,11 +1197,11 @@ const [showRemovalConfirm, setShowRemovalConfirm] = useState(false);
                                   <input type="date" data-idx={i} className="form-control" name="endingDate" value={w.endingDate || ""} onChange={(e) => handleChange(e, "workers", i)} disabled={!editMode} />
                                 </div>
 
-                                 <div className="col-md-4 mb-3">
+                                <div className="col-md-4 mb-3">
                                   <label className="form-label"><strong>Total Days</strong></label>
                                   <input type="tel" maxLength={2} data-idx={i} className="form-control" name="totalDays" value={w.totalDays || ""} onChange={(e) => handleChange(e, "workers", i)} disabled={!editMode} />
                                 </div>
-                            
+
                               </div>
 
                               <div className="row mt-2">
@@ -1246,7 +1247,7 @@ const [showRemovalConfirm, setShowRemovalConfirm] = useState(false);
                           )}
 
                           <div className="mt-2 d-flex justify-content-end">
-                            {!w.__locked && editMode && <button className="btn btn-danger btn-sm" onClick={() => removeWorker(i)}>Remove</button>}
+                            {editMode && <button className="btn btn-danger btn-sm" onClick={() => removeWorker(i)}>Remove</button>}
                           </div>
                         </div>
                       );
@@ -1275,7 +1276,7 @@ const [showRemovalConfirm, setShowRemovalConfirm] = useState(false);
                               <div className="row">
                                 <div className="col-md-4">
                                   <label className="form-label"><strong>Payment Method</strong></label>
-                                  <select data-idx={originalIndex} className="form-control" name="paymentMethod" value={p.paymentMethod || "cash"} onChange={(e) => handleChange(e, "payments", originalIndex)} disabled={locked}>
+                                  <select data-idx={originalIndex} className="form-control" name="paymentMethod" value={p.paymentMethod || "cash"} onChange={(e) => handleChange(e, "payments", originalIndex)} disabled={!editMode}>
                                     <option value="cash">Cash</option>
                                     <option value="online">Online</option>
                                     <option value="check">Check</option>
@@ -1285,36 +1286,36 @@ const [showRemovalConfirm, setShowRemovalConfirm] = useState(false);
 
                                 <div className="col-md-4">
                                   <label className="form-label"><strong>Date</strong></label>
-                                  <input data-idx={originalIndex} className="form-control" name="date" type="date" value={p.date ? formatDateForInput(p.date) : ""} onChange={(e) => handleChange(e, "payments", originalIndex)} disabled={locked} />
+                                  <input data-idx={originalIndex} className="form-control" name="date" type="date" value={p.date ? formatDateForInput(p.date) : ""} onChange={(e) => handleChange(e, "payments", originalIndex)} disabled={!editMode} />
                                 </div>
 
                                 <div className="col-md-4">
                                   <label className="form-label"><strong>Paid Amount</strong></label>
-                                  <input data-idx={originalIndex} className="form-control" name="paidAmount" type="tel" maxLength={5} value={p.paidAmount ?? ""} onChange={(e) => handleChange(e, "payments", originalIndex)} disabled={locked} />
+                                  <input data-idx={originalIndex} className="form-control" name="paidAmount" type="tel" maxLength={5} value={p.paidAmount ?? ""} onChange={(e) => handleChange(e, "payments", originalIndex)} disabled={!editMode} />
                                 </div>
                               </div>
 
                               <div className="row mt-2">
                                 <div className="col-md-4">
                                   <label className="form-label"><strong>Balance</strong></label>
-                                  <input data-idx={originalIndex} className="form-control" name="balance" type="tel" maxLength={5} value={p.balance ?? ""} onChange={(e) => handleChange(e, "payments", originalIndex)} disabled={locked} />
+                                  <input data-idx={originalIndex} className="form-control" name="balance" type="tel" maxLength={5} value={p.balance ?? ""} onChange={(e) => handleChange(e, "payments", originalIndex)} disabled={!editMode} />
                                 </div>
 
                                 <div className="col-md-4">
                                   <label className="form-label"><strong>Receipt No</strong></label>
-                                  <input data-idx={originalIndex} className="form-control" name="receptNo" type="tel" maxLength={2} value={p.receptNo || ""} onChange={(e) => handleChange(e, "payments", originalIndex)} disabled={locked} />
+                                  <input data-idx={originalIndex} className="form-control" name="receptNo" type="tel" maxLength={2} value={p.receptNo || ""} onChange={(e) => handleChange(e, "payments", originalIndex)} disabled={!editMode} />
                                 </div>
 
                                 <div className="col-md-4">
                                   <label className="form-label"><strong>Reminder Days</strong></label>
-                                  <input data-idx={originalIndex} className="form-control" name="reminderDays" type="tel" maxLength={2} value={p.reminderDays ?? ""} onChange={(e) => handleChange(e, "payments", originalIndex)} disabled={locked} />
+                                  <input data-idx={originalIndex} className="form-control" name="reminderDays" type="tel" maxLength={2} value={p.reminderDays ?? ""} onChange={(e) => handleChange(e, "payments", originalIndex)} disabled={!editMode} />
                                 </div>
                               </div>
 
                               <div className="row mt-2">
                                 <div className="col-12">
                                   <label className="form-label"><strong>Remarks</strong></label>
-                                  <textarea data-idx={originalIndex} className="form-control" name="remarks" rows="2" value={p.remarks || ""} onChange={(e) => handleChange(e, "payments", originalIndex)} disabled={locked} />
+                                  <textarea data-idx={originalIndex} className="form-control" name="remarks" rows="2" value={p.remarks || ""} onChange={(e) => handleChange(e, "payments", originalIndex)} disabled={!editMode} />
                                 </div>
                               </div>
 
@@ -1322,15 +1323,15 @@ const [showRemovalConfirm, setShowRemovalConfirm] = useState(false);
                                 <div className="row mt-2">
                                   <div className="col-md-4">
                                     <label className="form-label"><strong>Refund Date</strong></label>
-                                    <input data-idx={originalIndex} className="form-control" name="refundDate" type="date" value={p.refundDate ? formatDateForInput(p.refundDate) : ""} onChange={(e) => handleChange(e, "payments", originalIndex)} disabled={locked} />
+                                    <input data-idx={originalIndex} className="form-control" name="refundDate" type="date" value={p.refundDate ? formatDateForInput(p.refundDate) : ""} onChange={(e) => handleChange(e, "payments", originalIndex)} disabled={!editMode} />
                                   </div>
                                   <div className="col-md-4">
                                     <label className="form-label"><strong>Refund Amount</strong></label>
-                                    <input data-idx={originalIndex} className="form-control" name="refundAmount" type="tel" value={p.refundAmount ?? ""} onChange={(e) => handleChange(e, "payments", originalIndex)} disabled={locked} maxLength={12} />
+                                    <input data-idx={originalIndex} className="form-control" name="refundAmount" type="tel" value={p.refundAmount ?? ""} onChange={(e) => handleChange(e, "payments", originalIndex)} disabled={!editMode} maxLength={12} />
                                   </div>
                                   <div className="col-md-4">
                                     <label className="form-label"><strong>Refund Method</strong></label>
-                                    <select data-idx={originalIndex} className="form-control" name="refundPaymentMethod" value={p.refundPaymentMethod || ""} onChange={(e) => handleChange(e, "payments", originalIndex)} disabled={locked}>
+                                    <select data-idx={originalIndex} className="form-control" name="refundPaymentMethod" value={p.refundPaymentMethod || ""} onChange={(e) => handleChange(e, "payments", originalIndex)} disabled={!editMode}>
                                       <option value="">Select</option>
                                       <option value="cash">Cash</option>
                                       <option value="online">Online</option>
@@ -1339,7 +1340,7 @@ const [showRemovalConfirm, setShowRemovalConfirm] = useState(false);
                                   </div>
                                   <div className="col-12 mt-2">
                                     <label className="form-label"><strong>Refund Remarks</strong></label>
-                                    <textarea data-idx={originalIndex} className="form-control" name="refundRemarks" rows="2" value={p.refundRemarks || ""} onChange={(e) => handleChange(e, "payments", originalIndex)} disabled={locked} />
+                                    <textarea data-idx={originalIndex} className="form-control" name="refundRemarks" rows="2" value={p.refundRemarks || ""} onChange={(e) => handleChange(e, "payments", originalIndex)} disabled={!editMode} />
                                   </div>
                                 </div>
                               )}
@@ -1383,13 +1384,13 @@ const [showRemovalConfirm, setShowRemovalConfirm] = useState(false);
 
                     {editMode && <div className="actions-right mb-3"><button className="btn btn-primary" onClick={addPayment}>Add Payment</button></div>}
 
-                    
+
                     {/* Quick Actions: Refund + Balance Paid (outside of payments list) */}
-                    
-                    <div className="mb-3 p-2 border rounded" style={{background:"#d3d5d9"}}>
-                      
+
+                    <div className="mb-3 p-2 border rounded" style={{ background: "#d3d5d9" }}>
+
                       <div className="row g-2 align-items-center radio-row">
-                        <div className="col-md-6 d-flex align-items-center" style={{gap:12}}>
+                        <div className="col-md-6 d-flex align-items-center" style={{ gap: 12 }}>
                           <input
                             id="actionRefund"
                             type="radio"
@@ -1397,15 +1398,15 @@ const [showRemovalConfirm, setShowRemovalConfirm] = useState(false);
                             className="form-check-input"
                             checked={selectedAction === "refund"}
                             disabled={!editMode}
-                            onChange={() => { 
-                              setSelectedAction("refund"); 
-                              setQuickRefund(prev => ({...prev, enabled:true})); 
-                              setBalancePay(prev => ({...prev, enabled:false})); 
+                            onChange={() => {
+                              setSelectedAction("refund");
+                              setQuickRefund(prev => ({ ...prev, enabled: true }));
+                              setBalancePay(prev => ({ ...prev, enabled: false }));
                             }}
                           />
                           <label htmlFor="actionRefund" className="mb-0"><strong>Refund</strong></label>
                         </div>
-                        <div className="col-md-6 d-flex align-items-center" style={{gap:12}}>
+                        <div className="col-md-6 d-flex align-items-center" style={{ gap: 12 }}>
                           <input
                             id="actionBalance"
                             type="radio"
@@ -1413,18 +1414,18 @@ const [showRemovalConfirm, setShowRemovalConfirm] = useState(false);
                             className="form-check-input"
                             checked={selectedAction === "balance"}
                             disabled={!editMode}
-                            onChange={() => { 
-                              setSelectedAction("balance"); 
-                              setBalancePay(prev => ({...prev, enabled:true})); 
-                              setQuickRefund(prev => ({...prev, enabled:false})); 
+                            onChange={() => {
+                              setSelectedAction("balance");
+                              setBalancePay(prev => ({ ...prev, enabled: true }));
+                              setQuickRefund(prev => ({ ...prev, enabled: false }));
                             }}
                           />
                           <label htmlFor="actionBalance" className="mb-0"><strong>Balance Paid</strong></label>
                           {getLastBalance() > 0 && <span className="badge bg-light text-dark">Last Balance: {formatINR(getLastBalance())}</span>}
                         </div>
                       </div>
-{(selectedAction === "refund" || selectedAction === "balance") && (
-                        <div className="row g-2 mt-2"  style={{background: selectedAction === "balance" ? "#d5f5c7ff" : "#fad3d3ff", borderRadius:6, padding:5}}>
+                      {(selectedAction === "refund" || selectedAction === "balance") && (
+                        <div className="row g-2 mt-2" style={{ background: selectedAction === "balance" ? "#d5f5c7ff" : "#fad3d3ff", borderRadius: 6, padding: 5 }}>
                           <div className="col-md-4">
                             <label className="form-label"><strong>Date</strong></label>
                             <input
@@ -1433,8 +1434,8 @@ const [showRemovalConfirm, setShowRemovalConfirm] = useState(false);
                               disabled={!editMode}
                               value={(selectedAction === "refund" ? quickRefund.date : balancePay.date) || ""}
                               onChange={e => {
-                                if (selectedAction === "refund") setQuickRefund(prev => ({...prev, date: e.target.value }));
-                                if (selectedAction === "balance") setBalancePay(prev => ({...prev, date: e.target.value }));
+                                if (selectedAction === "refund") setQuickRefund(prev => ({ ...prev, date: e.target.value }));
+                                if (selectedAction === "balance") setBalancePay(prev => ({ ...prev, date: e.target.value }));
                               }}
                             />
                           </div>
@@ -1446,8 +1447,8 @@ const [showRemovalConfirm, setShowRemovalConfirm] = useState(false);
                               disabled={!editMode}
                               value={(selectedAction === "refund" ? (quickRefund.amount ?? "") : (balancePay.amount ?? ""))}
                               onChange={e => {
-                                if (selectedAction === "refund") setQuickRefund(prev => ({...prev, amount: e.target.value }));
-                                if (selectedAction === "balance") setBalancePay(prev => ({...prev, amount: e.target.value }));
+                                if (selectedAction === "refund") setQuickRefund(prev => ({ ...prev, amount: e.target.value }));
+                                if (selectedAction === "balance") setBalancePay(prev => ({ ...prev, amount: e.target.value }));
                               }}
                             />
                           </div>
@@ -1458,8 +1459,8 @@ const [showRemovalConfirm, setShowRemovalConfirm] = useState(false);
                               disabled={!editMode}
                               value={(selectedAction === "refund" ? quickRefund.method : balancePay.method) || "cash"}
                               onChange={e => {
-                                if (selectedAction === "refund") setQuickRefund(prev => ({...prev, method: e.target.value }));
-                                if (selectedAction === "balance") setBalancePay(prev => ({...prev, method: e.target.value }));
+                                if (selectedAction === "refund") setQuickRefund(prev => ({ ...prev, method: e.target.value }));
+                                if (selectedAction === "balance") setBalancePay(prev => ({ ...prev, method: e.target.value }));
                               }}
                             >
                               <option value="cash">Cash</option>
@@ -1476,8 +1477,8 @@ const [showRemovalConfirm, setShowRemovalConfirm] = useState(false);
                               placeholder={selectedAction === "refund" ? "Refund remarks" : "Balance pay remarks"}
                               value={(selectedAction === "refund" ? (quickRefund.remarks || "") : (balancePay.remarks || ""))}
                               onChange={e => {
-                                if (selectedAction === "refund") setQuickRefund(prev => ({...prev, remarks: e.target.value }));
-                                if (selectedAction === "balance") setBalancePay(prev => ({...prev, remarks: e.target.value }));
+                                if (selectedAction === "refund") setQuickRefund(prev => ({ ...prev, remarks: e.target.value }));
+                                if (selectedAction === "balance") setBalancePay(prev => ({ ...prev, remarks: e.target.value }));
                               }}
                             />
                           </div>
@@ -1502,7 +1503,7 @@ const [showRemovalConfirm, setShowRemovalConfirm] = useState(false);
                                     date: dt || formatDateForInput(new Date()),
                                     paymentMethod: mth || "cash",
                                     paidAmount: isRefund ? 0 : amt,
-                                    balance: isRefund ? (list.length ? Number(list[list.length-1]?.balance||0) : 0) : Math.max(0, (getLastBalance() || 0) - amt),
+                                    balance: isRefund ? (list.length ? Number(list[list.length - 1]?.balance || 0) : 0) : Math.max(0, (getLastBalance() || 0) - amt),
                                     receptNo: "",
                                     remarks: rem || (isRefund ? "Refund (quick)" : "Balance Paid (quick)"),
                                     refund: isRefund,
@@ -1526,8 +1527,8 @@ const [showRemovalConfirm, setShowRemovalConfirm] = useState(false);
                                 });
 
                                 // reset but keep radio selection
-                                if (isRefund) setQuickRefund(prev => ({...prev, amount:"", remarks:""}));
-                                else setBalancePay(prev => ({...prev, amount:"", remarks:""}));
+                                if (isRefund) setQuickRefund(prev => ({ ...prev, amount: "", remarks: "" }));
+                                else setBalancePay(prev => ({ ...prev, amount: "", remarks: "" }));
                               }}
                             >
                               Save Adjustment
@@ -1536,11 +1537,11 @@ const [showRemovalConfirm, setShowRemovalConfirm] = useState(false);
                         </div>
                       )}
                     </div>
-    
+
 
                     {/* Hidden adjustments mini-view */}
                     {Array.isArray(formData.payments) && formData.payments.some(x => x?.__adjustment) && (
-                      <div className="mb-3 p-2 border rounded" style={{background:"#f9fbff"}}>
+                      <div className="mb-3 p-2 border rounded" style={{ background: "#f9fbff" }}>
                         <div className="d-flex justify-content-between align-items-center mb-2">
                           <h6 className="mb-0"><strong>Adjustments</strong></h6>
                           <small className="text-muted">Hidden from payment rows</small>
@@ -1549,20 +1550,20 @@ const [showRemovalConfirm, setShowRemovalConfirm] = useState(false);
                           <table className="table table-sm mb-0">
                             <thead><tr><th>#</th><th>Type</th><th>Date</th><th>Amount</th><th>Method</th><th>Remarks</th></tr></thead>
                             <tbody>
-                              {formData.payments.filter(x => x?.__adjustment).map((a,i) => {
+                              {formData.payments.filter(x => x?.__adjustment).map((a, i) => {
                                 const d = a.date ? parseDateSafe(a.date) : null;
-                                const dateStr = d ? `${String(d.getDate()).padStart(2,"0")}/${String(d.getMonth()+1).padStart(2,"0")}/${d.getFullYear()}` : (a.date||"—");
+                                const dateStr = d ? `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()}` : (a.date || "—");
                                 const type = a.__type === "refund" ? "Refund" : "Balance Paid";
                                 const amt = a.__type === "refund" ? a.refundAmount : a.paidAmount;
-                                const mth = a.__type === "refund" ? (a.refundPaymentMethod||"") : (a.paymentMethod||"");
-                                return (<tr key={i}><td>{i+1}</td><td>{type}</td><td>{dateStr}</td><td>{a.__type === "refund" ? <span className="refund-amount">{formatINR(amt)}</span> : formatINR(amt)}</td><td>{mth||"—"}</td><td>{a.remarks||"—"}</td></tr>)
+                                const mth = a.__type === "refund" ? (a.refundPaymentMethod || "") : (a.paymentMethod || "");
+                                return (<tr key={i}><td>{i + 1}</td><td>{type}</td><td>{dateStr}</td><td>{a.__type === "refund" ? <span className="refund-amount">{formatINR(amt)}</span> : formatINR(amt)}</td><td>{mth || "—"}</td><td>{a.remarks || "—"}</td></tr>)
                               })}
                             </tbody>
                           </table>
                         </div>
                       </div>
                     )}
-{/* Change Log */}
+                    {/* Change Log */}
                     <div className="mt-3">
                       <div className="d-flex justify-content-between align-items-center mb-2">
                         <h6><strong>Change Log</strong></h6>

@@ -193,6 +193,7 @@ const emptyPayment = () => ({
   refundDate: "",
   refundPaymentMethod: "",
   refundRemarks: "",
+  __locked: false,
 });
 
 const getInitialFormData = () => ({
@@ -497,9 +498,7 @@ const [showRemovalConfirm, setShowRemovalConfirm] = useState(false);
     });
   };
 
-  const addPayment = () => {
-    const np = emptyPayment();
-    setFormData((prev) => {
+  const addPayment = () => { const np = emptyPayment(); setEditMode(true); setFormData((prev) => {
       const next = { ...prev, payments: [...(prev.payments || []), np] };
       markDirty(next);
       return next;
@@ -1105,11 +1104,11 @@ const [showRemovalConfirm, setShowRemovalConfirm] = useState(false);
                 {/* Payments */}
                 {activeTab === "payments" && (
                   <div>
-                    {( (formData.payments || []).filter(p => !p?.__adjustment) ).map((p, idx) => {
+                    {((formData.payments || []).map((p, originalIndex) => ({ p, originalIndex })).filter(({ p }) => !p?.__adjustment)).map(({ p, originalIndex }, idx) => {
                       const locked = !!p.__locked;
                       const refundDisabled = Number(p.refundAmount || 0) > 0;
                       return (
-                        <div key={idx} className="modal-card mb-3 p-3 border rounded">
+                        <div key={originalIndex} className="modal-card mb-3 p-3 border rounded">
                           <div className="d-flex justify-content-between align-items-center mb-2">
                             <strong>Payment #{idx + 1}</strong>
                             {locked ? <span className="badge bg-secondary">Existing</span> : <span className="badge bg-info">New</span>}
@@ -1121,7 +1120,7 @@ const [showRemovalConfirm, setShowRemovalConfirm] = useState(false);
                               <div className="row">
                                 <div className="col-md-4">
                                   <label className="form-label"><strong>Payment Method</strong></label>
-                                  <select data-idx={idx} className="form-control" name="paymentMethod" value={p.paymentMethod || "cash"} onChange={(e) => handleChange(e, "payments", idx)} disabled={locked}>
+                                  <select data-idx={originalIndex} className="form-control" name="paymentMethod" value={p.paymentMethod || "cash"} onChange={(e) => handleChange(e, "payments", originalIndex)} disabled={locked}>
                                     <option value="cash">Cash</option>
                                     <option value="online">Online</option>
                                     <option value="check">Check</option>
@@ -1131,36 +1130,36 @@ const [showRemovalConfirm, setShowRemovalConfirm] = useState(false);
 
                                 <div className="col-md-4">
                                   <label className="form-label"><strong>Date</strong></label>
-                                  <input data-idx={idx} className="form-control" name="date" type="date" value={p.date ? formatDateForInput(p.date) : ""} onChange={(e) => handleChange(e, "payments", idx)} disabled={locked} />
+                                  <input data-idx={originalIndex} className="form-control" name="date" type="date" value={p.date ? formatDateForInput(p.date) : ""} onChange={(e) => handleChange(e, "payments", originalIndex)} disabled={locked} />
                                 </div>
 
                                 <div className="col-md-4">
                                   <label className="form-label"><strong>Paid Amount</strong></label>
-                                  <input data-idx={idx} className="form-control" name="paidAmount" type="number" value={p.paidAmount ?? ""} onChange={(e) => handleChange(e, "payments", idx)} disabled={locked} />
+                                  <input data-idx={originalIndex} className="form-control" name="paidAmount" type="tel" maxLength={5} value={p.paidAmount ?? ""} onChange={(e) => handleChange(e, "payments", originalIndex)} disabled={locked} />
                                 </div>
                               </div>
 
                               <div className="row mt-2">
                                 <div className="col-md-4">
                                   <label className="form-label"><strong>Balance</strong></label>
-                                  <input data-idx={idx} className="form-control" name="balance" type="number" value={p.balance ?? ""} onChange={(e) => handleChange(e, "payments", idx)} disabled={locked} />
+                                  <input data-idx={originalIndex} className="form-control" name="balance" type="tel" maxLength={5} value={p.balance ?? ""} onChange={(e) => handleChange(e, "payments", originalIndex)} disabled={locked} />
                                 </div>
 
                                 <div className="col-md-4">
                                   <label className="form-label"><strong>Receipt No</strong></label>
-                                  <input data-idx={idx} className="form-control" name="receptNo" value={p.receptNo || ""} onChange={(e) => handleChange(e, "payments", idx)} disabled={locked} />
+                                  <input data-idx={originalIndex} className="form-control" name="receptNo" type="tel" maxLength={2} value={p.receptNo || ""} onChange={(e) => handleChange(e, "payments", originalIndex)} disabled={locked} />
                                 </div>
 
                                 <div className="col-md-4">
                                   <label className="form-label"><strong>Reminder Days</strong></label>
-                                  <input data-idx={idx} className="form-control" name="reminderDays" type="number" value={p.reminderDays ?? ""} onChange={(e) => handleChange(e, "payments", idx)} disabled={locked} />
+                                  <input data-idx={originalIndex} className="form-control" name="reminderDays" type="tel" maxLength={2} value={p.reminderDays ?? ""} onChange={(e) => handleChange(e, "payments", originalIndex)} disabled={locked} />
                                 </div>
                               </div>
 
                               <div className="row mt-2">
                                 <div className="col-12">
                                   <label className="form-label"><strong>Remarks</strong></label>
-                                  <textarea data-idx={idx} className="form-control" name="remarks" rows="2" value={p.remarks || ""} onChange={(e) => handleChange(e, "payments", idx)} disabled={locked} />
+                                  <textarea data-idx={originalIndex} className="form-control" name="remarks" rows="2" value={p.remarks || ""} onChange={(e) => handleChange(e, "payments", originalIndex)} disabled={locked} />
                                 </div>
                               </div>
 
@@ -1168,15 +1167,15 @@ const [showRemovalConfirm, setShowRemovalConfirm] = useState(false);
                                 <div className="row mt-2">
                                   <div className="col-md-4">
                                     <label className="form-label"><strong>Refund Date</strong></label>
-                                    <input data-idx={idx} className="form-control" name="refundDate" type="date" value={p.refundDate ? formatDateForInput(p.refundDate) : ""} onChange={(e) => handleChange(e, "payments", idx)} disabled={locked} />
+                                    <input data-idx={originalIndex} className="form-control" name="refundDate" type="date" value={p.refundDate ? formatDateForInput(p.refundDate) : ""} onChange={(e) => handleChange(e, "payments", originalIndex)} disabled={locked} />
                                   </div>
                                   <div className="col-md-4">
                                     <label className="form-label"><strong>Refund Amount</strong></label>
-                                    <input data-idx={idx} className="form-control" name="refundAmount" type="tel" value={p.refundAmount ?? ""} onChange={(e) => handleChange(e, "payments", idx)} disabled={locked} maxLength={12} />
+                                    <input data-idx={originalIndex} className="form-control" name="refundAmount" type="tel" value={p.refundAmount ?? ""} onChange={(e) => handleChange(e, "payments", originalIndex)} disabled={locked} maxLength={12} />
                                   </div>
                                   <div className="col-md-4">
                                     <label className="form-label"><strong>Refund Method</strong></label>
-                                    <select data-idx={idx} className="form-control" name="refundPaymentMethod" value={p.refundPaymentMethod || ""} onChange={(e) => handleChange(e, "payments", idx)} disabled={locked}>
+                                    <select data-idx={originalIndex} className="form-control" name="refundPaymentMethod" value={p.refundPaymentMethod || ""} onChange={(e) => handleChange(e, "payments", originalIndex)} disabled={locked}>
                                       <option value="">Select</option>
                                       <option value="cash">Cash</option>
                                       <option value="online">Online</option>
@@ -1185,7 +1184,7 @@ const [showRemovalConfirm, setShowRemovalConfirm] = useState(false);
                                   </div>
                                   <div className="col-12 mt-2">
                                     <label className="form-label"><strong>Refund Remarks</strong></label>
-                                    <textarea data-idx={idx} className="form-control" name="refundRemarks" rows="2" value={p.refundRemarks || ""} onChange={(e) => handleChange(e, "payments", idx)} disabled={locked} />
+                                    <textarea data-idx={originalIndex} className="form-control" name="refundRemarks" rows="2" value={p.refundRemarks || ""} onChange={(e) => handleChange(e, "payments", originalIndex)} disabled={locked} />
                                   </div>
                                 </div>
                               )}

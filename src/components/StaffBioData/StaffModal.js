@@ -2299,12 +2299,13 @@ const StaffModal = ({ staff, isOpen, onClose, onSave, onDelete, isEditMode }) =>
                                                         <div className="row">
                                                             <div className="col-md-4 mb-2">
                                                                 <label className="form-label">
-                                                                    <strong>Client Name</strong>
+                                                                    <strong>Total Days</strong>
                                                                     <span className="star">*</span>
                                                                 </label>
                                                                 {isEditMode ? (
                                                                     <input
-                                                                        type="text"
+                                                                        type="tel"
+                                                                        maxLength={2}
                                                                         className={`form-control form-control-sm${invalidClass("clientName")}`}
                                                                         value={p.clientName || ""}
                                                                         onChange={(e) => handleArrayChange("payments", i, "clientName", e.target.value)}
@@ -2318,7 +2319,7 @@ const StaffModal = ({ staff, isOpen, onClose, onSave, onDelete, isEditMode }) =>
 
                                                             <div className="col-md-4 mb-2">
                                                                 <label className="form-label">
-                                                                    <strong>Days</strong>
+                                                                    <strong>Worked Days</strong>
                                                                     <span className="star">*</span>
                                                                 </label>
                                                                 {isEditMode ? (
@@ -2711,11 +2712,11 @@ const StaffModal = ({ staff, isOpen, onClose, onSave, onDelete, isEditMode }) =>
 
                             {/* Footer buttons */}
                             <div className="d-flex gap-2 justify-content-end hideInView">
-                                {onDelete && isEditMode && (
+                                {/* {onDelete && isEditMode && (
                                     <button type="button" className="btn btn-danger" onClick={handleDelete}>
                                         Delete
                                     </button>
-                                )}
+                                )} */}
                                 <button type="button" className="btn btn-secondary" onClick={onClose}>
                                     Close
                                 </button>

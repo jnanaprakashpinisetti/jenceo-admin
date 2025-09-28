@@ -1,6 +1,39 @@
 // EnquiryForm.jsx
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { firebaseDB } from "../../firebase";
+
+/* ----------------------------- Confirmation Modal ----------------------------- */
+const ConfirmCloseModal = ({ open, onConfirm, onCancel }) => {
+    if (!open) return null;
+    return (
+        <div
+            className="modal fade show d-block"
+            tabIndex="-1"
+            aria-modal="true"
+            role="dialog"
+            style={{ background: "rgba(0,0,0,0.55)", zIndex: 1110 }}
+        >
+            <div className="modal-dialog modal-dialog-centered">
+                <div className="modal-content" style={{ borderRadius: 12 }}>
+                    <div className="modal-header">
+                        <h5 className="modal-title">Discard changes?</h5>
+                        <button type="button" className="btn-close" onClick={onCancel} />
+                    </div>
+                    <div className="modal-body">
+                        <p className="mb-0">
+                            You have unsaved changes. If you close now, your changes will be lost.
+                            Do you still want to close?
+                        </p>
+                    </div>
+                    <div className="modal-footer">
+                        <button className="btn btn-secondary" onClick={onCancel}>No, stay</button>
+                        <button className="btn btn-danger" onClick={onConfirm}>Yes, close</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+};
 
 /* ----------------------------- Thank You Modal ----------------------------- */
 const ThankYouModal = ({ open, onClose, name, mobile }) => {
@@ -55,7 +88,7 @@ const ThankYouModal = ({ open, onClose, name, mobile }) => {
 
 /* --------------------------------- Form ---------------------------------- */
 const EnquiryForm = ({ show, onClose, title = "Enquiry Form" }) => {
-    const [formData, setFormData] = useState({
+    const emptyForm = useMemo(() => ({
         date: "",
         name: "",
         mobile: "",
@@ -67,8 +100,10 @@ const EnquiryForm = ({ show, onClose, title = "Enquiry Form" }) => {
         communication: "",
         reminderDate: "",
         comments: "",
-    });
+    }), []);
 
+    const [formData, setFormData] = useState(emptyForm);
+    const [initialData, setInitialData] = useState(emptyForm); // used for pristine check
     const [errors, setErrors] = useState({});
     const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -76,16 +111,22 @@ const EnquiryForm = ({ show, onClose, title = "Enquiry Form" }) => {
     const [submittedData, setSubmittedData] = useState({ name: "", mobile: "" });
     const [showThankYou, setShowThankYou] = useState(false);
 
-    // Set default date to today whenever the modal opens
+    // Confirm close state
+    const [showConfirmClose, setShowConfirmClose] = useState(false);
+
+    // Set default date to today whenever the modal opens; also reset pristine baseline
     useEffect(() => {
         if (show) {
             const today = new Date();
             const formatted = today.toISOString().split("T")[0];
-            setFormData((prev) => ({ ...prev, date: formatted }));
+            const withToday = { ...emptyForm, date: formatted };
+            setFormData(withToday);
+            setInitialData(withToday);
             setErrors({});
             setShowThankYou(false);
+            setShowConfirmClose(false);
         }
-    }, [show]);
+    }, [show, emptyForm]);
 
     // Helpers for date comparisons as YYYY-MM-DD
     const toYMD = (d) => {
@@ -107,9 +148,9 @@ const EnquiryForm = ({ show, onClose, title = "Enquiry Form" }) => {
                 const todayYMD = new Date(toYMD(today));
                 const minYMD = new Date(toYMD(minDate));
 
-                if (selected < minYMD || selected > todayYMD) {
-                    error = "Date must be within the past 10 days up to today.";
-                }
+                // if (selected < minYMD || selected > todayYMD) {
+                //     error = "Date must be within the past 10 days up to today.";
+                // }
                 break;
             }
             case "name":
@@ -161,6 +202,15 @@ const EnquiryForm = ({ show, onClose, title = "Enquiry Form" }) => {
         setFormData((prev) => ({ ...prev, [name]: value }));
     };
 
+    const isPristine = useMemo(() => {
+        // shallow compare since structure is flat
+        const keys = Object.keys(initialData);
+        for (const k of keys) {
+            if ((formData[k] ?? "") !== (initialData[k] ?? "")) return false;
+        }
+        return true;
+    }, [formData, initialData]);
+
     const handleSubmit = async (e) => {
         e.preventDefault();
         setIsSubmitting(true);
@@ -191,9 +241,9 @@ const EnquiryForm = ({ show, onClose, title = "Enquiry Form" }) => {
                 setSubmittedData({ name: formData.name, mobile: formData.mobile });
                 setShowThankYou(true);
 
-                // Reset form (keep today's date)
+                // Reset form (keep today's date) and reset pristine baseline
                 const today = new Date().toISOString().split("T")[0];
-                setFormData({
+                const reset = {
                     date: today,
                     name: "",
                     mobile: "",
@@ -205,7 +255,9 @@ const EnquiryForm = ({ show, onClose, title = "Enquiry Form" }) => {
                     communication: "",
                     reminderDate: "",
                     comments: "",
-                });
+                };
+                setFormData(reset);
+                setInitialData(reset);
 
                 setErrors({});
             } catch (err) {
@@ -224,7 +276,17 @@ const EnquiryForm = ({ show, onClose, title = "Enquiry Form" }) => {
     // Close both form & thank-you modals
     const closeAll = () => {
         setShowThankYou(false);
+        setShowConfirmClose(false);
         onClose && onClose();
+    };
+
+    // Handle clicking close/cancel: if pristine, close immediately; else ask to confirm
+    const requestClose = () => {
+        if (isPristine) {
+            closeAll();
+        } else {
+            setShowConfirmClose(true);
+        }
     };
 
     // If parent closed the form, don't show anything
@@ -249,7 +311,7 @@ const EnquiryForm = ({ show, onClose, title = "Enquiry Form" }) => {
                                 style={{ borderTopLeftRadius: 12, borderTopRightRadius: 12 }}
                             >
                                 <h5 className="modal-title">{title}</h5>
-                                <button type="button" className="btn-close btn-close-white" onClick={closeAll} />
+                                <button type="button" className="btn-close btn-close-white" onClick={requestClose} />
                             </div>
 
                             <div className="modal-body">
@@ -478,7 +540,7 @@ const EnquiryForm = ({ show, onClose, title = "Enquiry Form" }) => {
                                     </div>
 
                                     <div className="d-flex justify-content-end gap-2">
-                                        <button type="button" className="btn btn-outline-secondary" onClick={closeAll}>
+                                        <button type="button" className="btn btn-outline-secondary" onClick={requestClose}>
                                             Cancel
                                         </button>
                                         <button type="submit" className="btn btn-primary" disabled={isSubmitting}>
@@ -502,6 +564,13 @@ const EnquiryForm = ({ show, onClose, title = "Enquiry Form" }) => {
                     </div>
                 </div>
             )}
+
+            {/* CONFIRMATION MODAL (only shows when closing with unsaved changes) */}
+            <ConfirmCloseModal
+                open={showConfirmClose}
+                onConfirm={closeAll}
+                onCancel={() => setShowConfirmClose(false)}
+            />
 
             {/* THANK-YOU MODAL (separate, unique classes; no shared .client-form styles) */}
             <ThankYouModal

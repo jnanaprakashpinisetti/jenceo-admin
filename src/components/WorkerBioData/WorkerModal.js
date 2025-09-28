@@ -2043,7 +2043,7 @@ const WorkerModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode }
                                                 </div>
                                             </div>
                                             <div className="row">
-                                                <div className="col-md-4">{renderInputField("Husband / Wife Name", "careOfPersonal", formData.careOfPersonal)}</div>
+                                                <div className="col-md-4">{renderInputField("Husband / Wife Name", "careOfPersonal", formData.co)}</div>
                                                 <div className="col-md-4">{renderInputField("Child 1", "childName1", formData.childName1)}</div>
                                                 <div className="col-md-4">{renderInputField("Child 2", "childName2", formData.childName2)}</div>
                                             </div>

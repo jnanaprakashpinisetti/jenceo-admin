@@ -20,6 +20,10 @@ const HospitalModal = ({ hospital, isOpen, onClose, onSave, isEditMode }) => {
   const [agentCommentInputs, setAgentCommentInputs] = useState({});
   const [hospitalCommentInput, setHospitalCommentInput] = useState('');
   const [showSaveModal, setShowSaveModal] = useState(false);
+  // Local edit toggle (pencil icon in modal body)
+  const [isLocalEdit, setIsLocalEdit] = useState(false);
+  const canEdit = isEditMode || isLocalEdit;
+
 
 
   const editedRef = useRef(false);
@@ -415,7 +419,7 @@ const HospitalModal = ({ hospital, isOpen, onClose, onSave, isEditMode }) => {
 
   const handleClose = () => {
     // Only block closing if in EDIT mode and there are unsaved edits from this session
-    if (isEditMode && hasUnsavedChanges) {
+    if (canEdit && hasUnsavedChanges) {
       setShowConfirmClose(true);
     } else {
       onClose();
@@ -486,6 +490,7 @@ const HospitalModal = ({ hospital, isOpen, onClose, onSave, isEditMode }) => {
                 <button type="button" className="btn-close" onClick={cancelClose}></button>
               </div>
               <div className="modal-body">
+
                 <p>You have unsaved changes. Are you sure you want to close without saving?</p>
               </div>
               <div className="modal-footer">
@@ -545,13 +550,23 @@ const HospitalModal = ({ hospital, isOpen, onClose, onSave, isEditMode }) => {
           <div className="modal-content">
             <div className="modal-header bg-secondary text-white">
               <h5 className="modal-title">
-                {isEditMode ? "Edit" : "View"} Hospital - {hospitalData.idNo} - {hospitalData.hospitalName}
+                {canEdit ? "Edit" : "View"} Hospital - {hospitalData.idNo} - {hospitalData.hospitalName}
                 <span className="badge bg-primary mt-2">Reminders: {totalReminders}</span>
               </h5>
               <button type="button" className="btn-close btn-close-white" onClick={handleClose}></button>
             </div>
 
             <div className="modal-body">
+              <div className="d-flex justify-content-end mb-2">
+                <button
+                  type="button"
+                  className={`btn btn-sm ${canEdit ? 'btn-outline-secondary' : 'btn-warning'}`}
+                  onClick={() => setIsLocalEdit(prev => !prev)}
+                  title={canEdit ? 'Switch to view mode' : 'Enable edit mode'}
+                >
+                  {canEdit ? '🔒 View' : '✏️ Edit'}
+                </button>
+              </div>
               {/* Tabs */}
               <ul className="nav nav-tabs" id="hospitalTabs" role="tablist">
                 <li className="nav-item" role="presentation">
@@ -603,7 +618,7 @@ const HospitalModal = ({ hospital, isOpen, onClose, onSave, isEditMode }) => {
                   <div className="row">
                     <div className="col-md-4 mb-3">
                       <label className="form-label"><strong>Hospital ID</strong></label>
-                      {isEditMode ? (
+                      {canEdit ? (
                         <input
                           type="text"
                           className="form-control"
@@ -617,7 +632,7 @@ const HospitalModal = ({ hospital, isOpen, onClose, onSave, isEditMode }) => {
                     </div>
                     <div className="col-md-4 mb-3">
                       <label className="form-label"><strong>Hospital Name</strong></label>
-                      {isEditMode ? (
+                      {canEdit ? (
                         <input
                           type="text"
                           className="form-control"
@@ -631,7 +646,7 @@ const HospitalModal = ({ hospital, isOpen, onClose, onSave, isEditMode }) => {
                     </div>
                     <div className="col-md-4 mb-3">
                       <label className="form-label"><strong>Hospital Type</strong></label>
-                      {isEditMode ? (
+                      {canEdit ? (
                         <input
                           type="text"
                           className="form-control"
@@ -645,9 +660,10 @@ const HospitalModal = ({ hospital, isOpen, onClose, onSave, isEditMode }) => {
 
                     <div className="col-md-4 mb-3">
                       <label className="form-label"><strong>Number of Beds</strong></label>
-                      {isEditMode ? (
+                      {canEdit ? (
                         <input
-                          type="number"
+                          type="tel"
+                          maxLength={4}
                           className="form-control"
                           value={hospitalData.noOfBeds || ''}
                           onChange={(e) => { setHospitalData({ ...hospitalData, noOfBeds: e.target.value }); markEdited(); }}
@@ -666,20 +682,26 @@ const HospitalModal = ({ hospital, isOpen, onClose, onSave, isEditMode }) => {
 
                     <div className="col-md-4 mb-3">
                       <label className="form-label"><strong>Timing</strong></label>
-                      {isEditMode ? (
-                        <input
-                          type="text"
-                          className="form-control"
+                      {canEdit ? (
+
+                        <select
+                          className="form-select"
                           value={hospitalData.timing || ''}
                           onChange={(e) => { setHospitalData({ ...hospitalData, timing: e.target.value }); markEdited(); }}
-                        />
+                        >
+                          <option value="">Select Timing</option>
+                          <option value="12 Hours">12 Hours</option>
+                          <option value="24 Hours">24 Hours</option>
+                        </select>
+
+
                       ) : (
                         <p>{hospitalData.timing || 'N/A'}</p>
                       )}
                     </div>
                     <div className="col-md-4 mb-3">
                       <label className="form-label"><strong>Location</strong></label>
-                      {isEditMode ? (
+                      {canEdit ? (
                         <input
                           type="text"
                           className="form-control"
@@ -692,7 +714,7 @@ const HospitalModal = ({ hospital, isOpen, onClose, onSave, isEditMode }) => {
                     </div>
                     <div className="col-md-4 mb-3">
                       <label className="form-label"><strong>Address</strong></label>
-                      {isEditMode ? (
+                      {canEdit ? (
                         <textarea
                           className="form-control"
                           rows={2}
@@ -705,7 +727,7 @@ const HospitalModal = ({ hospital, isOpen, onClose, onSave, isEditMode }) => {
                     </div>
                     <div className="col-md-3 mb-3">
                       <label className="form-label"><strong>Visit</strong></label>
-                      {isEditMode ? (
+                      {canEdit ? (
                         <select
                           className="form-select"
                           value={hospitalData.visitType || ''}
@@ -728,7 +750,7 @@ const HospitalModal = ({ hospital, isOpen, onClose, onSave, isEditMode }) => {
 
                     <div className="col-12 mb-3">
                       <label className="form-label"><strong>Location Link</strong></label>
-                      {isEditMode ? (
+                      {canEdit ? (
                         <input
                           type="url"
                           className="form-control"
@@ -739,7 +761,7 @@ const HospitalModal = ({ hospital, isOpen, onClose, onSave, isEditMode }) => {
                         hospitalData.locationLink ? (
                           <p>
                             <a href={hospitalData.locationLink} target="_blank" rel="noopener noreferrer">
-                              {hospitalData.locationLink}
+                              <strong>Get Dirction</strong>
                             </a>
                           </p>
                         ) : <p>N/A</p>
@@ -754,7 +776,7 @@ const HospitalModal = ({ hospital, isOpen, onClose, onSave, isEditMode }) => {
                           className="form-control"
                           placeholder="Add a comment"
                           rows={3}
-                          disabled={!isEditMode}
+                          disabled={!canEdit}
                           value={hospitalCommentInput}
                           onChange={(e) => setHospitalCommentInput(e.target.value)}
                           onKeyDown={(e) => {
@@ -764,7 +786,7 @@ const HospitalModal = ({ hospital, isOpen, onClose, onSave, isEditMode }) => {
                             }
                           }}
                         />
-                        {isEditMode && (
+                        {canEdit && (
                           <button className="btn btn-sm btn-warning mt-2" onClick={addHospitalComment}>
                             Add Comment
                           </button>
@@ -791,7 +813,7 @@ const HospitalModal = ({ hospital, isOpen, onClose, onSave, isEditMode }) => {
                   <div>
                     <div className="d-flex justify-content-between align-items-center mb-3 agent-details">
                       <h5>Agent Details</h5>
-                      {isEditMode && (
+                      {canEdit && (
                         <button type="button" className="btn btn-primary btn-sm" onClick={addNewAgent}>
                           + Add Agent
                         </button>
@@ -822,7 +844,7 @@ const HospitalModal = ({ hospital, isOpen, onClose, onSave, isEditMode }) => {
                                   Agent ID: {agent.id}
                                   {locked && <span className="badge bg-secondary mt-1">Saved</span>}
                                 </h5>
-                                {isEditMode && !locked && (
+                                {canEdit && !locked && (
                                   <button
                                     type="button"
                                     className="btn btn-danger btn-sm"
@@ -836,7 +858,7 @@ const HospitalModal = ({ hospital, isOpen, onClose, onSave, isEditMode }) => {
                               <div className="row">
                                 <div className="col-md-4 mb-2">
                                   <label className="form-label">Agent Name<span className="text-danger">*</span></label>
-                                  {isEditMode && !locked ? (
+                                  {canEdit && !locked ? (
                                     <>
                                       <input
                                         type="text"
@@ -855,7 +877,7 @@ const HospitalModal = ({ hospital, isOpen, onClose, onSave, isEditMode }) => {
 
                                 <div className="col-md-4 mb-2">
                                   <label className="form-label">Designation<span className="text-danger">*</span></label>
-                                  {isEditMode && !locked ? (
+                                  {canEdit && !locked ? (
                                     <>
                                       <select
                                         className={`form-select ${agentErrors[originalIndex]?.designation ? 'is-invalid' : ''}`}
@@ -878,7 +900,7 @@ const HospitalModal = ({ hospital, isOpen, onClose, onSave, isEditMode }) => {
 
                                 <div className="col-md-4 mb-2">
                                   <label className="form-label">Status</label>
-                                  {isEditMode && !locked ? (
+                                  {canEdit && !locked ? (
                                     <select
                                       className="form-select"
                                       value={agent.status}
@@ -898,7 +920,7 @@ const HospitalModal = ({ hospital, isOpen, onClose, onSave, isEditMode }) => {
 
                                 <div className="col-md-4 mb-2">
                                   <label className="form-label">Mobile No<span className="text-danger">*</span></label>
-                                  {isEditMode && !locked ? (
+                                  {canEdit && !locked ? (
                                     <>
                                       <input
                                         type="tel"
@@ -939,7 +961,7 @@ const HospitalModal = ({ hospital, isOpen, onClose, onSave, isEditMode }) => {
 
                                 <div className="col-md-4 mb-2">
                                   <label className="form-label">UPI No</label>
-                                  {isEditMode && !locked ? (
+                                  {canEdit && !locked ? (
                                     <input
                                       type="text"
                                       className="form-control"
@@ -954,7 +976,7 @@ const HospitalModal = ({ hospital, isOpen, onClose, onSave, isEditMode }) => {
 
                                 <div className="col-md-4 mb-2">
                                   <label className="form-label">UPI Name</label>
-                                  {isEditMode && !locked ? (
+                                  {canEdit && !locked ? (
                                     <input
                                       type="text"
                                       className="form-control"
@@ -969,7 +991,7 @@ const HospitalModal = ({ hospital, isOpen, onClose, onSave, isEditMode }) => {
                                 {/* Reminder Date for Agents */}
                                 <div className="col-md-4 mb-2">
                                   <label className="form-label"><strong>Reminder Date</strong></label>
-                                  {isEditMode && !isAgentFieldLocked(agent, 'reminderDate') ? (
+                                  {canEdit && !isAgentFieldLocked(agent, 'reminderDate') ? (
                                     <input
                                       type="date"
                                       className="form-control"
@@ -1002,10 +1024,10 @@ const HospitalModal = ({ hospital, isOpen, onClose, onSave, isEditMode }) => {
                                           addAgentComment(originalIndex);
                                         }
                                       }}
-                                      disabled={!isEditMode}
+                                      disabled={!canEdit}
                                       rows={3}
                                     />
-                                    {isEditMode && (
+                                    {canEdit && (
                                       <button
                                         className="btn btn-sm btn-warning mb-2"
                                         onClick={() => addAgentComment(originalIndex)}
@@ -1032,7 +1054,7 @@ const HospitalModal = ({ hospital, isOpen, onClose, onSave, isEditMode }) => {
                                 </div>
                               </div>
 
-                              {isEditMode && !locked && (
+                              {canEdit && !locked && (
                                 <div className="text-end mb-3">
                                   <button
                                     type="button"
@@ -1091,14 +1113,14 @@ const HospitalModal = ({ hospital, isOpen, onClose, onSave, isEditMode }) => {
                   <div>
                     <div className="d-flex justify-content-between align-items-center mb-3 payment-details">
                       <h5>Payment Details</h5>
-                      {isEditMode && (
+                      {canEdit && (
                         <button type="button" className="btn btn-primary btn-sm" onClick={addNewPayment}>
                           + Add Payment
                         </button>
                       )}
                     </div>
 
-                    {isEditMode && (
+                    {canEdit && (
                       <div className="row mb-3">
                         <div className="col-md-8">
                           <label className="form-label">Search by Agent ID</label>
@@ -1145,7 +1167,7 @@ const HospitalModal = ({ hospital, isOpen, onClose, onSave, isEditMode }) => {
                                   {/* Payment ID: {payment.id} */}
                                   {locked && <span className="badge bg-secondary mt-1">Saved</span>}
                                 </h5>
-                                {isEditMode && !locked && (
+                                {canEdit && !locked && (
                                   <button
                                     type="button"
                                     className="btn btn-danger btn-sm"
@@ -1159,7 +1181,7 @@ const HospitalModal = ({ hospital, isOpen, onClose, onSave, isEditMode }) => {
                               <div className="row">
                                 <div className="col-md-4 mb-2">
                                   <label className="form-label">Date<span className="text-danger">*</span></label>
-                                  {isEditMode && !locked ? (
+                                  {canEdit && !locked ? (
                                     <>
                                       <input
                                         type="date"
@@ -1178,7 +1200,7 @@ const HospitalModal = ({ hospital, isOpen, onClose, onSave, isEditMode }) => {
 
                                 <div className="col-md-4 mb-2">
                                   <label className="form-label">Name</label>
-                                  {isEditMode && !locked ? (
+                                  {canEdit && !locked ? (
                                     <input
                                       type="text"
                                       className="form-control"
@@ -1192,7 +1214,7 @@ const HospitalModal = ({ hospital, isOpen, onClose, onSave, isEditMode }) => {
 
                                 <div className="col-md-4 mb-2">
                                   <label className="form-label">Mobile No</label>
-                                  {isEditMode && !locked ? (
+                                  {canEdit && !locked ? (
                                     <input
                                       type="tel"
                                       className="form-control"
@@ -1217,7 +1239,7 @@ const HospitalModal = ({ hospital, isOpen, onClose, onSave, isEditMode }) => {
 
                                 <div className="col-md-4 mb-2">
                                   <label className="form-label">UPI No</label>
-                                  {isEditMode && !locked ? (
+                                  {canEdit && !locked ? (
                                     <input
                                       type="text"
                                       className="form-control"
@@ -1231,7 +1253,7 @@ const HospitalModal = ({ hospital, isOpen, onClose, onSave, isEditMode }) => {
 
                                 <div className="col-md-4 mb-2">
                                   <label className="form-label">Client ID</label>
-                                  {isEditMode && !locked ? (
+                                  {canEdit && !locked ? (
                                     <input
                                       type="text"
                                       className="form-control"
@@ -1245,7 +1267,7 @@ const HospitalModal = ({ hospital, isOpen, onClose, onSave, isEditMode }) => {
 
                                 <div className="col-md-4 mb-2">
                                   <label className="form-label">Client Name</label>
-                                  {isEditMode && !locked ? (
+                                  {canEdit && !locked ? (
                                     <input
                                       type="text"
                                       className="form-control"
@@ -1259,7 +1281,7 @@ const HospitalModal = ({ hospital, isOpen, onClose, onSave, isEditMode }) => {
 
                                 <div className="col-md-4 mb-2">
                                   <label className="form-label">Service Type</label>
-                                  {isEditMode && !locked ? (
+                                  {canEdit && !locked ? (
                                     <input
                                       type="text"
                                       className="form-control"
@@ -1273,7 +1295,7 @@ const HospitalModal = ({ hospital, isOpen, onClose, onSave, isEditMode }) => {
 
                                 <div className="col-md-4 mb-2">
                                   <label className="form-label">Service Charges</label>
-                                  {isEditMode && !locked ? (
+                                  {canEdit && !locked ? (
                                     <input
                                       type="text"
                                       className="form-control"
@@ -1288,7 +1310,7 @@ const HospitalModal = ({ hospital, isOpen, onClose, onSave, isEditMode }) => {
 
                                 <div className="col-md-4 mb-2">
                                   <label className="form-label">Commition<span className="text-danger">*</span></label>
-                                  {isEditMode && !locked ? (
+                                  {canEdit && !locked ? (
                                     <>
                                       <input
                                         type="text"
@@ -1308,7 +1330,7 @@ const HospitalModal = ({ hospital, isOpen, onClose, onSave, isEditMode }) => {
 
                                 <div className="col-md-4 mb-2">
                                   <label className="form-label">Payment Mode<span className="text-danger">*</span></label>
-                                  {isEditMode && !locked ? (
+                                  {canEdit && !locked ? (
                                     <>
                                       <select
                                         className={`form-select ${paymentErrors[originalIndex]?.paymentMode ? 'is-invalid' : ''}`}
@@ -1332,7 +1354,7 @@ const HospitalModal = ({ hospital, isOpen, onClose, onSave, isEditMode }) => {
                                 {/* Reminder Date for Payments */}
                                 {/* <div className="col-md-4 mb-2">
                                   <label className="form-label">Reminder Date</label>
-                                  {isEditMode && !locked ? (
+                                  {canEdit && !locked ? (
                                     <input
                                       type="date"
                                       className="form-control"
@@ -1350,7 +1372,7 @@ const HospitalModal = ({ hospital, isOpen, onClose, onSave, isEditMode }) => {
 
                                 <div className="col-12 mb-2">
                                   <label className="form-label">Comments</label>
-                                  {isEditMode && !locked ? (
+                                  {canEdit && !locked ? (
                                     <textarea
                                       className="form-control"
                                       rows={3}
@@ -1363,7 +1385,7 @@ const HospitalModal = ({ hospital, isOpen, onClose, onSave, isEditMode }) => {
                                 </div>
                               </div>
 
-                              {isEditMode && !locked && (
+                              {canEdit && !locked && (
                                 <div className="text-end mb-3">
                                   <button
                                     type="button"
@@ -1545,7 +1567,7 @@ const HospitalModal = ({ hospital, isOpen, onClose, onSave, isEditMode }) => {
               <button type="button" className="btn btn-secondary" onClick={handleClose}>
                 Close
               </button>
-              {isEditMode && (
+              {canEdit && (
                 <button type="button" className="btn btn-primary" onClick={handleSave}>
                   Save Changes
                 </button>

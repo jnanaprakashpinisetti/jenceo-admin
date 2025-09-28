@@ -227,8 +227,8 @@ const HospitalModal = ({ hospital, isOpen, onClose, onSave, isEditMode }) => {
 
     if (!agent.name.trim()) errors.name = "Name is required";
     if (!agent.designation) errors.designation = "Designation is required";
-    if (!agent.mobileNo.trim()) errors.mobileNo = "Mobile No is required";
-    else if (!/^\d{10}$/.test(agent.mobileNo)) errors.mobileNo = "Enter valid 10-digit mobile number";
+    if (!agent.mobileNoNo.trim()) errors.mobileNo = "Mobile No is required";
+    else if (!/^\d{10}$/.test(agent.mobileNoNo)) errors.mobileNo = "Enter valid 10-digit mobile number";
 
     return errors;
   };
@@ -761,7 +761,7 @@ const HospitalModal = ({ hospital, isOpen, onClose, onSave, isEditMode }) => {
                         hospitalData.locationLink ? (
                           <p>
                             <a href={hospitalData.locationLink} target="_blank" rel="noopener noreferrer">
-                              <strong>Get Dirction</strong>
+                              <strong>Get Direction</strong>
                             </a>
                           </p>
                         ) : <p>N/A</p>
@@ -804,8 +804,8 @@ const HospitalModal = ({ hospital, isOpen, onClose, onSave, isEditMode }) => {
                       ) : (
                         <p>No comments added</p>
                       )}
+                      </div>
                     </div>
-                  </div>
                 )}
 
                 {/* Agent Details Tab */}
@@ -925,7 +925,7 @@ const HospitalModal = ({ hospital, isOpen, onClose, onSave, isEditMode }) => {
                                       <input
                                         type="tel"
                                         className={`form-control ${agentErrors[originalIndex]?.mobileNo ? 'is-invalid' : ''}`}
-                                        value={agent.mobileNo}
+                                        value={agent.mobileNoNo}
                                         onChange={(e) => handleAgentChange(originalIndex, 'mobileNo', e.target.value)}
                                         maxLength="10"
                                       />
@@ -935,10 +935,10 @@ const HospitalModal = ({ hospital, isOpen, onClose, onSave, isEditMode }) => {
                                     </>
                                   ) : (
                                     <div className="d-flex align-items-center">
-                                      <span>{agent.mobileNo || 'N/A'}</span>
-                                      {agent.mobileNo && (
+                                      <span>{agent.mobileNoNo || 'N/A'}</span>
+                                      {agent.mobileNoNo && (
                                         <a
-                                          href={`tel:${agent.mobileNo}`}
+                                          href={`tel:${agent.mobileNoNo}`}
                                           className="btn btn-sm btn-info ms-2"
                                         >
                                           Call
@@ -947,7 +947,7 @@ const HospitalModal = ({ hospital, isOpen, onClose, onSave, isEditMode }) => {
                                       )}
                                       <a
                                         className="btn btn-sm btn-warning ms-1"
-                                        href={`https://wa.me/${agent.mobileNo.replace(/\D/g, '')}?text=${encodeURIComponent(
+                                        href={`https://wa.me/${agent.mobileNoNo.replace(/\D/g, '')}?text=${encodeURIComponent(
                                           "Hello This is Sudheer From JenCeo Home Care Services"
                                         )}`}
                                         target="_blank"
@@ -1467,11 +1467,11 @@ const HospitalModal = ({ hospital, isOpen, onClose, onSave, isEditMode }) => {
                                 <td>{agent.id}</td>
                                 <td>{agent.name}</td>
                                 <td>{agent.designation}</td>
-                                <td>{agent.mobileNo}
-                                  <a href={`tel:${agent.mobileNo1}`} className="btn btn-sm btn-info ms-1"> Call</a>
+                                <td>{agent.mobileNoNo}
+                                  <a href={`tel:${agent.mobileNoNo}`} className="btn btn-sm btn-info ms-1"> Call</a>
                                   <a
                                     className="btn btn-sm btn-warning ms-1"
-                                    href={`https://wa.me/${agent.mobile}?text=${encodeURIComponent(
+                                    href={`https://wa.me/${agent.mobileNo}?text=${encodeURIComponent(
                                       "Hello This is Sudheer From JenCeo Home Care Services"
                                     )}`}
                                     target="_blank"
@@ -1543,8 +1543,8 @@ const HospitalModal = ({ hospital, isOpen, onClose, onSave, isEditMode }) => {
                           </tbody>
                           <tfoot>
                             <tr className="table-info">
-                              <td colSpan="6" className="text-end"><strong>Total Commission:</strong></td>
-                              <td colSpan="3"><strong>{sumCommission()}</strong></td>
+                              <td colSpan="7" className="text-end"><strong>Total Commission:</strong></td>
+                              <td colSpan="1"><strong>{sumCommission()}</strong></td>
                             </tr>
                           </tfoot>
                         </table>

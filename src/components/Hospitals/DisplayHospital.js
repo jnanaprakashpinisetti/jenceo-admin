@@ -25,6 +25,9 @@ export default function DisplayHospital() {
     const [isEditMode, setIsEditMode] = useState(false);
     const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
     const [hospitalToDelete, setHospitalToDelete] = useState(null);
+    const [showDeleteReason, setShowDeleteReason] = useState(false);
+    const [deleteReason, setDeleteReason] = useState("");
+
 
     // Filters
     const [search, setSearch] = useState("");
@@ -148,8 +151,8 @@ export default function DisplayHospital() {
                 (h.type || "").toLowerCase().includes(term) ||
                 (h.idNo || "").toLowerCase().includes(term);
 
-            const typeMatch = filterType ? h.type === filterType : true;
-            const locationMatch = filterLocation ? h.location === filterLocation : true;
+            const typeMatch = filterType ? (h.type || '').toLowerCase() === filterType.toLowerCase() : true;
+            const locationMatch = filterLocation ? (h.location || '').toLowerCase() === filterLocation.toLowerCase() : true;
 
             // reminder filter toggle
             if (reminderFilter) {
@@ -266,6 +269,14 @@ export default function DisplayHospital() {
 
     const handleDeleteConfirmed = async () => {
         if (!hospitalToDelete) return;
+        setShowDeleteConfirm(false);
+        setDeleteReason("");
+        setShowDeleteReason(true);
+    };
+
+
+    const handleDeleteWithReason = async () => {
+        if (!hospitalToDelete) return;
         const { id, ...payload } = hospitalToDelete;
         try {
             const movedAt = new Date().toISOString();
@@ -273,12 +284,14 @@ export default function DisplayHospital() {
                 ...payload,
                 originalId: id,
                 movedAt,
+                deleteReason: deleteReason || "No reason provided"
             });
             await firebaseDB.child(`HospitalData/${id}`).remove();
-            closeDeleteConfirm();
+            setShowDeleteReason(false);
+            setHospitalToDelete(null);
         } catch (err) {
             setError("Error deleting hospital: " + err.message);
-            closeDeleteConfirm();
+            setShowDeleteReason(false);
         }
     };
 
@@ -388,7 +401,7 @@ export default function DisplayHospital() {
                             const nearestReminder = getNearestReminderDate(hospital);
                             const reminderClass = getReminderClass(nearestReminder);
                             return (
-                                <tr key={hospital.id}>
+                                <tr key={hospital.id} style={{cursor:'pointer'}} onClick={(e) => { if (e.target.closest('button, a, .btn, .page-link')) return; handleView(hospital); }}>
                                     <td>{hospital.idNo || hospital.id || "N/A"}</td>
                                     <td>{hospital.hospitalName || "N/A"}</td>
                                     <td>{hospital.location || "N/A"}</td>
@@ -404,13 +417,10 @@ export default function DisplayHospital() {
                                     </td>
                                     <td>
                                         <div className="d-flex">
-                                            <button className="btn btn-sm me-2" title="View" onClick={() => handleView(hospital)}>
+                                            <button className="btn btn-sm me-2" title="View" onClick={(e) => { e.stopPropagation(); handleView(hospital); }}>
                                                 <img src={viewIcon} alt="view" style={{ width: 18, height: 18, opacity: 0.8 }} />
                                             </button>
-                                            <button className="btn btn-sm me-2" title="Edit" onClick={() => handleEdit(hospital)}>
-                                                <img src={editIcon} alt="edit" style={{ width: 15, height: 15 }} />
-                                            </button>
-                                            <button className="btn btn-sm" title="Delete" onClick={() => openDeleteConfirm(hospital)}>
+                                            <button className="btn btn-sm" title="Delete" onClick={(e) => { e.stopPropagation(); openDeleteConfirm(hospital); }}>
                                                 <img src={deleteIcon} alt="delete" style={{ width: 14, height: 14 }} />
                                             </button>
                                         </div>
@@ -430,6 +440,7 @@ export default function DisplayHospital() {
             </div>
 
             {/* Pagination */}
+            
             {totalPages > 1 && (
                 <nav aria-label="Hospital pagination" className="pagination-wrapper">
                     <ul className="pagination justify-content-center">
@@ -438,11 +449,22 @@ export default function DisplayHospital() {
                                 Previous
                             </button>
                         </li>
-                        {Array.from({ length: totalPages }, (_, i) => i + 1).map((n) => (
-                            <li key={n} className={`page-item ${n === safePage ? "active" : ""}`}>
-                                <button className="page-link" onClick={() => paginate(n)}>{n}</button>
-                            </li>
-                        ))}
+                        {/* Numbered pages: show at most 10 */}
+                        {(() => {
+                            const pages = [];
+                            const maxToShow = 10;
+                            let start = Math.max(1, safePage - Math.floor(maxToShow / 2));
+                            let end = start + maxToShow - 1;
+                            if (end > totalPages) { end = totalPages; start = Math.max(1, end - maxToShow + 1); }
+                            for (let n = start; n <= end; n++) {
+                                pages.push(
+                                    <li key={n} className={`page-item ${n === safePage ? "active" : ""}`}>
+                                        <button className="page-link" onClick={() => paginate(n)}>{n}</button>
+                                    </li>
+                                );
+                            }
+                            return pages;
+                        })()}
                         <li className={`page-item ${safePage === totalPages ? "disabled" : ""}`}>
                             <button className="page-link" onClick={() => paginate(Math.min(totalPages, safePage + 1))} disabled={safePage === totalPages}>
                                 Next
@@ -452,6 +474,8 @@ export default function DisplayHospital() {
                 </nav>
             )}
 
+            
+          
             {/* Modal */}
             {selectedHospital && (
                 <HospitalModal
@@ -462,6 +486,61 @@ export default function DisplayHospital() {
                 />
             )}
 
+            
+            {/* Delete Reason Modal */}
+            {showDeleteReason && hospitalToDelete && (
+                <div className="modal fade show" style={{ display: "block", backgroundColor: "rgba(0,0,0,0.5)" }}>
+                    <div className="modal-dialog modal-dialog-centered">
+                        <div className="modal-content">
+                            <div className="modal-header">
+                                <h5 className="modal-title">Delete Reason</h5>
+                                <button type="button" className="btn-close" onClick={() => { setShowDeleteReason(false); setHospitalToDelete(null); }}></button>
+                            </div>
+                            <div className="modal-body">
+                                <p className="mb-2">Please provide a reason for deleting:</p>
+                                <textarea
+                                    className="form-control"
+                                    rows="4"
+                                    value={deleteReason}
+                                    onChange={(e) => setDeleteReason(e.target.value)}
+                                    placeholder="Reason for deletion"
+                                />
+                            </div>
+                            <div className="modal-footer">
+                                <button type="button" className="btn btn-secondary" onClick={() => { setShowDeleteReason(false); setHospitalToDelete(null); }}>Cancel</button>
+                                <button type="button" className="btn btn-danger" onClick={handleDeleteWithReason} disabled={deleteReason.trim().length === 0}>
+                                    Confirm Delete
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+
+            
+            {/* Delete Reason Modal */}
+            {showDeleteReason && hospitalToDelete && (
+                <div className="modal fade show" style={{ display: "block", backgroundColor: "rgba(0,0,0,0.5)" }} onClick={(e)=>e.stopPropagation()}>
+                    <div className="modal-dialog modal-dialog-centered">
+                        <div className="modal-content" onClick={(e)=>e.stopPropagation()}>
+                            <div className="modal-header">
+                                <h5 className="modal-title">Please Confirm Delete</h5>
+                                <button type="button" className="btn-close" onClick={() => { setShowDeleteReason(false); setHospitalToDelete(null); }}></button>
+                            </div>
+                            <div className="modal-body">
+                                <p className="mb-2">Provide a reason for deleting this hospital. This will be stored in DeletedHospitalData.</p>
+                                <textarea className="form-control" rows="4" value={deleteReason} onChange={(e)=>setDeleteReason(e.target.value)} placeholder="Reason (required)" />
+                            </div>
+                            <div className="modal-footer">
+                                <button type="button" className="btn btn-secondary" onClick={() => { setShowDeleteReason(false); setHospitalToDelete(null); }}>Cancel</button>
+                                <button type="button" className="btn btn-danger" onClick={handleDeleteWithReason} disabled={!deleteReason.trim()}>Delete</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+    
             {/* Delete Confirmation */}
             {showDeleteConfirm && hospitalToDelete && (
                 <div className="modal fade show" style={{ display: "block", backgroundColor: "rgba(0,0,0,0.5)" }}>

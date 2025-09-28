@@ -19,6 +19,8 @@ export default function DeletedHospital() {
 
   // Return/Restore flow
   const [showReturnConfirm, setShowReturnConfirm] = useState(false);
+  const [showReturnReason, setShowReturnReason] = useState(false);
+  const [returnReason, setReturnReason] = useState("");
   const [hospitalToReturn, setHospitalToReturn] = useState(null);
   const [showReturnSuccess, setShowReturnSuccess] = useState(false);
   const [returnedHospital, setReturnedHospital] = useState(null);
@@ -67,7 +69,7 @@ export default function DeletedHospital() {
   const filteredHospitals = hospitals.filter((h) =>
     [h.hospitalName, h.location, h.type, h.idNo]
       .filter(Boolean)
-      .some((field) => field.toLowerCase().includes(search.toLowerCase()))
+      .some((field) => String(field).toLowerCase().includes(String(search).toLowerCase()))
   );
 
   // Pagination logic
@@ -116,33 +118,32 @@ export default function DeletedHospital() {
 
   const handleReturnConfirmed = async () => {
     if (!hospitalToReturn) return;
-    
+    setShowReturnConfirm(false);
+    setReturnReason("");
+    setShowReturnReason(true);
+  };
+
+  const handleReturnWithReason = async () => {
+    if (!hospitalToReturn) return;
     try {
-      // Remove from deleted collection
+      // Remove from deleted
       await firebaseDB.child(`DeletedHospitalData/${hospitalToReturn.id}`).remove();
-      
-      // Add back to main hospital collection
-      const { id, movedAt, ...hospitalData } = hospitalToReturn;
-      const newHospitalRef = firebaseDB.child("HospitalData").push();
-      await newHospitalRef.set({ 
-        ...hospitalData, 
-        id: newHospitalRef.key, 
-        createdAt: hospitalData.createdAt || new Date().toISOString(),
-        updatedAt: new Date().toISOString()
+      // Add back to main with reason & timestamps
+      const { id, movedAt, deleteReason, originalId, ...hospitalData } = hospitalToReturn;
+      const newRef = firebaseDB.child("HospitalData").push();
+      await newRef.set({
+        ...hospitalData,
+        id: newRef.key,
+        restoredAt: new Date().toISOString(),
+        revertReason: returnReason || "No reason provided",
+        deleteReason: deleteReason || null,
+        originalId: originalId || id
       });
-      
-      // Store returned hospital data for success modal
-      setReturnedHospital({
-        idNo: hospitalToReturn.idNo,
-        hospitalName: hospitalToReturn.hospitalName
-      });
-      
-      // Show success modal
-      setShowReturnSuccess(true);
-      closeReturnConfirm();
+      setShowReturnReason(false);
+      setHospitalToReturn(null);
     } catch (err) {
       setError("Error restoring hospital: " + err.message);
-      closeReturnConfirm();
+      setShowReturnReason(false);
     }
   };
 
@@ -209,7 +210,7 @@ export default function DeletedHospital() {
           </thead>
           <tbody>
             {currentHospitals.map((hospital) => (
-              <tr key={hospital.id}>
+              <tr key={hospital.id} style={{cursor:"pointer"}} onClick={(e) => { e.stopPropagation(); handleView(hospital); }}>
                 <td>{hospital.idNo || "N/A"}</td>
                 <td>{hospital.hospitalName || "N/A"}</td>
                 <td>{hospital.location || "N/A"}</td>
@@ -225,7 +226,7 @@ export default function DeletedHospital() {
                     <button
                       className="btn btn-sm me-2"
                       title="View"
-                      onClick={() => handleView(hospital)}
+                      onClick={(e) => { e.stopPropagation(); handleView(hospital); }}
                     >
                       <img
                         src={viewIcon}
@@ -236,7 +237,7 @@ export default function DeletedHospital() {
                     <button
                       className="btn btn-sm me-2"
                       title="Restore to Hospital Data"
-                      onClick={() => openReturnConfirm(hospital)}
+                      onClick={(e) => { e.stopPropagation(); openReturnConfirm(hospital); }}
                     >
                       <img
                         src={returnIcon}
@@ -248,7 +249,7 @@ export default function DeletedHospital() {
                     {/* <button
                       className="btn btn-sm"
                       title="Delete Permanently"
-                      onClick={() => openDeleteConfirm(hospital)}
+                      onClick={(e) => { e.stopPropagation(); openDeleteConfirm(hospital); }}
                     >
                       <img
                         src={deleteIcon}
@@ -265,24 +266,52 @@ export default function DeletedHospital() {
       </div>
 
       {/* Pagination */}
+      
+      
       {totalFilteredPages > 1 && (
         <nav aria-label="Hospital pagination" className="pagination-wrapper">
           <ul className="pagination justify-content-center">
-            {Array.from({ length: totalFilteredPages }, (_, i) => i + 1).map(
-              (n) => (
-                <li
-                  key={n}
-                  className={`page-item ${n === currentPage ? "active" : ""}`}
-                >
-                  <button className="page-link" onClick={() => paginate(n)}>
-                    {n}
-                  </button>
-                </li>
-              )
-            )}
+            <li className={`page-item ${currentPage === 1 ? "disabled" : ""}`}>
+              <button
+                className="page-link"
+                onClick={() => paginate(Math.max(1, currentPage - 1))}
+                disabled={currentPage === 1}
+              >
+                Previous
+              </button>
+            </li>
+            {/* Numbered pages: show at most 10 */}
+            {(() => {
+              const items = [];
+              const maxToShow = 10;
+              let start = Math.max(1, currentPage - Math.floor(maxToShow / 2));
+              let end = start + maxToShow - 1;
+              if (end > totalFilteredPages) { end = totalFilteredPages; start = Math.max(1, end - maxToShow + 1); }
+              for (let n = start; n <= end; n++) {
+                items.push(
+                  <li key={n} className={`page-item ${n === currentPage ? "active" : ""}`}>
+                    <button className="page-link" onClick={() => paginate(n)}>{n}</button>
+                  </li>
+                );
+              }
+              return items;
+            })()}
+            <li className={`page-item ${currentPage === totalFilteredPages ? "disabled" : ""}`}>
+              <button
+                className="page-link"
+                onClick={() => paginate(Math.min(totalFilteredPages, currentPage + 1))}
+                disabled={currentPage === totalFilteredPages}
+              >
+                Next
+              </button>
+            </li>
           </ul>
         </nav>
       )}
+
+ 
+       
+    
 
       {/* Hospital Modal */}
       {selectedHospital && (
@@ -340,6 +369,29 @@ export default function DeletedHospital() {
         </div>
       )}
 
+      
+      {/* Return Reason Modal */}
+      {showReturnReason && hospitalToReturn && (
+        <div className="modal fade show" style={{ display: "block", backgroundColor: "rgba(0,0,0,0.5)" }} onClick={(e)=>e.stopPropagation()}>
+          <div className="modal-dialog modal-dialog-centered">
+            <div className="modal-content" onClick={(e)=>e.stopPropagation()}>
+              <div className="modal-header">
+                <h5 className="modal-title">Please Confirm Restore</h5>
+                <button type="button" className="btn-close" onClick={() => { setShowReturnReason(false); setHospitalToReturn(null); }}></button>
+              </div>
+              <div className="modal-body">
+                <p className="mb-2">Provide a reason for restoring this hospital to main data. This will be stored with the record.</p>
+                <textarea className="form-control" rows="4" value={returnReason} onChange={(e)=>setReturnReason(e.target.value)} placeholder="Reason (required)" />
+              </div>
+              <div className="modal-footer">
+                <button type="button" className="btn btn-secondary" onClick={() => { setShowReturnReason(false); setHospitalToReturn(null); }}>Cancel</button>
+                <button type="button" className="btn btn-primary" onClick={handleReturnWithReason} disabled={!returnReason.trim()}>Restore</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    
       {/* Return/Restore Confirmation Modal */}
       {showReturnConfirm && hospitalToReturn && (
         <div

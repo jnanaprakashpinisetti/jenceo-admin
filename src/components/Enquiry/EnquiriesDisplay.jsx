@@ -27,6 +27,7 @@ const EnquiriesDisplay = () => {
     const [activeYear, setActiveYear] = useState(new Date().getFullYear());
     const [showDeleteModal, setShowDeleteModal] = useState(false);
     const [deleteItem, setDeleteItem] = useState(null);
+    const [deleteReason, setDeleteReason] = useState("");
     const [sortBy, setSortBy] = useState("date");
 
     // Modal state
@@ -126,8 +127,8 @@ const EnquiriesDisplay = () => {
                 enq.mobile?.includes(search) ||
                 enq.service?.toLowerCase().includes(search.toLowerCase()) ||
                 enq.through?.toLowerCase().includes(search.toLowerCase());
-            const matchesStatus = filterStatus ? enq.status === filterStatus : true;
-            const matchesThrough = filterThrough ? enq.through === filterThrough : true;
+            const matchesStatus = filterStatus ? String(enq.status||"").toLowerCase() === String(filterStatus).toLowerCase() : true;
+            const matchesThrough = filterThrough ? String(enq.through||"").toLowerCase() === String(filterThrough).toLowerCase() : true;
             const matchesReminder = filterReminder
                 ? getReminderClass(enq.reminderDate) === filterReminder
                 : true;
@@ -174,7 +175,7 @@ const EnquiriesDisplay = () => {
 
     // Month-wise summary data preparation
     const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-    const years = Array.from({ length: 11 }, (_, i) => new Date().getFullYear() + i); // Current year → +10 years
+    const years = Array.from(new Set(enquiries.filter(e=>e.date).map(e=>new Date(e.date).getFullYear()))).sort((a,b)=>a-b);
     const throughOptions = [
         "Poster",
         "Reference",
@@ -285,22 +286,23 @@ const EnquiriesDisplay = () => {
     // Delete functionality
     const confirmDelete = (enquiry) => {
         setDeleteItem(enquiry);
+        setDeleteReason("");
         setShowDeleteModal(true);
     };
 
     const handleDelete = async () => {
         if (deleteItem) {
             try {
-                // Move to DeletedEnquiries
-                await firebaseDB.child("DeletedEnquiries").push(deleteItem);
-                // Remove from EnquiryData
-                await firebaseDB.child(`EnquiryData/${deleteItem.id}`).remove();
-                setEnquiries((prev) => prev.filter((e) => e.id !== deleteItem.id));
+                const comment = { text: `Clarification: ${deleteReason}`.trim(), date: new Date().toISOString(), id: Date.now() };
+                const existing = Array.isArray(deleteItem.comments) ? deleteItem.comments : [];
+                const updated = [comment, ...existing]; // newest first
+                await firebaseDB.child(`EnquiryData/${deleteItem.id}`).update({ comments: updated, status: "Clarification" });
+                setEnquiries(prev => prev.map(e => e.id === deleteItem.id ? { ...e, comments: updated, status: "Clarification" } : e));
                 setShowDeleteModal(false);
                 setDeleteItem(null);
             } catch (error) {
-                console.error("Error deleting enquiry:", error);
-                alert("There was an error deleting the enquiry. Please try again.");
+                console.error("Error saving clarification:", error);
+                alert("There was an error saving the clarification. Please try again.");
             }
         }
     };
@@ -415,7 +417,7 @@ const EnquiriesDisplay = () => {
                         </thead>
                         <tbody>
                             {currentEnquiries.map((enq, idx) => (
-                                <tr key={enq.id}>
+                                <tr key={enq.id} style={{cursor:"pointer"}} onClick={(e)=>{ if (e.target.closest("button,a,.btn")) return; handleView(enq); }}>
                                     <td>{indexOfFirst + idx + 1}</td>
                                     <td>{enq.name}</td>
                                     <td>{enq.gender}</td>
@@ -553,17 +555,17 @@ const EnquiriesDisplay = () => {
                 <div className="modal fade show d-block" tabIndex="-1" style={{ background: "rgba(0,0,0,0.5)" }}>
                     <div className="modal-dialog modal-dialog-centered">
                         <div className="modal-content">
-                            <div className="modal-header bg-danger text-white">
-                                <h5 className="modal-title">Confirm Delete</h5>
+                            <div className="modal-header bg-warning">
+                                <h5 className="modal-title">Ask Clarification</h5>
                                 <button type="button" className="btn-close" onClick={() => setShowDeleteModal(false)}></button>
                             </div>
                             <div className="modal-body">
-                                <p>Are you sure you want to delete the enquiry for <strong>{deleteItem?.name}</strong>?</p>
-                                <p className="text-muted">This action cannot be undone.</p>
+                                <p className="mb-2">Please enter clarification/details. It will be saved to the enquiry and shown in the modal comments.</p>
+                                <textarea className="form-control" rows={4} value={deleteReason} onChange={(e)=>setDeleteReason(e.target.value)} placeholder="Clarification reason..."></textarea>
                             </div>
                             <div className="modal-footer">
                                 <button className="btn btn-secondary" onClick={() => setShowDeleteModal(false)}>Cancel</button>
-                                <button className="btn btn-danger" onClick={handleDelete}>Delete</button>
+                                <button className="btn btn-primary" onClick={handleDelete} disabled={!deleteReason.trim()}>Save</button>
                             </div>
                         </div>
                     </div>

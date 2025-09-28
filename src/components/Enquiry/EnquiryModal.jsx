@@ -1,6 +1,6 @@
-// src/.../EnquiryModal.jsx
+// src/components/Enquiries/EnquiryModal.jsx
 import React, { useState, useEffect, useMemo, useRef } from "react";
-import firebaseDB from "../../firebase"; // align with HospitalModal's default import
+import firebaseDB from "../../firebase";
 
 const MAX_COMMENT_LEN = 500;
 
@@ -15,77 +15,69 @@ const toDateStr = (iso) => {
   }
 };
 
-/** Normalize raw comments into HospitalModal shape: [{text, date, id}] */
+/** Normalize raw comments to [{text, date, id}] */
 const normalizeComments = (raw) => {
   if (!raw) return [];
-  // Already array of objects?
   if (Array.isArray(raw)) {
     return raw
-      .map((c) => {
+      .map((c, i) => {
         if (!c) return null;
         if (typeof c === "string") {
-          return { text: c, date: new Date().toISOString(), id: Date.now() + Math.random() };
+          return { text: c, date: new Date().toISOString(), id: Date.now() + i };
         }
         if (typeof c === "object") {
-          // Accept previous EnquiryModal shapes too (text/author/ts)
-          const text = c.text ?? c.message ?? String(c) ?? "";
-          const date =
-            c.date ??
-            (c.ts ? new Date(c.ts).toISOString() : undefined) ??
-            new Date().toISOString();
-          const id = c.id ?? Date.now() + Math.random();
-          return { text, date, id };
+          const text = c.text ?? c.message ?? "";
+          const date = c.date ?? c.ts ?? new Date().toISOString();
+          const id = c.id ?? Date.now() + i;
+          return text ? { text, date, id } : null;
         }
-        return { text: String(c), date: new Date().toISOString(), id: Date.now() + Math.random() };
+        return null;
       })
-      .filter((x) => x && x.text);
+      .filter(Boolean);
   }
-
-  // Firebase array-like object: { "0": {...}, "1": "...", ... }
   if (typeof raw === "object") {
     return Object.keys(raw)
       .sort()
-      .map((k) => raw[k])
-      .map((v) => {
+      .map((k, i) => raw[k])
+      .map((v, i) => {
         if (!v) return null;
         if (typeof v === "string") {
-          return { text: v, date: new Date().toISOString(), id: Date.now() + Math.random() };
+          return { text: v, date: new Date().toISOString(), id: Date.now() + i };
         }
         if (typeof v === "object") {
-          const text = v.text ?? v.message ?? String(v) ?? "";
-          const date =
-            v.date ??
-            (v.ts ? new Date(v.ts).toISOString() : undefined) ??
-            new Date().toISOString();
-          const id = v.id ?? Date.now() + Math.random();
-          return { text, date, id };
+          const text = v.text ?? v.message ?? "";
+          const date = v.date ?? v.ts ?? new Date().toISOString();
+          const id = v.id ?? Date.now() + i;
+          return text ? { text, date, id } : null;
         }
-        return { text: String(v), date: new Date().toISOString(), id: Date.now() + Math.random() };
+        return null;
       })
-      .filter((x) => x && x.text);
+      .filter(Boolean);
   }
-
-  // Single string fallback
   if (typeof raw === "string") return [{ text: raw, date: new Date().toISOString(), id: Date.now() }];
-
   return [];
 };
 
-const EnquiryModal = ({
+export default function EnquiryModal({
   show,
   onClose,
   enquiry,
   mode = "view",          // "view" | "edit"
-  currentUser,            // not used for comments now (to match HospitalModal)
+  currentUser,            // optional; not persisted per-comment
   onSaveSuccess,
-}) => {
+}) {
   const [formData, setFormData] = useState(enquiry || {});
-  const [comments, setComments] = useState([]); // [{ text, date, id }]
+  const [comments, setComments] = useState([]);
   const [newComment, setNewComment] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const [showThankYou, setShowThankYou] = useState(false);
   const [showUnsavedConfirm, setShowUnsavedConfirm] = useState(false);
   const [isDirty, setIsDirty] = useState(false);
+
+  // local edit/view toggle
+  const [localMode, setLocalMode] = useState(mode);
+  useEffect(() => setLocalMode(mode), [mode, show]);
+
   const listRef = useRef(null);
 
   /* hydrate */
@@ -93,10 +85,11 @@ const EnquiryModal = ({
     if (enquiry) {
       setFormData(enquiry);
       setComments(normalizeComments(enquiry.comments));
+      setIsDirty(false);
     }
   }, [enquiry]);
 
-  /* autoscroll on comments change */
+  /* auto-scroll comments list */
   useEffect(() => {
     if (listRef.current) listRef.current.scrollTop = listRef.current.scrollHeight;
   }, [comments]);
@@ -107,32 +100,33 @@ const EnquiryModal = ({
     setIsDirty(true);
   };
 
-  /* Add comment — same behavior as HospitalModal (prepend newest) */
+  /* Add comment (prepend) */
   const addComment = () => {
     const text = (newComment || "").trim();
     if (!text) return;
     const entry = { text, date: new Date().toISOString(), id: Date.now() };
-    setComments((prev) => [entry, ...prev]); // unshift/newest first
+    setComments((prev) => [entry, ...prev]);
     setNewComment("");
     setIsDirty(true);
   };
 
   /* Save */
   const handleSave = async () => {
-    if (!formData.id) return;
+    if (!formData?.id) return;
     setIsSaving(true);
     try {
       await firebaseDB.child(`EnquiryData/${formData.id}`).update({
         ...formData,
-        comments, // store as [{ text, date, id }]
+        comments,
       });
       setShowThankYou(true);
       setIsDirty(false);
+      setLocalMode("view");
       onSaveSuccess && onSaveSuccess();
       setTimeout(() => {
         setShowThankYou(false);
-        onClose();
-      }, 1400);
+        onClose && onClose();
+      }, 1200);
     } catch (err) {
       console.error("Error saving enquiry:", err);
       alert("Error saving enquiry. Please try again.");
@@ -143,14 +137,13 @@ const EnquiryModal = ({
 
   const handleClose = () => {
     if (isDirty) setShowUnsavedConfirm(true);
-    else onClose();
+    else onClose && onClose();
   };
 
-  const commentLen = newComment.length;
-  const commentLeft = Math.max(0, MAX_COMMENT_LEN - commentLen);
+  const commentLeft = Math.max(0, MAX_COMMENT_LEN - newComment.length);
 
   const badgeForStatus = useMemo(() => {
-    const s = (formData.status || "").toLowerCase();
+    const s = String(formData.status || "").toLowerCase();
     if (s.includes("on boarding")) return "bg-info";
     if (s.includes("pending")) return "bg-warning";
     if (s.includes("no response")) return "bg-secondary";
@@ -169,7 +162,7 @@ const EnquiryModal = ({
             {/* Header */}
             <div className="modal-header bg-primary text-white">
               <div>
-                <h5 className="modal-title mb-0">{mode === "edit" ? "Edit Enquiry" : "View Enquiry"}</h5>
+                <h5 className="modal-title mb-0">{localMode === "edit" ? "Edit Enquiry" : "View Enquiry"}</h5>
                 {formData?.status ? <span className={`badge mt-1 ${badgeForStatus}`}>{formData.status}</span> : null}
               </div>
               <button type="button" className="btn-close btn-close-white" onClick={handleClose}></button>
@@ -177,9 +170,22 @@ const EnquiryModal = ({
 
             {/* Body */}
             <div className="modal-body">
+              {/* Edit toggle in view mode */}
+              {localMode === "view" && (
+                <div className="d-flex justify-content-end mb-2">
+                  <button
+                    className="btn btn-sm btn-outline-warning"
+                    title="Switch to Edit"
+                    onClick={(e) => { e.stopPropagation(); setLocalMode("edit"); }}
+                  >
+                    ✏️ Edit
+                  </button>
+                </div>
+              )}
+
               {/* Name / Mobile */}
               <div className="modal-card border-0 mb-3">
-                <div className="modal-card-body p-3">
+                <div className="modal-card-body">
                   <div className="row g-3">
                     <div className="col-md-6">
                       <label className="form-label fw-semibold">Name</label>
@@ -212,7 +218,7 @@ const EnquiryModal = ({
 
               {/* Service / Amount */}
               <div className="modal-card border-0 mb-3">
-                <div className="modal-card-body p-3">
+                <div className="modal-card-body">
                   <div className="row g-3">
                     <div className="col-md-6">
                       <label className="form-label fw-semibold">Service</label>
@@ -222,7 +228,7 @@ const EnquiryModal = ({
                         className="form-control"
                         value={formData.service || ""}
                         onChange={handleChange}
-                        disabled={mode === "view"}
+                        disabled={localMode === "view"}
                         placeholder="e.g., Old Age Care"
                       />
                     </div>
@@ -236,7 +242,7 @@ const EnquiryModal = ({
                           className="form-control"
                           value={formData.amount || ""}
                           onChange={handleChange}
-                          disabled={mode === "view"}
+                          disabled={localMode === "view"}
                           min="0"
                         />
                       </div>
@@ -247,7 +253,7 @@ const EnquiryModal = ({
 
               {/* Status / Through / Communication / Reminder */}
               <div className="modal-card border-0 mb-3">
-                <div className="modal-card-body p-3">
+                <div className="modal-card-body">
                   <div className="row g-3">
                     <div className="col-md-6">
                       <label className="form-label fw-semibold">Status</label>
@@ -256,7 +262,7 @@ const EnquiryModal = ({
                         className="form-select"
                         value={formData.status || ""}
                         onChange={handleChange}
-                        disabled={mode === "view"}
+                        disabled={localMode === "view"}
                       >
                         <option value="">Select Status</option>
                         <option value="Enquiry">Enquiry</option>
@@ -295,7 +301,7 @@ const EnquiryModal = ({
                         className="form-select"
                         value={formData.communication || ""}
                         onChange={handleChange}
-                        disabled={mode === "view"}
+                        disabled={localMode === "view"}
                       >
                         <option value="">Select Communication</option>
                         <option value="Very Good">Very Good</option>
@@ -314,21 +320,21 @@ const EnquiryModal = ({
                         className="form-control"
                         value={formData.reminderDate || ""}
                         onChange={handleChange}
-                        disabled={mode === "view"}
+                        disabled={localMode === "view"}
                       />
                     </div>
                   </div>
                 </div>
               </div>
 
-              {/* Comments — identical behavior and structure to HospitalModal */}
+              {/* Comments */}
               <div className="modal-card border-0">
                 <div className="modal-card-header bg-light">
                   <h6 className="mb-0">Comments</h6>
                 </div>
-                <div className="modal-card-body p-3">
-                  {/* Input */}
-                  {mode === "edit" && (
+                <div className="modal-card-body">
+                  {/* Add new comment */}
+                  {localMode === "edit" && (
                     <div className="mb-3">
                       <textarea
                         className="form-control"
@@ -374,7 +380,7 @@ const EnquiryModal = ({
 
             {/* Footer */}
             <div className="modal-footer">
-              {mode === "edit" && (
+              {localMode === "edit" && (
                 <button className="btn btn-success" onClick={handleSave} disabled={isSaving}>
                   {isSaving ? (
                     <>
@@ -413,7 +419,7 @@ const EnquiryModal = ({
                   className="btn btn-success"
                   onClick={() => {
                     setShowThankYou(false);
-                    onClose();
+                    onClose && onClose();
                   }}
                 >
                   OK
@@ -445,10 +451,10 @@ const EnquiryModal = ({
                   className="btn btn-danger"
                   onClick={() => {
                     setShowUnsavedConfirm(false);
-                    onClose();
+                    onClose && onClose();
                   }}
                 >
-                  Dismodal-card Changes
+                  Discard Changes
                 </button>
               </div>
             </div>
@@ -457,6 +463,4 @@ const EnquiryModal = ({
       )}
     </>
   );
-};
-
-export default EnquiryModal;
+}

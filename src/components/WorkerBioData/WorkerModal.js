@@ -658,7 +658,7 @@ const WorkerModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode }
   .heaerImg {margin: -21px -20px 10px -20px}
   .heaerImg img {width:100%}
   
-  @media only screen and (max-width: 992px) {
+  @media only screen and (max-width: 767px) {
         .biodataHeader {display:none}
         .header {display:block}
         .header .h-left {text-align:center; margin-top:10px}
@@ -863,22 +863,39 @@ const WorkerModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode }
 <style>
   *{box-sizing:border-box}
   html,body{margin:0;padding:0;font-family:Arial,Helvetica,sans-serif;color:#111;background:#f6f6f6}
+
   /* Print optimization: small margins and remove extra whitespace */
-  @page { margin: 6mm; }
+  @page { size: A4; margin: 8mm; }
+
   .container{ max-width:900px; margin:auto; padding:10px; }
   .toolbar{ display:flex; gap:8px; justify-content:flex-end; margin-bottom:8px }
   .toolbar button{ padding:6px 10px; font-size:13px; border-radius:4px; border:1px solid #ccc; background:#fff; cursor:pointer }
-  .page{ background:#fff; border:1px solid #e5e5e5; padding:16px; margin-bottom:10px; page-break-after:always; border-radius:6px }
+
+  /* Each page is exactly the printable area (A4 height - @page margins).
+     Because box-sizing:border-box is set globally, height includes padding/border. */
+  .page{
+    background:#fff;
+    border:1px solid #e5e5e5;
+    padding:16px;
+    margin-bottom:10px;
+    page-break-after:always;
+    border-radius:6px;
+    height: 281mm; /* 297mm total - 16mm @page top/bottom margins */
+    overflow: hidden; /* Prevent spillover to a third page */
+  }
   .page:last-child{ page-break-after:auto }
+
   .header{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;border-bottom:2px solid #92a9fb;padding-bottom:10px;margin-bottom:8px; background: #c7d1f5; border-radius:6px;}
   .title{font-size:25px;font-weight:700;margin:0;padding:12px 10px; margin-top:20px}
   .subtitle{font-size:11px;color:#444;padding-left:10px}
   .meta{font-size:12px;color:#555;padding:12px 10px}
+
   .kv-row{display:grid;grid-template-columns: 150px 12px 1fr;gap:6px;align-items:start;padding:7px 0 4px 10px; border-radius:5px}
   .kv-row:nth-child(even){background-color:#f0ebf5}
   .kv-label{font-weight:600; font-size:13px}
   .kv-colon{text-align:center}
   .kv-value{font-weight:500; font-size:13px}
+
   .two-col{display:grid;grid-template-columns:1fr 1fr;gap:12px}
   .addr{border:1px dashed #c9c9c9;border-radius:6px;padding:8px;background:#fff}
   .sec{margin-top:20px}
@@ -893,23 +910,27 @@ const WorkerModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode }
   .decleration {margin-top:20px; font-size:13px; padding:15px}
   .blue {color:#02acf2; font-weight:700}
   .hedder-inner {display:flex;flex-direction:column;justify-content:center}
- 
+
+  /* Avoid splitting rows/sections across pages */
+  .kv-row{break-inside: avoid; page-break-inside: avoid;}
+  .addr{break-inside: avoid; page-break-inside: avoid;}
+  .sec{break-inside: avoid; page-break-inside: avoid;}
+  img{max-width:100%; break-inside: avoid; page-break-inside: avoid;}
+
   @media print {
     body{background:#fff}
     .toolbar{display:none}
     .container{max-width:100%;margin:0}
-    .page{border:none;margin:0;padding:6mm;border-radius:0}
+    /* keep the same fixed page height in print too; padding switches to mm */
+    .page{border:none;margin:0;padding:6mm;border-radius:0;height:281mm}
   }
 
- @media (max-width: 992px) {
-
-  .header {display:block; text-align:center; padding-top:10px}
-  .header-inner {display:block}
-  .two-col {display:block}
-  .kv-row {grid-template-columns:80px 12px 1fr}
-  
+  @media (max-width: 767px) {
+    .header {display:block; text-align:center; padding-top:10px}
+    .header-inner {display:block}
+    .two-col {display:block}
+    .kv-row {grid-template-columns:80px 12px 1fr}
   }
-
 </style>
 </head>
 <body>
@@ -922,7 +943,7 @@ const WorkerModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode }
 
   <!-- PAGE 1 -->
   <div class="page" id="page1">
-  <div class="heaerImg"><img src="${headerImage}" alt="Header" /></div>
+    <div class="heaerImg"><img src="${headerImage}" alt="Header" /></div>
     <div class="header">
       <div class="header-inner">
         <div class="title">EMPLOYEE INFORMATION</div>
@@ -935,29 +956,24 @@ const WorkerModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode }
     <div class="sec">
       <div class="sec-title">Basic Information</div>
       <div class="sec-body" style="padding-top:10px">
-      <div class="two-col">
-      <div>
-
-        <div class="kv-row"><div class="kv-label">Full Name</div><div class="kv-colon">:</div><div class="kv-value blue">${fullName}</div></div>
-        <div class="kv-row"><div class="kv-label">Gender</div><div class="kv-colon">:</div><div class="kv-value blue">${gender}</div></div>
-
-         <div class="kv-row"><div class="kv-label">Date of Birth</div><div class="kv-colon">:</div><div class="kv-value">${dobText}</div></div>
-        <div class="kv-row"><div class="kv-label">Age</div><div class="kv-colon">:</div><div class="kv-value blue">${ageText}</div></div>
-
-        <div class="kv-row"><div class="kv-label">Care of</div><div class="kv-colon">:</div><div class="kv-value">${co}</div></div>
-         <div class="kv-row"><div class="kv-label">Marital Status</div><div class="kv-colon">:</div><div class="kv-value blue">${marital}</div></div>
-         </div>
-         <div>
-         <div class="kv-row"><div class="kv-label">Aadhar No</div><div class="kv-colon">:</div><div class="kv-value">${opts.hideSensitive ? "—" : safe(formData.aadharNo)}</div></div>
-        <div class="kv-row"><div class="kv-label">Local ID</div><div class="kv-colon">:</div><div class="kv-value">${safe(formData.localId)}</div></div>
-
-        <div class="kv-row"><div class="kv-label">Date of Joining</div><div class="kv-colon">:</div><div class="kv-value">${safe(formData.date || formData.dateOfJoining)}</div></div>
-        <div class="kv-row"><div class="kv-label">Page No</div><div class="kv-colon">:</div><div class="kv-value">${safe(formData.pageNo)}</div></div>
-        <div class="kv-row"><div class="kv-label">Mobile-1</div><div class="kv-colon">:</div><div class="kv-value blue">${opts.hideSensitive ? "—" : `${formData.mobileNo1 ? + safe(formData.mobileNo1) : ""}`}</div></div>
-        <div class="kv-row"><div class="kv-label">Mobile-2</div><div class="kv-colon">:</div><div class="kv-value blue">${opts.hideSensitive ? "—" : `${formData.mobileNo2 ? + safe(formData.mobileNo2) : ""}`}</div></div>
-      </div>
-         </div>
-
+        <div class="two-col">
+          <div>
+            <div class="kv-row"><div class="kv-label">Full Name</div><div class="kv-colon">:</div><div class="kv-value blue">${fullName}</div></div>
+            <div class="kv-row"><div class="kv-label">Gender</div><div class="kv-colon">:</div><div class="kv-value blue">${gender}</div></div>
+            <div class="kv-row"><div class="kv-label">Date of Birth</div><div class="kv-colon">:</div><div class="kv-value">${dobText}</div></div>
+            <div class="kv-row"><div class="kv-label">Age</div><div class="kv-colon">:</div><div class="kv-value blue">${ageText}</div></div>
+            <div class="kv-row"><div class="kv-label">Care of</div><div class="kv-colon">:</div><div class="kv-value">${co}</div></div>
+            <div class="kv-row"><div class="kv-label">Marital Status</div><div class="kv-colon">:</div><div class="kv-value blue">${marital}</div></div>
+          </div>
+          <div>
+            <div class="kv-row"><div class="kv-label">Aadhar No</div><div class="kv-colon">:</div><div class="kv-value">${opts.hideSensitive ? "—" : safe(formData.aadharNo)}</div></div>
+            <div class="kv-row"><div class="kv-label">Local ID</div><div class="kv-colon">:</div><div class="kv-value">${safe(formData.localId)}</div></div>
+            <div class="kv-row"><div class="kv-label">Date of Joining</div><div class="kv-colon">:</div><div class="kv-value">${safe(formData.date || formData.dateOfJoining)}</div></div>
+            <div class="kv-row"><div class="kv-label">Page No</div><div class="kv-colon">:</div><div class="kv-value">${safe(formData.pageNo)}</div></div>
+            <div class="kv-row"><div class="kv-label">Mobile-1</div><div class="kv-colon">:</div><div class="kv-value blue">${opts.hideSensitive ? "—" : safe(formData.mobileNo1)}</div></div>
+            <div class="kv-row"><div class="kv-label">Mobile-2</div><div class="kv-colon">:</div><div class="kv-value blue">${opts.hideSensitive ? "—" : safe(formData.mobileNo2)}</div></div>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -999,38 +1015,34 @@ const WorkerModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode }
       </div>
     </div>
 
-      <div class="footer">
+    <div class="footer">
       <div><strong>Doc Ref:</strong> JC-HR-01&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Revision: 1&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Date: 1st May 2025 </div>
       <div>Page 1 of 2</div>
     </div>
   </div>
 
   <!-- PAGE 2 -->
-
   <div class="page" id="page2">
-  <div class="heaerImg" style="margin-top:15px; margin-bottom:25px"><img src="${headerImageSecond}" alt="Header" /></div>
-      <div class="sec" style="margin-top:14px">
-      <div class="sec-title">Health Info</div>
-      
-      <div class="sec-body" style="padding-top:10px">
-      <div class="two-col">
-      <div>
-        <div class="kv-row"><div class="kv-label">Health Issues</div><div class="kv-colon">:</div><div class="kv-value">${health.length ? health.join(", ") : "No Health Issues"}</div></div>
-        <div class="kv-row"><div class="kv-label">Other Issues</div><div class="kv-colon">:</div><div class="kv-value">${safe(formData.otherIssues)}</div></div>
-        <div class="kv-row"><div class="kv-label">Blood Group</div><div class="kv-colon">:</div><div class="kv-value">${safe(formData.bloodGroup)}</div></div>
-        
-        
-        </div>
-        <div>
-        <div class="kv-row"><div class="kv-label">Height</div><div class="kv-colon">:</div><div class="kv-value">${safe(formData.height)}</div></div>
-        <div class="kv-row"><div class="kv-label">Weight</div><div class="kv-colon">:</div><div class="kv-value">${safe(formData.weight)}</div></div>
-        <div class="kv-row"><div class="kv-label">Health Card No</div><div class="kv-colon">:</div><div class="kv-value">${safe(formData.healthCardNo)}</div></div>
-        
-      </div>
-      </div>
+    <div class="heaerImg" style="margin-top:15px; margin-bottom:25px"><img src="${headerImageSecond}" alt="Header" /></div>
 
+    <div class="sec" style="margin-top:14px">
+      <div class="sec-title">Health Info</div>
+      <div class="sec-body" style="padding-top:10px">
+        <div class="two-col">
+          <div>
+            <div class="kv-row"><div class="kv-label">Health Issues</div><div class="kv-colon">:</div><div class="kv-value">${health.length ? health.join(", ") : "No Health Issues"}</div></div>
+            <div class="kv-row"><div class="kv-label">Other Issues</div><div class="kv-colon">:</div><div class="kv-value">${safe(formData.otherIssues)}</div></div>
+            <div class="kv-row"><div class="kv-label">Blood Group</div><div class="kv-colon">:</div><div class="kv-value">${safe(formData.bloodGroup)}</div></div>
+          </div>
+          <div>
+            <div class="kv-row"><div class="kv-label">Height</div><div class="kv-colon">:</div><div class="kv-value">${safe(formData.height)}</div></div>
+            <div class="kv-row"><div class="kv-label">Weight</div><div class="kv-colon">:</div><div class="kv-value">${safe(formData.weight)}</div></div>
+            <div class="kv-row"><div class="kv-label">Health Card No</div><div class="kv-colon">:</div><div class="kv-value">${safe(formData.healthCardNo)}</div></div>
+          </div>
+        </div>
       </div>
-      </div>
+    </div>
+
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
       <div style="font-weight:700; margin-top:20px">Emergency Contacts & Bank Details</div>
     </div>
@@ -1073,28 +1085,25 @@ const WorkerModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode }
             <div class="kv-row"><div class="kv-label">Bank Name</div><div class="kv-colon">:</div><div class="kv-value">${bank.bankName}</div></div>
             <div class="kv-row"><div class="kv-label">Branch</div><div class="kv-colon">:</div><div class="kv-value">${bank.branchName}</div></div>
             <div class="kv-row"><div class="kv-label">IFSC</div><div class="kv-colon">:</div><div class="kv-value">${opts.hideSensitive ? "—" : bank.ifsc}</div></div>
-            <div class="kv-row"><div class="kv-label">PhonePe</div><div class="kv-colon">:</div><div class="kv-value">${opts.hideSensitive ? "—" : bank.phonePayNo + (bank.phonePayName ? " / " + bank.phonePayName : "")}</div></div>
-            <div class="kv-row"><div class="kv-label">GooglePay</div><div class="kv-colon">:</div><div class="kv-value">${opts.hideSensitive ? "—" : bank.googlePayNo + (bank.googlePayName ? " / " + bank.googlePayName : "")}</div></div>
+            <div class="kv-row"><div class="kv-label">PhonePe</div><div class="kv-colon">:</div><div class="kv-value">${opts.hideSensitive ? "—" : (bank.phonePayNo || "") + (bank.phonePayName ? " / " + bank.phonePayName : "")}</div></div>
+            <div class="kv-row"><div class="kv-label">GooglePay</div><div class="kv-colon">:</div><div class="kv-value">${opts.hideSensitive ? "—" : (bank.googlePayNo || "") + (bank.googlePayName ? " / " + bank.googlePayName : "")}</div></div>
           </div>
         </div>
       </div>
     </div>
 
     <div class="decleration">
-        <p><strong>Declaration:</strong> I hereby declare that the information provided in this document regarding my personal information, experience, skills,
-    health reports and qualifications is true, complete, and accurate to the best of my knowledge. I understand that any misrepresentation
-    or omission of facts may result in legal consequences or disqualification from consideration for employment</p>
-    <p style="text-align:right; font-style:italic; font-weight:700; margin-top:20px">Signature of the Employee</p>
+      <p><strong>Declaration:</strong> I hereby declare that the information provided in this document regarding my personal information, experience, skills, health reports and qualifications is true, complete, and accurate to the best of my knowledge. I understand that any misrepresentation or omission of facts may result in legal consequences or disqualification from consideration for employment</p>
+      <p style="text-align:right; font-style:italic; font-weight:700; margin-top:20px">Signature of the Employee</p>
     </div>
-    
 
     <div class="footer">
       <div><strong>Doc Ref:</strong> JC-HR-01&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Revision: 1&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Date: 1st May 2025 </div>
       <div>Page 2 of 2</div>
     </div>
-  </div>
-</div>
- </div>
+  </div> <!-- /page2 -->
+
+</div> <!-- /container -->
 
 <script>
   // Download current HTML as file
@@ -1110,24 +1119,27 @@ const WorkerModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode }
     setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(url); }, 150);
   });
 
-  // Share with Web Share API if available (falls back to download)
-  document.getElementById('shareBtn').addEventListener('click', async function(){
-    try {
-      const docHtml = '<!doctype html>' + document.documentElement.outerHTML;
-      const blob = new Blob([docHtml], { type: 'text/html' });
-      const file = new File([blob], 'Employee_FullData_${safe(formData.idNo || formData.employeeId || "unknown")}.html', { type: 'text/html' });
-      if (navigator.canShare && navigator.canShare({ files: [file] })) {
-        await navigator.share({ files: [file], title: 'Employee Full-Data' });
-      } else if (navigator.share) {
-        await navigator.share({ title: 'Employee Full-Data', text: 'Employee Full-Data attached.' });
-      } else {
+  // Share button (guarded if not present)
+  const shareBtn = document.getElementById('shareBtn');
+  if (shareBtn) {
+    shareBtn.addEventListener('click', async function(){
+      try {
+        const docHtml = '<!doctype html>' + document.documentElement.outerHTML;
+        const blob = new Blob([docHtml], { type: 'text/html' });
+        const file = new File([blob], 'Employee_FullData_${safe(formData.idNo || formData.employeeId || "unknown")}.html', { type: 'text/html' });
+        if (navigator.canShare && navigator.canShare({ files: [file] })) {
+          await navigator.share({ files: [file], title: 'Employee Full-Data' });
+        } else if (navigator.share) {
+          await navigator.share({ title: 'Employee Full-Data', text: 'Employee Full-Data attached.' });
+        } else {
+          document.getElementById('downloadBtn').click();
+        }
+      } catch (err) {
+        console.error(err);
         document.getElementById('downloadBtn').click();
       }
-    } catch (err) {
-      console.error(err);
-      document.getElementById('downloadBtn').click();
-    }
-  });
+    });
+  }
 </script>
 </body>
 </html>`;
@@ -1301,7 +1313,7 @@ const WorkerModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode }
             {isEditMode ? (
                 <input
                     type={type}
-                    className="form-control form-control-sm"
+                    className={"form-control form-control-sm" + (isEditMode ? " mb-2" : "")}
                     name={name}
                     value={value || ""}
                     onChange={handleInputChange}
@@ -1326,7 +1338,7 @@ const WorkerModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode }
                 {isEditMode ? (
                     <input
                         type="tel"
-                        className="form-control form-control-sm"
+                        className={"form-control form-control-sm" + (isEditMode ? " mb-2" : "")}
                         name={name}
                         value={value || ""}
                         onChange={handleInputChange}
@@ -1366,7 +1378,7 @@ const WorkerModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode }
                 <strong>{label}</strong>
             </label>
             {isEditMode ? (
-                <select className="form-select" name={name} value={value || ""} onChange={handleInputChange}>
+                <select className={"form-select" + (isEditMode ? " mb-2" : "")} name={name} value={value || ""} onChange={handleInputChange}>
                     <option value="">Select {label}</option>
                     {options.map((option) => (
                         <option key={option.value} value={option.value}>

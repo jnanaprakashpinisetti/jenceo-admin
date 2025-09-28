@@ -153,7 +153,7 @@ const DeletedEnquiriesDisplay = () => {
                         </thead>
                         <tbody>
                             {deletedEnquiries.map((enq, idx) => (
-                                <tr key={enq.delKey}>
+                                <tr key={enq.delKey} style={{cursor:"pointer"}} onClick={(e)=>{ if (e.target.closest("button,a,.btn")) return; handleView(enq); }}>
                                     <td>{idx + 1}</td>
                                     <td>{enq.name}</td>
                                     <td>{enq.mobile}</td>

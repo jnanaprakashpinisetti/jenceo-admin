@@ -1331,7 +1331,7 @@ const WorkerModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode }
                             </div> */}
 
                             {/* Tabs */}
-                            <ul className="nav nav-tabs mb-3" id="employeeTabs" role="tablist">
+                            <ul className="nav nav-tabs" id="employeeTabs" role="tablist">
                                 {[
                                     ["basic", "Basic Info"],
                                     ["address", "Address"],
@@ -1354,7 +1354,7 @@ const WorkerModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode }
                                 ))}
                             </ul>
 
-                            <div className="tab-content ">
+                            <div className="tab-content p-3 ">
                                 {/* Basic */}
                                 {activeTab === "basic" && (
                                     <div className="modal-card">

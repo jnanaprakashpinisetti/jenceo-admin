@@ -21,11 +21,16 @@ export default function DisplayWorkers() {
         Female: false
     });
     const [skillFilters, setSkillFilters] = useState({
-        Nursing: false,
-        Diaper: false,
-        'Patent Care': false,
+        Cook: false,
         'Baby Care': false,
-        Cook: false
+        'House Made': false,
+        Nursing: false,
+        'Elder Care': false,
+        Diaper: false,
+        'Patient Care': false,
+        Cook: false,
+        Others:false,
+
     });
 
     // Pagination state

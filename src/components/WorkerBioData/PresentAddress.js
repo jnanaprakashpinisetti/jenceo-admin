@@ -1,5 +1,24 @@
 import React, { useState, useEffect } from 'react';
 
+
+
+// --- India State/District lists for typeahead (Present Address) ---
+const INDIAN_STATES = [
+  "Andhra Pradesh","Arunachal Pradesh","Assam","Bihar","Chhattisgarh","Goa","Gujarat","Haryana",
+  "Himachal Pradesh","Jharkhand","Karnataka","Kerala","Madhya Pradesh","Maharashtra","Manipur",
+  "Meghalaya","Mizoram","Nagaland","Odisha","Punjab","Rajasthan","Sikkim","Tamil Nadu","Telangana",
+  "Tripura","Uttar Pradesh","Uttarakhand","West Bengal","Andaman and Nicobar Islands","Chandigarh",
+  "Dadra and Nagar Haveli and Daman and Diu","Delhi","Jammu and Kashmir","Ladakh","Lakshadweep","Puducherry"
+];
+
+const STATE_DISTRICTS = {
+  "Andhra Pradesh": ["Anantapur","Chittoor","East Godavari","Guntur","Krishna","Kurnool","Nellore","Prakasam","Srikakulam","Visakhapatnam","Vizianagaram","West Godavari","YSR Kadapa"],
+  "Telangana": ["Adilabad","Bhadradri Kothagudem","Hyderabad","Jagtial","Jangaon","Jayashankar Bhupalpally","Jogulamba Gadwal","Kamareddy","Karimnagar","Khammam","Komaram Bheem","Mahabubabad","Mahabubnagar","Mancherial","Medak","Medchal–Malkajgiri","Mulugu","Nagarkurnool","Nalgonda","Narayanpet","Nirmal","Nizamabad","Peddapalli","Rajanna Sircilla","Ranga Reddy","Sangareddy","Siddipet","Suryapet","Vikarabad","Wanaparthy","Warangal Rural","Warangal Urban","Yadadri Bhuvanagiri"],
+  "Karnataka": ["Bagalkot","Ballari","Belagavi","Bengaluru Rural","Bengaluru Urban","Bidar","Chamarajanagar","Chikkaballapur","Chikkamagaluru","Chitradurga","Dakshina Kannada","Davangere","Dharwad","Gadag","Hassan","Haveri","Kalaburagi","Kodagu","Kolar","Koppal","Mandya","Mysuru","Raichur","Ramanagara","Shivamogga","Tumakuru","Udupi","Uttara Kannada","Vijayapura","Yadgir"],
+  "Tamil Nadu": ["Chennai","Coimbatore","Cuddalore","Dharmapuri","Dindigul","Erode","Kanchipuram","Kanniyakumari","Karur","Krishnagiri","Madurai","Nagapattinam","Namakkal","Nilgiris","Perambalur","Pudukkottai","Ramanathapuram","Salem","Sivaganga","Thanjavur","Theni","Thiruvallur","Thiruvarur","Thoothukudi","Tiruchirappalli","Tirunelveli","Tiruppur","Tiruvannamalai","Vellore","Viluppuram","Virudhunagar"],
+  "Maharashtra": ["Mumbai City","Mumbai Suburban","Pune","Nagpur","Nashik","Thane","Aurangabad","Solapur","Amravati","Kolhapur","Jalgaon","Latur","Dhule","Ahmednagar","Satara","Chandrapur","Buldhana","Yavatmal","Raigad","Sangli","Akola","Gondia","Wardha","Beed","Nanded","Osmanabad","Parbhani","Ratnagiri","Washim","Gadchiroli","Nandurbar","Hingoli","Palghar","Sindhudurg","Jalna"],
+  // ... add more states as needed
+};
 const PresentAddress = ({ formData, errors, handleChange, handleBlur, nextStep, prevStep }) => {
   const [sameAsPermanent, setSameAsPermanent] = useState(false);
 
@@ -134,35 +153,43 @@ const PresentAddress = ({ formData, errors, handleChange, handleBlur, nextStep, 
           {errors.presentMandal && <div className="invalid-feedback">{errors.presentMandal}</div>}
         </div>
 
+             <div className="col-md-6">
+          <label htmlFor="presentState" className="form-label">State<span className="star">*</span></label>
+          <input
+            type="text"
+            className={`form-control ${errors.presentState ? 'is-invalid' : ''}`}
+            id="presentState"
+            name="presentState" list="presentStatesList"
+            value={formData.presentState}
+            onChange={handleChange}
+            onBlur={handleBlur}
+            disabled={sameAsPermanent}
+          />
+          <datalist id="presentStatesList">
+            {INDIAN_STATES.map((s) => (<option key={s} value={s} />))}
+          </datalist>
+          {errors.presentState && <div className="invalid-feedback">{errors.presentState}</div>}
+        </div>
+
         <div className="col-md-6">
           <label htmlFor="presentDistrict" className="form-label">District<span className="star">*</span></label>
           <input
             type="text"
             className={`form-control ${errors.presentDistrict ? 'is-invalid' : ''}`}
             id="presentDistrict"
-            name="presentDistrict"
+            name="presentDistrict" list="presentDistrictsList"
             value={formData.presentDistrict}
             onChange={handleChange}
             onBlur={handleBlur}
             disabled={sameAsPermanent}
           />
+          <datalist id="presentDistrictsList">
+            {(STATE_DISTRICTS[formData.presentState] || []).map((d) => (<option key={d} value={d} />))}
+          </datalist>
           {errors.presentDistrict && <div className="invalid-feedback">{errors.presentDistrict}</div>}
         </div>
 
-        <div className="col-md-6">
-          <label htmlFor="presentState" className="form-label">State<span className="star">*</span></label>
-          <input
-            type="text"
-            className={`form-control ${errors.presentState ? 'is-invalid' : ''}`}
-            id="presentState"
-            name="presentState"
-            value={formData.presentState}
-            onChange={handleChange}
-            onBlur={handleBlur}
-            disabled={sameAsPermanent}
-          />
-          {errors.presentState && <div className="invalid-feedback">{errors.presentState}</div>}
-        </div>
+   
 
         <div className="col-md-6">
           <label htmlFor="presentPincode" className="form-label">Pin Code<span className="star">*</span></label>

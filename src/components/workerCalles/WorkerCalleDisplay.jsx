@@ -1,9 +1,9 @@
-// src/pages/workers/WorkerCalleDisplay.jsx
+// src/components/WorkerBioData/WorkerCalleDisplay.jsx
 import React, { useEffect, useMemo, useState } from "react";
 import firebaseDB from "../../firebase";
 import WorkerCallModal from "./WorkerCallModal";
 import viewIcon from "../../assets/view.svg";
-import editIcon from "../../assets/eidt.svg"; // make sure filename matches your assets
+import editIcon from "../../assets/eidt.svg";
 import deleteIcon from "../../assets/delete.svg";
 import * as XLSX from "xlsx";
 
@@ -46,9 +46,14 @@ const urgencyClass = (v) => {
   if (du === 1) return "reminder-tomorrow";
   return "reminder-upcoming";
 };
-const normalizeArray = (val) => Array.isArray(val) ? val.filter(Boolean) : (typeof val === "string" ? val.split(",").map(s => s.trim()).filter(Boolean) : []);
+const normalizeArray = (val) =>
+  Array.isArray(val)
+    ? val.filter(Boolean)
+    : typeof val === "string"
+    ? val.split(",").map((s) => s.trim()).filter(Boolean)
+    : [];
 
-/* ------------ looks-like-a-worker detector (so we know which nested objects to collect) ------------ */
+/* ------------ looks-like-a-worker detector ------------ */
 const isWorkerShape = (v) => {
   if (!v || typeof v !== "object") return false;
   return Boolean(v.name || v.mobileNo || v.location || v.gender || v.skills || v.conversationLevel);
@@ -58,7 +63,6 @@ const isWorkerShape = (v) => {
 function collectWorkersFromSnapshot(rootSnap) {
   const rows = [];
   if (!rootSnap.exists()) return rows;
-
   const collectChild = (snap, depth = 1) => {
     if (!snap) return;
     const val = snap.val();
@@ -66,18 +70,15 @@ function collectWorkersFromSnapshot(rootSnap) {
       rows.push({ id: snap.key, ...val });
       return;
     }
-    // If not a worker object and has children, traverse (limit depth to avoid huge trees)
     if (typeof val === "object" && snap.hasChildren() && depth < 3) {
       snap.forEach((child) => collectChild(child, depth + 1));
     }
   };
-
   rootSnap.forEach((child) => collectChild(child, 1));
   return rows;
 }
 
-/* ------------ Component ------------ */
-export default function WorkerCallDisplay() {
+export default function WorkerCalleDisplay() {
   // data
   const [workers, setWorkers] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -101,12 +102,11 @@ export default function WorkerCallDisplay() {
   const [currentPage, setCurrentPage] = useState(1);
   const [rowsPerPage, setRowsPerPage] = useState(10);
 
-  /* --- FETCH: flatten nested nodes under WorkerCallData --- */
+  /* --- FETCH --- */
   useEffect(() => {
     const ref = firebaseDB.child("WorkerCallData");
     const cb = ref.on("value", (snap) => {
       try {
-        // NEW: flatten up to 3 levels (fixes "only 1 row shows" when data is nested)
         const list = collectWorkersFromSnapshot(snap);
         setWorkers(list);
         setLoading(false);
@@ -116,7 +116,7 @@ export default function WorkerCallDisplay() {
       }
     });
     return () => ref.off("value", cb);
-  }, []); // :contentReference[oaicite:0]{index=0}
+  }, []);
 
   /* badge counts (from ALL rows) */
   const badgeCounts = useMemo(() => {
@@ -132,19 +132,28 @@ export default function WorkerCallDisplay() {
     return c;
   }, [workers]);
 
-  /* filtering (opt-in) */
+  /* filtering (case-insensitive for ALL filters & search) */
   const filtered = useMemo(() => {
     const term = searchTerm.trim().toLowerCase();
     return workers.filter((w) => {
+      // search
       if (term) {
         const hay = `${w?.name ?? ""} ${w?.location ?? ""} ${String(w?.mobileNo ?? "")}`.toLowerCase();
         if (!hay.includes(term)) return false;
       }
-      if (selectedGender.length > 0 && !selectedGender.includes(w?.gender)) return false;
-      if (selectedSkills.length > 0) {
-        const have = normalizeArray(w?.skills);
-        if (!selectedSkills.some((s) => have.includes(s))) return false;
+      // gender (case-insensitive)
+      if (selectedGender.length > 0) {
+        const g = String(w?.gender ?? "").toLowerCase();
+        const wanted = selectedGender.map((x) => String(x).toLowerCase());
+        if (!wanted.includes(g)) return false;
       }
+      // skills (case-insensitive; any-match)
+      if (selectedSkills.length > 0) {
+        const have = normalizeArray(w?.skills).map((s) => String(s).toLowerCase());
+        const want = selectedSkills.map((s) => String(s).toLowerCase());
+        if (!want.some((s) => have.includes(s))) return false;
+      }
+      // reminder bucket
       if (reminderFilter) {
         const du = daysUntil(w?.callReminderDate);
         if (!isFinite(du)) return false;
@@ -157,13 +166,13 @@ export default function WorkerCallDisplay() {
     });
   }, [workers, searchTerm, selectedGender, selectedSkills, reminderFilter]);
 
-  /* sorting */
+  /* sorting (case-insensitive where applicable) */
   const sorted = useMemo(() => {
     const arr = [...filtered];
     const dir = sortDir === "asc" ? 1 : -1;
     arr.sort((a, b) => {
       if (sortBy === "name") {
-        return dir * String(a?.name ?? "").localeCompare(String(b?.name ?? ""));
+        return dir * String(a?.name ?? "").toLowerCase().localeCompare(String(b?.name ?? "").toLowerCase());
       }
       if (sortBy === "callReminderDate") {
         const da = parseDate(a?.callReminderDate);
@@ -172,8 +181,8 @@ export default function WorkerCallDisplay() {
         const bv = isValidDate(db) ? db.getTime() : Number.POSITIVE_INFINITY;
         return dir * (av - bv);
       }
-      // default id
-      return dir * String(a?.id ?? "").localeCompare(String(b?.id ?? ""));
+      // default id (string compare, insensitive)
+      return dir * String(a?.id ?? "").toLowerCase().localeCompare(String(b?.id ?? "").toLowerCase());
     });
     return arr;
   }, [filtered, sortBy, sortDir]);
@@ -185,6 +194,7 @@ export default function WorkerCallDisplay() {
   const indexOfFirst = indexOfLast - rowsPerPage;
   const pageItems = sorted.slice(indexOfFirst, indexOfLast);
 
+  // Reset to page 1 when filters change
   useEffect(() => { setCurrentPage(1); }, [searchTerm, selectedGender, selectedSkills, reminderFilter, rowsPerPage]);
 
   /* actions */
@@ -197,7 +207,6 @@ export default function WorkerCallDisplay() {
       await firebaseDB.child(`DeletedWorkersData/${selectedWorker.id}`).set({
         ...selectedWorker, originalId: selectedWorker.id, deletedAt: new Date().toISOString(),
       });
-      // NOTE: if your data is nested, adjust removal path accordingly.
       await firebaseDB.child(`WorkerCallData/${selectedWorker.id}`).remove();
       setShowDeleteConfirm(false);
       setSelectedWorker(null);
@@ -238,6 +247,18 @@ export default function WorkerCallDisplay() {
   if (loading) return <div className="text-center my-5">Loading…</div>;
   if (error) return <div className="alert alert-danger">Error: {error}</div>;
 
+  // helper to build max-10 page numbers around current page
+  const getDisplayedPageNumbers = () => {
+    const maxBtns = 10;
+    if (totalPages <= maxBtns) return Array.from({ length: totalPages }, (_, i) => i + 1);
+    const half = Math.floor(maxBtns / 2);
+    let start = Math.max(1, safePage - half);
+    let end = start + maxBtns - 1;
+    if (end > totalPages) { end = totalPages; start = end - maxBtns + 1; }
+    return Array.from({ length: end - start + 1 }, (_, i) => start + i);
+  };
+
+  // options for filters (case-insensitive applies in logic)
   const skillOptions = ["Nursing", "Patient Care", "Care Taker", "Old Age Care", "Baby Care", "Bedside Attender", "Supporting"];
 
   return (
@@ -263,7 +284,7 @@ export default function WorkerCallDisplay() {
           placeholder="Search name, location, mobile…"
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
-          style={{ maxWidth: 800 }}
+          style={{ maxWidth: 500 }}
         />
 
         <div className="d-flex gap-2">
@@ -290,7 +311,6 @@ export default function WorkerCallDisplay() {
           <span
             key={k}
             role="button"
-            // ✅ same class pattern as ClientDisplay
             className={`reminder-badge ${k} ${reminderFilter === k ? "active" : ""}`}
             onClick={() => setReminderFilter(reminderFilter === k ? "" : k)}
           >
@@ -308,18 +328,26 @@ export default function WorkerCallDisplay() {
         ))}
       </div>
 
-
       {/* extra filters */}
       <div className="mb-3 d-flex gap-4 flex-wrap opacity-75">
         <div>
           <h6 className="mb-1">Gender</h6>
-          {["Male", "Female", "Others"].map((g) => (
+          {["Male", "Female"].map((g) => (
             <label key={g} className="me-3">
               <input
                 type="checkbox"
                 className="form-check-input me-1"
-                checked={selectedGender.includes(g)}
-                onChange={(e) => setSelectedGender((prev) => e.target.checked ? [...prev, g] : prev.filter(x => x !== g))}
+                checked={selectedGender.map(x=>String(x).toLowerCase()).includes(String(g).toLowerCase())}
+                onChange={(e) =>
+                  setSelectedGender((prev) => {
+                    const low = String(g).toLowerCase();
+                    if (e.target.checked) {
+                      return Array.from(new Set([...prev.map(x=>String(x).toLowerCase()), low]));
+                    } else {
+                      return prev.map(x=>String(x).toLowerCase()).filter(x => x !== low);
+                    }
+                  })
+                }
               />{g}
             </label>
           ))}
@@ -331,8 +359,17 @@ export default function WorkerCallDisplay() {
               <input
                 type="checkbox"
                 className="form-check-input me-1"
-                checked={selectedSkills.includes(s)}
-                onChange={(e) => setSelectedSkills((prev) => e.target.checked ? [...prev, s] : prev.filter(x => x !== s))}
+                checked={selectedSkills.map(x=>String(x).toLowerCase()).includes(String(s).toLowerCase())}
+                onChange={(e) =>
+                  setSelectedSkills((prev) => {
+                    const low = String(s).toLowerCase();
+                    if (e.target.checked) {
+                      return Array.from(new Set([...prev.map(x=>String(x).toLowerCase()), low]));
+                    } else {
+                      return prev.map(x=>String(x).toLowerCase()).filter(x => x !== low);
+                    }
+                  })
+                }
               />{s}
             </label>
           ))}
@@ -369,7 +406,15 @@ export default function WorkerCallDisplay() {
                 ? du === 0 ? "Today" : du === 1 ? "Tomorrow" : du < 0 ? `${Math.abs(du)} days ago` : `${du} days`
                 : "";
               return (
-                <tr key={`${w.id}-${idx}`} className={urgencyClass(w?.callReminderDate)}>
+                <tr
+                  key={`${w.id}-${idx}`}
+                  className={urgencyClass(w?.callReminderDate)}
+                  onClick={(e) => {
+                    if (e.target.closest("button, a, .btn, .page-link")) return;
+                    handleView(w);
+                  }}
+                  style={{ cursor: "pointer" }}
+                >
                   <td>{indexOfFirst + idx + 1}</td>
                   <td>{w?.name || "N/A"}</td>
                   <td>{w?.location || "N/A"}</td>
@@ -397,10 +442,11 @@ export default function WorkerCallDisplay() {
                     )}
                   </td>
                   <td>
-                    <span className={`badge ${w?.conversationLevel === "Very Good" ? "bg-success" :
-                        w?.conversationLevel === "Good" ? "bg-primary" :
-                          w?.conversationLevel === "Average" ? "bg-warning" : "bg-secondary"
-                      }`}>
+                    <span className={`badge ${
+                      w?.conversationLevel?.toLowerCase() === "very good" ? "bg-success" :
+                      w?.conversationLevel?.toLowerCase() === "good" ? "bg-primary" :
+                      w?.conversationLevel?.toLowerCase() === "average" ? "bg-warning" : "bg-secondary"
+                    }`}>
                       {w?.conversationLevel || "N/A"}
                     </span>
                   </td>
@@ -427,7 +473,7 @@ export default function WorkerCallDisplay() {
         </table>
       </div>
 
-      {/* pagination */}
+      {/* pagination (min 1, max 10 numbers) */}
       {totalPages > 1 && (
         <nav aria-label="Worker pagination" className="pagination-wrapper">
           <ul className="pagination justify-content-center">
@@ -436,7 +482,7 @@ export default function WorkerCallDisplay() {
                 Previous
               </button>
             </li>
-            {Array.from({ length: totalPages }, (_, i) => i + 1).map((num) => (
+            {getDisplayedPageNumbers().map((num) => (
               <li key={num} className={`page-item ${safePage === num ? "active" : ""}`}>
                 <button className="page-link" onClick={() => setCurrentPage(num)}>{num}</button>
               </li>

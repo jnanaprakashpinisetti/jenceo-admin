@@ -200,6 +200,65 @@ export default function WorkerCallModal({ worker, isOpen, onClose, isEditMode })
                       </div>
                     </div>
 
+                    <div className="row mt-3">
+                      <div className="col-md-6">
+                        {/* Conversation Level */}
+                        <div className="mb-2">
+                          <label className="form-label"><strong>Conversation Level</strong></label>
+                          {isEditMode ? (
+                            <select
+                              name="conversationLevel"
+                              value={localWorker.conversationLevel || ""}
+                              onChange={handleChange}
+                              className="form-select"
+                            >
+                              <option value="">Select</option>
+                              <option value="Very Good">Very Good</option>
+                              <option value="Good">Good</option>
+                              <option value="Average">Average</option>
+                              <option value="Below Average">Below Average</option>
+                              <option value="Bad">Bad</option>
+                              <option value="Very Bad">Very Bad</option>
+                            </select>
+                          ) : (
+                            <span
+                              className={`badge ${localWorker.conversationLevel === "Very Good"
+                                ? "bg-success"
+                                : localWorker.conversationLevel === "Good"
+                                  ? "bg-primary"
+                                  : localWorker.conversationLevel === "Average"
+                                    ? "bg-warning"
+                                    : "bg-danger"
+                                }`}
+                            >
+                              {localWorker.conversationLevel || "N/A"}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      <div className="col-md-6">
+                        {/* Reminder Date */}
+                        <div className="mb-2">
+                          <label className="form-label"><strong>Reminder Date</strong></label>
+                          {isEditMode ? (
+                            <input
+                              type="date"
+                              name="callReminderDate"
+                              value={localWorker.callReminderDate || ""}
+                              onChange={handleChange}
+                              className="form-control"
+                            />
+                          ) : (
+                            <p>
+                              {localWorker.callReminderDate
+                                ? new Date(localWorker.callReminderDate).toLocaleDateString("en-GB")
+                                : "—"}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
                     {/* Comments */}
                     <h6 className="mt-3"><strong>Comments</strong></h6>
                     <ul className="list-group mb-2">
@@ -278,20 +337,7 @@ export default function WorkerCallModal({ worker, isOpen, onClose, isEditMode })
                         {/* Languages */}
                         <div className="mb-2">
                           <label className="form-label"><strong>Languages</strong></label>
-                          <div className="d-flex flex-wrap gap-2">
-                            {normalizeArray(localWorker.languages).map((lang, idx) => (
-                              <span key={idx} className="badge bg-secondary">
-                                {lang}
-                                {isEditMode && (
-                                  <button
-                                    type="button"
-                                    className="btn-close btn-close-white ms-2"
-                                    onClick={() => handleTagRemove("languages", idx)}
-                                  ></button>
-                                )}
-                              </span>
-                            ))}
-                          </div>
+
                           {isEditMode && (
                             <input
                               type="text"
@@ -306,26 +352,28 @@ export default function WorkerCallModal({ worker, isOpen, onClose, isEditMode })
                               }}
                             />
                           )}
-                        </div>
-                      </div>
-                      <div className="col-md-6">
-                        {/* Skills */}
-                        <div className="mb-2">
-                          <label className="form-label"><strong>Skills</strong></label>
-                          <div className="d-flex flex-wrap gap-2">
-                            {normalizeArray(localWorker.skills).map((skill, idx) => (
+                          <div className="d-flex flex-wrap gap-2 mt-2">
+                            {normalizeArray(localWorker.languages).map((lang, idx) => (
                               <span key={idx} className="badge bg-info">
-                                {skill}
+                                {lang}
                                 {isEditMode && (
                                   <button
                                     type="button"
                                     className="btn-close btn-close-white ms-2"
-                                    onClick={() => handleTagRemove("skills", idx)}
+                                    onClick={() => handleTagRemove("languages", idx)}
                                   ></button>
                                 )}
                               </span>
                             ))}
                           </div>
+                        </div>
+
+                      </div>
+                      <div className="col-md-6">
+                        {/* Skills */}
+                        <div className="mb-2">
+                          <label className="form-label"><strong>Skills</strong></label>
+
                           {isEditMode && (
                             <input
                               type="text"
@@ -340,69 +388,26 @@ export default function WorkerCallModal({ worker, isOpen, onClose, isEditMode })
                               }}
                             />
                           )}
+
+                          <div className="d-flex flex-wrap gap-2 mt-2">
+                            {normalizeArray(localWorker.skills).map((skill, idx) => (
+                              <span key={idx} className="badge bg-info">
+                                {skill}
+                                {isEditMode && (
+                                  <button
+                                    type="button"
+                                    className="btn-close btn-close-white ms-2"
+                                    onClick={() => handleTagRemove("skills", idx)}
+                                  ></button>
+                                )}
+                              </span>
+                            ))}
+                          </div>
                         </div>
                       </div>
                     </div>
 
-                    <div className="row">
-                      <div className="col-md-6">
-                        {/* Conversation Level */}
-                        <div className="mb-2">
-                          <label className="form-label"><strong>Conversation Level</strong></label>
-                          {isEditMode ? (
-                            <select
-                              name="conversationLevel"
-                              value={localWorker.conversationLevel || ""}
-                              onChange={handleChange}
-                              className="form-select"
-                            >
-                              <option value="">Select</option>
-                              <option value="Very Good">Very Good</option>
-                              <option value="Good">Good</option>
-                              <option value="Average">Average</option>
-                              <option value="Below Average">Below Average</option>
-                              <option value="Bad">Bad</option>
-                              <option value="Very Bad">Very Bad</option>
-                            </select>
-                          ) : (
-                            <span
-                              className={`badge ${
-                                localWorker.conversationLevel === "Very Good"
-                                  ? "bg-success"
-                                  : localWorker.conversationLevel === "Good"
-                                  ? "bg-primary"
-                                  : localWorker.conversationLevel === "Average"
-                                  ? "bg-warning"
-                                  : "bg-danger"
-                              }`}
-                            >
-                              {localWorker.conversationLevel || "N/A"}
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                      <div className="col-md-6">
-                        {/* Reminder Date */}
-                        <div className="mb-2">
-                          <label className="form-label"><strong>Reminder Date</strong></label>
-                          {isEditMode ? (
-                            <input
-                              type="date"
-                              name="callReminderDate"
-                              value={localWorker.callReminderDate || ""}
-                              onChange={handleChange}
-                              className="form-control"
-                            />
-                          ) : (
-                            <p>
-                              {localWorker.callReminderDate
-                                ? new Date(localWorker.callReminderDate).toLocaleDateString("en-GB")
-                                : "—"}
-                            </p>
-                          )}
-                        </div>
-                      </div>
-                    </div>
+
                   </div>
                 )}
               </div>

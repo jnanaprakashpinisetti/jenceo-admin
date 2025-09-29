@@ -1685,7 +1685,7 @@ const WorkerModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode }
                         <div className="modal-body">
 
                             {/* Edit/View icons at top of modal body */}
-                            <div className="d-flex justify-content-end mb-2">
+                            {/* <div className="d-flex justify-content-end mb-2">
                                 <button
                                     type="button"
                                     className={`btn btn-sm ${canEdit ? "btn-outline-secondary" : "btn-warning"}`}
@@ -1693,7 +1693,7 @@ const WorkerModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode }
                                 >
                                     {canEdit ? "🔒 View Mode" : "✏️ Edit Mode"}
                                 </button>
-                            </div>
+                            </div> */}
 
 
                             {/* Tabs */}
@@ -2132,22 +2132,59 @@ const WorkerModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode }
                                         </div>
                                         <div className="modal-card-body">
                                             <div className="row">
-                                                <div className="col-md-4">{renderInputField("Qualification", "qualification", formData.qualification)}</div>
-                                                <div className="col-md-4">{renderInputField("School/College", "schoolCollege", formData.schoolCollege)}</div>
-                                                <div className="col-md-4">{renderInputField("Primary Skill", "primarySkill", formData.primarySkill)}</div>
+                                                <div className="col-md-4">
+                                                    {renderInputField("Qualification", "qualification", formData.qualification)}
+                                                </div>
+                                                <div className="col-md-4">
+                                                    {renderInputField("School/College", "schoolCollege", formData.schoolCollege)}
+                                                </div>
+                                                <div className="col-md-4">
+                                                    <label htmlFor="primarySkill" className="form-label">
+                                                        Primary Skill
+                                                    </label>
+                                                    <select
+                                                        id="primarySkill"
+                                                        name="primarySkill"
+                                                        className="form-select"
+                                                        value={formData.primarySkill || ""}
+                                                        onChange={(e) =>
+                                                            setFormData((prev) => ({ ...prev, primarySkill: e.target.value }))
+                                                        }
+                                                    >
+                                                        <option value="">Select</option>
+                                                        <option value="Cook">Cook</option>
+                                                        <option value="Baby Care">Baby Care</option>
+                                                        <option value="House Maid">House Maid</option>
+                                                        <option value="Nursing">Nursing</option>
+                                                        <option value="Elder Care">Elder Care</option>
+                                                        <option value="Patient Care">Patient Care</option>
+                                                        <option value="Others">Others</option>
+                                                    </select>
+                                                </div>
                                             </div>
                                             <div className="row">
-                                                <div className="col-md-4">{renderArrayField("Secondary Skills", "secondarySkills", "Add secondary skill")}</div>
-                                                <div className="col-md-4">{renderArrayField("Other Skills", "workingSkills", "Add skill")}</div>
-                                                <div className="col-md-4">{renderInputField("Work Experience", "workExperince", formData.workExperince, "text")}</div>
+                                                <div className="col-md-4">
+                                                    {renderArrayField("Secondary Skills", "secondarySkills", "Add secondary skill")}
+                                                </div>
+                                                <div className="col-md-4">
+                                                    {renderArrayField("Other Skills", "workingSkills", "Add skill")}
+                                                </div>
+                                                <div className="col-md-4">
+                                                    {renderInputField("Work Experience", "workExperince", formData.workExperince, "text")}
+                                                </div>
                                             </div>
                                             <div className="row">
-                                                <div className="col-md-4">{renderInputField("Mother Tongue", "motherTongue", formData.motherTongue)}</div>
-                                                <div className="col-md-4">{renderInputField("Languages", "languages", formData.languages)}</div>
+                                                <div className="col-md-4">
+                                                    {renderInputField("Mother Tongue", "motherTongue", formData.motherTongue)}
+                                                </div>
+                                                <div className="col-md-4">
+                                                    {renderInputField("Languages", "languages", formData.languages)}
+                                                </div>
                                             </div>
                                         </div>
                                     </div>
                                 )}
+
 
                                 {/* Health */}
                                 {activeTab === "health" && (
@@ -2217,7 +2254,7 @@ const WorkerModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode }
                                                 const locked = !!p.__locked;
                                                 const invalidClass = (field) => (paymentErrors[i]?.[field] ? " is-invalid" : "");
                                                 return (
-                                                    <div key={i} className="border rounded  ">
+                                                    <div key={i} className="border rounded p-3 ">
                                                         <div className="d-flex justify-content-between align-items-center mb-2">
                                                             <h6 className="mb-0">
                                                                 Payment #{i + 1} {locked && <span className="badge bg-secondary ms-2">Locked</span>}
@@ -2467,7 +2504,7 @@ const WorkerModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode }
                                                 const locked = !!w.__locked;
                                                 const invalidClass = (field) => (workErrors[i]?.[field] ? " is-invalid" : "");
                                                 return (
-                                                    <div key={i} className="border rounded  ">
+                                                    <div key={i} className="border rounded  p-3">
                                                         <div className="d-flex justify-content-between align-items-center mb-2">
                                                             <h6 className="mb-0">
                                                                 Work #{i + 1} {locked && <span className="badge bg-secondary ms-2">Locked</span>}

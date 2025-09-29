@@ -42,16 +42,26 @@ const HealthDetails = ({ formData, handleChange, nextStep, prevStep }) => {
           </div>
         </div>
 
+ 
         <div className="col-md-6">
           <label className="form-label">Blood Group</label>
-          <input
-            className="form-control"
-            type="text"
+          <select
+            className="form-select"
             name="bloodGroup"
             id="bloodGroup"
             value={formData.bloodGroup}
             onChange={handleChange}
-          />
+          >
+            <option value="">Select</option>
+            <option value="A+">A+</option>
+            <option value="A-">A-</option>
+            <option value="B+">B+</option>
+            <option value="B-">B-</option>
+            <option value="AB+">AB+</option>
+            <option value="AB-">AB-</option>
+            <option value="O+">O+</option>
+            <option value="O-">O-</option>
+          </select>
         </div>
         <div className="col-md-6">
           <label className="form-label">Health Card No</label>
@@ -68,7 +78,8 @@ const HealthDetails = ({ formData, handleChange, nextStep, prevStep }) => {
           <label className="form-label">Height</label>
           <input
             className="form-control"
-            type="text"
+            type="tel"
+            maxLength={2}
             name="height"
             id="height"
             value={formData.height}
@@ -79,7 +90,8 @@ const HealthDetails = ({ formData, handleChange, nextStep, prevStep }) => {
           <label className="form-label">Weight</label>
           <input
             className="form-control"
-            type="text"
+             type="tel"
+            maxLength={2}
             name="weight"
             id="weight"
             value={formData.weight}

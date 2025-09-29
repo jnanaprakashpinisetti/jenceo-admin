@@ -21,11 +21,14 @@ export default function DisplayWorkers() {
         Female: false
     });
     const [skillFilters, setSkillFilters] = useState({
-        Nursing: false,
-        Diaper: false,
-        'Patent Care': false,
-        'Baby Care': false,
-        Cook: false
+        Admin: false,
+        Coordinator: false,
+        Manager: false,
+        HR:false,
+        Operations:false,
+        Accounts:false,
+        User:false
+       
     });
 
     // Pagination state

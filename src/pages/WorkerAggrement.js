@@ -1,393 +1,497 @@
-import React, { useState, useRef, useEffect } from "react";
 
-export default function EmployeeAggrement() {
-  const [selectedLanguage, setSelectedLanguage] = useState("English");
-  const [formData, setFormData] = useState({
-    firstName: "",
-    lastName: "",
-    salary: "",
-    experience: "",
-    signature: "",
-    date: "",
-  });
-  const [isJsPdfLoaded, setIsJsPdfLoaded] = useState(false);
-  const agreementRef = useRef(null);
+import React, { useEffect, useMemo, useState } from "react";
+import firebaseDB from "../firebase"; // If you export { firebaseDB }, change this import accordingly.
 
-  useEffect(() => {
-    // Load jsPDF dynamically
-    const script = document.createElement("script");
-    script.src =
-      "https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js";
-    script.async = true;
-    script.onload = () => setIsJsPdfLoaded(true);
-    document.head.appendChild(script);
+/* =============================
+   Static & helpers
+   ============================= */
+const HEADER_IMG =
+  "https://firebasestorage.googleapis.com/v0/b/jenceo-admin.firebasestorage.app/o/OfficeFiles%2FHeadder.svg?alt=media&token=fa65a3ab-ba03-4959-bc36-e293c6db48ae";
 
-    return () => {
-      document.head.removeChild(script);
-    };
-  }, []);
+const safe = (v, fb = "—") =>
+  v !== undefined && v !== null && String(v).trim() !== "" ? v : fb;
+const fullName = (e) =>
+  [safe(e?.firstName, ""), safe(e?.lastName, "")].filter(Boolean).join(" ").trim() || "—";
+const toDateText = (d) => {
+  if (!d) return "—";
+  const dt = new Date(d);
+  return isNaN(dt.getTime()) ? "—" : dt.toLocaleDateString();
+};
 
-  // Agreement content in different languages with form elements
-  const agreementContent = {
-    telugu: {
-      title: "ఉద్యోగ ఒప్పందం (Telugu)",
-      content: `
-          <div class="mb-3">
-            <label class="form-label fw-bold">పేరు (Name):</label>
-            <input type="text" placeholder="మొదటి పేరు" class="form-control mb-2" />
-            <input type="text" placeholder="చివరి పేరు" class="form-control" />
-          </div>
-          
-          <div class="mb-3">
-            <label class="form-label fw-bold">ప్రాథమిక వేతనం (Basic Salary):</label>
-            <input type="number" placeholder="₹ వేతనం నమోదు చేయండి" class="form-control" />
-          </div>
-          
-          <div class="mb-3">
-            <label class="form-label fw-bold">అనుభవం (Experience):</label>
-            <input type="text" placeholder="సంవత్సరాలలో అనుభవం" class="form-control" />
-          </div>
-          
-          <div class="mb-3 p-3 bg-white border border-2 border-dashed rounded">
-            <p class="mb-2 fw-bold">ఈ ఒప్పందం ద్వారా ఉద్యోగి మా కంపెనీలో పని చేస్తున్నారు. ప్రాథమిక వేతనం నిర్ణయించబడుతుంది మరియు అనుభవం ప్రకారం స్కిల్స్ గుర్తించబడతాయి.</p>
-          </div>
-          
-          <div class="row mb-3">
-            <div class="col-md-6">
-              <label class="form-label fw-bold">సంతకం (Signature):</label>
-              <input type="text" placeholder="మీ సంతకం" class="form-control" />
-            </div>
-            <div class="col-md-6">
-              <label class="form-label fw-bold">తేదీ (Date):</label>
-              <input type="date" class="form-control" />
-            </div>
-          </div>
-        `,
-    },
-    english: {
-      title: "Employment Agreement (English)",
-      content: `
-          <div class="mb-3">
-            <label class="form-label fw-bold">Full Name:</label>
-            <input type="text" placeholder="First Name" class="form-control mb-2" />
-            <input type="text" placeholder="Last Name" class="form-control" />
-          </div>
-          
-          <div class="mb-3">
-            <label class="form-label fw-bold">Basic Salary:</label>
-            <input type="number" placeholder="Enter salary amount" class="form-control" />
-          </div>
-          
-          <div class="mb-3">
-            <label class="form-label fw-bold">Work Experience:</label>
-            <input type="text" placeholder="Years of experience" class="form-control" />
-          </div>
-          
-          <div class="mb-3 p-3 bg-white border border-2 border-dashed rounded">
-            <p class="mb-2 fw-bold">This agreement confirms that the employee is employed at our company. The basic salary will be determined and skills will be recognized based on experience.</p>
-          </div>
-          
-          <div class="row mb-3">
-            <div class="col-md-6">
-              <label class="form-label fw-bold">Signature:</label>
-              <input type="text" placeholder="Your signature" class="form-control" />
-            </div>
-            <div class="col-md-6">
-              <label class="form-label fw-bold">Date:</label>
-              <input type="date" class="form-control" />
-            </div>
-          </div>
-        `,
-    },
-    hindi: {
-      title: "रोजगार समझौता (Hindi)",
-      content: `
-          <div class="mb-3">
-            <label class="form-label fw-bold">पूरा नाम (Full Name):</label>
-            <input type="text" placeholder="पहला नाम" class="form-control mb-2" />
-            <input type="text" placeholder="अंतिम नाम" class="form-control" />
-          </div>
-          
-          <div class="mb-3">
-            <label class="form-label fw-bold">मूल वेतन (Basic Salary):</label>
-            <input type="number" placeholder="वेतन राशि दर्ज करें" class="form-control" />
-          </div>
-          
-          <div class="mb-3">
-            <label class="form-label fw-bold">कार्य अनुभव (Work Experience):</label>
-            <input type="text" placeholder="वर्षों का अनुभव" class="form-control" />
-          </div>
-          
-          <div class="mb-3 p-3 bg-white border border-2 border-dashed rounded">
-            <p class="mb-2 fw-bold">इस समझौते के माध्यम से, कर्मचारी हमारी कंपनी में कार्यरत है। मूल वेतन निर्धारित किया जाएगा और अनुभव के आधार पर कौशल को मान्यता दी जाएगी।</p>
-          </div>
-          
-          <div class="row mb-3">
-            <div class="col-md-6">
-              <label class="form-label fw-bold">हस्ताक्षर (Signature):</label>
-              <input type="text" placeholder="आपके हस्ताक्षर" class="form-control" />
-            </div>
-            <div class="col-md-6">
-              <label class="form-label fw-bold">तारीख (Date):</label>
-              <input type="date" class="form-control" />
-            </div>
-          </div>
-        `,
-    },
-    urdu: {
-      title: "ملازمت کا معاہدہ (Urdu)",
-      content: `
-          <div class="mb-3">
-            <label class="form-label fw-bold">پورا نام (Full Name):</label>
-            <input type="text" placeholder="پہلا نام" class="form-control mb-2" />
-            <input type="text" placeholder="آخری نام" class="form-control" />
-          </div>
-          
-          <div class="mb-3">
-            <label class="form-label fw-bold">بنیادی تنخواہ (Basic Salary):</label>
-            <input type="number" placeholder="تنخواہ کی رقم درج کریں" class="form-control" />
-          </div>
-          
-          <div class="mb-3">
-            <label class="form-label fw-bold">کام کا تجربہ (Work Experience):</label>
-            <input type="text" placeholder="سالوں کا تجربہ" class="form-control" />
-          </div>
-          
-          <div class="mb-3 p-3 bg-white border border-2 border-dashed rounded">
-            <p class="mb-2 fw-bold">اس معاہدے کے ذریعے، ملازم हमारी کمپनी में کام کر रहा है। بنیادی تنخواہ کا تعین किया जाएगा और تجربے کی بنیاد پر مہارتوں کو تسلیم किया जाएگا।</p>
-          </div>
-          
-          <div class="row mb-3">
-            <div class="col-md-6">
-              <label class="form-label fw-bold">دستخط (Signature):</label>
-              <input type="text" placeholder="آپ کے دستخط" class="form-control" />
-            </div>
-            <div class="col-md-6">
-              <label class="form-label fw-bold">تاریخ (Date):</label>
-              <input type="date" class="form-control" />
-            </div>
-          </div>
-        `,
-    },
-  };
-
-  const languages = [
-    { id: "telugu", label: "Telugu" },
-    { id: "english", label: "English" },
-    { id: "hindi", label: "Hindi" },
-    { id: "urdu", label: "Urdu" },
+const addrBlock = (data, prefix) => {
+  const rows = [
+    ["Door No", safe(data[`${prefix}Address`])],
+    ["Street", safe(data[`${prefix}Street`])],
+    ["Landmark", safe(data[`${prefix}Landmark`])],
+    ["Village / Town", safe(data[`${prefix}Village`])],
+    ["Mandal", safe(data[`${prefix}Mandal`])],
+    ["District", safe(data[`${prefix}District`])],
+    ["State", `${safe(data[`${prefix}State`])}${data[`${prefix}Pincode`] ? " - " + data[`${prefix}Pincode`] : ""}`],
   ];
+  return rows
+    .map(
+      ([k, v], i) => `
+    <div class="kv-row ${i % 2 ? "alt" : ""}">
+      <div class="kv-label">${k}</div><div class="kv-colon">:</div>
+      <div class="kv-value">${v}</div>
+    </div>`
+    )
+    .join("");
+};
 
-  const currentContent = agreementContent[selectedLanguage.toLowerCase()];
+const skillTags = (data) =>
+  Array.isArray(data.workingSkills) && data.workingSkills.length
+    ? data.workingSkills.filter(Boolean).map((s) => `<span class="tag">${s}</span>`).join("")
+    : `<span class="muted">—</span>`;
 
-  // Print functionality
-  const handlePrint = () => {
-    const printContent = agreementRef.current.innerHTML;
-    const originalContent = document.body.innerHTML;
+/* =============================
+   Variant-specific HTML builders
+   Each one returns a complete printable A4 block
+   ============================= */
+const commonHeadCSS = `
+  @page { size: A4 portrait; margin: 18mm; }
+  html, body { font-family: Arial, Helvetica, sans-serif; font-size: 12pt; color: #141414; }
+  .a4-wrap{border:1px solid #e6e6e6;border-radius:10px;background:#fff;overflow:hidden}
+  .header-img{margin:-6px -6px 6px -6px}
+  .header-img img{width:100%;height:auto;object-fit:contain}
+  .mast{display:flex;justify-content:space-between;align-items:flex-start;gap:14px;background:linear-gradient(180deg,#eef3ff, #f7f9ff);padding:14px 16px;border-bottom:1px solid #dfe3f4}
+  .mast .title{font-size:22pt;font-weight:800;margin:0;letter-spacing:0.3px}
+  .mast .sub{font-size:10pt;color:#4d4f56;margin-top:4px}
+  .meta{font-size:10pt;color:#333;margin-top:6px}
+  .photo{display:flex;align-items:center;justify-content:center}
+  .photo img{width:120px;height:145px;object-fit:cover;border-radius:8px;border:1px solid #8aa0d6;background:#fafbff}
+  .no-photo{width:120px;height:145px;border:1px dashed #8aa0d6;border-radius:8px;display:flex;align-items:center;justify-content:center;color:#6b7280;font-size:10pt}
+  .section{margin:12px;border:1px solid #e9ebf5;border-radius:10px;overflow:hidden;box-shadow:0 0 0 1px rgba(17,24,39,0.02)}
+  .section .hd{background:#f3f6ff;padding:8px 12px;font-weight:700;color:#1f2a55}
+  .section .bd{padding:12px}
+  .grid-2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  .kv-row{display:grid;grid-template-columns:120px 14px 1fr;gap:8px;align-items:start; font-size:11px}
+  .kv-row.alt{background:#f9fbff}
+  .kv-label{font-weight:600}
+  .kv-colon{text-align:center}
+  .kv-value{font-weight:500}
+  .tag{border:1px solid #0a84ff;color:#0a84ff;font-size:10pt;padding:2px 8px;border-radius:999px;margin-right:6px;display:inline-block;margin-bottom:4px;background:#f0f7ff}
+  .muted{color:#777}
+  .prose{font-size:11.5pt;line-height:1.5;color:#202124}
+  .prose h4{margin:0 0 6px 0;font-size:13pt;color:#1f2a55}
+  .prose p{margin:0 0 8px 0}
+  .prose ul{margin:0 0 8px 18px}
+  p, li {font-size: 11px}
+  .fot {display:flex; justify-content: space-between;}
+  .footer {padding:3px; background:#0a84ff; color:#fff; font-size:8px; text-align:center}
+  .p-3 {padding:5px};
+  .mb-0 {margin-bottom:0}
+  @media print { .no-print { display:none !important; } }
+  @media (max-width: 768px){
+    .grid-2{display:block}
+    .kv-row{grid-template-columns:140px 14px 1fr}
+    .mast{display:block;text-align:center}
+    .photo{margin-top:10px}
+  }
+`;
 
-    document.body.innerHTML = `
-        <div class="container-fluid p-4">
-          <h2 class="text-center text-dark mb-4">Worker Agreement</h2>
-          <h3 class="text-center text-secondary mb-4">${
-            currentContent.title
-          }</h3>
-          <div class="border rounded p-4">
-            ${currentContent.content}
+const buildTemplate = (heading, sub, data, trailingContentHTML) => {
+  const metaDate = new Date().toLocaleDateString();
+  const name = fullName(data);
+  const age = data.years ? `${data.years} Years` : "—";
+  const dob = toDateText(data.dateOfBirth);
+  const gender = safe(data.gender);
+  const marital = safe(data.maritalStatus);
+  const co = safe(data.co || data.careOfPersonal);
+  const photoHtml = data.employeePhotoUrl
+    ? `<img src="${data.employeePhotoUrl}" alt="photo" />`
+    : `<div class="no-photo">No Photo</div>`;
+
+  return `
+  <style>${commonHeadCSS}</style>
+  <div class="a4-wrap">
+    <div class="header-img"><img src="${HEADER_IMG}" alt="Header"/></div>
+    <div class="mast">
+      <div>
+        <div class="title">${heading}</div>
+        <div class="sub">${sub}</div>
+        <div class="meta"><strong>ID:</strong> ${safe(data.idNo || data.employeeId)} &nbsp; | &nbsp; <strong>Date:</strong> ${metaDate}</div>
+      </div>
+      <div class="photo">${photoHtml}</div>
+    </div>
+
+    <div class="section">
+      <div class="hd">Basic Information</div>
+      <div class="bd">
+        <div class="grid-2">
+          <div>
+            <div class="kv-row"><div class="kv-label">Full Name</div><div class="kv-colon">:</div><div class="kv-value">${name}</div></div>
+            <div class="kv-row alt"><div class="kv-label">Gender</div><div class="kv-colon">:</div><div class="kv-value">${gender}</div></div>
+            <div class="kv-row"><div class="kv-label">Date of Birth</div><div class="kv-colon">:</div><div class="kv-value">${dob}</div></div>
+            <div class="kv-row"><div class="kv-label">Care of</div><div class="kv-colon">:</div><div class="kv-value">${co}</div></div>
           </div>
-          <div class="mt-4 text-center text-muted small">
-            Printed on: ${new Date().toLocaleDateString()} at ${new Date().toLocaleTimeString()}
-          </div>
-        </div>
-      `;
-
-    window.print();
-    document.body.innerHTML = originalContent;
-    window.location.reload();
-  };
-
-  // Download as PDF functionality
-  const handleDownloadPDF = () => {
-    if (!isJsPdfLoaded) {
-      alert("PDF generator is still loading. Please try again in a moment.");
-      return;
-    }
-
-    try {
-      const { jsPDF } = window.jspdf;
-      const doc = new jsPDF();
-
-      // Add header
-      doc.setFontSize(20);
-      doc.setTextColor(40, 40, 40);
-      doc.text("Worker Agreement", 105, 20, { align: "center" });
-
-      doc.setFontSize(16);
-      doc.setTextColor(60, 60, 60);
-      doc.text(currentContent.title, 105, 30, { align: "center" });
-
-      // Add some spacing
-      doc.setFontSize(12);
-      doc.setTextColor(0, 0, 0);
-      doc.text("Please print and fill out this agreement form", 105, 45, {
-        align: "center",
-      });
-
-      // Add form fields representation
-      let yPosition = 60;
-
-      // Name fields
-      doc.text("Full Name:", 15, yPosition);
-      doc.rect(15, yPosition + 5, 80, 8); // First name box
-      doc.rect(100, yPosition + 5, 80, 8); // Last name box
-      yPosition += 20;
-
-      // Salary field
-      doc.text("Basic Salary:", 15, yPosition);
-      doc.rect(15, yPosition + 5, 165, 8);
-      yPosition += 20;
-
-      // Experience field
-      doc.text("Work Experience:", 15, yPosition);
-      doc.rect(15, yPosition + 5, 165, 8);
-      yPosition += 20;
-
-      // Agreement text
-      const agreementText = currentContent.title.includes("English")
-        ? "This agreement confirms employment terms and conditions."
-        : "Employment agreement terms and conditions.";
-
-      doc.setFontSize(10);
-      const splitText = doc.splitTextToSize(agreementText, 180);
-      doc.text(splitText, 15, yPosition);
-      yPosition += 20;
-
-      // Signature and Date
-      doc.setFontSize(12);
-      doc.text("Signature:", 15, yPosition);
-      doc.rect(15, yPosition + 5, 80, 8);
-
-      doc.text("Date:", 100, yPosition);
-      doc.rect(100, yPosition + 5, 80, 8);
-
-      // Add footer
-      doc.setFontSize(10);
-      doc.setTextColor(100, 100, 100);
-      doc.text(`Generated on: ${new Date().toLocaleDateString()}`, 15, 280);
-
-      // Save the PDF
-      doc.save(
-        `Worker_Agreement_Form_${selectedLanguage}_${new Date().getTime()}.pdf`
-      );
-    } catch (error) {
-      console.error("Error generating PDF:", error);
-      alert("Error generating PDF. Please try again.");
-    }
-  };
-
-  const handleInputChange = (e) => {
-    setFormData({
-      ...formData,
-      [e.target.name]: e.target.value,
-    });
-  };
-  return (
-    <div className="layout-body">
-      <div className="container-fluid py-4">
-        <div className="row justify-content-center">
-          <div className="col-lg-10 col-xl-8">
-            {/* Header */}
-            <div className="text-center mb-5">
-              <h2 className="text-primary fw-bold">Worker Agreement Form</h2>
-              <p className="text-muted">
-                Fill out the employment agreement form
-              </p>
-            </div>
-
-            {/* Language Selection */}
-            <div className="aggrement-card shadow-sm mb-4">
-              <div className="card-header bg-light">
-                <h5 className="card-title mb-0">Select Language:</h5>
-              </div>
-              <div className="card-body">
-                <div className="d-flex flex-wrap gap-3">
-                  {languages.map((language) => (
-                    <div key={language.id} className="form-check">
-                      <input
-                        className="form-check-input"
-                        type="radio"
-                        id={language.id}
-                        name="language"
-                        value={language.label}
-                        checked={selectedLanguage === language.label}
-                        onChange={() => setSelectedLanguage(language.label)}
-                      />
-                      <label
-                        className="form-check-label fw-medium"
-                        htmlFor={language.id}
-                      >
-                        {language.label}
-                      </label>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-
-            {/* Agreement Content with Form Elements */}
-            <div ref={agreementRef} className="aggrement-card shadow-sm">
-              <div className="card-header bg-white border-bottom">
-                <h5 className="card-title text-center text-primary mb-0">
-                  {currentContent.title}
-                </h5>
-              </div>
-              <div className="card-body">
-                <div
-                  dangerouslySetInnerHTML={{ __html: currentContent.content }}
-                  className="bg-light p-4 rounded border"
-                />
-              </div>
-              <div className="card-footer bg-white border-top">
-                <div className="text-center">
-                  <button
-                    onClick={handlePrint}
-                    className="btn btn-success me-3 px-4"
-                  >
-                    <i className="bi bi-printer me-2"></i>Print Agreement
-                  </button>
-                  <button
-                    onClick={handleDownloadPDF}
-                    disabled={!isJsPdfLoaded}
-                    className="btn btn-primary px-4"
-                  >
-                    {!isJsPdfLoaded ? (
-                      <>
-                        <span className="spinner-border spinner-border-sm me-2"></span>
-                        Loading...
-                      </>
-                    ) : (
-                      <>
-                        <i className="bi bi-download me-2"></i>Download as PDF
-                      </>
-                    )}
-                  </button>
-                </div>
-              </div>
-            </div>
+          <div>
+            <div class="kv-row"><div class="kv-label">Aadhar No</div><div class="kv-colon">:</div><div class="kv-value">${safe(data.aadharNo)}</div></div>
+            <div class="kv-row alt"><div class="kv-label">Local ID</div><div class="kv-colon">:</div><div class="kv-value">${safe(data.localId)}</div></div>
+            <div class="kv-row"><div class="kv-label">Date of Joining</div><div class="kv-colon">:</div><div class="kv-value">${safe(data.date || data.dateOfJoining)}</div></div>
+            <div class="kv-row"><div class="kv-label">Mobile-1</div><div class="kv-colon">:</div><div class="kv-value">${safe(data.mobileNo1)}</div></div>
           </div>
         </div>
-
-        {/* Bootstrap Icons CDN */}
-        <link
-          rel="stylesheet"
-          href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css"
-        />
-
-        {/* Bootstrap CSS CDN */}
-        <link
-          href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css"
-          rel="stylesheet"
-        />
       </div>
     </div>
+
+ 
+
+    ${trailingContentHTML}
+  </div>
+  `;
+};
+
+/* === Variant content blocks (really different HTML per tab) === */
+const htmlAggEng = (data) =>
+  buildTemplate(
+    "EMPLOYMENT AGREEMENT (English)",
+    "H.R Department (Reg No: SEA/HYD/ALO/26/1040178/2025).",
+    data,
+    `
+    <div class="section p-3">
+   <p>This is an agreement entered into between Mr./Mrs./Ms  <strong>${fullName(data)}</strong> and <strong> JenCeo Homecare </strong>.</p>
+   <p>I, Shri/Srimati/Kumar <strong>${fullName(data)}</strong> hereby declare that I have voluntarily joined JenCeo Homecare
+as a <strong>${safe(data.primarySkill)}</strong> .. I assure that I will abide by the rules and regulations of JenCeo Homecare and will
+perform my duties at the assigned location with utmost dedication, sincerity, and integrity. I pledge to work wholeheartedly,  with
+complete commitment, a service-oriented mindset, and with purity in thought, word, and action. I promise to fulfill my responsibilities
+with 100% fairness, guided by my conscience and with God as my witness.</p>
+ 
+      <div class="hd">Terms and Conditions </div>
+      <div class="bd prose">
+               <ol class="mb-0">
+             <li>The salary of each employee will be paid after the completion of 30 working days. No advance payment
+                 will be provided
+                 within this 30-day period. </li>
+             <li>Employees must perform only the duties assigned by the organization. They are prohibited from engaging
+                 in any private
+                 arrangements with clients for personal gain.</li>
+             <li>Employees must conduct themselves in a manner that does not interfere with the client's personal,
+                 family, religious, or
+                 cultural practices.</li>
+             <li>Employees are strictly prohibited from touching or taking any valuables belonging to the client,
+                 including money, gold, mobile
+                 phones, laptops, or any other valuable items. </li>
+             <li>Employees must perform their duties diligently and treat clients with respect and courtesy at all
+                 times. </li>
+             <li>If an employee behaves inappropriately towards a client or is involved in theft of any item, legal
+                 action will be taken. The
+                 company will not bear any responsibility in such cases.</li>
+             <li>If an employee wishes to resign, they must inform the organization at least 5 days in advance</li>
+             <li>In any situation, an employee must not leave their duties / patient without obtaining proper permission
+             </li>
+             <li>If a patient passes away, it should be reported to the office without delay.
+             </li>
+             <li>If complaints are received from clients, or if the employee fails to perform their duties properly or
+                 behaves inappropriately,
+                 they will be terminated immediately</li>
+         </ol>
+      </div>
+      <div class="hd">Employee Acknowledgment Section </div>
+      <p>I have read/heard and fully understood the terms and conditions mentioned above. I wholeheartedly agree to abide by them and
+accept full responsibility for my actions. I acknowledge that if I violate any of the company's rules and regulations, I will comply with
+any disciplinary or legal actions taken by the company.</p>
+<p>By signing this agreement, I confirm that I grant JenCeo all rights and authorities necessary to enforce these terms.</p>
+
+<div class="fot" >
+<div>
+<p><strong>Witness</strong></p>
+<p>1)…………………………………………</p>
+<p>2)…………………………………………</p>
+</div>
+<div>
+<p>Employee Name: <strong>${fullName(data)} </p>
+<p>Signature: ………………………………………………</p>
+</div>
+
+</div>
+
+<p clalss="smalll">This document is a formal agreement between the employee and JenCeo Homecare, ensuring professionalism, accountability, and adherence to
+organizational policies.</p>
+
+<div class="footer">
+Doc Ref: JC-HR-02     |     Revision: 1     |     Date: 1st May 2025     |     Page 1 of 1     </div>
+</div>
+    `
   );
-}
+
+const htmlAggTel = (data) =>
+  buildTemplate(
+     "ఉద్యోగి ఒప్పందం (Telugu)",
+ "H. R Department (Reg No: SEA/HYD/ALO/26/1040178/2025)",
+ data,
+ `
+ <div class="section">
+     <p>ఇది శ్రీ / శ్రీమతి / కుమారి ${fullName(data)} మరియు JenCeo Homecare సంస్థ మద్య వ్రాసుకున్న అగ్రిమంట్.</p>
+     <p>నేను, JenCeo Homecare నందు <strong>${safe(data.primarySkill)} గా ప్పనిచేయుటకు నా సొంత ఆసక్తి తో కుదిరినాను. నేను
+             JenCeo Homecare నియమ నిబంధనలకు కట్టుబడి, కంపెనీ నియమంచిన చోట మనసా, వాచా, కర్మణా, త్రికర్ణ శుద్దితో, అంకిత భావముతో, సేవా భావముతో
+             నియమించిన పని చేస్తానని, నూటికి నూరుపాళ్ళు న్యాయం చేస్తానాని, నా మన్సాాక్షిగా, దైవసాక్షిగా హామీ ఇస్తున్నన్ను. </p>
+     <div class="hd">నియమ నిబంధనలు</div>
+     <div class="bd prose">
+         <ol class="mb-0">
+             <li>ప్రతీ ఉద్యోగీ తన నెల జీతం 30 రోజులు పూర్తి అయిన తరువాత చెల్లించబడును, మరియు 30 రోజుల లోపు ఎటువంటి అడ్వాన్సు ఇవ్వబడదు</li>
+             <li>సంసథ ద్వార్య నియమంచబడిన పని సంస్థకు మాత్రమే చేయాలి, ఉద్యోగి ఆ ఆ పనిని స్వలాభం కోసం క్లంట్ తో పని కుదుర్చుకోకూడదు</li>
+             <li>క్లంట్ యొక్క వ్యక్తిగత / కుట్టంబ / మతపర / ఆచార వ్యహారాలకు ఎలాంటి బంగం కలగకుండా నడుచుకోవాలి</li>
+             <li>క్లంట్ కి సంబందించిన డబ్బు / బంగారం / సెల్ ఫోనులు / లాప్టాప్ లు / మరియు ఏ ఇతర్ విలువైన్ వస్తువులు తాకరాదూ/ తీసుకోరాదు</li>
+             <li>ఇచ్చిన పనిని సక్రమముగా చేస్తూ క్లంట్ పట్ల గౌరవ మర్యాదలతో వుండాలి</li>
+             <li>క్లంట్ పట్ల చేదుగా ప్రవర్తించినా / ఏదైనా వసుివు దొంగలించినా చట్టబద్దమైన చర్యలు తీసుకొనబడును. కంపెనీ ఎటువంటి భాద్యతా వహించదు</li>
+             <li>డ్యూటీ  దిగాలి అనుకున్న యెడల సంస్థకు 5 రోజుల ముందుగా తెలియబరచవలెను</li>
+             <li>ఎటువంటి పరిస్థితిలోను సరైన అనుమతి లేకుండా ఉద్యోగి తన పనిని గాని / పేషంట్ని గాని విడిచి పెట్టి వెళ్ళకూడదు</li>
+             <li>ఒకవేళ పేటెంట్ మరణించిన యెడల  వెంటనే ఆఫీసుకు తెలియజేయవలెను</li>
+             <li>క్లంట్ నుండి పిరియాదులు వచ్చినా / పని సరిగా చేయకపోయినా/ ప్రవర్తన సరిగా లేకపోయినా ఉద్యోగం నుండి తక్షణమే
+                 తొలగించడం జరుగును</li>
+         </ol>
+     </div>
+     <div class="hd">ఉద్యోగి అంగీకార్ విభాగం</div>
+     <p>పైన్ తెల్పిన నిబంధనలను  సూచనలను  చదివి / విని అందులోని చిక్కులను అర్ధం చేసుకుని మనస్పూర్తిగా అంగీకరిస్తూ పూర్తి బాధ్యతతో ఉంటానని, నేను
+         కంపెనీ నియమ నిబంధనలు అతిక్రమంచిన యడల కంపెనీ తీసుకునే ఎటువంటి క్రమ శిక్షణ / చట్టపరమైన చర్యలకు  కట్టుబడి
+         ఉంటానని. ఇందుకు గాను JenCeo వారికీ సర్వ హక్కులు, అధికారాలు కలవని అంగీకరిస్తూ ఇస్తున్న  వీలునామా పత్రం.</p>
+     <div class="fot">
+         <div>
+             <p><strong>సాక్షులు</strong></p>
+             <p>1)…………………………………………</p>
+             <p>2)…………………………………………</p>
+         </div>
+         <div>
+             <p>ఇట్లు తమ విదేయురాలు / వేదేయుడు : <strong>${fullName(data)} </p>
+             <p>సంతకం: ………………………………………………</p>
+         </div>
+
+     </div>
+
+     <br>
+
+     <div class="footer">
+         Doc Ref: JC-HR-02 | Revision: 1 | Date: 1st May 2025 | Page 1 of 1 </div>
+ </div>
+ `
+  );
+
+const htmlOffEng = (data) =>
+  buildTemplate(
+    "OFFER LETTER (English)",
+    "Official offer letter preview with employee information.",
+    data,
+    `
+    <div class="section">
+      <div class="hd">Offer Details — English</div>
+      <div class="bd prose">
+        <p>We are pleased to offer you employment with our organization. Your joining date, role, and compensation are outlined below.</p>
+        <ul>
+          <li><strong>Role:</strong> As mutually agreed</li>
+          <li><strong>Joining:</strong> Subject to HR confirmation</li>
+          <li><strong>Compensation:</strong> As per policy</li>
+        </ul>
+        <p>Please sign and return a copy of this offer as acceptance.</p>
+      </div>
+    </div>
+    `
+  );
+
+const htmlOffTel = (data) =>
+  buildTemplate(
+    "ఆఫర్ లెటర్ (Telugu)",
+    "ఉద్యోగి వివరాలతో ఆఫర్ లెటర్ ప్రివ్యూ.",
+    data,
+    `
+    <div class="section">
+      <div class="hd">ఆఫర్ వివరాలు — తెలుగు</div>
+      <div class="bd prose">
+        <p>మా సంస్థలో ఉద్యోగం కోసం మిమ్మల్ని ఆహ్వానిస్తున్నాము. మీ జాయినింగ్ తేదీ, బాధ్యతలు మరియు పారితోషికం క్రింద ఇవ్వబడినవి.</p>
+        <ul>
+          <li><strong>పాత్ర:</strong> పరస్పరం అంగీకరించిన విధంగా</li>
+          <li><strong>జాయినింగ్:</strong> హెచ్ ఆర్ నిర్ధారణకు లోబడి</li>
+          <li><strong>పారితోషికం:</strong> పాలసీ ప్రకారం</li>
+        </ul>
+        <p>దయచేసి ఈ ఆఫర్‌ను అంగీకరించినట్లు సంతకం చేసి ఒక కాపీ తిరిగి పంపించండి.</p>
+      </div>
+    </div>
+    `
+  );
+
+/* =============================
+   Main Component (no Bootstrap cards)
+   ============================= */
+const WorkerAggrement = () => {
+  const [active, setActive] = useState("Agg-Eng");
+  const [employeeId, setEmployeeId] = useState("");
+  const [employee, setEmployee] = useState({});
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+
+  const tabs = [
+    { key: "Agg-Eng", label: "Agg-Eng" },
+    { key: "Agg-Tel", label: "Agg-Tel" },
+    { key: "Off-Eng", label: "Off-Eng" },
+    { key: "Off-Tel", label: "Off-Tel" },
+  ];
+
+  const fetchById = async (id) => {
+    if (!id) return;
+    setLoading(true);
+    setError("");
+    try {
+      const snap = await firebaseDB
+        .child("EmployeeBioData")
+        .orderByChild("idNo")
+        .equalTo(id)
+        .once("value");
+      if (snap.exists()) {
+        const val = snap.val();
+        const key = Object.keys(val)[0];
+        const data = val[key] || {};
+        setEmployee({ ...data, idNo: data.idNo || id, _key: key });
+      } else {
+        setEmployee({});
+        setError("No employee found for this ID.");
+      }
+    } catch (e) {
+      console.error(e);
+      setError("Error loading data. Check console.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Build variant HTML for preview (per tab)
+  const variantHTML = useMemo(() => {
+    const m = {
+      "Agg-Eng": htmlAggEng,
+      "Agg-Tel": htmlAggTel,
+      "Off-Eng": htmlOffEng,
+      "Off-Tel": htmlOffTel,
+    };
+    const fn = m[active] || htmlAggEng;
+    return fn(employee);
+  }, [active, employee]);
+
+  // Robust print: open new window with full HTML & print
+  const handlePrint = () => {
+    const w = window.open("", "_blank", "width=1024,height=768");
+    if (!w) return;
+    const html = `<!doctype html>
+<html>
+<head>
+<meta charset="utf-8" />
+<title>${active}</title>
+</head>
+<body>
+${variantHTML}
+<script>
+  window.focus();
+  setTimeout(function(){
+    window.print();
+    // Increased timeout to prevent immediate closing
+    setTimeout(function(){ 
+      // Only close if not in print dialog (some browsers block window.close during print)
+      try { window.close(); } catch(e) { /* ignore */ }
+    }, 1000); // Increased from 200ms to 1000ms
+  }, 300);
+</script>
+</body>
+</html>`;
+    w.document.open();
+    w.document.write(html);
+    w.document.close();
+  };
+
+  const handleDownloadPdf = async () => {
+    if (!("jsPDF" in window)) {
+      await new Promise((resolve) => {
+        const s = document.createElement("script");
+        s.src = "https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js";
+        s.onload = resolve;
+        document.head.appendChild(s);
+      });
+    }
+    const { jsPDF } = window.jspdf || window;
+    if (!jsPDF) return;
+    const doc = new jsPDF({ unit: "pt", format: "a4" });
+    let y = 48;
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(16);
+    doc.text(`Worker Document — ${active}`, 40, y);
+    y += 24;
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(11);
+    const lines = [
+      `Employee ID: ${safe(employee.idNo || employee.employeeId)}`,
+      `Name: ${fullName(employee)} | Gender: ${safe(employee.gender)} | DOB: ${toDateText(employee.dateOfBirth)}`,
+      `Mobile: ${safe(employee.mobileNo1)} | Primary Skill: ${safe(employee.primarySkill)}`,
+      `Present: ${safe(employee.presentState)} / ${safe(employee.presentDistrict)}`,
+      `Permanent: ${safe(employee.permanentState)} / ${safe(employee.permanentDistrict)}`,
+      `Generated: ${new Date().toLocaleString()}`,
+    ];
+    lines.forEach((t) => { doc.text(t, 40, y); y += 16; });
+    doc.save(`Worker_${safe(employee.idNo || employeeId)}_${active}.pdf`);
+  };
+
+  return (
+    <div className="container-fluid py-3">
+      {/* Inline minimal styles to avoid card; make it elegant */}
+      <style>{`
+        .toolbar{display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end;margin-bottom:12px}
+        .soft{background:#ffffff;border:1px solid #eaecef;border-radius:12px;padding:12px 14px;box-shadow:0 3px 18px rgba(16,24,40,0.05)}
+        .tabs{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}
+        .tab-btn{border:1px solid #e1e6f9;background:#f7f9ff;color:#1f2a55;border-radius:999px;padding:6px 12px;font-weight:600}
+        .tab-btn.active{background:#304ffe;color:#fff;border-color:#304ffe;box-shadow:0 4px 14px rgba(48,79,254,0.25)}
+        .actions{display:flex;gap:8px;flex-wrap:wrap}
+        .btn{border:1px solid #dfe3f4;background:#fff;border-radius:10px;padding:8px 14px;font-weight:600}
+        .btn.primary{background:#304ffe;border-color:#304ffe;color:#fff}
+        .panel-preview{border:1px dashed #ccd5ff;border-radius:14px;padding:10px;background:linear-gradient(180deg,#fbfdff,#ffffff)}
+        .input{border:1px solid #d5d9e8;border-radius:10px;padding:8px 10px;min-width:260px}
+        .help{font-size:12px;color:#6b7280;margin-top:4px}
+      `}</style>
+
+      <div className="toolbar soft">
+        <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center",   }}>
+          <div>
+            <label className="form-label fw-semibold">Employee ID Number</label>
+            <input
+              type="text"
+              className="input"
+              placeholder="Enter ID (idNo)"
+              value={employeeId}
+              onChange={(e) => setEmployeeId(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter") fetchById(employeeId.trim()); }}
+            />
+            <div className="help">Looks in Firebase → EmployeeBioData / idNo</div>
+          </div>
+          <button className="btn primary mb-3" onClick={() => fetchById(employeeId.trim())}>
+            Load Employee
+          </button>
+          {loading && <span className="help">Loading…</span>}
+          {error && <span className="help" style={{ color: "#d11" }}>{error}</span>}
+        </div>
+      </div>
+
+      <div className="tabs">
+        {tabs.map(t => (
+          <button
+            key={t.key}
+            className={`tab-btn ${active === t.key ? "active" : ""}`}
+            onClick={() => setActive(t.key)}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      <div className="soft actions mb-3" style={{ justifyContent: "space-between", alignItems: "center" }}>
+        <div className="help">Preview below is A4-ready. Use the buttons to print or export PDF.</div>
+        <div className="actions no-print">
+          <button className="btn" onClick={handlePrint}><i className="bi bi-printer me-1"></i> Print</button>
+          <button className="btn primary" onClick={handleDownloadPdf}><i className="bi bi-download me-1"></i> PDF</button>
+        </div>
+      </div>
+
+      {/* Preview */}
+      <div id="variant-preview" className="panel-preview" dangerouslySetInnerHTML={{ __html: variantHTML }} />
+
+      {/* Icons (optional) */}
+      <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" />
+    </div>
+  );
+};
+
+export default WorkerAggrement;

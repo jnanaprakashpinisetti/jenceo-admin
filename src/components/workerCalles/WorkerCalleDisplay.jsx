@@ -1,4 +1,4 @@
-// src/components/WorkerBioData/WorkerCalleDisplay.jsx
+// src/components/workerCalles/WorkerCalleDisplay.jsx
 import React, { useEffect, useMemo, useState } from "react";
 import firebaseDB from "../../firebase";
 import WorkerCallModal from "./WorkerCallModal";
@@ -56,7 +56,7 @@ const normalizeArray = (val) =>
 /* ------------ looks-like-a-worker detector ------------ */
 const isWorkerShape = (v) => {
   if (!v || typeof v !== "object") return false;
-  return Boolean(v.name || v.mobileNo || v.location || v.gender || v.skills || v.conversationLevel);
+  return Boolean(v.name || v.mobileNo || v.location || v.gender || v.skills || v.conversationLevel || v.callThrough || v.through || v.source);
 };
 
 /* ------------ flatten up to depth=3 under WorkerCallData ------------ */
@@ -101,6 +101,14 @@ export default function WorkerCalleDisplay() {
   // pagination
   const [currentPage, setCurrentPage] = useState(1);
   const [rowsPerPage, setRowsPerPage] = useState(10);
+
+  // summary (year / month / day)
+  const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  const callThroughOptions = [
+    "Apana","WorkerIndian","Reference","Poster","Agent","Facebook","LinkedIn","Instagram","YouTube","Website","Just Dail","News Paper"
+  ];
+  const [activeYear, setActiveYear] = useState(new Date().getFullYear());
+  const [activeMonth, setActiveMonth] = useState(null); // 0-11 or null
 
   /* --- FETCH --- */
   useEffect(() => {
@@ -188,11 +196,11 @@ export default function WorkerCalleDisplay() {
   }, [filtered, sortBy, sortDir]);
 
   /* pagination */
-  const totalPages = Math.max(1, Math.ceil(sorted.length / rowsPerPage));
+  const totalPages = useMemo(() => Math.max(1, Math.ceil(sorted.length / rowsPerPage)), [sorted, rowsPerPage]);
   const safePage = Math.min(Math.max(1, currentPage), totalPages);
   const indexOfLast = safePage * rowsPerPage;
   const indexOfFirst = indexOfLast - rowsPerPage;
-  const pageItems = sorted.slice(indexOfFirst, indexOfLast);
+  const pageItems = useMemo(() => sorted.slice(indexOfFirst, indexOfLast), [sorted, indexOfFirst, indexOfLast]);
 
   // Reset to page 1 when filters change
   useEffect(() => { setCurrentPage(1); }, [searchTerm, selectedGender, selectedSkills, reminderFilter, rowsPerPage]);
@@ -236,6 +244,7 @@ export default function WorkerCalleDisplay() {
         "Days Until": duText,
         Mobile: w?.mobileNo ?? "",
         Communication: w?.conversationLevel ?? "",
+        "Call Through": w?.callThrough || w?.through || w?.source || ""
       };
     });
     const wb = XLSX.utils.book_new();
@@ -244,22 +253,76 @@ export default function WorkerCalleDisplay() {
     XLSX.writeFile(wb, "WorkerCallData.xlsx");
   };
 
-  if (loading) return <div className="text-center my-5">Loading…</div>;
-  if (error) return <div className="alert alert-danger">Error: {error}</div>;
+  // ---------- YEAR / MONTH / DAY SUMMARY ----------
+  const years = useMemo(() => {
+    const ys = new Set();
+    workers.forEach((w) => {
+      const d = parseDate(w?.date || w?.callReminderDate || w?.createdAt);
+      if (isValidDate(d)) ys.add(d.getFullYear());
+    });
+    const sortedYs = Array.from(ys).sort((a, b) => a - b);
+    return sortedYs.length ? sortedYs : [new Date().getFullYear()];
+  }, [workers]);
+
+  // keep activeYear valid (hook must not be conditional)
+  useEffect(() => {
+    if (!years.includes(activeYear)) {
+      setActiveYear(years[years.length - 1]);
+      setActiveMonth(null);
+    }
+  }, [years, activeYear]);
+
+  // month summary per "callThrough"
+  const monthSummary = useMemo(() => {
+    const summary = {};
+    callThroughOptions.forEach((t) => { summary[t] = Array(12).fill(0); });
+    workers.forEach((w) => {
+      const d = parseDate(w?.date || w?.callReminderDate || w?.createdAt);
+      if (!isValidDate(d) || d.getFullYear() !== activeYear) return;
+      const m = d.getMonth();
+      const src = (w?.callThrough || w?.through || w?.source || "").trim();
+      const key = callThroughOptions.find(o => o.toLowerCase() === src.toLowerCase());
+      if (key) summary[key][m] += 1;
+    });
+    return summary;
+  }, [workers, activeYear]);
+
+  // day summary for active month (compute always, guard with null)
+  const daySummary = useMemo(() => {
+    if (activeMonth === null) return null;
+    const daysInMonth = new Date(activeYear, activeMonth + 1, 0).getDate();
+    const summary = {};
+    callThroughOptions.forEach((t) => { summary[t] = Array(daysInMonth).fill(0); });
+    workers.forEach((w) => {
+      const d = parseDate(w?.date || w?.callReminderDate || w?.createdAt);
+      if (!isValidDate(d) || d.getFullYear() !== activeYear || d.getMonth() !== activeMonth) return;
+      const day = d.getDate(); // 1..days
+      const src = (w?.callThrough || w?.through || w?.source || "").trim();
+      const key = callThroughOptions.find(o => o.toLowerCase() === src.toLowerCase());
+      if (key) summary[key][day - 1] += 1;
+    });
+    return summary;
+  }, [workers, activeYear, activeMonth]);
 
   // helper to build max-10 page numbers around current page
   const getDisplayedPageNumbers = () => {
+    const totalPagesCalc = totalPages;
     const maxBtns = 10;
-    if (totalPages <= maxBtns) return Array.from({ length: totalPages }, (_, i) => i + 1);
+    if (totalPagesCalc <= maxBtns) return Array.from({ length: totalPagesCalc }, (_, i) => i + 1);
     const half = Math.floor(maxBtns / 2);
     let start = Math.max(1, safePage - half);
     let end = start + maxBtns - 1;
-    if (end > totalPages) { end = totalPages; start = end - maxBtns + 1; }
+    if (end > totalPagesCalc) { end = totalPagesCalc; start = end - maxBtns + 1; }
     return Array.from({ length: end - start + 1 }, (_, i) => start + i);
   };
 
   // options for filters (case-insensitive applies in logic)
   const skillOptions = ["Nursing", "Patient Care", "Care Taker", "Old Age Care", "Baby Care", "Bedside Attender", "Supporting"];
+
+  /* ---- RENDER ---- */
+  // NOTE: early returns happen AFTER all hooks have been called to satisfy rules-of-hooks
+  if (loading) return <div className="text-center my-5">Loading…</div>;
+  if (error) return <div className="alert alert-danger">Error: {error}</div>;
 
   return (
     <div className="p-3">
@@ -396,6 +459,7 @@ export default function WorkerCalleDisplay() {
               <th>Skills</th>
               <th>Mobile</th>
               <th>Communication</th>
+              <th>Call Through</th>
               <th>Actions</th>
             </tr>
           </thead>
@@ -405,6 +469,7 @@ export default function WorkerCalleDisplay() {
               const duLabel = isFinite(du)
                 ? du === 0 ? "Today" : du === 1 ? "Tomorrow" : du < 0 ? `${Math.abs(du)} days ago` : `${du} days`
                 : "";
+              const callThrough = w?.callThrough || w?.through || w?.source || "—";
               return (
                 <tr
                   key={`${w.id}-${idx}`}
@@ -442,13 +507,7 @@ export default function WorkerCalleDisplay() {
                     )}
                   </td>
                   <td>
-                    <span className={`badge ${
-                      w?.conversationLevel?.toLowerCase() === "very good" ? "bg-success" :
-                      w?.conversationLevel?.toLowerCase() === "good" ? "bg-primary" :
-                      w?.conversationLevel?.toLowerCase() === "average" ? "bg-warning" : "bg-secondary"
-                    }`}>
-                      {w?.conversationLevel || "N/A"}
-                    </span>
+                    <span className="badge bg-secondary">{callThrough}</span>
                   </td>
                   <td>
                     <button className="btn btn-sm me-2" title="View" onClick={() => handleView(w)}>
@@ -466,7 +525,7 @@ export default function WorkerCalleDisplay() {
             })}
             {pageItems.length === 0 && (
               <tr>
-                <td colSpan="9"><div className="alert alert-warning mb-0">No records match your filters.</div></td>
+                <td colSpan="10"><div className="alert alert-warning mb-0">No records match your filters.</div></td>
               </tr>
             )}
           </tbody>
@@ -494,6 +553,92 @@ export default function WorkerCalleDisplay() {
             </li>
           </ul>
         </nav>
+      )}
+
+      {/* ---------- YEAR / MONTH / DAY SUMMARY UI ---------- */}
+      <hr />
+      <h4 className="mt-4">Call Through Summary</h4>
+
+      {/* Year Tabs */}
+      <ul className="nav nav-tabs summary-tabs mb-3">
+        {years.map((y) => (
+          <li className="nav-item" key={y}>
+            <button
+              className={`nav-link summary-tab ${activeYear === y ? "active" : ""}`}
+              onClick={() => { setActiveYear(y); setActiveMonth(null); }}
+            >
+              {y}
+            </button>
+          </li>
+        ))}
+      </ul>
+
+      {/* Month-wise table */}
+      <div className="table-responsive summary-table-container">
+        <table className="table table-dark summary-table table-hover">
+          <thead className="summary-table-header">
+            <tr>
+              <th>Call Through</th>
+              {months.map((m, mi) => (
+                <th key={m} style={{cursor:"pointer"}} onClick={() => setActiveMonth(mi)}>
+                  {m}
+                </th>
+              ))}
+              <th>Total</th>
+            </tr>
+          </thead>
+          <tbody>
+            {callThroughOptions.map((t) => (
+              <tr key={t} className="summary-table-row">
+                <td className="source-name">{t}</td>
+                {monthSummary[t].map((count, idx) => (
+                  <td key={idx} className={count > 0 ? "has-data" : ""} style={{cursor:"pointer"}} onClick={() => setActiveMonth(idx)}>
+                    {count > 0 ? count : ""}
+                  </td>
+                ))}
+                <td className="total-cell">{monthSummary[t].reduce((a, b) => a + b, 0)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {/* Day-wise table for selected month */}
+      {activeMonth !== null && (
+        <div className="mt-4">
+          <div className="d-flex justify-content-between align-items-center mb-2">
+            <h5 className="mb-0">
+              {months[activeMonth]} {activeYear} — Day-wise
+            </h5>
+            <button className="btn btn-sm btn-outline-light" onClick={() => setActiveMonth(null)}>Close</button>
+          </div>
+          <div className="table-responsive summary-table-container">
+            <table className="table table-dark summary-table table-hover">
+              <thead className="summary-table-header">
+                <tr>
+                  <th>Call Through</th>
+                  {Array.from({ length: new Date(activeYear, activeMonth + 1, 0).getDate() }, (_, i) => i + 1).map((d) => (
+                    <th key={d}>{d}</th>
+                  ))}
+                  <th>Total</th>
+                </tr>
+              </thead>
+              <tbody>
+                {callThroughOptions.map((t) => (
+                  <tr key={t} className="summary-table-row">
+                    <td className="source-name">{t}</td>
+                    {daySummary && daySummary[t].map((count, idx) => (
+                      <td key={idx} className={count > 0 ? "has-data" : ""}>
+                        {count > 0 ? count : ""}
+                      </td>
+                    ))}
+                    <td className="total-cell">{daySummary ? daySummary[t].reduce((a, b) => a + b, 0) : 0}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
       )}
 
       {/* modal */}

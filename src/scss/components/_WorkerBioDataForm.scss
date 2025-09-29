@@ -20,7 +20,9 @@
 
     .form-control,
     .form-select {
-        opacity: .6;
+       background-color: transparent;
+       color: #63828f;
+       border-color: #63828f;
     }
 
     h3,
@@ -106,7 +108,7 @@
     display: block;
     width: 100%;
     text-align: left;
-    padding: 5px;
+    padding: 5px 10px;
     margin-bottom: 8px;
     border: none;
     background: transparent;

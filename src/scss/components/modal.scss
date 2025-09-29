@@ -23,11 +23,17 @@
 .viewEmployee {
 
     .modal-card {
+        padding: 10px;
         .row:nth-child(even) {
             padding-top: 15px;
             margin-bottom: 15px;
             border-top: 1px solid #e6e3e3;
             border-bottom: 1px solid #e6e3e3;
+        }
+
+        .form-control {
+            padding: 5px 10px;
+            margin-bottom: 10px;
         }
 
 

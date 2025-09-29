@@ -1,5 +1,17 @@
 import React, { useState, useEffect, useRef } from "react";
-import { storageRef, uploadFile, getDownloadURL } from "../../firebase";
+import firebaseDB, { storageRef, uploadFile, getDownloadURL } from "../../firebase";
+
+
+const SKILL_OPTIONS = [
+    "Nursing",
+    "Diaper",
+    "Patent Care",
+    "Baby Care",
+    "Cook",
+    "Supporting",
+    "Old Age Care",
+    "Others",
+];
 
 
 const headerImage =
@@ -22,7 +34,9 @@ const BaseModal = ({ open, title, children, onClose, footer }) => {
                     <strong className="me-3">{title}</strong>
                     <button type="button" className="btn-close" onClick={onClose} />
                 </div>
-                <div className="card-body">{children}</div>
+                <div className="card-body">
+
+                    {children}</div>
                 {footer && <div className="card-footer d-flex gap-2 justify-content-end">{footer}</div>}
             </div>
         </div>
@@ -83,6 +97,11 @@ const ConfirmModal = ({
 
 /* --------------------------------- Component --------------------------------- */
 const WorkerModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode }) => {
+
+    // View/Edit toggle (icons at top of modal body)
+    const [localEdit, setLocalEdit] = useState(false);
+    const canEdit = isEditMode || localEdit;
+
     const [formData, setFormData] = useState({});
     const [status, setStatus] = useState("On Duty");
     const [activeTab, setActiveTab] = useState("basic");
@@ -1303,6 +1322,29 @@ const WorkerModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode }
 
 
     /* ------------------------------ render helpers ----------------------------- */
+
+    // Autofill clientName & location by Client ID (from Firebase)
+    const handleClientIdBlur = async (index) => {
+        try {
+            const id = (formData.workDetails?.[index]?.clientId || "").trim();
+            if (!id) return;
+            const snap = await firebaseDB.child(`ClientData/${id}`).get();
+            if (snap && snap.exists()) {
+                const c = snap.val() || {};
+                setFormData(prev => {
+                    const list = [...(prev.workDetails || [])];
+                    const row = { ...(list[index] || {}) };
+                    if (!row.clientName) row.clientName = c.clientName || c.name || "";
+                    if (!row.location) row.location = c.location || c.address || "";
+                    list[index] = row;
+                    return { ...prev, workDetails: list };
+                });
+            }
+        } catch (e) {
+            console.error("Client fetch error:", e);
+        }
+    };
+
     const Err = ({ msg }) => (msg ? <div className="text-danger mt-1" style={{ fontSize: ".85rem" }}>{msg}</div> : null);
 
     const renderInputField = (label, name, value, type = "text", placeholder = "", hardDisabled = false, extraProps = {}) => (
@@ -1310,7 +1352,7 @@ const WorkerModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode }
             <label className="form-label">
                 <strong>{label}</strong>
             </label>
-            {isEditMode ? (
+            {canEdit ? (
                 <input
                     type={type}
                     className={"form-control form-control-sm" + (isEditMode ? " mb-2" : "")}
@@ -1335,7 +1377,7 @@ const WorkerModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode }
                 <label className="form-label">
                     <strong>{label}</strong>
                 </label>
-                {isEditMode ? (
+                {canEdit ? (
                     <input
                         type="tel"
                         className={"form-control form-control-sm" + (isEditMode ? " mb-2" : "")}
@@ -1377,7 +1419,7 @@ const WorkerModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode }
             <label className="form-label">
                 <strong>{label}</strong>
             </label>
-            {isEditMode ? (
+            {canEdit ? (
                 <select className={"form-select" + (isEditMode ? " mb-2" : "")} name={name} value={value || ""} onChange={handleInputChange}>
                     <option value="">Select {label}</option>
                     {options.map((option) => (
@@ -1397,7 +1439,7 @@ const WorkerModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode }
             <label className="form-label">
                 <strong>{label}</strong>
             </label>
-            {isEditMode ? (
+            {canEdit ? (
                 <>
                     <div className="d-flex">
                         <input
@@ -1430,7 +1472,7 @@ const WorkerModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode }
                         {(formData[field] || []).map((item, index) => (
                             <span key={index} className="badge bg-secondary d-flex align-items-center">
                                 {item}
-                                {isEditMode && (
+                                {canEdit && (
                                     <button
                                         type="button"
                                         className="btn-close btn-close-white ms-1"
@@ -1641,6 +1683,19 @@ const WorkerModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode }
                         </div>
 
                         <div className="modal-body">
+
+                            {/* Edit/View icons at top of modal body */}
+                            <div className="d-flex justify-content-end mb-2">
+                                <button
+                                    type="button"
+                                    className={`btn btn-sm ${canEdit ? "btn-outline-secondary" : "btn-warning"}`}
+                                    onClick={() => setLocalEdit(prev => !prev)}
+                                >
+                                    {canEdit ? "🔒 View Mode" : "✏️ Edit Mode"}
+                                </button>
+                            </div>
+
+
                             {/* Tabs */}
                             <ul className="nav nav-tabs" id="employeeTabs" role="tablist">
                                 {[
@@ -1665,7 +1720,7 @@ const WorkerModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode }
                                 ))}
                             </ul>
 
-                            <div className="tab-content p-3">
+                            <div className="tab-content ">
                                 {/* Basic */}
                                 {activeTab === "basic" && (
                                     <div className="modal-card">
@@ -1676,7 +1731,7 @@ const WorkerModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode }
                                                     <strong>Status</strong>
                                                 </label>
 
-                                                {isEditMode ? (
+                                                {canEdit ? (
                                                     <select className="form-select" value={status} onChange={(e) => setStatus(e.target.value)}>
                                                         <option value="On Duty">On Duty</option>
                                                         <option value="Off Duty">Off Duty</option>
@@ -1733,7 +1788,7 @@ const WorkerModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode }
                                                                 <div className="text-muted ">No photo selected</div>
                                                             )}
 
-                                                            {isEditMode && (
+                                                            {canEdit && (
                                                                 <div className="d-flex flex-column align-items-center gap-2 mt-3">
                                                                     <input
                                                                         type="file"
@@ -1830,7 +1885,7 @@ const WorkerModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode }
                                                         <label className="form-label">
                                                             <strong>About Employee & Skills</strong>
                                                         </label>
-                                                        {isEditMode ? (
+                                                        {canEdit ? (
                                                             <textarea
                                                                 className="form-control"
                                                                 name="aboutEmployeee"
@@ -2035,6 +2090,7 @@ const WorkerModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode }
                                                 <div className="col-md-4">
                                                     {renderSelectField("Marital Status", "maritalStatus", formData.maritalStatus, [
                                                         { value: "Single", label: "Single" },
+                                                        { value: "UnMarried", label: "Un Married" },
                                                         { value: "Married", label: "Married" },
                                                         { value: "Divorced", label: "Divorced" },
                                                         { value: "Widowed", label: "Widowed" },
@@ -2161,12 +2217,12 @@ const WorkerModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode }
                                                 const locked = !!p.__locked;
                                                 const invalidClass = (field) => (paymentErrors[i]?.[field] ? " is-invalid" : "");
                                                 return (
-                                                    <div key={i} className="border rounded p-3 ">
+                                                    <div key={i} className="border rounded  ">
                                                         <div className="d-flex justify-content-between align-items-center mb-2">
                                                             <h6 className="mb-0">
                                                                 Payment #{i + 1} {locked && <span className="badge bg-secondary ms-2">Locked</span>}
                                                             </h6>
-                                                            {isEditMode && !locked && (
+                                                            {canEdit && !locked && (
                                                                 <button className="btn btn-outline-danger btn-sm" onClick={() => removePaymentSection(i)}>
                                                                     Remove
                                                                 </button>
@@ -2179,7 +2235,7 @@ const WorkerModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode }
                                                                     <strong>Date</strong>
                                                                     <span className="star">*</span>
                                                                 </label>
-                                                                {isEditMode ? (
+                                                                {canEdit ? (
                                                                     <input
                                                                         type="date"
                                                                         className={`form-control form-control-sm${invalidClass("date")}`}
@@ -2200,7 +2256,7 @@ const WorkerModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode }
                                                                     <strong>Amount</strong>
                                                                     <span className="star">*</span>
                                                                 </label>
-                                                                {isEditMode ? (
+                                                                {canEdit ? (
                                                                     <input
                                                                         type="tel"
                                                                         inputMode="numeric"
@@ -2221,7 +2277,7 @@ const WorkerModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode }
                                                                 <label className="form-label">
                                                                     <strong>Balance Amount</strong>
                                                                 </label>
-                                                                {isEditMode ? (
+                                                                {canEdit ? (
                                                                     <input
                                                                         type="tel"
                                                                         inputMode="numeric"
@@ -2245,7 +2301,7 @@ const WorkerModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode }
                                                                     <strong>Type of payment</strong>
                                                                     <span className="star">*</span>
                                                                 </label>
-                                                                {isEditMode ? (
+                                                                {canEdit ? (
                                                                     <select
                                                                         className={`form-select ${invalidClass("typeOfPayment")}`}
                                                                         value={p.typeOfPayment || ""}
@@ -2268,7 +2324,7 @@ const WorkerModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode }
                                                                     <strong>Payment For</strong>
                                                                     <span className="star">*</span>
                                                                 </label>
-                                                                {isEditMode ? (
+                                                                {canEdit ? (
                                                                     <select
                                                                         className={`form-select ${invalidClass("status")}`}
                                                                         value={p.status || ""}
@@ -2293,7 +2349,7 @@ const WorkerModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode }
                                                                 <label className="form-label">
                                                                     <strong>Receipt No</strong>
                                                                 </label>
-                                                                {isEditMode ? (
+                                                                {canEdit ? (
                                                                     <input
                                                                         type="tel"
                                                                         className="form-control form-control-sm"
@@ -2314,7 +2370,7 @@ const WorkerModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode }
                                                                     <strong>Client Name</strong>
                                                                     <span className="star">*</span>
                                                                 </label>
-                                                                {isEditMode ? (
+                                                                {canEdit ? (
                                                                     <input
                                                                         type="text"
                                                                         className={`form-control form-control-sm${invalidClass("clientName")}`}
@@ -2333,7 +2389,7 @@ const WorkerModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode }
                                                                     <strong>Days</strong>
                                                                     <span className="star">*</span>
                                                                 </label>
-                                                                {isEditMode ? (
+                                                                {canEdit ? (
                                                                     <input
                                                                         type="tel"
                                                                         className={`form-control form-control-sm${invalidClass("days")}`}
@@ -2352,7 +2408,7 @@ const WorkerModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode }
                                                                 <label className="form-label">
                                                                     <strong>Book No</strong>
                                                                 </label>
-                                                                {isEditMode ? (
+                                                                {canEdit ? (
                                                                     <input
                                                                         type="tel"
                                                                         className="form-control form-control-sm"
@@ -2372,7 +2428,7 @@ const WorkerModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode }
                                                                 <label className="form-label">
                                                                     <strong>Remarks</strong>
                                                                 </label>
-                                                                {isEditMode ? (
+                                                                {canEdit ? (
                                                                     <textarea
                                                                         className="form-control form-control-sm"
                                                                         rows={2}
@@ -2389,7 +2445,7 @@ const WorkerModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode }
                                                 );
                                             })}
 
-                                            {isEditMode && (
+                                            {canEdit && (
                                                 <div className="d-flex justify-content-end">
                                                     <button className="btn btn-outline-primary btn-sm mt-2" onClick={addPaymentSection}>
                                                         + Add Payment
@@ -2411,12 +2467,12 @@ const WorkerModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode }
                                                 const locked = !!w.__locked;
                                                 const invalidClass = (field) => (workErrors[i]?.[field] ? " is-invalid" : "");
                                                 return (
-                                                    <div key={i} className="border rounded p-3 ">
+                                                    <div key={i} className="border rounded  ">
                                                         <div className="d-flex justify-content-between align-items-center mb-2">
                                                             <h6 className="mb-0">
                                                                 Work #{i + 1} {locked && <span className="badge bg-secondary ms-2">Locked</span>}
                                                             </h6>
-                                                            {isEditMode && !locked && (
+                                                            {canEdit && !locked && (
                                                                 <button className="btn btn-outline-danger btn-sm" onClick={() => removeWorkSection(i)}>
                                                                     Remove
                                                                 </button>
@@ -2429,7 +2485,7 @@ const WorkerModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode }
                                                                     <strong>Client ID</strong>
                                                                     <span className="star">*</span>
                                                                 </label>
-                                                                {isEditMode ? (
+                                                                {canEdit ? (
                                                                     <input
                                                                         type="text"
                                                                         className={`form-control form-control-sm${invalidClass("clientId")}`}
@@ -2448,7 +2504,7 @@ const WorkerModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode }
                                                                     <strong>Client Name</strong>
                                                                     <span className="star">*</span>
                                                                 </label>
-                                                                {isEditMode ? (
+                                                                {canEdit ? (
                                                                     <input
                                                                         type="text"
                                                                         className={`form-control form-control-sm${invalidClass("clientName")}`}
@@ -2466,7 +2522,7 @@ const WorkerModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode }
                                                                 <label className="form-label">
                                                                     <strong>Location</strong>
                                                                 </label>
-                                                                {isEditMode ? (
+                                                                {canEdit ? (
                                                                     <input
                                                                         type="text"
                                                                         className="form-control form-control-sm"
@@ -2486,7 +2542,7 @@ const WorkerModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode }
                                                                     <strong>Days</strong>
                                                                     <span className="star">*</span>
                                                                 </label>
-                                                                {isEditMode ? (
+                                                                {canEdit ? (
                                                                     <input
                                                                         type="number"
                                                                         className={`form-control form-control-sm${invalidClass("days")}`}
@@ -2505,7 +2561,7 @@ const WorkerModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode }
                                                                     <strong>From Date</strong>
                                                                     <span className="star">*</span>
                                                                 </label>
-                                                                {isEditMode ? (
+                                                                {canEdit ? (
                                                                     <input
                                                                         type="date"
                                                                         className={`form-control form-control-sm${invalidClass("fromDate")}`}
@@ -2524,7 +2580,7 @@ const WorkerModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode }
                                                                     <strong>To Date</strong>
                                                                     <span className="star">*</span>
                                                                 </label>
-                                                                {isEditMode ? (
+                                                                {canEdit ? (
                                                                     <input
                                                                         type="date"
                                                                         className={`form-control form-control-sm${invalidClass("toDate")}`}
@@ -2545,7 +2601,7 @@ const WorkerModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode }
                                                                     <strong>Service Type</strong>
                                                                     <span className="star">*</span>
                                                                 </label>
-                                                                {isEditMode ? (
+                                                                {canEdit ? (
                                                                     <input
                                                                         type="text"
                                                                         className={`form-control form-control-sm${invalidClass("serviceType")}`}
@@ -2563,7 +2619,7 @@ const WorkerModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode }
                                                                 <label className="form-label">
                                                                     <strong>Remarks</strong>
                                                                 </label>
-                                                                {isEditMode ? (
+                                                                {canEdit ? (
                                                                     <input
                                                                         type="text"
                                                                         className="form-control form-control-sm"
@@ -2580,7 +2636,7 @@ const WorkerModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode }
                                                 );
                                             })}
 
-                                            {isEditMode && (
+                                            {canEdit && (
                                                 <div className="d-flex justify-content-end">
                                                     <button className="btn btn-outline-primary btn-sm mt-2" onClick={addWorkSection}>
                                                         + Add Work
@@ -2723,7 +2779,7 @@ const WorkerModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode }
 
                             {/* Footer buttons */}
                             <div className="d-flex gap-2 justify-content-end hideInView">
-                                {onDelete && isEditMode && (
+                                {onDelete && canEdit && (
                                     <button type="button" className="btn btn-danger" onClick={handleDelete}>
                                         Delete
                                     </button>

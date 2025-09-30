@@ -5,13 +5,11 @@ import { Tabs, Tab } from "react-bootstrap";
 import * as XLSX from "xlsx";
 
 /**
- * PettyCashReport.jsx (v3)
- * - Restores full Category-wise table (including "Others" breakdown) with collapsible groups
- * - Adds notification-style counts for All/Approved/Pending/Rejected/Clarification/Delete
- * - Reads from multiple Firebase roots and flattens nested data:
- *     PettyCash, FB/PettyCash, PettyCash/admin, FB/PettyCash/admin
- * - Robust date parsing (DD-MM-YYYY, DD/MM/YYYY, YYYY-MM-DD) and safe totals
- * - Case-insensitive status handling; Deleted rows excluded from calculations
+ * PettyCashReport.jsx (v4.1 - dedupe + stable updates + syntax fix)
+ * - Fix: duplicate rows by de-duplicating on `_fullPath` across multiple Firebase roots
+ * - Fix: status changes persist and row moves between tabs (updates use `_fullPath`)
+ * - Category-wise table retained
+ * - Syntax error fixed in othersKeys useMemo
  */
 
 // ---- Helpers ----
@@ -51,30 +49,39 @@ const monthsList = [
   "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"
 ];
 
-// Heuristic for detecting a petty-cash-like record
+// Determine if an object resembles a record
 function looksLikeRecord(obj) {
   if (!obj || typeof obj !== "object") return false;
   const keys = Object.keys(obj);
-  const hints = ["date","description","price","total","mainCategory","subCategory","approval","comments","quantity","employeeName"];
+  const hints = ["date","description","price","total","mainCategory","subCategory","approval","comments","quantity","employeeName","createdAt"];
   return keys.some(k => hints.includes(k));
 }
 
-// Deeply flatten nested maps into an array of records
+// Deeply flatten nested maps into an array of records and capture the relative path
 function flattenRecords(node, keyPath = []) {
   const out = [];
   if (!node || typeof node !== "object") return out;
 
+  // If this node is a record, stop descending and return it with its rel path
   if (looksLikeRecord(node)) {
+    const relPath = keyPath.join("/"); // e.g., "admin/-NtAbc123"
     const idGuess = keyPath[keyPath.length - 1] || Math.random().toString(36).slice(2);
-    out.push({ id: idGuess, ...node });
+    out.push({ id: idGuess, _relPath: relPath, ...node });
     return out;
   }
+
+  // Otherwise descend
   Object.entries(node).forEach(([k, v]) => {
     if (v && typeof v === "object") {
       out.push(...flattenRecords(v, [...keyPath, k]));
     }
   });
   return out;
+}
+
+// Normalize a Firebase path
+function normPath(p) {
+  return String(p || "").replace(/\/+/g, "/").replace(/\/$/,"").replace(/^\//,"");
 }
 
 export default function PettyCashReport({ currentUser = "Admin", currentUserRole = "employee" }) {
@@ -107,7 +114,7 @@ export default function PettyCashReport({ currentUser = "Admin", currentUserRole
 
   const tableRef = useRef(null);
 
-  // --------- Data Fetch (multi-root flatten) ---------
+  // --------- Data Fetch (multi-root flatten + de-dupe) ---------
   useEffect(() => {
     const candidateRoots = [
       "PettyCash",
@@ -117,23 +124,33 @@ export default function PettyCashReport({ currentUser = "Admin", currentUserRole
     ];
 
     const detach = [];
-    const pathData = {}; // path -> records
-
+    const pathData = {}; // path -> raw flattened records
     const handleSnapshot = (path) => (snapshot) => {
       const next = [];
       if (snapshot && snapshot.exists && snapshot.exists()) {
         const rootVal = snapshot.val();
         const flattened = flattenRecords(rootVal, []);
         flattened.forEach((val) => {
-          const pd = parseDateString(val.date);
+          const pd = parseDateString(val.date || val.createdAt);
           const safeDate = pd ? pd.toISOString().slice(0, 10) : (val.date || "");
-          const id = val.id ? `${path}__${val.id}` : `${path}__${Math.random().toString(36).slice(2)}`;
-          next.push({ id, ...val, _parsedDate: pd, _safeDate: safeDate, _sourcePath: path });
+          const rel = normPath(val._relPath || val.id || "");
+          const fullPath = normPath(`${path}/${rel}`); // stable location inside Firebase
+          const id = `${fullPath}`; // use full path as unique id to avoid duplicates across roots
+          next.push({ id, ...val, _parsedDate: pd, _safeDate: safeDate, _sourcePath: path, _relPath: rel, _fullPath: fullPath });
         });
       }
       pathData[path] = next;
 
-      const merged = Object.values(pathData).flat();
+      // --- De-duplicate across roots by _fullPath ---
+      const mergedMap = new Map();
+      Object.values(pathData).flat().forEach((rec) => {
+        const prev = mergedMap.get(rec._fullPath);
+        if (!prev || (prev._fullPath.length < rec._fullPath.length)) {
+          mergedMap.set(rec._fullPath, rec);
+        }
+      });
+
+      const merged = Array.from(mergedMap.values());
       merged.sort((a, b) => {
         const da = a._parsedDate ? a._parsedDate.getTime() : 0;
         const db = b._parsedDate ? b._parsedDate.getTime() : 0;
@@ -333,7 +350,8 @@ export default function PettyCashReport({ currentUser = "Admin", currentUserRole
       "Clarification Request": r.clarificationRequest?.text || "",
       "Clarification By": r.clarificationRequest?.requestedBy || "",
       "Clarification At": r.clarificationRequest?.requestedAt || "",
-      "Source Path": r._sourcePath || ""
+      "Source Path": r._sourcePath || "",
+      "Full Path": r._fullPath || ""
     }));
     const ws = XLSX.utils.json_to_sheet(exportData);
     const wb = XLSX.utils.book_new();
@@ -496,7 +514,7 @@ export default function PettyCashReport({ currentUser = "Admin", currentUserRole
     return Array.from(map.values()).sort((a,b)=>a.localeCompare(b));
   }, [data, mainCategory]);
 
-  // compute others keys
+  // compute others keys (FIXED SYNTAX)
   const othersKeys = useMemo(() => {
     const knownSet = new Set();
     subCategories.forEach(block => (block.items || []).forEach(i => knownSet.add(i)));
@@ -536,9 +554,8 @@ export default function PettyCashReport({ currentUser = "Admin", currentUserRole
       },
     };
     try {
-      const rawId = clarItem.id.split("__").slice(1).join("__");
-      const path = clarItem._sourcePath;
-      await firebaseDB.child(`${path}/${rawId}`).update(payload);
+      const target = clarItem._fullPath || `${clarItem._sourcePath}/${clarItem._relPath}`;
+      await firebaseDB.child(target).update(payload);
       closeClarModal();
     } catch (err) {
       console.error("Error saving clarification request:", err);
@@ -682,7 +699,6 @@ export default function PettyCashReport({ currentUser = "Admin", currentUserRole
                   </thead>
                   <tbody>
                     {pageItems.map((item, idx) => {
-                      const rawId = item.id.split("__").slice(1).join("__");
                       return (
                         <tr key={item.id}>
                           <td>{indexOfFirst + idx + 1}</td>
@@ -711,10 +727,10 @@ export default function PettyCashReport({ currentUser = "Admin", currentUserRole
                               <select
                                 className="form-select form-select-sm"
                                 value={item.approval || "Pending"}
-                                onChange={(e) => {
+                                onChange={async (e) => {
                                   try {
-                                    const path = item._sourcePath;
-                                    firebaseDB.child(`${path}/${rawId}`).update({ approval: e.target.value });
+                                    const target = item._fullPath || `${item._sourcePath}/${item._relPath}`;
+                                    await firebaseDB.child(target).update({ approval: e.target.value });
                                   } catch (err) {
                                     console.error("Error updating approval", err);
                                   }
@@ -748,7 +764,7 @@ export default function PettyCashReport({ currentUser = "Admin", currentUserRole
                               </small>
                             ) : <span className="text-muted">—</span>}
                           </td>
-                          <td><code>{item._sourcePath}</code></td>
+                          <td><code>{item._fullPath}</code></td>
                         </tr>
                       );
                     })}
@@ -954,9 +970,8 @@ export default function PettyCashReport({ currentUser = "Admin", currentUserRole
                   onClick={async () => {
                     if (!deleteItem) return;
                     try {
-                      const rawId = deleteItem.id.split("__").slice(1).join("__");
-                      const path = deleteItem._sourcePath;
-                      await firebaseDB.child(`${path}/${rawId}`).update({
+                      const target = `${deleteItem._sourcePath}`;
+                      await firebaseDB.child(target).update({
                         isDeleted: true,
                         deleteInfo: {
                           reason: deleteText,

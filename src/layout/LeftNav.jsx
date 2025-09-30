@@ -42,12 +42,12 @@ import ClientExit from '../pages/ClientExit';
 import Expenses from '../pages/Expenses';
 import Task from '../pages/Task';
 import Admin from '../pages/Admin';
-import Hr from '../pages/Hr';
 import Accounts from '../pages/Accounts';
 import Operations from '../pages/Operations';
 import HospitalList from '../pages/HospitalList';
 import HospitalDeleteList from '../pages/HospitalDeleteList';
 import WorkerCallsData from '../pages/WorkerCallsData';
+import WorkerCallDelete from '../pages/WorkerCallDelete';
 import Enquiry from '../pages/Enquiry';
 import EnquiryExit from '../pages/EnquiryExit';
 import SearchResults from '../pages/SearchResults';
@@ -149,6 +149,12 @@ export default function LeftNav() {
               </NavLink>
             </li>
 
+                 <li className="nav-item">
+              <NavLink to='WorkerCallDelete' className="nav-link" title='Worker Call Delete' onClick={closeMobile}>
+                <img src={hr} alt="" /> Worker Call Delete
+              </NavLink>
+            </li>
+
             <li className="nav-item">
               <NavLink to='EmployeeAggrement' className="nav-link" title='Worker Aggrement' onClick={closeMobile}>
                 <img src={WorkerAggrement} alt="" /> Worker Aggremnt
@@ -213,11 +219,7 @@ export default function LeftNav() {
               </NavLink>
             </li>
 
-            <li className="nav-item">
-              <NavLink to='HR' className="nav-link" title='HR' onClick={closeMobile}>
-                <img src={hr} alt="" /> HR
-              </NavLink>
-            </li>
+       
 
             <li className="nav-item">
               <NavLink to='Accounts' className="nav-link" title='Accounts' onClick={closeMobile}>
@@ -251,7 +253,7 @@ export default function LeftNav() {
         <Route path="Expenses" element={<Expenses />} />
         <Route path="Task" element={<Task />} />
         {/* <Route path="Admin" element={<Admin />} /> */}
-        <Route path="HR" element={<Hr />} />
+        <Route path="WorkerCallDelete" element={<WorkerCallDelete />} />
         <Route path="Accounts" element={<Accounts />} />
         <Route path="Operations" element={<Operations />} />
         <Route path="HospitalList" element={<HospitalList />} />

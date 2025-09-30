@@ -5,15 +5,77 @@ import { Tabs, Tab } from "react-bootstrap";
 import * as XLSX from "xlsx";
 
 /**
- * PettyCashReport.jsx
- * Implements:
- * - Status tabs (Approved, Pending, Rejected, Clarification, Delete)
- * - Only Approved (not deleted) included in calculations
- * - Delete flow (reason modal, role-based access, saving to Firebase)
- * - Delete notes column
- * - Case-insensitive search/filters
- * - Year & Month counts tied to current status tab
+ * PettyCashReport.jsx (v3)
+ * - Restores full Category-wise table (including "Others" breakdown) with collapsible groups
+ * - Adds notification-style counts for All/Approved/Pending/Rejected/Clarification/Delete
+ * - Reads from multiple Firebase roots and flattens nested data:
+ *     PettyCash, FB/PettyCash, PettyCash/admin, FB/PettyCash/admin
+ * - Robust date parsing (DD-MM-YYYY, DD/MM/YYYY, YYYY-MM-DD) and safe totals
+ * - Case-insensitive status handling; Deleted rows excluded from calculations
  */
+
+// ---- Helpers ----
+function parseDateString(input) {
+  if (!input) return null;
+  if (input instanceof Date && !isNaN(input)) return input;
+
+  // Native first
+  const native = new Date(input);
+  if (!isNaN(native)) return native;
+
+  // DD-MM-YYYY or DD/MM/YYYY
+  const m = String(input).match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})$/);
+  if (m) {
+    const dd = parseInt(m[1], 10);
+    const mm = parseInt(m[2], 10);
+    let yyyy = parseInt(m[3], 10);
+    if (yyyy < 100) yyyy = 2000 + yyyy;
+    const d = new Date(yyyy, (mm - 1), dd);
+    if (!isNaN(d)) return d;
+  }
+
+  // YYYY-MM-DD or YYYY/MM/DD
+  const m2 = String(input).match(/^(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})$/);
+  if (m2) {
+    const yyyy = parseInt(m2[1], 10);
+    const mm = parseInt(m2[2], 10);
+    const dd = parseInt(m2[3], 10);
+    const d = new Date(yyyy, (mm - 1), dd);
+    if (!isNaN(d)) return d;
+  }
+  return null;
+}
+
+const monthsList = [
+  "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+  "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"
+];
+
+// Heuristic for detecting a petty-cash-like record
+function looksLikeRecord(obj) {
+  if (!obj || typeof obj !== "object") return false;
+  const keys = Object.keys(obj);
+  const hints = ["date","description","price","total","mainCategory","subCategory","approval","comments","quantity","employeeName"];
+  return keys.some(k => hints.includes(k));
+}
+
+// Deeply flatten nested maps into an array of records
+function flattenRecords(node, keyPath = []) {
+  const out = [];
+  if (!node || typeof node !== "object") return out;
+
+  if (looksLikeRecord(node)) {
+    const idGuess = keyPath[keyPath.length - 1] || Math.random().toString(36).slice(2);
+    out.push({ id: idGuess, ...node });
+    return out;
+  }
+  Object.entries(node).forEach(([k, v]) => {
+    if (v && typeof v === "object") {
+      out.push(...flattenRecords(v, [...keyPath, k]));
+    }
+  });
+  return out;
+}
 
 export default function PettyCashReport({ currentUser = "Admin", currentUserRole = "employee" }) {
   const [data, setData] = useState([]);
@@ -45,44 +107,73 @@ export default function PettyCashReport({ currentUser = "Admin", currentUserRole
 
   const tableRef = useRef(null);
 
-  const months = [
-    "Jan", "Feb", "Mar", "Apr", "May", "Jun",
-    "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"
-  ];
-
-  // Fetch Data from Realtime DB
+  // --------- Data Fetch (multi-root flatten) ---------
   useEffect(() => {
-    const ref = firebaseDB.child("PettyCash/admin");
-    const onValue = (snapshot) => {
-      if (snapshot.exists()) {
-        const records = [];
-        snapshot.forEach((child) => {
-          const val = child.val();
-          records.push({ id: child.key, ...val });
+    const candidateRoots = [
+      "PettyCash",
+      "FB/PettyCash",
+      "PettyCash/admin",
+      "FB/PettyCash/admin"
+    ];
+
+    const detach = [];
+    const pathData = {}; // path -> records
+
+    const handleSnapshot = (path) => (snapshot) => {
+      const next = [];
+      if (snapshot && snapshot.exists && snapshot.exists()) {
+        const rootVal = snapshot.val();
+        const flattened = flattenRecords(rootVal, []);
+        flattened.forEach((val) => {
+          const pd = parseDateString(val.date);
+          const safeDate = pd ? pd.toISOString().slice(0, 10) : (val.date || "");
+          const id = val.id ? `${path}__${val.id}` : `${path}__${Math.random().toString(36).slice(2)}`;
+          next.push({ id, ...val, _parsedDate: pd, _safeDate: safeDate, _sourcePath: path });
         });
-        // newest first
-        records.sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0));
-        setData(records);
-        if (!activeYear) setActiveYear(String(new Date().getFullYear()));
-        if (!activeMonth) setActiveMonth(months[new Date().getMonth()]);
-      } else {
-        setData([]);
       }
+      pathData[path] = next;
+
+      const merged = Object.values(pathData).flat();
+      merged.sort((a, b) => {
+        const da = a._parsedDate ? a._parsedDate.getTime() : 0;
+        const db = b._parsedDate ? b._parsedDate.getTime() : 0;
+        return db - da;
+      });
+      setData(merged);
     };
 
-    ref.on("value", onValue);
-    return () => ref.off("value", onValue);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    const handleError = (err) => console.error("Firebase error:", err);
+
+    candidateRoots.forEach((root) => {
+      const ref = firebaseDB.child(root);
+      ref.on("value", handleSnapshot(root), handleError);
+      detach.push(() => ref.off("value", handleSnapshot(root)));
+    });
+
+    return () => detach.forEach((fn) => fn());
   }, []);
 
-  // derive years dynamically from data
+  // Status matching (case-insensitive)
+  const recordMatchesStatus = (r) => {
+    const isDel = !!r.isDeleted;
+    const approvalStatus = String(r.approval || "Pending").toLowerCase();
+    const currentTab = statusTab.toLowerCase();
+
+    if (currentTab === "delete") return isDel === true;
+    if (currentTab === "clarification") return !isDel && approvalStatus === "clarification";
+    if (currentTab === "approved") return !isDel && approvalStatus === "approved";
+    if (currentTab === "rejected") return !isDel && approvalStatus === "rejected";
+    if (currentTab === "pending") return !isDel && (approvalStatus === "pending" || !r.approval);
+    if (currentTab === "all") return !isDel;
+    return true;
+  };
+
+  // derive years dynamically
   const years = useMemo(() => {
     const set = new Set();
     data.forEach((d) => {
-      if (d && d.date) {
-        const dt = new Date(d.date);
-        if (!isNaN(dt)) set.add(String(dt.getFullYear()));
-      }
+      const dt = d._parsedDate;
+      if (dt) set.add(String(dt.getFullYear()));
     });
     if (set.size === 0) {
       return [String(new Date().getFullYear())];
@@ -90,25 +181,36 @@ export default function PettyCashReport({ currentUser = "Admin", currentUserRole
     return Array.from(set).sort((a, b) => Number(b) - Number(a));
   }, [data]);
 
-  // Filtering by status (and delete) will be applied in applyFilters and also used for counts
-  const recordMatchesStatus = (r) => {
-    const isDel = !!r.isDeleted;
-    const st = String(r.approval || "Pending");
-    if (statusTab === "Delete") return isDel === true;
-    if (statusTab === "Clarification") return !isDel && st === "Clarification";
-    if (statusTab === "Approved") return !isDel && st === "Approved";
-    if (statusTab === "Rejected") return !isDel && st === "Rejected";
-    if (statusTab === "Pending") return !isDel && (st === "Pending" || !st);
-    return true;
-  };
+  // Counts per status for current Year/Month (for notification badges)
+  const statusCountsForSelection = useMemo(() => {
+    const counters = { all: 0, approved: 0, pending: 0, rejected: 0, clarification: 0, delete: 0 };
+    const withinSelection = data.filter((d) => {
+      const dt = d._parsedDate;
+      if (!dt) return false;
+      const matchesYear = String(dt.getFullYear()) === activeYear;
+      const matchesMonth = !activeMonth || monthsList[dt.getMonth()] === activeMonth;
+      return matchesYear && matchesMonth;
+    });
+    withinSelection.forEach((r) => {
+      const isDel = !!r.isDeleted;
+      const st = String(r.approval || "Pending").toLowerCase();
+      if (isDel) { counters.delete += 1; return; }
+      counters.all += 1;
+      if (st === "approved") counters.approved += 1;
+      else if (st === "rejected") counters.rejected += 1;
+      else if (st === "clarification") counters.clarification += 1;
+      else counters.pending += 1;
+    });
+    return counters;
+  }, [data, activeYear, activeMonth]);
 
   // year -> total count (for current status tab)
   const yearCounts = useMemo(() => {
     const map = {};
     years.forEach(y => map[y] = 0);
     data.forEach(d => {
-      if (!d.date) return;
-      const dt = new Date(d.date);
+      const dt = d._parsedDate;
+      if (!dt) return;
       const y = String(dt.getFullYear());
       if (recordMatchesStatus(d) && map[y] !== undefined) map[y]++;
     });
@@ -117,38 +219,36 @@ export default function PettyCashReport({ currentUser = "Admin", currentUserRole
 
   // month -> count for active year (for current status tab)
   const monthCountsForYear = useMemo(() => {
-    const map = {}; months.forEach(m => map[m] = 0);
+    const map = {}; monthsList.forEach(m => map[m] = 0);
     const yearRecs = data.filter(d => {
-      if (!d.date) return false;
-      const dt = new Date(d.date);
-      return String(dt.getFullYear()) === activeYear;
+      const dt = d._parsedDate;
+      return dt && String(dt.getFullYear()) === activeYear;
     });
     const statusApplied = yearRecs.filter(recordMatchesStatus);
     statusApplied.forEach(d => {
-      if (!d.date) return;
-      const dt = new Date(d.date);
-      const m = months[dt.getMonth()];
+      const dt = d._parsedDate;
+      if (!dt) return;
+      const m = monthsList[dt.getMonth()];
       map[m]++;
     });
     return map;
-  }, [data, months, activeYear, statusTab]);
+  }, [data, activeYear, statusTab]);
 
   // Records for selected year and month (unfiltered by search/filters yet)
   const recordsForYearMonth = useMemo(() => {
     const filteredByYear = data.filter((d) => {
-      if (!d.date) return false;
-      const dt = new Date(d.date);
-      return String(dt.getFullYear()) === activeYear;
+      const dt = d._parsedDate;
+      return dt && String(dt.getFullYear()) === activeYear;
     });
 
     const filteredByStatus = filteredByYear.filter(recordMatchesStatus);
 
     if (activeMonth) {
-      return filteredByStatus.filter((d) => {
-        if (!d.date) return false;
-        const dt = new Date(d.date);
-        return months[dt.getMonth()] === activeMonth;
+      const monthFiltered = filteredByStatus.filter((d) => {
+        const dt = d._parsedDate;
+        return dt && monthsList[dt.getMonth()] === activeMonth;
       });
+      return monthFiltered;
     }
     return filteredByStatus;
   }, [data, activeYear, activeMonth, statusTab]);
@@ -176,8 +276,23 @@ export default function PettyCashReport({ currentUser = "Admin", currentUserRole
       const s = String(subCategory).toLowerCase();
       recordsFiltered = recordsFiltered.filter((r) => String(r.subCategory || "").toLowerCase() === s);
     }
-    if (dateFrom) recordsFiltered = recordsFiltered.filter((r) => new Date(r.date) >= new Date(dateFrom));
-    if (dateTo) recordsFiltered = recordsFiltered.filter((r) => new Date(r.date) <= new Date(dateTo));
+    if (dateFrom) {
+      const df = parseDateString(dateFrom);
+      if (df) recordsFiltered = recordsFiltered.filter((r) => {
+        const rd = r._parsedDate;
+        return rd && rd >= df;
+      });
+    }
+    if (dateTo) {
+      const dt = parseDateString(dateTo);
+      if (dt) {
+        const dtEnd = new Date(dt.getFullYear(), dt.getMonth(), dt.getDate(), 23, 59, 59, 999);
+        recordsFiltered = recordsFiltered.filter((r) => {
+          const rd = r._parsedDate;
+          return rd && rd <= dtEnd;
+        });
+      }
+    }
 
     return recordsFiltered;
   };
@@ -194,12 +309,14 @@ export default function PettyCashReport({ currentUser = "Admin", currentUserRole
   const indexOfFirst = indexOfLast - rowsPerPage;
   const pageItems = filteredRecords.slice(indexOfFirst, indexOfLast);
 
-  useEffect(() => { setCurrentPage(1); }, [search, mainCategory, subCategory, dateFrom, dateTo, activeYear, activeMonth, rowsPerPage, statusTab]);
+  useEffect(() => { 
+    setCurrentPage(1); 
+  }, [search, mainCategory, subCategory, dateFrom, dateTo, activeYear, activeMonth, rowsPerPage, statusTab]);
 
   // Export Excel (single function)
   const exportExcel = (records, label) => {
     const exportData = records.map((r) => ({
-      Date: r.date,
+      Date: r._safeDate || r.date || "",
       "Main Category": r.mainCategory,
       "Sub Category": r.subCategory,
       Description: r.description,
@@ -216,6 +333,7 @@ export default function PettyCashReport({ currentUser = "Admin", currentUserRole
       "Clarification Request": r.clarificationRequest?.text || "",
       "Clarification By": r.clarificationRequest?.requestedBy || "",
       "Clarification At": r.clarificationRequest?.requestedAt || "",
+      "Source Path": r._sourcePath || ""
     }));
     const ws = XLSX.utils.json_to_sheet(exportData);
     const wb = XLSX.utils.book_new();
@@ -223,13 +341,13 @@ export default function PettyCashReport({ currentUser = "Admin", currentUserRole
     XLSX.writeFile(wb, `${label}-PettyCash.xlsx`);
   };
 
-  // Status badge
+  // Status badge class
   const statusColorClass = (status) => {
     const s = String(status || "Pending").toLowerCase();
     if (s === "approved") return "badge bg-success";
     if (s === "rejected") return "badge bg-danger";
     if (s === "clarification") return "badge bg-info text-dark";
-    return "badge bg-warning text-dark"; // pending
+    return "badge bg-warning text-dark";
   };
 
   // Category summary definitions
@@ -266,25 +384,25 @@ export default function PettyCashReport({ currentUser = "Admin", currentUserRole
     subCategories.forEach(block => {
       (block.items || []).forEach(sub => {
         summary[sub] = {};
-        months.forEach(m => summary[sub][m] = 0);
+        monthsList.forEach(m => summary[sub][m] = 0);
         summary[sub]["Total"] = 0;
       });
     });
 
     data.forEach((rec) => {
-      // Only Approved and not deleted count towards summary
-      if (rec.isDeleted || String(rec.approval || "Pending") !== "Approved") return;
+      const approvalLower = String(rec.approval || "Pending").toLowerCase();
+      if (rec.isDeleted || approvalLower !== "approved") return;
 
-      const dt = rec.date ? new Date(rec.date) : null;
-      const m = (dt && !isNaN(dt)) ? months[dt.getMonth()] : "Unknown";
-      const t = Number(rec.total || rec.price || 0) || 0;
+      const dt = rec._parsedDate;
+      const m = (dt && !isNaN(dt)) ? monthsList[dt.getMonth()] : "Unknown";
+      const t = Number(rec.total ?? rec.price ?? 0) || 0;
       const main = rec.mainCategory || "Unspecified";
       const sub = rec.subCategory || "Unspecified";
 
       if (main === "Others") {
         if (!othersMap[sub]) {
           othersMap[sub] = {};
-          months.forEach(mm => othersMap[sub][mm] = 0);
+          monthsList.forEach(mm => othersMap[sub][mm] = 0);
           othersMap[sub]["Total"] = 0;
         }
         othersMap[sub][m] = (othersMap[sub][m] || 0) + t;
@@ -294,7 +412,7 @@ export default function PettyCashReport({ currentUser = "Admin", currentUserRole
 
       if (!summary[sub]) {
         summary[sub] = {};
-        months.forEach(mm => summary[sub][mm] = 0);
+        monthsList.forEach(mm => summary[sub][mm] = 0);
         summary[sub]["Total"] = 0;
       }
       summary[sub][m] = (summary[sub][m] || 0) + t;
@@ -306,19 +424,19 @@ export default function PettyCashReport({ currentUser = "Admin", currentUserRole
     });
 
     return summary;
-  }, [data, months, subCategories]);
+  }, [data]);
 
   // compute month totals & grand total (from summaryData)
   const monthTotals = useMemo(() => {
     const mTotals = {};
-    months.forEach(m => { mTotals[m] = 0; });
+    monthsList.forEach(m => { mTotals[m] = 0; });
     Object.keys(summaryData).forEach(sub => {
-      months.forEach(m => {
+      monthsList.forEach(m => {
         mTotals[m] += summaryData[sub][m] || 0;
       });
     });
     return mTotals;
-  }, [summaryData, months]);
+  }, [summaryData]);
 
   const grandTotal = useMemo(() => {
     return Object.keys(summaryData).reduce((acc, sub) => acc + (summaryData[sub]["Total"] || 0), 0);
@@ -327,13 +445,13 @@ export default function PettyCashReport({ currentUser = "Admin", currentUserRole
   // totals for table (page total + filtered total) — ONLY Approved and not deleted
   const pageTotal = useMemo(() => {
     return pageItems
-      .filter(r => !r.isDeleted && String(r.approval || "Pending") === "Approved")
+      .filter(r => !r.isDeleted && String(r.approval || "Pending").toLowerCase() === "approved")
       .reduce((s, r) => s + (Number(r.total || 0) || 0), 0);
   }, [pageItems]);
 
   const filteredTotal = useMemo(() => {
     return filteredRecords
-      .filter(r => !r.isDeleted && String(r.approval || "Pending") === "Approved")
+      .filter(r => !r.isDeleted && String(r.approval || "Pending").toLowerCase() === "approved")
       .reduce((s, r) => s + (Number(r.total || 0) || 0), 0);
   }, [filteredRecords]);
 
@@ -383,18 +501,18 @@ export default function PettyCashReport({ currentUser = "Admin", currentUserRole
     const knownSet = new Set();
     subCategories.forEach(block => (block.items || []).forEach(i => knownSet.add(i)));
     return Object.keys(summaryData).filter(k => !knownSet.has(k));
-  }, [summaryData, subCategories]);
+  }, [summaryData]);
 
   const othersTotals = useMemo(() => {
     const totals = {};
-    months.forEach(m => totals[m] = 0);
+    monthsList.forEach(m => totals[m] = 0);
     totals["Total"] = 0;
     othersKeys.forEach(key => {
-      months.forEach(m => { totals[m] += summaryData[key][m] || 0; });
+      monthsList.forEach(m => { totals[m] += summaryData[key][m] || 0; });
       totals["Total"] += summaryData[key]["Total"] || 0;
     });
     return totals;
-  }, [othersKeys, summaryData, months]);
+  }, [othersKeys, summaryData]);
 
   // Clarification
   const openClarModal = (item) => {
@@ -418,7 +536,9 @@ export default function PettyCashReport({ currentUser = "Admin", currentUserRole
       },
     };
     try {
-      await firebaseDB.child(`PettyCash/admin/${clarItem.id}`).update(payload);
+      const rawId = clarItem.id.split("__").slice(1).join("__");
+      const path = clarItem._sourcePath;
+      await firebaseDB.child(`${path}/${rawId}`).update(payload);
       closeClarModal();
     } catch (err) {
       console.error("Error saving clarification request:", err);
@@ -434,16 +554,38 @@ export default function PettyCashReport({ currentUser = "Admin", currentUserRole
         <h3>Petty Cash Report</h3>
         {/* Status tabs */}
         <div className="btn-group" role="group" aria-label="Status tabs">
-          {["Approved","Pending","Rejected","Clarification","Delete"].map(s => (
+          {["All","Approved","Pending","Rejected","Clarification","Delete"].map(s => (
             <button
               key={s}
-              className={`btn btn-sm ${statusTab === s ? "btn-primary" : "btn-outline-secondary"}`}
+              className={`btn btn-sm ${statusTab.toLowerCase() === s.toLowerCase() ? "btn-primary" : "btn-outline-secondary"}`}
               onClick={() => { setStatusTab(s); setCurrentPage(1); }}
             >
               {s}
             </button>
           ))}
         </div>
+      </div>
+
+      {/* Notification-style status counts for current Year/Month selection */}
+      <div className="d-flex flex-wrap gap-2 mb-3">
+        <span className="badge rounded-pill bg-secondary" role="button" onClick={() => setStatusTab("All")}>
+          All <span className="ms-1 badge bg-light text-dark">{statusCountsForSelection.all}</span>
+        </span>
+        <span className="badge rounded-pill bg-success" role="button" onClick={() => setStatusTab("Approved")}>
+          Approved <span className="ms-1 badge bg-light text-dark">{statusCountsForSelection.approved}</span>
+        </span>
+        <span className="badge rounded-pill bg-warning text-dark" role="button" onClick={() => setStatusTab("Pending")}>
+          Pending <span className="ms-1 badge bg-light text-dark">{statusCountsForSelection.pending}</span>
+        </span>
+        <span className="badge rounded-pill bg-danger" role="button" onClick={() => setStatusTab("Rejected")}>
+          Rejected <span className="ms-1 badge bg-light text-dark">{statusCountsForSelection.rejected}</span>
+        </span>
+        <span className="badge rounded-pill bg-info text-dark" role="button" onClick={() => setStatusTab("Clarification")}>
+          Clarification <span className="ms-1 badge bg-light text-dark">{statusCountsForSelection.clarification}</span>
+        </span>
+        <span className="badge rounded-pill bg-secondary" role="button" onClick={() => setStatusTab("Delete")}>
+          Delete <span className="ms-1 badge bg-light text-dark">{statusCountsForSelection.delete}</span>
+        </span>
       </div>
 
       {/* Year tabs */}
@@ -459,7 +601,7 @@ export default function PettyCashReport({ currentUser = "Admin", currentUserRole
             {/* month tabs inside each year */}
             <div className="mb-3">
               <div className="d-flex gap-2 flex-wrap">
-                {months.map((m) => (
+                {monthsList.map((m) => (
                   <button
                     key={m}
                     className={`btn btn-sm ${activeMonth === m ? "btn-primary" : "btn-outline-secondary"}`}
@@ -486,20 +628,13 @@ export default function PettyCashReport({ currentUser = "Admin", currentUserRole
               <div className="col-md-2">
                 <select className="form-select" value={mainCategory} onChange={(e) => { setMainCategory(e.target.value); setSubCategory(""); }}>
                   <option value="">All Main Categories</option>
-                  {Array.from(new Set([
-                    ...data.map(d => (d.mainCategory || "").trim()).filter(Boolean),
-                    "Others"
-                  ])).sort((a,b)=>a.localeCompare(b)).map((cat) => <option key={cat} value={cat}>{cat}</option>)}
+                  {mainOptions.map((cat) => <option key={cat} value={cat}>{cat}</option>)}
                 </select>
               </div>
               <div className="col-md-2">
                 <select className="form-select" value={subCategory} onChange={(e) => setSubCategory(e.target.value)} disabled={!mainCategory}>
                   <option value="">All Sub Categories</option>
-                  {data.filter(d => String(d.mainCategory || "").toLowerCase() === String(mainCategory || "").toLowerCase())
-                       .map(d => (d.subCategory || "").trim()).filter(Boolean)
-                       .filter((v,i,a)=>a.findIndex(x=>x.toLowerCase()===v.toLowerCase())===i)
-                       .sort((a,b)=>a.localeCompare(b))
-                       .map((sub)=> <option key={sub} value={sub}>{sub}</option>)}
+                  {subOptions.map((sub)=> <option key={sub} value={sub}>{sub}</option>)}
                 </select>
               </div>
               <div className="col-md-1">
@@ -511,151 +646,142 @@ export default function PettyCashReport({ currentUser = "Admin", currentUserRole
 
               {/* Reset + Export buttons column */}
               <div className="col-md-2 d-flex flex-row gap-2">
-                <button
-                  className="btn btn-outline-secondary btn-sm"
-                  onClick={() => resetFilters()}
-                  title="Reset filters"
-                >
-                  Reset
-                </button>
-
-                <button
-                  className="btn btn-primary btn-sm"
-                  onClick={() => handleExportClick(filteredRecords)}
-                  title="Export visible records"
-                >
-                  Export
-                </button>
+                <button className="btn btn-outline-secondary btn-sm" onClick={() => resetFilters()} title="Reset filters">Reset</button>
+                <button className="btn btn-primary btn-sm" onClick={() => handleExportClick(filteredRecords)} title="Export visible records">Export</button>
               </div>
             </div>
 
             {/* Table */}
             <div className="table-responsive" ref={tableRef}>
-              <table className="table table-dark table-hover table-sm align-middle">
-                <thead>
-                  <tr>
-                    <th>S.No</th>
-                    <th>Date</th>
-                    <th>Main Category</th>
-                    <th>Sub Category</th>
-                    <th>Description</th>
-                    <th>Quantity</th>
-                    <th>Price</th>
-                    <th>Total</th>
-                    <th>Comments</th>
-                    <th>Purchased By</th>
-                    <th>Actions</th>
-                    <th>Approval</th>
-                    <th>Clarification</th>
-                    <th>Delete Note</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {pageItems.map((item, idx) => (
-                    <tr key={item.id}>
-                      <td>{indexOfFirst + idx + 1}</td>
-                      <td>{item.date}</td>
-                      <td>{item.mainCategory}</td>
-                      <td>{item.subCategory}</td>
-                      <td>{item.description}</td>
-                      <td>{item.quantity}</td>
-                      <td>{item.price}</td>
-                      <td>{item.total}</td>
-                      <td style={{ maxWidth: 220, whiteSpace: "pre-wrap" }}>{item.comments}</td>
-                      <td>{item.employeeName || "—"}</td>
-                      <td>
-                        <div className="d-flex gap-1">
-                          <button
-                            className="btn btn-sm btn-outline-warning"
-                            title="Ask Clarification"
-                            onClick={() => openClarModal(item)}
-                          >
-                            ❓
-                          </button>
-                          {canDelete && (
-                            <button
-                              className="btn btn-sm btn-outline-danger"
-                              title="Delete (mark as deleted)"
-                              onClick={() => { setDeleteItem(item); setDeleteText(""); setShowDeleteModal(true); }}
-                            >
-                              🗑️
-                            </button>
-                          )}
-                        </div>
-                      </td>
-                      <td style={{ minWidth: 260 }}>
-                        <div className="d-flex align-items-center gap-2">
-                          <span className={statusColorClass(item.approval)} style={{ minWidth: 96, textAlign: "center" }}>
-                            {item.approval || "Pending"}
-                          </span>
-                          <select
-                            className="form-select form-select-sm"
-                            value={item.approval || "Pending"}
-                            onChange={(e) => {
-                              try {
-                                firebaseDB.child(`PettyCash/admin/${item.id}`).update({ approval: e.target.value });
-                              } catch (err) {
-                                console.error("Error updating approval", err);
-                              }
-                            }}
-                          >
-                            <option value="Pending">Pending</option>
-                            <option value="Approved">Approved</option>
-                            <option value="Clarification">Clarification</option>
-                            <option value="Rejected">Rejected</option>
-                          </select>
-                        </div>
-                      </td>
-                      <td style={{ maxWidth: 240, whiteSpace: "pre-wrap" }}>
-                        {item.clarificationRequest?.text ? (
-                          <small>
-                            <strong>Req:</strong> {item.clarificationRequest.text}{" "}
-                            <em className="text-muted">
-                              ({item.clarificationRequest.requestedBy || ""} @{" "}
-                              {item.clarificationRequest.requestedAt ? new Date(item.clarificationRequest.requestedAt).toLocaleString() : ""})
-                            </em>
-                          </small>
-                        ) : <span className="text-muted">—</span>}
-                      </td>
-                      <td style={{ maxWidth: 240, whiteSpace: "pre-wrap" }}>
-                        {item.isDeleted && item.deleteInfo?.reason ? (
-                          <small>
-                            <strong>Del:</strong> {item.deleteInfo.reason}{" "}
-                            <em className="text-muted">
-                              ({item.deleteInfo.deletedBy || ""} @ {item.deleteInfo.deletedAt ? new Date(item.deleteInfo.deletedAt).toLocaleString() : ""})
-                            </em>
-                          </small>
-                        ) : <span className="text-muted">—</span>}
-                      </td>
+              {filteredRecords.length === 0 ? (
+                <div className="alert alert-warning text-center">
+                  No records found for the selected filters. 
+                  <br />
+                  Status: <strong>{statusTab}</strong> | Year: <strong>{activeYear}</strong> | Month: <strong>{activeMonth || "All"}</strong>
+                </div>
+              ) : (
+                <table className="table table-dark table-hover table-sm align-middle">
+                  <thead>
+                    <tr>
+                      <th>S.No</th>
+                      <th>Date</th>
+                      <th>Main Category</th>
+                      <th>Sub Category</th>
+                      <th>Description</th>
+                      <th>Quantity</th>
+                      <th>Price</th>
+                      <th>Total</th>
+                      <th>Comments</th>
+                      <th>Purchased By</th>
+                      <th>Actions</th>
+                      <th>Approval</th>
+                      <th>Clarification</th>
+                      <th>Delete Note</th>
+                      <th>Source</th>
                     </tr>
-                  ))}
-                </tbody>
+                  </thead>
+                  <tbody>
+                    {pageItems.map((item, idx) => {
+                      const rawId = item.id.split("__").slice(1).join("__");
+                      return (
+                        <tr key={item.id}>
+                          <td>{indexOfFirst + idx + 1}</td>
+                          <td>{item._safeDate || item.date}</td>
+                          <td>{item.mainCategory}</td>
+                          <td>{item.subCategory}</td>
+                          <td>{item.description}</td>
+                          <td>{item.quantity}</td>
+                          <td>{item.price}</td>
+                          <td>{item.total}</td>
+                          <td style={{ maxWidth: 220, whiteSpace: "pre-wrap" }}>{item.comments}</td>
+                          <td>{item.employeeName || "—"}</td>
+                          <td>
+                            <div className="d-flex gap-1">
+                              <button className="btn btn-sm btn-outline-warning" title="Ask Clarification" onClick={() => openClarModal(item)}>❓</button>
+                              {canDelete && (
+                                <button className="btn btn-sm btn-outline-danger" title="Delete (mark as deleted)" onClick={() => { setDeleteItem(item); setDeleteText(""); setShowDeleteModal(true); }}>🗑️</button>
+                              )}
+                            </div>
+                          </td>
+                          <td style={{ minWidth: 260 }}>
+                            <div className="d-flex align-items-center gap-2">
+                              <span className={statusColorClass(item.approval)} style={{ minWidth: 96, textAlign: "center" }}>
+                                {item.approval || "Pending"}
+                              </span>
+                              <select
+                                className="form-select form-select-sm"
+                                value={item.approval || "Pending"}
+                                onChange={(e) => {
+                                  try {
+                                    const path = item._sourcePath;
+                                    firebaseDB.child(`${path}/${rawId}`).update({ approval: e.target.value });
+                                  } catch (err) {
+                                    console.error("Error updating approval", err);
+                                  }
+                                }}
+                              >
+                                <option value="Pending">Pending</option>
+                                <option value="Approved">Approved</option>
+                                <option value="Clarification">Clarification</option>
+                                <option value="Rejected">Rejected</option>
+                              </select>
+                            </div>
+                          </td>
+                          <td style={{ maxWidth: 240, whiteSpace: "pre-wrap" }}>
+                            {item.clarificationRequest?.text ? (
+                              <small>
+                                <strong>Req:</strong> {item.clarificationRequest.text}{" "}
+                                <em className="text-muted">
+                                  ({item.clarificationRequest.requestedBy || ""} @{" "}
+                                  {item.clarificationRequest.requestedAt ? new Date(item.clarificationRequest.requestedAt).toLocaleString() : ""})
+                                </em>
+                              </small>
+                            ) : <span className="text-muted">—</span>}
+                          </td>
+                          <td style={{ maxWidth: 240, whiteSpace: "pre-wrap" }}>
+                            {item.isDeleted && item.deleteInfo?.reason ? (
+                              <small>
+                                <strong>Del:</strong> {item.deleteInfo.reason}{" "}
+                                <em className="text-muted">
+                                  ({item.deleteInfo.deletedBy || ""} @ {item.deleteInfo.deletedAt ? new Date(item.deleteInfo.deletedAt).toLocaleString() : ""})
+                                </em>
+                              </small>
+                            ) : <span className="text-muted">—</span>}
+                          </td>
+                          <td><code>{item._sourcePath}</code></td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
 
-                {/* table footer: page total + filtered total (Approved only, not deleted) */}
-                <tfoot>
-                  <tr className="table-secondary">
-                    <td colSpan={7} className="text-end"><strong>Page Total (Approved)</strong></td>
-                    <td><strong>{pageTotal.toLocaleString()}</strong></td>
-                    <td colSpan={6}></td>
-                  </tr>
-                  <tr className="table-secondary">
-                    <td colSpan={7} className="text-end"><strong>Filtered Total (Approved)</strong></td>
-                    <td><strong>{filteredTotal.toLocaleString()}</strong></td>
-                    <td colSpan={6}></td>
-                  </tr>
-                </tfoot>
-              </table>
+                  {/* table footer: page total + filtered total (Approved only, not deleted) */}
+                  <tfoot>
+                    <tr className="table-secondary">
+                      <td colSpan={7} className="text-end"><strong>Page Total (Approved)</strong></td>
+                      <td><strong>{pageTotal.toLocaleString()}</strong></td>
+                      <td colSpan={8}></td>
+                    </tr>
+                    <tr className="table-secondary">
+                      <td colSpan={7} className="text-end"><strong>Filtered Total (Approved)</strong></td>
+                      <td><strong>{filteredTotal.toLocaleString()}</strong></td>
+                      <td colSpan={8}></td>
+                    </tr>
+                  </tfoot>
+                </table>
+              )}
             </div>
 
             {/* pagination */}
-            <div className="d-flex justify-content-between align-items-center mt-3">
-              <div>Showing {filteredRecords.length} items</div>
-              <div className="d-flex gap-2 align-items-center">
-                <button className="btn btn-sm btn-outline-secondary" onClick={() => setCurrentPage(p => Math.max(1, p - 1))}>Prev</button>
-                <div>Page {safePage} / {totalPages}</div>
-                <button className="btn btn-sm btn-outline-secondary" onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}>Next</button>
+            {filteredRecords.length > 0 && (
+              <div className="d-flex justify-content-between align-items-center mt-3">
+                <div>Showing {filteredRecords.length} items</div>
+                <div className="d-flex gap-2 align-items-center">
+                  <button className="btn btn-sm btn-outline-secondary" onClick={() => setCurrentPage(p => Math.max(1, p - 1))}>Prev</button>
+                  <div>Page {safePage} / {totalPages}</div>
+                  <button className="btn btn-sm btn-outline-secondary" onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}>Next</button>
+                </div>
               </div>
-            </div>
+            )}
           </Tab>
         ))}
       </Tabs>
@@ -671,18 +797,18 @@ export default function PettyCashReport({ currentUser = "Admin", currentUserRole
             <tr>
               <th style={{width: 220}}>Main Category</th>
               <th>Sub Category</th>
-              {months.map((m) => <th key={m} className="text-end">{m}</th>)}
+              {monthsList.map((m) => <th key={m} className="text-end">{m}</th>)}
               <th className="text-end">Grand Total</th>
             </tr>
           </thead>
           <tbody>
             {subCategories.map((block) => {
               const blockTotals = {};
-              months.forEach((m) => (blockTotals[m] = 0));
+              monthsList.forEach((m) => (blockTotals[m] = 0));
               let blockGrand = 0;
 
               block.items.forEach((sub) => {
-                months.forEach((m) => {
+                monthsList.forEach((m) => {
                   blockTotals[m] += (summaryData[sub] && summaryData[sub][m]) ? summaryData[sub][m] : 0;
                 });
                 blockGrand += (summaryData[sub] && summaryData[sub]["Total"]) ? summaryData[sub]["Total"] : 0;
@@ -704,14 +830,14 @@ export default function PettyCashReport({ currentUser = "Admin", currentUserRole
                         </button>
                         <strong>{block.cat}</strong>
                       </td>
-                      {months.map((m) => <td key={m} className="text-end"><strong>{blockTotals[m].toLocaleString()}</strong></td>)}
+                      {monthsList.map((m) => <td key={m} className="text-end"><strong>{blockTotals[m].toLocaleString()}</strong></td>)}
                       <td className="text-end"><strong>{blockGrand.toLocaleString()}</strong></td>
                     </tr>
                     {!isCollapsed && block.items.map((sub) => (
                       <tr key={block.cat + "-" + sub} className={categoryColors[block.cat] || ""}>
                         <td></td>
                         <td>{sub}</td>
-                        {months.map((m) => (
+                        {monthsList.map((m) => (
                           <td key={m} className="text-end">
                             {summaryData[sub] && summaryData[sub][m] ? summaryData[sub][m].toLocaleString() : ""}
                           </td>
@@ -725,13 +851,43 @@ export default function PettyCashReport({ currentUser = "Admin", currentUserRole
               return null;
             })}
 
-            {/* Others section - if any */}
-            {/* Skipped detailed "Others" aggregation for brevity; can be added like prior version */}
+            {/* Others section */}
+            {othersKeys.length > 0 && (
+              <React.Fragment>
+                <tr className="table-category-total table-dark">
+                  <td colSpan={2}>
+                    <button
+                      type="button"
+                      className="btn btn-sm btn-outline-light me-2"
+                      onClick={() => setCollapsedCats(prev => ({ ...prev, "Others": !prev["Others"] }))}
+                      title={collapsedCats["Others"] ? "Expand" : "Collapse"}
+                    >
+                      {collapsedCats["Others"] ? "➕" : "➖"}
+                    </button>
+                    <strong>Others</strong>
+                  </td>
+                  {monthsList.map((m) => <td key={m} className="text-end"><strong>{othersTotals[m].toLocaleString()}</strong></td>)}
+                  <td className="text-end"><strong>{othersTotals["Total"].toLocaleString()}</strong></td>
+                </tr>
+                {!collapsedCats["Others"] && othersKeys.map((key) => (
+                  <tr key={"others-" + key} className="table-dark">
+                    <td></td>
+                    <td>{key}</td>
+                    {monthsList.map((m) => (
+                      <td key={m} className="text-end">
+                        {summaryData[key] && summaryData[key][m] ? summaryData[key][m].toLocaleString() : ""}
+                      </td>
+                    ))}
+                    <td className="text-end"><strong>{summaryData[key] && summaryData[key]["Total"] ? summaryData[key]["Total"].toLocaleString() : ""}</strong></td>
+                  </tr>
+                ))}
+              </React.Fragment>
+            )}
 
             {/* Grand Totals */}
             <tr className="table-success sticky-grand-total">
               <td colSpan={2}><strong>Grand Total</strong></td>
-              {months.map((m) => <td key={m} className="text-end"><strong>{monthTotals[m].toLocaleString()}</strong></td>)}
+              {monthsList.map((m) => <td key={m} className="text-end"><strong>{monthTotals[m].toLocaleString()}</strong></td>)}
               <td className="text-end"><strong>{grandTotal.toLocaleString()}</strong></td>
             </tr>
           </tbody>
@@ -798,7 +954,9 @@ export default function PettyCashReport({ currentUser = "Admin", currentUserRole
                   onClick={async () => {
                     if (!deleteItem) return;
                     try {
-                      await firebaseDB.child(`PettyCash/admin/${deleteItem.id}`).update({
+                      const rawId = deleteItem.id.split("__").slice(1).join("__");
+                      const path = deleteItem._sourcePath;
+                      await firebaseDB.child(`${path}/${rawId}`).update({
                         isDeleted: true,
                         deleteInfo: {
                           reason: deleteText,

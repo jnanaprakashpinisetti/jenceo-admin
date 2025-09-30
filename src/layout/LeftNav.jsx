@@ -20,7 +20,6 @@ import HospitalDeleteIcon from "../assets/hospital-delet-icon.svg";
 
 import invest from "../assets/invest.svg";
 import purchase from "../assets/purchase.svg";
-import cell from "../assets/cell.svg";
 import balance from "../assets/balance.svg";
 import expences from "../assets/expence.svg";
 import task from "../assets/task.svg";
@@ -29,6 +28,12 @@ import hr from "../assets/hr.svg";
 import accounts from "../assets/accounts.svg";
 import operations from "../assets/Operations.svg";
 import enquiry from "../assets/enquiry.svg";
+import call from "../assets/Call.svg";
+import callDelete from "../assets/CallDelete.svg";
+import inquiry from "../assets/inquiry.svg";
+import inquiryDelete from "../assets/inquiryDelete.svg";
+import Staff from "../assets/Staff.svg";
+import StaffExit from "../assets/StaffExit.svg";
 
 import Dashboard from '../pages/Dashboard';
 // Employee Data
@@ -122,12 +127,12 @@ export default function LeftNav() {
             <hr />
             <li className="nav-item">
               <NavLink to='StaffData' className="nav-link" title='Staff' onClick={closeMobile}>
-                <img src={invest} alt="" /> Staff
+                <img src={Staff} alt="" /> Staff
               </NavLink>
             </li>
             <li className="nav-item">
               <NavLink to='ExistingStaff' className="nav-link" title='Exist Staff' onClick={closeMobile}>
-                <img src={invest} alt="" /> Exist Staff
+                <img src={StaffExit} alt="" /> Exist Staff
               </NavLink>
             </li>
             <hr></hr>
@@ -145,13 +150,13 @@ export default function LeftNav() {
             </li>
             <li className="nav-item">
               <NavLink to='WorkerCallsData' className="nav-link" title='Worker Call Data' onClick={closeMobile}>
-                <img src={cell} alt="Worker Call Data" /> Worker Call Data
+                <img src={call} alt="Worker Call Data" /> Worker Call Data
               </NavLink>
             </li>
 
                  <li className="nav-item">
               <NavLink to='WorkerCallDelete' className="nav-link" title='Worker Call Delete' onClick={closeMobile}>
-                <img src={hr} alt="" /> Worker Call Delete
+                <img src={callDelete} alt="" /> Worker Call Delete
               </NavLink>
             </li>
 
@@ -176,12 +181,12 @@ export default function LeftNav() {
             </li>
             <li className="nav-item">
               <NavLink to='Enquiry' className="nav-link" title='Enquiry' onClick={closeMobile}>
-                <img src={enquiry} alt="" /> Enquiry
+                <img src={inquiry} alt="" /> Enquiry
               </NavLink>
             </li>
             <li className="nav-item">
               <NavLink to='EnquiryExit' className="nav-link" title='Old Enquirys' onClick={closeMobile}>
-                <img src={enquiry} alt="" /> Old Enquiry
+                <img src={inquiryDelete} alt="" /> Old Enquiry
               </NavLink>
             </li>
 

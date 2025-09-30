@@ -2,6 +2,15 @@ import React, { useState, useEffect } from "react";
 import firebaseDB from "../../firebase";
 
 export default function WorkerCallModal({ worker, isOpen, onClose, isEditMode }) {
+  const homeCareSkillOptions = [
+    "Nursing", "Patient Care", "Care Taker", "Old Age Care", "Baby Care",
+    "Bedside Attender", "Supporting", "Any duty", "Daiper"
+  ];
+  const otherSkillOptions = [
+    "Computer Operating", "Tele Calling", "Driving", "Supervisor", "Manager", "Attender", "Security",
+    "Carpenter", "Painter", "Plumber", "Electrician", "Mason (Home maker)", "Tailor", "Labour", "Farmer", "Delivery Boy"
+  ];
+
   const sourceOptions = [
     "Apana", "WorkerIndian", "Reference", "Poster", "Agent",
     "Facebook", "LinkedIn", "Instagram", "YouTube", "Website",
@@ -30,6 +39,29 @@ export default function WorkerCallModal({ worker, isOpen, onClose, isEditMode })
     }
     return [];
   };
+  const handleMultiToggle = (field, value) => {
+    setLocalWorker(prev => {
+      const arr = normalizeArray(prev[field]);
+      const has = arr.some(v => String(v).toLowerCase() === String(value).toLowerCase());
+      return { ...prev, [field]: has ? arr.filter(v => String(v).toLowerCase() !== String(value).toLowerCase()) : [...arr, value] };
+    });
+    setDirty(true);
+  };
+
+  const handleAddCustom = (field, inputId) => {
+    const el = document.getElementById(inputId);
+    if (!el) return;
+    const value = (el.value || '').trim();
+    if (!value) return;
+    setLocalWorker(prev => {
+      const arr = normalizeArray(prev[field]);
+      if (arr.some(v => String(v).toLowerCase() === value.toLowerCase())) return prev;
+      return { ...prev, [field]: [...arr, value] };
+    });
+    el.value = "";
+    setDirty(true);
+  };
+
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -425,7 +457,7 @@ export default function WorkerCallModal({ worker, isOpen, onClose, isEditMode })
                 {activeTab === "skills" && (
                   <div>
                     <div className="row">
-                      <div className="col-md-6">
+                      <div className="col-md-4">
                         {/* Education */}
                         <div className="mb-2">
                           <label className="form-label"><strong>Education</strong></label>
@@ -442,7 +474,7 @@ export default function WorkerCallModal({ worker, isOpen, onClose, isEditMode })
                           )}
                         </div>
                       </div>
-                      <div className="col-md-6">
+                      <div className="col-md-4">
                         {/* Working Hours */}
                         <div className="mb-2">
                           <label className="form-label"><strong>Working Hours</strong></label>
@@ -462,10 +494,8 @@ export default function WorkerCallModal({ worker, isOpen, onClose, isEditMode })
                           )}
                         </div>
                       </div>
-                    </div>
 
-                    <div className="row">
-                      <div className="col-md-6">
+                      <div className="col-md-4">
                         {/* Languages */}
                         <div className="mb-2">
                           <label className="form-label"><strong>Languages</strong></label>
@@ -501,26 +531,34 @@ export default function WorkerCallModal({ worker, isOpen, onClose, isEditMode })
                         </div>
 
                       </div>
-                      <div className="col-md-6">
+                    </div>
+
+                    <div className="row">
+
+                      <div className="col-md-12">
                         {/* Skills */}
                         <div className="mb-2">
                           <label className="form-label"><strong>Skills</strong></label>
-
-                          {isEditMode && (
-                            <input
-                              type="text"
-                              className="form-control mt-2"
-                              placeholder="Add skill"
-                              onKeyDown={(e) => {
-                                if (e.key === "Enter") {
-                                  e.preventDefault();
-                                  handleTagAdd("skills", e.target.value);
-                                  e.target.value = "";
-                                }
-                              }}
-                            />
-                          )}
-
+                          {isEditMode ? (
+                            <>
+                              <div className="border rounded p-2" style={{ maxHeight: 160, overflowY: "auto" }}>
+                                {homeCareSkillOptions.map(opt => (
+                                  <label key={opt} className="d-inline-flex align-items-center me-3 mb-2">
+                                    <input
+                                      type="checkbox"
+                                      className="form-check-input me-1"
+                                      checked={normalizeArray(localWorker.skills).map(x => String(x).toLowerCase()).includes(String(opt).toLowerCase())}
+                                      onChange={() => handleMultiToggle('skills', opt)}
+                                    />{opt}
+                                  </label>
+                                ))}
+                              </div>
+                              <div className="input-group mt-2">
+                                <input id="custom-skills" type="text" className="form-control" placeholder="Add custom value" />
+                                <button type="button" className="btn btn-outline-primary" onClick={() => handleAddCustom('skills', 'custom-skills')}>Add</button>
+                              </div>
+                            </>
+                          ) : null}
                           <div className="d-flex flex-wrap gap-2 mt-2">
                             {normalizeArray(localWorker.skills).map((skill, idx) => (
                               <span key={idx} className="badge bg-info">
@@ -538,26 +576,33 @@ export default function WorkerCallModal({ worker, isOpen, onClose, isEditMode })
                         </div>
                       </div>
                     </div>
+                    <hr></hr>
 
                     <div className="row">
-                      <div className="col-md-6">
+                      <div className="col-md-12">
                         {/* Home Care Skills */}
                         <div className="mb-2">
                           <label className="form-label"><strong>Home Care Skills</strong></label>
-                          {isEditMode && (
-                            <input
-                              type="text"
-                              className="form-control mt-2"
-                              placeholder="Add home care skill"
-                              onKeyDown={(e) => {
-                                if (e.key === "Enter") {
-                                  e.preventDefault();
-                                  handleTagAdd("homeCareSkills", e.target.value);
-                                  e.target.value = "";
-                                }
-                              }}
-                            />
-                          )}
+                          {isEditMode ? (
+                            <>
+                              <div className="border rounded p-2" style={{ maxHeight: 160, overflowY: "auto" }}>
+                                {homeCareSkillOptions.map(opt => (
+                                  <label key={opt} className="d-inline-flex align-items-center me-3 mb-2">
+                                    <input
+                                      type="checkbox"
+                                      className="form-check-input me-1"
+                                      checked={normalizeArray(localWorker.homeCareSkills).map(x => String(x).toLowerCase()).includes(String(opt).toLowerCase())}
+                                      onChange={() => handleMultiToggle('homeCareSkills', opt)}
+                                    />{opt}
+                                  </label>
+                                ))}
+                              </div>
+                              <div className="input-group mt-2">
+                                <input id="custom-homeCareSkills" type="text" className="form-control" placeholder="Add custom value" />
+                                <button type="button" className="btn btn-outline-primary" onClick={() => handleAddCustom('homeCareSkills', 'custom-homeCareSkills')}>Add</button>
+                              </div>
+                            </>
+                          ) : null}
                           <div className="d-flex flex-wrap gap-2 mt-2">
                             {normalizeArray(localWorker.homeCareSkills).map((skill, idx) => (
                               <span key={idx} className="badge bg-info">
@@ -574,24 +619,31 @@ export default function WorkerCallModal({ worker, isOpen, onClose, isEditMode })
                           </div>
                         </div>
                       </div>
-                      <div className="col-md-6">
+                      <hr></hr>
+                      <div className="col-md-12">
                         {/* Other Skills */}
                         <div className="mb-2">
                           <label className="form-label"><strong>Other Skills</strong></label>
-                          {isEditMode && (
-                            <input
-                              type="text"
-                              className="form-control mt-2"
-                              placeholder="Add other skill"
-                              onKeyDown={(e) => {
-                                if (e.key === "Enter") {
-                                  e.preventDefault();
-                                  handleTagAdd("otherSkills", e.target.value);
-                                  e.target.value = "";
-                                }
-                              }}
-                            />
-                          )}
+                          {isEditMode ? (
+                            <>
+                              <div className="border rounded p-2" style={{ maxHeight: 160, overflowY: "auto" }}>
+                                {otherSkillOptions.map(opt => (
+                                  <label key={opt} className="d-inline-flex align-items-center me-3 mb-2">
+                                    <input
+                                      type="checkbox"
+                                      className="form-check-input me-1"
+                                      checked={normalizeArray(localWorker.otherSkills).map(x => String(x).toLowerCase()).includes(String(opt).toLowerCase())}
+                                      onChange={() => handleMultiToggle('otherSkills', opt)}
+                                    />{opt}
+                                  </label>
+                                ))}
+                              </div>
+                              <div className="input-group mt-2">
+                                <input id="custom-otherSkills" type="text" className="form-control" placeholder="Add custom value" />
+                                <button type="button" className="btn btn-outline-primary" onClick={() => handleAddCustom('otherSkills', 'custom-otherSkills')}>Add</button>
+                              </div>
+                            </>
+                          ) : null}
                           <div className="d-flex flex-wrap gap-2 mt-2">
                             {normalizeArray(localWorker.otherSkills).map((skill, idx) => (
                               <span key={idx} className="badge bg-info">

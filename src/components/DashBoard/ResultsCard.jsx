@@ -57,7 +57,6 @@ function parseDateRobust(v) {
   return null;
 }
 
-
 function monthKey(d){ const dt = d instanceof Date ? d : parseDateRobust(d); if(!dt) return 'Unknown'; return `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,'0')}`; }
 /* ---------------------- Normalizers ---------------------- */
 function extractClientPayments(clientRecord = {}) {
@@ -117,8 +116,6 @@ function extractInvestments(raw = {}) {
   });
 }
 
-
-
 function extractPettyCash(raw = {}) {
   const rows = [];
   const isPlain = (x) => x && typeof x === "object" && !Array.isArray(x);
@@ -164,8 +161,6 @@ function extractPettyCash(raw = {}) {
   walk(raw);
   return rows;
 }
-
-
 
 function extractStaffSalaries(staffNode = {}) {
   const out = [];
@@ -218,6 +213,73 @@ function extractWorkerSalaries(node = {}) {
 
   return out;
 }
+
+// Extract Agent Commission from HospitalData
+function extractAgentCommission(hospitalNode = {}) {
+  const out = [];
+  const isPlain = (x) => x && typeof x === "object" && !Array.isArray(x);
+  
+  if (!isPlain(hospitalNode)) return out;
+
+  Object.values(hospitalNode).forEach((hospital) => {
+    if (!isPlain(hospital)) return;
+    
+    const payments = Array.isArray(hospital.payments) 
+      ? hospital.payments 
+      : (isPlain(hospital.payments) ? Object.values(hospital.payments) : []);
+    
+    payments.forEach((p) => {
+      if (!p) return;
+      const commissionAmount = safeNumber(p.commition ?? p.commission ?? p.agentCommission ?? 0);
+      if (commissionAmount > 0) {
+        const date = p.date ?? p.paymentDate ?? p.createdAt ?? "";
+        out.push({ 
+          type: "commission", 
+          date, 
+          parsedDate: parseDateRobust(date), 
+          amount: commissionAmount, 
+          raw: p 
+        });
+      }
+    });
+  });
+
+  return out;
+}
+
+// Extract Hospital Service Charges from HospitalData
+function extractHospitalServiceCharges(hospitalNode = {}) {
+  const out = [];
+  const isPlain = (x) => x && typeof x === "object" && !Array.isArray(x);
+  
+  if (!isPlain(hospitalNode)) return out;
+
+  Object.values(hospitalNode).forEach((hospital) => {
+    if (!isPlain(hospital)) return;
+    
+    const payments = Array.isArray(hospital.payments) 
+      ? hospital.payments 
+      : (isPlain(hospital.payments) ? Object.values(hospital.payments) : []);
+    
+    payments.forEach((p) => {
+      if (!p) return;
+      const serviceCharges = safeNumber(p.serviceCharges ?? p.hospitalCharges ?? p.serviceFee ?? 0);
+      if (serviceCharges > 0) {
+        const date = p.date ?? p.paymentDate ?? p.createdAt ?? "";
+        out.push({ 
+          type: "hospital", 
+          date, 
+          parsedDate: parseDateRobust(date), 
+          amount: serviceCharges, 
+          raw: p 
+        });
+      }
+    });
+  });
+
+  return out;
+}
+
 /* ---------------------- SVG Charts (No external deps) ---------------------- */
 function BarChart({ data = [], width = 520, height = 150, pad = 30, color = "url(#gradProfit)" }) {
   const max = Math.max(...data.map(d => d.value), 1);
@@ -228,6 +290,14 @@ function BarChart({ data = [], width = 520, height = 150, pad = 30, color = "url
         <linearGradient id="gradProfit" x1="0" y1="0" x2="1" y2="1">
           <stop offset="0%" stopColor="#34d399" />
           <stop offset="100%" stopColor="#059669" />
+        </linearGradient>
+        <linearGradient id="gradCommission" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0%" stopColor="#f97316" />
+          <stop offset="100%" stopColor="#ea580c" />
+        </linearGradient>
+        <linearGradient id="gradHospital" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0%" stopColor="#06b6d4" />
+          <stop offset="100%" stopColor="#0e7490" />
         </linearGradient>
       </defs>
       <rect x="0" y="0" width={width} height={height} fill="transparent" />
@@ -271,6 +341,14 @@ function DonutChart({ segments = [], size = 150, stroke = 18 }) {
           <stop offset="0%" stopColor="#a78bfa" />
           <stop offset="100%" stopColor="#6d28d9" />
         </linearGradient>
+        <linearGradient id="gradCommission" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0%" stopColor="#f97316" />
+          <stop offset="100%" stopColor="#ea580c" />
+        </linearGradient>
+        <linearGradient id="gradHospital" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0%" stopColor="#06b6d4" />
+          <stop offset="100%" stopColor="#0e7490" />
+        </linearGradient>
       </defs>
       <circle cx={size/2} cy={size/2} r={r} stroke="#e2e8f0" strokeWidth={stroke} fill="none" />
       {segments.map((s, i) => {
@@ -307,6 +385,7 @@ export default function ResultsCard({
   investmentsCollection = "Investments",
   staffCollections = { active: "StaffBioData", exit: "ExitStaffs" },
   workerCollections = { active: "EmployeeBioData", exit: "ExitEmployees" },
+  hospitalCollection = "HospitalData",
 }) {
   const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
@@ -350,6 +429,7 @@ export default function ResultsCard({
       attach(staffCollections.exit, "staffExit");
       attach(workerCollections.active, "workerActive");
       attach(workerCollections.exit, "workerExit");
+      attach(hospitalCollection, "hospitalData");
 
       const rebuild = () => {
         const rows = [];
@@ -365,25 +445,24 @@ export default function ResultsCard({
 
         extractInvestments(snapshots.investments || {}).forEach((r) => rows.push(r));
         
-// Collect petty from root/Admin/admin then de-duplicate by (id?) else amount+category+month
-{
-  const pettyCollected = [];
-  extractPettyCash(snapshots.petty || {}).forEach((r) => pettyCollected.push(r));
-  extractPettyCash(snapshots.pettyAdmin || {}).forEach((r) => pettyCollected.push(r));
-  extractPettyCash(snapshots.pettyAdminLower || {}).forEach((r) => pettyCollected.push(r));
-  const seen = new Set();
-  pettyCollected.forEach((r) => {
-    const raw = r.raw || {};
-    const id = raw.id ?? raw.ID ?? raw.key ?? raw.uid ?? raw.billNo ?? raw.invoiceNo ?? raw.refNo ?? "";
-    const cat = String((r.category || raw.mainCategory || raw.category || raw.head || "Petty")).toLowerCase();
-    const mon = monthKey(r.parsedDate || r.date);
-    const sig = id ? `id:${id}` : `amt:${Number(r.amount||0)}|cat:${cat}|mon:${mon}`;
-    if (seen.has(sig)) return;
-    seen.add(sig);
-    rows.push(r);
-  });
-}
-
+        // Collect petty from root/Admin/admin then de-duplicate by (id?) else amount+category+month
+        {
+          const pettyCollected = [];
+          extractPettyCash(snapshots.petty || {}).forEach((r) => pettyCollected.push(r));
+          extractPettyCash(snapshots.pettyAdmin || {}).forEach((r) => pettyCollected.push(r));
+          extractPettyCash(snapshots.pettyAdminLower || {}).forEach((r) => pettyCollected.push(r));
+          const seen = new Set();
+          pettyCollected.forEach((r) => {
+            const raw = r.raw || {};
+            const id = raw.id ?? raw.ID ?? raw.key ?? raw.uid ?? raw.billNo ?? raw.invoiceNo ?? raw.refNo ?? "";
+            const cat = String((r.category || raw.mainCategory || raw.category || raw.head || "Petty")).toLowerCase();
+            const mon = monthKey(r.parsedDate || r.date);
+            const sig = id ? `id:${id}` : `amt:${Number(r.amount||0)}|cat:${cat}|mon:${mon}`;
+            if (seen.has(sig)) return;
+            seen.add(sig);
+            rows.push(r);
+          });
+        }
 
         const pushStaff = (node) => { extractStaffSalaries(node || {}).forEach((r) => rows.push(r)); };
         pushStaff(snapshots.staffActive || {});
@@ -392,6 +471,10 @@ export default function ResultsCard({
         const pushWorkers = (node) => { extractWorkerSalaries(node || {}).forEach((r) => rows.push(r)); };
         pushWorkers(snapshots.workerActive || {});
         pushWorkers(snapshots.workerExit || {});
+
+        // Extract Agent Commission and Hospital Service Charges
+        extractAgentCommission(snapshots.hospitalData || {}).forEach((r) => rows.push(r));
+        extractHospitalServiceCharges(snapshots.hospitalData || {}).forEach((r) => rows.push(r));
 
         rows.forEach((r) => { if (!r.parsedDate && r.date) r.parsedDate = parseDateRobust(r.date); });
         rows.sort((a, b) => (b.parsedDate?.getTime() || 0) - (a.parsedDate?.getTime() || 0));
@@ -406,7 +489,7 @@ export default function ResultsCard({
       mounted = false;
       try { listeners.forEach(({ ref, cb }) => ref.off("value", cb)); } catch {}
     };
-  }, [clientCollections.active, clientCollections.exit, investmentsCollection, pettyCollection, staffCollections.active, staffCollections.exit, workerCollections.active, workerCollections.exit]);
+  }, [clientCollections.active, clientCollections.exit, investmentsCollection, pettyCollection, staffCollections.active, staffCollections.exit, workerCollections.active, workerCollections.exit, hospitalCollection]);
 
   /* ------------- Grouping ------------- */
   const yearMap = useMemo(() => {
@@ -441,15 +524,18 @@ export default function ResultsCard({
 
   /* ------------- Calculations ------------- */
   function splitSums(rows) {
-    const s = { income: 0, investment: 0, petty: 0, staff: 0, worker: 0 };
+    const s = { income: 0, investment: 0, petty: 0, staff: 0, worker: 0, commission: 0, hospital: 0 };
     (rows || []).forEach((r) => {
       if (r.type === "client") s.income += Number(r.payment || 0);
       else if (r.type === "investment") s.investment += Number(r.amount || 0);
       else if (r.type === "petty") s.petty += Number(r.amount || 0);
       else if (r.type === "staff") s.staff += Number(r.amount || 0);
       else if (r.type === "worker") s.worker += Number(r.amount || 0);
+      else if (r.type === "commission") s.commission += Number(r.amount || 0);
+      else if (r.type === "hospital") s.hospital += Number(r.amount || 0);
     });
-    s.expense = s.investment + s.petty + s.staff + s.worker;
+    // Profit calculation: Client Amount - (Investment + Worker Salary + Staff Salary + Petty Cash + Agent Commission)
+    s.expense = s.investment + s.petty + s.staff + s.worker + s.commission;
     s.profit = s.income - s.expense;
     return s;
   }
@@ -483,6 +569,7 @@ export default function ResultsCard({
       { key: "Staff", value: s.staff, color: "url(#gradStaff)" },
       { key: "Workers", value: s.worker, color: "url(#gradWorker)" },
       { key: "Petty", value: s.petty, color: "url(#gradPetty)" },
+      { key: "Commission", value: s.commission, color: "url(#gradCommission)" },
     ];
   }, [currentMonthTotals]);
 
@@ -541,8 +628,8 @@ export default function ResultsCard({
         </div>
       </div>
 
-         {modalOpen && (
-        <div className="modal fade show" style={{ display: "block", background: "rgba(2,6,23,0.55)", zIndex: 2000 }} onClick={() => setModalOpen(false)}>
+      {modalOpen && (
+        <div className="modal fade show" style={{ display: "block", background: "rgba(2,6,23,0.9)", zIndex: 2000 }} onClick={() => setModalOpen(false)}>
           <div className="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable" style={{ zIndex: 2001 }} onClick={(e) => e.stopPropagation()} ref={modalRef}>
             <div className="modal-content overflow-hidden">
               <div className="modal-header gradient-header text-white" style={{ position: "sticky", top: 0, zIndex: 2002 }}>
@@ -626,6 +713,8 @@ export default function ResultsCard({
                         <th className="text-end">Worker Salaries</th>
                         <th className="text-end">Staff Salaries</th>
                         <th className="text-end">Petty Cash</th>
+                        <th className="text-end">Agent Commission</th>
+                        <th className="text-end">Hospital Charges</th>
                         <th className="text-end">Profit</th>
                       </tr>
                     </thead>
@@ -637,6 +726,8 @@ export default function ResultsCard({
                         <td className="text-end">{formatINR(overall.worker)}</td>
                         <td className="text-end">{formatINR(overall.staff)}</td>
                         <td className="text-end">{formatINR(overall.petty)}</td>
+                        <td className="text-end">{formatINR(overall.commission)}</td>
+                        <td className="text-end">{formatINR(overall.hospital)}</td>
                         <td className="text-end fw-bold">{formatINR(overall.profit)}</td>
                       </tr>
                       <tr>
@@ -646,15 +737,19 @@ export default function ResultsCard({
                         <td className="text-end">{formatINR(currentYearTotals.worker)}</td>
                         <td className="text-end">{formatINR(currentYearTotals.staff)}</td>
                         <td className="text-end">{formatINR(currentYearTotals.petty)}</td>
+                        <td className="text-end">{formatINR(currentYearTotals.commission)}</td>
+                        <td className="text-end">{formatINR(currentYearTotals.hospital)}</td>
                         <td className="text-end fw-bold">{formatINR(currentYearTotals.profit)}</td>
                       </tr>
                       <tr>
-                        <td>Month ({activeYear || "-"}, {monthLabels[Number(activeMonth)] || "-"})</td>
+                        <td>Month ({monthLabels[Number(activeMonth)] || "-"})</td>
                         <td className="text-end">{formatINR(currentMonthTotals.income)}</td>
                         <td className="text-end">{formatINR(currentMonthTotals.investment)}</td>
                         <td className="text-end">{formatINR(currentMonthTotals.worker)}</td>
                         <td className="text-end">{formatINR(currentMonthTotals.staff)}</td>
                         <td className="text-end">{formatINR(currentMonthTotals.petty)}</td>
+                        <td className="text-end">{formatINR(currentMonthTotals.commission)}</td>
+                        <td className="text-end">{formatINR(currentMonthTotals.hospital)}</td>
                         <td className="text-end fw-bold">{formatINR(currentMonthTotals.profit)}</td>
                       </tr>
                     </tbody>
@@ -694,6 +789,8 @@ export default function ResultsCard({
                                 {r.type === "petty" ? <span className="badge bg-violet-subtle text-violet fw-semibold">Petty</span> : null}
                                 {r.type === "staff" ? <span className="badge bg-sky-subtle text-sky fw-semibold">Staff</span> : null}
                                 {r.type === "worker" ? <span className="badge bg-amber-subtle text-amber fw-semibold">Worker</span> : null}
+                                {r.type === "commission" ? <span className="badge bg-violet-subtle text-warning fw-semibold">Commission</span> : null}
+                                {r.type === "hospital" ? <span className="badge bg-cyan-subtle text-cyan fw-semibold">Hospital</span> : null}
                               </td>
                               <td className={`text-end ${isOut ? "text-danger" : "text-success"}`}>{formatINR(amt)}</td>
                               <td className="text-muted tiny">{r.raw?.remarks || r.raw?.description || r.raw?.invest_purpose || r.raw?.paymentFor || ""}</td>
@@ -713,8 +810,6 @@ export default function ResultsCard({
           </div>
         </div>
       )}
-
-  
     </>
   );
 }

@@ -2,6 +2,11 @@ import React, { useState, useEffect } from "react";
 import firebaseDB from "../../firebase";
 
 export default function WorkerCallModal({ worker, isOpen, onClose, isEditMode }) {
+  const sourceOptions = [
+    "Apana", "WorkerIndian", "Reference", "Poster", "Agent",
+    "Facebook", "LinkedIn", "Instagram", "YouTube", "Website",
+    "Just Dial", "News Paper", "Other"
+  ];
   const [activeTab, setActiveTab] = useState("basic");
   const [localWorker, setLocalWorker] = useState({ ...worker });
   const [comments, setComments] = useState(worker.comments || []);
@@ -36,8 +41,11 @@ export default function WorkerCallModal({ worker, isOpen, onClose, isEditMode })
     // Always normalize before saving
     const toSave = {
       ...localWorker,
+      // normalize arrays
       skills: normalizeArray(localWorker.skills),
       languages: normalizeArray(localWorker.languages),
+      homeCareSkills: normalizeArray(localWorker.homeCareSkills),
+      otherSkills: normalizeArray(localWorker.otherSkills),
     };
     await firebaseDB.child(`WorkerCallData/${worker.id}`).update(toSave);
     setShowSaveModal(true);
@@ -119,7 +127,7 @@ export default function WorkerCallModal({ worker, isOpen, onClose, isEditMode })
                 </li>
               </ul>
 
-              <div className="tab-content mt-3">
+              <div className="tab-content mt-3 p-3">
                 {/* Basic Info Tab */}
                 {activeTab === "basic" && (
                   <div>
@@ -196,10 +204,134 @@ export default function WorkerCallModal({ worker, isOpen, onClose, isEditMode })
                           ) : (
                             <p>{localWorker.location}</p>
                           )}
+                        </div></div></div>
+                    <div className="row">
+                      <div className="col-md-6">
+                        {/* Source */}
+                        <div className="mb-2">
+                          <label className="form-label"><strong>Source</strong></label>
+                          {isEditMode ? (
+                            <select
+                              name="source"
+                              value={localWorker.source || ""}
+                              onChange={handleChange}
+                              className="form-select"
+                            >
+                              <option value="">Select</option>
+                              {sourceOptions.map(s => <option key={s} value={s}>{s}</option>)}
+                            </select>
+                          ) : (
+                            <p>{localWorker.source || "—"}</p>
+                          )}
+                        </div>
+                      </div>
+                      <div className="col-md-6">
+                        {/* Marital Status */}
+                        <div className="mb-2">
+                          <label className="form-label"><strong>Marital Status</strong></label>
+                          {isEditMode ? (
+                            <select
+                              name="maritalStatus"
+                              value={localWorker.maritalStatus || ""}
+                              onChange={handleChange}
+                              className="form-select"
+                            >
+                              <option value="">Select</option>
+                              <option value="Single">Single</option>
+                              <option value="Married">Married</option>
+                              <option value="Separated">Separated</option>
+                              <option value="Widow">Widow</option>
+                            </select>
+                          ) : (
+                            <p>{localWorker.maritalStatus || "—"}</p>
+                          )}
                         </div>
                       </div>
                     </div>
 
+                    <div className="row">
+                      <div className="col-md-4">
+                        {/* Age */}
+                        <div className="mb-2">
+                          <label className="form-label"><strong>Age</strong></label>
+                          {isEditMode ? (
+                            <input
+                              type="tel"
+                              maxLength={2}
+                              name="age"
+                              value={localWorker.age || ""}
+                              onChange={handleChange}
+                              className="form-control"
+                              min="10"
+                              max="80"
+                            />
+                          ) : (
+                            <p>{localWorker.age || "—"}</p>
+                          )}
+                        </div>
+                      </div>
+                      <div className="col-md-4">
+                        {/* Experience */}
+                        <div className="mb-2">
+                          <label className="form-label"><strong>Experience</strong></label>
+                          {isEditMode ? (
+                            <select
+                              name="experience"
+                              value={localWorker.experience || "No"}
+                              onChange={handleChange}
+                              className="form-select"
+                            >
+                              <option value="No">No</option>
+                              <option value="Yes">Yes</option>
+                            </select>
+                          ) : (
+                            <p>{localWorker.experience || "No"}</p>
+                          )}
+                        </div>
+                      </div>
+                      <div className="col-md-4">
+                        {/* Years */}
+                        <div className="mb-2">
+                          <label className="form-label"><strong>Years</strong></label>
+                          {isEditMode ? (
+                            <input
+                              type="tel"
+                              maxLength={2}
+                              name="years"
+                              value={localWorker.years || ""}
+                              onChange={handleChange}
+                              className="form-control"
+                              min="0"
+                              max="50"
+                            />
+                          ) : (
+                            <p>{localWorker.years || "—"}</p>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Recent Comment fields */}
+                    <div className="row">
+                      <div className="col-md-12">
+                        <div className="mb-2">
+                          <label className="form-label"><strong>Recent Comment</strong></label>
+                          {isEditMode ? (
+                            <textarea
+                              name="comment"
+                              value={localWorker.comment || ""}
+                              onChange={handleChange}
+                              className="form-control"
+                              rows="2"
+                              disabled
+                            />
+                          ) : (
+                            <p>{localWorker.comment || "—"}</p>
+                          )}
+                        </div>
+                      </div>
+
+                    </div>
                     <div className="row mt-3">
                       <div className="col-md-6">
                         {/* Conversation Level */}
@@ -398,6 +530,77 @@ export default function WorkerCallModal({ worker, isOpen, onClose, isEditMode })
                                     type="button"
                                     className="btn-close btn-close-white ms-2"
                                     onClick={() => handleTagRemove("skills", idx)}
+                                  ></button>
+                                )}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="row">
+                      <div className="col-md-6">
+                        {/* Home Care Skills */}
+                        <div className="mb-2">
+                          <label className="form-label"><strong>Home Care Skills</strong></label>
+                          {isEditMode && (
+                            <input
+                              type="text"
+                              className="form-control mt-2"
+                              placeholder="Add home care skill"
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter") {
+                                  e.preventDefault();
+                                  handleTagAdd("homeCareSkills", e.target.value);
+                                  e.target.value = "";
+                                }
+                              }}
+                            />
+                          )}
+                          <div className="d-flex flex-wrap gap-2 mt-2">
+                            {normalizeArray(localWorker.homeCareSkills).map((skill, idx) => (
+                              <span key={idx} className="badge bg-info">
+                                {skill}
+                                {isEditMode && (
+                                  <button
+                                    type="button"
+                                    className="btn-close btn-close-white ms-2"
+                                    onClick={() => handleTagRemove("homeCareSkills", idx)}
+                                  ></button>
+                                )}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                      <div className="col-md-6">
+                        {/* Other Skills */}
+                        <div className="mb-2">
+                          <label className="form-label"><strong>Other Skills</strong></label>
+                          {isEditMode && (
+                            <input
+                              type="text"
+                              className="form-control mt-2"
+                              placeholder="Add other skill"
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter") {
+                                  e.preventDefault();
+                                  handleTagAdd("otherSkills", e.target.value);
+                                  e.target.value = "";
+                                }
+                              }}
+                            />
+                          )}
+                          <div className="d-flex flex-wrap gap-2 mt-2">
+                            {normalizeArray(localWorker.otherSkills).map((skill, idx) => (
+                              <span key={idx} className="badge bg-info">
+                                {skill}
+                                {isEditMode && (
+                                  <button
+                                    type="button"
+                                    className="btn-close btn-close-white ms-2"
+                                    onClick={() => handleTagRemove("otherSkills", idx)}
                                   ></button>
                                 )}
                               </span>

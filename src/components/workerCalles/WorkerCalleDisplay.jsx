@@ -78,7 +78,6 @@ function collectWorkersFromSnapshot(rootSnap) {
   return rows;
 }
 
-
 export default function WorkerCalleDisplay() {
   // data
   const [workers, setWorkers] = useState([]);
@@ -94,7 +93,8 @@ export default function WorkerCalleDisplay() {
   // filters & sort
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedSkills, setSelectedSkills] = useState([]);
-  const [selectedRoles, setSelectedRoles] = useState([]); // NEW: Job Roles filter
+  const [selectedRoles, setSelectedRoles] = useState([]); // FIXED: include more keys (see getWorkerRoles)
+  const [selectedLanguages, setSelectedLanguages] = useState([]); // NEW: Languages filter
   const [selectedGender, setSelectedGender] = useState([]);
   const [reminderFilter, setReminderFilter] = useState(""); // '', 'overdue','today','tomorrow','upcoming'
   const [selectedSource, setSelectedSource] = useState("All");
@@ -188,19 +188,28 @@ export default function WorkerCalleDisplay() {
   }, [workers]);
 
   // Options for filters
-  const skillOptions = ["Nursing", "Patient Care", "Care Taker", "Old Age Care", "Baby Care", "Bedside Attender", "Supporting", "Any duty", "Daiper"];
+  const skillOptions = ["Nursing", "Patient Care", "Care Taker", "Old Age Care", "Baby Care", "Bedside Attender", "Supporting", "Any duty", "Daiper", "Others", "Any Duty"];
   const roleOptions = [
     "Computer Operating", "Tele Calling", "Driving", "Supervisor", "Manager", "Attender", "Security",
     "Carpenter", "Painter", "Plumber", "Electrician", "Mason (Home maker)", "Tailor", "Labour", "Farmer", "Delivery Boy"
   ];
+  const languageOptions = ["Telugu", "English", "Hindi", "Urdu", "Kannada", "Malayalam", "Tamil"];
 
   // Helper to get a worker's roles value across possible keys (string or array)
   const getWorkerRoles = (w) => {
-    const val = w?.jobRole ?? w?.role ?? w?.roles ?? w?.profession ?? w?.designation ?? w?.workType ?? "";
+    const val =
+      w?.jobRole ?? w?.role ?? w?.roles ?? w?.profession ?? w?.designation ?? w?.workType ??
+      w?.otherSkills ?? w?.otherskills ?? w?.other_skills ?? w?.["other skils"] ?? // include common variations
+      "";
     return normalizeArray(val).map((s) => String(s).toLowerCase());
   };
   // Helper to get a worker's skills (string or array)
   const getWorkerSkills = (w) => normalizeArray(w?.skills).map((s) => String(s).toLowerCase());
+  // Helper to get languages (string/array, various keys)
+  const getWorkerLanguages = (w) => {
+    const val = w?.languages ?? w?.language ?? w?.knownLanguages ?? w?.speaks ?? "";
+    return normalizeArray(val).map((s) => String(s).toLowerCase());
+  };
 
   /* filtering (case-insensitive for ALL filters & search) */
   const filtered = useMemo(() => {
@@ -235,6 +244,12 @@ export default function WorkerCalleDisplay() {
         const want = selectedRoles.map((s) => String(s).toLowerCase());
         if (!want.some((s) => have.includes(s))) return false;
       }
+      // languages (any-match; case-insensitive)
+      if (selectedLanguages.length > 0) {
+        const have = getWorkerLanguages(w);
+        const want = selectedLanguages.map((s) => String(s).toLowerCase());
+        if (!want.some((s) => have.includes(s))) return false;
+      }
       // reminder bucket
       if (reminderFilter) {
         const du = daysUntil(w?.callReminderDate);
@@ -246,7 +261,7 @@ export default function WorkerCalleDisplay() {
       }
       return true;
     });
-  }, [workers, searchTerm, selectedGender, selectedSkills, selectedRoles, reminderFilter, selectedSource]);
+  }, [workers, searchTerm, selectedGender, selectedSkills, selectedRoles, selectedLanguages, reminderFilter, selectedSource]);
 
   /* sorting (case-insensitive where applicable) */
   const sorted = useMemo(() => {
@@ -277,7 +292,7 @@ export default function WorkerCalleDisplay() {
   const pageItems = useMemo(() => sorted.slice(indexOfFirst, indexOfLast), [sorted, indexOfFirst, indexOfLast]);
 
   // Reset to page 1 when filters change
-  useEffect(() => { setCurrentPage(1); }, [searchTerm, selectedGender, selectedSkills, selectedRoles, reminderFilter, rowsPerPage]);
+  useEffect(() => { setCurrentPage(1); }, [searchTerm, selectedGender, selectedSkills, selectedRoles, selectedLanguages, reminderFilter, rowsPerPage]);
 
   /* actions */
   const handleView = (w) => { setSelectedWorker(w); setIsEditMode(false); setIsModalOpen(true); };
@@ -296,7 +311,7 @@ export default function WorkerCalleDisplay() {
   };
 
   const resetFilters = () => {
-    setSearchTerm(""); setSelectedSkills([]); setSelectedRoles([]); setSelectedGender([]);
+    setSearchTerm(""); setSelectedSkills([]); setSelectedRoles([]); setSelectedLanguages([]); setSelectedGender([]);
     setReminderFilter(""); setSortBy("id"); setSortDir("desc");
     setRowsPerPage(10); setCurrentPage(1);
   };
@@ -317,6 +332,8 @@ export default function WorkerCalleDisplay() {
         Name: w?.name ?? "",
         Gender: w?.gender ?? "",
         Skills: normalizeArray(w?.skills).join(", "),
+        Roles: normalizeArray(w?.jobRole ?? w?.role ?? w?.roles ?? w?.profession ?? w?.designation ?? w?.workType ?? "").join(", "),
+        Languages: normalizeArray(w?.languages ?? w?.language ?? w?.knownLanguages ?? w?.speaks ?? "").join(", "),
         "Reminder Date": formatDDMMYYYY(w?.callReminderDate || w?.reminderDate || w?.date || w?.createdAt),
         "Days Until": duText,
         Mobile: w?.mobileNo ?? "",
@@ -413,6 +430,8 @@ export default function WorkerCalleDisplay() {
   if (loading) return <div className="text-center my-5">Loading…</div>;
   if (error) return <div className="alert alert-danger">Error: {error}</div>;
 
+  const totalRowStyle = { background: "#122438" }; // NEW: distinct background for total rows
+
   return (
     <div className="p-3">
       {/* top controls */}
@@ -436,7 +455,7 @@ export default function WorkerCalleDisplay() {
           placeholder="Search name, location, mobile…"
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
-          style={{ maxWidth: 350 }}
+          style={{ maxWidth: 325 }}
         />
 
         {/* Call Through filter */}
@@ -471,7 +490,7 @@ export default function WorkerCalleDisplay() {
       </div>
 
       {/* reminder badges as filters */}
-      <div className="alert alert-info d-flex justify-content-around flex-wrap reminder-badges">
+      <div className="alert alert-info d-flex justify-content-around flex-wrap reminder-badges mb-4">
         {["overdue", "today", "tomorrow", "upcoming"].map((k) => (
           <span
             key={k}
@@ -494,9 +513,9 @@ export default function WorkerCalleDisplay() {
       </div>
 
       {/* extra filters */}
-      <div className="mb-3 d-flex gap-4 flex-wrap opacity-75">
+      <div className="filterData">
         <div>
-          <h6 className="mb-1">Gender</h6>
+          <h6 className="mb-1  text-info">Gender</h6>
           {["Male", "Female"].map((g) => (
             <label key={g} className="me-3">
               <input
@@ -517,17 +536,18 @@ export default function WorkerCalleDisplay() {
             </label>
           ))}
         </div>
+
         <div>
-          <h6 className="mb-1">Skills</h6>
-          {skillOptions.map((s) => (
-            <label key={s} className="me-3">
+          <h6 className="mb-1 text-info">Languages</h6>
+          {languageOptions.map((l) => (
+            <label key={l} className="me-3">
               <input
                 type="checkbox"
                 className="form-check-input me-1"
-                checked={selectedSkills.map(x => String(x).toLowerCase()).includes(String(s).toLowerCase())}
+                checked={selectedLanguages.map(x => String(x).toLowerCase()).includes(String(l).toLowerCase())}
                 onChange={(e) =>
-                  setSelectedSkills((prev) => {
-                    const low = String(s).toLowerCase();
+                  setSelectedLanguages((prev) => {
+                    const low = String(l).toLowerCase();
                     if (e.target.checked) {
                       return Array.from(new Set([...prev.map(x => String(x).toLowerCase()), low]));
                     } else {
@@ -535,35 +555,61 @@ export default function WorkerCalleDisplay() {
                     }
                   })
                 }
-              />{s}
-            </label>
-          ))}
-        </div>
-        <div>
-          <hr></hr>
-          <h6 className="mb-1">Job Role</h6>
-          {roleOptions.map((r) => (
-            <label key={r} className="me-3">
-              <input
-                type="checkbox"
-                className="form-check-input me-1"
-                checked={selectedRoles.map(x => String(x).toLowerCase()).includes(String(r).toLowerCase())}
-                onChange={(e) =>
-                  setSelectedRoles((prev) => {
-                    const low = String(r).toLowerCase();
-                    if (e.target.checked) {
-                      return Array.from(new Set([...prev.map(x => String(x).toLowerCase()), low]));
-                    } else {
-                      return prev.map(x => String(x).toLowerCase()).filter(x => x !== low);
-                    }
-                  })
-                }
-              />{r}
+              />{l}
             </label>
           ))}
         </div>
       </div>
-      <hr></hr>
+
+
+      <h6 className="mb-1  text-info">Skills</h6>
+      <div className="filterData">
+        {skillOptions.map((s) => (
+          <label key={s} className="me-3">
+            <input
+              type="checkbox"
+              className="form-check-input me-1"
+              checked={selectedSkills.map(x => String(x).toLowerCase()).includes(String(s).toLowerCase())}
+              onChange={(e) =>
+                setSelectedSkills((prev) => {
+                  const low = String(s).toLowerCase();
+                  if (e.target.checked) {
+                    return Array.from(new Set([...prev.map(x => String(x).toLowerCase()), low]));
+                  } else {
+                    return prev.map(x => String(x).toLowerCase()).filter(x => x !== low);
+                  }
+                })
+              }
+            />{s}
+          </label>
+        ))}
+      </div>
+
+      <h6 className="mb-1  text-info">Job Role</h6>
+      <div className="filterData">
+        {roleOptions.map((r) => (
+          <label key={r} className="me-3">
+            <input
+              type="checkbox"
+              className="form-check-input me-1"
+              checked={selectedRoles.map(x => String(x).toLowerCase()).includes(String(r).toLowerCase())}
+              onChange={(e) =>
+                setSelectedRoles((prev) => {
+                  const low = String(r).toLowerCase();
+                  if (e.target.checked) {
+                    return Array.from(new Set([...prev.map(x => String(x).toLowerCase()), low]));
+                  } else {
+                    return prev.map(x => String(x).toLowerCase()).filter(x => x !== low);
+                  }
+                })
+              }
+            />{r}
+          </label>
+        ))}
+      </div>
+
+
+      <hr />
 
       {/* status line */}
       <div className="mb-3 small" style={{ color: "yellow" }}>
@@ -572,7 +618,7 @@ export default function WorkerCalleDisplay() {
       </div>
 
       {/* table */}
-      <div className="table-responsive">
+      <div className="table-responsive workerCallTable">
         <table className="table table-hover table-dark">
           <thead>
             <tr>
@@ -582,6 +628,7 @@ export default function WorkerCalleDisplay() {
               <th>Gender</th>
               <th>Reminder Date</th>
               <th>Skills</th>
+              <th>Languages</th>
               <th>Mobile</th>
               <th>Communications</th>
               <th>Call Through</th>
@@ -596,7 +643,8 @@ export default function WorkerCalleDisplay() {
                 : "";
               const callThrough = normalizeSource(w?.callThrough || w?.through || w?.source || "");
               const comms = (w?.communications ?? w?.communication ?? w?.conversation ?? w?.conversationLevel ?? "") || "N/A";
-              const roles = normalizeArray(w?.jobRole ?? w?.role ?? w?.roles ?? w?.profession ?? w?.designation ?? w?.workType ?? "");
+              const roles = normalizeArray(w?.jobRole ?? w?.role ?? w?.roles ?? w?.profession ?? w?.designation ?? w?.workType ?? w?.otherSkills ?? w?.otherskills ?? w?.other_skills ?? w?.["other skils"] ?? "");
+              const languages = normalizeArray(w?.languages ?? w?.language ?? w?.knownLanguages ?? w?.speaks ?? "");
               return (
                 <tr
                   key={`${w.id}-${idx}`}
@@ -613,17 +661,18 @@ export default function WorkerCalleDisplay() {
                   <td>{w?.name || "N/A"}</td>
                   <td>{w?.gender || "N/A"}</td>
 
-
                   <td>
                     {formatDDMMYYYY(w?.callReminderDate || w?.reminderDate || w?.date || w?.createdAt)}
                     {duLabel && <small className="d-block text-muted">{duLabel}</small>}
                   </td>
                   <td>{normalizeArray(w?.skills).join(", ") || "N/A"}</td>
+                  <td>{languages.join(", ") || "N/A"}</td>
                   <td>{w?.mobileNo || "N/A"}       {w?.mobileNo && (
                     <>&nbsp; &nbsp;
-                      <a href={`tel:${w.mobileNo}`} className="btn btn-sm btn-info me-2">Call</a>
+                      <a href={`tel:${w.mobileNo}`} className="btn btn-sm btn-info mb-2 me-2">Call</a>
+
                       <a
-                        className="btn btn-sm btn-warning me-2"
+                        className="btn btn-sm btn-warning mb-2"
                         href={`https://wa.me/${String(w.mobileNo).replace(/\D/g, "")}?text=${encodeURIComponent(
                           "Hello, This is Sudheer From JenCeo Home Care Services"
                         )}`}
@@ -636,7 +685,6 @@ export default function WorkerCalleDisplay() {
                   <td>{comms}</td>
                   <td><span className="badge bg-secondary">{callThrough}</span></td>
                   <td>
-
                     <button className="btn btn-sm me-2" title="View" onClick={() => handleView(w)}>
                       <img src={viewIcon} alt="view" width="18" height="18" />
                     </button>
@@ -652,9 +700,10 @@ export default function WorkerCalleDisplay() {
             })}
             {pageItems.length === 0 && (
               <tr>
-                <td colSpan="10"><div className="alert alert-warning mb-0">No records match your filters.</div></td>
+                <td colSpan="12"><div className="alert alert-warning mb-0">No records match your filters.</div></td>
               </tr>
-            )}</tbody>
+            )}
+          </tbody>
         </table>
       </div>
 
@@ -725,7 +774,7 @@ export default function WorkerCalleDisplay() {
                 <td className="total-cell">{(monthSummary[t] || Array(12).fill(0)).reduce((a, b) => a + b, 0)}</td>
               </tr>
             ))}
-            <tr className="summary-table-row fw-bold">
+            <tr className="summary-table-row fw-bold" style={totalRowStyle}>
               <td className="source-name text-warning">Total</td>
               {months.map((_, mi) => {
                 let sum = 0;
@@ -776,7 +825,7 @@ export default function WorkerCalleDisplay() {
                   </tr>
                 ))}
 
-                <tr className="summary-table-row fw-bold">
+                <tr className="summary-table-row fw-bold" style={totalRowStyle}>
                   <td className="source-name text-warning">Total</td>
                   {Array.from({ length: new Date(activeYear, activeMonth + 1, 0).getDate() }, (_, di) => {
                     let sum = 0;

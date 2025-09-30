@@ -97,6 +97,7 @@ export default function WorkerCalleDisplay() {
   const [selectedRoles, setSelectedRoles] = useState([]); // NEW: Job Roles filter
   const [selectedGender, setSelectedGender] = useState([]);
   const [reminderFilter, setReminderFilter] = useState(""); // '', 'overdue','today','tomorrow','upcoming'
+  const [selectedSource, setSelectedSource] = useState("All");
   const [sortBy, setSortBy] = useState("id"); // 'id' | 'name' | 'callReminderDate'
   const [sortDir, setSortDir] = useState("desc");
 
@@ -205,6 +206,12 @@ export default function WorkerCalleDisplay() {
   const filtered = useMemo(() => {
     const term = searchTerm.trim().toLowerCase();
     return workers.filter((w) => {
+      // call-through dropdown
+      if (selectedSource !== "All") {
+        const srcRaw = (w?.callThrough || w?.through || w?.source || "").trim();
+        const canon = normalizeSource(srcRaw);
+        if (canon !== selectedSource) return false;
+      }
       // search
       if (term) {
         const hay = `${w?.name ?? ""} ${w?.location ?? ""} ${String(w?.mobileNo ?? "")}`.toLowerCase();
@@ -239,7 +246,7 @@ export default function WorkerCalleDisplay() {
       }
       return true;
     });
-  }, [workers, searchTerm, selectedGender, selectedSkills, selectedRoles, reminderFilter]);
+  }, [workers, searchTerm, selectedGender, selectedSkills, selectedRoles, reminderFilter, selectedSource]);
 
   /* sorting (case-insensitive where applicable) */
   const sorted = useMemo(() => {
@@ -342,34 +349,50 @@ export default function WorkerCalleDisplay() {
     }
   }, [years, activeYear]);
 
-  // month summary per "callThrough"
+  // FIXED: month summary per "callThrough" - use normalizeSource for consistent matching
   const monthSummary = useMemo(() => {
     const summary = {};
     callThroughOptions.forEach((t) => { summary[t] = Array(12).fill(0); });
+
     workers.forEach((w) => {
       const d = parseDate(w?.date || w?.callReminderDate || w?.createdAt);
       if (!isValidDate(d) || d.getFullYear() !== activeYear) return;
+
       const m = d.getMonth();
-      const src = (w?.callThrough || w?.through || w?.source || "").trim();
-      const key = callThroughOptions.find(o => o.toLowerCase() === src.toLowerCase());
-      if (key) summary[key][m] += 1;
+      const srcRaw = (w?.callThrough || w?.through || w?.source || "").trim();
+      const normalizedSource = normalizeSource(srcRaw);
+
+      // Find the matching option (case-sensitive exact match)
+      const matchingOption = callThroughOptions.find(opt => opt === normalizedSource);
+
+      if (matchingOption) {
+        summary[matchingOption][m] += 1;
+      }
     });
     return summary;
   }, [workers, activeYear]);
 
-  // day summary for active month (compute always, guard with null)
+  // FIXED: day summary for active month - use normalizeSource for consistent matching
   const daySummary = useMemo(() => {
     if (activeMonth === null) return null;
     const daysInMonth = new Date(activeYear, activeMonth + 1, 0).getDate();
     const summary = {};
     callThroughOptions.forEach((t) => { summary[t] = Array(daysInMonth).fill(0); });
+
     workers.forEach((w) => {
       const d = parseDate(w?.date || w?.callReminderDate || w?.createdAt);
       if (!isValidDate(d) || d.getFullYear() !== activeYear || d.getMonth() !== activeMonth) return;
+
       const day = d.getDate(); // 1..days
-      const src = (w?.callThrough || w?.through || w?.source || "").trim();
-      const key = callThroughOptions.find(o => o.toLowerCase() === src.toLowerCase());
-      if (key) summary[key][day - 1] += 1;
+      const srcRaw = (w?.callThrough || w?.through || w?.source || "").trim();
+      const normalizedSource = normalizeSource(srcRaw);
+
+      // Find the matching option (case-sensitive exact match)
+      const matchingOption = callThroughOptions.find(opt => opt === normalizedSource);
+
+      if (matchingOption) {
+        summary[matchingOption][day - 1] += 1;
+      }
     });
     return summary;
   }, [workers, activeYear, activeMonth]);
@@ -413,8 +436,21 @@ export default function WorkerCalleDisplay() {
           placeholder="Search name, location, mobile…"
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
-          style={{ maxWidth: 550 }}
+          style={{ maxWidth: 350 }}
         />
+
+        {/* Call Through filter */}
+        <select
+          className="form-select opacity-75 ms-2"
+          style={{ maxWidth: 220 }}
+          value={selectedSource}
+          onChange={(e) => setSelectedSource(e.target.value)}
+        >
+          <option value="All">All Call Through</option>
+          {callThroughOptions.map((opt) => (
+            <option key={opt} value={opt}>{opt}</option>
+          ))}
+        </select>
 
         <div className="d-flex gap-2">
           <select className="form-select opacity-75" value={sortBy} onChange={(e) => setSortBy(e.target.value)}>
@@ -618,8 +654,7 @@ export default function WorkerCalleDisplay() {
               <tr>
                 <td colSpan="10"><div className="alert alert-warning mb-0">No records match your filters.</div></td>
               </tr>
-            )}
-          </tbody>
+            )}</tbody>
         </table>
       </div>
 
@@ -681,7 +716,7 @@ export default function WorkerCalleDisplay() {
           <tbody>
             {callThroughOptions.map((t) => (
               <tr key={t} className="summary-table-row">
-                <td className="source-name">{t}</td>
+                <td className="source-name text-info">{t}</td>
                 {(monthSummary[t] || Array(12).fill(0)).map((count, idx) => (
                   <td key={idx} className={count > 0 ? "has-data" : ""} style={{ cursor: "pointer" }} onClick={() => setActiveMonth(idx)}>
                     {count > 0 ? count : ""}
@@ -690,6 +725,20 @@ export default function WorkerCalleDisplay() {
                 <td className="total-cell">{(monthSummary[t] || Array(12).fill(0)).reduce((a, b) => a + b, 0)}</td>
               </tr>
             ))}
+            <tr className="summary-table-row fw-bold">
+              <td className="source-name text-warning">Total</td>
+              {months.map((_, mi) => {
+                let sum = 0;
+                callThroughOptions.forEach((t) => {
+                  const arr = monthSummary[t] || Array(12).fill(0);
+                  sum += arr[mi] || 0;
+                });
+                return <td className="text-warning" key={mi}>{sum || ""}</td>;
+              })}
+              <td className="total-cell">
+                {callThroughOptions.reduce((acc, t) => acc + (monthSummary[t] || Array(12).fill(0)).reduce((a, b) => a + b, 0), 0)}
+              </td>
+            </tr>
           </tbody>
         </table>
       </div>
@@ -704,7 +753,7 @@ export default function WorkerCalleDisplay() {
             <button className="btn btn-sm btn-outline-light" onClick={() => setActiveMonth(null)}>Close</button>
           </div>
           <div className="table-responsive summary-table-container">
-            <table className="table table-dark summary-table table-hover">
+            <table className="table table-dark table-sm summary-table table-hover" style={{ fontSize: "12px", tableLayout: "fixed" }}>
               <thead className="summary-table-header">
                 <tr>
                   <th>Call Through</th>
@@ -726,6 +775,21 @@ export default function WorkerCalleDisplay() {
                     <td className="total-cell">{daySummary ? (daySummary[t] || Array(new Date(activeYear, activeMonth + 1, 0).getDate()).fill(0)).reduce((a, b) => a + b, 0) : 0}</td>
                   </tr>
                 ))}
+
+                <tr className="summary-table-row fw-bold">
+                  <td className="source-name text-warning">Total</td>
+                  {Array.from({ length: new Date(activeYear, activeMonth + 1, 0).getDate() }, (_, di) => {
+                    let sum = 0;
+                    callThroughOptions.forEach((t) => {
+                      const arr = daySummary ? (daySummary[t] || Array(new Date(activeYear, activeMonth + 1, 0).getDate()).fill(0)) : [];
+                      sum += arr[di] || 0;
+                    });
+                    return <td className="text-warning" key={di}>{sum || ""}</td>;
+                  })}
+                  <td className="total-cell">
+                    {callThroughOptions.reduce((acc, t) => acc + (daySummary ? (daySummary[t] || Array(new Date(activeYear, activeMonth + 1, 0).getDate()).fill(0)).reduce((a, b) => a + b, 0) : 0), 0)}
+                  </td>
+                </tr>
               </tbody>
             </table>
           </div>

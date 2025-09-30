@@ -221,7 +221,7 @@ export default function PettyCashCard({ pettyCollection = "PettyCash" }) {
           seen.set(sig, true);
           const deleted = detectDeleted(r);
           const status = classifyStatus(r);
-          normalized.push({
+          normalized.push({ sig,
             id: r.id ?? `${r.__origin || "pc"}-${Math.random().toString(36).slice(2,9)}`,
             raw: r,
             __origin: r.__origin || "",
@@ -241,7 +241,9 @@ export default function PettyCashCard({ pettyCollection = "PettyCash" }) {
       });
 
       // totals (EXCLUDE deleted & reject)
-      let grand = 0, gcount = 0;
+      
+      let grand = 0;
+      let gcount = 0;
       const stat = {
         acknowledge: { total: 0, count: 0 },
         pending: { total: 0, count: 0 },
@@ -250,19 +252,25 @@ export default function PettyCashCard({ pettyCollection = "PettyCash" }) {
         unknown: { total: 0, count: 0 },
       };
 
+      // Count only unique, valid (non-deleted, non-rejected, amount>0) entries
+      const countSeen = new Set();
+
       normalized.forEach(e => {
         if (e.deleted) return;
         const st = e.status || "unknown";
-        if (st !== "reject") {
-          grand += Number(e.amountNum || 0);
-          gcount += 1;
-        }
         if (!stat[st]) stat[st] = { total: 0, count: 0 };
         stat[st].total += Number(e.amountNum || 0);
         stat[st].count += 1;
-      });
 
-      setEntries(
+        if (st !== "reject" && Number(e.amountNum || 0) > 0) {
+          grand += Number(e.amountNum || 0);
+          if (!countSeen.has(e.sig)) {
+            countSeen.add(e.sig);
+            gcount += 1;
+          }
+        }
+      });
+setEntries(
         normalized.sort((a,b) => (b.dateParsed?.getTime()||0) - (a.dateParsed?.getTime()||0))
       );
       setUnknownDateCount(normalized.filter(e => !e.dateParsed).length);

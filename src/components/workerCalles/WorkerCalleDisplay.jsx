@@ -50,8 +50,8 @@ const normalizeArray = (val) =>
   Array.isArray(val)
     ? val.filter(Boolean)
     : typeof val === "string"
-    ? val.split(",").map((s) => s.trim()).filter(Boolean)
-    : [];
+      ? val.split(",").map((s) => s.trim()).filter(Boolean)
+      : [];
 
 /* ------------ looks-like-a-worker detector ------------ */
 const isWorkerShape = (v) => {
@@ -105,10 +105,49 @@ export default function WorkerCalleDisplay() {
   const [rowsPerPage, setRowsPerPage] = useState(10);
 
   // summary (year / month / day)
-  const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
   const callThroughOptions = [
-    "Apana","WorkerIndian","Reference","Poster","Agent","Facebook","LinkedIn","Instagram","YouTube","Website","Just Dail","News Paper"
+    "Apana", "WorkerIndian", "Reference", "Poster", "Agent", "Facebook", "LinkedIn", "Instagram", "YouTube", "Website", "Just Dial", "News Paper", "Other"
   ];
+
+  // Canonicalize various spellings/inputs into a fixed set
+  const normalizeSource = (raw) => {
+    if (!raw) return "Other";
+    const s = String(raw).trim().toLowerCase();
+    const map = new Map([
+      ["apna", "Apana"], ["apana", "Apana"],
+      ["workerindian", "WorkerIndian"],
+      ["reference", "Reference"],
+      ["poster", "Poster"],
+      ["agent", "Agent"],
+      ["facebook", "Facebook"],
+      ["linkedin", "LinkedIn"], ["linked in", "LinkedIn"],
+      ["instagram", "Instagram"],
+      ["youtube", "YouTube"], ["you tube", "YouTube"],
+      ["website", "Website"],
+      ["just dial", "Just Dial"], ["just dail", "Just Dial"], ["justdail", "Just Dial"], ["justdial", "Just Dial"],
+      ["news paper", "News Paper"], ["newspaper", "News Paper"],
+    ]);
+    if (map.has(s)) return map.get(s);
+
+    // try relaxed matches
+    if (s.includes("apna") || s.includes("apana")) return "Apana";
+    if (s.includes("worker")) return "WorkerIndian";
+    if (s.includes("refer")) return "Reference";
+    if (s.includes("poster")) return "Poster";
+    if (s.includes("agent")) return "Agent";
+    if (s.includes("facebook")) return "Facebook";
+    if (s.includes("link") && s.includes("in")) return "LinkedIn";
+    if (s.includes("insta")) return "Instagram";
+    if (s.includes("you") && s.includes("tube")) return "YouTube";
+    if (s.includes("site") || s.includes("web")) return "Website";
+    if (s.replace(/\s+/g, "") === "justdial" || s.replace(/\s+/g, "") === "justdail") return "Just Dial";
+    if (s.includes("news") && s.includes("paper")) return "News Paper";
+
+    return "Other";
+  };
+
   const [activeYear, setActiveYear] = useState(new Date().getFullYear());
   const [activeMonth, setActiveMonth] = useState(null); // 0-11 or null
 
@@ -118,7 +157,12 @@ export default function WorkerCalleDisplay() {
     const cb = ref.on("value", (snap) => {
       try {
         const list = collectWorkersFromSnapshot(snap);
-        setWorkers(list);
+        // ensure a 'date' exists in-memory (do not write to DB)
+        const enriched = list.map(w => ({
+          ...w,
+          date: w?.date || w?.createdAt || w?.callReminderDate || new Date().toISOString()
+        }));
+        setWorkers(enriched);
         setLoading(false);
       } catch (e) {
         setError(e.message || "Failed to load data");
@@ -145,8 +189,8 @@ export default function WorkerCalleDisplay() {
   // Options for filters
   const skillOptions = ["Nursing", "Patient Care", "Care Taker", "Old Age Care", "Baby Care", "Bedside Attender", "Supporting", "Any duty", "Daiper"];
   const roleOptions = [
-    "Computer Operating","Tele Calling","Driving","Supervisor","Manager","Attender","Security",
-    "Carpenter","Painter","Plumber","Electrician","Mason (Home maker)","Tailor","Labour","Farmer","Delivery Boy"
+    "Computer Operating", "Tele Calling", "Driving", "Supervisor", "Manager", "Attender", "Security",
+    "Carpenter", "Painter", "Plumber", "Electrician", "Mason (Home maker)", "Tailor", "Labour", "Farmer", "Delivery Boy"
   ];
 
   // Helper to get a worker's roles value across possible keys (string or array)
@@ -253,20 +297,20 @@ export default function WorkerCalleDisplay() {
   /* export current filtered view */
   const handleExport = () => {
     const exportData = sorted.map((w, i) => {
-      const du = daysUntil(w?.callReminderDate);
+      const baseDate = w?.date || w?.createdAt || w?.callReminderDate;
+      const du = daysUntil(w?.callReminderDate || w?.reminderDate || w?.date || w?.createdAt);
       const duText = isFinite(du)
         ? du === 0 ? "Today" : du === 1 ? "Tomorrow" : du < 0 ? `${Math.abs(du)} days ago` : `${du} days`
         : "";
       const comms = (w?.communications ?? w?.communication ?? w?.conversation ?? w?.conversationLevel ?? "") || "";
-      const callThrough = w?.callThrough || w?.through || w?.source || "";
+      const callThrough = normalizeSource(w?.callThrough || w?.through || w?.source || "");
       return {
         "S.No": i + 1,
+        Date: formatDDMMYYYY(baseDate),
         Name: w?.name ?? "",
-        Location: w?.location ?? "",
         Gender: w?.gender ?? "",
         Skills: normalizeArray(w?.skills).join(", "),
-        Roles: normalizeArray(w?.jobRole ?? w?.role ?? w?.roles ?? w?.profession ?? w?.designation ?? w?.workType ?? "").join(", "),
-        "Reminder Date": formatDDMMYYYY(w?.callReminderDate),
+        "Reminder Date": formatDDMMYYYY(w?.callReminderDate || w?.reminderDate || w?.date || w?.createdAt),
         "Days Until": duText,
         Mobile: w?.mobileNo ?? "",
         Communications: comms,
@@ -360,7 +404,7 @@ export default function WorkerCalleDisplay() {
           >
             {[10, 20, 30, 40, 50].map(n => <option key={n} value={n}>{n}</option>)}
           </select>
-          <span className="ms-2 text-white opacity-75">entries</span>
+          <span className="ms-2 text-white opacity-75">Entries</span>
         </div>
 
         <input
@@ -369,7 +413,7 @@ export default function WorkerCalleDisplay() {
           placeholder="Search name, location, mobile…"
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
-          style={{ maxWidth: 500 }}
+          style={{ maxWidth: 550 }}
         />
 
         <div className="d-flex gap-2">
@@ -422,14 +466,14 @@ export default function WorkerCalleDisplay() {
               <input
                 type="checkbox"
                 className="form-check-input me-1"
-                checked={selectedGender.map(x=>String(x).toLowerCase()).includes(String(g).toLowerCase())}
+                checked={selectedGender.map(x => String(x).toLowerCase()).includes(String(g).toLowerCase())}
                 onChange={(e) =>
                   setSelectedGender((prev) => {
                     const low = String(g).toLowerCase();
                     if (e.target.checked) {
-                      return Array.from(new Set([...prev.map(x=>String(x).toLowerCase()), low]));
+                      return Array.from(new Set([...prev.map(x => String(x).toLowerCase()), low]));
                     } else {
-                      return prev.map(x=>String(x).toLowerCase()).filter(x => x !== low);
+                      return prev.map(x => String(x).toLowerCase()).filter(x => x !== low);
                     }
                   })
                 }
@@ -444,14 +488,14 @@ export default function WorkerCalleDisplay() {
               <input
                 type="checkbox"
                 className="form-check-input me-1"
-                checked={selectedSkills.map(x=>String(x).toLowerCase()).includes(String(s).toLowerCase())}
+                checked={selectedSkills.map(x => String(x).toLowerCase()).includes(String(s).toLowerCase())}
                 onChange={(e) =>
                   setSelectedSkills((prev) => {
                     const low = String(s).toLowerCase();
                     if (e.target.checked) {
-                      return Array.from(new Set([...prev.map(x=>String(x).toLowerCase()), low]));
+                      return Array.from(new Set([...prev.map(x => String(x).toLowerCase()), low]));
                     } else {
-                      return prev.map(x=>String(x).toLowerCase()).filter(x => x !== low);
+                      return prev.map(x => String(x).toLowerCase()).filter(x => x !== low);
                     }
                   })
                 }
@@ -460,21 +504,21 @@ export default function WorkerCalleDisplay() {
           ))}
         </div>
         <div>
-        <hr></hr>
+          <hr></hr>
           <h6 className="mb-1">Job Role</h6>
           {roleOptions.map((r) => (
             <label key={r} className="me-3">
               <input
                 type="checkbox"
                 className="form-check-input me-1"
-                checked={selectedRoles.map(x=>String(x).toLowerCase()).includes(String(r).toLowerCase())}
+                checked={selectedRoles.map(x => String(x).toLowerCase()).includes(String(r).toLowerCase())}
                 onChange={(e) =>
                   setSelectedRoles((prev) => {
                     const low = String(r).toLowerCase();
                     if (e.target.checked) {
-                      return Array.from(new Set([...prev.map(x=>String(x).toLowerCase()), low]));
+                      return Array.from(new Set([...prev.map(x => String(x).toLowerCase()), low]));
                     } else {
-                      return prev.map(x=>String(x).toLowerCase()).filter(x => x !== low);
+                      return prev.map(x => String(x).toLowerCase()).filter(x => x !== low);
                     }
                   })
                 }
@@ -486,7 +530,7 @@ export default function WorkerCalleDisplay() {
       <hr></hr>
 
       {/* status line */}
-      <div className="mb-2 text-muted small">
+      <div className="mb-3 small" style={{ color: "yellow" }}>
         Showing <strong>{pageItems.length}</strong> of <strong>{sorted.length}</strong> (from <strong>{workers.length}</strong> total)
         {reminderFilter ? ` — ${reminderFilter}` : ""}
       </div>
@@ -497,12 +541,11 @@ export default function WorkerCalleDisplay() {
           <thead>
             <tr>
               <th>S.No</th>
+              <th>Date</th>
               <th>Name</th>
-              <th>Location</th>
               <th>Gender</th>
               <th>Reminder Date</th>
               <th>Skills</th>
-              <th>Roles</th>
               <th>Mobile</th>
               <th>Communications</th>
               <th>Call Through</th>
@@ -515,7 +558,7 @@ export default function WorkerCalleDisplay() {
               const duLabel = isFinite(du)
                 ? du === 0 ? "Today" : du === 1 ? "Tomorrow" : du < 0 ? `${Math.abs(du)} days ago` : `${du} days`
                 : "";
-              const callThrough = w?.callThrough || w?.through || w?.source || "—";
+              const callThrough = normalizeSource(w?.callThrough || w?.through || w?.source || "");
               const comms = (w?.communications ?? w?.communication ?? w?.conversation ?? w?.conversationLevel ?? "") || "N/A";
               const roles = normalizeArray(w?.jobRole ?? w?.role ?? w?.roles ?? w?.profession ?? w?.designation ?? w?.workType ?? "");
               return (
@@ -529,33 +572,35 @@ export default function WorkerCalleDisplay() {
                   style={{ cursor: "pointer" }}
                 >
                   <td>{indexOfFirst + idx + 1}</td>
+                  {/* show primary date */}
+                  <td>{formatDDMMYYYY(w?.date || w?.createdAt || w?.callReminderDate)}</td>
                   <td>{w?.name || "N/A"}</td>
-                  <td>{w?.location || "N/A"}</td>
                   <td>{w?.gender || "N/A"}</td>
+
+
                   <td>
-                    {formatDDMMYYYY(w?.callReminderDate)}
+                    {formatDDMMYYYY(w?.callReminderDate || w?.reminderDate || w?.date || w?.createdAt)}
                     {duLabel && <small className="d-block text-muted">{duLabel}</small>}
                   </td>
                   <td>{normalizeArray(w?.skills).join(", ") || "N/A"}</td>
-                  <td>{roles.length ? roles.join(", ") : "N/A"}</td>
-                  <td>{w?.mobileNo || "N/A"}</td>
+                  <td>{w?.mobileNo || "N/A"}       {w?.mobileNo && (
+                    <>&nbsp; &nbsp;
+                      <a href={`tel:${w.mobileNo}`} className="btn btn-sm btn-info me-2">Call</a>
+                      <a
+                        className="btn btn-sm btn-warning me-2"
+                        href={`https://wa.me/${String(w.mobileNo).replace(/\D/g, "")}?text=${encodeURIComponent(
+                          "Hello, This is Sudheer From JenCeo Home Care Services"
+                        )}`}
+                        target="_blank" rel="noopener noreferrer"
+                      >
+                        WAP
+                      </a>
+                    </>
+                  )}</td>
                   <td>{comms}</td>
                   <td><span className="badge bg-secondary">{callThrough}</span></td>
                   <td>
-                    {w?.mobileNo && (
-                      <>
-                        <a href={`tel:${w.mobileNo}`} className="btn btn-sm btn-info me-2">Call</a>
-                        <a
-                          className="btn btn-sm btn-warning me-2"
-                          href={`https://wa.me/${String(w.mobileNo).replace(/\D/g, "")}?text=${encodeURIComponent(
-                            "Hello, This is Sudheer From JenCeo Home Care Services"
-                          )}`}
-                          target="_blank" rel="noopener noreferrer"
-                        >
-                          WAP
-                        </a>
-                      </>
-                    )}
+
                     <button className="btn btn-sm me-2" title="View" onClick={() => handleView(w)}>
                       <img src={viewIcon} alt="view" width="18" height="18" />
                     </button>
@@ -571,7 +616,7 @@ export default function WorkerCalleDisplay() {
             })}
             {pageItems.length === 0 && (
               <tr>
-                <td colSpan="11"><div className="alert alert-warning mb-0">No records match your filters.</div></td>
+                <td colSpan="10"><div className="alert alert-warning mb-0">No records match your filters.</div></td>
               </tr>
             )}
           </tbody>
@@ -621,12 +666,12 @@ export default function WorkerCalleDisplay() {
 
       {/* Month-wise table */}
       <div className="table-responsive summary-table-container">
-        <table className="table table-dark summary-table table-hover">
+        <table className="table table-dark table-sm summary-table table-hover" style={{ fontSize: "12px", tableLayout: "fixed" }}>
           <thead className="summary-table-header">
             <tr>
               <th>Call Through</th>
               {months.map((m, mi) => (
-                <th key={m} style={{cursor:"pointer"}} onClick={() => setActiveMonth(mi)}>
+                <th key={m} style={{ cursor: "pointer" }} onClick={() => setActiveMonth(mi)}>
                   {m}
                 </th>
               ))}
@@ -637,12 +682,12 @@ export default function WorkerCalleDisplay() {
             {callThroughOptions.map((t) => (
               <tr key={t} className="summary-table-row">
                 <td className="source-name">{t}</td>
-                {monthSummary[t].map((count, idx) => (
-                  <td key={idx} className={count > 0 ? "has-data" : ""} style={{cursor:"pointer"}} onClick={() => setActiveMonth(idx)}>
+                {(monthSummary[t] || Array(12).fill(0)).map((count, idx) => (
+                  <td key={idx} className={count > 0 ? "has-data" : ""} style={{ cursor: "pointer" }} onClick={() => setActiveMonth(idx)}>
                     {count > 0 ? count : ""}
                   </td>
                 ))}
-                <td className="total-cell">{monthSummary[t].reduce((a, b) => a + b, 0)}</td>
+                <td className="total-cell">{(monthSummary[t] || Array(12).fill(0)).reduce((a, b) => a + b, 0)}</td>
               </tr>
             ))}
           </tbody>
@@ -664,7 +709,7 @@ export default function WorkerCalleDisplay() {
                 <tr>
                   <th>Call Through</th>
                   {Array.from({ length: new Date(activeYear, activeMonth + 1, 0).getDate() }, (_, i) => i + 1).map((d) => (
-                    <th key={d}>{d}</th>
+                    <th key={d} style={{ whiteSpace: "nowrap", padding: "2px 4px" }}>{d}</th>
                   ))}
                   <th>Total</th>
                 </tr>
@@ -673,12 +718,12 @@ export default function WorkerCalleDisplay() {
                 {callThroughOptions.map((t) => (
                   <tr key={t} className="summary-table-row">
                     <td className="source-name">{t}</td>
-                    {daySummary && daySummary[t].map((count, idx) => (
-                      <td key={idx} className={count > 0 ? "has-data" : ""}>
+                    {(daySummary && (daySummary[t] || Array(new Date(activeYear, activeMonth + 1, 0).getDate()).fill(0))).map((count, idx) => (
+                      <td key={idx} className={count > 0 ? "has-data" : ""} style={{ whiteSpace: "nowrap", padding: "2px 4px" }}>
                         {count > 0 ? count : ""}
                       </td>
                     ))}
-                    <td className="total-cell">{daySummary ? daySummary[t].reduce((a, b) => a + b, 0) : 0}</td>
+                    <td className="total-cell">{daySummary ? (daySummary[t] || Array(new Date(activeYear, activeMonth + 1, 0).getDate()).fill(0)).reduce((a, b) => a + b, 0) : 0}</td>
                   </tr>
                 ))}
               </tbody>

@@ -119,7 +119,7 @@ export default function WorkerCallForm({ isOpen, onClose }) {
       setStep(step + 1);
     }
   };
-  
+
   const prevStep = () => setStep(step - 1);
 
   const handleSubmit = async (e) => {
@@ -186,9 +186,8 @@ export default function WorkerCallForm({ isOpen, onClose }) {
                           value={formData.mobileNo}
                           onChange={handleChange}
                           onBlur={handleBlur}
-                          className={`form-control ${
-                            errors.mobileNo ? "is-invalid" : ""
-                          }`}
+                          className={`form-control ${errors.mobileNo ? "is-invalid" : ""
+                            }`}
                           maxLength={10}
                         />
                         {errors.mobileNo && (
@@ -203,9 +202,8 @@ export default function WorkerCallForm({ isOpen, onClose }) {
                           value={formData.name}
                           onChange={handleChange}
                           onBlur={handleBlur}
-                          className={`form-control ${
-                            errors.name ? "is-invalid" : ""
-                          }`}
+                          className={`form-control ${errors.name ? "is-invalid" : ""
+                            }`}
                         />
                         {errors.name && (
                           <div className="invalid-feedback">{errors.name}</div>
@@ -223,9 +221,8 @@ export default function WorkerCallForm({ isOpen, onClose }) {
                           value={formData.location}
                           onChange={handleChange}
                           onBlur={handleBlur}
-                          className={`form-control ${
-                            errors.location ? "is-invalid" : ""
-                          }`}
+                          className={`form-control ${errors.location ? "is-invalid" : ""
+                            }`}
                         />
                         {errors.location && (
                           <div className="invalid-feedback">{errors.location}</div>
@@ -238,9 +235,8 @@ export default function WorkerCallForm({ isOpen, onClose }) {
                           value={formData.source}
                           onChange={handleChange}
                           onBlur={handleBlur}
-                          className={`form-select ${
-                            errors.source ? "is-invalid" : ""
-                          }`}
+                          className={`form-select ${errors.source ? "is-invalid" : ""
+                            }`}
                         >
                           <option value="">Select</option>
                           {[
@@ -277,9 +273,8 @@ export default function WorkerCallForm({ isOpen, onClose }) {
                           value={formData.gender}
                           onChange={handleChange}
                           onBlur={handleBlur}
-                          className={`form-select ${
-                            errors.gender ? "is-invalid" : ""
-                          }`}
+                          className={`form-select ${errors.gender ? "is-invalid" : ""
+                            }`}
                         >
                           <option value="">Select</option>
                           <option value="Male">Male</option>
@@ -316,9 +311,8 @@ export default function WorkerCallForm({ isOpen, onClose }) {
                           value={formData.age}
                           onChange={handleChange}
                           onBlur={handleBlur}
-                          className={`form-control ${
-                            errors.age ? "is-invalid" : ""
-                          }`}
+                          className={`form-control ${errors.age ? "is-invalid" : ""
+                            }`}
                         />
                         {errors.age && (
                           <div className="invalid-feedback">{errors.age}</div>
@@ -361,30 +355,46 @@ export default function WorkerCallForm({ isOpen, onClose }) {
                             value={formData.years}
                             onChange={handleChange}
                             onBlur={handleBlur}
-                            className={`form-control ${
-                              errors.years ? "is-invalid" : ""
-                            }`}
+                            className={`form-control ${errors.years ? "is-invalid" : ""
+                              }`}
                           />
                           {errors.years && (
                             <div className="invalid-feedback">{errors.years}</div>
                           )}
                         </div>
                         <div className="col-md-6">
-                          <label className="form-label">Skills</label>
-                          <input
-                            type="text"
+                          <label className="form-label">Primary Skills</label>
+                          <select
                             name="skills"
                             value={formData.skills}
                             onChange={handleChange}
                             onBlur={handleBlur}
-                            className={`form-control ${
-                              errors.skills ? "is-invalid" : ""
-                            }`}
-                          />
+                            className={`form-select ${errors.skills ? "is-invalid" : ""}`}
+                          >
+                            <option value="">-- Select Skill --</option>
+                            {[
+                              "Nursing",
+                              "Patient Care",
+                              "Care Taker",
+                              "Old Age Care",
+                              "Baby Care",
+                              "Bedside Attender",
+                              "Supporting",
+                              "Any duty",
+                              "Daiper",
+                              "Others",
+                              "Any Duty"
+                            ].map((skill) => (
+                              <option key={skill} value={skill}>
+                                {skill}
+                              </option>
+                            ))}
+                          </select>
                           {errors.skills && (
                             <div className="invalid-feedback">{errors.skills}</div>
                           )}
                         </div>
+
                       </div>
                     )}
                   </div>
@@ -476,9 +486,8 @@ export default function WorkerCallForm({ isOpen, onClose }) {
                           value={formData.education}
                           onChange={handleChange}
                           onBlur={handleBlur}
-                          className={`form-control ${
-                            errors.education ? "is-invalid" : ""
-                          }`}
+                          className={`form-control ${errors.education ? "is-invalid" : ""
+                            }`}
                         />
                         {errors.education && (
                           <div className="invalid-feedback">{errors.education}</div>
@@ -495,7 +504,7 @@ export default function WorkerCallForm({ isOpen, onClose }) {
                               checked={formData.workingHours === "12"}
                               onChange={handleChange}
                             />
-                           
+
                             <label className="form-check-label"> &nbsp;&nbsp;12 Hours</label>
                           </div>
                           <div className="form-check form-check-inline">
@@ -551,9 +560,8 @@ export default function WorkerCallForm({ isOpen, onClose }) {
                           value={formData.conversationLevel}
                           onChange={handleChange}
                           onBlur={handleBlur}
-                          className={`form-select ${
-                            errors.conversationLevel ? "is-invalid" : ""
-                          }`}
+                          className={`form-select ${errors.conversationLevel ? "is-invalid" : ""
+                            }`}
                         >
                           <option value="">Select</option>
                           <option value="Very Good">Very Good</option>
@@ -577,9 +585,8 @@ export default function WorkerCallForm({ isOpen, onClose }) {
                             name="callReminderDate"
                             value={formData.callReminderDate}
                             onChange={handleChange}
-                            className={`form-control ${
-                              errors.callReminderDate ? "is-invalid" : ""
-                            }`}
+                            className={`form-control ${errors.callReminderDate ? "is-invalid" : ""
+                              }`}
                             min={new Date().toISOString().split("T")[0]}
                           />
                           {formData.callReminderDate && (

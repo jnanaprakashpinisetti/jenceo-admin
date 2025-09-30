@@ -12,6 +12,7 @@ import {
   Pie,
   Cell,
   Legend,
+  LabelList,
 } from "recharts";
 
 /* ---------------------- Firebase helper ---------------------- */
@@ -20,12 +21,12 @@ async function importFirebaseDB() {
     const a = await import("../../firebase");
     if (a && a.default) return a.default;
     if (a && a.firebaseDB) return a.firebaseDB;
-  } catch {}
+  } catch { }
   try {
     const b = await import("../firebase");
     if (b && b.default) return b.default;
     if (b && b.firebaseDB) return b.firebaseDB;
-  } catch {}
+  } catch { }
   if (typeof window !== "undefined" && window.firebaseDB) return window.firebaseDB;
   return null;
 }
@@ -38,6 +39,8 @@ const COLORS = {
   investments: "#fb7185", // rose-400
   staff: "#60a5fa", // blue-400
   worker: "#f59e0b", // amber-500
+  commission: "#8b5cf6", // violet-500
+  hospitalref: "#0ea5e9", // sky-500
 };
 const PIE_COLORS = ["#10b981", "#f43f5e", "#22c55e", "#fb7185", "#60a5fa", "#f59e0b", "#8b5cf6", "#0ea5e9", "#14b8a6"];
 
@@ -51,7 +54,7 @@ function safeNumber(v) {
 }
 function parseDateRobust(v) {
   if (!v && v !== 0) return null;
-  try { if (v instanceof Date && !isNaN(v)) return v; } catch {}
+  try { if (v instanceof Date && !isNaN(v)) return v; } catch { }
   const s = String(v || "").trim();
   if (!s) return null;
   if (/^\d{10,13}$/.test(s)) { const n = Number(s); return new Date(n < 1e12 ? n * 1000 : n); }
@@ -61,12 +64,12 @@ function parseDateRobust(v) {
   if (m) return new Date(Number(m[3]), Number(m[2]) - 1, Number(m[1]));
   const mm = s.match(/([A-Za-z]+)[,]?\s*(\d{4})/);
   if (mm) {
-    const idx = ["jan","feb","mar","apr","may","jun","jul","aug","sep","oct","nov","dec"].indexOf(mm[1].slice(0,3).toLowerCase());
+    const idx = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"].indexOf(mm[1].slice(0, 3).toLowerCase());
     if (idx >= 0) return new Date(Number(mm[2]), idx, 1);
   }
   return null;
 }
-function monthKey(d) { const dt = d instanceof Date ? d : parseDateRobust(d); if (!dt) return "Unknown"; return `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,"0")}`; }
+function monthKey(d) { const dt = d instanceof Date ? d : parseDateRobust(d); if (!dt) return "Unknown"; return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, "0")}`; }
 function yearKey(d) { const dt = d instanceof Date ? d : parseDateRobust(d); if (!dt) return "Unknown"; return String(dt.getFullYear()); }
 function asArray(node) { if (!node) return []; if (Array.isArray(node)) return node; if (typeof node === "object") return Object.values(node); return []; }
 
@@ -133,7 +136,7 @@ function extractPetty(node = {}) {
 /** Assets (leaf-only + robust) */
 function extractAssets(node = {}) {
   const out = [];
-  const monetaryKeys = ["total","amount","value","totalNum","cost","totalAmount","amountPaid","price","unitPrice","unit_price","rate"];
+  const monetaryKeys = ["total", "amount", "value", "totalNum", "cost", "totalAmount", "amountPaid", "price", "unitPrice", "unit_price", "rate"];
   const isPlainObj = (x) => x && typeof x === "object" && !Array.isArray(x);
   const hasMonetary = (o) => isPlainObj(o) && monetaryKeys.some((k) => o[k] !== undefined && o[k] !== null && safeNumber(o[k]) !== 0);
 
@@ -264,6 +267,42 @@ function extractWorkersFromCollections(node = {}) {
         const amount = safeNumber(p.amount ?? p.salary ?? p.paidAmount ?? 0);
         const date = p.date ?? p.paymentDate ?? p.paidOn ?? emp.createdAt ?? "";
         if (amount) out.push({ type: "worker", amount, date, parsedDate: parseDateRobust(date), category: "Worker", raw: p });
+      });
+    }
+  });
+  return out;
+}
+
+// Commission from HospitalData payments
+function extractCommission(node = {}) {
+  const out = [];
+  Object.values(node || {}).forEach((hospital) => {
+    const pays = Array.isArray(hospital?.payments) ? hospital.payments : (hospital?.payments && typeof hospital.payments === "object" ? Object.values(hospital.payments) : []);
+    if (pays && pays.length) {
+      pays.forEach((p) => {
+        if (!p) return;
+        const commission = safeNumber(p.commition ?? p.commission ?? p.agentCommission ?? p.commissionAmount ?? 0);
+        const date = p.date ?? p.paymentDate ?? p.paidOn ?? hospital.createdAt ?? "";
+        const agent = p.agentName ?? p.agent ?? p.referredBy ?? "Agent";
+        if (commission) out.push({ type: "commission", amount: commission, date, parsedDate: parseDateRobust(date), category: agent, raw: p });
+      });
+    }
+  });
+  return out;
+}
+
+// Hospital Ref (serviceCharges) from HospitalData
+function extractHospitalRef(node = {}) {
+  const out = [];
+  Object.values(node || {}).forEach((hospital) => {
+    const pays = Array.isArray(hospital?.payments) ? hospital.payments : (hospital?.payments && typeof hospital.payments === "object" ? Object.values(hospital.payments) : []);
+    if (pays && pays.length) {
+      pays.forEach((p) => {
+        if (!p) return;
+        const serviceCharges = safeNumber(p.serviceCharges ?? p.serviceCharge ?? p.hospitalCharges ?? 0);
+        const date = p.date ?? p.paymentDate ?? p.paidOn ?? hospital.createdAt ?? "";
+        const hospitalName = hospital.hospitalName ?? hospital.name ?? hospital.title ?? "Hospital";
+        if (serviceCharges) out.push({ type: "hospitalref", amount: serviceCharges, date, parsedDate: parseDateRobust(date), category: hospitalName, raw: p });
       });
     }
   });
@@ -403,9 +442,10 @@ export default function ResultsGrafCard({
   investmentsCollection = "Investments",
   staffCollections = { active: "StaffBioData", exit: "ExitStaffs" },
   workerCollections = { active: "EmployeeBioData", exit: "ExitEmployees" },
+  hospitalCollection = "HospitalData",
 }) {
   const [loading, setLoading] = useState(true);
-  const [rows, setRows] = useState({ client: [], petty: [], assets: [], investments: [], staff: [], worker: [] });
+  const [rows, setRows] = useState({ client: [], petty: [], assets: [], investments: [], staff: [], worker: [], commission: [], hospitalref: [] });
   const [mode, setMode] = useState("monthly"); // monthly | yearly
   const [activeRange, setActiveRange] = useState("ALL"); // ALL | YTD | 12M | 6M | 4M | 3M
   const [modalOpen, setModalOpen] = useState(false);
@@ -459,6 +499,9 @@ export default function ResultsGrafCard({
       attach(workerCollections.active, "workerActive");
       attach(workerCollections.exit, "workerExit");
 
+      // Hospital Data (for Commission and Hospital Ref)
+      attach(hospitalCollection, "hospitalData");
+
       function rebuild() {
         // Clients
         const clientRows = [];
@@ -484,7 +527,7 @@ export default function ResultsGrafCard({
           const mainCat = String((raw.category ?? raw.mainCategory ?? raw.assetCategory ?? raw.type ?? "") || "").toLowerCase();
           const month = monthKey(r.parsedDate || r.date);
           const strong = id ? `id:${id}` : null;
-          const fuzzy = `amt:${Number(r.amount||0)}|cat:${mainCat}|name:${name}|mon:${month}`;
+          const fuzzy = `amt:${Number(r.amount || 0)}|cat:${mainCat}|name:${name}|mon:${month}`;
           const sig = strong ?? fuzzy;
           if (aSeen.has(sig)) return false;
           aSeen.add(sig);
@@ -504,6 +547,12 @@ export default function ResultsGrafCard({
         workerRows.push(...extractWorkersFromCollections(snapshots.workerActive || {}));
         workerRows.push(...extractWorkersFromCollections(snapshots.workerExit || {}));
 
+        // Commission from HospitalData
+        const commissionRows = extractCommission(snapshots.hospitalData || {});
+
+        // Hospital Ref (serviceCharges) from HospitalData
+        const hospitalRefRows = extractHospitalRef(snapshots.hospitalData || {});
+
         // Sort by date desc
         const byDateDesc = (a, b) => (b.parsedDate?.getTime?.() || 0) - (a.parsedDate?.getTime?.() || 0);
         clientRows.sort(byDateDesc);
@@ -512,9 +561,20 @@ export default function ResultsGrafCard({
         investRows.sort(byDateDesc);
         staffRows.sort(byDateDesc);
         workerRows.sort(byDateDesc);
+        commissionRows.sort(byDateDesc);
+        hospitalRefRows.sort(byDateDesc);
 
         if (mounted) {
-          setRows({ client: clientRows, petty: pettyRows, assets: assetRows, investments: investRows, staff: staffRows, worker: workerRows });
+          setRows({
+            client: clientRows,
+            petty: pettyRows,
+            assets: assetRows,
+            investments: investRows,
+            staff: staffRows,
+            worker: workerRows,
+            commission: commissionRows,
+            hospitalref: hospitalRefRows
+          });
           setLoading(false);
         }
       }
@@ -522,9 +582,9 @@ export default function ResultsGrafCard({
 
     return () => {
       mounted = false;
-      try { listeners.forEach(({ ref, cb }) => ref.off("value", cb)); } catch {}
+      try { listeners.forEach(({ ref, cb }) => ref.off("value", cb)); } catch { }
     };
-  }, [clientCollections.active, clientCollections.exit, pettyCollection, assetsCollection, investmentsCollection, staffCollections.active, staffCollections.exit, workerCollections.active, workerCollections.exit]);
+  }, [clientCollections.active, clientCollections.exit, pettyCollection, assetsCollection, investmentsCollection, staffCollections.active, staffCollections.exit, workerCollections.active, workerCollections.exit, hospitalCollection]);
 
   // Date range filter (added 12M, 6M, 4M, 3M)
   const filteredRows = useMemo(() => {
@@ -565,6 +625,8 @@ export default function ResultsGrafCard({
     investments: { title: "Investments by Investor", data: toPie(filteredRows.investments, "category") },
     staff: { title: "Staff Salaries", data: toPie(filteredRows.staff, "category") },
     worker: { title: "Worker Salaries", data: toPie(filteredRows.worker, "category") },
+    commission: { title: "Comm by Agent", data: toPie(filteredRows.commission, "category") },
+    hospitalref: { title: "Hospital Service Charges", data: toPie(filteredRows.hospitalref, "category") },
   }), [filteredRows]);
 
   // totals
@@ -577,6 +639,8 @@ export default function ResultsGrafCard({
       investments: sum(filteredRows.investments),
       staff: sum(filteredRows.staff),
       worker: sum(filteredRows.worker),
+      commission: sum(filteredRows.commission),
+      hospitalref: sum(filteredRows.hospitalref),
     };
   }, [filteredRows]);
 
@@ -608,7 +672,7 @@ export default function ResultsGrafCard({
 
       {/* Modal */}
       {modalOpen && (
-        <div className="modal fade show" style={{ display: "block", background: "rgba(2,6,23,0.55)" }} onClick={() => setModalOpen(false)}>
+        <div className="modal fade show" style={{ display: "block", background: "rgba(2,6,23,0.9)" }} onClick={() => setModalOpen(false)}>
           <div className="modal-dialog modal-xl modal-dialog-centered" onClick={(e) => e.stopPropagation()} ref={modalRef}>
             <div className="modal-content overflow-hidden">
               <div className="modal-header gradient-header text-white">
@@ -644,59 +708,99 @@ export default function ResultsGrafCard({
 
                   <div className="ms-auto btn-group btn-group-sm" role="group" aria-label="Select category">
                     {[
-                      ["client","Client"],
-                      ["investments","Invest"],
-                      ["worker","Workers"],
-                      ["staff","Staff"],
-                      ["petty","Petty"],
-                      ["assets","Assets"],
-                    ].map(([val, lab]) => (
-                      <button key={val} className={`btn btn-outline-info ${pieView===val?"active":""}`} onClick={() => setPieView(val)}>{lab}</button>
+                      ["client", "Client"],
+                      ["investments", "Invest"],
+                      ["worker", "Workers"],
+                      ["staff", "Staff"],
+                      ["petty", "Petty"],
+                      ["assets", "Assets"],
+                      ["commission", "Com"],
+                      ["hospitalref", "Hosp Ref"],
+
+                    ].map(([key, label]) => (
+                      <button
+                        key={key}
+                        type="button"
+                        className={`btn ${pieView === key ? "btn-primary" : "btn-outline-primary"}`}
+                        onClick={() => setPieView(key)}
+                      >
+                        {label}
+                      </button>
                     ))}
                   </div>
                 </div>
 
-                {/* Single-series bar chart for the selected category */}
-                <Card
-                  title={`${pieView.charAt(0).toUpperCase() + pieView.slice(1)} — ${mode === "monthly" ? "Monthly" : "Yearly"}`}
-                  action={<span className="text-muted small">Total: {fmtINR(totals[pieView] || 0)}</span>}
-                >
-                  <div style={{ width: "100%", height: 300 }}>
-                    <ResponsiveContainer>
-                      <RBarChart data={seriesSingle} margin={{ top: 12, right: 16, left: 0, bottom: 8 }}>
-                        <CartesianGrid strokeDasharray="3 3" />
-                        <XAxis dataKey="label" />
-                        <YAxis />
-                        <Tooltip formatter={(v) => fmtINR(v)} />
-                        <Legend />
-                        <Bar dataKey={pieView} name={pieView.toUpperCase()} fill={COLORS[pieView]} />
-                      </RBarChart>
-                    </ResponsiveContainer>
-                  </div>
-                </Card>
 
-                {/* Pie (for same selected category) + Totals */}
-                <div className="row g-3 mt-1">
+
+                {/* Charts */}
+                <div className="row g-3">
+                  {/* Single-series bar chart */}
+                  <div className="col-md-12">
+                    <Card title={`${pieView.charAt(0).toUpperCase() + pieView.slice(1)} Payments (${mode})`}>
+                      {loading ? (
+                        <div className="text-center py-5">Loading...</div>
+                      ) : (
+                        <ResponsiveContainer width="100%" height={300}>
+                          <RBarChart data={seriesSingle} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
+                            <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
+                            <XAxis dataKey="label" />
+                            <YAxis />
+                            <Tooltip formatter={(v) => fmtINR(v)} />
+                            <Bar dataKey={singleKey} fill={COLORS[singleKey] || "#8884d8"}>
+                              <LabelList dataKey={singleKey} position="top" formatter={(v) => fmtINR(v)} />
+                              {seriesSingle.map((entry, index) => (
+                                <Cell key={`cell-${index}`} fill={COLORS[singleKey] || "#8884d8"} />
+                              ))}
+                            </Bar>
+                          </RBarChart>
+                        </ResponsiveContainer>
+                      )}
+                    </Card>
+                  </div>
+
+                  {/* Pie chart */}
                   <div className="col-md-6">
-                    <Card title={pie.title || "Breakdown"}>
-                      <div style={{ width: "100%", height: 260 }}>
-                        <ResponsiveContainer>
+                    <Card title={pie.title}>
+                      {loading ? (
+                        <div className="text-center py-5">Loading...</div>
+                      ) : (
+                        <ResponsiveContainer width="100%" height={300}>
                           <PieChart>
-                            <Pie data={pie.data} dataKey="value" nameKey="name" outerRadius={90} innerRadius={50} paddingAngle={2}>
+                            <Pie
+                              data={pie.data}
+                              cx="50%"
+                              cy="50%"
+                              labelLine={false}
+                              label={({ name, value, percent }) => `${name}: ${fmtINR(value)} (${(percent * 100).toFixed(1)}%)`}
+                              outerRadius={80}
+                              fill="#8884d8"
+                              dataKey="value"
+                              stroke="white"
+                              strokeWidth={2}
+                            >
                               {pie.data.map((entry, index) => (
-                                <Cell key={`pv-${index}`} fill={entry.color} />
+                                <Cell
+                                  key={`cell-${index}`}
+                                  fill={entry.color}
+                                  style={{
+                                    filter: "drop-shadow(0px 0px 2px rgba(0,0,0,0.2))",
+                                  }}
+                                />
                               ))}
                             </Pie>
                             <Tooltip formatter={(v) => fmtINR(v)} />
                             <Legend />
                           </PieChart>
                         </ResponsiveContainer>
-                      </div>
+                      )}
                     </Card>
                   </div>
 
                   <div className="col-md-6">
-                    <div className="d-grid" style={{ gridTemplateColumns: "repeat(3, minmax(0,1fr))", gap: "12px" }}>
+                    <div
+                      className="d-grid"
+                      style={{ gridTemplateColumns: "repeat(3, minmax(0,1fr))", gap: "12px" }}
+                    >
                       {[
                         { k: "client", label: "Client", color: COLORS.client, val: totals.client },
                         { k: "investments", label: "Invest", color: COLORS.investments, val: totals.investments },
@@ -704,20 +808,31 @@ export default function ResultsGrafCard({
                         { k: "staff", label: "Staff", color: COLORS.staff, val: totals.staff },
                         { k: "petty", label: "Petty", color: COLORS.petty, val: totals.petty },
                         { k: "assets", label: "Assets", color: COLORS.assets, val: totals.assets },
+                        { k: "commission", label: "Comm", color: COLORS.commission, val: totals.commission },
+                        { k: "hospitalref", label: "Hosp Ref", color: COLORS.hospitalref, val: totals.hospitalref },
                       ].map((t) => (
-                        <div key={t.k} className="p-3 rounded-3" style={{ background: "#0b1220", color: "#e2e8f0", border: `1px solid ${t.color}30` }}>
+                        <div
+                          key={t.k}
+                          className="p-3 rounded-3"
+                          style={{
+                            background: "#1c2331ff",
+                            color: "#e2e8f0",
+                            border: `1px solid ${t.color}30`,
+                          }}
+                        >
                           <div className="d-flex align-items-center justify-content-between">
-                            {/* <div className="fw-semibold">{t.label}</div> */}
-                            <span className="badge" style={{ background: t.color }}>{t.k.toUpperCase()}</span>
+                            <span className="badge" style={{ background: t.color }}>
+                              {t.k.toUpperCase()}
+                            </span>
                           </div>
                           <div className="fs-5 mt-1">{fmtINR(t.val)}</div>
                         </div>
                       ))}
                     </div>
                   </div>
+
                 </div>
               </div>
-
               <div className="modal-footer bg-surface">
                 <button className="btn btn-secondary" onClick={() => setModalOpen(false)}>Close</button>
               </div>

@@ -514,6 +514,13 @@ export default function ResultsGrafCard({
         const pettyRows = [];
         ["pettyRoot", "pettyAdmin", "pettyAdminCaps"].forEach((k) => pettyRows.push(...extractPetty(snapshots[k] || {})));
 
+        // ONLY APPROVED petty entries
+        const pettyRowsApproved = pettyRows.filter(r => {
+          const s = String((r.raw && (r.raw.approval || r.raw.status || r.raw.approvalStatus)) || "").toLowerCase();
+          if (s.includes("approve") || s === "approved" || s === "acknowledged" || s === "acknowledge") return true;
+          return false;
+        });
+
         // Assets (flat + nested, plus derived from petty)
         let assetRows = [];
         ["assetsRoot", "assetsAdmin", "assetsAltRoot", "assetsAltAdmin", "assetsJenAdmin"].forEach((k) => assetRows.push(...extractAssets(snapshots[k] || {})));
@@ -567,7 +574,7 @@ export default function ResultsGrafCard({
         if (mounted) {
           setRows({
             client: clientRows,
-            petty: pettyRows,
+            petty: pettyRowsApproved,
             assets: assetRows,
             investments: investRows,
             staff: staffRows,
@@ -681,44 +688,6 @@ export default function ResultsGrafCard({
               </div>
 
               <div className="modal-body bg-surface">
-                {/* SVG Gradients Definitions */}
-                <svg style={{ position: 'absolute', width: 0, height: 0 }}>
-                  <defs>
-                    <linearGradient id="clientGradient" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor="#10b981" stopOpacity="1" />
-                      <stop offset="100%" stopColor="#059669" stopOpacity="1" />
-                    </linearGradient>
-                    <linearGradient id="pettyGradient" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor="#f43f5e" stopOpacity="1" />
-                      <stop offset="100%" stopColor="#e11d48" stopOpacity="1" />
-                    </linearGradient>
-                    <linearGradient id="assetsGradient" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor="#22c55e" stopOpacity="1" />
-                      <stop offset="100%" stopColor="#16a34a" stopOpacity="1" />
-                    </linearGradient>
-                    <linearGradient id="investmentsGradient" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor="#fb7185" stopOpacity="1" />
-                      <stop offset="100%" stopColor="#f43f5e" stopOpacity="1" />
-                    </linearGradient>
-                    <linearGradient id="staffGradient" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor="#60a5fa" stopOpacity="1" />
-                      <stop offset="100%" stopColor="#3b82f6" stopOpacity="1" />
-                    </linearGradient>
-                    <linearGradient id="workerGradient" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor="#f59e0b" stopOpacity="1" />
-                      <stop offset="100%" stopColor="#d97706" stopOpacity="1" />
-                    </linearGradient>
-                    <linearGradient id="commissionGradient" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor="#8b5cf6" stopOpacity="1" />
-                      <stop offset="100%" stopColor="#7c3aed" stopOpacity="1" />
-                    </linearGradient>
-                    <linearGradient id="hospitalrefGradient" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor="#0ea5e9" stopOpacity="1" />
-                      <stop offset="100%" stopColor="#0284c7" stopOpacity="1" />
-                    </linearGradient>
-                  </defs>
-                </svg>
-
                 {/* Controls */}
                 <div className="d-flex flex-wrap align-items-center gap-2 mb-3">
                   <Toggle
@@ -754,6 +723,7 @@ export default function ResultsGrafCard({
                       ["assets", "Assets"],
                       ["commission", "Com"],
                       ["hospitalref", "Hosp Ref"],
+
                     ].map(([key, label]) => (
                       <button
                         key={key}
@@ -766,6 +736,8 @@ export default function ResultsGrafCard({
                     ))}
                   </div>
                 </div>
+
+
 
                 {/* Charts */}
                 <div className="row g-3">
@@ -780,37 +752,11 @@ export default function ResultsGrafCard({
                             <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
                             <XAxis dataKey="label" />
                             <YAxis />
-                            <Tooltip
-                              formatter={(v) => fmtINR(v)}
-                              contentStyle={{
-                                background: 'linear-gradient(135deg, #1e293b 0%, #334155 100%)',
-                                border: '1px solid rgba(255,255,255,0.2)',
-                                borderRadius: '8px',
-                                boxShadow: '0 8px 25px rgba(0,0,0,0.5)',
-                                color: 'white'
-                              }}
-                              labelStyle={{ color: 'white', fontWeight: '600' }}
-                            />
-                            <Bar dataKey={singleKey} fill={`url(#${singleKey}Gradient)`}>
-                              <LabelList
-                                dataKey={singleKey}
-                                position="top"
-                                formatter={(v) => fmtINR(v)}
-                                style={{
-                                  fill: 'white',
-                                  fontWeight: '600',
-                                  textShadow: '1px 1px 2px rgba(0,0,0,0.8)',
-                                  fontSize: '12px'
-                                }}
-                              />
+                            <Tooltip formatter={(v) => fmtINR(v)} />
+                            <Bar dataKey={singleKey} fill={COLORS[singleKey] || "#8884d8"}>
+                              <LabelList dataKey={singleKey} position="top" formatter={(v) => fmtINR(v)} />
                               {seriesSingle.map((entry, index) => (
-                                <Cell
-                                  key={`cell-${index}`}
-                                  fill={`url(#${singleKey}Gradient)`}
-                                  style={{
-                                    filter: 'drop-shadow(0px 2px 4px rgba(0,0,0,0.3))'
-                                  }}
-                                />
+                                <Cell key={`cell-${index}`} fill={COLORS[singleKey] || "#8884d8"} />
                               ))}
                             </Bar>
                           </RBarChart>
@@ -836,7 +782,7 @@ export default function ResultsGrafCard({
                               outerRadius={80}
                               fill="#8884d8"
                               dataKey="value"
-                              stroke="rgba(255,255,255,0.3)"
+                              stroke="white"
                               strokeWidth={2}
                             >
                               {pie.data.map((entry, index) => (
@@ -844,32 +790,13 @@ export default function ResultsGrafCard({
                                   key={`cell-${index}`}
                                   fill={entry.color}
                                   style={{
-                                    filter: "drop-shadow(2px 2px 4px rgba(0,0,0,0.4))",
-                                    stroke: "rgba(255,255,255,0.1)",
-                                    strokeWidth: 1
+                                    filter: "drop-shadow(0px 0px 2px rgba(0,0,0,0.2))",
                                   }}
                                 />
                               ))}
                             </Pie>
-                            <Tooltip
-                              formatter={(v) => fmtINR(v)}
-                              contentStyle={{
-                                background: 'linear-gradient(135deg, #1e293b 0%, #334155 100%)',
-                                border: '1px solid rgba(255,255,255,0.2)',
-                                borderRadius: '8px',
-                                boxShadow: '0 8px 25px rgba(0,0,0,0.5)',
-                                color: 'white'
-                              }}
-                            />
-                            <Legend
-                              wrapperStyle={{
-                                padding: '10px',
-                                background: 'rgba(255,255,255,0.05)',
-                                borderRadius: '8px',
-                                border: '1px solid rgba(255,255,255,0.1)',
-                                marginTop: '10px'
-                              }}
-                            />
+                            <Tooltip formatter={(v) => fmtINR(v)} />
+                            <Legend />
                           </PieChart>
                         </ResponsiveContainer>
                       )}
@@ -895,40 +822,22 @@ export default function ResultsGrafCard({
                           key={t.k}
                           className="p-3 rounded-3"
                           style={{
-                            background: `linear-gradient(135deg, ${t.color}20 0%, ${t.color}10 100%)`,
+                            background: "#1c2331ff",
                             color: "#e2e8f0",
                             border: `1px solid ${t.color}30`,
-                            boxShadow: `
-                              0 4px 12px rgba(0,0,0,0.3),
-                              inset 0 1px 0 rgba(255,255,255,0.1)
-                            `,
-                            backdropFilter: 'blur(10px)',
                           }}
                         >
                           <div className="d-flex align-items-center justify-content-between">
-                            <span
-                              className="badge"
-                              style={{
-                                background: `linear-gradient(135deg, ${t.color} 0%, ${t.color}cc 100%)`,
-                                boxShadow: '0 2px 8px rgba(0,0,0,0.3)',
-                                fontSize: '10px'
-                              }}
-                            >
+                            <span className="badge" style={{ background: t.color }}>
                               {t.k.toUpperCase()}
                             </span>
                           </div>
-                          <div
-                            className="fs-5 mt-1 fw-bold"
-                            style={{
-                              textShadow: '0 2px 4px rgba(0,0,0,0.5)'
-                            }}
-                          >
-                            {fmtINR(t.val)}
-                          </div>
+                          <div className="fs-5 mt-1">{fmtINR(t.val)}</div>
                         </div>
                       ))}
                     </div>
                   </div>
+
                 </div>
               </div>
               <div className="modal-footer bg-surface">

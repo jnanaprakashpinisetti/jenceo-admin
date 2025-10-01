@@ -262,7 +262,8 @@ export default function PettyCashCard({ pettyCollection = "PettyCash" }) {
         stat[st].total += Number(e.amountNum || 0);
         stat[st].count += 1;
 
-        if (st !== "reject" && Number(e.amountNum || 0) > 0) {
+        // ONLY APPROVED (acknowledge) contribute to grand total & count
+        if (st == "acknowledge" && Number(e.amountNum || 0) > 0) {
           grand += Number(e.amountNum || 0);
           if (!countSeen.has(e.sig)) {
             countSeen.add(e.sig);
@@ -311,8 +312,8 @@ setEntries(
       const mo = years[y].months[m];
       // push all entries for details view
       mo.entries.push(e);
-      // but only add to totals if NOT rejected
-      if (e.status !== "reject") {
+      // Only add to totals if APPROVED (acknowledge)
+      if (e.status === "acknowledge") {
         const cat = e.categoryNormalized;
         mo.categories[cat] = (mo.categories[cat] || 0) + Number(e.amountNum || 0);
       }

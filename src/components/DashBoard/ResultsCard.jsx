@@ -7,12 +7,12 @@ async function importFirebaseDB() {
     const a = await import("../../firebase");
     if (a && a.default) return a.default;
     if (a && a.firebaseDB) return a.firebaseDB;
-  } catch {}
+  } catch { }
   try {
     const b = await import("../firebase");
     if (b && b.default) return b.default;
     if (b && b.firebaseDB) return b.firebaseDB;
-  } catch {}
+  } catch { }
   if (typeof window !== "undefined" && window.firebaseDB) return window.firebaseDB;
   return null;
 }
@@ -38,7 +38,7 @@ function parseDateRobust(v) {
   if (!v && v !== 0) return null;
   try {
     if (v instanceof Date && !isNaN(v)) return v;
-  } catch {}
+  } catch { }
   const s = String(v || "").trim();
   if (!s) return null;
   if (/^\d{10,13}$/.test(s)) {
@@ -51,13 +51,14 @@ function parseDateRobust(v) {
   if (m) return new Date(Number(m[3]), Number(m[2]) - 1, Number(m[1]));
   const mm = s.match(/([A-Za-z]+)[,]?\s*(\d{4})/);
   if (mm) {
-    const idx = ["jan","feb","mar","apr","may","jun","jul","aug","sep","oct","nov","dec"].indexOf(mm[1].slice(0,3).toLowerCase());
+    const idx = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"].indexOf(mm[1].slice(0, 3).toLowerCase());
     if (idx >= 0) return new Date(Number(mm[2]), idx, 1);
   }
   return null;
 }
 
-function monthKey(d){ const dt = d instanceof Date ? d : parseDateRobust(d); if(!dt) return 'Unknown'; return `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,'0')}`; }
+function monthKey(d) { const dt = d instanceof Date ? d : parseDateRobust(d); if (!dt) return 'Unknown'; return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}`; }
+
 /* ---------------------- Normalizers ---------------------- */
 function extractClientPayments(clientRecord = {}) {
   const paymentsArr = Array.isArray(clientRecord.payments)
@@ -85,6 +86,7 @@ function extractClientPayments(clientRecord = {}) {
       parsedDate,
       payment: net, // net income
       raw: p,
+      clientData: clientRecord, // Include full client data
     });
   });
 
@@ -101,6 +103,7 @@ function extractClientPayments(clientRecord = {}) {
       parsedDate: parseDateRobust(date),
       payment: -refundAmount, // as negative income
       raw: lg,
+      clientData: clientRecord, // Include full client data
     });
   });
 
@@ -122,7 +125,7 @@ function extractPettyCash(raw = {}) {
 
   const hasAmount = (obj) => {
     if (!isPlain(obj)) return false;
-    const keys = ["total","amount","pettyAmount","value","price"];
+    const keys = ["total", "amount", "pettyAmount", "value", "price"];
     return keys.some((k) => obj[k] !== undefined && obj[k] !== null && safeNumber(obj[k]) !== 0);
   };
 
@@ -177,7 +180,7 @@ function extractStaffSalaries(staffNode = {}) {
         if (!p) return;
         const date = p.date ?? p.paymentDate ?? p.paidOn ?? emp.createdAt ?? "";
         const amount = safeNumber(p.amount ?? p.salary ?? p.paidAmount ?? 0);
-        if (amount) out.push({ type: "staff", date, parsedDate: parseDateRobust(date), amount, raw: p });
+        if (amount) out.push({ type: "staff", date, parsedDate: parseDateRobust(date), amount, raw: p, staffData: emp });
       });
     }
   };
@@ -203,7 +206,7 @@ function extractWorkerSalaries(node = {}) {
         if (!p) return;
         const date = p.date ?? p.paymentDate ?? p.paidOn ?? emp.createdAt ?? "";
         const amount = safeNumber(p.amount ?? p.salary ?? p.paidAmount ?? 0);
-        if (amount) out.push({ type: "worker", date, parsedDate: parseDateRobust(date), amount, raw: p });
+        if (amount) out.push({ type: "worker", date, parsedDate: parseDateRobust(date), amount, raw: p, workerData: emp });
       });
     }
   };
@@ -218,27 +221,28 @@ function extractWorkerSalaries(node = {}) {
 function extractAgentCommission(hospitalNode = {}) {
   const out = [];
   const isPlain = (x) => x && typeof x === "object" && !Array.isArray(x);
-  
+
   if (!isPlain(hospitalNode)) return out;
 
   Object.values(hospitalNode).forEach((hospital) => {
     if (!isPlain(hospital)) return;
-    
-    const payments = Array.isArray(hospital.payments) 
-      ? hospital.payments 
+
+    const payments = Array.isArray(hospital.payments)
+      ? hospital.payments
       : (isPlain(hospital.payments) ? Object.values(hospital.payments) : []);
-    
+
     payments.forEach((p) => {
       if (!p) return;
       const commissionAmount = safeNumber(p.commition ?? p.commission ?? p.agentCommission ?? 0);
       if (commissionAmount > 0) {
         const date = p.date ?? p.paymentDate ?? p.createdAt ?? "";
-        out.push({ 
-          type: "commission", 
-          date, 
-          parsedDate: parseDateRobust(date), 
-          amount: commissionAmount, 
-          raw: p 
+        out.push({
+          type: "commission",
+          date,
+          parsedDate: parseDateRobust(date),
+          amount: commissionAmount,
+          raw: p,
+          hospitalData: hospital // Include full hospital data
         });
       }
     });
@@ -251,27 +255,28 @@ function extractAgentCommission(hospitalNode = {}) {
 function extractHospitalServiceCharges(hospitalNode = {}) {
   const out = [];
   const isPlain = (x) => x && typeof x === "object" && !Array.isArray(x);
-  
+
   if (!isPlain(hospitalNode)) return out;
 
   Object.values(hospitalNode).forEach((hospital) => {
     if (!isPlain(hospital)) return;
-    
-    const payments = Array.isArray(hospital.payments) 
-      ? hospital.payments 
+
+    const payments = Array.isArray(hospital.payments)
+      ? hospital.payments
       : (isPlain(hospital.payments) ? Object.values(hospital.payments) : []);
-    
+
     payments.forEach((p) => {
       if (!p) return;
       const serviceCharges = safeNumber(p.serviceCharges ?? p.hospitalCharges ?? p.serviceFee ?? 0);
       if (serviceCharges > 0) {
         const date = p.date ?? p.paymentDate ?? p.createdAt ?? "";
-        out.push({ 
-          type: "hospital", 
-          date, 
-          parsedDate: parseDateRobust(date), 
-          amount: serviceCharges, 
-          raw: p 
+        out.push({
+          type: "hospital",
+          date,
+          parsedDate: parseDateRobust(date),
+          amount: serviceCharges,
+          raw: p,
+          hospitalData: hospital // Include full hospital data
         });
       }
     });
@@ -350,7 +355,7 @@ function DonutChart({ segments = [], size = 150, stroke = 18 }) {
           <stop offset="100%" stopColor="#0e7490" />
         </linearGradient>
       </defs>
-      <circle cx={size/2} cy={size/2} r={r} stroke="#e2e8f0" strokeWidth={stroke} fill="none" />
+      <circle cx={size / 2} cy={size / 2} r={r} stroke="#e2e8f0" strokeWidth={stroke} fill="none" />
       {segments.map((s, i) => {
         const frac = (s.value || 0) / total;
         const len = c * frac;
@@ -360,8 +365,8 @@ function DonutChart({ segments = [], size = 150, stroke = 18 }) {
         return (
           <circle
             key={i}
-            cx={size/2}
-            cy={size/2}
+            cx={size / 2}
+            cy={size / 2}
             r={r}
             stroke={s.color}
             strokeWidth={stroke}
@@ -389,6 +394,8 @@ export default function ResultsCard({
 }) {
   const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
+  const [txModalOpen, setTxModalOpen] = useState(false);
+  const [selectedTx, setSelectedTx] = useState(null);
   const [allRows, setAllRows] = useState([]);
   const [activeYear, setActiveYear] = useState(null);
   const [activeMonth, setActiveMonth] = useState(null);
@@ -444,7 +451,7 @@ export default function ResultsCard({
         pushClients(snapshots.clientsExit || {});
 
         extractInvestments(snapshots.investments || {}).forEach((r) => rows.push(r));
-        
+
         // Collect petty from root/Admin/admin then de-duplicate by (id?) else amount+category+month
         {
           const pettyCollected = [];
@@ -457,7 +464,7 @@ export default function ResultsCard({
             const id = raw.id ?? raw.ID ?? raw.key ?? raw.uid ?? raw.billNo ?? raw.invoiceNo ?? raw.refNo ?? "";
             const cat = String((r.category || raw.mainCategory || raw.category || raw.head || "Petty")).toLowerCase();
             const mon = monthKey(r.parsedDate || r.date);
-            const sig = id ? `id:${id}` : `amt:${Number(r.amount||0)}|cat:${cat}|mon:${mon}`;
+            const sig = id ? `id:${id}` : `amt:${Number(r.amount || 0)}|cat:${cat}|mon:${mon}`;
             if (seen.has(sig)) return;
             seen.add(sig);
             rows.push(r);
@@ -487,7 +494,7 @@ export default function ResultsCard({
 
     return () => {
       mounted = false;
-      try { listeners.forEach(({ ref, cb }) => ref.off("value", cb)); } catch {}
+      try { listeners.forEach(({ ref, cb }) => ref.off("value", cb)); } catch { }
     };
   }, [clientCollections.active, clientCollections.exit, investmentsCollection, pettyCollection, staffCollections.active, staffCollections.exit, workerCollections.active, workerCollections.exit, hospitalCollection]);
 
@@ -548,7 +555,7 @@ export default function ResultsCard({
   }, [activeYear, activeMonth, yearMap]);
 
   /* ------------- UI Helpers ------------- */
-  const monthLabels = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  const monthLabels = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
   const chartDataYear = useMemo(() => {
     if (!activeYear) return [];
@@ -575,13 +582,13 @@ export default function ResultsCard({
 
   function exportMonthCSV() {
     const rows = (yearMap[activeYear]?.months?.[activeMonth] || []);
-    const header = ["Date","Type","Amount","Note"];
+    const header = ["Date", "Type", "Amount", "Note"];
     const body = rows.map((r) => {
       const d = r.parsedDate || parseDateRobust(r.date);
-      const dateStr = d ? d.toISOString().slice(0,10) : (r.date || "");
+      const dateStr = d ? d.toISOString().slice(0, 10) : (r.date || "");
       const amt = r.type === "client" ? Number(r.payment || 0) : Number(r.amount || 0);
       const note = r.raw?.remarks || r.raw?.description || r.raw?.invest_purpose || r.raw?.paymentFor || "";
-      return [dateStr, r.type, amt, `"${String(note).replace(/"/g,'""')}"`].join(",");
+      return [dateStr, r.type, amt, `"${String(note).replace(/"/g, '""')}"`].join(",");
     });
     const csv = [header.join(","), ...body].join("\n");
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
@@ -594,6 +601,76 @@ export default function ResultsCard({
     a.remove();
     setTimeout(() => URL.revokeObjectURL(url), 1500);
   }
+
+  // Function to get transaction details based on type
+  const getTransactionDetails = (tx) => {
+    const details = [];
+
+    switch (tx.type) {
+      case "client":
+        // Client related data
+        details.push({ label: "Client Name", value: tx.clientData?.clientName || tx.clientData?.name || tx.raw?.clientName || "-" });
+        details.push({ label: "Phone", value: tx.clientData?.phone || tx.clientData?.phoneNumber || "-" });
+        details.push({ label: "Service", value: tx.clientData?.service || tx.raw?.service || "-" });
+        details.push({ label: "Package", value: tx.clientData?.package || tx.raw?.package || "-" });
+        details.push({ label: "Payment Method", value: tx.raw?.paymentMethod || tx.raw?.method || "-" });
+        details.push({ label: "Reference No", value: tx.raw?.refNo || tx.raw?.receiptNo || tx.raw?.invoiceNo || "-" });
+        break;
+
+      case "commission":
+        // Commission related data
+        details.push({ label: "Hospital Name", value: tx.hospitalData?.hospitalName || tx.hospitalData?.name || tx.raw?.hospitalName || "-" });
+        details.push({ label: "Agent Name", value: tx.raw?.agentName || tx.hospitalData?.agentName || "-" });
+        details.push({ label: "Service Type", value: tx.hospitalData?.serviceType || tx.raw?.serviceType || "-" });
+        details.push({ label: "Commission Rate", value: tx.raw?.commissionRate || tx.raw?.rate ? `${tx.raw.commissionRate || tx.raw.rate}%` : "-" });
+        details.push({ label: "Reference", value: tx.raw?.refNo || tx.raw?.reference || "-" });
+        break;
+
+      case "investment":
+        // Investment related data
+        details.push({ label: "Investor", value: tx.raw?.investor || tx.raw?.investorName || "-" });
+        details.push({ label: "Purpose", value: tx.raw?.invest_purpose || tx.raw?.purpose || "-" });
+        details.push({ label: "Investment Type", value: tx.raw?.invest_type || tx.raw?.type || "-" });
+        details.push({ label: "Reference", value: tx.raw?.refNo || tx.raw?.receiptNo || "-" });
+        break;
+
+      case "staff":
+        // Staff related data
+        details.push({ label: "Staff Name", value: tx.staffData?.staffName || tx.staffData?.name || tx.raw?.staffName || "-" });
+        details.push({ label: "Designation", value: tx.staffData?.designation || tx.staffData?.role || "-" });
+        details.push({ label: "Department", value: tx.staffData?.department || "-" });
+        details.push({ label: "Payment Period", value: tx.raw?.period || tx.raw?.month || "-" });
+        break;
+
+      case "worker":
+        // Worker related data
+        details.push({ label: "Worker Name", value: tx.workerData?.workerName || tx.workerData?.name || tx.raw?.workerName || "-" });
+        details.push({ label: "Work Type", value: tx.workerData?.workType || tx.workerData?.department || "-" });
+        details.push({ label: "Payment Period", value: tx.raw?.period || tx.raw?.month || "-" });
+        break;
+
+      case "petty":
+        // Petty cash related data
+        details.push({ label: "Category", value: tx.category || tx.raw?.mainCategory || tx.raw?.category || "-" });
+        details.push({ label: "Description", value: tx.raw?.description || tx.raw?.purpose || "-" });
+        details.push({ label: "Bill No", value: tx.raw?.billNo || tx.raw?.invoiceNo || "-" });
+        details.push({ label: "Approved By", value: tx.raw?.approvedBy || tx.raw?.authorizedBy || "-" });
+        break;
+
+      default:
+        // Generic fields for other types
+        details.push({ label: "Description", value: tx.raw?.description || tx.raw?.remarks || "-" });
+        details.push({ label: "Reference", value: tx.raw?.refNo || tx.raw?.receiptNo || "-" });
+    }
+
+    // Common fields for all types
+    details.push({ label: "Amount", value: formatINR(tx.type === "client" ? (tx.payment || 0) : (tx.amount || 0)) });
+    details.push({ label: "Date", value: (tx.parsedDate || new Date(tx.date || "")).toLocaleDateString() });
+    details.push({ label: "Payment Method", value: tx.raw?.paymentMethod || tx.raw?.method || "-" });
+    details.push({ label: "Remarks", value: tx.raw?.remarks || tx.raw?.note || tx.raw?.description || "-" });
+
+    return details.filter(detail => detail.value && detail.value !== "-" && detail.value !== "");
+  };
 
   const topStat = (label, value, sub, gradClass, icon) => (
     <div className={`col-md-6 col-lg-3 mb-3`}>
@@ -692,7 +769,7 @@ export default function ResultsCard({
                       <div className="mt-2 tiny">
                         {donutSegments.map((s) => (
                           <div key={s.key} className="d-flex align-items-center gap-2 mb-1">
-                            <span className="legend-dot" style={{background: s.color}}></span>
+                            <span className="legend-dot" style={{ background: s.color }}></span>
                             <span className="text-muted">{s.key}</span>
                             <span className="ms-auto fw-semibold">{formatINR(s.value)}</span>
                           </div>
@@ -705,7 +782,7 @@ export default function ResultsCard({
                 {/* Breakdown Table */}
                 <div className="table-responsive mt-3">
                   <table className="table table-sm align-middle table-modern">
-                    <thead>
+                    <thead style={{ background: "linear-gradient(90deg,#0ea5e9,#6366f1)", color: "white" }}>
                       <tr>
                         <th>Scope</th>
                         <th className="text-end">Client Payment</th>
@@ -719,7 +796,7 @@ export default function ResultsCard({
                       </tr>
                     </thead>
                     <tbody>
-                      <tr>
+                      <tr style={{ background: "linear-gradient(90deg,#0b1220,#1e293b)", color: "#e2e8f0" }}>
                         <td>Overall</td>
                         <td className="text-end">{formatINR(overall.income)}</td>
                         <td className="text-end">{formatINR(overall.investment)}</td>
@@ -730,7 +807,7 @@ export default function ResultsCard({
                         <td className="text-end">{formatINR(overall.hospital)}</td>
                         <td className="text-end fw-bold">{formatINR(overall.profit)}</td>
                       </tr>
-                      <tr>
+                      <tr style={{ background: "linear-gradient(90deg,#0b1328,#1e293b)", color: "#e2e8f0" }}>
                         <td>Year ({activeYear || "-"})</td>
                         <td className="text-end">{formatINR(currentYearTotals.income)}</td>
                         <td className="text-end">{formatINR(currentYearTotals.investment)}</td>
@@ -741,7 +818,7 @@ export default function ResultsCard({
                         <td className="text-end">{formatINR(currentYearTotals.hospital)}</td>
                         <td className="text-end fw-bold">{formatINR(currentYearTotals.profit)}</td>
                       </tr>
-                      <tr>
+                      <tr style={{ background: "linear-gradient(90deg,#111827,#1e293b)", color: "#e2e8f0" }}>
                         <td>Month ({monthLabels[Number(activeMonth)] || "-"})</td>
                         <td className="text-end">{formatINR(currentMonthTotals.income)}</td>
                         <td className="text-end">{formatINR(currentMonthTotals.investment)}</td>
@@ -764,7 +841,7 @@ export default function ResultsCard({
                   </div>
                   <div className="table-responsive">
                     <table className="table transcation table-sm table-hover table-modern">
-                      <thead>
+                      <thead style={{ background: "linear-gradient(90deg,#0ea5e9,#6366f1)", color: "white" }}>
                         <tr>
                           <th>#</th>
                           <th>Date</th>
@@ -774,13 +851,13 @@ export default function ResultsCard({
                         </tr>
                       </thead>
                       <tbody>
-                        {(yearMap[activeYear]?.months?.[activeMonth] || []).map((r, i) => {
+                        {(yearMap[activeYear]?.months?.[activeMonth] || []).filter(r => r.type !== "hospital").map((r, i) => {
                           const d = r.parsedDate || parseDateRobust(r.date);
                           const dateStr = d ? d.toLocaleDateString() : (r.date || "-");
                           const amt = r.type === "client" ? Number(r.payment || 0) : Number(r.amount || 0);
                           const isOut = r.type !== "client";
                           return (
-                            <tr key={i}>
+                            <tr key={i} role="button" style={{ cursor: "pointer" }} onClick={() => { setSelectedTx(r); setTxModalOpen(true); }}>
                               <td>{i + 1}</td>
                               <td>{dateStr}</td>
                               <td>
@@ -790,7 +867,6 @@ export default function ResultsCard({
                                 {r.type === "staff" ? <span className="badge bg-sky-subtle text-sky fw-semibold">Staff</span> : null}
                                 {r.type === "worker" ? <span className="badge bg-amber-subtle text-amber fw-semibold">Worker</span> : null}
                                 {r.type === "commission" ? <span className="badge bg-violet-subtle text-warning fw-semibold">Commission</span> : null}
-                                {r.type === "hospital" ? <span className="badge bg-cyan-subtle text-cyan fw-semibold">Hospital</span> : null}
                               </td>
                               <td className={`text-end ${isOut ? "text-danger" : "text-success"}`}>{formatINR(amt)}</td>
                               <td className="text-muted tiny">{r.raw?.remarks || r.raw?.description || r.raw?.invest_purpose || r.raw?.paymentFor || ""}</td>
@@ -801,6 +877,55 @@ export default function ResultsCard({
                     </table>
                   </div>
                 </div>
+
+                {/* TX DETAIL MODAL */}
+                {txModalOpen && selectedTx && (
+                  <div className="modal fade show" style={{ display: "block", background: "rgba(2,6,23,0.6)", zIndex: 3000 }} onClick={() => setTxModalOpen(false)}>
+                    <div className="modal-dialog modal-lg modal-dialog-centered" onClick={(e) => e.stopPropagation()} style={{ zIndex: 3001 }}>
+                      <div className="modal-content bg-white">
+                        <div className="modal-header bg-primary text-white">
+                          <h6 className="modal-title mb-0">Transaction Details</h6>
+                          <button className="btn-close btn-close-white" onClick={() => setTxModalOpen(false)} />
+                        </div>
+                        <div className="modal-body">
+                          <div className="row g-3">
+                            {/* Transaction Type Badge */}
+                            <div className="col-12 mb-3">
+                              <div className="d-flex justify-content-between align-items-center">
+                                <span className={`badge ${selectedTx.type === "client" ? "bg-success" :
+                                    selectedTx.type === "investment" ? "bg-danger" :
+                                      selectedTx.type === "petty" ? "bg-violet" :
+                                        selectedTx.type === "staff" ? "bg-sky" :
+                                          selectedTx.type === "worker" ? "bg-warning" :
+                                            selectedTx.type === "commission" ? "bg-warning" : "bg-secondary"
+                                  } text-uppercase fs-6`}>
+                                  {selectedTx.type} Transaction
+                                </span>
+                                <div className={`fw-bold fs-5 ${selectedTx.type === "client" ? "text-success" : "text-danger"
+                                  }`}>
+                                  {formatINR(selectedTx.type === "client" ? (selectedTx.payment || 0) : (selectedTx.amount || 0))}
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* Dynamic Details based on transaction type */}
+                            {getTransactionDetails(selectedTx).map((detail, idx) => (
+                              <div key={idx} className="col-md-6">
+                                <div className="p-3 rounded-3 border">
+                                  <div className="small mb-1">{detail.label}</div>
+                                  <div className="fw-semibold text-dark">{detail.value}</div>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                        <div className="modal-footer">
+                          <button className="btn btn-secondary" onClick={() => setTxModalOpen(false)}>Close</button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
 
               <div className="modal-footer bg-surface">

@@ -472,7 +472,7 @@ export default function PettyCashReport({ currentUser = "Admin", currentUserRole
 
   return (
     <div className="pettyCashReport">
-      <div className="d-flex justify-content-between align-items-center mb-3">
+      <div className="actionBar">
         <h3>Petty Cash Report</h3>
         <div className="btn-group" role="group" aria-label="Status tabs">
           {["All", "Approved", "Pending", "Rejected", "Clarification", "Delete"].map(s => (
@@ -484,7 +484,7 @@ export default function PettyCashReport({ currentUser = "Admin", currentUserRole
       </div>
 
       {/* Notification counters for year/month */}
-      <div className="d-flex flex-wrap gap-2 mb-3">
+      <div className="badgeWrapper">
         <span className="badge rounded-pill bg-secondary" role="button" onClick={() => setStatusTab("All")}>
           All <span className="ms-1 badge bg-light text-dark">{statusCountsForSelection.all}</span>
         </span>

@@ -147,7 +147,13 @@ function extractPettyCash(raw = {}) {
     const date = obj.date ?? obj.pettyDate ?? obj.paymentDate ?? obj.createdAt ?? "";
     const amount = safeNumber(obj.total ?? obj.amount ?? obj.pettyAmount ?? obj.value ?? obj.price ?? 0);
     const category = obj.mainCategory ?? obj.category ?? obj.head ?? obj.type ?? "Petty";
-    if (amount) rows.push({ type: "petty", date, parsedDate: parseDateRobust(date), amount, category, raw: obj });
+    // Only include approved petty cash
+    const approvalText = String(obj.approval || obj.approvalStatus || obj.status || "").toLowerCase();
+    const approved = (obj.approved === true)
+      || (obj.isApproved === true)
+      || (approvalText === "approved" || approvalText === "true" || approvalText === "yes")
+      || (!!obj.approvedBy);
+    if (amount && approved) rows.push({ type: "petty", date, parsedDate: parseDateRobust(date), amount, category, raw: obj });
   };
 
   const walk = (obj) => {
@@ -315,6 +321,20 @@ function BarChart({ data = [], width = 520, height = 150, pad = 30, color = "url
           <g key={i}>
             <title>{d.label}: {formatINR(d.value)}</title>
             <rect x={x} y={y} width={Math.max(8, barW - 8)} height={h} fill={color} rx="6" />
+            {/* vertical value label inside bar */}
+            {h > 12 && (
+              <text
+                x={x + Math.max(8, barW - 8) / 2}
+                y={y + h / 2}
+                textAnchor="middle"
+                dominantBaseline="middle"
+                fontSize="10"
+                fill="#facc15"
+                transform={`rotate(-90 ${x + Math.max(8, barW - 8) / 2} ${y + h / 2})`}
+              >
+                {formatINR(d.value)}
+              </text>
+            )}
             <text x={x + Math.max(8, barW - 8) / 2} y={height - 10} textAnchor="middle" fontSize="10" fill="#94a3b8">{d.short || d.label}</text>
           </g>
         );
@@ -633,13 +653,13 @@ export default function ResultsCard({
   // Function to get agent details from hospital data
   const getAgentDetails = (tx) => {
     if (tx.type !== "commission") return null;
-    
+
     const agentData = tx.agentData || {};
-    const agents = Array.isArray(agentData) ? agentData : 
-                  (agentData && typeof agentData === "object" ? Object.values(agentData) : []);
-    
+    const agents = Array.isArray(agentData) ? agentData :
+      (agentData && typeof agentData === "object" ? Object.values(agentData) : []);
+
     if (agents.length === 0) return null;
-    
+
     // Get the first agent (you can modify this logic if you need specific agent selection)
     const agent = agents[0];
     return {
@@ -668,7 +688,7 @@ export default function ResultsCard({
       case "commission":
         // Commission related data with agent details
         details.push({ label: "Hospital Name", value: tx.hospitalData?.hospitalName || tx.hospitalData?.name || tx.raw?.hospitalName || "-" });
-        
+
         // Agent details
         const agentDetails = getAgentDetails(tx);
         if (agentDetails) {
@@ -683,7 +703,7 @@ export default function ResultsCard({
         } else {
           details.push({ label: "Agent Name", value: tx.raw?.agentName || tx.hospitalData?.agentName || "-" });
         }
-        
+
         details.push({ label: "Service Type", value: tx.hospitalData?.serviceType || tx.raw?.serviceType || "-" });
         details.push({ label: "Commission Rate", value: tx.raw?.commissionRate || tx.raw?.rate ? `${tx.raw.commissionRate || tx.raw.rate}%` : "-" });
         details.push({ label: "Reference", value: tx.raw?.refNo || tx.raw?.reference || "-" });
@@ -828,13 +848,13 @@ export default function ResultsCard({
                       <div className="d-flex justify-content-between align-items-center mb-2">
                         <h6 className="mb-0">Expense Distribution</h6>
                         <div className="btn-group btn-group-sm">
-                          <button 
+                          <button
                             className={`btn ${chartType === "month" ? "btn-primary" : "btn-outline-primary"}`}
                             onClick={() => setChartType("month")}
                           >
                             Month
                           </button>
-                          <button 
+                          <button
                             className={`btn ${chartType === "year" ? "btn-primary" : "btn-outline-primary"}`}
                             onClick={() => setChartType("year")}
                           >
@@ -843,8 +863,8 @@ export default function ResultsCard({
                         </div>
                       </div>
                       <div className="d-flex align-items-center justify-content-center">
-                        <DonutChart 
-                          segments={chartType === "month" ? monthlyExpenseSegments : yearlyExpenseSegments} 
+                        <DonutChart
+                          segments={chartType === "month" ? monthlyExpenseSegments : yearlyExpenseSegments}
                           title={chartType === "month" ? "This Month" : "This Year"}
                         />
                       </div>
@@ -1004,11 +1024,11 @@ export default function ResultsCard({
                             <div className="col-12 mb-3">
                               <div className="d-flex justify-content-between align-items-center">
                                 <span className={`badge ${selectedTx.type === "client" ? "bg-success" :
-                                    selectedTx.type === "investment" ? "bg-danger" :
-                                      selectedTx.type === "petty" ? "bg-info" :
-                                        selectedTx.type === "staff" ? "bg-sky" :
-                                          selectedTx.type === "worker" ? "bg-warning" :
-                                            selectedTx.type === "commission" ? "bg-warning" : "bg-secondary"
+                                  selectedTx.type === "investment" ? "bg-danger" :
+                                    selectedTx.type === "petty" ? "bg-info" :
+                                      selectedTx.type === "staff" ? "bg-sky" :
+                                        selectedTx.type === "worker" ? "bg-warning" :
+                                          selectedTx.type === "commission" ? "bg-warning" : "bg-secondary"
                                   } text-uppercase fs-6`}>
                                   {selectedTx.type} Transaction
                                 </span>

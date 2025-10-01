@@ -5,8 +5,14 @@ import { Tabs, Tab } from "react-bootstrap";
 import * as XLSX from "xlsx";
 
 /**
- * PettyCashReport.jsx (Updated)
- * - Rejected/Deleted rows are moved to DeleteReport path and don't calculate
+ * PettyCashReport.jsx (clean build)
+ * - Multi-root read, flatten, dedupe by _fullPath
+ * - Stable updates write to _fullPath
+ * - Tabs (Status/Year/Month), filters, export preserved
+ * - Slim table columns + row click opens details modal
+ * - Unified action modal for Rejected / Clarification / Delete
+ * - Admin/Manager lock prevents employee edits after Reject/Delete
+ * - Category summary table with collapsible sections
  */
 
 function parseDateString(input) {
@@ -115,7 +121,7 @@ export default function PettyCashReport({ currentUser = "Admin", currentUserRole
     { cat: "Others", items: [] },
   ];
 
-  // Fetch - Only fetch from main PettyCash paths, exclude DeleteReport
+  // Fetch
   useEffect(() => {
     const candidateRoots = ["PettyCash", "FB/PettyCash", "PettyCash/admin", "FB/PettyCash/admin"];
     const detach = [];
@@ -126,12 +132,6 @@ export default function PettyCashReport({ currentUser = "Admin", currentUserRole
         const rootVal = snapshot.val();
         const flattened = flattenRecords(rootVal, []);
         flattened.forEach((val) => {
-          // Skip records that are already in DeleteReport status
-          const approvalLower = String(val.approval || "").toLowerCase();
-          if (approvalLower === "rejected" || approvalLower === "delete" || val.isDeleted) {
-            return; // Skip these records as they should be in DeleteReport
-          }
-
           const pd = parseDateString(val.date || val.createdAt);
           const safeDate = pd ? pd.toISOString().slice(0, 10) : (val.date || "");
           const rel = normPath(val._relPath || val.id || "");
@@ -172,14 +172,15 @@ export default function PettyCashReport({ currentUser = "Admin", currentUserRole
   };
 
   const recordMatchesStatus = (r) => {
+    const isDel = !!r.isDeleted || String(r.approval || "").toLowerCase() === "delete";
     const s = String(r.approval || "Pending").toLowerCase();
     const tab = statusTab.toLowerCase();
-    if (tab === "delete") return s === "delete";
-    if (tab === "clarification") return s === "clarification";
-    if (tab === "approved") return s === "approved";
-    if (tab === "rejected") return s === "rejected";
-    if (tab === "pending") return s === "pending" || !r.approval;
-    if (tab === "all") return true;
+    if (tab === "delete") return isDel === true;
+    if (tab === "clarification") return !isDel && s === "clarification";
+    if (tab === "approved") return !isDel && s === "approved";
+    if (tab === "rejected") return !isDel && s === "rejected";
+    if (tab === "pending") return !isDel && (s === "pending" || !r.approval);
+    if (tab === "all") return !isDel;
     return true;
   };
 
@@ -199,12 +200,13 @@ export default function PettyCashReport({ currentUser = "Admin", currentUserRole
       return matchesYear && matchesMonth;
     });
     withinSelection.forEach((r) => {
+      const isDel = !!r.isDeleted || String(r.approval || "").toLowerCase() === "delete";
       const st = String(r.approval || "Pending").toLowerCase();
+      if (isDel) { counters.delete += 1; return; }
       counters.all += 1;
       if (st === "approved") counters.approved += 1;
       else if (st === "rejected") counters.rejected += 1;
       else if (st === "clarification") counters.clarification += 1;
-      else if (st === "delete") counters.delete += 1;
       else counters.pending += 1;
     });
     return counters;
@@ -281,6 +283,13 @@ export default function PettyCashReport({ currentUser = "Admin", currentUserRole
       Comments: r.comments,
       "Purchased By": r.employeeName || "",
       Approval: r.approval || "Pending",
+      Deleted: r.isDeleted ? "Yes" : "No",
+      "Delete Reason": r.deleteInfo?.reason || "",
+      "Delete By": r.deleteInfo?.deletedBy || "",
+      "Delete At": r.deleteInfo?.deletedAt || "",
+      "Clarification Request": r.clarificationRequest?.text || "",
+      "Clarification By": r.clarificationRequest?.requestedBy || "",
+      "Clarification At": r.clarificationRequest?.requestedAt || "",
       "Source Path": r._fullPath || ""
     }));
     const ws = XLSX.utils.json_to_sheet(exportData);
@@ -289,7 +298,7 @@ export default function PettyCashReport({ currentUser = "Admin", currentUserRole
     XLSX.writeFile(wb, `${label}-PettyCash.xlsx`);
   };
 
-  // Category Summary Data - EXCLUDE rejected and deleted records
+  // Category Summary Data
   const summaryData = useMemo(() => {
     const summary = {};
     const othersMap = {};
@@ -305,8 +314,7 @@ export default function PettyCashReport({ currentUser = "Admin", currentUserRole
 
     data.forEach((rec) => {
       const approvalLower = String(rec.approval || "Pending").toLowerCase();
-      // EXCLUDE rejected and deleted records from calculations
-      if (approvalLower === "rejected" || approvalLower === "delete") return;
+      if (rec.isDeleted || approvalLower !== "approved") return;
 
       const dt = rec._parsedDate;
       const m = (dt && !isNaN(dt)) ? monthsList[dt.getMonth()] : "Unknown";
@@ -389,67 +397,51 @@ export default function PettyCashReport({ currentUser = "Admin", currentUserRole
     }
   };
 
-  // NEW: Move rejected/deleted records to DeleteReport path
-  const moveToDeleteReport = async (item, actionType, reason) => {
-    try {
-      const originalPath = item._fullPath || `${item._sourcePath}/${item._relPath}`;
-      const deleteReportPath = `PettyCashDeleteReport/${item.id || Date.now()}`;
-
-      // Create record in DeleteReport with all original data plus rejection/delete info
-      const deleteRecord = {
-        ...item,
-        originalPath: originalPath,
-        movedToDeleteReportAt: new Date().toISOString(),
-        movedBy: currentUser || "System",
-        deleteInfo: {
-          reason: reason,
-          actionType: actionType,
-          movedBy: currentUser || "System",
-          movedAt: new Date().toISOString(),
-        }
-      };
-
-      // Remove from original location and add to DeleteReport
-      await firebaseDB.child(deleteReportPath).set(deleteRecord);
-      await firebaseDB.child(originalPath).remove();
-
-    } catch (err) {
-      console.error("Error moving to DeleteReport:", err);
-      throw err;
-    }
-  };
-
   const saveAction = async () => {
     if (!actionItem) return;
     try {
-      if (actionType === "Rejected" || actionType === "Delete") {
-        // Move to DeleteReport for Rejected/Delete actions
-        await moveToDeleteReport(actionItem, actionType, actionText);
-      } else {
-        // For Clarification, just update in place
-        const target = actionItem._fullPath || `${actionItem._sourcePath}/${actionItem._relPath}`;
-        const base = { approval: actionType };
-        const lock = canDeleteOrRejectLock ? {
-          approvalLock: {
-            locked: true,
-            lockedBy: currentUser || "System",
-            lockedByRole: currentUserRole || "",
-            lockedAt: new Date().toISOString(),
-            reason: actionText
-          }
-        } : {};
-
-        if (actionType === "Clarification") {
-          await firebaseDB.child(target).update({
-            ...base,
-            clarificationRequest: {
-              text: actionText,
-              requestedBy: currentUser || "System",
-              requestedAt: new Date().toISOString(),
-            },
-            ...lock
-          });
+      const target = actionItem._fullPath || `${actionItem._sourcePath}/${actionItem._relPath}`;
+      const base = { approval: actionType };
+      const lock = canDeleteOrRejectLock ? {
+        approvalLock: {
+          locked: true,
+          lockedBy: currentUser || "System",
+          lockedByRole: currentUserRole || "",
+          lockedAt: new Date().toISOString(),
+          reason: actionText
         }
+      } : {};
+      if (actionType === "Clarification") {
+        await firebaseDB.child(target).update({
+          ...base,
+          clarificationRequest: {
+            text: actionText,
+            requestedBy: currentUser || "System",
+            requestedAt: new Date().toISOString(),
+          },
+          ...lock
+        });
+      } else if (actionType === "Rejected") {
+        await firebaseDB.child(target).update({
+          ...base,
+          rejectionInfo: {
+            reason: actionText,
+            rejectedBy: currentUser || "System",
+            rejectedAt: new Date().toISOString(),
+          },
+          ...lock
+        });
+      } else if (actionType === "Delete") {
+        await firebaseDB.child(target).update({
+          approval: "Delete",
+          isDeleted: true,
+          deleteInfo: {
+            reason: actionText,
+            deletedBy: currentUser || "System",
+            deletedAt: new Date().toISOString(),
+          },
+          ...lock
+        });
       }
       setActionModalOpen(false); setActionItem(null); setActionText(""); setActionType("");
     } catch (err) {
@@ -473,18 +465,8 @@ export default function PettyCashReport({ currentUser = "Admin", currentUserRole
     return Array.from(m.values()).sort((a, b) => a.localeCompare(b));
   }, [data, mainCategory]);
 
-  // Calculate totals - EXCLUDE rejected and deleted
-  const pageTotal = useMemo(() =>
-    pageItems
-      .filter(r => String(r.approval || "Pending").toLowerCase() === "approved")
-      .reduce((s, r) => s + (Number(r.total || 0) || 0), 0),
-    [pageItems]);
-
-  const filteredTotal = useMemo(() =>
-    filteredRecords
-      .filter(r => String(r.approval || "Pending").toLowerCase() === "approved")
-      .reduce((s, r) => s + (Number(r.total || 0) || 0), 0),
-    [filteredRecords]);
+  const pageTotal = useMemo(() => pageItems.filter(r => !r.isDeleted && String(r.approval || "Pending").toLowerCase() === "approved").reduce((s, r) => s + (Number(r.total || 0) || 0), 0), [pageItems]);
+  const filteredTotal = useMemo(() => filteredRecords.filter(r => !r.isDeleted && String(r.approval || "Pending").toLowerCase() === "approved").reduce((s, r) => s + (Number(r.total || 0) || 0), 0), [filteredRecords]);
 
   const resetFilters = () => { setSearch(""); setMainCategory(""); setSubCategory(""); setDateFrom(""); setDateTo(""); setCurrentPage(1); };
 
@@ -494,7 +476,7 @@ export default function PettyCashReport({ currentUser = "Admin", currentUserRole
         <h3>Petty Cash Report</h3>
         <div className="btn-group" role="group" aria-label="Status tabs">
           {["All", "Approved", "Pending", "Rejected", "Clarification", "Delete"].map(s => (
-            <button key={s} className={`btn btn-sm ${statusTab.toLowerCase() === s.toLowerCase() ? "btn-primary" : "btn-outline-info"}`} onClick={() => { setStatusTab(s); setCurrentPage(1); }}>
+            <button key={s} className={`btn btn-sm ${statusTab.toLowerCase() === s.toLowerCase() ? "btn-primary" : "btn-outline-secondary"}`} onClick={() => { setStatusTab(s); setCurrentPage(1); }}>
               {s}
             </button>
           ))}
@@ -531,11 +513,11 @@ export default function PettyCashReport({ currentUser = "Admin", currentUserRole
             <div className="mb-3">
               <div className="d-flex gap-2 flex-wrap">
                 {monthsList.map((m) => (
-                  <button key={m} className={`btn btn-sm ${activeMonth === m ? "btn-primary" : "btn-outline-info"}`} onClick={() => { setActiveMonth(m); setCurrentPage(1); }} title={`Records: ${monthCountsForYear[m] || 0}`}>
+                  <button key={m} className={`btn btn-sm ${activeMonth === m ? "btn-primary" : "btn-outline-secondary"}`} onClick={() => { setActiveMonth(m); setCurrentPage(1); }} title={`Records: ${monthCountsForYear[m] || 0}`}>
                     {m} <small className="opacity-75">({monthCountsForYear[m] || 0})</small>
                   </button>
                 ))}
-                <button className={`btn btn-sm ${activeMonth === "" ? "btn-primary" : "btn-outline-info"}`} onClick={() => { setActiveMonth(""); setCurrentPage(1); }}>
+                <button className={`btn btn-sm ${activeMonth === "" ? "btn-primary" : "btn-outline-secondary"}`} onClick={() => { setActiveMonth(""); setCurrentPage(1); }}>
                   All months <small className="opacity-75">({recordsForYearMonth.length})</small>
                 </button>
               </div>
@@ -596,7 +578,7 @@ export default function PettyCashReport({ currentUser = "Admin", currentUserRole
                     {pageItems.map((item, idx) => {
                       const lockedByAdmin = !!(item.approvalLock?.locked && (String(currentUserRole || "").toLowerCase() === "employee"));
                       const approvalLower = String(item.approval || "Pending").toLowerCase();
-                      const rowClass = approvalLower === "rejected" ? "table-danger" : approvalLower === "delete" ? "table-secondary" : "";
+                      const rowClass = item.isDeleted ? "table-secondary" : (approvalLower === "rejected" ? "table-danger" : "");
                       return (
                         <tr
                           key={item.id}
@@ -658,9 +640,9 @@ export default function PettyCashReport({ currentUser = "Admin", currentUserRole
               <div className="d-flex justify-content-between align-items-center mt-3">
                 <div>Showing {filteredRecords.length} items</div>
                 <div className="d-flex gap-2 align-items-center">
-                  <button className="btn btn-sm btn-outline-info" onClick={() => setCurrentPage(p => Math.max(1, p - 1))}>Prev</button>
+                  <button className="btn btn-sm btn-outline-secondary" onClick={() => setCurrentPage(p => Math.max(1, p - 1))}>Prev</button>
                   <div>Page {safePage} / {totalPages}</div>
-                  <button className="btn btn-sm btn-outline-info" onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}>Next</button>
+                  <button className="btn btn-sm btn-outline-secondary" onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}>Next</button>
                 </div>
               </div>
             )}
@@ -668,7 +650,7 @@ export default function PettyCashReport({ currentUser = "Admin", currentUserRole
         ))}
       </Tabs>
 
-      {/* Category Summary Table - Only shows approved records */}
+      {/* Category Summary Table */}
       <div className="d-flex justify-content-between align-items-center mb-2 mt-5">
         <h4 className="opacity-85">Category Wise Summary (All Years, Approved Only)</h4>
       </div>
@@ -822,6 +804,12 @@ export default function PettyCashReport({ currentUser = "Admin", currentUserRole
                   <div className="col-md-12"> <strong>Source Path:</strong><div><code>{detailsItem._fullPath}</code></div></div>
                   {detailsItem.clarificationRequest?.text && (
                     <div className="col-12"><div className="alert alert-info mb-0 text-white"><strong>Clarification:</strong> {detailsItem.clarificationRequest.text} <em className="text-muted">({detailsItem.clarificationRequest.requestedBy || ""} @ {detailsItem.clarificationRequest.requestedAt ? new Date(detailsItem.clarificationRequest.requestedAt).toLocaleString() : ""})</em></div></div>
+                  )}
+                  {detailsItem.rejectionInfo?.reason && (
+                    <div className="col-12"><div className="alert alert-warning mb-0 text-black"><strong>Rejected:</strong> {detailsItem.rejectionInfo.reason} <em className="text-muted">({detailsItem.rejectionInfo.rejectedBy || ""} @ {detailsItem.rejectionInfo.rejectedAt ? new Date(detailsItem.rejectionInfo.rejectedAt).toLocaleString() : ""})</em></div></div>
+                  )}
+                  {detailsItem.isDeleted && detailsItem.deleteInfo?.reason && (
+                    <div className="col-12"><div className="alert alert-danger mb-0 text-black"><strong>Deleted:</strong> {detailsItem.deleteInfo.reason} <em className="text-muted">({detailsItem.deleteInfo.deletedBy || ""} @ {detailsItem.deleteInfo.deletedAt ? new Date(detailsItem.deleteInfo.deletedAt).toLocaleString() : ""})</em></div></div>
                   )}
                 </div>
               </div>

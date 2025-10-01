@@ -9,12 +9,12 @@ async function importFirebaseDB() {
     const a = await import("../../firebase");
     if (a && a.default) return a.default;
     if (a && a.firebaseDB) return a.firebaseDB;
-  } catch (e) {}
+  } catch (e) { }
   try {
     const b = await import("../firebase");
     if (b && b.default) return b.default;
     if (b && b.firebaseDB) return b.firebaseDB;
-  } catch (e) {}
+  } catch (e) { }
   if (typeof window !== "undefined" && window.firebaseDB) return window.firebaseDB;
   return null;
 }
@@ -34,10 +34,7 @@ function formatINR(value) {
       style: "currency",
       currency: "INR",
       maximumFractionDigits: 0,
-    }
-
-
-).format(n);
+    }).format(n);
   } catch (e) {
     return "\u20B9" + n.toLocaleString("en-IN");
   }
@@ -65,6 +62,104 @@ function parseDateRobust(v) {
     if (idx >= 0) return new Date(Number(mm[2]), idx, 1);
   }
   return null;
+}
+
+/* ---------------------- SVG Charts ---------------------- */
+function BarChart({ data = [], width = 520, height = 150, pad = 30, color = "url(#gradClient)" }) {
+  const max = Math.max(...data.map(d => d.value), 1);
+  const barW = (width - pad * 2) / (data.length || 1);
+  return (
+    <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none">
+      <defs>
+        <linearGradient id="gradClient" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0%" stopColor="#3b82f6" />
+          <stop offset="100%" stopColor="#1d4ed8" />
+        </linearGradient>
+        <linearGradient id="gradPayment" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0%" stopColor="#10b981" />
+          <stop offset="100%" stopColor="#047857" />
+        </linearGradient>
+      </defs>
+      <rect x="0" y="0" width={width} height={height} fill="transparent" />
+      {data.map((d, i) => {
+        const h = Math.max(2, (d.value / max) * (height - pad * 2));
+        const x = pad + i * barW + 4;
+        const y = height - pad - h;
+        return (
+          <g key={i}>
+            <title>{d.label}: {formatINR(d.value)}</title>
+            <rect x={x} y={y} width={Math.max(8, barW - 8)} height={h} fill={color} rx="6" />
+            {h > 12 && (
+              <text
+                x={x + Math.max(8, barW - 8) / 2}
+                y={y + h / 2}
+                textAnchor="middle"
+                dominantBaseline="middle"
+                fontSize="10"
+                fill="#facc15"
+                transform={`rotate(-90 ${x + Math.max(8, barW - 8) / 2} ${y + h / 2})`}
+              >
+                {formatINR(d.value)}
+              </text>
+            )}
+            <text x={x + Math.max(8, barW - 8) / 2} y={height - 10} textAnchor="middle" fontSize="10" fill="#94a3b8">{d.short || d.label}</text>
+          </g>
+        );
+      })}
+    </svg>
+  );
+}
+
+function DonutChart({ segments = [], size = 150, stroke = 18, title = "Distribution" }) {
+  const total = Math.max(1, segments.reduce((s, x) => s + (x.value || 0), 0));
+  const r = (size - stroke) / 2;
+  const c = 2 * Math.PI * r;
+  let offset = 0;
+  return (
+    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
+      <defs>
+        <linearGradient id="gradClient" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0%" stopColor="#3b82f6" />
+          <stop offset="100%" stopColor="#1d4ed8" />
+        </linearGradient>
+        <linearGradient id="gradPayment" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0%" stopColor="#10b981" />
+          <stop offset="100%" stopColor="#047857" />
+        </linearGradient>
+        <linearGradient id="gradRefund" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0%" stopColor="#ef4444" />
+          <stop offset="100%" stopColor="#b91c1c" />
+        </linearGradient>
+        <linearGradient id="gradBalance" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0%" stopColor="#f59e0b" />
+          <stop offset="100%" stopColor="#b45309" />
+        </linearGradient>
+      </defs>
+      <circle cx={size / 2} cy={size / 2} r={r} stroke="#e2e8f0" strokeWidth={stroke} fill="none" />
+      {segments.map((s, i) => {
+        const frac = (s.value || 0) / total;
+        const len = c * frac;
+        const dash = `${len} ${c - len}`;
+        const dashoffset = c - offset;
+        offset += len;
+        return (
+          <circle
+            key={i}
+            cx={size / 2}
+            cy={size / 2}
+            r={r}
+            stroke={s.color}
+            strokeWidth={stroke}
+            fill="none"
+            strokeDasharray={dash}
+            strokeDashoffset={dashoffset}
+            strokeLinecap="round"
+          />
+        );
+      })}
+      <text x="50%" y="50%" dominantBaseline="middle" textAnchor="middle" fontSize="14" fill="#0f172a">{title}</text>
+    </svg>
+  );
 }
 
 /* Normalize client record into payment rows */
@@ -107,6 +202,7 @@ function extractPaymentsFromClient(clientRecord = {}, collectionName = "") {
         date,
         parsedDate,
         raw: p,
+        _fullClientData: clientRecord // Store full client data for detailed view
       });
     });
   } else {
@@ -130,6 +226,7 @@ function extractPaymentsFromClient(clientRecord = {}, collectionName = "") {
         date,
         parsedDate: parseDateRobust(date),
         raw: clientRecord,
+        _fullClientData: clientRecord
       });
     }
   }
@@ -163,6 +260,7 @@ function extractPaymentsFromClient(clientRecord = {}, collectionName = "") {
         date: dateLg,
         parsedDate: parsedLg,
         raw: lg,
+        _fullClientData: clientRecord
       });
     });
   }
@@ -182,7 +280,7 @@ function isBalancePayRow(p) {
     const rem2 = String(p.raw?.remarks || "").toLowerCase();
     if (rem2.includes("balance paid")) return true;
     if (!p.isRefund && Number(p.paidAmount || 0) > 0 && Number(p.balance || 0) === 0) return true;
-  } catch(e) {}
+  } catch (e) { }
   return false;
 }
 //  { years: { [year]: { months: { [monthKey]: { rows, totals } }, totals } }, yearKeys: [] } 
@@ -307,6 +405,10 @@ export default function ClientPaymentCard({
   const [activeMonth, setActiveMonth] = useState(null); // string like "0".."11" or "Unknown"
   const [viewMode, setViewMode] = useState("month");
   const [filterClient, setFilterClient] = useState(null);
+  const [selectedPayment, setSelectedPayment] = useState(null);
+  const [paymentDetailModal, setPaymentDetailModal] = useState(false);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
   const modalRef = useRef(null);
 
   // listen Firebase nodes and build payments
@@ -377,7 +479,7 @@ export default function ClientPaymentCard({
       mounted = false;
       try {
         listeners.forEach(({ ref, cb }) => ref.off("value", cb));
-      } catch (e) {}
+      } catch (e) { }
     };
   }, [clientCollections.active, clientCollections.exit]);
 
@@ -400,37 +502,37 @@ export default function ClientPaymentCard({
     return Object.values(map).sort((a, b) => b.paid - a.paid);
   }, [allPayments]);
 
-  
-const overallTotals = useMemo(() => {
-  const acc = allPayments.reduce(
-    (acc2, p) => {
-      acc2.paid += Number(p.paidAmount || 0);
-      acc2.paidIncludingTravel += Number(p.totalForTotals || p.paidAmount || 0);
-      acc2.balanceSumAllRows += Number(p.balance || 0);
-      acc2.refunds += Number(p.refundAmount || 0);
-      acc2.count += 1;
-      const isBal = p?.raw?.__type === "balance";
-      if (Number(p.paidAmount || 0) === 0 && Number(p.refundAmount || 0) === 0 && !isBal) acc2.pendingCount += 1;
-      return acc2;
-    },
-    { paid: 0, paidIncludingTravel: 0, balanceSumAllRows: 0, refunds: 0, count: 0, pendingCount: 0 }
-  );
 
-  // Payment (net) across all rows
-  acc.netPaid = (allPayments || []).reduce((s, r) => s + getDisplayPayment(r), 0);
+  const overallTotals = useMemo(() => {
+    const acc = allPayments.reduce(
+      (acc2, p) => {
+        acc2.paid += Number(p.paidAmount || 0);
+        acc2.paidIncludingTravel += Number(p.totalForTotals || p.paidAmount || 0);
+        acc2.balanceSumAllRows += Number(p.balance || 0);
+        acc2.refunds += Number(p.refundAmount || 0);
+        acc2.count += 1;
+        const isBal = p?.raw?.__type === "balance";
+        if (Number(p.paidAmount || 0) === 0 && Number(p.refundAmount || 0) === 0 && !isBal) acc2.pendingCount += 1;
+        return acc2;
+      },
+      { paid: 0, paidIncludingTravel: 0, balanceSumAllRows: 0, refunds: 0, count: 0, pendingCount: 0 }
+    );
 
-  // Outstanding balance = sum of latest balance per client (using sorted allPayments desc)
-  const latestByClient = {};
-  (allPayments || []).forEach((row) => {
-    const cid = (row.clientId || "Unknown").toString();
-    if (latestByClient[cid] === undefined) {
-      latestByClient[cid] = Number(row.balance || 0);
-    }
-  });
-  acc.netBalance = Object.values(latestByClient).reduce((s, n) => s + Number(n || 0), 0);
+    // Payment (net) across all rows
+    acc.netPaid = (allPayments || []).reduce((s, r) => s + getDisplayPayment(r), 0);
 
-  return acc;
-}, [allPayments]);
+    // Outstanding balance = sum of latest balance per client (using sorted allPayments desc)
+    const latestByClient = {};
+    (allPayments || []).forEach((row) => {
+      const cid = (row.clientId || "Unknown").toString();
+      if (latestByClient[cid] === undefined) {
+        latestByClient[cid] = Number(row.balance || 0);
+      }
+    });
+    acc.netBalance = Object.values(latestByClient).reduce((s, n) => s + Number(n || 0), 0);
+
+    return acc;
+  }, [allPayments]);
 
 
   // default active year/month when modal opens
@@ -506,6 +608,76 @@ const overallTotals = useMemo(() => {
     return rows;
   }, [activeYear, grouped, filterClient]);
 
+  // Pagination
+  const currentRows = useMemo(() => {
+    return viewMode === "month" ? currentMonthRows : currentYearRows;
+  }, [viewMode, currentMonthRows, currentYearRows]);
+
+  const totalEntries = currentRows.length;
+  const totalPages = Math.ceil(totalEntries / pageSize);
+  const pageSafe = Math.max(1, Math.min(page, totalPages || 1));
+  const pageStart = (pageSafe - 1) * pageSize;
+  const pageEnd = Math.min(pageStart + pageSize, totalEntries);
+  const paginatedRows = currentRows.slice(pageStart, pageEnd);
+
+  useEffect(() => {
+    if (pageSafe !== page) {
+      setPage(pageSafe);
+    }
+  }, [pageSafe, page]);
+
+  // Chart data
+  const monthlyChartData = useMemo(() => {
+    if (!activeYear) return [];
+    const months = grouped.years?.[activeYear]?.months || {};
+    const monthLabels = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+    return monthLabels.map((label, index) => {
+      const monthData = months[index] || { totals: { paid: 0 } };
+      return {
+        label,
+        short: label,
+        value: monthData.totals.paid
+      };
+    });
+  }, [activeYear, grouped]);
+
+  // Payment method distribution for pie chart
+  const paymentMethodDistribution = useMemo(() => {
+    const methods = {};
+    currentMonthRows.forEach(payment => {
+      const method = payment.method || "Unknown";
+      methods[method] = (methods[method] || 0) + getDisplayPayment(payment);
+    });
+
+    return Object.entries(methods).map(([method, amount]) => ({
+      key: method,
+      value: amount,
+      color: method === "Cash" ? "url(#gradClient)" :
+        method === "Bank" ? "url(#gradPayment)" :
+          method === "Card" ? "url(#gradBalance)" :
+            "url(#gradRefund)"
+    }));
+  }, [currentMonthRows]);
+
+  // Client distribution for pie chart
+  const clientDistribution = useMemo(() => {
+    const clients = {};
+    currentMonthRows.forEach(payment => {
+      const client = payment.clientName;
+      clients[client] = (clients[client] || 0) + getDisplayPayment(payment);
+    });
+
+    return Object.entries(clients)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 5) // Top 5 clients
+      .map(([client, amount]) => ({
+        key: client,
+        value: amount,
+        color: "url(#gradClient)"
+      }));
+  }, [currentMonthRows]);
+
   // totals
   const monthlyTotals = useMemo(() => {
     const paid = currentMonthRows.reduce((s, r) => s + Number(r.paidAmount || 0), 0);
@@ -513,12 +685,12 @@ const overallTotals = useMemo(() => {
     const net = currentMonthRows.reduce((s, r) => s + getDisplayPayment(r), 0);
     // Balance (month): sum of latest balance per client within the month (avoid double subtraction)
     const latestByClientM = {};
-    const rowsM = currentMonthRows.slice().sort((a,b) => (b.parsedDate ? b.parsedDate.getTime() : 0) - (a.parsedDate ? a.parsedDate.getTime() : 0));
+    const rowsM = currentMonthRows.slice().sort((a, b) => (b.parsedDate ? b.parsedDate.getTime() : 0) - (a.parsedDate ? a.parsedDate.getTime() : 0));
     for (const row of rowsM) {
       const cid = (row.clientId || "Unknown").toString();
       if (latestByClientM[cid] === undefined) latestByClientM[cid] = Number(row.balance || 0);
     }
-    const balance = Object.values(latestByClientM).reduce((s,n) => s + Number(n||0), 0);
+    const balance = Object.values(latestByClientM).reduce((s, n) => s + Number(n || 0), 0);
     const paidInclTravel = currentMonthRows.reduce((s, r) => s + Number(r.totalForTotals || r.paidAmount || 0), 0);
     const pending = currentMonthRows.reduce((s, r) => s + ((Number(r.paidAmount || 0) === 0 && Number(r.refundAmount || 0) === 0 && !isBalancePayRow(r)) ? 1 : 0), 0);
     return { paid, paidInclTravel, balance, refunds, pending, count: currentMonthRows.length, net };
@@ -530,12 +702,12 @@ const overallTotals = useMemo(() => {
     const net = currentYearRows.reduce((s, r) => s + getDisplayPayment(r), 0);
     // Balance (year): sum of latest balance per client within the year
     const latestByClientY = {};
-    const rowsY = currentYearRows.slice().sort((a,b) => (b.parsedDate ? b.parsedDate.getTime() : 0) - (a.parsedDate ? a.parsedDate.getTime() : 0));
+    const rowsY = currentYearRows.slice().sort((a, b) => (b.parsedDate ? b.parsedDate.getTime() : 0) - (a.parsedDate ? a.parsedDate.getTime() : 0));
     for (const row of rowsY) {
       const cid = (row.clientId || "Unknown").toString();
       if (latestByClientY[cid] === undefined) latestByClientY[cid] = Number(row.balance || 0);
     }
-    const balance = Object.values(latestByClientY).reduce((s,n) => s + Number(n||0), 0);
+    const balance = Object.values(latestByClientY).reduce((s, n) => s + Number(n || 0), 0);
     const paidInclTravel = currentYearRows.reduce((s, r) => s + Number(r.totalForTotals || r.paidAmount || 0), 0);
     const pending = currentYearRows.reduce((s, r) => s + ((Number(r.paidAmount || 0) === 0 && Number(r.refundAmount || 0) === 0 && !isBalancePayRow(r)) ? 1 : 0), 0);
     return { paid, paidInclTravel, balance, refunds, pending, count: currentYearRows.length, net };
@@ -643,6 +815,11 @@ const overallTotals = useMemo(() => {
   };
 
   const handleRowClick = (r) => {
+    setSelectedPayment(r);
+    setPaymentDetailModal(true);
+  };
+
+  const handleClientProfileClick = (r) => {
     if (openClientModal && typeof openClientModal === "function" && r.clientId) {
       openClientModal(r.clientId);
       return;
@@ -652,6 +829,34 @@ const overallTotals = useMemo(() => {
       return;
     }
     window.location.href = `${rootPathForClientProfile}/${encodeURIComponent(r.clientId || "")}`;
+  };
+
+  // Function to get payment details for modal
+  const getPaymentDetails = (payment) => {
+    const details = [];
+
+    details.push({ label: "Client ID", value: payment.clientId || "-" });
+    details.push({ label: "Client Name", value: payment.clientName || "-" });
+    details.push({ label: "Payment Method", value: payment.method || "-" });
+    details.push({ label: "Date", value: payment.parsedDate ? payment.parsedDate.toLocaleDateString() : payment.date || "-" });
+    details.push({ label: "Receipt No", value: payment.receipt || "-" });
+    details.push({ label: "Paid Amount", value: formatINR(payment.paidAmount) });
+    details.push({ label: "Travel Charges", value: formatINR(payment.travel) });
+    details.push({ label: "Total Amount", value: formatINR(payment.totalForTotals) });
+    details.push({ label: "Refund Amount", value: formatINR(payment.refundAmount) });
+    details.push({ label: "Balance", value: formatINR(payment.balance) });
+    details.push({ label: "Net Payment", value: formatINR(getDisplayPayment(payment)) });
+    details.push({ label: "Payment Type", value: payment.isRefund ? "Refund" : "Payment" });
+    // details.push({ label: "Source Collection", value: payment.sourceCollection || "-" });
+
+    // Additional client details from full client data
+    const clientData = payment._fullClientData || {};
+    if (clientData.phone) details.push({ label: "Client Phone", value: clientData.phone });
+    if (clientData.service) details.push({ label: "Service", value: clientData.service });
+    if (clientData.package) details.push({ label: "Package", value: clientData.package });
+    if (clientData.address) details.push({ label: "Address", value: clientData.address });
+
+    return details;
   };
 
   useEffect(() => {
@@ -690,7 +895,6 @@ const overallTotals = useMemo(() => {
               </div>
 
               <div className="invest-modal-body">
- 
 
                 <div className="overall-cards">
                   <div className="header-gradient grad-paid">
@@ -711,6 +915,40 @@ const overallTotals = useMemo(() => {
                     <div className="header-sub">across all years</div>
                   </div>
                 </div>
+
+                {/* Charts Section */}
+                {activeYear && activeMonth && currentMonthRows.length > 0 && (
+                  <div className="row g-3 mb-4">
+                    <div className="col-lg-8">
+                      <div className="glass-card p-3">
+                        <h6 className="mb-2">Monthly Payment Trend - {activeYear}</h6>
+                        <BarChart data={monthlyChartData} width={520} height={200} color="url(#gradClient)" />
+                      </div>
+                    </div>
+                    <div className="col-lg-4">
+                      <div className="glass-card p-3">
+                        <h6 className="mb-2">Payment Method Distribution</h6>
+                        <div className="d-flex align-items-center justify-content-center">
+                          <DonutChart
+                            segments={paymentMethodDistribution}
+                            size={150}
+                            stroke={16}
+                            title="Methods"
+                          />
+                        </div>
+                        <div className="mt-2 tiny">
+                          {paymentMethodDistribution.map((s) => (
+                            <div key={s.key} className="d-flex align-items-center gap-2 mb-1">
+                              <span className="legend-dot" style={{ background: s.color }}></span>
+                              <span className="text-muted">{s.key}</span>
+                              <span className="ms-auto fw-semibold">{formatINR(s.value)}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
 
                 <ul className="nav nav-tabs invest-year-tabs">
                   {yearKeys.length === 0 ? (
@@ -815,10 +1053,10 @@ const overallTotals = useMemo(() => {
                       </div>
 
                       <div className="btn-group me-2">
-                          <button className={`btn btn-sm ${viewMode === "month" ? "btn-primary" : "btn-outline-primary"}`} onClick={() => setViewMode("month")}>Months</button>
-                          <button className={`btn btn-sm ${viewMode === "year" ? "btn-primary" : "btn-outline-primary"}`} onClick={() => setViewMode("year")}>Year</button>
-                        </div>
-                        <div className="btn-group">
+                        <button className={`btn btn-sm ${viewMode === "month" ? "btn-primary" : "btn-outline-primary"}`} onClick={() => setViewMode("month")}>Months</button>
+                        <button className={`btn btn-sm ${viewMode === "year" ? "btn-primary" : "btn-outline-primary"}`} onClick={() => setViewMode("year")}>Year</button>
+                      </div>
+                      <div className="btn-group">
                         <button className="btn btn-sm btn-outline-primary" onClick={() => exportCSV("month")} disabled={activeMonth === null || activeMonth === undefined}>
                           Export Month CSV
                         </button>
@@ -837,69 +1075,138 @@ const overallTotals = useMemo(() => {
                       </div>
                     </div>
 
+
+
                     {viewMode === "month" && (
-<div className="table-responsive">
-                      <table className="table table-sm table-hover invest-table">
-                        <thead>
-                          <tr>
-                            <th className="th-narrow">#</th>
-                            <th>Client ID</th>
-                            <th>Client Name</th>
-                            <th>Method</th>
-                            <th>Date</th>
-                            <th>Receipt No</th>
-                            <th className="text-end">Payment</th>
-                            <th className="text-end">Balance</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {(!activeMonth || currentMonthRows.length === 0) && (
+                      <div className="table-responsive">
+                        <table className="table table-sm table-hover invest-table">
+                          <thead>
                             <tr>
-                              <td colSpan={8} className="text-center small text-muted">
-                                No payments for selected month/year
+                              <th className="th-narrow">#</th>
+                              <th>Client ID</th>
+                              <th>Client Name</th>
+                              <th>Method</th>
+                              <th>Date</th>
+                              <th>Receipt No</th>
+                              <th className="text-end">Payment</th>
+                              <th className="text-end">Balance</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {(!activeMonth || paginatedRows.length === 0) && (
+                              <tr>
+                                <td colSpan={8} className="text-center small text-muted">
+                                  No payments for selected month/year
+                                </td>
+                              </tr>
+                            )}
+                            {paginatedRows.map((r, i) => (
+                              <tr key={`${r._clientDbKey}_${i}`} className="invest-table-row clickable-row" onClick={() => handleRowClick(r)}>
+                                <td>{pageStart + i + 1}</td>
+                                <td>
+                                  <div className="d-flex align-items-center gap-2">
+                                    {r.clientId || "-"}
+                                    <button
+                                      className="btn btn-sm btn-outline-primary py-0 px-1"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleClientProfileClick(r);
+                                      }}
+                                      title="View Client Profile"
+                                    >
+                                      👤
+                                    </button>
+                                  </div>
+                                </td>
+                                <td>{r.clientName || "-"}</td>
+                                <td>{r.method || "-"}</td>
+                                <td>{r.parsedDate ? r.parsedDate.toLocaleDateString() : r.date || "-"}</td>
+                                <td>{r.receipt || "-"}</td>
+                                {/* show row payment as totalForTotals - refundAmount so each row reflects net effect */}
+                                <td className="text-end">{renderAmount(getDisplayPayment(r))}</td>
+                                <td className="text-end">{renderAmount(getDisplayBalance(r))}{(r?.raw?.__type === "balance" && Number(r?.balance || 0) <= 0) && (<div className="small-text">{r.parsedDate ? r.parsedDate.toLocaleDateString() : (r.date || "")} · cleared {formatINR(Number(r.paidAmount || 0))}</div>)}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                          <tfoot>
+                            <tr className="table-secondary">
+                              <td colSpan={6} className="text-end">
+                                <strong>Monthly Subtotal (net)</strong>
+                              </td>
+                              <td className="text-end">
+                                <strong>{renderAmount(monthlyTotals.net ?? monthlyTotals.paidInclTravel ?? monthlyTotals.paid)}</strong>
+                              </td>
+                              <td className="text-end">
+                                <strong>{renderAmount(monthlyTotals.balance)}</strong>
                               </td>
                             </tr>
-                          )}
-                          {currentMonthRows.map((r, i) => (
-                            <tr key={`${r._clientDbKey}_${i}`} className="invest-table-row clickable-row" onClick={() => handleRowClick(r)}>
-                              <td>{i + 1}</td>
-                              <td>{r.clientId || "-"}</td>
-                              <td>{r.clientName || "-"}</td>
-                              <td>{r.method || "-"}</td>
-                              <td>{r.parsedDate ? r.parsedDate.toLocaleDateString() : r.date || "-"}</td>
-                              <td>{r.receipt || "-"}</td>
-                              {/* show row payment as totalForTotals - refundAmount so each row reflects net effect */}
-                              <td className="text-end">{renderAmount(getDisplayPayment(r))}</td>
-                              <td className="text-end">{renderAmount(getDisplayBalance(r))}{(r?.raw?.__type === "balance" && Number(r?.balance || 0) <= 0) && (<div className="small-text">{r.parsedDate ? r.parsedDate.toLocaleDateString() : (r.date || "")} · cleared {formatINR(Number(r.paidAmount || 0))}</div>)}</td>
+                            <tr className="table-secondary">
+                              <td colSpan={6} className="text-end">
+                                <strong>Yearly Grand Total (net)</strong>
+                              </td>
+                              <td className="text-end">
+                                <strong>{renderAmount(yearlyTotals.net ?? yearlyTotals.paidInclTravel ?? yearlyTotals.paid)}</strong>
+                              </td>
+                              <td className="text-end">
+                                <strong>{renderAmount(yearlyTotals.balance)}</strong>
+                              </td>
                             </tr>
-                          ))}
-                        </tbody>
-                        <tfoot>
-                          <tr className="table-secondary">
-                            <td colSpan={6} className="text-end">
-                              <strong>Monthly Subtotal (net)</strong>
-                            </td>
-                            <td className="text-end">
-                              <strong>{renderAmount(monthlyTotals.net ?? monthlyTotals.paidInclTravel ?? monthlyTotals.paid)}</strong>
-                            </td>
-                            <td className="text-end">
-                              <strong>{renderAmount(monthlyTotals.balance)}</strong>
-                            </td>
-                          </tr>
-                          <tr className="table-secondary">
-                            <td colSpan={6} className="text-end">
-                              <strong>Yearly Grand Total (net)</strong>
-                            </td>
-                            <td className="text-end">
-                              <strong>{renderAmount(yearlyTotals.net ?? yearlyTotals.paidInclTravel ?? yearlyTotals.paid)}</strong>
-                            </td>
-                            <td className="text-end">
-                              <strong>{renderAmount(yearlyTotals.balance)}</strong>
-                            </td>
-                          </tr>
-                        </tfoot>
-                      </table>
-                    </div>
+                          </tfoot>
+                        </table>
+                      </div>
+                    )}
+
+                    {/* Pagination Navigation */}
+                    {totalPages > 1 && (
+                      <nav className="d-flex justify-content-between align-items-center mt-3 w-100" style={{ borderRadius: "10px", padding: "10px 20px", marginBottom: "15px", backgroundColor: "#63707c" }}>
+
+                        <div className="small text-white ">
+                          Page {pageSafe} of {totalPages}
+                        </div>
+                        <ul className="pagination pagination-sm mb-0">
+                          <li className={`page-item ${pageSafe <= 1 ? "disabled" : ""}`}>
+                            <button className="page-link" onClick={() => pageSafe > 1 && setPage(pageSafe - 1)}>Previous</button>
+                          </li>
+                          {[...Array(totalPages)].map((_, idx) => {
+                            const num = idx + 1;
+                            const show =
+                              num === 1 ||
+                              num === totalPages ||
+                              (num >= pageSafe - 2 && num <= pageSafe + 2);
+                            if (!show) return null;
+                            return (
+                              <li key={num} className={`page-item ${num === pageSafe ? "active" : ""}`}>
+                                <button className="page-link" onClick={() => setPage(num)}>{num}</button>
+                              </li>
+                            );
+                          })}
+                          <li className={`page-item ${pageSafe >= totalPages ? "disabled" : ""}`}>
+                            <button className="page-link" onClick={() => pageSafe < totalPages && setPage(pageSafe + 1)}>Next</button>
+                          </li>
+                        </ul>
+
+                        {/* Pagination Controls */}
+                        <div className="d-flex justify-content-between align-items-center">
+                          <div className="d-flex align-items-center gap-2">
+                            <span className="small text-muted">Show</span>
+                            <select
+                              className="form-select form-select-sm"
+                              style={{ width: 'auto' }}
+                              value={pageSize}
+                              onChange={(e) => {
+                                setPageSize(Number(e.target.value));
+                                setPage(1);
+                              }}
+                            >
+                              <option value={10}>10</option>
+                              <option value={25}>25</option>
+                              <option value={50}>50</option>
+                              <option value={100}>100</option>
+                            </select>
+                          </div>
+
+                        </div>
+                      </nav>
                     )}
 
                     {hasRefundsThisMonth && (
@@ -954,68 +1261,79 @@ const overallTotals = useMemo(() => {
                           </table>
                         </div>
                       </div>
-                    
-)}
 
-{viewMode === "year" && (
-  <div className="table-responsive">
-    <table className="table table-sm table-hover invest-table">
-      <thead>
-        <tr>
-          <th className="th-narrow">#</th>
-          <th>Client ID</th>
-          <th>Client Name</th>
-          <th>Method</th>
-          <th>Date</th>
-          <th>Receipt No</th>
-          <th className="text-end">Payment</th>
-          <th className="text-end">Balance</th>
-        </tr>
-      </thead>
-      <tbody>
-        {(currentYearRows.length === 0) && (
-          <tr>
-            <td colSpan={8} className="text-center small text-muted">
-              No payments for selected year
-            </td>
-          </tr>
-        )}
-        {currentYearRows
-          .slice()
-          .sort((a,b) => (b.parsedDate ? b.parsedDate.getTime() : 0) - (a.parsedDate ? a.parsedDate.getTime() : 0))
-          .map((r, i) => (
-          <tr key={`${r._clientDbKey}_yr_${i}`} className="invest-table-row clickable-row" onClick={() => handleRowClick(r)}>
-            <td>{i + 1}</td>
-            <td>{r.clientId || "-"}</td>
-            <td>{r.clientName || "-"}</td>
-            <td>{r.method || "-"}</td>
-            <td>{r.parsedDate ? r.parsedDate.toLocaleDateString() : r.date || "-"}</td>
-            <td>{r.receipt || "-"}</td>
-            <td className="text-end">{renderAmount(getDisplayPayment(r))}</td>
-            <td className="text-end">{renderAmount(getDisplayBalance(r))}{(r?.raw?.__type === "balance" && Number(r?.balance || 0) <= 0) && (<div className="small text-muted">{r.parsedDate ? r.parsedDate.toLocaleDateString() : (r.date || "")} · cleared {formatINR(Number(r.paidAmount || 0))}</div>)}</td>
-          </tr>
-        ))}
-      </tbody>
-      <tfoot>
-        <tr className="table-secondary">
-          <td colSpan={6} className="text-end">
-            <strong>Yearly Subtotal (net)</strong>
-          </td>
-          <td className="text-end">
-            <strong>{renderAmount(yearlyTotals.net ?? yearlyTotals.paidInclTravel ?? yearlyTotals.paid)}</strong>
-          </td>
-          <td className="text-end">
-            <strong>{renderAmount(yearlyTotals.balance)}</strong>
-          </td>
-        </tr>
-      </tfoot>
-    </table>
-  </div>
-)}
- 
+                    )}
+
+                    {viewMode === "year" && (
+                      <div className="table-responsive">
+                        <table className="table table-sm table-hover invest-table">
+                          <thead>
+                            <tr>
+                              <th className="th-narrow">#</th>
+                              <th>Client ID</th>
+                              <th>Client Name</th>
+                              <th>Method</th>
+                              <th>Date</th>
+                              <th>Receipt No</th>
+                              <th className="text-end">Payment</th>
+                              <th className="text-end">Balance</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {(paginatedRows.length === 0) && (
+                              <tr>
+                                <td colSpan={8} className="text-center small text-muted">
+                                  No payments for selected year
+                                </td>
+                              </tr>
+                            )}
+                            {paginatedRows
+                              .map((r, i) => (
+                                <tr key={`${r._clientDbKey}_yr_${i}`} className="invest-table-row clickable-row" onClick={() => handleRowClick(r)}>
+                                  <td>{pageStart + i + 1}</td>
+                                  <td>
+                                    <div className="d-flex align-items-center gap-2">
+                                      {r.clientId || "-"}
+                                      <button
+                                        className="btn btn-sm btn-outline-info py-0 px-1"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          handleClientProfileClick(r);
+                                        }}
+                                        title="View Client Profile"
+                                      >
+                                        👤
+                                      </button>
+                                    </div>
+                                  </td>
+                                  <td>{r.clientName || "-"}</td>
+                                  <td>{r.method || "-"}</td>
+                                  <td>{r.parsedDate ? r.parsedDate.toLocaleDateString() : r.date || "-"}</td>
+                                  <td>{r.receipt || "-"}</td>
+                                  <td className="text-end">{renderAmount(getDisplayPayment(r))}</td>
+                                  <td className="text-end">{renderAmount(getDisplayBalance(r))}{(r?.raw?.__type === "balance" && Number(r?.balance || 0) <= 0) && (<div className="small text-muted">{r.parsedDate ? r.parsedDate.toLocaleDateString() : (r.date || "")} · cleared {formatINR(Number(r.paidAmount || 0))}</div>)}</td>
+                                </tr>
+                              ))}
+                          </tbody>
+                          <tfoot>
+                            <tr className="table-secondary">
+                              <td colSpan={6} className="text-end">
+                                <strong>Yearly Subtotal (net)</strong>
+                              </td>
+                              <td className="text-end">
+                                <strong>{renderAmount(yearlyTotals.net ?? yearlyTotals.paidInclTravel ?? yearlyTotals.paid)}</strong>
+                              </td>
+                              <td className="text-end">
+                                <strong>{renderAmount(yearlyTotals.balance)}</strong>
+                              </td>
+                            </tr>
+                          </tfoot>
+                        </table>
+                      </div>
+                    )}
 
                     <div className="mt-3 d-flex justify-content-between align-items-center gap-3">
-                      <div className="small ">Showing {currentMonthRows.length} payments</div>
+                      <div className="small ">Showing {paginatedRows.length} of {totalEntries} payments</div>
                       <div>
                         <button className="btn btn-sm btn-outline-secondary me-2" onClick={() => exportCSV("month")} disabled={activeMonth === null || activeMonth === undefined}>
                           CSV (month)
@@ -1039,6 +1357,57 @@ const overallTotals = useMemo(() => {
                 <div className="me-auto small text-muted">Overall Grand Total (net): {formatINR(overallTotals.netPaid ?? overallTotals.paidIncludingTravel ?? overallTotals.paid)}</div>
                 <button className="btn btn-secondary btn-sm" onClick={() => setModalOpen(false)}>
                   Close
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Payment Detail Modal */}
+      {paymentDetailModal && selectedPayment && (
+        <div className="modal fade show" style={{ display: "block", background: "rgba(2,6,23,0.6)", zIndex: 3000 }} onClick={() => setPaymentDetailModal(false)}>
+          <div className="modal-dialog modal-lg modal-dialog-centered" onClick={(e) => e.stopPropagation()} style={{ zIndex: 3001 }}>
+            <div className="modal-content bg-white">
+              <div className="modal-header bg-primary text-white">
+                <h6 className="modal-title mb-0">Payment Details</h6>
+                <button className="btn-close btn-close-white" onClick={() => setPaymentDetailModal(false)} />
+              </div>
+              <div className="modal-body">
+                <div className="row g-3">
+                  {/* Payment Type Badge */}
+                  <div className="col-12 mb-3">
+                    <div className="d-flex justify-content-between align-items-center">
+                      <span className={`badge ${selectedPayment.isRefund ? "bg-danger" : "bg-success"} text-uppercase fs-6`}>
+                        {selectedPayment.isRefund ? "Refund" : "Payment"}
+                      </span>
+                      <div className={`fw-bold fs-5 ${selectedPayment.isRefund ? "text-danger" : "text-success"}`}>
+                        {formatINR(getDisplayPayment(selectedPayment))}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Payment Details */}
+                  {getPaymentDetails(selectedPayment).map((detail, idx) => (
+                    <div key={idx} className="col-md-6">
+                      <div className="p-3 rounded-3 border">
+                        <div className="small mb-1">{detail.label}</div>
+                        <div className="fw-semibold text-dark">{detail.value}</div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <div className="modal-footer">
+                <button className="btn btn-secondary" onClick={() => setPaymentDetailModal(false)}>Close</button>
+                <button
+                  className="btn btn-primary"
+                  onClick={() => {
+                    setPaymentDetailModal(false);
+                    handleClientProfileClick(selectedPayment);
+                  }}
+                >
+                  View Client Profile
                 </button>
               </div>
             </div>

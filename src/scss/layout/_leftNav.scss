@@ -77,7 +77,7 @@ nav {
     }
 
     &.navbar-expand-sm {
-        @media (min-width:768px) {
+        @media (min-width: 992px) {
 
             display: block;
             width: 100%;
@@ -133,17 +133,17 @@ nav {
     }
 
     .navbar-toggler {
-        @include mobile {
+        @include res {
             margin-right: 15px;
             border: none;
 
             img {
-                max-width: 20px;
+                max-width: 25px;
             }
         }
 
         &:focus {
-            @include mobile {
+            @include res {
                 outline: none;
                 box-shadow: none;
             }
@@ -179,5 +179,28 @@ nav {
     hr {
         border-top: 1px solid #8c97a3;
         margin: 10px 0;
+    }
+}
+
+.navbar-expand-lg {
+    display: block;
+
+    @include res {
+        width: 100%;
+        display: flex;
+        padding: 15px;
+    }
+
+    .slide {
+        @include res {
+            display: none;
+        }
+    }
+}
+
+.navbar-collapse {
+
+    .navbar-nav {
+        display: block;
     }
 }

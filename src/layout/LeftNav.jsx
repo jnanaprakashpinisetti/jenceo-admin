@@ -77,7 +77,7 @@ export default function LeftNav() {
 
   return (
     <>
-      <nav className={isActive ? 'navbar navbar-expand-sm toggle' : 'navbar navbar-expand-sm'}>
+      <nav className={isActive ? 'navbar navbar-expand-lg toggle' : 'navbar navbar-expand-lg'}>
         <button type="button" className="navbar-brand" onClick={() => { }}>
           <img src={isActive ? logoicon : logo} alt="JenCeo Logo" />
         </button>
@@ -100,7 +100,7 @@ export default function LeftNav() {
         </button>
 
         <div className={collapseClass} id="collapsibleNavbar">
-          <div className="mobile-top d-block d-md-none mb-3">
+          <div className="mobile-top d-block d-lg-none mb-3">
             <div className="d-flex justify-content-between align-items-center px-2">
               <NavLink to='Profile' className="nav-link p-0" onClick={closeMobile} title="Profile">
                 <span style={{ fontSize: 14 }}>👤 Profile</span>

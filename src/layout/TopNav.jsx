@@ -13,7 +13,7 @@ import PropTypes from "prop-types";
  *  - navigate: function (optional) - prefer useNavigate() from react-router
  *
  * Visibility:
- *  - Hidden on mobile via Bootstrap utility classes (d-none d-md-flex)
+ *  - Hidden on mobile via Bootstrap utility classes (d-none d-lg-flex)
  */
 export default function TopNav({
   currentUser = {},
@@ -116,7 +116,7 @@ export default function TopNav({
 
   return (
     // hide on small devices, show from md+ (tablet/desktop)
-    <header className="TopHeader sticky-top d-none d-md-flex navbar navbar-dark bg-dark px-3" style={{ zIndex: 1060 }}>
+    <header className="TopHeader sticky-top d-none d-lg-flex navbar navbar-dark bg-dark px-3" style={{ zIndex: 1060 }}>
       <div className="container-fluid d-flex align-items-center gap-3">
         {/* Brand label */}
         <div className="d-flex align-items-center">

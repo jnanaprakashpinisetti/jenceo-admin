@@ -55,6 +55,10 @@ $dark-table-text: #e6eef6;
         transition: transform 0.18s ease, box-shadow 0.18s ease;
         margin-bottom: 15px;
 
+        @include mobile {
+            max-width: 100%;
+        }
+
         &:hover {
             transform: translateY(-4px);
             box-shadow: 0 18px 40px rgba(2, 6, 23, 0.6);
@@ -1523,15 +1527,18 @@ $grad-amber: linear-gradient(135deg, #f59e0b, #fbbf24, #d97706);
 
 .table-modern {
     border-color: #42474c;
+
     tr {
         border-color: #42474c;
+
         td {
             background-color: #383838;
         }
+
         &:nth-child(even) {
             td {
-            background-color: #353535;
-        }
+                background-color: #353535;
+            }
         }
     }
 

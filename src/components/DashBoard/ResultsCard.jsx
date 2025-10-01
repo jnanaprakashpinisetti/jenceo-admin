@@ -760,17 +760,11 @@ export default function ResultsCard({
 
       case "worker":
         // Worker related data - FIXED: Added proper field mappings
-        details.push({
-          label: "Worker Name",
-          value: tx.workerData?.workerName || tx.workerData?.name || tx.workerData?.employeeName || tx.workerData?.empName || tx.raw?.workerName || "-"
-        });
-        details.push({
-          label: "Employee ID",
-          value: tx.workerData?.id || tx.workerData?.empId || tx.workerData?.employeeId || tx.workerData?.empID || "-"
-        });
-        details.push({ label: "Phone", value: tx.workerData?.phone || tx.workerData?.mobile || tx.workerData?.contact || "-" });
+        details.push({ label: "Worker ID", value: tx.workerData?.idNo || "-" });
+        details.push({ label: "Worker Name", value: `${tx.workerData?.lastName || ''} ${tx.workerData?.firstName || ''} `.trim() || "-" });
+        details.push({ label: "Phone", value: tx.workerData?.mobileNo1 || "-" });
         details.push({ label: "Work Type", value: tx.workerData?.workType || tx.workerData?.department || tx.serviceName || "-" });
-        details.push({ label: "Client Name", value: tx.clientName || tx.workDetail?.clientName || tx.raw?.clientName || tx.workerData?.clientName || "-" });
+        details.push({ label: "Client Name", value: tx.workDetail?.clientName || (((tx.workDetail?.clientFirstName || "") + " " + (tx.workDetail?.clientLastName || "")).trim()) || tx.raw?.clientName || tx.workerData?.clientName || "-" });
         details.push({ label: "Service", value: tx.serviceName || tx.workDetail?.service || tx.workDetail?.serviceName || tx.raw?.service || "-" });
         details.push({ label: "Payment Period", value: tx.raw?.period || tx.raw?.month || "-" });
         break;

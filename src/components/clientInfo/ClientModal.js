@@ -241,7 +241,13 @@ const ClientModal = ({
   isAdmin = false,
   currentUserName = "System",
   onRemoved = () => { },
+  // NEW (optional): parent can handle payments-only saves distinctly
+  onSavePayments = null,
 }) => {
+
+  const [showErrorModal, setShowErrorModal] = useState(false);
+  const [errorList, setErrorList] = useState([]); // [{path, message}]
+
   const [formData, setFormData] = useState(getInitialFormData());
   const [activeTab, setActiveTab] = useState("basic");
   const [errors, setErrors] = useState({});
@@ -255,6 +261,100 @@ const ClientModal = ({
   const initialSnapshotRef = useRef(null);
 
   const [expandedLogIndex, setExpandedLogIndex] = useState(null);
+
+  const validatePaymentsOnly = () => {
+    const errs = [];
+    const payments = Array.isArray(formData.payments) ? formData.payments : [];
+    payments.forEach((p, i) => {
+      const hasValue =
+        (p.paidAmount && String(p.paidAmount).trim() !== "") ||
+        (p.receptNo && String(p.receptNo).trim() !== "");
+      if (!hasValue) return; // skip totally empty rows
+
+      if (!p.paymentMethod) errs.push({ path: `payments.${i}.paymentMethod`, message: "Payment method is required" });
+      if (p.paidAmount === "" || Number(p.paidAmount) === 0) errs.push({ path: `payments.${i}.paidAmount`, message: "Paid amount is required" });
+      if (!p.date) errs.push({ path: `payments.${i}.date`, message: "Date is required" });
+
+      if (p.refund) {
+        if (!p.refundDate) errs.push({ path: `payments.${i}.refundDate`, message: "Refund date required" });
+        if (!p.refundAmount || Number(p.refundAmount) <= 0) errs.push({ path: `payments.${i}.refundAmount`, message: "Refund amount required" });
+      }
+    });
+    return errs;
+  };
+
+  const buildPaymentSummaryOnly = (prevObj = {}, nextObj = {}) => {
+    const { summaryChanges } = buildChangeSummaryAndFullAudit(prevObj, nextObj);
+    if (!summaryChanges.length) return null;
+    const now = new Date();
+    const dateLabel = `${String(now.getDate()).padStart(2, "0")}/${String(now.getMonth() + 1).padStart(2, "0")}/${now.getFullYear()} ${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}:${String(now.getSeconds()).padStart(2, "0")}`;
+    return {
+      date: now.toISOString(),
+      dateLabel,
+      user: currentUserName || "System",
+      message: summaryChanges.map(s => `${s.friendly}: '${String(s.before)}' → '${String(s.after)}'`).join("; "),
+      changes: summaryChanges,
+      type: "summary",
+    };
+  };
+
+
+  const handleSubmitPaymentsOnly = async (ev) => {
+    ev && ev.preventDefault && ev.preventDefault();
+
+    // 1) validate payments only
+    const errs = validatePaymentsOnly();
+    if (errs.length) {
+      setErrorList(errs);
+      setShowErrorModal(true); // show modal with issues
+      return;
+    }
+
+    // 2) isolate just payments + paymentLogs from current form
+    const prevSnapshot = initialSnapshotRef.current ? JSON.parse(initialSnapshotRef.current) : {};
+    const nextSnapshot = stripLocks(formData);
+
+    // keep only payments and identifiers in the payload to avoid cross-tab coupling
+    const payload = {
+      id: nextSnapshot.id || nextSnapshot.key || nextSnapshot.recordId || nextSnapshot.clientId || undefined,
+      idNo: nextSnapshot.idNo || undefined,
+      clientName: nextSnapshot.clientName || undefined,
+      payments: Array.isArray(nextSnapshot.payments) ? nextSnapshot.payments : [],
+      paymentLogs: Array.isArray(nextSnapshot.paymentLogs) ? nextSnapshot.paymentLogs : [],
+    };
+
+    // 3) payment summary only (no full audit)
+    const summaryEntry = buildPaymentSummaryOnly(prevSnapshot, nextSnapshot);
+    if (summaryEntry) {
+      // keep only 'initial' and 'summary' logs; cap summaries to last 10
+      const summariesOnly = [...payload.paymentLogs.filter(l => l?.type === "initial" || l?.type === "summary"), summaryEntry];
+      const nonSummaries = payload.paymentLogs.filter(l => l?.type !== "summary" && l?.type !== "initial");
+      const keepSummaries = summariesOnly.slice(-10);
+      payload.paymentLogs = [...nonSummaries, ...keepSummaries];
+    }
+
+    // 4) persist using parent's hook if provided, else fall back to onSave with scope hint
+    try {
+      const res = onSavePayments
+        ? onSavePayments(payload)
+        : (onSave && onSave(payload, { scope: "payments-only" }));
+      if (res && typeof res.then === "function") await res;
+
+      // 5) merge back updated logs into local form state; don't touch workers/etc.
+      setFormData(prev => {
+        const next = { ...prev, paymentLogs: payload.paymentLogs };
+        initialSnapshotRef.current = JSON.stringify(next);
+        markDirty(next);
+        setShowThankYou(true);
+        setTimeout(() => setShowThankYou(false), 1400);
+        return next;
+      });
+    } catch (err) {
+      console.error("Payments-only save failed", err);
+      setErrorList([{ path: "save", message: "Payments save failed. Please try again." }]);
+      setShowErrorModal(true);
+    }
+  };
 
 
   // --- Quick Actions state (Refund + Balance Paid) ---
@@ -1767,9 +1867,22 @@ const ClientModal = ({
             </div>
 
             <div className="modal-footer">
-              {editMode && <button className="btn btn-success" onClick={handleSubmit}><strong>Save Changes</strong></button>}
-              <button className="btn btn-secondary" onClick={() => handleCloseAttempt()}><strong>Close</strong></button>
+              {editMode && (
+                <>
+                  <button className="btn btn-success" onClick={handleSubmit}>
+                    <strong>Save Changes</strong>
+                  </button>
+                  {/* NEW: decoupled payments-only action */}
+                  <button className="btn btn-primary" onClick={handleSubmitPaymentsOnly}>
+                    <strong>Save Payments Only</strong>
+                  </button>
+                </>
+              )}
+              <button className="btn btn-secondary" onClick={() => handleCloseAttempt()}>
+                <strong>Close</strong>
+              </button>
             </div>
+
           </div>
         </div>
       </div>

@@ -10,14 +10,17 @@ body {
     .contanier {
         margin-bottom: 0;
     }
+
     .contanier-fluid {
         margin-bottom: 0;
     }
 }
+
 .contanier-fluid {
     .contanier {
         margin-bottom: 0;
     }
+
     .contanier-fluid {
         margin-bottom: 0;
     }
@@ -27,7 +30,7 @@ body {
     display: flex;
     // height: 100vh;
 
-    @include mobile {
+    @include res {
         display: block;
 
     }
@@ -37,31 +40,16 @@ body {
         margin-top: 40px;
         width: 100%;
 
+        @include res {
+            margin-top: 0;
+        }
+
         @include mobile {
             margin-top: 60px;
         }
     }
 }
 
-@include res {
-
-    .col-md-3 {
-        width: 100%;
-    }
-
-    .col-md-4 {
-        width: 100%;
-    }
-
-    .col-md-6 {
-        width: 100%;
-    }
-
-    .col-md-8 {
-        width: 100%;
-    }
-
-}
 
 .small-text {
     font-size: 9px;

@@ -555,7 +555,7 @@ export default function PettyCashReport({ currentUser = "Admin", currentUserRole
             {/* Table */}
             <div className="table-responsive" ref={tableRef}>
               {filteredRecords.length === 0 ? (
-                <div className="alert alert-warning text-center">
+                <div className="alert alert-info text-center text-white">
                   No records found for the selected filters.
                   <br />
                   Status: <strong>{statusTab}</strong> | Year: <strong>{activeYear}</strong> | Month: <strong>{activeMonth || "All"}</strong>

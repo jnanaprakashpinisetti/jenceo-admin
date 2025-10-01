@@ -208,11 +208,16 @@ function extractWorkerSalaries(node = {}) {
     if (!isPlain(emp)) return;
     const pays = Array.isArray(emp.payments) ? emp.payments : (isPlain(emp.payments) ? Object.values(emp.payments) : []);
     if (pays && pays.length) {
-      pays.forEach((p) => {
+      pays.forEach((p, idx) => {
         if (!p) return;
         const date = p.date ?? p.paymentDate ?? p.paidOn ?? emp.createdAt ?? "";
         const amount = safeNumber(p.amount ?? p.salary ?? p.paidAmount ?? 0);
-        if (amount) out.push({ type: "worker", date, parsedDate: parseDateRobust(date), amount, raw: p, workerData: emp });
+        // Map workDetails by the same index to get clientName and more
+        const workList = Array.isArray(emp.workDetails) ? emp.workDetails : (emp.workDetails && typeof emp.workDetails === "object" ? Object.values(emp.workDetails) : []);
+        const work = (workList && workList.length > idx) ? workList[idx] : null;
+        const workClient = work?.clientName || work?.client || work?.name || p?.clientName || "";
+        const workService = work?.service || work?.serviceName || work?.work || p?.service || "";
+        if (amount) out.push({ type: "worker", date, parsedDate: parseDateRobust(date), amount, raw: p, workerData: emp, payIndex: idx, workDetail: work, clientName: workClient, serviceName: workService });
       });
     }
   };
@@ -579,6 +584,11 @@ export default function ResultsCard({
   /* ------------- UI Helpers ------------- */
   const monthLabels = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
+  const activeMonthLabel = React.useMemo(() => {
+    return String(activeMonth) === "ALL" ? "All" : (monthLabels[Number(activeMonth)] || "-");
+  }, [activeMonth]);
+
+
   const chartDataYear = useMemo(() => {
     if (!activeYear) return [];
     const months = yearMap[activeYear]?.months || {};
@@ -615,21 +625,28 @@ export default function ResultsCard({
     ];
   }, [currentMonthTotals]);
 
+  // Rows for current view: specific month or ALL months
+  const scopedRows = useMemo(() => {
+    if (!activeYear) return [];
+    if (String(activeMonth) === "ALL") return yearMap[activeYear]?.rows || [];
+    return yearMap[activeYear]?.months?.[activeMonth] || [];
+  }, [activeYear, activeMonth, yearMap]);
+
+
   // Get all available months for the selected year
   const availableMonths = useMemo(() => {
     if (!activeYear) return [];
     const months = Object.keys(yearMap[activeYear]?.months || {});
-    return months
+    const list = months
       .filter(m => m !== "Unknown")
       .sort((a, b) => Number(a) - Number(b))
-      .map(m => ({
-        value: Number(m),
-        label: monthLabels[m] || `Month ${Number(m) + 1}`
-      }));
+      .map(m => ({ value: Number(m), label: monthLabels[m] || `Month ${Number(m) + 1}` }));
+    list.push({ value: "ALL", label: "All" });
+    return list;
   }, [activeYear, yearMap]);
 
   function exportMonthCSV() {
-    const rows = (yearMap[activeYear]?.months?.[activeMonth] || []);
+    const rows = scopedRows;
     const header = ["Date", "Type", "Amount", "Note"];
     const body = rows.map((r) => {
       const d = r.parsedDate || parseDateRobust(r.date);
@@ -643,7 +660,7 @@ export default function ResultsCard({
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `results_${activeYear}_${monthLabels[Number(activeMonth)] || "month"}.csv`;
+    a.download = `results_${activeYear}_${String(activeMonth) === "ALL" ? "all" : (monthLabels[Number(activeMonth)] || "month")}.csv`;
     document.body.appendChild(a);
     a.click();
     a.remove();
@@ -728,7 +745,11 @@ export default function ResultsCard({
       case "worker":
         // Worker related data
         details.push({ label: "Worker Name", value: tx.workerData?.workerName || tx.workerData?.name || tx.raw?.workerName || "-" });
-        details.push({ label: "Work Type", value: tx.workerData?.workType || tx.workerData?.department || "-" });
+        details.push({ label: "Employee ID", value: tx.workerData?.id || tx.workerData?.empId || tx.workerData?.employeeId || "-" });
+        details.push({ label: "Phone", value: tx.workerData?.phone || tx.workerData?.mobile || "-" });
+        details.push({ label: "Work Type", value: tx.workerData?.workType || tx.workerData?.department || tx.serviceName || "-" });
+        details.push({ label: "Client Name", value: tx.clientName || tx.workDetail?.clientName || tx.raw?.clientName || "-" });
+        details.push({ label: "Service", value: tx.serviceName || tx.workDetail?.service || tx.workDetail?.serviceName || "-" });
         details.push({ label: "Payment Period", value: tx.raw?.period || tx.raw?.month || "-" });
         break;
 
@@ -747,10 +768,12 @@ export default function ResultsCard({
     }
 
     // Common fields for all types
-    details.push({ label: "Amount", value: formatINR(tx.type === "client" ? (tx.payment || 0) : (tx.amount || 0)) });
-    details.push({ label: "Date", value: (tx.parsedDate || new Date(tx.date || "")).toLocaleDateString() });
-    details.push({ label: "Payment Method", value: tx.raw?.paymentMethod || tx.raw?.method || "-" });
-    details.push({ label: "Remarks", value: tx.raw?.remarks || tx.raw?.note || tx.raw?.description || "-" });
+    if (tx.type !== "worker") {
+      details.push({ label: "Amount", value: formatINR(tx.type === "client" ? (tx.payment || 0) : (tx.amount || 0)) });
+      details.push({ label: "Date", value: (tx.parsedDate || new Date(tx.date || "")).toLocaleDateString() });
+      details.push({ label: "Payment Method", value: tx.raw?.paymentMethod || tx.raw?.method || "-" });
+      details.push({ label: "Remarks", value: tx.raw?.remarks || tx.raw?.note || tx.raw?.description || "-" });
+    }
 
     return details.filter(detail => detail.value && detail.value !== "-" && detail.value !== "");
   };
@@ -950,7 +973,7 @@ export default function ResultsCard({
                         <td className="text-end fw-bold">{formatINR(currentYearTotals.profit)}</td>
                       </tr>
                       <tr style={{ background: "linear-gradient(90deg,#111827,#1e293b)", color: "#e2e8f0" }}>
-                        <td>Month ({monthLabels[Number(activeMonth)] || "-"})</td>
+                        <td>Month ({activeMonthLabel})</td>
                         <td className="text-end">{formatINR(currentMonthTotals.income)}</td>
                         <td className="text-end">{formatINR(currentMonthTotals.investment)}</td>
                         <td className="text-end">{formatINR(currentMonthTotals.worker)}</td>
@@ -967,7 +990,7 @@ export default function ResultsCard({
                 {/* Raw rows for the current month */}
                 <div className="glass-card mt-3">
                   <div className="d-flex justify-content-between align-items-center">
-                    <h6 className="mb-2">Transactions — {activeYear || "-"}, {monthLabels[Number(activeMonth)] || "-"}</h6>
+                    <h6 className="mb-2">Transactions — {activeYear || "-"}, {activeMonthLabel}</h6>
                     <div className="tiny text-muted">Green=Income, Red=Expense</div>
                   </div>
                   <div className="table-responsive">
@@ -982,7 +1005,7 @@ export default function ResultsCard({
                         </tr>
                       </thead>
                       <tbody>
-                        {(yearMap[activeYear]?.months?.[activeMonth] || []).filter(r => r.type !== "hospital").map((r, i) => {
+                        {scopedRows.filter(r => r.type !== "hospital").map((r, i) => {
                           const d = r.parsedDate || parseDateRobust(r.date);
                           const dateStr = d ? d.toLocaleDateString() : (r.date || "-");
                           const amt = r.type === "client" ? Number(r.payment || 0) : Number(r.amount || 0);

@@ -527,19 +527,12 @@ export default function ResultsGrafCard({
         ["pettyRoot", "pettyAdmin", "pettyAdminCaps"].forEach((k) => assetRows.push(...extractAssetsFromPetty(snapshots[k] || {})));
         // De-dup assets by strong or fuzzy signature
         const aSeen = new Set();
-        assetRows = assetRows.filter((r) => {
-          const raw = r.raw || {};
-          const id = raw.id ?? raw.ID ?? raw.key ?? raw.uid ?? raw.assetId ?? raw.refNo ?? raw.invoiceNo ?? raw.invoice ?? raw.docId ?? "";
-          const name = String((raw.name ?? raw.title ?? raw.head ?? raw.description ?? raw.item ?? raw.product ?? "") || "").toLowerCase();
-          const mainCat = String((raw.category ?? raw.mainCategory ?? raw.assetCategory ?? raw.type ?? "") || "").toLowerCase();
-          const month = monthKey(r.parsedDate || r.date);
-          const strong = id ? `id:${id}` : null;
-          const fuzzy = `amt:${Number(r.amount || 0)}|cat:${mainCat}|name:${name}|mon:${month}`;
-          const sig = strong ?? fuzzy;
-          if (aSeen.has(sig)) return false;
-          aSeen.add(sig);
-          return true;
+        // ONLY APPROVED assets
+        assetRows = assetRows.filter(r => {
+          const s = String((r.raw && (r.raw.approval || r.raw.status || r.raw.approvalStatus)) || "").toLowerCase();
+          return s.includes("approve") || s === "approved" || s === "acknowledged" || s === "acknowledge";
         });
+
 
         // Investments
         const investRows = extractInvestments(snapshots.investments || {});

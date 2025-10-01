@@ -710,12 +710,11 @@ export default function ResultsCard({
     switch (tx.type) {
       case "client":
         // Client related data
+        details.push({ label: "ID", value: tx.clientData?.idNo || tx.clientData?.idNo || tx.raw?.idNo || "-" });
         details.push({ label: "Client Name", value: tx.clientData?.clientName || tx.clientData?.name || tx.raw?.clientName || "-" });
-        details.push({ label: "Phone", value: tx.clientData?.phone || tx.clientData?.phoneNumber || "-" });
         details.push({ label: "Service", value: tx.clientData?.service || tx.raw?.service || "-" });
         details.push({ label: "Package", value: tx.clientData?.package || tx.raw?.package || "-" });
-        details.push({ label: "Payment Method", value: tx.raw?.paymentMethod || tx.raw?.method || "-" });
-        details.push({ label: "Reference No", value: tx.raw?.refNo || tx.raw?.receiptNo || tx.raw?.invoiceNo || "-" });
+        details.push({ label: "Recept No", value: tx.raw?.receptNo || tx.raw?.receptNo || tx.raw?.receptNo || "-" });
         break;
 
       case "commission":
@@ -759,15 +758,71 @@ export default function ResultsCard({
         break;
 
       case "worker":
-        // Worker related data - FIXED: Added proper field mappings
+        // Worker related data - only the requested fields
         details.push({ label: "Worker ID", value: tx.workerData?.idNo || "-" });
-        details.push({ label: "Worker Name", value: `${tx.workerData?.lastName || ''} ${tx.workerData?.firstName || ''} `.trim() || "-" });
-        details.push({ label: "Phone", value: tx.workerData?.mobileNo1 || "-" });
-        details.push({ label: "Work Type", value: tx.workerData?.workType || tx.workerData?.department || tx.serviceName || "-" });
-        details.push({ label: "Client Name", value: tx.workDetail?.clientName || (((tx.workDetail?.clientFirstName || "") + " " + (tx.workDetail?.clientLastName || "")).trim()) || tx.raw?.clientName || tx.workerData?.clientName || "-" });
-        details.push({ label: "Service", value: tx.serviceName || tx.workDetail?.service || tx.workDetail?.serviceName || tx.raw?.service || "-" });
-        details.push({ label: "Payment Period", value: tx.raw?.period || tx.raw?.month || "-" });
+
+        // Prefer firstName + lastName (from EmployeeBioData)
+        details.push({
+          label: "Worker Name",
+          value: `${tx.workerData?.lastName || ""} ${tx.workerData?.firstName || ""}`.trim() || "-"
+        });
+
+        // Employee photo as a JSX element (not an object)
+        details.push({
+          label: "Employee Photo",
+          value: tx.workerData?.employeePhoto
+            ? (
+              <img
+                src={tx.workerData.employeePhoto}
+                alt="Employee"
+                style={{
+                  width: 64,
+                  height: 64,
+                  objectFit: "cover",
+                  borderRadius: 8,
+                  border: "1px solid #e5e7eb"
+                }}
+              />
+            )
+            : "-"
+        });
+
+        // workDetails / location
+        details.push({ label: "Location", value: tx.workDetail?.location || "-" });
+
+        // payments / typeOfPayment
+        details.push({ label: "Type of Payment", value: tx.raw?.typeOfPayment || "-" });
+
+        // Client Name (with clientFirstName/clientLastName fallback)
+        details.push({
+          label: "Client Name",
+          value:
+            tx.workDetail?.clientName ||
+            `${tx.workDetail?.clientFirstName || ""} ${tx.workDetail?.clientLastName || ""}`.trim() ||
+            tx.raw?.clientName ||
+            tx.workerData?.clientName ||
+            "-"
+        });
+
+        // Client Name (with clientFirstName/clientLastName fallback)
+        details.push({
+          label: "Recept No",
+          value:
+            tx.workDetail?.days
+            ||
+            `${tx.days
+              ?.days
+              || ""} ${tx.workDetail?.days
+              || ""}`.trim() ||
+            tx.raw?.days
+            ||
+            tx.workerData?.days
+            ||
+            "-"
+        });
+
         break;
+
 
       case "petty":
         // Petty cash related data

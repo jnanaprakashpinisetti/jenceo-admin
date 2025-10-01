@@ -56,6 +56,96 @@ function parseDateRobust(v) {
     return null;
 }
 
+/* ---------------- SVG Charts ---------------- */
+function BarChart({ data = [], width = 520, height = 150, pad = 30, color = "url(#gradWorker)" }) {
+    const max = Math.max(...data.map(d => d.value), 1);
+    const barW = (width - pad * 2) / (data.length || 1);
+    return (
+        <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none">
+            <defs>
+                <linearGradient id="gradWorker" x1="0" y1="0" x2="1" y2="1">
+                    <stop offset="0%" stopColor="#f59e0b" />
+                    <stop offset="100%" stopColor="#b45309" />
+                </linearGradient>
+            </defs>
+            <rect x="0" y="0" width={width} height={height} fill="transparent" />
+            {data.map((d, i) => {
+                const h = Math.max(2, (d.value / max) * (height - pad * 2));
+                const x = pad + i * barW + 4;
+                const y = height - pad - h;
+                return (
+                    <g key={i}>
+                        <title>{d.label}: {formatINR(d.value)}</title>
+                        <rect x={x} y={y} width={Math.max(8, barW - 8)} height={h} fill={color} rx="6" />
+                        {h > 12 && (
+                            <text
+                                x={x + Math.max(8, barW - 8) / 2}
+                                y={y + h / 2}
+                                textAnchor="middle"
+                                dominantBaseline="middle"
+                                fontSize="10"
+                                fill="#facc15"
+                                transform={`rotate(-90 ${x + Math.max(8, barW - 8) / 2} ${y + h / 2})`}
+                            >
+                                {formatINR(d.value)}
+                            </text>
+                        )}
+                        <text x={x + Math.max(8, barW - 8) / 2} y={height - 10} textAnchor="middle" fontSize="10" fill="#94a3b8">{d.short || d.label}</text>
+                    </g>
+                );
+            })}
+        </svg>
+    );
+}
+
+function DonutChart({ segments = [], size = 150, stroke = 18, title = "Distribution" }) {
+    const total = Math.max(1, segments.reduce((s, x) => s + (x.value || 0), 0));
+    const r = (size - stroke) / 2;
+    const c = 2 * Math.PI * r;
+    let offset = 0;
+    return (
+        <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
+            <defs>
+                <linearGradient id="gradWorker" x1="0" y1="0" x2="1" y2="1">
+                    <stop offset="0%" stopColor="#f59e0b" />
+                    <stop offset="100%" stopColor="#b45309" />
+                </linearGradient>
+                <linearGradient id="gradPayment" x1="0" y1="0" x2="1" y2="1">
+                    <stop offset="0%" stopColor="#3b82f6" />
+                    <stop offset="100%" stopColor="#1d4ed8" />
+                </linearGradient>
+                <linearGradient id="gradClient" x1="0" y1="0" x2="1" y2="1">
+                    <stop offset="0%" stopColor="#10b981" />
+                    <stop offset="100%" stopColor="#047857" />
+                </linearGradient>
+            </defs>
+            <circle cx={size / 2} cy={size / 2} r={r} stroke="#e2e8f0" strokeWidth={stroke} fill="none" />
+            {segments.map((s, i) => {
+                const frac = (s.value || 0) / total;
+                const len = c * frac;
+                const dash = `${len} ${c - len}`;
+                const dashoffset = c - offset;
+                offset += len;
+                return (
+                    <circle
+                        key={i}
+                        cx={size / 2}
+                        cy={size / 2}
+                        r={r}
+                        stroke={s.color}
+                        strokeWidth={stroke}
+                        fill="none"
+                        strokeDasharray={dash}
+                        strokeDashoffset={dashoffset}
+                        strokeLinecap="round"
+                    />
+                );
+            })}
+            <text x="50%" y="50%" dominantBaseline="middle" textAnchor="middle" fontSize="14" fill="#0f172a">{title}</text>
+        </svg>
+    );
+}
+
 /* normalize employee record -> payment rows */
 function extractPaymentsFromEmployeeRecord(employeeRecord = {}, collectionPrefix = "") {
     const empId = employeeRecord.employeeId ?? employeeRecord.idNo ?? employeeRecord.id ?? employeeRecord.uid ?? "";
@@ -65,6 +155,11 @@ function extractPaymentsFromEmployeeRecord(employeeRecord = {}, collectionPrefix
             : employeeRecord.employeeName ?? employeeRecord.name ?? employeeRecord.displayName ?? "Unknown";
     const photo = employeeRecord.employeePhoto || employeeRecord.employeePhotoUrl || employeeRecord.photo || null;
 
+    // Extract work details
+    const workDetails = Array.isArray(employeeRecord.workDetails)
+        ? employeeRecord.workDetails
+        : (employeeRecord.workDetails && typeof employeeRecord.workDetails === "object" ? Object.values(employeeRecord.workDetails) : []);
+
     const paymentsArray = Array.isArray(employeeRecord.payments)
         ? employeeRecord.payments
         : (employeeRecord.payments && typeof employeeRecord.payments === "object" ? Object.values(employeeRecord.payments) : []);
@@ -72,15 +167,22 @@ function extractPaymentsFromEmployeeRecord(employeeRecord = {}, collectionPrefix
     const results = [];
 
     if (paymentsArray && paymentsArray.length) {
-        paymentsArray.forEach((p) => {
+        paymentsArray.forEach((p, index) => {
             if (!p) return;
             // treat positive amounts as paid; ignore negatives (refunds removed)
             const paidAmount = safeNumber(p.amount ?? p.salary ?? p.paidAmount ?? p.Amount ?? p.pay_amount ?? 0);
             const paymentFor = p.paymentFor ?? p.for ?? p.payment_of ?? "";
-            const receiptNo = p.receptNo ?? p.receiptNo ?? p.receipt_no ?? p.bookNo ?? p.bookno ?? "";
+            const receiptNo = p.receptNo ?? p.receiptNo ?? p.receipt_no ?? p.bookNo ?? p.bookno ?? p.recNo ?? p.refNo ?? p.invoiceNo ?? "";
             const typeOfPayment = p.typeOfPayment ?? p.paymentMode ?? p.payment_type ?? p.mode ?? p.type ?? "";
             const dateRaw = p.date ?? p.pay_date ?? p.paymentDate ?? p.paidOn ?? p.createdAt ?? "";
             const parsedDate = parseDateRobust(dateRaw);
+
+            // Get corresponding work detail
+            const workDetail = workDetails && workDetails.length > index ? workDetails[index] : {};
+            const clientName = workDetail?.clientName || `${workDetail?.clientFirstName || ''} ${workDetail?.clientLastName || ''}`.trim() || "";
+            const clientId = workDetail?.clientId || workDetail?.clientID || "";
+            const location = workDetail?.location || "";
+            const service = workDetail?.service || workDetail?.serviceName || "";
 
             results.push({
                 sourceCollection: collectionPrefix || "",
@@ -94,6 +196,13 @@ function extractPaymentsFromEmployeeRecord(employeeRecord = {}, collectionPrefix
                 date: dateRaw ? String(dateRaw) : "",
                 parsedDate,
                 raw: p,
+                workDetail: workDetail,
+                clientName: clientName,
+                clientId: clientId,
+                location: location,
+                service: service,
+                _employeeDbKey: `${collectionPrefix}/${empId}`,
+                _fullEmployeeData: employeeRecord // Store full employee data for detailed view
             });
         });
     } else {
@@ -112,6 +221,13 @@ function extractPaymentsFromEmployeeRecord(employeeRecord = {}, collectionPrefix
             date: dateRaw ? String(dateRaw) : "",
             parsedDate: parseDateRobust(dateRaw),
             raw: employeeRecord,
+            workDetail: {},
+            clientName: "",
+            clientId: "",
+            location: "",
+            service: "",
+            _employeeDbKey: `${collectionPrefix}/${empId}`,
+            _fullEmployeeData: employeeRecord
         });
     }
 
@@ -171,6 +287,10 @@ export default function WorkerSalaryCard() {
     const [modalOpen, setModalOpen] = useState(false);
     const [activeYear, setActiveYear] = useState(null);
     const [activeMonth, setActiveMonth] = useState(null); // "0".."11" or "Unknown"
+    const [selectedWorker, setSelectedWorker] = useState(null);
+    const [workerDetailModal, setWorkerDetailModal] = useState(false);
+    const [page, setPage] = useState(1);
+    const [pageSize, setPageSize] = useState(10);
     const modalRef = useRef(null);
 
     useEffect(() => {
@@ -271,6 +391,18 @@ export default function WorkerSalaryCard() {
         if (!mObj) return [];
         return mObj.rows.slice().sort((a, b) => (b.parsedDate?.getTime() || 0) - (a.parsedDate?.getTime() || 0));
     }, [activeYear, activeMonth, grouped]);
+    // Pagination derived values for the month table
+    const totalEntries = currentMonthRows.length;
+    const totalPages = Math.max(1, Math.ceil(totalEntries / pageSize));
+    const pageSafe = Math.min(Math.max(1, page), totalPages);
+    const pageStart = (pageSafe - 1) * pageSize;
+    const pageEnd = Math.min(pageStart + pageSize, totalEntries);
+    const currentMonthRowsPage = useMemo(() => currentMonthRows.slice(pageStart, pageEnd), [currentMonthRows, pageStart, pageEnd]);
+
+    useEffect(() => {
+        if (page > totalPages) setPage(totalPages);
+    }, [totalPages]);
+
 
     const currentYearRows = useMemo(() => {
         if (!activeYear) return [];
@@ -297,6 +429,57 @@ export default function WorkerSalaryCard() {
         return { paid, count };
     }, [allPayments]);
 
+    // Chart data for monthly payments
+    const monthlyChartData = useMemo(() => {
+        if (!activeYear) return [];
+        const months = grouped.years?.[activeYear]?.months || {};
+        const monthLabels = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+        return monthLabels.map((label, index) => {
+            const monthData = months[index] || { totals: { paid: 0 } };
+            return {
+                label,
+                short: label,
+                value: monthData.totals.paid
+            };
+        });
+    }, [activeYear, grouped]);
+
+    // Payment type distribution for pie chart
+    const paymentTypeDistribution = useMemo(() => {
+        const types = {};
+        currentMonthRows.forEach(payment => {
+            const type = payment.typeOfPayment || "Unknown";
+            types[type] = (types[type] || 0) + payment.paidAmount;
+        });
+
+        return Object.entries(types).map(([type, amount]) => ({
+            key: type,
+            value: amount,
+            color: type === "Cash" ? "url(#gradWorker)" :
+                type === "Bank" ? "url(#gradPayment)" :
+                    "url(#gradClient)"
+        }));
+    }, [currentMonthRows]);
+
+    // Worker distribution for pie chart
+    const workerDistribution = useMemo(() => {
+        const workers = {};
+        currentMonthRows.forEach(payment => {
+            const worker = payment.employeeName;
+            workers[worker] = (workers[worker] || 0) + payment.paidAmount;
+        });
+
+        return Object.entries(workers)
+            .sort((a, b) => b[1] - a[1])
+            .slice(0, 5) // Top 5 workers
+            .map(([worker, amount]) => ({
+                key: worker,
+                value: amount,
+                color: "url(#gradWorker)"
+            }));
+    }, [currentMonthRows]);
+
     const safeMonthLabel = (y, mKey) => {
         if (mKey === "Unknown") return "Unknown";
         return new Date(Number(y), Number(mKey), 1).toLocaleString("default", { month: "long" });
@@ -305,6 +488,31 @@ export default function WorkerSalaryCard() {
     const formatDateCell = (r) => {
         if (r.parsedDate) return r.parsedDate.toLocaleDateString();
         return r.date || "-";
+    };
+
+    // Function to get worker details for modal
+    const getWorkerDetails = (worker) => {
+        const details = [];
+
+        details.push({ label: "Employee ID", value: worker.employeeId || "-" });
+        details.push({ label: "Employee Name", value: worker.employeeName || "-" });
+        details.push({ label: "Client Name", value: worker.clientName || "-" });
+        details.push({ label: "Client ID", value: worker.clientId || "-" });
+        details.push({ label: "Payment Type", value: worker.typeOfPayment || "-" });
+        details.push({ label: "Date", value: formatDateCell(worker) });
+        details.push({ label: "Receipt No", value: worker.receiptNo || "-" });
+        details.push({ label: "Paid Amount", value: formatINR(worker.paidAmount) });
+        details.push({ label: "Service", value: worker.service || "-" });
+        details.push({ label: "Location", value: worker.days || "-" });
+        details.push({ label: "Payment For", value: worker.paymentFor || "-" });
+        details.push({ label: "Source", value: worker.sourceCollection || "-" });
+
+        return details;
+    };
+
+    const handleRowClick = (worker) => {
+        setSelectedWorker(worker);
+        setWorkerDetailModal(true);
     };
 
     useEffect(() => {
@@ -358,6 +566,40 @@ export default function WorkerSalaryCard() {
                                     </div>
                                 </div>
 
+                                {/* Charts Section */}
+                                {activeYear && activeMonth && currentMonthRows.length > 0 && (
+                                    <div className="row g-3 mb-4">
+                                        <div className="col-lg-8">
+                                            <div className="glass-card p-3">
+                                                <h6 className="mb-2">Monthly Salary Trend - {activeYear}</h6>
+                                                <BarChart data={monthlyChartData} width={520} height={200} color="url(#gradWorker)" />
+                                            </div>
+                                        </div>
+                                        <div className="col-lg-4">
+                                            <div className="glass-card p-3">
+                                                <h6 className="mb-2">Payment Type Distribution</h6>
+                                                <div className="d-flex align-items-center justify-content-center">
+                                                    <DonutChart
+                                                        segments={paymentTypeDistribution}
+                                                        size={150}
+                                                        stroke={16}
+                                                        title="Types"
+                                                    />
+                                                </div>
+                                                <div className="mt-2 tiny">
+                                                    {paymentTypeDistribution.map((s) => (
+                                                        <div key={s.key} className="d-flex align-items-center gap-2 mb-1">
+                                                            <span className="legend-dot" style={{ background: s.color }}></span>
+                                                            <span className="text-muted">{s.key}</span>
+                                                            <span className="ms-auto fw-semibold">{formatINR(s.value)}</span>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+
                                 <ul className="nav nav-tabs invest-year-tabs">
                                     {yearKeys.length === 0 ? (
                                         <li className="nav-item"><span className="nav-link active">No Data</span></li>
@@ -380,15 +622,7 @@ export default function WorkerSalaryCard() {
                                             ))}
                                         </ul>
 
-                                        <div className="invest-month-toolbar d-flex justify-content-between align-items-center mb-3">
-                                            <div className="small text-center">
-                                                {activeMonth !== null && activeMonth !== undefined ? <>{safeMonthLabel(activeYear, activeMonth)} {activeYear}</> : "Select a month"}
-                                            </div>
 
-                                            <div className="btn-group ms-2">
-                                                {/* Export / Print buttons can be added if needed */}
-                                            </div>
-                                        </div>
 
                                         <div className="table-responsive">
                                             <table className="table table-sm table-hover invest-table">
@@ -398,6 +632,7 @@ export default function WorkerSalaryCard() {
                                                         <th style={{ width: 56 }}>Photo</th>
                                                         <th>Employee ID</th>
                                                         <th>Employee Name</th>
+                                                        <th>Client Name</th>
                                                         <th>Payment Type</th>
                                                         <th>Date</th>
                                                         <th>Receipt No</th>
@@ -406,10 +641,14 @@ export default function WorkerSalaryCard() {
                                                 </thead>
                                                 <tbody>
                                                     {(!activeMonth || currentMonthRows.length === 0) && (
-                                                        <tr><td colSpan={8} className="text-center small text-muted">No payments for selected month/year</td></tr>
+                                                        <tr><td colSpan={9} className="text-center small text-muted">No payments for selected month/year</td></tr>
                                                     )}
-                                                    {currentMonthRows.map((r, i) => (
-                                                        <tr key={`${r._employeeDbKey}_${i}`}>
+                                                    {currentMonthRowsPage.map((r, i) => (
+                                                        <tr
+                                                            key={`${r._employeeDbKey}_${i}`}
+                                                            style={{ cursor: 'pointer' }}
+                                                            onClick={() => handleRowClick(r)}
+                                                        >
                                                             <td>{i + 1}</td>
                                                             <td>
                                                                 {r.employeePhoto ? (
@@ -420,6 +659,7 @@ export default function WorkerSalaryCard() {
                                                             </td>
                                                             <td>{r.employeeId || "-"}</td>
                                                             <td>{r.employeeName || "-"}</td>
+                                                            <td>{r.clientName || "-"}</td>
                                                             <td>{r.typeOfPayment || "-"}</td>
                                                             <td>{formatDateCell(r)}</td>
                                                             <td>{r.receiptNo || "-"}</td>
@@ -429,15 +669,58 @@ export default function WorkerSalaryCard() {
                                                 </tbody>
                                                 <tfoot>
                                                     <tr className="table-secondary">
-                                                        <td colSpan={7} className="text-end"><strong>Monthly Subtotal</strong></td>
+                                                        <td colSpan={8} className="text-end"><strong>Monthly Subtotal</strong></td>
                                                         <td className="text-end"><strong>{formatINR(monthlyTotals.paid)}</strong></td>
                                                     </tr>
                                                     <tr className="table-secondary">
-                                                        <td colSpan={7} className="text-end"><strong>Yearly Grand Total</strong></td>
+                                                        <td colSpan={8} className="text-end"><strong>Yearly Grand Total</strong></td>
                                                         <td className="text-end"><strong>{formatINR(yearlyTotals.paid)}</strong></td>
                                                     </tr>
                                                 </tfoot>
                                             </table>
+                                        </div>
+
+                                        <div className="d-flex justify-content-between align-items-center p-2 border-top">
+                                            <div className="invest-month-toolbar d-flex justify-content-between align-items-center mb-3">
+
+                                                <div className="d-flex align-items-center gap-3">
+                                                    <div className="d-flex align-items-center gap-2">
+                                                        <span className="tiny ">Show</span>
+                                                        <select
+                                                            className="form-select form-select-sm"
+                                                            style={{ width: 90 }}
+                                                            value={pageSize}
+                                                            onChange={(e) => { setPageSize(Number(e.target.value) || 10); setPage(1); }}
+                                                        >
+                                                            {[10, 20, 30, 40, 50].map(sz => <option key={sz} value={sz}>{sz}</option>)}
+                                                        </select>
+                                                        <span className="tiny ">entries</span>
+                                                    </div>
+                                                    <div className="tiny ">
+                                                        {totalEntries ? `Showing ${pageStart + 1} to ${pageEnd} of ${totalEntries} entries` : "No entries"}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <nav style={{ backgroundColor: "transparent" }}>
+                                                <ul className="pagination pagination-sm mb-0">
+                                                    <li className={`page-item ${pageSafe <= 1 ? "disabled" : ""}`}>
+                                                        <button className="page-link" onClick={() => pageSafe > 1 && setPage(pageSafe - 1)}>Prev</button>
+                                                    </li>
+                                                    {[...Array(totalPages)].map((_, idx) => {
+                                                        const num = idx + 1;
+                                                        const show = num === 1 || num === totalPages || (num >= pageSafe - 2 && num <= pageSafe + 2);
+                                                        if (!show) return null;
+                                                        return (
+                                                            <li key={num} className={`page-item ${num === pageSafe ? "active" : ""}`}>
+                                                                <button className="page-link" onClick={() => setPage(num)}>{num}</button>
+                                                            </li>
+                                                        );
+                                                    })}
+                                                    <li className={`page-item ${pageSafe >= totalPages ? "disabled" : ""}`}>
+                                                        <button className="page-link" onClick={() => pageSafe < totalPages && setPage(pageSafe + 1)}>Next</button>
+                                                    </li>
+                                                </ul>
+                                            </nav>
                                         </div>
 
                                     </div>
@@ -450,6 +733,58 @@ export default function WorkerSalaryCard() {
                                 <button className="btn btn-secondary btn-sm" onClick={() => setModalOpen(false)}>Close</button>
                             </div>
 
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Worker Detail Modal */}
+            {workerDetailModal && selectedWorker && (
+                <div className="modal fade show" style={{ display: "block", background: "rgba(2,6,23,0.6)", zIndex: 3000 }} onClick={() => setWorkerDetailModal(false)}>
+                    <div className="modal-dialog modal-lg modal-dialog-centered" onClick={(e) => e.stopPropagation()} style={{ zIndex: 3001 }}>
+                        <div className="modal-content bg-white">
+                            <div className="modal-header bg-warning text-white">
+                                <h6 className="modal-title mb-0">Worker Payment Details</h6>
+                                <button className="btn-close btn-close-white" onClick={() => setWorkerDetailModal(false)} />
+                            </div>
+                            <div className="modal-body">
+                                <div className="row g-3">
+                                    {/* Worker Photo and Basic Info */}
+                                    <div className="col-12 mb-3">
+                                        <div className="d-flex align-items-center gap-3">
+                                            {selectedWorker.employeePhoto ? (
+                                                <img src={selectedWorker.employeePhoto} alt="Worker" className="rounded-circle" style={{ width: 80, height: 80, objectFit: 'cover' }} />
+                                            ) : (
+                                                <div className="rounded-circle bg-secondary d-flex align-items-center justify-content-center" style={{ width: 80, height: 80 }}>
+                                                    <span className="text-white fs-4">👷</span>
+                                                </div>
+                                            )}
+                                            <div>
+                                                <h5 className="mb-1">{selectedWorker.employeeName}</h5>
+                                                <p className="text-muted mb-0">ID: {selectedWorker.employeeId}</p>
+                                            </div>
+                                            <div className="ms-auto">
+                                                <div className="fw-bold fs-4 text-success">
+                                                    {formatINR(selectedWorker.paidAmount)}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* Worker Details */}
+                                    {getWorkerDetails(selectedWorker).map((detail, idx) => (
+                                        <div key={idx} className="col-md-6">
+                                            <div className="p-3 rounded-3 border">
+                                                <div className="small mb-1">{detail.label}</div>
+                                                <div className="fw-semibold text-dark">{detail.value}</div>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                            <div className="modal-footer">
+                                <button className="btn btn-secondary" onClick={() => setWorkerDetailModal(false)}>Close</button>
+                            </div>
                         </div>
                     </div>
                 </div>

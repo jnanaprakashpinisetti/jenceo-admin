@@ -833,7 +833,9 @@ table {
 }
 
 .readonly-table {
-    .readonly-row-label, td {
+
+    .readonly-row-label,
+    td {
         background-color: transparent !important;
         color: #444 !important;
     }
@@ -847,7 +849,9 @@ table {
 
 .workerCallTable {
     tr {
-        td, th {
+
+        td,
+        th {
             max-width: 120px;
         }
     }
@@ -867,4 +871,134 @@ table {
         opacity: .7;
         margin-left: 3px;
     }
+}
+
+/* Add these styles to your CSS file for 3D effects and gradients */
+
+/* Glass card effect */
+.glass-card {
+    background: linear-gradient(135deg, rgba(30, 41, 59, 0.9) 0%, rgba(15, 23, 42, 0.9) 100%);
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 12px;
+    box-shadow:
+        0 8px 32px rgba(0, 0, 0, 0.3),
+        inset 0 1px 0 rgba(255, 255, 255, 0.1);
+    padding: 1rem;
+}
+
+/* Gradient header */
+.gradient-header {
+    background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 50%, #ec4899 100%);
+    border: none;
+}
+
+/* 3D effects for bars */
+.recharts-bar-rectangle {
+    filter: drop-shadow(0px 2px 4px rgba(0, 0, 0, 0.3));
+}
+
+/* 3D effects for pie chart */
+.recharts-pie-sector {
+    filter: drop-shadow(2px 2px 4px rgba(0, 0, 0, 0.3));
+    stroke-width: 2px;
+}
+
+.recharts-pie-label-text {
+    font-weight: 600;
+    filter: drop-shadow(1px 1px 2px rgba(0, 0, 0, 0.5));
+    font-size: 12px;
+}
+
+/* Enhanced tooltips */
+.recharts-tooltip-wrapper {
+    filter: drop-shadow(0 4px 12px rgba(0, 0, 0, 0.4));
+}
+
+.recharts-default-tooltip {
+    border-radius: 8px !important;
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.5) !important;
+}
+
+/* Cartesian grid enhancement */
+.recharts-cartesian-grid-horizontal line,
+.recharts-cartesian-grid-vertical line {
+    stroke: rgba(255, 255, 255, 0.1);
+    stroke-dasharray: 3 3;
+}
+
+/* Axis text enhancement */
+.recharts-text {
+    fill: rgba(255, 255, 255, 0.8);
+    font-weight: 500;
+}
+
+.recharts-cartesian-axis-tick-value {
+    fill: rgba(255, 255, 255, 0.7);
+    font-size: 12px;
+}
+
+/* Legend enhancement */
+.recharts-legend-wrapper {
+    padding: 10px;
+}
+
+.recharts-default-legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.recharts-legend-item {
+    background: rgba(255, 255, 255, 0.1);
+    padding: 4px 8px;
+    border-radius: 6px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    font-size: 12px;
+}
+
+/* Label list enhancement */
+.recharts-label-list {
+    text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.8);
+}
+
+/* Neo card effects */
+.neo-card {
+    background: linear-gradient(135deg, rgba(30, 41, 59, 0.8) 0%, rgba(15, 23, 42, 0.8) 100%);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 12px;
+    padding: 1rem;
+    box-shadow:
+        0 4px 20px rgba(0, 0, 0, 0.3),
+        inset 0 1px 0 rgba(255, 255, 255, 0.1);
+    transition: all 0.3s ease;
+}
+
+.neo-card:hover {
+    transform: translateY(-2px);
+    box-shadow:
+        0 8px 30px rgba(0, 0, 0, 0.4),
+        inset 0 1px 0 rgba(255, 255, 255, 0.1);
+}
+
+.hover-rise {
+    transition: all 0.3s ease;
+}
+
+.hover-rise:hover {
+    transform: translateY(-3px);
+}
+
+/* Background surface */
+.bg-surface {
+    background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+}
+
+/* Text utilities */
+.text-white-80 {
+    color: rgba(255, 255, 255, 0.8);
+}
+
+.tiny {
+    font-size: 0.75rem;
 }

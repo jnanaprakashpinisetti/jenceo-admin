@@ -242,7 +242,8 @@ function extractAgentCommission(hospitalNode = {}) {
           parsedDate: parseDateRobust(date),
           amount: commissionAmount,
           raw: p,
-          hospitalData: hospital // Include full hospital data
+          hospitalData: hospital, // Include full hospital data
+          agentData: hospital.agent || hospital.agents || {} // Include agent data
         });
       }
     });
@@ -322,7 +323,7 @@ function BarChart({ data = [], width = 520, height = 150, pad = 30, color = "url
   );
 }
 
-function DonutChart({ segments = [], size = 150, stroke = 18 }) {
+function DonutChart({ segments = [], size = 150, stroke = 18, title = "Expenses" }) {
   const total = Math.max(1, segments.reduce((s, x) => s + (x.value || 0), 0));
   const r = (size - stroke) / 2;
   const c = 2 * Math.PI * r;
@@ -377,7 +378,7 @@ function DonutChart({ segments = [], size = 150, stroke = 18 }) {
           />
         );
       })}
-      <text x="50%" y="50%" dominantBaseline="middle" textAnchor="middle" fontSize="14" fill="#0f172a">Expenses</text>
+      <text x="50%" y="50%" dominantBaseline="middle" textAnchor="middle" fontSize="14" fill="#0f172a">{title}</text>
     </svg>
   );
 }
@@ -399,6 +400,7 @@ export default function ResultsCard({
   const [allRows, setAllRows] = useState([]);
   const [activeYear, setActiveYear] = useState(null);
   const [activeMonth, setActiveMonth] = useState(null);
+  const [chartType, setChartType] = useState("month"); // "month" or "year"
   const modalRef = useRef(null);
 
   useEffect(() => {
@@ -569,7 +571,20 @@ export default function ResultsCard({
     return arr;
   }, [activeYear, yearMap]);
 
-  const donutSegments = useMemo(() => {
+  // Yearly expense data for pie chart
+  const yearlyExpenseSegments = useMemo(() => {
+    const s = currentYearTotals;
+    return [
+      { key: "Investments", value: s.investment, color: "url(#gradInv)" },
+      { key: "Staff", value: s.staff, color: "url(#gradStaff)" },
+      { key: "Workers", value: s.worker, color: "url(#gradWorker)" },
+      { key: "Petty", value: s.petty, color: "url(#gradPetty)" },
+      { key: "Commission", value: s.commission, color: "url(#gradCommission)" },
+    ];
+  }, [currentYearTotals]);
+
+  // Monthly expense data for pie chart
+  const monthlyExpenseSegments = useMemo(() => {
     const s = currentMonthTotals;
     return [
       { key: "Investments", value: s.investment, color: "url(#gradInv)" },
@@ -579,6 +594,19 @@ export default function ResultsCard({
       { key: "Commission", value: s.commission, color: "url(#gradCommission)" },
     ];
   }, [currentMonthTotals]);
+
+  // Get all available months for the selected year
+  const availableMonths = useMemo(() => {
+    if (!activeYear) return [];
+    const months = Object.keys(yearMap[activeYear]?.months || {});
+    return months
+      .filter(m => m !== "Unknown")
+      .sort((a, b) => Number(a) - Number(b))
+      .map(m => ({
+        value: Number(m),
+        label: monthLabels[m] || `Month ${Number(m) + 1}`
+      }));
+  }, [activeYear, yearMap]);
 
   function exportMonthCSV() {
     const rows = (yearMap[activeYear]?.months?.[activeMonth] || []);
@@ -602,6 +630,26 @@ export default function ResultsCard({
     setTimeout(() => URL.revokeObjectURL(url), 1500);
   }
 
+  // Function to get agent details from hospital data
+  const getAgentDetails = (tx) => {
+    if (tx.type !== "commission") return null;
+    
+    const agentData = tx.agentData || {};
+    const agents = Array.isArray(agentData) ? agentData : 
+                  (agentData && typeof agentData === "object" ? Object.values(agentData) : []);
+    
+    if (agents.length === 0) return null;
+    
+    // Get the first agent (you can modify this logic if you need specific agent selection)
+    const agent = agents[0];
+    return {
+      name: agent.name || agent.agentName || "-",
+      designation: agent.designation || agent.role || "-",
+      phone: agent.phone || agent.phoneNumber || "-",
+      commissionRate: agent.commissionRate || agent.rate || "-"
+    };
+  };
+
   // Function to get transaction details based on type
   const getTransactionDetails = (tx) => {
     const details = [];
@@ -618,9 +666,24 @@ export default function ResultsCard({
         break;
 
       case "commission":
-        // Commission related data
+        // Commission related data with agent details
         details.push({ label: "Hospital Name", value: tx.hospitalData?.hospitalName || tx.hospitalData?.name || tx.raw?.hospitalName || "-" });
-        details.push({ label: "Agent Name", value: tx.raw?.agentName || tx.hospitalData?.agentName || "-" });
+        
+        // Agent details
+        const agentDetails = getAgentDetails(tx);
+        if (agentDetails) {
+          details.push({ label: "Agent Name", value: agentDetails.name });
+          details.push({ label: "Agent Designation", value: agentDetails.designation });
+          if (agentDetails.phone && agentDetails.phone !== "-") {
+            details.push({ label: "Agent Phone", value: agentDetails.phone });
+          }
+          if (agentDetails.commissionRate && agentDetails.commissionRate !== "-") {
+            details.push({ label: "Agent Commission Rate", value: `${agentDetails.commissionRate}%` });
+          }
+        } else {
+          details.push({ label: "Agent Name", value: tx.raw?.agentName || tx.hospitalData?.agentName || "-" });
+        }
+        
         details.push({ label: "Service Type", value: tx.hospitalData?.serviceType || tx.raw?.serviceType || "-" });
         details.push({ label: "Commission Rate", value: tx.raw?.commissionRate || tx.raw?.rate ? `${tx.raw.commissionRate || tx.raw.rate}%` : "-" });
         details.push({ label: "Reference", value: tx.raw?.refNo || tx.raw?.reference || "-" });
@@ -727,16 +790,16 @@ export default function ResultsCard({
                 <div className="d-flex flex-wrap align-items-center gap-2 my-3">
                   <div className="btn-group btn-group-sm" role="group" aria-label="Year selector">
                     {yearKeys.map((y) => (
-                      <button key={y} className={`btn btn-outline-light ${String(y) === String(activeYear) ? "active" : ""}`} onClick={() => { setActiveYear(y); setActiveMonth("0"); }}>
+                      <button key={y} className={`btn btn-outline-light ${String(y) === String(activeYear) ? "active" : ""}`} onClick={() => { setActiveYear(y); setActiveMonth(availableMonths[0]?.value || "0"); }}>
                         {y}
                       </button>
                     ))}
                   </div>
 
                   <div className="btn-group btn-group-sm ms-auto" role="group" aria-label="Month selector">
-                    {monthLabels.map((m, i) => (
-                      <button key={m} className={`btn btn-outline-info ${String(i) === String(activeMonth) ? "active" : ""}`} onClick={() => setActiveMonth(String(i))}>
-                        {m}
+                    {availableMonths.map((m) => (
+                      <button key={m.value} className={`btn btn-outline-info ${String(m.value) === String(activeMonth) ? "active" : ""}`} onClick={() => setActiveMonth(m.value)}>
+                        {m.label}
                       </button>
                     ))}
                   </div>
@@ -762,12 +825,31 @@ export default function ResultsCard({
                   </div>
                   <div className="col-lg-4">
                     <div className="glass-card h-100">
-                      <h6 className="mb-2">This Month — Expense mix</h6>
+                      <div className="d-flex justify-content-between align-items-center mb-2">
+                        <h6 className="mb-0">Expense Distribution</h6>
+                        <div className="btn-group btn-group-sm">
+                          <button 
+                            className={`btn ${chartType === "month" ? "btn-primary" : "btn-outline-primary"}`}
+                            onClick={() => setChartType("month")}
+                          >
+                            Month
+                          </button>
+                          <button 
+                            className={`btn ${chartType === "year" ? "btn-primary" : "btn-outline-primary"}`}
+                            onClick={() => setChartType("year")}
+                          >
+                            Year
+                          </button>
+                        </div>
+                      </div>
                       <div className="d-flex align-items-center justify-content-center">
-                        <DonutChart segments={donutSegments} />
+                        <DonutChart 
+                          segments={chartType === "month" ? monthlyExpenseSegments : yearlyExpenseSegments} 
+                          title={chartType === "month" ? "This Month" : "This Year"}
+                        />
                       </div>
                       <div className="mt-2 tiny">
-                        {donutSegments.map((s) => (
+                        {(chartType === "month" ? monthlyExpenseSegments : yearlyExpenseSegments).map((s) => (
                           <div key={s.key} className="d-flex align-items-center gap-2 mb-1">
                             <span className="legend-dot" style={{ background: s.color }}></span>
                             <span className="text-muted">{s.key}</span>
@@ -775,6 +857,35 @@ export default function ResultsCard({
                           </div>
                         ))}
                       </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Additional Insights */}
+                <div className="row mt-3">
+                  <div className="col-md-4">
+                    <div className="glass-card p-3 text-center">
+                      <div className="small text-muted">Profit Margin</div>
+                      <div className="h4 fw-bold text-success">
+                        {overall.income > 0 ? `${((overall.profit / overall.income) * 100).toFixed(1)}%` : "0%"}
+                      </div>
+                      <div className="tiny text-muted">Overall Efficiency</div>
+                    </div>
+                  </div>
+                  <div className="col-md-4">
+                    <div className="glass-card p-3 text-center">
+                      <div className="small text-muted">Expense Ratio</div>
+                      <div className="h4 fw-bold text-warning">
+                        {overall.income > 0 ? `${((overall.expense / overall.income) * 100).toFixed(1)}%` : "0%"}
+                      </div>
+                      <div className="tiny text-muted">Cost to Income</div>
+                    </div>
+                  </div>
+                  <div className="col-md-4">
+                    <div className="glass-card p-3 text-center">
+                      <div className="small text-muted">Transactions</div>
+                      <div className="h4 fw-bold text-info">{allRows.length}</div>
+                      <div className="tiny text-muted">Total Records</div>
                     </div>
                   </div>
                 </div>
@@ -894,7 +1005,7 @@ export default function ResultsCard({
                               <div className="d-flex justify-content-between align-items-center">
                                 <span className={`badge ${selectedTx.type === "client" ? "bg-success" :
                                     selectedTx.type === "investment" ? "bg-danger" :
-                                      selectedTx.type === "petty" ? "bg-violet" :
+                                      selectedTx.type === "petty" ? "bg-info" :
                                         selectedTx.type === "staff" ? "bg-sky" :
                                           selectedTx.type === "worker" ? "bg-warning" :
                                             selectedTx.type === "commission" ? "bg-warning" : "bg-secondary"

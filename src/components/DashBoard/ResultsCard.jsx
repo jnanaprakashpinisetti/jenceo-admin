@@ -426,6 +426,8 @@ export default function ResultsCard({
   const [activeYear, setActiveYear] = useState(null);
   const [activeMonth, setActiveMonth] = useState(null);
   const [chartType, setChartType] = useState("month"); // "month" or "year"
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
   const modalRef = useRef(null);
 
   useEffect(() => {
@@ -645,6 +647,20 @@ export default function ResultsCard({
     return list;
   }, [activeYear, yearMap]);
 
+  /* ------------- Pagination ------------- */
+  const totalEntries = scopedRows.length;
+  const totalPages = Math.ceil(totalEntries / pageSize);
+  const pageSafe = Math.max(1, Math.min(page, totalPages || 1));
+  const pageStart = (pageSafe - 1) * pageSize;
+  const pageEnd = Math.min(pageStart + pageSize, totalEntries);
+  const scopedRowsPage = scopedRows.slice(pageStart, pageEnd);
+
+  useEffect(() => {
+    if (pageSafe !== page) {
+      setPage(pageSafe);
+    }
+  }, [pageSafe, page]);
+
   function exportMonthCSV() {
     const rows = scopedRows;
     const header = ["Date", "Type", "Amount", "Note"];
@@ -743,13 +759,19 @@ export default function ResultsCard({
         break;
 
       case "worker":
-        // Worker related data
-        details.push({ label: "Worker Name", value: tx.workerData?.workerName || tx.workerData?.name || tx.raw?.workerName || "-" });
-        details.push({ label: "Employee ID", value: tx.workerData?.id || tx.workerData?.empId || tx.workerData?.employeeId || "-" });
-        details.push({ label: "Phone", value: tx.workerData?.phone || tx.workerData?.mobile || "-" });
+        // Worker related data - FIXED: Added proper field mappings
+        details.push({
+          label: "Worker Name",
+          value: tx.workerData?.workerName || tx.workerData?.name || tx.workerData?.employeeName || tx.workerData?.empName || tx.raw?.workerName || "-"
+        });
+        details.push({
+          label: "Employee ID",
+          value: tx.workerData?.id || tx.workerData?.empId || tx.workerData?.employeeId || tx.workerData?.empID || "-"
+        });
+        details.push({ label: "Phone", value: tx.workerData?.phone || tx.workerData?.mobile || tx.workerData?.contact || "-" });
         details.push({ label: "Work Type", value: tx.workerData?.workType || tx.workerData?.department || tx.serviceName || "-" });
-        details.push({ label: "Client Name", value: tx.clientName || tx.workDetail?.clientName || tx.raw?.clientName || "-" });
-        details.push({ label: "Service", value: tx.serviceName || tx.workDetail?.service || tx.workDetail?.serviceName || "-" });
+        details.push({ label: "Client Name", value: tx.clientName || tx.workDetail?.clientName || tx.raw?.clientName || tx.workerData?.clientName || "-" });
+        details.push({ label: "Service", value: tx.serviceName || tx.workDetail?.service || tx.workDetail?.serviceName || tx.raw?.service || "-" });
         details.push({ label: "Payment Period", value: tx.raw?.period || tx.raw?.month || "-" });
         break;
 
@@ -990,7 +1012,7 @@ export default function ResultsCard({
                 {/* Raw rows for the current month */}
                 <div className="glass-card mt-3">
                   <div className="d-flex justify-content-between align-items-center">
-                    <h6 className="mb-2">Transactions — {activeYear || "-"}, {activeMonthLabel}</h6>
+                    <h6 className="mb-2">Transactions — {activeYear || "-"}, {activeMonthLabel} <span className="tiny text-muted">({totalEntries} entries)</span></h6>
                     <div className="tiny text-muted">Green=Income, Red=Expense</div>
                   </div>
                   <div className="table-responsive">
@@ -1005,14 +1027,14 @@ export default function ResultsCard({
                         </tr>
                       </thead>
                       <tbody>
-                        {scopedRows.filter(r => r.type !== "hospital").map((r, i) => {
+                        {scopedRowsPage.filter(r => r.type !== "hospital").map((r, i) => {
                           const d = r.parsedDate || parseDateRobust(r.date);
                           const dateStr = d ? d.toLocaleDateString() : (r.date || "-");
                           const amt = r.type === "client" ? Number(r.payment || 0) : Number(r.amount || 0);
                           const isOut = r.type !== "client";
                           return (
                             <tr key={i} role="button" style={{ cursor: "pointer" }} onClick={() => { setSelectedTx(r); setTxModalOpen(true); }}>
-                              <td>{i + 1}</td>
+                              <td>{pageStart + i + 1}</td>
                               <td>{dateStr}</td>
                               <td>
                                 {r.type === "client" ? <span className="badge bg-success-subtle text-success fw-semibold">Client</span> : null}
@@ -1030,6 +1052,38 @@ export default function ResultsCard({
                       </tbody>
                     </table>
                   </div>
+
+                  {/* Pagination Controls */}
+                  {totalPages > 1 && (
+                    <div className="d-flex justify-content-between align-items-center p-2 border-top">
+                      <div className="tiny text-muted">
+                        Showing {totalEntries === 0 ? 0 : (pageStart + 1)} to {pageEnd} of {totalEntries} entries
+                      </div>
+                      <nav style={{ backgroundColor: "transparent" }}>
+                        <ul className="pagination pagination-sm mb-0">
+                          <li className={`page-item ${pageSafe <= 1 ? "disabled" : ""}`}>
+                            <button className="page-link" onClick={() => pageSafe > 1 && setPage(pageSafe - 1)}>Prev</button>
+                          </li>
+                          {[...Array(totalPages)].map((_, idx) => {
+                            const num = idx + 1;
+                            const show =
+                              num === 1 ||
+                              num === totalPages ||
+                              (num >= pageSafe - 2 && num <= pageSafe + 2);
+                            if (!show) return null;
+                            return (
+                              <li key={num} className={`page-item ${num === pageSafe ? "active" : ""}`}>
+                                <button className="page-link" onClick={() => setPage(num)}>{num}</button>
+                              </li>
+                            );
+                          })}
+                          <li className={`page-item ${pageSafe >= totalPages ? "disabled" : ""}`}>
+                            <button className="page-link" onClick={() => pageSafe < totalPages && setPage(pageSafe + 1)}>Next</button>
+                          </li>
+                        </ul>
+                      </nav>
+                    </div>
+                  )}
                 </div>
 
                 {/* TX DETAIL MODAL */}

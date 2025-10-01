@@ -45,10 +45,10 @@ import Investments from '../pages/Investments';
 import ClientInfo from '../pages/ClientInfo';
 import ClientExit from '../pages/ClientExit';
 import Expenses from '../pages/Expenses';
+import ExpenceDelete from '../pages/ExpenceDelete';
 import Task from '../pages/Task';
 import Admin from '../pages/Admin';
 import Accounts from '../pages/Accounts';
-import Operations from '../pages/Operations';
 import HospitalList from '../pages/HospitalList';
 import HospitalDeleteList from '../pages/HospitalDeleteList';
 import WorkerCallsData from '../pages/WorkerCallsData';
@@ -58,7 +58,7 @@ import EnquiryExit from '../pages/EnquiryExit';
 import SearchResults from '../pages/SearchResults';
 import StaffData from '../pages/StaffData';
 import ExistingStaff from '../pages/ExistingStaff';
- import AdminUsers from '../pages/AdminUsers';
+import AdminUsers from '../pages/AdminUsers';
 
 export default function LeftNav() {
   const [isActive, setIsActive] = useState(false);
@@ -154,7 +154,7 @@ export default function LeftNav() {
               </NavLink>
             </li>
 
-                 <li className="nav-item">
+            <li className="nav-item">
               <NavLink to='WorkerCallDelete' className="nav-link" title='Worker Call Delete' onClick={closeMobile}>
                 <img src={callDelete} alt="" /> Worker Call Delete
               </NavLink>
@@ -206,7 +206,12 @@ export default function LeftNav() {
 
             <li className="nav-item">
               <NavLink to='Expenses' className="nav-link" title='Expenses' onClick={closeMobile}>
-                <img src={expences} alt="" /> Expenses
+                <img src={expences} alt="" /> Petty Cash
+              </NavLink>
+            </li>
+            <li className="nav-item">
+              <NavLink to='ExpenceDelete' className="nav-link" title='Delete Expenses' onClick={closeMobile}>
+                <img src={expences} alt="" /> Delete Petty Cash
               </NavLink>
             </li>
 
@@ -224,7 +229,7 @@ export default function LeftNav() {
               </NavLink>
             </li>
 
-       
+
 
             <li className="nav-item">
               <NavLink to='Accounts' className="nav-link" title='Accounts' onClick={closeMobile}>
@@ -232,11 +237,7 @@ export default function LeftNav() {
               </NavLink>
             </li>
 
-            <li className="nav-item">
-              <NavLink to='Operations' className="nav-link" title='Operations' onClick={closeMobile}>
-                <img src={operations} alt="" /> Operations
-              </NavLink>
-            </li>
+
           </ul>
         </div>
       </nav>
@@ -256,11 +257,11 @@ export default function LeftNav() {
         <Route path="Enquiry" element={<Enquiry />} />
         <Route path="EnquiryExit" element={<EnquiryExit />} />
         <Route path="Expenses" element={<Expenses />} />
+        <Route path="ExpenceDelete" element={<ExpenceDelete />} />
         <Route path="Task" element={<Task />} />
         {/* <Route path="Admin" element={<Admin />} /> */}
         <Route path="WorkerCallDelete" element={<WorkerCallDelete />} />
         <Route path="Accounts" element={<Accounts />} />
-        <Route path="Operations" element={<Operations />} />
         <Route path="HospitalList" element={<HospitalList />} />
         <Route path="HospitalDeleteList" element={<HospitalDeleteList />} />
         <Route path="search" element={<SearchResults />} />

@@ -320,7 +320,7 @@ const commonHeadCSS = `
   .a4-wrap{border:1px solid #e6e6e6;border-radius:10px;background:#fff;overflow:hidden}
   .header-img{margin:-6px -6px 6px -6px}
   .header-img img{width:100%;height:auto;object-fit:contain}
-  .mast{display:flex;justify-content:space-between;align-items:flex-start;gap:14px;background:linear-gradient(180deg,#eef3ff, #f7f9ff);padding:14px 16px;border-bottom:1px solid #dfe3f4}
+  .mast{display:flex;justify-content:space-between;align-items:flex-start;gap:14px;background:#b8c0e9;padding:14px 16px;border-bottom:1px solid #dfe3f4; border-radius: 10px; margin:0 10px}
   .mast .title{font-size:22pt;font-weight:800;margin:0;letter-spacing:0.3px}
   .mast .sub{font-size:10pt;color:#4d4f56;margin-top:4px}
   .meta{font-size:10pt;color:#333;margin-top:6px}
@@ -328,11 +328,11 @@ const commonHeadCSS = `
   .photo img{width:120px;height:145px;object-fit:cover;border-radius:8px;border:1px solid #8aa0d6;background:#fafbff}
   .no-photo{width:120px;height:145px;border:1px dashed #8aa0d6;border-radius:8px;display:flex;align-items:center;justify-content:center;color:#6b7280;font-size:10pt}
   .section{margin:12px;border:1px solid #e9ebf5;border-radius:10px;overflow:hidden;box-shadow:0 0 0 1px rgba(17,24,39,0.02)}
-  .section .hd{background:#f3f6ff;padding:8px 12px;font-weight:700;color:#1f2a55}
+  .section .hd{background:#dcd3f5;padding:8px 12px;font-weight:700;color:#1f2a55}
   .section .bd{padding:12px}
   .grid-2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
-  .kv-row{display:grid;grid-template-columns:120px 14px 1fr;gap:8px;align-items:start;padding:6px 8px}
-  .kv-row.alt{background:#f9fbff}
+  .kv-row{display:grid;grid-template-columns:100px 14px 1fr;gap:8px;align-items:start;padding:6px 8px}
+  .kv-row.alt{background:#ebeff7}
   .kv-label{font-weight:600}
   .kv-colon{text-align:center}
   .kv-value{font-weight:500}
@@ -342,7 +342,7 @@ const commonHeadCSS = `
   .prose p{margin:0 0 8px 0}
   .prose ul{margin:0 0 8px 18px}
   p, li {font-size: 11px}
-  .fot {display:flex; justify-content: space-between;}
+  .fot {display:flex; justify-content: space-between; margin-bottom:10px; padding: 0 15px;}
   .footer {padding:3px; background:#0a84ff; color:#fff; font-size:8px; text-align:center}
   .p-3 {padding:5px}
   .mb-0 {margin-bottom:0}
@@ -394,20 +394,13 @@ const buildTemplate = (heading, sub, data, trailingContentHTML) => {
           <div>
             ${addrKV("Full Name", nameText)}
             <div class="kv-row alt"><div class="kv-label">Gender</div><div class="kv-colon">:</div><div class="kv-value">${gender}</div></div>
-            ${addrKV("Date of Birth", dob)}
-            <div class="kv-row alt"><div class="kv-label">Age</div><div class="kv-colon">:</div><div class="kv-value">${age}</div></div>
-            ${addrKV("Care of", co)}
-            <div class="kv-row alt"><div class="kv-label">Marital Status</div><div class="kv-colon">:</div><div class="kv-value">${marital}</div></div>
           </div>
           <div>
             ${addrKV("Aadhar No", data.aadharNo)}
-            <div class="kv-row alt"><div class="kv-label">Local ID</div><div class="kv-colon">:</div><div class="kv-value">${safe(
-    data.localId
-  )}</div></div>
-            ${addrKV("Date of Joining", data.date || data.dateOfJoining)}
-            <div class="kv-row alt"><div class="kv-label">Mobile-1</div><div class="kv-colon">:</div><div class="kv-value">${safe(
-    data.mobileNo1
-  )}</div></div>
+            <div class="kv-row alt"><div class="kv-label">Care Of</div><div class="kv-colon">:</div><div class="kv-value">${co}</div></div>
+
+       </div>
+          
           </div>
         </div>
       </div>
@@ -422,51 +415,79 @@ const buildTemplate = (heading, sub, data, trailingContentHTML) => {
    Agreement / Offer tab HTMLs
    ============================= */
 const htmlAggEng = (data) =>
-  buildTemplate(
-    "WORKER AGREEMENT — ENGLISH",
-    "H.R Department (Reg No: SEA/HYD/ALO/26/1040178/2025)",
-    data,
-    `<div class="section">
-      <div class="hd">Terms & Conditions</div>
-      <div class="bd">
-        <div class="prose">
-          <h4>1. Employment Terms</h4>
-          <p>This agreement is made between JenCeo Home Care Services and ${fullName(
-      data
-    )} (Employee ID: ${safe(
-      data.idNo || data.employeeId
-    )}) for employment as ${safe(
-      data.primarySkill
-    )} under the following terms:</p>
-          <h4>2. Compensation & Benefits</h4>
-          <ul>
-            <li>Basic salary as per company standards</li>
-            <li>Overtime compensation as per policy</li>
-            <li>Statutory benefits (PF/ESI) if applicable</li>
-          </ul>
-          <h4>3. Working Hours</h4>
-          <p>Standard: 8 hours per day, 6 days per week.</p>
-          <h4>4. Code of Conduct</h4>
-          <p>Follow company policies, safety norms and confidentiality.</p>
-        </div>
-      </div>
+buildTemplate(
+"WORKER AGREEMENT",
+"H.R Department (Reg No: SEA/HYD/ALO/26/1040178/2025)",
+data,
+`<div class="section">
+  <div class="hd">1. Terms & Conditions</div>
+  <div class="bd">
+    <div class="prose">
+      <p>This agreement is made between JenCeo Home Care Services and <strong>${fullName(data)}</strong> (Employee ID:
+        <strong>${safe( data.idNo || data.employeeId)}</strong>) for employment as
+        <strong>${safe(data.primarySkill)}</strong> under the following terms:</p>
+      <p>I, Shri/Srimati/Kumari <strong>${fullName(data)}</strong> , hereby declare that I have voluntarily joined
+        JenCeo Homecare
+        as a <strong>${safe(data.primarySkill)}</strong>, I assure that I will abide by the rules and regulations of
+        JenCeo Homecare and will
+        perform my duties at the assigned location with utmost dedication, sincerity, and integrity. I pledge to work
+        wholeheartedly, with
+        complete commitment, a service-oriented mindset, and with purity in thought, word, and action. I promise to
+        fulfill my responsibilities
+        with 100% fairness, guided by my conscience and with God as my witness.</p>
+      <ol>
+        <li>The salary of each employee will be paid after the completion of 30 working days. No advance payment will be
+          provided
+          within this 30-day period.</li>
+        <li>Employees must perform only the duties assigned by the organization. They are prohibited from engaging in
+          any private
+          arrangements with clients for personal gain.</li>
+        <li>Employees must conduct themselves in a manner that does not interfere with the client's personal, family,
+          religious, or
+          cultural practices.</li>
+        <li>Employees are strictly prohibited from touching or taking any valuables belonging to the client, including
+          money, gold, mobile
+          phones, laptops, or any other valuable items.</li>
+        <li>Employees must perform their duties diligently and treat clients with respect and courtesy at all times.
+        </li>
+        <li>If an employee behaves inappropriately towards a client or is involved in theft of any item, legal action
+          will be taken. The
+          company will not bear any responsibility in such cases.</li>
+        <li>If an employee wishes to resign, they must inform the organization at least 5 days in advance.</li>
+        <li>In any situation, an employee must not leave their duties / patient without obtaining proper permission.
+        </li>
+        <li>If a patient passes away, it should be reported to the office without delay.</li>
+        <li>If complaints are received from clients, or if the employee fails to perform their duties properly or
+          behaves inappropriately,
+          they will be terminated immediately.</li>
+      </ol>
+      <h4>2. Employee Acknowledgment Section </h4>
+      <p>I have read/heard and fully understood the terms and conditions mentioned above. I wholeheartedly agree to
+        abide by them and
+        accept full responsibility for my actions. I acknowledge that if I violate any of the company's rules and
+        regulations, I will comply with
+        any disciplinary or legal actions taken by the company.</p>
+      <p>By signing this agreement, I confirm that I grant JenCeo all rights and authorities necessary to enforce these
+        terms.</p>
     </div>
-    <div class="p-3">
-      <div class="fot">
-        <div>
-          <p class="mb-0"><strong>Employee Signature</strong></p>
-          <p class="mb-0">Date: ________________</p>
-        </div>
-        <div>
-          <p class="mb-0"><strong>Authorized Signatory</strong></p>
-          <p class="mb-0">JenCeo Home Care Services</p>
-        </div>
-      </div>
+  </div>
+</div>
+<div class="p-3">
+  <div class="fot">
+    <div>
+      <p class="mb-0"><strong>Employee Signature</strong></p>
+      <p class="mb-0">Date: ________________</p>
     </div>
-    <div class="footer">
-      <div><strong>Doc Ref:</strong> JC-HR-AGG-EN</div>
-    </div>`
-  );
+    <div>
+      <p class="mb-0"><strong>Authorized Signatory</strong></p>
+      <p class="mb-0">JenCeo Home Care Services</p>
+    </div>
+  </div>
+</div>
+<div class="footer">
+  <div><strong>Doc Ref:</strong> JC-HR-02 | Revision: 1 | Date: 1st May 2025 | Page 1 of 1 </div>
+</div>`
+);
 
 const htmlAggTel = (data) =>
   buildTemplate(

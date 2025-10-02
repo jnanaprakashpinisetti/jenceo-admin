@@ -56,6 +56,96 @@ function parseDateRobust(v) {
     return null;
 }
 
+/* ---------------- SVG Charts ---------------- */
+function BarChart({ data = [], width = 520, height = 150, pad = 30, color = "url(#gradStaff)" }) {
+    const max = Math.max(...data.map(d => d.value), 1);
+    const barW = (width - pad * 2) / (data.length || 1);
+    return (
+        <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none">
+            <defs>
+                <linearGradient id="gradStaff" x1="0" y1="0" x2="1" y2="1">
+                    <stop offset="0%" stopColor="#8b5cf6" />
+                    <stop offset="100%" stopColor="#7c3aed" />
+                </linearGradient>
+            </defs>
+            <rect x="0" y="0" width={width} height={height} fill="transparent" />
+            {data.map((d, i) => {
+                const h = Math.max(2, (d.value / max) * (height - pad * 2));
+                const x = pad + i * barW + 4;
+                const y = height - pad - h;
+                return (
+                    <g key={i}>
+                        <title>{d.label}: {formatINR(d.value)}</title>
+                        <rect x={x} y={y} width={Math.max(8, barW - 8)} height={h} fill={color} rx="6" />
+                        {h > 12 && (
+                            <text
+                                x={x + Math.max(8, barW - 8) / 2}
+                                y={y + h / 2}
+                                textAnchor="middle"
+                                dominantBaseline="middle"
+                                fontSize="10"
+                                fill="#c4b5fd"
+                                transform={`rotate(-90 ${x + Math.max(8, barW - 8) / 2} ${y + h / 2})`}
+                            >
+                                {formatINR(d.value)}
+                            </text>
+                        )}
+                        <text x={x + Math.max(8, barW - 8) / 2} y={height - 10} textAnchor="middle" fontSize="10" fill="#94a3b8">{d.short || d.label}</text>
+                    </g>
+                );
+            })}
+        </svg>
+    );
+}
+
+function DonutChart({ segments = [], size = 150, stroke = 18, title = "Distribution" }) {
+    const total = Math.max(1, segments.reduce((s, x) => s + (x.value || 0), 0));
+    const r = (size - stroke) / 2;
+    const c = 2 * Math.PI * r;
+    let offset = 0;
+    return (
+        <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
+            <defs>
+                <linearGradient id="gradStaff" x1="0" y1="0" x2="1" y2="1">
+                    <stop offset="0%" stopColor="#8b5cf6" />
+                    <stop offset="100%" stopColor="#7c3aed" />
+                </linearGradient>
+                <linearGradient id="gradPaymentStaff" x1="0" y1="0" x2="1" y2="1">
+                    <stop offset="0%" stopColor="#06b6d4" />
+                    <stop offset="100%" stopColor="#0891b2" />
+                </linearGradient>
+                <linearGradient id="gradClientStaff" x1="0" y1="0" x2="1" y2="1">
+                    <stop offset="0%" stopColor="#84cc16" />
+                    <stop offset="100%" stopColor="#65a30d" />
+                </linearGradient>
+            </defs>
+            <circle cx={size / 2} cy={size / 2} r={r} stroke="#e2e8f0" strokeWidth={stroke} fill="none" />
+            {segments.map((s, i) => {
+                const frac = (s.value || 0) / total;
+                const len = c * frac;
+                const dash = `${len} ${c - len}`;
+                const dashoffset = c - offset;
+                offset += len;
+                return (
+                    <circle
+                        key={i}
+                        cx={size / 2}
+                        cy={size / 2}
+                        r={r}
+                        stroke={s.color}
+                        strokeWidth={stroke}
+                        fill="none"
+                        strokeDasharray={dash}
+                        strokeDashoffset={dashoffset}
+                        strokeLinecap="round"
+                    />
+                );
+            })}
+            <text x="50%" y="50%" dominantBaseline="middle" textAnchor="middle" fontSize="14" fill="#0f172a">{title}</text>
+        </svg>
+    );
+}
+
 /* normalize staff record -> payment rows */
 function extractPaymentsFromStaffRecord(staffRecord = {}, collectionPrefix = "") {
     const empId = staffRecord.employeeId ?? staffRecord.idNo ?? staffRecord.id ?? staffRecord.uid ?? "";
@@ -303,6 +393,57 @@ export default function StaffSalaryCard() {
         return { paid, count };
     }, [allPayments]);
 
+    // Chart data for monthly payments
+    const monthlyChartData = useMemo(() => {
+        if (!activeYear) return [];
+        const months = grouped.years?.[activeYear]?.months || {};
+        const monthLabels = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+        return monthLabels.map((label, index) => {
+            const monthData = months[index] || { totals: { paid: 0 } };
+            return {
+                label,
+                short: label,
+                value: monthData.totals.paid
+            };
+        });
+    }, [activeYear, grouped]);
+
+    // Payment type distribution for pie chart
+    const paymentTypeDistribution = useMemo(() => {
+        const types = {};
+        currentMonthRows.forEach(payment => {
+            const type = payment.typeOfPayment || "Unknown";
+            types[type] = (types[type] || 0) + payment.paidAmount;
+        });
+
+        return Object.entries(types).map(([type, amount]) => ({
+            key: type,
+            value: amount,
+            color: type === "Cash" ? "url(#gradStaff)" :
+                type === "Bank" ? "url(#gradPaymentStaff)" :
+                    "url(#gradClientStaff)"
+        }));
+    }, [currentMonthRows]);
+
+    // Staff distribution for pie chart
+    const staffDistribution = useMemo(() => {
+        const staff = {};
+        currentMonthRows.forEach(payment => {
+            const staffMember = payment.employeeName;
+            staff[staffMember] = (staff[staffMember] || 0) + payment.paidAmount;
+        });
+
+        return Object.entries(staff)
+            .sort((a, b) => b[1] - a[1])
+            .slice(0, 5) // Top 5 staff
+            .map(([staffMember, amount]) => ({
+                key: staffMember,
+                value: amount,
+                color: "url(#gradStaff)"
+            }));
+    }, [currentMonthRows]);
+
     const safeMonthLabel = (y, mKey) => {
         if (mKey === "Unknown") return "Unknown";
         return new Date(Number(y), Number(mKey), 1).toLocaleString("default", { month: "long" });
@@ -364,6 +505,40 @@ export default function StaffSalaryCard() {
                                         <div className="header-sub">{(activeMonth !== null && activeMonth !== undefined) ? `${monthlyTotals.count} payments` : "select month"}</div>
                                     </div>
                                 </div>
+
+                                {/* Charts Section */}
+                                {activeYear && activeMonth && currentMonthRows.length > 0 && (
+                                    <div className="row g-3 mb-4">
+                                        <div className="col-lg-8">
+                                            <div className="glass-card p-3">
+                                                <h6 className="mb-2">Monthly Salary Trend - {activeYear}</h6>
+                                                <BarChart data={monthlyChartData} width={520} height={200} color="url(#gradStaff)" />
+                                            </div>
+                                        </div>
+                                        <div className="col-lg-4">
+                                            <div className="glass-card p-3">
+                                                <h6 className="mb-2">Payment Type Distribution</h6>
+                                                <div className="d-flex align-items-center justify-content-center">
+                                                    <DonutChart
+                                                        segments={paymentTypeDistribution}
+                                                        size={150}
+                                                        stroke={16}
+                                                        title="Types"
+                                                    />
+                                                </div>
+                                                <div className="mt-2 tiny">
+                                                    {paymentTypeDistribution.map((s) => (
+                                                        <div key={s.key} className="d-flex align-items-center gap-2 mb-1">
+                                                            <span className="legend-dot" style={{ background: s.color }}></span>
+                                                            <span className="text-muted">{s.key}</span>
+                                                            <span className="ms-auto fw-semibold">{formatINR(s.value)}</span>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
 
                                 <ul className="nav nav-tabs invest-year-tabs">
                                     {yearKeys.length === 0 ? (

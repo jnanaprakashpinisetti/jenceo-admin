@@ -3,10 +3,10 @@ import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 
 export default function Login() {
-  const { login, loading, debugDatabase } = useAuth();
+  const { login, loading } = useAuth();
   const navigate = useNavigate();
 
-  const [identifier, setIdentifier] = useState(""); // email OR username
+  const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -17,47 +17,24 @@ export default function Login() {
 
   const clearErrors = () => {
     setError("");
-    setFieldErrors({
-      identifier: "",
-      password: ""
-    });
+    setFieldErrors({ identifier: "", password: "" });
   };
 
   const validateForm = () => {
     const errors = {
-      identifier: "",
-      password: ""
+      identifier: identifier.trim() ? "" : "Email or username is required",
+      password: password ? "" : "Password is required"
     };
-
-    if (!identifier.trim()) {
-      errors.identifier = "Email or username is required";
-    }
-
-    if (!password) {
-      errors.password = "Password is required";
-    }
 
     setFieldErrors(errors);
     return !errors.identifier && !errors.password;
   };
 
-  // Debug function to check database
-  const handleDebug = async () => {
-    try {
-      console.clear();
-      await debugDatabase();
-    } catch (err) {
-      console.error("Debug failed:", err);
-    }
-  };
-
-  async function handleSubmit(e) {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     clearErrors();
 
-    if (!validateForm()) {
-      return;
-    }
+    if (!validateForm()) return;
 
     setBusy(true);
 
@@ -65,36 +42,23 @@ export default function Login() {
       await login(identifier.trim(), password);
       navigate("/");
     } catch (err) {
-      console.error("Login error", err);
-
       const errorMessage = err.message || "Login failed";
       setError(errorMessage);
 
       // Set specific field errors based on error type
-      if (errorMessage.toLowerCase().includes("user not found") ||
-        errorMessage.toLowerCase().includes("no account found") ||
-        errorMessage.toLowerCase().includes("username")) {
-        setFieldErrors(prev => ({
-          ...prev,
-          identifier: "Username not found"
-        }));
-      } else if (errorMessage.toLowerCase().includes("password") ||
-        errorMessage.toLowerCase().includes("incorrect")) {
-        setFieldErrors(prev => ({
-          ...prev,
-          password: "Invalid password"
-        }));
-      } else if (errorMessage.toLowerCase().includes("inactive") ||
-        errorMessage.toLowerCase().includes("disabled")) {
-        setFieldErrors(prev => ({
-          ...prev,
-          identifier: "Account is inactive"
-        }));
+      const errorLower = errorMessage.toLowerCase();
+      
+      if (errorLower.includes("user not found") || errorLower.includes("no account found")) {
+        setFieldErrors(prev => ({ ...prev, identifier: "Username not found" }));
+      } else if (errorLower.includes("password") || errorLower.includes("incorrect")) {
+        setFieldErrors(prev => ({ ...prev, password: "Invalid password" }));
+      } else if (errorLower.includes("inactive") || errorLower.includes("disabled")) {
+        setFieldErrors(prev => ({ ...prev, identifier: "Account is inactive" }));
       }
     }
 
     setBusy(false);
-  }
+  };
 
   const handleIdentifierChange = (e) => {
     setIdentifier(e.target.value);
@@ -113,25 +77,20 @@ export default function Login() {
   };
 
   const getInputClass = (fieldName) => {
-    const baseClass = "form-control";
-    return fieldErrors[fieldName] ? `${baseClass} is-invalid` : baseClass;
+    return `form-control ${fieldErrors[fieldName] ? "is-invalid" : ""}`;
   };
 
+  const isSubmitting = busy || loading;
+
   return (
-    <div style={{
-      padding: 24,
-      display: "flex",
-      justifyContent: "center",
-      alignItems: "center",
-      minHeight: "100vh",
-    }}>
-      <div className="card text-white shadow-lg" style={{ width: 400, backgroundColor: "#333638", borderRadius: "10px" }}>
-        <div className="card-body p-4">
-          <h4 className="mb-4 text-center">Sign In</h4>
+    <div className="login-container">
+      <div className="card login-card">
+        <div className="card-body">
+          <h4 className="login-title">Sign In</h4>
 
           <form onSubmit={handleSubmit}>
-            <div className="form-group mb-3">
-              <label className="small mb-2">Email or Username</label>
+            <div className="form-group">
+              <label className="form-label">Email or Username</label>
               <input
                 className={getInputClass("identifier")}
                 type="text"
@@ -140,17 +99,15 @@ export default function Login() {
                 onChange={handleIdentifierChange}
                 placeholder="example@site.com or admin"
                 autoFocus
-                disabled={busy || loading}
+                disabled={isSubmitting}
               />
               {fieldErrors.identifier && (
-                <div className="invalid-feedback d-block">
-                  {fieldErrors.identifier}
-                </div>
+                <div className="error-message">{fieldErrors.identifier}</div>
               )}
             </div>
 
-            <div className="form-group mb-4">
-              <label className="small mb-2">Password</label>
+            <div className="form-group">
+              <label className="form-label">Password</label>
               <input
                 className={getInputClass("password")}
                 type="password"
@@ -158,35 +115,29 @@ export default function Login() {
                 value={password}
                 onChange={handlePasswordChange}
                 placeholder="Enter your password"
-                disabled={busy || loading}
+                disabled={isSubmitting}
               />
               {fieldErrors.password && (
-                <div className="invalid-feedback d-block">
-                  {fieldErrors.password}
-                </div>
+                <div className="error-message">{fieldErrors.password}</div>
               )}
             </div>
 
             {error && !fieldErrors.identifier && !fieldErrors.password && (
-              <div className="alert alert-danger small mb-3">
+              <div className="alert alert-danger error-alert">
                 <i className="bi bi-exclamation-triangle me-2"></i>
                 {error}
               </div>
             )}
 
-            <div className="d-flex justify-content-center">
+            <div className="submit-container">
               <button
-                className="btn btn-primary btn-lg"
+                className="btn btn-primary submit-button"
                 type="submit"
-                disabled={busy || loading}
-                style={{
-                  minWidth: "120px",
-                  padding: "10px 30px"
-                }}
+                disabled={isSubmitting}
               >
-                {busy || loading ? (
+                {isSubmitting ? (
                   <>
-                    <span className="spinner-border spinner-border-sm me-2" role="status"></span>
+                    <span className="spinner spinner-sm me-2"></span>
                     Signing in...
                   </>
                 ) : (
@@ -196,32 +147,104 @@ export default function Login() {
             </div>
           </form>
 
-          {/* Debug button */}
-          <div className="d-flex justify-content-center mt-3">
-            <button
-              type="button"
-              className="btn btn-sm btn-outline-warning"
-              onClick={handleDebug}
-            >
-              Debug Database
-            </button>
-          </div>
-
-          <div className="mt-4 small text-muted text-center">
-            <div className="mb-2">
+          <div className="login-info">
+            <div className="info-title">
               <strong>Login Options:</strong>
             </div>
-            <div className="mb-1">
+            <div className="info-item">
               <i className="bi bi-envelope me-2"></i>
               Use email for Firebase Authentication
             </div>
-            <div>
+            <div className="info-item">
               <i className="bi bi-person me-2"></i>
               Use username for database authentication
             </div>
           </div>
         </div>
       </div>
+
+      <style jsx>{`
+        .login-container {
+          padding: 24px;
+          display: flex;
+          justify-content: center;
+          align-items: center;
+          min-height: 100vh;
+        }
+
+        .login-card {
+          width: 400px;
+          background-color: #333638;
+          border-radius: 10px;
+          color: white;
+        }
+
+        .login-title {
+          margin-bottom: 1.5rem;
+          text-align: center;
+        }
+
+        .form-group {
+          margin-bottom: 1.5rem;
+        }
+
+        .form-label {
+          font-size: 0.875rem;
+          margin-bottom: 0.5rem;
+          display: block;
+        }
+
+        .error-message {
+          width: 100%;
+          margin-top: 0.25rem;
+          font-size: 0.875rem;
+          color: #dc3545;
+        }
+
+        .error-alert {
+          font-size: 0.875rem;
+          margin-bottom: 1rem;
+        }
+
+        .submit-container {
+          display: flex;
+          justify-content: center;
+        }
+
+        .submit-button {
+          min-width: 120px;
+          padding: 10px 30px;
+        }
+
+        .spinner {
+          display: inline-block;
+          width: 1rem;
+          height: 1rem;
+          border: 2px solid currentColor;
+          border-right-color: transparent;
+          border-radius: 50%;
+          animation: spinner-border 0.75s linear infinite;
+        }
+
+        .login-info {
+          margin-top: 1.5rem;
+          font-size: 0.875rem;
+          color: #6c757d;
+          text-align: center;
+        }
+
+        .info-title {
+          margin-bottom: 0.5rem;
+        }
+
+        .info-item {
+          margin-bottom: 0.25rem;
+        }
+
+        @keyframes spinner-border {
+          to { transform: rotate(360deg); }
+        }
+      `}</style>
     </div>
   );
 }

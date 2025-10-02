@@ -58,12 +58,12 @@ const EMAIL_FIELDS = ["email", "Email", "userEmail", "emailId"];
 
 const AuthContext = createContext({
   user: null,
-  login: async () => {},
-  logout: async () => {},
+  login: async () => { },
+  logout: async () => { },
   loading: false,
   currentUser: null,
   userRole: null,
-  debugDatabase: async () => {}, // Add debug function to context
+  debugDatabase: async () => { }, // Add debug function to context
 });
 
 export function AuthProvider({ children }) {
@@ -82,16 +82,16 @@ export function AuthProvider({ children }) {
   // Debug function to check database contents
   const debugDatabase = async () => {
     console.log("=== DATABASE DEBUG ===");
-    
+
     const pathsToCheck = [
       "JenCeo-DataBase/Users",
-      "Users", 
+      "Users",
       "authentication/Users",
       "jenceo-admin/Users",
       "authentication/users",
       "jenceo-admin/authentication/users"
     ];
-    
+
     for (const path of pathsToCheck) {
       try {
         const data = await safeRead(path);
@@ -131,7 +131,7 @@ export function AuthProvider({ children }) {
           const firstId = Object.keys(obj)[0];
           if (firstId) return obj[firstId];
         }
-      } catch {}
+      } catch { }
     }
 
     // Fallback: read whole node and deep-match the email (handles nesting)
@@ -149,27 +149,33 @@ export function AuthProvider({ children }) {
       setAuthLoading(true);
       try {
         if (!fbUser) {
+          // don't nuke local user until we're sure there's no auth
           setUser(null);
           localStorage.removeItem("app_user");
-          setAuthLoading(false);
           return;
         }
 
-        // Merge FB Auth user + RTDB profile
-        const profile = await fetchEmailProfile(fbUser.email);
+        // --- NEW: read profile by UID first (works for anonymous username sessions) ---
+        const profileByUid = await safeRead(`authentication/users/${fbUser.uid}`);
+
+        // fallback: for email users, try to fetch by email if UID record not present
+        let profile = profileByUid;
+        if (!profile && fbUser.email) {
+          profile = await fetchEmailProfile(fbUser.email);
+        }
+
         const session = {
           uid: fbUser.uid,
           name:
             fbUser.displayName ||
             profile?.name ||
-            fbUser.email?.split("@")[0] ||
-            "User",
+            (fbUser.email ? fbUser.email.split("@")[0] : "User"),
           email: fbUser.email || profile?.email || profile?.Email || null,
           role: profile?.role || "user",
           permissions: profile?.permissions || {},
-          mode: "email",
-          emailVerified: fbUser.emailVerified,
-          _source: "firebase_auth",
+          mode: fbUser.isAnonymous ? "username" : "email",
+          emailVerified: fbUser.emailVerified ?? false,
+          _source: fbUser.isAnonymous ? "anonymous_auth" : "firebase_auth",
         };
 
         setUser(session);
@@ -179,84 +185,86 @@ export function AuthProvider({ children }) {
       }
     });
     return () => unsub();
-  }, [auth]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
 
   /* ===== Username login: Try multiple database paths ===== */
-/* ===== Username login: JenCeo-DataBase/Users ===== */
-// In your AuthContext.jsx, update the loginUsername function:
+  /* ===== Username login: JenCeo-DataBase/Users ===== */
+  // In your AuthContext.jsx, update the loginUsername function:
 
-/* ===== Username login: JenCeo-DataBase/Users ===== */
-/* ===== Username login: JenCeo-DataBase/Users (secure) ===== */
-const loginUsername = async (username, password) => {
-  const uname = norm(username);
-  const auth = getAuth();
+  /* ===== Username login: JenCeo-DataBase/Users ===== */
+  /* ===== Username login: JenCeo-DataBase/Users (secure) ===== */
+  const loginUsername = async (username, password) => {
+    const uname = norm(username);
+    const auth = getAuth();
 
-  // 1) Make sure we have a Firebase Auth session so rules with "auth != null" pass
-  if (!auth.currentUser) {
-    try {
-      await signInAnonymously(auth);
-    } catch (e) {
-      // If already signed in (email mode), ignore
-      if (!/already/.test(String(e?.message || ""))) throw e;
+    // 1) Make sure we have a Firebase Auth session so rules with "auth != null" pass
+    if (!auth.currentUser) {
+      try {
+        await signInAnonymously(auth);
+      } catch (e) {
+        // If already signed in (email mode), ignore
+        if (!/already/.test(String(e?.message || ""))) throw e;
+      }
     }
-  }
 
-  // 2) Read username store
-  const usersSnap = await db.ref("JenCeo-DataBase/Users").once("value");
-  const map = usersSnap.val() || {};
-  if (!Object.keys(map).length) {
-    throw new Error("No users found. Please check database permissions.");
-  }
+    // 2) Read username store
+    const usersSnap = await db.ref("JenCeo-DataBase/Users").once("value");
+    const map = usersSnap.val() || {};
+    if (!Object.keys(map).length) {
+      throw new Error("No users found. Please check database permissions.");
+    }
 
-  const list = Object.keys(map).map((id) => ({ id, ...map[id] }));
-  const me = list.find((u) => norm(u.name || u.username || u.displayName) === uname);
-  if (!me) throw new Error("User not found");
+    const list = Object.keys(map).map((id) => ({ id, ...map[id] }));
+    const me = list.find((u) => norm(u.name || u.username || u.displayName) === uname);
+    if (!me) throw new Error("User not found");
 
-  if (me.active === false || me.disabled === true) throw new Error("Account is inactive");
+    if (me.active === false || me.disabled === true) throw new Error("Account is inactive");
 
-  // 3) Verify password (hash or plain)
-  const storedHash  = me.passwordHash || me.pwdHash || null;
-  const storedPlain = me.password    || me.pwd    || null;
-  const incomingHash = await sha256Base64(password);
-  const ok =
-    (storedHash && storedHash === incomingHash) ||
-    (storedPlain && storedPlain === password);
-  if (!ok) throw new Error("Invalid password");
+    // 3) Verify password (hash or plain)
+    const storedHash = me.passwordHash || me.pwdHash || null;
+    const storedPlain = me.password || me.pwd || null;
+    const incomingHash = await sha256Base64(password);
+    const ok =
+      (storedHash && storedHash === incomingHash) ||
+      (storedPlain && storedPlain === password);
+    if (!ok) throw new Error("Invalid password");
 
-  // 4) Upsert a profile under authentication/users/{auth.uid} so rules can check permissions
-  const uid = auth.currentUser.uid;
-  const profileRef = db.ref(`authentication/users/${uid}`);
-  const profile = {
-    name: me.name || me.username || username,
-    role: me.role || "user",
-    permissions: me.permissions || {},
-    mode: "username",
-    usernameLinked: me.id, // trace back if needed
+    // 4) Upsert a profile under authentication/users/{auth.uid} so rules can check permissions
+    const uid = auth.currentUser.uid;
+    const profileRef = db.ref(`authentication/users/${uid}`);
+    const profile = {
+      name: me.name || me.username || username,
+      role: me.role || "user",
+      permissions: me.permissions || {},
+      mode: "username",
+      usernameLinked: me.id, // trace back if needed
+    };
+    await profileRef.update(profile);
+
+    // 5) Build session used by LeftNav/guards
+    const session = {
+      uid,
+      name: profile.name,
+      email: me.email || null,
+      role: profile.role,
+      permissions: profile.permissions,
+      mode: "username",
+      _source: "jenCeo_database",
+    };
+
+    setUser(session);
+    localStorage.setItem("app_user", JSON.stringify(session));
+    return session;
   };
-  await profileRef.update(profile);
-
-  // 5) Build session used by LeftNav/guards
-  const session = {
-    uid,
-    name: profile.name,
-    email: me.email || null,
-    role: profile.role,
-    permissions: profile.permissions,
-    mode: "username",
-    _source: "jenCeo_database",
-  };
-
-  setUser(session);
-  localStorage.setItem("app_user", JSON.stringify(session));
-  return session;
-};
 
 
 
   /* ===== Email login: Firebase Auth + RTDB permissions ===== */
   const loginEmail = async (email, password) => {
     console.log("Attempting email login for:", email);
-    
+
     // Sign into Firebase Auth first
     const cred = await signInWithEmailAndPassword(getAuth(), email, password);
     const fbUser = cred.user;
@@ -293,7 +301,7 @@ const loginUsername = async (username, password) => {
     setLoading(true);
     try {
       console.log("Login attempt with identifier:", identifier);
-      
+
       if (identifier.includes("@")) {
         return await loginEmail(identifier.trim(), password);
       } else {
@@ -301,7 +309,7 @@ const loginUsername = async (username, password) => {
       }
     } catch (error) {
       console.error("Login error details:", error);
-      
+
       // nicer Firebase errors
       if (error?.code) {
         const map = {
@@ -313,7 +321,7 @@ const loginUsername = async (username, password) => {
         };
         throw new Error(map[error.code] || error.message || "Login failed");
       }
-      
+
       throw error;
     } finally {
       setLoading(false);

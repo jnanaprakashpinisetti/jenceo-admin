@@ -379,7 +379,7 @@ export default function PettyCashCard({ pettyCollection = "PettyCash" }) {
           </div>
           <div className="invest-card__divider" />
           <div style={{ fontSize: 12, opacity: .85, paddingLeft: "20px" }}>
-            Ack: {formatINR(statusTotals.acknowledge?.total || 0)} | Pend: {formatINR(statusTotals.pending?.total || 0)} | Clar: {formatINR(statusTotals.clarification?.total || 0)} | <span style={{ color: "#ff6b6b" }}>Rej: {formatINR(statusTotals.reject?.total || 0)}</span>
+            Ack: {formatINR(statusTotals.acknowledge?.total || 0)} | Pend: {formatINR(statusTotals.pending?.total || 0)} | Clar: {formatINR(statusTotals.clarification?.total || 0)} | <span style={{ color: "#f3c807ff" }}>Rej: {formatINR(statusTotals.reject?.total || 0)}</span>
           </div>
         </div>
       </div>

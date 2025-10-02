@@ -367,7 +367,7 @@ setShowReturnReasonModal(false);
 
       {/* Filter Checkboxes */}
       <div className="row mb-3">
-        <div className="col-md-8 m-auto">
+        <div className="col-md-12 m-auto">
           <div className="chec-box-card">
             <div className="card-body py-2 justify-content-between filter-wrapper">
               <div className="row w-100">

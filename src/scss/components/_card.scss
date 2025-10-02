@@ -86,6 +86,7 @@
     &:checked {
         border-color: #fff;
     }
+
     &:focus {
         border-color: $sec-white;
         box-shadow: none;
@@ -136,15 +137,20 @@
         }
     }
 
-       .badgeWrapper {
-            display: flex;
-            gap: 15px;
-            align-items: center;
-            margin-bottom: 20px;
+    .badgeWrapper {
+        display: flex;
+        gap: 15px;
+        align-items: center;
+        margin-bottom: 20px;
 
-            @include mobile {
-                flex-wrap: wrap;
-            }
+        @include mobile {
+            flex-wrap: wrap;
         }
-}
 
+        .rounded-pill {
+            padding: 8px 15px;
+            border-radius: 5px !important;
+
+        }
+    }
+}

@@ -352,7 +352,7 @@ setShowReturnReasonModal(false);
     <div className="container-fluid py-4">
       {/* Search Bar */}
       <div className="row mb-3">
-        <div className="col-md-12 m-auto">
+        <div className="col-md-6 m-auto">
           <div className="input-group">
             <span className="input-group-text">
               <i className="bi bi-search"></i>

@@ -3,10 +3,10 @@ import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 
 export default function Login() {
-  const { login } = useAuth();
+  const { login, loading, debugDatabase } = useAuth();
   const navigate = useNavigate();
 
-  const [identifier, setIdentifier] = useState("");
+  const [identifier, setIdentifier] = useState(""); // email OR username
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -35,12 +35,20 @@ export default function Login() {
 
     if (!password) {
       errors.password = "Password is required";
-    } else if (password.length < 3) {
-      errors.password = "Password must be at least 3 characters";
     }
 
     setFieldErrors(errors);
     return !errors.identifier && !errors.password;
+  };
+
+  // Debug function to check database
+  const handleDebug = async () => {
+    try {
+      console.clear();
+      await debugDatabase();
+    } catch (err) {
+      console.error("Debug failed:", err);
+    }
   };
 
   async function handleSubmit(e) {
@@ -58,23 +66,26 @@ export default function Login() {
       navigate("/");
     } catch (err) {
       console.error("Login error", err);
-      
-      // Set specific field errors based on error type
+
       const errorMessage = err.message || "Login failed";
       setError(errorMessage);
 
-      // Highlight specific fields based on error
-      if (errorMessage.includes("user not found") || errorMessage.includes("no account found")) {
+      // Set specific field errors based on error type
+      if (errorMessage.toLowerCase().includes("user not found") ||
+        errorMessage.toLowerCase().includes("no account found") ||
+        errorMessage.toLowerCase().includes("username")) {
         setFieldErrors(prev => ({
           ...prev,
-          identifier: "User not found"
+          identifier: "Username not found"
         }));
-      } else if (errorMessage.includes("password") || errorMessage.includes("incorrect")) {
+      } else if (errorMessage.toLowerCase().includes("password") ||
+        errorMessage.toLowerCase().includes("incorrect")) {
         setFieldErrors(prev => ({
           ...prev,
           password: "Invalid password"
         }));
-      } else if (errorMessage.includes("inactive") || errorMessage.includes("disabled")) {
+      } else if (errorMessage.toLowerCase().includes("inactive") ||
+        errorMessage.toLowerCase().includes("disabled")) {
         setFieldErrors(prev => ({
           ...prev,
           identifier: "Account is inactive"
@@ -107,22 +118,29 @@ export default function Login() {
   };
 
   return (
-    <div style={{ padding: 24, display: "flex", justifyContent: "center", minHeight: "80vh", alignItems: "center" }}>
-      <div className="card bg-dark text-white" style={{ width: 400 }}>
-        <div className="card-body">
-          <h4 className="mb-3 text-center">Sign In</h4>
+    <div style={{
+      padding: 24,
+      display: "flex",
+      justifyContent: "center",
+      alignItems: "center",
+      minHeight: "100vh",
+    }}>
+      <div className="card text-white shadow-lg" style={{ width: 400, backgroundColor: "#333638", borderRadius: "10px" }}>
+        <div className="card-body p-4">
+          <h4 className="mb-4 text-center">Sign In</h4>
 
           <form onSubmit={handleSubmit}>
             <div className="form-group mb-3">
-              <label className="small">Email or Username</label>
+              <label className="small mb-2">Email or Username</label>
               <input
                 className={getInputClass("identifier")}
                 type="text"
                 required
                 value={identifier}
                 onChange={handleIdentifierChange}
-                placeholder="Enter email or username"
-                disabled={busy}
+                placeholder="example@site.com or admin"
+                autoFocus
+                disabled={busy || loading}
               />
               {fieldErrors.identifier && (
                 <div className="invalid-feedback d-block">
@@ -131,16 +149,16 @@ export default function Login() {
               )}
             </div>
 
-            <div className="form-group mb-3">
-              <label className="small">Password</label>
+            <div className="form-group mb-4">
+              <label className="small mb-2">Password</label>
               <input
                 className={getInputClass("password")}
                 type="password"
                 required
                 value={password}
                 onChange={handlePasswordChange}
-                placeholder="Enter password"
-                disabled={busy}
+                placeholder="Enter your password"
+                disabled={busy || loading}
               />
               {fieldErrors.password && (
                 <div className="invalid-feedback d-block">
@@ -156,46 +174,50 @@ export default function Login() {
               </div>
             )}
 
-            <button
-              className="btn btn-primary w-100"
-              type="submit"
-              disabled={busy}
-              style={{ height: "45px" }}
-            >
-              {busy ? (
-                <>
-                  <span className="spinner-border spinner-border-sm me-2" role="status"></span>
-                  Signing in...
-                </>
-              ) : (
-                "Sign in"
-              )}
-            </button>
+            <div className="d-flex justify-content-center">
+              <button
+                className="btn btn-primary btn-lg"
+                type="submit"
+                disabled={busy || loading}
+                style={{
+                  minWidth: "120px",
+                  padding: "10px 30px"
+                }}
+              >
+                {busy || loading ? (
+                  <>
+                    <span className="spinner-border spinner-border-sm me-2" role="status"></span>
+                    Signing in...
+                  </>
+                ) : (
+                  "Sign In"
+                )}
+              </button>
+            </div>
           </form>
 
-          <div className="mt-4 small text-muted">
+          {/* Debug button */}
+          <div className="d-flex justify-content-center mt-3">
+            <button
+              type="button"
+              className="btn btn-sm btn-outline-warning"
+              onClick={handleDebug}
+            >
+              Debug Database
+            </button>
+          </div>
+
+          <div className="mt-4 small text-muted text-center">
             <div className="mb-2">
-              <strong>Demo Credentials:</strong>
+              <strong>Login Options:</strong>
             </div>
             <div className="mb-1">
               <i className="bi bi-envelope me-2"></i>
-              <strong>Email:</strong> Use your Firebase Authentication email
+              Use email for Firebase Authentication
             </div>
             <div>
               <i className="bi bi-person me-2"></i>
-              <strong>Username:</strong> Use your database username
-            </div>
-          </div>
-
-          {/* Help tips */}
-          <div className="mt-3 small text-muted border-top pt-3">
-            <div className="mb-1">
-              <i className="bi bi-lightbulb me-2"></i>
-              <strong>Tip:</strong> Enter email for Firebase login, username for database login
-            </div>
-            <div>
-              <i className="bi bi-shield-check me-2"></i>
-              <strong>Note:</strong> Passwords are case-sensitive
+              Use username for database authentication
             </div>
           </div>
         </div>

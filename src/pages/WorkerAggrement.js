@@ -629,7 +629,7 @@ const today = new Date().toLocaleDateString()
 const htmlOffEng = (data) =>
   buildTemplate(
     "OFFER LETTER",
-    "Official offer letter preview with employee information.",
+    "H.R Department (Reg No: SEA/HYD/ALO/26/1040178/2025)",
     data,
     `<div class="section">
       <div class="hd">Offer Details</div>
@@ -673,28 +673,52 @@ mutual understanding of the terms and conditions of employment</p>
 
 const htmlOffTel = (data) =>
   buildTemplate(
-    "ఆఫర్ లెటర్ — తెలుగు",
-    "ఉద్యోగి వివరాలతో ఆఫర్ లెటర్ ప్రివ్యూ.",
+    "ఉద్యోగ నియామక పత్రం",
+    "H.R Department (Reg No: SEA/HYD/ALO/26/1040178/2025)",
     data,
     `<div class="section">
-      <div class="hd">ఆఫర్ వివరాలు</div>
+      <div class="hd">ఉద్యోగి ప్రయోజనాలు</div>
       <div class="bd prose">
-        <p><strong>${fullName(data)}</strong> గారికి <strong>${safe(
-      data.primarySkill
-    )}</strong> హోదాతో ఉద్యోగ ఆఫర్ ఇస్తున్నాము.</p>
-        <ul>
-          <li>జాయినింగ్ & వేతనం HR ధృవీకరణపై</li>
-          <li>కంపెనీ పాలసీలను పాటించాలి</li>
-        </ul>
-      </div>
+        <h5 class ="telugu"> గౌరవనీయులైన శ్రీ / శ్రీమతి / కుమారి. <strong>${fullName(data)}</strong> మీకు <strong>${safe(data.primarySkill)} </strong> యొకక స్థానాన్ని అందించడానికి మేము సంతోషిస్తున్నాము.</h5>
+        <p> Joining date <strong>${today} </strong></p>
+        <p>జీతము: <strong>${safe(data.basicSalary)}</strong> <small> అక్షరాలా(${numberToWords(Number(data.basicSalary))} Only)</small></p>
+        <h4>ఉద్యోగి ప్రయోజనాలు</h4>
+        <ol>
+           <li>ఆరు నెలలు నిరంతరాయంగా ఉద్యోగం చేసినవారికి 6,000/- రూపాయిలు బోనస్ గా ఇవ్వబడును</li>
+           <li>పెన్నెండు నెలలు నిరంతరాయంగా ఉద్యోగం చేసినవారికి 15,000/- రూపాయిలు బోనస్ ఇవ్వబడును 3,000/- వరకు ఇంక్రిమంట్ ఇవ్వబడును</li>
+           <li>నిరంతరాయంగా ఆరు నెలలు మించి పని చేసిన ఉద్యోగికి ఇంటికి వెళ్ళుటకు చార్జీలు ఇవ్వబడును</li>
+           <li>నిరంతరాయంగా ఒక సమవస్త్సరం చేసినవారికి తదుపరి నెల నుండి 1,000/- నుండి 3,000/- వరకు జీతం పెంచబడును</li>
+        </ol>
+        <h4>ఉద్యోగి అంగీకార విభాగం</h4>
+        <p>పైన తెలపిన సూచనలను శ్రద్దగా చదివి / విని అర్ధం చేసుకుని మనస్పూర్తిగా అంగీకరిస్తూ పూర్తి బాధ్యతగా ఉంటానని హామీ ఇస్తున్నాను.</p>
+<div class="p-3">
+<br><br>
+  <div class="fot">
+    <div>
+      <p class="mb-0"><strong>ఉద్యోగి సంతకం</strong></p>
+      <p class="mb-0">తేది: ________________</p>
     </div>
-    <div class="footer"><div><strong>Doc Ref:</strong> JC-HR-OFF-TE</div></div>`
+    <div>
+      <p class="mb-0"><strong>Authorized Signatory</strong></p>
+      <p class="mb-0">JenCeo Home Care Services</p>
+    </div>
+  </div>
+  <br><br><br>
+  <p>ఇది ఉద్యోగి మరియు JenCeo Homecare మధ్య ఉన్న ఒక అధికారిక ఒప్పంద పత్రం. ఈ పత్రం ఉద్యోగ నిబంధనలు మరియు షరతులపై స్పష్టత, వృత్తిపరమైన దృక్పథం, మరియు పరస్పర అవగాహనను నిర్ధారిస్తుంది</p>
+</div>
+      </div>
+      <br><br>
+   
+    </div>
+    <div class="footer">
+      <div><strong>Doc Ref:</strong> JC-HR-02 | Revision: 1 | Date: 1st May 2025 | Page 1 of 1 </div>
+    </div>`
   );
 
 const htmlOffHin = (data) =>
   buildTemplate(
     "ऑफ़र लेटर — हिंदी",
-    "कर्मचारी विवरण सहित ऑफर लेटर।",
+    "H.R Department (Reg No: SEA/HYD/ALO/26/1040178/2025)",
     data,
     `<div class="section">
       <div class="hd">ऑफ़र विवरण</div>

@@ -168,6 +168,8 @@ form {
 }
 
 .hospitalForm {
+    z-index: 100 !important;
+
     .wb-card {
         max-width: 500px;
     }

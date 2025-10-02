@@ -203,7 +203,7 @@ export default function PettyCashDeleteReport({ currentUser = "Admin" }) {
                 {years.map((y) => (
                     <Tab eventKey={y} title={`${y}`} key={y}>
                         {/* Month buttons */}
-                        <div className="mb-3">
+                        <div className="mb-3 mt-3">
                             <div className="d-flex gap-2 flex-wrap">
                                 {monthsList.map((m) => (
                                     <button key={m} className={`btn btn-sm ${activeMonth === m ? "btn-primary" : "btn-outline-info"}`} onClick={() => { setActiveMonth(m); setCurrentPage(1); }}>

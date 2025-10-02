@@ -152,7 +152,7 @@ const DeletedEnquiriesDisplay = () => {
           <p className="mt-2">Loading deleted enquiries...</p>
         </div>
       ) : deletedEnquiries.length === 0 ? (
-        <div className="alert alert-info text-center">
+        <div className="alert alert-info text-center text-white">
           <h5>No deleted enquiries found</h5>
         </div>
       ) : (

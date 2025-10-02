@@ -5,20 +5,31 @@ import TableInvestment from '../components/Investments/TableInvestment';
 
 
 
+
 export default function Investments() {
+  const [showInvestModal, setShowInvestModal] = useState(false);
 
 
   return (
     <div className="layout-body">
       <div className="investments">
-        <div className="row">
-          <div className="col-md-4">
-            <h4>Add Investment Details</h4>
-            <InvestForm />
+          <div className="m-auto text-center">
+            <button className="btn btn-warning" onClick={() => setShowInvestModal(true)}>
+              + New Investment
+            </button>
+            <InvestForm
+              show={showInvestModal}
+              onClose={() => setShowInvestModal(false)}
+              title="Add New Investment"
+              currentUser="Admin"
+            />
           </div>
-          
-          <div className="col-md-8">
-            <h4>All Investment Details</h4>
+          <hr></hr>
+
+        <div className="row">
+
+
+          <div className="col-md-12">
             <TableInvestment />
           </div>
         </div>

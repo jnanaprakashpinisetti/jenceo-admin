@@ -513,11 +513,11 @@ export default function PettyCashReport({ currentUser = "Admin", currentUserRole
             <div className="mb-3">
               <div className="d-flex gap-2 flex-wrap">
                 {monthsList.map((m) => (
-                  <button key={m} className={`btn btn-sm ${activeMonth === m ? "btn-primary" : "btn-outline-secondary"}`} onClick={() => { setActiveMonth(m); setCurrentPage(1); }} title={`Records: ${monthCountsForYear[m] || 0}`}>
+                  <button key={m} className={`btn btn-sm ${activeMonth === m ? "btn-primary" : "btn-outline-info"}`} onClick={() => { setActiveMonth(m); setCurrentPage(1); }} title={`Records: ${monthCountsForYear[m] || 0}`}>
                     {m} <small className="opacity-75">({monthCountsForYear[m] || 0})</small>
                   </button>
                 ))}
-                <button className={`btn btn-sm ${activeMonth === "" ? "btn-primary" : "btn-outline-secondary"}`} onClick={() => { setActiveMonth(""); setCurrentPage(1); }}>
+                <button className={`btn btn-sm ${activeMonth === "" ? "btn-primary" : "btn-outline-info"}`} onClick={() => { setActiveMonth(""); setCurrentPage(1); }}>
                   All months <small className="opacity-75">({recordsForYearMonth.length})</small>
                 </button>
               </div>

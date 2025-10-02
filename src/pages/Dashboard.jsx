@@ -8,6 +8,8 @@ import StaffSalaryCard from '../components/DashBoard/StaffSalaryCard';
 import AssetsCard from '../components/DashBoard/AssetsCard';
 import ResultsCard from '../components/DashBoard/ResultsCard';
 import ResultsGrafCard from '../components/DashBoard/ResultsGrafCard';
+import EnquiryCard from '../components/DashBoard/EnquiryCard';
+
 
 
 
@@ -43,6 +45,9 @@ export default function Dashboard() {
           </div>
           <div className="col-md-4">
             <ResultsGrafCard />
+          </div>
+          <div className="col-md-4">
+            <EnquiryCard />
           </div>
         </div>
       </div>

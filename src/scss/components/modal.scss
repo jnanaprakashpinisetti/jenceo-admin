@@ -697,3 +697,17 @@
   .wb-right { padding-left: 0; }
   .wb-modal-card { width: min(960px, 98vw); }
 }
+
+.EnquiryDetails {
+    .col-md-6 {
+     div {
+        border: 1px solid #ccc;
+        border-radius: 10px;
+        margin-bottom: 15px;
+        align-items: center;
+        display: flex;
+        align-items: center;
+        padding: 15px 20px;
+    }
+    }
+}

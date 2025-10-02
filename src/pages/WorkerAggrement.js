@@ -342,12 +342,17 @@ const htmlFullData = (data) => {
         </div>
       </div>
     </div>
-
+   <br>
+    <br>
     <div class="decleration">
       <p><strong>Declaration:</strong> I hereby declare that the information provided in this document regarding my personal information, experience, skills, health reports and qualifications is true, complete, and accurate to the best of my knowledge. I understand that any misrepresentation or omission of facts may result in legal consequences or disqualification from consideration for employment.</p>
       <p style="text-align:right; font-style:italic; font-weight:700; margin-top:20px">Signature of the Employee</p>
     </div>
-
+ 
+    <br>
+    <br>
+    <br>
+    <br>
     <div class="footer">
       <div><strong>Doc Ref:</strong> JC-HR-01&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Revision: 1&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Date: 1st May 2025</div>
       <div>Page 2 of 2</div>
@@ -442,7 +447,10 @@ const buildTemplate = (heading, sub, data, trailingContentHTML) => {
         <div class="grid-2">
           <div>
             ${addrKV("Full Name", nameText)}
-            <div class="kv-row alt"><div class="kv-label">Gender</div><div class="kv-colon">:</div><div class="kv-value">${gender}</div></div>
+            <div class="kv-row alt">
+            <div class="kv-label">Gender</div>
+            <div class="kv-colon">:</div>
+            <div class="kv-value">${gender}</div></div>
           </div>
           <div>
             ${addrKV("Aadhar No", data.aadharNo)}
@@ -781,6 +789,396 @@ const htmlOffHin = (data) =>
   );
 
 /* =============================
+ Agg/Off — Tamil (Tem)
+ ============================= */
+const htmlAggTem = (data) =>
+  buildTemplate(
+    "பணியாளர் ஒப்பந்தம்",
+    "மனிதவளத் துறை (Reg No: SEA/HYD/ALO/26/1040178/2025)",
+    data,
+    `<div class="section">
+  <div class="hd">1. விதிமுறைகள் & நிபந்தனைகள்</div>
+  <div class="bd">
+    <div class="prose">
+      <p>இந்த ஒப்பந்தம் JenCeo Home Care Services மற்றும் <strong>${fullName(data)}</strong> (உழைப்பாளர் ஐடி:
+        <strong>${safe(data.idNo || data.employeeId)}</strong>) ஆகியோருக்கிடையே <strong>${safe(data.primarySkill)}</strong> பதவிக்கான வேலைவாய்ப்பிற்காக மேற்கொள்ளப்படுகிறது.</p>
+      <p>நான், திரு/திருமதி/செல்வி <strong>${fullName(data)}</strong>, விருப்பத்துடன் JenCeo Homecare நிறுவனத்தில்
+        <strong>${safe(data.primarySkill)}</strong> ஆக இணைகிறேன் என்பதை உறுதிப்படுத்துகிறேன். நிறுவன விதிமுறைகளையும் ஒழுங்குகளையும் கடைப்பிடிப்பேன்;
+        ஒதுக்கப்பட்ட இடத்தில் முழு நேர்மை, தீர்க்கத் தன்மை, சேவை மனப்பான்மை மற்றும் ஒழுக்கத்துடன் பணியாற்றுவேன். நன் மனச்சாட்சி முன்பும் இறைவன் சாட்சி முன்பும்
+        100% நியாயத்துடன் என் பொறுப்புகளை நிறைவேற்றுவேன் என்று உறுதியளிக்கிறேன்.</p>
+      <ol>
+        <li>ஒவ்வொரு பணியாளரின் சம்பளம் 30 வேலை நாட்கள் முடிந்தபின் வழங்கப்படும். இந்த காலத்தில் முன்னெச்சரிக்கை/அட்வான்ஸ் வழங்கப்படாது.</li>
+        <li>நிறுவனம் ஒதுக்கிய பணிகளை மட்டும் செய்ய வேண்டும். தனி லாபத்திற்காக வாடிக்கையாளர்களுடன் தனிப்பட்ட ஒப்பந்தங்கள் செய்யக்கூடாது.</li>
+        <li>வாடிக்கையாளரின் தனிப்பட்ட/குடும்ப/மத/நெறி வழக்கங்களுக்கு இடையூறு ஏற்படும் வகையில் நடந்து கொள்ளக்கூடாது.</li>
+        <li>வாடிக்கையாளரின் பணம், தங்கம், மொபைல், லாப்டாப் உள்ளிட்ட எந்தவொரு மதிப்புள்ள பொருளையும் தொடவோ எடுக்கவோ கூடாது.</li>
+        <li>எப்போதும் மரியாதையுடனும் பணிவுடனும் செயல்பட வேண்டும்.</li>
+        <li>தகாத நடத்தை அல்லது திருட்டில் ஈடுபட்டால் சட்ட நடவடிக்கை எடுக்கப்படும்; இத்தகைய வழக்குகளில் நிறுவனம் பொறுப்பேற்காது.</li>
+        <li>ராஜினாமா செய்ய விரும்பினால் குறைந்தது 5 நாட்களுக்கு முன் நிறுவனத்திற்கு தெரியப்படுத்த வேண்டும்.</li>
+        <li>எந்த சூழலிலும் உரிய அனுமதி இன்றி கடமை/நோயாளியை விட்டு வெளியேறக்கூடாது.</li>
+        <li>நோயாளி மரணமடைந்தால் உடனடியாக அலுவலகத்திற்கு தகவல் தர வேண்டும்.</li>
+        <li>வாடிக்கையாளர்களிடமிருந்து புகார் வந்தாலோ, கடமையை சரிவர செய்யாதாலோ அல்லது தகாத நடத்தை இருந்தாலோ உடனடியாக பணிநீக்கம் செய்யப்படும்.</li>
+      </ol>
+      <h4>2. பணியாளர் உறுதிமொழி</h4>
+      <p>மேலே கூறிய விதிமுறைகள் மற்றும் நிபந்தனைகளை கவனமாகப் படித்து/கேட்டு முழுமையாகப் புரிந்துள்ளேன். அவற்றை கடைப்பிடிக்கவும்,
+        என் செயல்களுக்கு முழுப் பொறுப்பும் ஏற்கவும் சம்மதிக்கிறேன். நிறுவன விதிகளை மீறினால் மேற்கொள்ளப்படும் எந்த ஒழுங்கு/சட்ட நடவடிக்கையையும் இணங்குவேன்.</p>
+      <p>இந்த ஒப்பந்தத்தில் கையொப்பமிடுவதன் மூலம், மேற்கண்ட நிபந்தனைகளை அமல்படுத்த JenCeo நிறுவனத்திற்கு தேவையான அனைத்து உரிமைகளையும் அதிகாரங்களையும் வழங்குகிறேன்.</p>
+    </div>
+  </div>
+</div>
+<div class="p-3">
+  <div class="fot">
+    <div>
+      <p class="mb-0"><strong>பணியாளர் கையொப்பம்</strong></p>
+      <p class="mb-0">தேதி: ________________</p>
+    </div>
+    <div>
+      <p class="mb-0"><strong>அங்கீகரிக்கப்பட்ட கையொப்பம்</strong></p>
+      <p class="mb-0">JenCeo Home Care Services</p>
+    </div>
+  </div>
+</div>
+<div class="footer">
+  <div><strong>Doc Ref:</strong> JC-HR-02 | Revision: 1 | Date: 1st May 2025 | Page 1 of 1 </div>
+</div>`
+  );
+
+const htmlOffTem = (data) =>
+  buildTemplate(
+    "நியமனக் கடிதம்",
+    "மனிதவளத் துறை (Reg No: SEA/HYD/ALO/26/1040178/2025)",
+    data,
+    `<div class="section">
+      <div class="hd">Offer விவரங்கள்</div>
+      <div class="bd prose">
+        <h5> அய்யா / அம்மையார் / செல்வி <strong>${fullName(data)}</strong>,  
+        JenCeo Homecare நிறுவனத்தில் <strong>${safe(data.primarySkill)}</strong> பதவியை வழங்குவதில் மகிழ்ச்சி அடைகிறோம். சம்பளம் மற்றும் சலுகைகள் HR உறுதிப்படுத்தலின் படி இருக்கும்.</h5>
+        <p>சேரும் தேதி: <strong>${today}</strong></p>
+        <p>சம்பளம்: <strong>${safe(data.basicSalary)}</strong> <small> (எழுத்தில்: ${numberToWords(Number(data.basicSalary))} Only)</small></p>
+        <h4>பணியாளர் நலன்</h4>
+        <ol>
+          <li>தொடர்ச்சியாக 6 மாத சேவையை நிறைவு செய்த பணியாளருக்கு ₹6,000/- போனஸ் வழங்கப்படும்.</li>
+          <li>12 மாத சேவையை நிறைவு செய்த பணியாளருக்கு ₹15,000/- போனஸ் மற்றும் உயர்வு வழங்கப்படும்.</li>
+          <li>6 மாத சேவை நிறைவு செய்தவருக்கு வீட்டிற்கு செல்வதற்கான பயணச் செலவு வழங்கப்படும்.</li>
+          <li>ஒரு வருட சேவை நிறைவிற்குப் பிறகு அடுத்த மாதம் முதல் ₹1,000/- முதல் ₹3,000/- வரை சம்பள உயர்வு வழங்கப்படும்.</li>
+        </ol>
+        <h4>பணியாளர் உறுதி</h4>
+        <p>மேலே உள்ள வழிகாட்டுதல்களை கவனமாகப் படித்து/கேட்டு புரிந்துள்ளேன். இவற்றை முழுமையாக ஏற்றுக்கொள்கிறேன் மற்றும் விதிமுறைகளைக் கடைப்பிடிப்பதற்குப் பொறுப்பேற்கிறேன்.</p>
+<div class="p-3">
+<br><br>
+  <div class="fot">
+    <div>
+      <p class="mb-0"><strong>பணியாளர் கையொப்பம்</strong></p>
+      <p class="mb-0">தேதி: ________________</p>
+    </div>
+    <div>
+      <p class="mb-0"><strong>அங்கீகரிக்கப்பட்ட கையொப்பம்</strong></p>
+      <p class="mb-0">JenCeo Home Care Services</p>
+    </div>
+  </div>
+  <br><br><br>
+  <p>இந்த ஆவணம் பணியாளரும் JenCeo Homecare நிறுவனமும் இடையிலான ஒரு முறையான ஒப்பந்தமாகும்; இது தெளிவு, தொழில்முறைத் தன்மை மற்றும் வேலை நிபந்தனைகள் குறித்த பரஸ்பர புரிதலை உறுதிப்படுத்துகிறது.</p>
+</div>
+      </div>
+      <br><br>
+   
+    </div>
+    <div class="footer">
+      <div><strong>Doc Ref:</strong> JC-HR-02 | Revision: 1 | Date: 1st May 2025 | Page 1 of 1 </div>
+    </div>`
+  );
+
+/* =============================
+   Agg/Off — Kannada (Kan)
+   ============================= */
+const htmlAggKan = (data) =>
+  buildTemplate(
+    "ಕಾರ್ಮಿಕ ಒಪ್ಪಂದ",
+    "ಮಾನವ ಸಂಪನ್ಮೂಲ ವಿಭಾಗ (Reg No: SEA/HYD/ALO/26/1040178/2025)",
+    data,
+    `<div class="section">
+  <div class="hd">1. ನಿಯಮಗಳು ಮತ್ತು ಷರತ್ತುಗಳು</div>
+  <div class="bd">
+    <div class="prose">
+      <p>ಈ ಒಪ್ಪಂದವು JenCeo Home Care Services ಮತ್ತು <strong>${fullName(data)}</strong> (Employee ID:
+        <strong>${safe(data.idNo || data.employeeId)}</strong>) ಇವರ ನಡುವೆ <strong>${safe(data.primarySkill)}</strong> ಹುದ್ದೆಗೆ ಸಂಬಂಧಿಸಿದೆ.</p>
+      <p>ನಾನು, ಶ್ರೀ/ಶ್ರೀಮತಿ/ಕುಮಾರಿ <strong>${fullName(data)}</strong>, ಸ್ವಯಂ ಪ್ರೇರಣೆಯಿಂದ JenCeo Homecare ಗೆ
+        <strong>${safe(data.primarySkill)}</strong> ಆಗ ಸೇರಿದ್ದೇನೆ. ಸಂಸ್ಥೆಯ ನಿಯಮಾವಳಿ ಪಾಲಿಸುತ್ತೇನೆ; ನಿಯೋಜಿತ ಸ್ಥಳದಲ್ಲಿ ಪ್ರಾಮಾಣಿಕತೆ,
+        ಸಮರ್ಪಣೆ ಮತ್ತು ಸೇವಾ ಮನೋಭಾವದಿಂದ 100% ನ್ಯಾಯದೊಂದಿಗೆ ಕರ್ತವ್ಯ ನಿರ್ವಹಿಸುತ್ತೇನೆ ಎಂದು ಭರವಸೆ ನೀಡುತ್ತೇನೆ.</p>
+      <ol>
+        <li>ಪ್ರತಿ ಉದ್ಯೋಗಿಯ ವೇತನವನ್ನು 30 ಕೆಲಸದ ದಿನಗಳು ಪೂರ್ಣಗೊಂಡ ನಂತರ ನೀಡಲಾಗುವುದು. ಈ ಅವಧಿಯಲ್ಲಿ ಮುಂಗಡ ನೀಡಲಾಗುವುದಿಲ್ಲ.</li>
+        <li>ಸಂಸ್ಥೆ ನೀಡಿದ ಕರ್ತವ್ಯಗಳನ್ನು ಮಾತ್ರ ನಿರ್ವಹಿಸಬೇಕು; ವೈಯಕ್ತಿಕ ಲಾಭಕ್ಕಾಗಿ ಗ್ರಾಹಕರೊಂದಿಗೆ ಖಾಸಗಿ ಒಪ್ಪಂದ ಮಾಡಿಕೊಳ್ಳಬಾರದು.</li>
+        <li>ಗ್ರಾಹಕರ ವೈಯಕ್ತಿಕ/ಕುಟುಂಬ/ಧಾರ್ಮಿಕ/ಸಾಂಸ್ಕೃತಿಕ ಆಚರಣೆಗಳಿಗೆ ವ್ಯತ್ಯಯ ಉಂಟುಮಾಡಬಾರದು.</li>
+        <li>ಗ್ರಾಹಕರ ಹಣ/ಬಂಗಾರ/ಮೊಬೈಲ್/ಲ್ಯಾಪ್‌ಟಾಪ್ ಮುಂತಾದ ಬೆಲೆಬಾಳುವ ವಸ್ತುಗಳನ್ನು ಮುಟ್ಟಬಾರದು/ತೆಗೆದುಕೊಳ್ಳಬಾರದು.</li>
+        <li>ಯಾವಾಗಲೂ ಗೌರವ ಮತ್ತು ಸ್ನೇಹಪೂರ್ವಕವಾಗಿ ವರ್ತಿಸಬೇಕು.</li>
+        <li>ಅಸಭ್ಯ ವರ್ತನೆ/ಕಳ್ಳತನ ಕಂಡುಬಂದಲ್ಲಿ ಕಾನೂನು ಕ್ರಮ ಕೈಗೊಳ್ಳಲಾಗುತ್ತದೆ; ಅಂತಹ ಸಂದರ್ಭಗಳಲ್ಲಿ ಕಂಪನಿ ಜವಾಬ್ದಾರಿಯಾಗಿರುವುದಿಲ್ಲ.</li>
+        <li>ರಾಜೀನಾಮೆ ಕೊಡಲು ಕನಿಷ್ಠ 5 ದಿನಗಳ ಮುಂಚಿತವಾಗಿ ಸಂಸ್ಥೆಗೆ ತಿಳಿಸಬೇಕು.</li>
+        <li>ಯಾವುದೇ ಸಂದರ್ಭದಲ್ಲಿ ಸರಿಯಾದ ಅನುಮತಿ ಇಲ್ಲದೆ ಕರ್ತವ್ಯ/ರೋಗಿಯನ್ನು ಬಿಟ್ಟು ಹೋಗಬಾರದು.</li>
+        <li>ರೋಗಿ ಮೃತಪಟ್ಟರೆ ತಕ್ಷಣ ಕಛೇರಿಗೆ ತಿಳಿಸಬೇಕು.</li>
+        <li>ಗ್ರಾಹಕರಿಂದ ದೂರಣೆಗಳು ಬಂದಲ್ಲಿ ಅಥವಾ ಕರ್ತವ್ಯ ನಿರ್ವಹಣೆ ಸರಿಯಾಗಿರದಿದ್ದರೆ ತಕ್ಷಣವೇ ಸೇವೆಯಿಂದ ತೆಗೆಯಲಾಗುತ್ತದೆ.</li>
+      </ol>
+      <h4>2. ಉದ್ಯೋಗಿ ಘೋಷಣೆ</h4>
+      <p>ಮೇಲಿನ ನಿಯಮಗಳು ಮತ್ತು ಷರತ್ತುಗಳನ್ನು ತಿಳಿದು, ಸಂಪೂರ್ಣವಾಗಿ ಒಪ್ಪುತ್ತೇನೆ. ಅವುಗಳನ್ನು ಪಾಲಿಸಲು ಮತ್ತು ನನ್ನ ಕ್ರಿಯೆಗಳ ಹೊಣೆಗಾರಿಕೆಯನ್ನು ಸ್ವೀಕರಿಸುತ್ತೇನೆ.
+        ಕಂಪನಿಯ ನಿಯಮ ಉಲ್ಲಂಘನೆ ಮಾಡಿದಲ್ಲಿ ಕೈಗೊಳ್ಳುವ ಯಾವುದೇ ಕ್ರಮಗಳಿಗೆ ನಾನು ಅನುಸರಿಸುತ್ತೇನೆ.</p>
+      <p>ಈ ಒಪ್ಪಂದಕ್ಕೆ ಸಹಿ ಮಾಡುವುದರ ಮೂಲಕ, ಮೇಲ್ಕಂಡ ಷರತ್ತುಗಳನ್ನು ಜಾರಿಗೊಳಿಸಲು JenCeo ಗೆ ಅಗತ್ಯವಾದ ಎಲ್ಲಾ ಹಕ್ಕುಗಳನ್ನು ನೀಡುತ್ತೇನೆ.</p>
+    </div>
+  </div>
+</div>
+<div class="p-3">
+  <div class="fot">
+    <div>
+      <p class="mb-0"><strong>ಉದ್ಯೋಗಿಯ ಸಹಿ</strong></p>
+      <p class="mb-0">ದಿನಾಂಕ: ________________</p>
+    </div>
+    <div>
+      <p class="mb-0"><strong>ಅಧಿಕೃತ ಸಹಿ</strong></p>
+      <p class="mb-0">JenCeo Home Care Services</p>
+    </div>
+  </div>
+</div>
+<div class="footer">
+  <div><strong>Doc Ref:</strong> JC-HR-02 | Revision: 1 | Date: 1st May 2025 | Page 1 of 1 </div>
+</div>`
+  );
+
+const htmlOffKan = (data) =>
+  buildTemplate(
+    "ನೇಮಕ ಪತ್ರ",
+    "ಮಾನವ ಸಂಪನ್ಮೂಲ ವಿಭಾಗ (Reg No: SEA/HYD/ALO/26/1040178/2025)",
+    data,
+    `<div class="section">
+      <div class="hd">ಆಫರ್ ವಿವರಗಳು</div>
+      <div class="bd prose">
+        <h5> ಶ್ರೀ/ಶ್ರೀಮತಿ/ಕುಮಾರಿ <strong>${fullName(data)}</strong> ಅವರೇ, JenCeo Homecare ನಲ್ಲಿ <strong>${safe(data.primarySkill)}</strong> ಹುದ್ದೆಯನ್ನು ನೀಡುವುದರಲ್ಲಿ ನಮಗೆ ಸಂತೋಷವಾಗಿದೆ. ವೇತನ ಮತ್ತು ಸೌಲಭ್ಯಗಳು HR ದೃಢೀಕರಣದಂತೆ ಇರುತ್ತವೆ.</h5>
+        <p>ಜೋಯಿನ್ ದಿನಾಂಕ: <strong>${today}</strong></p>
+        <p>ವೇತನ: <strong>${safe(data.basicSalary)}</strong> <small> (ಪದಗಳಲ್ಲಿ: ${numberToWords(Number(data.basicSalary))} Only)</small></p>
+        <h4>ಉದ್ಯೋಗಿ ಪ್ರಯೋಜನಗಳು</h4>
+        <ol>
+          <li>6 ತಿಂಗಳು ನಿರಂತರ ಸೇವೆ ಮಾಡಿದವರಿಗೆ ₹6,000/- ಬೋನಸ್.</li>
+          <li>12 ತಿಂಗಳು ಸೇವೆ ಮಾಡಿದವರಿಗೆ ₹15,000/- ಬೋನಸ್ ಮತ್ತು ವೇತನವೃದ್ಧಿ.</li>
+          <li>6 ತಿಂಗಳು ಸೇವೆಯ ನಂತರ ಮನೆಗೆ ಭೇಟಿ ನೀಡಲು ಪ್ರಯಾಣ ವೆಚ್ಚ.</li>
+          <li>ಒಂದು ವರ್ಷದ ಸೇವೆಯ ನಂತರ ಮುಂದಿನ ತಿಂಗಳಿಂದ ₹1,000/- ರಿಂದ ₹3,000/- ವೇತನವೃದ್ಧಿ.</li>
+        </ol>
+        <h4>ಉದ್ಯೋಗಿ ದೃಢೀಕರಣ</h4>
+        <p>ನಾನು ಮೇಲಿನ ಸೂಚನೆಗಳನ್ನು ಓದಿ/ಕೆಳಗಿ ಅರ್ಥಮಾಡಿಕೊಂಡಿದ್ದೇನೆ. ಅವನ್ನು ಪಾಲಿಸಲು ಮತ್ತು ಹೊಣೆ ಹೊರುವುದಾಗಿ ಒಪ್ಪುತ್ತೇನೆ.</p>
+<div class="p-3">
+<br><br>
+  <div class="fot">
+    <div>
+      <p class="mb-0"><strong>ಉದ್ಯೋಗಿಯ ಸಹಿ</strong></p>
+      <p class="mb-0">ದಿನಾಂಕ: ________________</p>
+    </div>
+    <div>
+      <p class="mb-0"><strong>ಅಧಿಕೃತ ಸಹಿ</strong></p>
+      <p class="mb-0">JenCeo Home Care Services</p>
+    </div>
+  </div>
+  <br><br><br>
+  <p>ಈ ದಾಖಲೆ ಉದ್ಯೋಗಿ ಮತ್ತು JenCeo Homecare ನಡುವಿನ ಅಧಿಕೃತ ಒಪ್ಪಂದವಾಗಿದ್ದು, ಸ್ಪಷ್ಟತೆ, ವೃತ್ತಿಪರತೆ ಮತ್ತು ಉದ್ಯೋಗದ ನಿಯಮ-ಷರತ್ತುಗಳ ಪರಸ್ಪರ ಅರ್ಥೈಸಿಕೆಯನ್ನು ಖಚಿತಪಡಿಸುತ್ತದೆ.</p>
+</div>
+      </div>
+      <br><br>
+   
+    </div>
+    <div class="footer">
+      <div><strong>Doc Ref:</strong> JC-HR-02 | Revision: 1 | Date: 1st May 2025 | Page 1 of 1 </div>
+    </div>`
+  );
+
+/* =============================
+   Agg/Off — Bengali (Ben)
+   ============================= */
+const htmlAggBen = (data) =>
+  buildTemplate(
+    "কর্মচারী চুক্তিপত্র",
+    "এইচ.আর. বিভাগ (Reg No: SEA/HYD/ALO/26/1040178/2025)",
+    data,
+    `<div class="section">
+  <div class="hd">১. শর্তাবলী ও বিধি</div>
+  <div class="bd">
+    <div class="prose">
+      <p>এই চুক্তি JenCeo Home Care Services এবং <strong>${fullName(data)}</strong> (কর্মী আইডি:
+        <strong>${safe(data.idNo || data.employeeId)}</strong>)-এর মধ্যে <strong>${safe(data.primarySkill)}</strong> পদে নিয়োগের জন্য সম্পাদিত হলো।</p>
+      <p>আমি, জনাব/জনাবা/কুমারী <strong>${fullName(data)}</strong>, স্বেচ্ছায় JenCeo Homecare-এ
+        <strong>${safe(data.primarySkill)}</strong> হিসেবে যোগদান করছি। প্রতিষ্ঠানের সকল নিয়ম-কানুন মেনে দায়িত্বশীলভাবে, সততা
+        ও নিষ্ঠার সাথে কর্মসম্পাদন করবো—বিবেক ও সর্বশক্তিমানকে সাক্ষী রেখে ১০০% ন্যায়নিষ্ঠার প্রতিশ্রুতি দিচ্ছি।</p>
+      <ol>
+        <li>৩০ কার্যদিবস পূর্ণ হওয়ার পরই বেতন প্রদান করা হবে; এর আগে কোনো অগ্রিম প্রদান করা হবে না।</li>
+        <li>প্রতিষ্ঠান কর্তৃক নির্ধারিত কাজ ব্যতীত ব্যক্তিগত লাভের জন্য ক্লায়েন্টের সঙ্গে কোনও ব্যক্তিগত সমঝোতা করা যাবে না।</li>
+        <li>ক্লায়েন্টের ব্যক্তিগত/পারিবারিক/ধর্মীয়/সাংস্কৃতিক আচরণে হস্তক্ষেপ করা যাবে না।</li>
+        <li>ক্লায়েন্টের টাকা, সোনা, মোবাইল, ল্যাপটপ ইত্যাদি মূল্যবান জিনিস স্পর্শ/গ্রহণ করা সম্পূর্ণ নিষিদ্ধ।</li>
+        <li>সবসময় ভদ্রতা ও সম্মান বজায় রাখতে হবে।</li>
+        <li>অশোভন আচরণ বা চুরির প্রমাণ পাওয়া গেলে আইনানুগ ব্যবস্থা নেওয়া হবে; এ ক্ষেত্রে কোম্পানি দায়ী থাকবে না।</li>
+        <li>পদত্যাগ করতে চাইলে কমপক্ষে ৫ দিন আগে প্রতিষ্ঠানকে জানাতে হবে।</li>
+        <li>কোনও পরিস্থিতিতেই যথাযথ অনুমতি ছাড়া দায়িত্ব/রোগীকে ছেড়ে যাওয়া যাবে না।</li>
+        <li>রোগী মৃত্যুবরণ করলে বিলম্ব না করে অফিসে জানাতে হবে।</li>
+        <li>ক্লায়েন্টের অভিযোগ প্রাপ্ত হলে বা কাজ যথাযথভাবে না করলে, অথবা অশোভন আচরণ করলে, চাকরি তাৎক্ষণিকভাবে বাতিল করা হবে।</li>
+      </ol>
+      <h4>২. কর্মচারীর স্বীকৃতি</h4>
+      <p>উপরোক্ত শর্তাবলী ও বিধি মনোযোগসহকারে পড়ে/শুনে সম্পূর্ণরূপে বুঝেছি। এগুলো মেনে চলতে এবং নিজের কার্যকলাপের সম্পূর্ণ দায়িত্ব নিতে সম্মত।</p>
+      <p>এই চুক্তিতে স্বাক্ষরের মাধ্যমে, উল্লিখিত শর্তাবলী কার্যকর করতে JenCeo-কে প্রয়োজনীয় সকল ক্ষমতা ও অধিকার প্রদান করছি।</p>
+    </div>
+  </div>
+</div>
+<div class="p-3">
+  <div class="fot">
+    <div>
+      <p class="mb-0"><strong>কর্মচারীর স্বাক্ষর</strong></p>
+      <p class="mb-0">তারিখ: ________________</p>
+    </div>
+    <div>
+      <p class="mb-0"><strong>অনুমোদিত স্বাক্ষরকারী</strong></p>
+      <p class="mb-0">JenCeo Home Care Services</p>
+    </div>
+  </div>
+</div>
+<div class="footer">
+  <div><strong>Doc Ref:</strong> JC-HR-02 | Revision: 1 | Date: 1st May 2025 | Page 1 of 1 </div>
+</div>`
+  );
+
+const htmlOffBen = (data) =>
+  buildTemplate(
+    "নিয়োগপত্র",
+    "এইচ.আর. বিভাগ (Reg No: SEA/HYD/ALO/26/1040178/2025)",
+    data,
+    `<div class="section">
+      <div class="hd">প্রস্তাবের বিবরণ</div>
+      <div class="bd prose">
+        <h5> জনাব / জনাবা / কুমারী <strong>${fullName(data)}</strong>, JenCeo Homecare-এ <strong>${safe(data.primarySkill)}</strong> পদে আপনাকে নিয়োগ দিতে পেরে আমরা আনন্দিত। বেতন ও সুবিধা HR-এর নিশ্চয়তা অনুযায়ী হবে।</h5>
+        <p>যোগদানের তারিখ: <strong>${today}</strong></p>
+        <p>বেতন: <strong>${safe(data.basicSalary)}</strong> <small> (কথায়: ${numberToWords(Number(data.basicSalary))} Only)</small></p>
+        <h4>কর্মচারী সুবিধাসমূহ</h4>
+        <ol>
+          <li>৬ মাস নিরবচ্ছিন্ন সেবার পর ₹6,000/- বোনাস।</li>
+          <li>১২ মাসের পরে ₹15,000/- বোনাস এবং ইনক্রিমেন্ট।</li>
+          <li>৬ মাসের পরে বাড়ি যাওয়ার জন্য যাতায়াত ব্যয়।</li>
+          <li>১ বছর পূর্ণ হলে পরের মাস থেকে ₹1,000/- থেকে ₹3,000/- পর্যন্ত বেতন বৃদ্ধি।</li>
+        </ol>
+        <h4>কর্মচারীর স্বীকৃতি</h4>
+        <p>উপরে বর্ণিত নির্দেশনা মনোযোগ দিয়ে পড়ে/শুনে বুঝেছি এবং সেগুলো মেনে চলতে সম্মত।</p>
+<div class="p-3">
+<br><br>
+  <div class="fot">
+    <div>
+      <p class="mb-0"><strong>কর্মচারীর স্বাক্ষর</strong></p>
+      <p class="mb-0">তারিখ: ________________</p>
+    </div>
+    <div>
+      <p class="mb-0"><strong>অনুমোদিত স্বাক্ষরকারী</strong></p>
+      <p class="mb-0">JenCeo Home Care Services</p>
+    </div>
+  </div>
+  <br><br><br>
+  <p>এই নথিটি কর্মচারী এবং JenCeo Homecare-এর মধ্যে একটি আনুষ্ঠানিক চুক্তি হিসেবে বিবেচিত হবে, যা স্বচ্ছতা, পেশাদারিত্ব এবং চাকরির শর্তাবলী সম্পর্কে পারস্পরিক বোঝাপড়া নিশ্চিত করে।</p>
+</div>
+      </div>
+      <br><br>
+   
+    </div>
+    <div class="footer">
+      <div><strong>Doc Ref:</strong> JC-HR-02 | Revision: 1 | Date: 1st May 2025 | Page 1 of 1 </div>
+    </div>`
+  );
+
+/* =============================
+   Agg/Off — Urdu (Urd)  (RTL)
+   ============================= */
+const htmlAggUrd = (data) =>
+  buildTemplate(
+    "ملازم کا معاہدہ",
+    "محکمہ برائے انسانی وسائل (Reg No: SEA/HYD/ALO/26/1040178/2025)",
+    data,
+    `<div class="section">
+  <div class="hd" style="direction:rtl;text-align:right">۱۔ شرائط و ضوابط</div>
+  <div class="bd">
+    <div class="prose" style="direction:rtl;text-align:right">
+      <p>یہ معاہدہ JenCeo Home Care Services اور <strong>${fullName(data)}</strong> (ملازم آئی ڈی:
+        <strong>${safe(data.idNo || data.employeeId)}</strong>) کے درمیان <strong>${safe(data.primarySkill)}</strong> کی ملازمت کے لیے کیا جا رہا ہے۔</p>
+      <p>میں، جناب/محترمہ/کمہاری <strong>${fullName(data)}</strong>، بذاتِ خود JenCeo Homecare میں
+        <strong>${safe(data.primarySkill)}</strong> کے طور پر شامل ہوتا/ہوتی ہوں۔ میں ادارے کے قواعد و ضوابط پر مکمل طور پر عمل کرنے
+        اور مقررہ مقام پر دیانت داری، اخلاص اور خدمت کے جذبے کے ساتھ ۱۰۰٪ انصاف کے ساتھ فرائض انجام دینے کا عہد کرتا/کرتی ہوں۔</p>
+      <ol>
+        <li>ہر ملازم کی تنخواہ 30 ورکنگ ڈیز مکمل ہونے کے بعد ادا کی جائے گی؛ اس دوران کسی قسم کی ایڈوانس ادائیگی نہیں ہوگی۔</li>
+        <li>صرف ادارے کی جانب سے تفویض کردہ ذمہ داریاں انجام دی جائیں؛ ذاتی فائدے کے لیے کلائنٹس سے کوئی نجی معاہدہ نہیں ہوگا۔</li>
+        <li>کلائنٹ کے ذاتی، خاندانی، مذہبی یا ثقافتی امور میں مداخلت سے گریز کیا جائے۔</li>
+        <li>کلائنٹ کی رقم، سونا، موبائل، لیپ ٹاپ یا کوئی قیمتی شے چھونا/لینا سخت منع ہے۔</li>
+        <li>ہمیشہ احترام اور شائستگی کے ساتھ پیش آیا جائے۔</li>
+        <li>غلط رویّہ یا چوری کی صورت میں قانونی کارروائی کی جائے گی؛ اس صورت میں کمپنی ذمہ دار نہیں ہوگی۔</li>
+        <li>استعفیٰ دینا ہو تو کم از کم 5 دن پہلے ادارے کو اطلاع دینا ضروری ہے۔</li>
+        <li>کسی بھی صورت میں مناسب اجازت کے بغیر ڈیوٹی/مریض کو چھوڑ کر جانا منع ہے۔</li>
+        <li>اگر مریض کا انتقال ہو جائے تو فوراً دفتر کو اطلاع دی جائے۔</li>
+        <li>کلائنٹ کی شکایات یا فرائض میں کوتاہی/نامناسب رویّہ کی صورت میں ملازمت فوری طور پر ختم کی جا سکتی ہے۔</li>
+      </ol>
+      <h4>۲۔ ملازم کی توثیق</h4>
+      <p>میں نے اوپر درج شرائط و ضوابط بغور پڑھ/سن کر مکمل طور پر سمجھ لیے ہیں اور ان پر عمل کرنے اور اپنے افعال کی مکمل ذمہ داری قبول کرتا/کرتی ہوں۔</p>
+      <p>اس معاہدے پر دستخط کر کے میں تصدیق کرتا/کرتی ہوں کہ JenCeo کو ان شرائط کے نفاذ کے لیے تمام ضروری اختیارات حاصل ہوں گے۔</p>
+    </div>
+  </div>
+</div>
+<div class="p-3" style="direction:rtl;text-align:right">
+  <div class="fot" style="flex-direction:row-reverse">
+    <div>
+      <p class="mb-0"><strong>ملازم کے دستخط</strong></p>
+      <p class="mb-0">تاریخ: ________________</p>
+    </div>
+    <div>
+      <p class="mb-0"><strong>مجاز دستخط کنندہ</strong></p>
+      <p class="mb-0">JenCeo Home Care Services</p>
+    </div>
+  </div>
+</div>
+<div class="footer">
+  <div><strong>Doc Ref:</strong> JC-HR-02 | Revision: 1 | Date: 1st May 2025 | Page 1 of 1 </div>
+</div>`
+  );
+
+const htmlOffUrd = (data) =>
+  buildTemplate(
+    "تقرری نامہ",
+    "محکمہ برائے انسانی وسائل (Reg No: SEA/HYD/ALO/26/1040178/2025)",
+    data,
+    `<div class="section">
+      <div class="hd" style="direction:rtl;text-align:right">آفر کی تفصیلات</div>
+      <div class="bd prose" style="direction:rtl;text-align:right">
+        <h5> جناب / محترمہ / کمہاری <strong>${fullName(data)}</strong>،  
+        ہمیں خوشی ہے کہ JenCeo Homecare میں آپ کو <strong>${safe(data.primarySkill)}</strong> کے عہدے کی پیشکش کی جا رہی ہے۔ معاوضہ HR کی توثیق کے مطابق ہوگا۔</h5>
+        <p>شمولیتی تاریخ: <strong>${today}</strong></p>
+        <p>تنخواہ: <strong>${safe(data.basicSalary)}</strong> <small> (الفاظ میں: ${numberToWords(Number(data.basicSalary))} Only)</small></p>
+        <h4>ملازم کے فوائد</h4>
+        <ol>
+          <li>مسلسل 6 ماہ کی خدمت پر ₹6,000/- بونس۔</li>
+          <li>12 ماہ مکمل ہونے پر ₹15,000/- بونس اور انکریمنٹ۔</li>
+          <li>6 ماہ مکمل کرنے پر گھر آنے جانے کے سفری اخراجات۔</li>
+          <li>ایک سال مکمل ہونے پر اگلے مہینے سے ₹1,000/- تا ₹3,000/- تنخواہ میں اضافہ۔</li>
+        </ol>
+        <h4>ملازم کی توثیق</h4>
+        <p>میں نے مذکورہ ہدایات بغور پڑھ/سن کر سمجھ لی ہیں اور ان پر عمل کرنے کی مکمل ذمہ داری قبول کرتا/کرتی ہوں۔</p>
+<div class="p-3">
+<br><br>
+  <div class="fot" style="direction:rtl;flex-direction:row-reverse">
+    <div>
+      <p class="mb-0"><strong>ملازم کے دستخط</strong></p>
+      <p class="mb-0">تاریخ: ________________</p>
+    </div>
+    <div>
+      <p class="mb-0"><strong>مجاز دستخط کنندہ</strong></p>
+      <p class="mb-0">JenCeo Home Care Services</p>
+    </div>
+  </div>
+  <br><br><br>
+  <p style="direction:rtl;text-align:right">یہ دستاویز ملازم اور JenCeo Homecare کے درمیان ایک باقاعدہ معاہدہ ہے جو وضاحت، پیشہ ورانہ طرزِعمل اور ملازمت کی شرائط و ضوابط کے باہمی فہم کو یقینی بناتا ہے۔</p>
+</div>
+      </div>
+      <br><br>
+   
+    </div>
+    <div class="footer">
+      <div><strong>Doc Ref:</strong> JC-HR-02 | Revision: 1 | Date: 1st May 2025 | Page 1 of 1 </div>
+    </div>`
+  );
+
+
+/* =============================
    Main Component
    ============================= */
 const WorkerAggrement = () => {
@@ -792,30 +1190,79 @@ const WorkerAggrement = () => {
 
   const iframeRef = useRef(null);
 
-  const tabs = ["Full Data", "Agg-Eng", "Agg-Tel", "Agg-Hin", "Off-Eng", "Off-Tel", "Off-Hin"];
+  const tabs = [
+    "Full Data",
+    "Agg-Eng",
+    "Off-Eng",
+    "Agg-Tel",
+    "Off-Tel",
+    "Agg-Hin",
+    "Off-Hin",
+    "Agg-Tem",
+    "Off-Tem",
+    "Agg-Kan",
+    "Off-Kan",
+    "Agg-Ben",
+    "Off-Ben",
+    "Agg-Urd",
+    "Off-Urd",
+  ];
+
 
   const fetchData = async () => {
-    const key = idNo.trim();
-    if (!key) {
+    const raw = (idNo || "").trim();
+    if (!raw) {
       setError("Please enter an ID number");
       return;
     }
 
+    const key = raw;                 // original casing
+    const lower = raw.toLowerCase(); // normalized for case-insensitive compare
+
     setLoading(true);
     setError("");
     try {
-      // IMPORTANT: uses EmployeeBioData/idNo
-      const snapshot = await firebaseDB
+      // 1) Try exact match on idNo (existing behavior)
+      let snapshot = await firebaseDB
         .child("EmployeeBioData")
         .orderByChild("idNo")
         .equalTo(key)
         .once("value");
 
+      // 2) If not found, try case-insensitive via `idNoLower` (if your records store it)
       if (!snapshot.exists()) {
+        snapshot = await firebaseDB
+          .child("EmployeeBioData")
+          .orderByChild("idNoLower")
+          .equalTo(lower)
+          .once("value");
+      }
+
+      // 3) If still not found, fallback: scan and compare case-insensitively
+      if (!snapshot.exists()) {
+        const allSnap = await firebaseDB.child("EmployeeBioData").once("value");
+        if (allSnap.exists()) {
+          let found = null;
+          allSnap.forEach((child) => {
+            const v = child.val() || {};
+            const idRaw = String(v.idNo ?? "").trim();
+            const idLower = String(v.idNoLower ?? "").trim();
+            if (idRaw.toLowerCase() === lower || idLower === lower) {
+              found = v;
+              return true; // stop iteration
+            }
+            return false;
+          });
+          if (found) {
+            setData(found);
+            return;
+          }
+        }
         setError("No employee found with this ID");
         setData(null);
         return;
       }
+
       const obj = snapshot.val();
       const first = obj[Object.keys(obj)[0]];
       setData(first);
@@ -828,6 +1275,7 @@ const WorkerAggrement = () => {
     }
   };
 
+
   const handleKeyDown = (e) => {
     if (e.key === "Enter") fetchData();
   };
@@ -836,23 +1284,25 @@ const WorkerAggrement = () => {
   const currentHTML = useMemo(() => {
     if (!data) return "";
     switch (activeTab) {
-      case "Full Data":
-        return htmlFullData(data);
-      case "Agg-Eng":
-        return htmlAggEng(data);
-      case "Agg-Tel":
-        return htmlAggTel(data);
-      case "Agg-Hin":
-        return htmlAggHin(data);
-      case "Off-Eng":
-        return htmlOffEng(data);
-      case "Off-Tel":
-        return htmlOffTel(data);
-      case "Off-Hin":
-        return htmlOffHin(data);
-      default:
-        return htmlFullData(data);
+      case "Full Data": return htmlFullData(data);
+      case "Agg-Eng": return htmlAggEng(data);
+      case "Off-Eng": return htmlOffEng(data);
+      case "Agg-Tel": return htmlAggTel(data);
+      case "Off-Tel": return htmlOffTel(data);
+      case "Agg-Hin": return htmlAggHin(data);
+      case "Off-Hin": return htmlOffHin(data);
+      default: return htmlFullData(data);
+      case "Agg-Tem": return htmlAggTem(data);
+      case "Off-Tem": return htmlOffTem(data);
+      case "Agg-Kan": return htmlAggKan(data);
+      case "Off-Kan": return htmlOffKan(data);
+      case "Agg-Ben": return htmlAggBen(data);
+      case "Off-Ben": return htmlOffBen(data);
+      case "Agg-Urd": return htmlAggUrd(data);
+      case "Off-Urd": return htmlOffUrd(data);
+
     }
+
   }, [data, activeTab]);
 
   // Keep the iframe preview in sync
@@ -939,8 +1389,8 @@ const WorkerAggrement = () => {
           </div>
           <div className="col-md-6 d-flex justify-content-end align-items-end">
             {data && (
-              <button type="button" className="btn-lite" onClick={printDocument}>
-                <i className="bi bi-printer me-1" /> Print
+              <button type="button" className="btn btn-warning" onClick={printDocument}>
+                <i className="bi bi-printer me-1" /> <strong>Print</strong>
               </button>
             )}
           </div>

@@ -139,7 +139,9 @@ $dark-table-text: #e6eef6;
 
 .clinet-payment-card {
     .invest-card__box {
-        background: linear-gradient(135deg, #c09402 0%, #f7b603);
+
+        background: rgba(12, 194, 238, 1.0);
+        background: linear-gradient(0deg, rgba(12, 194, 238, 1.0), rgba(1, 88, 223, 1.0));
     }
 }
 
@@ -1378,7 +1380,8 @@ $grad-amber: linear-gradient(135deg, #f59e0b, #fbbf24, #d97706);
 }
 
 .results-card {
-    background: linear-gradient(135deg, #0ea5e9, #4338ca, #7c3aed);
+    background: rgba(252, 217, 55, 1.0);
+    background: linear-gradient(0deg, rgba(252, 217, 55, 1.0), rgba(223, 155, 1, 1.0));
     color: $white;
     border: none;
     padding: 16px 18px;
@@ -1406,6 +1409,7 @@ $grad-amber: linear-gradient(135deg, #f59e0b, #fbbf24, #d97706);
     position: relative;
     overflow: hidden;
     box-shadow: 0 8px 24px rgba(2, 6, 23, .35);
+    min-height: 100px;
 
     &::before {
         content: "";

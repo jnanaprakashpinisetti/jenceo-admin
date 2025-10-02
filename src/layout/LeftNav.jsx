@@ -1,6 +1,6 @@
 // src/layout/LeftNav.jsx
 import React, { useState, useEffect } from 'react';
-import { Routes, Route, NavLink, useLocation } from 'react-router-dom';
+import { Routes, Route, NavLink, useLocation, Navigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 
 import logo from "../assets/jencio-logo.svg";
@@ -20,14 +20,10 @@ import HospitalIcon from "../assets/hospital-icon.svg";
 import HospitalDeleteIcon from "../assets/hospital-delet-icon.svg";
 
 import invest from "../assets/invest.svg";
-import purchase from "../assets/purchase.svg";
-import balance from "../assets/balance.svg";
 import expences from "../assets/expence.svg";
 import task from "../assets/task.svg";
 import admin from "../assets/admin.svg";
-import hr from "../assets/hr.svg";
 import accounts from "../assets/accounts.svg";
-import operations from "../assets/Operations.svg";
 import enquiry from "../assets/enquiry.svg";
 import call from "../assets/Call.svg";
 import callDelete from "../assets/CallDelete.svg";
@@ -48,7 +44,7 @@ import ClientExit from '../pages/ClientExit';
 import Expenses from '../pages/Expenses';
 import ExpenceDelete from '../pages/ExpenceDelete';
 import Task from '../pages/Task';
-import Admin from '../pages/Admin';
+import AdminUsers from '../pages/AdminUsers';
 import Accounts from '../pages/Accounts';
 import HospitalList from '../pages/HospitalList';
 import HospitalDeleteList from '../pages/HospitalDeleteList';
@@ -57,20 +53,20 @@ import WorkerCallDelete from '../pages/WorkerCallDelete';
 import Enquiry from '../pages/Enquiry';
 import EnquiryExit from '../pages/EnquiryExit';
 import SearchResults from '../pages/SearchResults';
-import StaffData from '../pages/StaffData';
-import ExistingStaff from '../pages/ExistingStaff';
-import AdminUsers from '../pages/AdminUsers';
 
 export default function LeftNav() {
-  const { user } = useAuth(); // <-- get permissions/role from session
+  const { user } = useAuth();
   const perms = user?.permissions || {};
-  const isAdmin = user?.role === 'admin';
 
+  // Only allow via explicit permissions (no role-based override).
   const canView = (key) => {
-    // allow admin to see everything
-    if (isAdmin) return true;
     const p = perms[key];
-    return p && (p.view === true || p.read === true);
+    return !!(p && (p.view === true || p.read === true));
+  };
+
+  // Route guard wrapper (blocks rendering without permission)
+  const PermRoute = ({ permKey, children }) => {
+    return canView(permKey) ? children : <Navigate to="/" replace />;
   };
 
   const [isActive, setIsActive] = useState(false);
@@ -170,16 +166,20 @@ export default function LeftNav() {
                     <img src={workerExit} alt="Worker Exit" /> Exit Worker
                   </NavLink>
                 </li>
-                <li className="nav-item">
-                  <NavLink to='WorkerCallsData' className="nav-link" title='Worker Call Data' onClick={closeMobile}>
-                    <img src={call} alt="Worker Call Data" /> Worker Call Data
-                  </NavLink>
-                </li>
-                <li className="nav-item">
-                  <NavLink to='WorkerCallDelete' className="nav-link" title='Worker Call Delete' onClick={closeMobile}>
-                    <img src={callDelete} alt="" /> Worker Call Delete
-                  </NavLink>
-                </li>
+                {canView('Worker Call Data') && (
+                  <>
+                    <li className="nav-item">
+                      <NavLink to='WorkerCallsData' className="nav-link" title='Worker Call Data' onClick={closeMobile}>
+                        <img src={call} alt="Worker Call Data" /> Worker Call Data
+                      </NavLink>
+                    </li>
+                    <li className="nav-item">
+                      <NavLink to='WorkerCallDelete' className="nav-link" title='Worker Call Delete' onClick={closeMobile}>
+                        <img src={callDelete} alt="" /> Worker Call Delete
+                      </NavLink>
+                    </li>
+                  </>
+                )}
                 <li className="nav-item">
                   <NavLink to='EmployeeAggrement' className="nav-link" title='Worker Aggrement' onClick={closeMobile}>
                     <img src={WorkerAggrement} alt="" /> Worker Aggremnt
@@ -259,7 +259,7 @@ export default function LeftNav() {
               </li>
             )}
 
-            {(isAdmin || canView('Admin')) && (
+            {canView('Admin') && (
               <li className="nav-item">
                 <NavLink to='Admin' className="nav-link" title='Admin' onClick={closeMobile}>
                   <img src={admin} alt="" /> Admin
@@ -278,29 +278,63 @@ export default function LeftNav() {
         </div>
       </nav>
 
-      {/* Routes for pages */}
+      {/* Routes with permission guards */}
       <Routes>
-        <Route path="/" element={<Dashboard />} />
-        <Route path="WorkersData" element={<WorkersData />} />
-        <Route path="StaffData" element={<StaffData />} />
-        <Route path="ExistingStaff" element={<ExistingStaff />} />
-        <Route path="EmployeeAggrement" element={<EmployeeAggrement />} />
-        <Route path="WorkerCallsData" element={<WorkerCallsData />} />
-        <Route path="ExistingEmployees" element={<ExistingEmployees />} />
-        <Route path="Investments" element={<Investments />} />
-        <Route path="ClientInfo" element={<ClientInfo />} />
-        <Route path="ClientExit" element={<ClientExit />} />
-        <Route path="Enquiry" element={<Enquiry />} />
-        <Route path="EnquiryExit" element={<EnquiryExit />} />
-        <Route path="Expenses" element={<Expenses />} />
-        <Route path="ExpenceDelete" element={<ExpenceDelete />} />
-        <Route path="Task" element={<Task />} />
-        <Route path="WorkerCallDelete" element={<WorkerCallDelete />} />
-        <Route path="Accounts" element={<Accounts />} />
-        <Route path="HospitalList" element={<HospitalList />} />
-        <Route path="HospitalDeleteList" element={<HospitalDeleteList />} />
+        <Route path="/" element={
+          <PermRoute permKey="Dashboard"><Dashboard /></PermRoute>
+        } />
+        <Route path="WorkersData" element={
+          <PermRoute permKey="Workers Data"><WorkersData /></PermRoute>
+        } />
+        <Route path="ExistingEmployees" element={
+          <PermRoute permKey="Workers Data"><ExistingEmployees /></PermRoute>
+        } />
+        <Route path="EmployeeAggrement" element={
+          <PermRoute permKey="Workers Data"><EmployeeAggrement /></PermRoute>
+        } />
+        <Route path="WorkerCallsData" element={
+          <PermRoute permKey="Worker Call Data"><WorkerCallsData /></PermRoute>
+        } />
+        <Route path="WorkerCallDelete" element{
+          ...undefined
+        } />
+        <Route path="Investments" element={
+          <PermRoute permKey="Investments"><Investments /></PermRoute>
+        } />
+        <Route path="ClientInfo" element={
+          <PermRoute permKey="Client Data"><ClientInfo /></PermRoute>
+        } />
+        <Route path="ClientExit" element={
+          <PermRoute permKey="Client Data"><ClientExit /></PermRoute>
+        } />
+        <Route path="Enquiry" element={
+          <PermRoute permKey="Enquiries"><Enquiry /></PermRoute>
+        } />
+        <Route path="EnquiryExit" element={
+          <PermRoute permKey="Enquiries"><EnquiryExit /></PermRoute>
+        } />
+        <Route path="Expenses" element={
+          <PermRoute permKey="Expenses"><Expenses /></PermRoute>
+        } />
+        <Route path="ExpenceDelete" element={
+          <PermRoute permKey="Expenses"><ExpenceDelete /></PermRoute>
+        } />
+        <Route path="Task" element={
+          <PermRoute permKey="Task"><Task /></PermRoute>
+        } />
+        <Route path="Accounts" element={
+          <PermRoute permKey="Accounts"><Accounts /></PermRoute>
+        } />
+        <Route path="HospitalList" element{
+          ...undefined
+        } />
+        <Route path="HospitalDeleteList" element{
+          ...undefined
+        } />
         <Route path="search" element={<SearchResults />} />
-        <Route path="Admin" element={<AdminUsers />} />
+        <Route path="Admin" element={
+          <PermRoute permKey="Admin"><AdminUsers /></PermRoute>
+        } />
       </Routes>
     </>
   );

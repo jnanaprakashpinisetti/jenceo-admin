@@ -1,11 +1,10 @@
 import React, { createContext, useContext, useEffect, useMemo, useState } from "react";
-// at top imports:
 import {
   getAuth,
   signInWithEmailAndPassword,
   signOut,
   onAuthStateChanged,
-  signInAnonymously,          // <-- add this
+  signInAnonymously,
 } from "firebase/auth";
 
 import { db } from "../firebase";
@@ -63,8 +62,25 @@ const AuthContext = createContext({
   loading: false,
   currentUser: null,
   userRole: null,
-  debugDatabase: async () => { }, // Add debug function to context
+  debugDatabase: async () => { },
 });
+
+// Add this normalization function at the top level
+const normalizePermissions = (perms) => {
+  if (!perms || typeof perms !== 'object') return {};
+  
+  // Ensure all permissions are proper objects
+  const normalized = {};
+  Object.keys(perms).forEach(key => {
+    if (typeof perms[key] === 'boolean') {
+      normalized[key] = { view: perms[key], read: perms[key] };
+    } else if (typeof perms[key] === 'object') {
+      normalized[key] = { ...perms[key] };
+    }
+  });
+  
+  return normalized;
+};
 
 export function AuthProvider({ children }) {
   const auth = getAuth();
@@ -149,13 +165,12 @@ export function AuthProvider({ children }) {
       setAuthLoading(true);
       try {
         if (!fbUser) {
-          // don't nuke local user until we're sure there's no auth
           setUser(null);
           localStorage.removeItem("app_user");
           return;
         }
 
-        // --- NEW: read profile by UID first (works for anonymous username sessions) ---
+        // Read profile by UID first (works for anonymous username sessions)
         const profileByUid = await safeRead(`authentication/users/${fbUser.uid}`);
 
         // fallback: for email users, try to fetch by email if UID record not present
@@ -166,13 +181,10 @@ export function AuthProvider({ children }) {
 
         const session = {
           uid: fbUser.uid,
-          name:
-            fbUser.displayName ||
-            profile?.name ||
-            (fbUser.email ? fbUser.email.split("@")[0] : "User"),
+          name: fbUser.displayName || profile?.name || (fbUser.email ? fbUser.email.split("@")[0] : "User"),
           email: fbUser.email || profile?.email || profile?.Email || null,
           role: profile?.role || "user",
-          permissions: profile?.permissions || {},
+          permissions: normalizePermissions(profile?.permissions),
           mode: fbUser.isAnonymous ? "username" : "email",
           emailVerified: fbUser.emailVerified ?? false,
           _source: fbUser.isAnonymous ? "anonymous_auth" : "firebase_auth",
@@ -188,13 +200,7 @@ export function AuthProvider({ children }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-
-  /* ===== Username login: Try multiple database paths ===== */
   /* ===== Username login: JenCeo-DataBase/Users ===== */
-  // In your AuthContext.jsx, update the loginUsername function:
-
-  /* ===== Username login: JenCeo-DataBase/Users ===== */
-  /* ===== Username login: JenCeo-DataBase/Users (secure) ===== */
   const loginUsername = async (username, password) => {
     const uname = norm(username);
     const auth = getAuth();
@@ -237,9 +243,9 @@ export function AuthProvider({ children }) {
     const profile = {
       name: me.name || me.username || username,
       role: me.role || "user",
-      permissions: me.permissions || {},
+      permissions: normalizePermissions(me.permissions || {}),
       mode: "username",
-      usernameLinked: me.id, // trace back if needed
+      usernameLinked: me.id,
     };
     await profileRef.update(profile);
 
@@ -259,8 +265,6 @@ export function AuthProvider({ children }) {
     return session;
   };
 
-
-
   /* ===== Email login: Firebase Auth + RTDB permissions ===== */
   const loginEmail = async (email, password) => {
     console.log("Attempting email login for:", email);
@@ -276,14 +280,10 @@ export function AuthProvider({ children }) {
 
     const session = {
       uid: fbUser.uid,
-      name:
-        fbUser.displayName ||
-        profile?.name ||
-        fbUser.email?.split("@")[0] ||
-        "User",
+      name: fbUser.displayName || profile?.name || fbUser.email?.split("@")[0] || "User",
       email: fbUser.email || profile?.email || profile?.Email || null,
       role: profile?.role || "user",
-      permissions: profile?.permissions || {},
+      permissions: normalizePermissions(profile?.permissions),
       mode: "email",
       emailVerified: fbUser.emailVerified,
       _source: "firebase_auth",
@@ -346,7 +346,7 @@ export function AuthProvider({ children }) {
       currentUser: user,
       userRole: user?.role || null,
       setUser,
-      debugDatabase, // Export debug function
+      debugDatabase,
     }),
     [user, loading, authLoading]
   );

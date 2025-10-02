@@ -295,7 +295,7 @@ export default function ToDo() {
 
   // ---------- UI ----------
   return (
-    <div className="todo-wrap container-fluid py-2">
+    <div className="todo-wrap">
       {/* Header card */}
       <div className="todo-head rounded-4 p-3 mb-3 shadow-sm">
         <div className="d-flex justify-content-between align-items-center">

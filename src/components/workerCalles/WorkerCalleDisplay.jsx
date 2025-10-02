@@ -441,7 +441,7 @@ export default function WorkerCalleDisplay() {
   const totalRowStyle = { background: "#122438" };
 
   return (
-    <div className="p-3">
+    <>
       {/* top controls */}
       <div className="alert alert-info d-flex justify-content-between flex-wrap reminder-badges">
         <div className="d-flex align-items-center">
@@ -498,7 +498,7 @@ export default function WorkerCalleDisplay() {
       </div>
 
       {/* reminder badges as filters */}
-      <div className="alert alert-info d-flex justify-content-around flex-wrap reminder-badges mb-4">
+      <div className="alert alert-info text-info d-flex justify-content-around flex-wrap reminder-badges mb-4">
         {["overdue", "today", "tomorrow", "upcoming"].map((k) => (
           <span
             key={k}
@@ -920,6 +920,6 @@ export default function WorkerCalleDisplay() {
           </div>
         </div>
       )}
-    </div>
+    </>
   );
 }

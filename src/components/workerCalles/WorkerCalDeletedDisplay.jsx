@@ -326,7 +326,7 @@ export default function WorkerCalDeletedDisplay() {
   if (error) return <div className="alert alert-danger">Error: {error}</div>;
 
   return (
-    <div className="p-3">
+    <>
       <div className="d-flex justify-content-between align-items-center mb-4">
         <h3 className="text-white">Deleted Workers</h3>
         <div className="d-flex gap-2">
@@ -710,6 +710,6 @@ export default function WorkerCalDeletedDisplay() {
           </div>
         </div>
       )}
-    </div>
+    </>
   );
 }

@@ -345,7 +345,7 @@ export default function DisplayClient() {
   if (clients.length === 0) return <div className="alert alert-info">No clients found</div>;
 
   return (
-    <div className="container-fluid mt-4 display-client">
+    <div className="display-client">
       <h3 className="mb-3">Clients</h3>
 
       {/* Reminder badges (click to filter) */}

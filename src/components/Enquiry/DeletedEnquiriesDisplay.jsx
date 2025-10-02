@@ -143,7 +143,7 @@ const DeletedEnquiriesDisplay = () => {
   };
 
   return (
-    <div className="container-fluid mt-4">
+    <>
       <h3 className="mb-4 text-center">Deleted Enquiries</h3>
 
       {loading ? (
@@ -336,7 +336,7 @@ const DeletedEnquiriesDisplay = () => {
           onSaveSuccess={() => {}}
         />
       )}
-    </div>
+    </>
   );
 };
 

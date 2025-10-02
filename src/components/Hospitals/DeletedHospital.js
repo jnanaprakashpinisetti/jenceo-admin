@@ -155,10 +155,10 @@ export default function DeletedHospital() {
   if (loading) return <div className="text-center my-5">Loading deleted hospitals...</div>;
   if (error) return <div className="alert alert-danger">Error: {error}</div>;
   if (hospitals.length === 0)
-    return <div className="alert alert-info">No deleted hospitals found</div>;
+    return <div className="alert alert-info text-info">No deleted hospitals found</div>;
 
   return (
-    <div>
+    <>
       {/* Header: Search & Rows per page */}
       <div className="d-flex justify-content-between align-items-center mb-4 flex-wrap" style={{ gap: "10px" }}>
         <div className="d-flex align-items-center">
@@ -476,6 +476,6 @@ export default function DeletedHospital() {
           </div>
         </div>
       )}
-    </div>
+    </>
   );
 }

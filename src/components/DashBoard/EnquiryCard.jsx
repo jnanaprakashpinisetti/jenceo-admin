@@ -44,7 +44,6 @@ function BarChart({ data = [], width = 520, height = 160, pad = 28, colorId = "e
     return (
         <svg width="100%" height={height} viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none">
             <defs>
-                {/* gradients close to ResultsCard look, a touch brighter */}
                 <linearGradient id="enqBar" x1="0" y1="0" x2="1" y2="1">
                     <stop offset="0%" stopColor="#38bdf8" /><stop offset="100%" stopColor="#0ea5e9" />
                 </linearGradient>
@@ -62,7 +61,6 @@ function BarChart({ data = [], width = 520, height = 160, pad = 28, colorId = "e
                     <g key={i}>
                         <title>{d.label}: {d.value}</title>
                         <rect x={x} y={y} width={w} height={h} rx="6" fill={`url(#${colorId})`} />
-                        {/* value inside vertically in yellow (like ResultsCard) */}
                         {h > 14 && (
                             <text
                                 x={x + w / 2}
@@ -151,13 +149,7 @@ export default function EnquiryCard({
     const [detailOpen, setDetailOpen] = useState(false);
     const [detailRow, setDetailRow] = useState(null);
 
-    // gradient card (request #2)
-    const cardStyle = {
-        background: "linear-gradient(135deg, rgb(45 62 189), rgb(133 123 219 / 72%))",
-        border: "1px solid #1f2937",
-        color: "#e5e7eb",
-        boxShadow: "0 8px 24px rgba(0,0,0,0.25), inset 0 1px 0 rgba(255,255,255,0.04)"
-    };
+ 
 
     /* -------- Firebase live attach (same style as ResultsCard) -------- */
     useEffect(() => {
@@ -213,10 +205,14 @@ export default function EnquiryCard({
         })();
 
         return () => {
-            mounted = false;
             try { listeners.forEach(({ ref, cb }) => ref.off("value", cb)); } catch { }
         };
     }, [enquiryCollection, workerCallCollection]);
+
+    // Keep pagination valid when filters change
+    useEffect(() => {
+        setPage(1);
+    }, [activeMonth, activeYear, tab, search, pageSize]);
 
     /* ---------------------- Year list ---------------------- */
     const years = useMemo(() => {
@@ -302,15 +298,27 @@ export default function EnquiryCard({
     const start = (safePage - 1) * pageSize;
     const pageRows = tableRows.slice(start, start + pageSize);
 
+    // Build a stable page window without duplicates
+    const windowSize = 5;
+    const startPage = Math.max(
+        1,
+        Math.min(
+            safePage - Math.floor(windowSize / 2),
+            Math.max(1, totalPages - windowSize + 1)
+        )
+    );
+    const endPage = Math.min(totalPages, startPage + windowSize - 1);
+    const pageWindow = [];
+    for (let p = startPage; p <= endPage; p++) pageWindow.push(p);
+
     /* ---------------------- UI: Dashboard Card (click → modal) ---------------------- */
     return (
         <>
             <div className="col-12 mb-3">
-                <div className="neo-card hover-rise p-3" role="button" onClick={() => setModalOpen(true)} style={cardStyle}>
+                <div className="neo-card hover-rise  results-card  p-3" role="button" onClick={() => setModalOpen(true)}>
                     <div className="d-flex justify-content-between align-items-center">
                         <div>
                             <div className="tiny text-white-80 text-uppercase">{title}</div>
-                            {/* request #1: show both counts on the card */}
                             <div className="d-flex gap-3 mt-1">
                                 <div className="d-flex flex-column">
                                     <span className="tiny text-white-50">Enquiries ({activeYear})</span>
@@ -323,7 +331,6 @@ export default function EnquiryCard({
                                 </div>
                             </div>
                         </div>
-
                     </div>
                 </div>
             </div>
@@ -333,20 +340,19 @@ export default function EnquiryCard({
                 <div className="modal fade show" style={{ display: "block", background: "rgba(2,6,23,0.9)", zIndex: 2000 }} onClick={() => setModalOpen(false)}>
                     <div className="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable" style={{ zIndex: 2001 }} onClick={(e) => e.stopPropagation()} ref={modalRef}>
                         <div className="modal-content overflow-hidden">
-                            <div className="modal-header gradient-header text-white justify-content-between" style={{ position: "sticky", top: 0, zIndex: 2002, justfyContent: "sapceBetween" }}>
+                            <div className="modal-header gradient-header text-white justify-content-between" style={{ position: "sticky", top: 0, zIndex: 2002 }}>
                                 <h5 className="modal-title">Enquiries & Worker Calls</h5>
                                 <button className="btn-close btn-close-white ms-2" onClick={() => setModalOpen(false)} />
                             </div>
 
-
-
                             <div className="modal-body bg-surface">
-                                <div className="ms-auto text-center">{/* request #3: move tabs to right */}
+                                <div className="ms-auto text-center">
                                     <div className="btn-group">
                                         <button className={classNames("btn btn-sm", tab === "enquiries" ? "btn-info text-dark" : "btn-outline-info")} onClick={() => setTab("enquiries")}>Enquiries</button>
                                         <button className={classNames("btn btn-sm", tab === "workers" ? "btn-info text-dark" : "btn-outline-info")} onClick={() => setTab("workers")}>Worker Calls</button>
                                     </div>
                                 </div>
+
                                 {/* Year & Month selectors & search */}
                                 <div className="row g-3 align-items-end mb-3">
                                     <div className="col-md-2">
@@ -399,7 +405,7 @@ export default function EnquiryCard({
                                     </div>
                                 </div>
 
-                                {/* ===== Table toolbar (request #4: move entries dropdown to top) ===== */}
+                                {/* ===== Table toolbar (entries dropdown at top) ===== */}
                                 <div className="d-flex flex-wrap justify-content-between align-items-center mt-4 mb-2">
                                     <div className="d-flex align-items-center gap-2">
                                         <span className="tiny text-muted">Show</span>
@@ -449,36 +455,32 @@ export default function EnquiryCard({
                                     </table>
                                 </div>
 
-                                {/* Pagination (request #5: keep bottom, themed) */}
+                                {/* Pagination (bottom, themed) */}
                                 <div className="d-flex flex-wrap align-items-center justify-content-center mt-2">
-                                    <div>
-                                        <nav style={{ backgroundColor: "transparent" }}>
-                                            <ul className="pagination pagination-sm mb-0 ms-2">
-                                                <li className={classNames("page-item", safePage === 1 && "disabled")}>
-                                                    <button className="page-link" onClick={() => setPage(1)}>Previous</button>
+                                    <nav style={{ backgroundColor: "transparent" }}>
+                                        <ul className="pagination pagination-sm mb-0 ms-2">
+                                            <li className={classNames("page-item", safePage === 1 && "disabled")}>
+                                                <button className="page-link" onClick={() => setPage(1)}>«</button>
+                                            </li>
+                                            <li className={classNames("page-item", safePage === 1 && "disabled")}>
+                                                <button className="page-link" onClick={() => setPage(safePage - 1)}>‹</button>
+                                            </li>
+
+                                            {/* Stable page window (no duplicates) */}
+                                            {pageWindow.map((pn) => (
+                                                <li key={pn} className={classNames("page-item", pn === safePage && "active")}>
+                                                    <button className="page-link" onClick={() => setPage(pn)}>{pn}</button>
                                                 </li>
-                                                <li className={classNames("page-item", safePage === 1 && "disabled")}>
-                                                    <button className="page-link" onClick={() => setPage(safePage - 1)}>‹</button>
-                                                </li>
-                                                {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
-                                                    let startFrom = Math.max(1, safePage - 2);
-                                                    let p = startFrom + i;
-                                                    if (p > totalPages) p = totalPages - (Math.min(5, totalPages) - 1 - i);
-                                                    return p;
-                                                }).map(pn => (
-                                                    <li key={pn} className={classNames("page-item", pn === safePage && "active")}>
-                                                        <button className="page-link" onClick={() => setPage(pn)}>{pn}</button>
-                                                    </li>
-                                                ))}
-                                                <li className={classNames("page-item", safePage === totalPages && "disabled")}>
-                                                    <button className="page-link" onClick={() => setPage(safePage + 1)}>›</button>
-                                                </li>
-                                                <li className={classNames("page-item", safePage === totalPages && "disabled")}>
-                                                    <button className="page-link" onClick={() => setPage(totalPages)}>Next</button>
-                                                </li>
-                                            </ul>
-                                        </nav>
-                                    </div>
+                                            ))}
+
+                                            <li className={classNames("page-item", safePage === totalPages && "disabled")}>
+                                                <button className="page-link" onClick={() => setPage(safePage + 1)}>›</button>
+                                            </li>
+                                            <li className={classNames("page-item", safePage === totalPages && "disabled")}>
+                                                <button className="page-link" onClick={() => setPage(totalPages)}>»</button>
+                                            </li>
+                                        </ul>
+                                    </nav>
                                 </div>
                             </div>
 
@@ -490,7 +492,7 @@ export default function EnquiryCard({
                 </div>
             )}
 
-            {/* ===== Row Details Modal (request #6) ===== */}
+            {/* Row Details Modal */}
             {detailOpen && (
                 <div className="modal fade show" style={{ display: "block", background: "rgba(2,6,23,0.5)", zIndex: 2100 }} onClick={() => setDetailOpen(false)}>
                     <div className="modal-dialog modal-lg modal-dialog-centered" onClick={(e) => e.stopPropagation()}>
@@ -506,7 +508,6 @@ export default function EnquiryCard({
                                             <div><strong>Name: </strong> {detailRow.name || "-"}</div>
                                             <div><strong>Mobile: </strong> {detailRow.mobile || detailRow.mobileNo || "-"}</div>
                                             <div><strong>{tab === "enquiries" ? "Service" : "Location"}:</strong> {tab === "enquiries" ? (detailRow.service || "-") : (detailRow.location || "-")}</div>
-
                                         </div>
                                         <div className="col-md-6">
                                             {(() => {

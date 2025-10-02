@@ -323,7 +323,7 @@ export default function PettyCashCard({ pettyRoot = "PettyCash" }) {
               <div>Top Month: <strong>{cards.topMonth}</strong></div>
             </div>
           </div>
-          <div class="invest-card__divider"></div>
+          <div className="invest-card__divider"></div>
           <div>Avg / Entry: <strong>{INR(cards.avg)}</strong></div>
         </div>
       </div>

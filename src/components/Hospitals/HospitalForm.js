@@ -5,9 +5,9 @@ const HospitalForm = ({
   onSubmit,
   initialData = {},
   isEdit = false,
-  // NEW modal API like EnquiryForm:
+  // modal API like EnquiryForm:
   show = false,
-  onClose = () => {},
+  onClose = () => { },
   title = "Add New Hospital",
 }) => {
   const [formData, setFormData] = useState({
@@ -28,7 +28,10 @@ const HospitalForm = ({
   const [showDuplicateModal, setShowDuplicateModal] = useState(false);
   const [showThankYouModal, setShowThankYouModal] = useState(false);
   const [duplicateHospital, setDuplicateHospital] = useState(null);
-  const [submittedHospital, setSubmittedHospital] = useState(null); // Store submitted data
+  const [submittedHospital, setSubmittedHospital] = useState(null);
+
+  // NEW: lock flag so ID is disabled when auto-generated
+  const [autoIdLock, setAutoIdLock] = useState(false);
 
   // Close on ESC when modal open
   useEffect(() => {
@@ -38,8 +41,72 @@ const HospitalForm = ({
     return () => document.removeEventListener("keydown", onKey);
   }, [show, onClose]);
 
+  // ---------- NEW: Auto-generate next Hospital ID when opening "Add New" ----------
+  useEffect(() => {
+    const generateNextId = async () => {
+      try {
+        // read all hospital ids
+        const snap = await firebaseDB.child("HospitalData").once("value");
+        const ids = new Set();
+        let maxN = 0;
+
+        if (snap && snap.exists()) {
+          snap.forEach((child) => {
+            const v = child.val() || {};
+            const raw = String(v.idNo || "").trim();
+            const m = raw.match(/^H(\d{1,4})$/i);
+            if (m) {
+              const n = parseInt(m[1], 10);
+              if (!Number.isNaN(n)) {
+                ids.add(`H${n}`);
+                if (n > maxN) maxN = n;
+              }
+            }
+          });
+        }
+
+        // propose next
+        let candidate = `H${maxN + 1}`;
+        // ensure uniqueness even if something else wrote meanwhile
+        while (ids.has(candidate)) {
+          const num = parseInt(candidate.slice(1), 10);
+          candidate = `H${num + 1}`;
+        }
+
+        setFormData((p) => ({ ...p, idNo: candidate }));
+        setAutoIdLock(true);
+      } catch (err) {
+        console.error("Failed to generate next Hospital ID:", err);
+        // fallback
+        if (!formData.idNo) {
+          setFormData((p) => ({ ...p, idNo: "H1" }));
+          setAutoIdLock(true);
+        }
+      }
+    };
+
+    // Only when opening modal for ADD (not edit)
+    if (show && !isEdit) {
+      // Only generate if not already set/populated
+      if (!formData.idNo || !/^H[1-9]\d{0,3}$/.test(formData.idNo)) {
+        generateNextId();
+      } else {
+        setAutoIdLock(true);
+      }
+    } else if (!show) {
+      // close/reset lock when modal closes
+      setAutoIdLock(false);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [show, isEdit]);
+  // -------------------------------------------------------------------------------
+
   const handleChange = (e) => {
     const { name, value } = e.target;
+    // Do not allow editing idNo when locked or in edit mode
+    if (name === "idNo" && (autoIdLock || isEdit)) {
+      return;
+    }
     setFormData((prev) => ({
       ...prev,
       [name]: value,
@@ -68,7 +135,7 @@ const HospitalForm = ({
     }
     if (!formData.noOfBeds) {
       newErrors.noOfBeds = "Number of Beds is required";
-    } else if (isNaN(formData.noOfBeds) || parseInt(formData.noOfBeds) <= 0) {
+    } else if (isNaN(formData.noOfBeds) || parseInt(formData.noOfBeds, 10) <= 0) {
       newErrors.noOfBeds = "Please enter a valid number of beds";
     }
     if (formData.locationLink && !isValidUrl(formData.locationLink)) {
@@ -91,9 +158,13 @@ const HospitalForm = ({
     e.preventDefault();
     if (!validateForm()) return;
 
-    // ✅ Check for duplicate ID before showing confirm modal
+    // Check for duplicate ID before confirm
     try {
-      const snapshot = await firebaseDB.child("HospitalData").orderByChild("idNo").equalTo(formData.idNo).once("value");
+      const snapshot = await firebaseDB
+        .child("HospitalData")
+        .orderByChild("idNo")
+        .equalTo(formData.idNo)
+        .once("value");
 
       if (snapshot.exists() && !isEdit) {
         let dup = null;
@@ -122,7 +193,7 @@ const HospitalForm = ({
         hospitalName: formData.hospitalName,
         hospitalType: formData.hospitalType,
         location: formData.location,
-        noOfBeds: parseInt(formData.noOfBeds),
+        noOfBeds: parseInt(formData.noOfBeds, 10),
         timing: formData.timing,
         address: formData.address,
         locationLink: formData.locationLink,
@@ -138,15 +209,13 @@ const HospitalForm = ({
         await newHospitalRef.set({ ...hospitalData, id: newHospitalRef.key, createdAt: new Date().toISOString() });
         setSubmitStatus({ success: true, message: "Hospital added successfully!" });
 
-        // Store the submitted data before resetting the form
         setSubmittedHospital({
           idNo: formData.idNo,
-          hospitalName: formData.hospitalName
+          hospitalName: formData.hospitalName,
         });
 
-        // Show thank you modal for new hospital additions
         setShowThankYouModal(true);
-        
+
         setFormData({
           idNo: "",
           hospitalName: "",
@@ -188,12 +257,11 @@ const HospitalForm = ({
     }
   };
 
-  // If modal not requested, render nothing (same pattern as EnquiryForm usage)
   if (!show) return null;
 
   return (
     <>
-      {/* Modal Shell (click outside to close, ESC handled above) */}
+      {/* Modal Shell */}
       <div className="wb-backdrop hospitalForm" onClick={onClose}>
         <div
           className="wb-card"
@@ -202,7 +270,6 @@ const HospitalForm = ({
           aria-modal="true"
           aria-labelledby="hospitalFormTitle"
         >
-          {/* Header */}
           <div className="wb-header">
             <div style={{ display: "flex", flexDirection: "column" }}>
               <div id="hospitalFormTitle" className="wb-title">
@@ -215,7 +282,6 @@ const HospitalForm = ({
             </div>
           </div>
 
-          {/* Body – your existing form markup preserved */}
           <div className="wb-body">
             <div className="form-card shadow">
               <div className="form-card-header mb-4">
@@ -242,9 +308,11 @@ const HospitalForm = ({
                         name="idNo"
                         value={formData.idNo}
                         onChange={handleChange}
-                        placeholder="Enter ID (e.g., H1, H25, H9999)"
+                        placeholder="Auto-generated e.g., H25"
                         maxLength="5"
-                        disabled={isEdit}
+                        // Disable when auto-generated or editing
+                        disabled={autoIdLock || isEdit}
+                        title={autoIdLock ? "Auto-generated" : (isEdit ? "Editing existing hospital" : "Enter ID")}
                       />
                       {errors.idNo && <div className="invalid-feedback">{errors.idNo}</div>}
                     </div>
@@ -383,7 +451,6 @@ const HospitalForm = ({
             </div>
           </div>
 
-          {/* Optional footer area to match your modal pattern */}
           <div className="wb-footer d-flex justify-content-end">
             <button className="wb-secondary-btn" onClick={onClose}>Close</button>
           </div>
@@ -437,7 +504,7 @@ const HospitalForm = ({
         </div>
       )}
 
-      {/* Thank You Modal - Only shows for new hospital additions */}
+      {/* Thank You Modal */}
       {showThankYouModal && submittedHospital && (
         <div className="modal fade show" style={{ display: "block", backgroundColor: "rgba(0,0,0,0.5)" }}>
           <div className="modal-dialog modal-dialog-centered">

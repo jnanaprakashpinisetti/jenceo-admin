@@ -291,6 +291,7 @@ export default function WorkerSalaryCard() {
     const [workerDetailModal, setWorkerDetailModal] = useState(false);
     const [page, setPage] = useState(1);
     const [pageSize, setPageSize] = useState(10);
+    const [showZeroRows, setShowZeroRows] = useState(false);
     const modalRef = useRef(null);
 
     useEffect(() => {
@@ -390,14 +391,22 @@ export default function WorkerSalaryCard() {
         const mObj = grouped.years?.[activeYear]?.months?.[String(activeMonth)];
         if (!mObj) return [];
         return mObj.rows.slice().sort((a, b) => (b.parsedDate?.getTime() || 0) - (a.parsedDate?.getTime() || 0));
+
+    
     }, [activeYear, activeMonth, grouped]);
+        // rows actually displayed in table (amount > 0 unless toggled)
+        const displayRows = React.useMemo(() => {
+            if (!currentMonthRows) return [];
+            if (showZeroRows) return currentMonthRows;
+            return currentMonthRows.filter(r => Number(r.paidAmount || 0) > 0);
+        }, [currentMonthRows, showZeroRows]);
     // Pagination derived values for the month table
-    const totalEntries = currentMonthRows.length;
+    const totalEntries = displayRows.length;
     const totalPages = Math.max(1, Math.ceil(totalEntries / pageSize));
     const pageSafe = Math.min(Math.max(1, page), totalPages);
     const pageStart = (pageSafe - 1) * pageSize;
     const pageEnd = Math.min(pageStart + pageSize, totalEntries);
-    const currentMonthRowsPage = useMemo(() => currentMonthRows.slice(pageStart, pageEnd), [currentMonthRows, pageStart, pageEnd]);
+    const currentMonthRowsPage = useMemo(() => displayRows.slice(pageStart, pageEnd), [displayRows, pageStart, pageEnd]);
 
     useEffect(() => {
         if (page > totalPages) setPage(totalPages);
@@ -684,6 +693,10 @@ export default function WorkerSalaryCard() {
                                             <div className="invest-month-toolbar d-flex justify-content-between align-items-center mb-3">
 
                                                 <div className="d-flex align-items-center gap-3">
+                                                    <div className="form-check form-switch ms-3">
+                                                        <input className="form-check-input" type="checkbox" id="toggleZeroRows" checked={showZeroRows} onChange={(e) => { setShowZeroRows(e.target.checked); setPage(1); }} />
+                                                        <label className="form-check-label tiny" htmlFor="toggleZeroRows">Show zero-amount rows</label>
+                                                    </div>
                                                     <div className="d-flex align-items-center gap-2">
                                                         <span className="tiny ">Show</span>
                                                         <select
@@ -752,6 +765,10 @@ export default function WorkerSalaryCard() {
                                     {/* Worker Photo and Basic Info */}
                                     <div className="col-12 mb-3">
                                         <div className="d-flex align-items-center gap-3">
+                                            <div className="form-check form-switch ms-3">
+                                                <input className="form-check-input" type="checkbox" id="toggleZeroRows" checked={showZeroRows} onChange={(e) => { setShowZeroRows(e.target.checked); setPage(1); }} />
+                                                <label className="form-check-label tiny" htmlFor="toggleZeroRows">Show zero-amount rows</label>
+                                            </div>
                                             {selectedWorker.employeePhoto ? (
                                                 <img src={selectedWorker.employeePhoto} alt="Worker" className="rounded-circle" style={{ width: 80, height: 80, objectFit: 'cover' }} />
                                             ) : (

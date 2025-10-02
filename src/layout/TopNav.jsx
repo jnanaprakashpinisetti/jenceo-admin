@@ -5,60 +5,63 @@ import { useAuth } from "../context/AuthContext";
 
 /**
  * TopNav
+ * - Visible on ≥992px (d-lg-flex).
+ * - Adds: login time, time-on-page, dark mode toggle, fullscreen toggle.
  * - Safe against update-depth loops.
- * - Search submits to /search?q=...
- * - Optional notifications/profile dropdowns (local-only UI).
  */
 export default function TopNav() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
 
-  // local UI state
+  // —— session & timing ——
+  const [nowTick, setNowTick] = useState(0);
+  const [pageSeconds, setPageSeconds] = useState(0);
+  const pageStartRef = useRef(Date.now());
+
+  // Persist a session loginAt across reloads (best-effort)
+  const [loginAt] = useState(() => {
+    const stored = sessionStorage.getItem("loginAt");
+    if (stored) return Number(stored);
+    const t = Date.now();
+    sessionStorage.setItem("loginAt", String(t));
+    return t;
+  });
+
+  // Reset page timer whenever route changes
+  useEffect(() => {
+    pageStartRef.current = Date.now();
+    setPageSeconds(0);
+  }, [location.pathname, location.search, location.hash]);
+
+  // Tick each second for timers
+  useEffect(() => {
+    const t = setInterval(() => {
+      setNowTick((n) => n + 1);
+      setPageSeconds(Math.max(0, Math.floor((Date.now() - pageStartRef.current) / 1000)));
+    }, 1000);
+    return () => clearInterval(t);
+  }, []);
+
+  const fmtClock = (ms) => {
+    const d = new Date(ms);
+    return d.toLocaleTimeString();
+  };
+  const fmtHHMMSS = (secs) => {
+    const h = Math.floor(secs / 3600);
+    const m = Math.floor((secs % 3600) / 60);
+    const s = secs % 60;
+    const pad = (n) => String(n).padStart(2, "0");
+    return (h > 0 ? `${pad(h)}:` : "") + `${pad(m)}:${pad(s)}`;
+  };
+
+  // —— search ——
   const [query, setQuery] = useState("");
-  const [showNotif, setShowNotif] = useState(false);
-  const [showProfile, setShowProfile] = useState(false);
-  const [unreadCount, setUnreadCount] = useState(0); // local demo; wire to real data if needed
-
-  const profileRef = useRef(null);
-  const notifRef = useRef(null);
-  const profileBtnRef = useRef(null);
-  const notifBtnRef = useRef(null);
-
-  const currentUser = user || {};
-  const userName = currentUser.name || currentUser.email || "User";
-  const userRole = currentUser.role || "Member";
-
-  // Keep input synced to ?q= only when URL actually changes
   useEffect(() => {
     const params = new URLSearchParams(location.search);
     const q = params.get("q") || "";
-    setQuery(prev => (prev !== q ? q : prev)); // guard to avoid infinite re-set
+    setQuery((prev) => (prev !== q ? q : prev));
   }, [location.search]);
-
-  // Click outside for dropdowns (depends only on visibility flags)
-  useEffect(() => {
-    const handleClickOutside = (e) => {
-      if (showProfile) {
-        const outsideProfile =
-          profileRef.current &&
-          !profileRef.current.contains(e.target) &&
-          profileBtnRef.current &&
-          !profileBtnRef.current.contains(e.target);
-        if (outsideProfile) setShowProfile(false);
-      }
-      if (showNotif) {
-        const outsideNotif =
-          notifRef.current &&
-          !notifRef.current.contains(e.target) &&
-          notifBtnRef.current &&
-          !notifBtnRef.current.contains(e.target);
-        if (outsideNotif) setShowNotif(false);
-      }
-    };
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, [showProfile, showNotif]);
 
   const submitSearch = useCallback(
     (e) => {
@@ -67,26 +70,49 @@ export default function TopNav() {
       const params = new URLSearchParams(location.search);
       if (q) params.set("q", q);
       else params.delete("q");
-
       const nextSearch = params.toString();
       const nextUrl = nextSearch ? `?${nextSearch}` : "";
       const goto = { pathname: "/search", search: nextUrl };
-
-      // only navigate if something actually changed
       if (location.pathname !== "/search" || location.search !== nextUrl) {
         navigate(goto);
       }
     },
     [query, location.pathname, location.search, navigate]
   );
+  const clearQuery = () => setQuery("");
 
-  const handleLogout = useCallback(async () => {
-    try {
-      await logout();
-    } finally {
-      navigate("/login");
-    }
-  }, [logout, navigate]);
+  // —— profile / notifications ——
+  const [showNotif, setShowNotif] = useState(false);
+  const [showProfile, setShowProfile] = useState(false);
+  const [unreadCount, setUnreadCount] = useState(0);
+
+  const profileRef = useRef(null);
+  const notifRef = useRef(null);
+  const profileBtnRef = useRef(null);
+  const notifBtnRef = useRef(null);
+
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (showProfile) {
+        const out =
+          profileRef.current &&
+          !profileRef.current.contains(e.target) &&
+          profileBtnRef.current &&
+          !profileBtnRef.current.contains(e.target);
+        if (out) setShowProfile(false);
+      }
+      if (showNotif) {
+        const out =
+          notifRef.current &&
+          !notifRef.current.contains(e.target) &&
+          notifBtnRef.current &&
+          !notifBtnRef.current.contains(e.target);
+        if (out) setShowNotif(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [showProfile, showNotif]);
 
   const toggleNotifications = (e) => {
     e?.stopPropagation();
@@ -99,7 +125,42 @@ export default function TopNav() {
     setShowNotif(false);
   };
 
-  const clearQuery = () => setQuery("");
+  const handleLogout = useCallback(async () => {
+    try {
+      await logout();
+    } finally {
+      navigate("/login");
+    }
+  }, [logout, navigate]);
+
+  const currentUser = user || {};
+  const userName = currentUser.name || currentUser.email || "User";
+  const userRole = currentUser.role || "Member";
+
+  // —— dark mode ——
+  const [dark, setDark] = useState(() => {
+    const saved = localStorage.getItem("prefersDark");
+    return saved ? saved === "1" : false;
+  });
+  useEffect(() => {
+    document.body.classList.toggle("theme-dark", dark);
+    localStorage.setItem("prefersDark", dark ? "1" : "0");
+  }, [dark]);
+
+  // —— fullscreen ——
+  const [fs, setFs] = useState(() => !!document.fullscreenElement);
+  const toggleFullscreen = () => {
+    if (!document.fullscreenElement) {
+      document.documentElement.requestFullscreen?.().then(() => setFs(true)).catch(() => {});
+    } else {
+      document.exitFullscreen?.().then(() => setFs(false)).catch(() => {});
+    }
+  };
+  useEffect(() => {
+    const handler = () => setFs(!!document.fullscreenElement);
+    document.addEventListener("fullscreenchange", handler);
+    return () => document.removeEventListener("fullscreenchange", handler);
+  }, []);
 
   return (
     <header
@@ -132,8 +193,38 @@ export default function TopNav() {
           </form>
         </div>
 
+        {/* Quick stats */}
+        <div className="d-flex align-items-center gap-3 text-white small">
+          <div className="text-nowrap">
+            <span className="text-muted">Login:</span>{" "}
+            <strong>{fmtClock(loginAt)}</strong>
+          </div>
+          <div className="text-nowrap">
+            <span className="text-muted">On this page:</span>{" "}
+            <strong title={`${pageSeconds} seconds`}>{fmtHHMMSS(pageSeconds)}</strong>
+          </div>
+        </div>
+
         {/* Right side */}
         <div className="d-flex align-items-center gap-2">
+          {/* Dark / Fullscreen */}
+          <button
+            className="btn btn-outline-light btn-sm"
+            type="button"
+            onClick={() => setDark((v) => !v)}
+            title={dark ? "Switch to light" : "Switch to dark"}
+          >
+            {dark ? "🌙" : "☀️"}
+          </button>
+          <button
+            className="btn btn-outline-light btn-sm"
+            type="button"
+            onClick={toggleFullscreen}
+            title={fs ? "Exit full screen" : "Full screen"}
+          >
+            ⛶
+          </button>
+
           {/* Notifications */}
           <div style={{ position: "relative" }}>
             <button

@@ -1,6 +1,7 @@
 // src/layout/LeftNav.jsx
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Routes, Route, NavLink, useLocation } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
 
 import logo from "../assets/jencio-logo.svg";
 import logoicon from "../assets/jenceo-icon.svg";
@@ -61,11 +62,22 @@ import ExistingStaff from '../pages/ExistingStaff';
 import AdminUsers from '../pages/AdminUsers';
 
 export default function LeftNav() {
+  const { user } = useAuth(); // <-- get permissions/role from session
+  const perms = user?.permissions || {};
+  const isAdmin = user?.role === 'admin';
+
+  const canView = (key) => {
+    // allow admin to see everything
+    if (isAdmin) return true;
+    const p = perms[key];
+    return p && (p.view === true || p.read === true);
+  };
+
   const [isActive, setIsActive] = useState(false);
   const [isShow, setIsShow] = useState(false);
   const location = useLocation();
 
-  React.useEffect(() => {
+  useEffect(() => {
     setIsShow(false);
   }, [location.pathname]);
 
@@ -112,132 +124,156 @@ export default function LeftNav() {
           </div>
 
           <ul className="navbar-nav">
-            <li className="nav-item">
-              <NavLink to='/' className="nav-link" title='Dash Board' onClick={closeMobile}>
-                <img src={home} alt="" /> Dash Board
-              </NavLink>
-            </li>
+            {canView('Dashboard') && (
+              <li className="nav-item">
+                <NavLink to='/' className="nav-link" title='Dash Board' onClick={closeMobile}>
+                  <img src={home} alt="" /> Dash Board
+                </NavLink>
+              </li>
+            )}
 
-            <li className="nav-item">
-              <NavLink to='Investments' className="nav-link" title='Investments' onClick={closeMobile}>
-                <img src={invest} alt="" /> Investments
-              </NavLink>
-            </li>
-
-            <hr />
-            <li className="nav-item">
-              <NavLink to='StaffData' className="nav-link" title='Staff' onClick={closeMobile}>
-                <img src={Staff} alt="" /> Staff
-              </NavLink>
-            </li>
-            <li className="nav-item">
-              <NavLink to='ExistingStaff' className="nav-link" title='Exist Staff' onClick={closeMobile}>
-                <img src={StaffExit} alt="" /> Exist Staff
-              </NavLink>
-            </li>
-            <hr></hr>
-
-            <li className="nav-item">
-              <NavLink to='WorkersData' className="nav-link" title='Worker Data' onClick={closeMobile}>
-                <img src={workerData} alt="" /> Worker Data
-              </NavLink>
-            </li>
-
-            <li className="nav-item">
-              <NavLink to='ExistingEmployees' className="nav-link" title='Existing Workers' onClick={closeMobile}>
-                <img src={workerExit} alt="Worker Exit" /> Exit Worker
-              </NavLink>
-            </li>
-            <li className="nav-item">
-              <NavLink to='WorkerCallsData' className="nav-link" title='Worker Call Data' onClick={closeMobile}>
-                <img src={call} alt="Worker Call Data" /> Worker Call Data
-              </NavLink>
-            </li>
-
-            <li className="nav-item">
-              <NavLink to='WorkerCallDelete' className="nav-link" title='Worker Call Delete' onClick={closeMobile}>
-                <img src={callDelete} alt="" /> Worker Call Delete
-              </NavLink>
-            </li>
-
-            <li className="nav-item">
-              <NavLink to='EmployeeAggrement' className="nav-link" title='Worker Aggrement' onClick={closeMobile}>
-                <img src={WorkerAggrement} alt="" /> Worker Aggremnt
-              </NavLink>
-            </li>
+            {canView('Investments') && (
+              <li className="nav-item">
+                <NavLink to='Investments' className="nav-link" title='Investments' onClick={closeMobile}>
+                  <img src={invest} alt="" /> Investments
+                </NavLink>
+              </li>
+            )}
 
             <hr />
 
-            <li className="nav-item">
-              <NavLink to='ClientInfo' className="nav-link" title='ClientInfo' onClick={closeMobile}>
-                <img src={client} alt="" /> Client Data
-              </NavLink>
-            </li>
+            {canView('Staff') && (
+              <>
+                <li className="nav-item">
+                  <NavLink to='StaffData' className="nav-link" title='Staff' onClick={closeMobile}>
+                    <img src={Staff} alt="" /> Staff
+                  </NavLink>
+                </li>
+                <li className="nav-item">
+                  <NavLink to='ExistingStaff' className="nav-link" title='Exist Staff' onClick={closeMobile}>
+                    <img src={StaffExit} alt="" /> Exist Staff
+                  </NavLink>
+                </li>
+                <hr />
+              </>
+            )}
 
-            <li className="nav-item">
-              <NavLink to='ClientExit' className="nav-link" title='ClientExit' onClick={closeMobile}>
-                <img src={ClientExitIcon} alt="" /> ClientExit
-              </NavLink>
-            </li>
-            <li className="nav-item">
-              <NavLink to='Enquiry' className="nav-link" title='Enquiry' onClick={closeMobile}>
-                <img src={inquiry} alt="" /> Enquiry
-              </NavLink>
-            </li>
-            <li className="nav-item">
-              <NavLink to='EnquiryExit' className="nav-link" title='Old Enquirys' onClick={closeMobile}>
-                <img src={inquiryDelete} alt="" /> Old Enquiry
-              </NavLink>
-            </li>
+            {canView('Workers Data') && (
+              <>
+                <li className="nav-item">
+                  <NavLink to='WorkersData' className="nav-link" title='Worker Data' onClick={closeMobile}>
+                    <img src={workerData} alt="" /> Worker Data
+                  </NavLink>
+                </li>
+                <li className="nav-item">
+                  <NavLink to='ExistingEmployees' className="nav-link" title='Existing Workers' onClick={closeMobile}>
+                    <img src={workerExit} alt="Worker Exit" /> Exit Worker
+                  </NavLink>
+                </li>
+                <li className="nav-item">
+                  <NavLink to='WorkerCallsData' className="nav-link" title='Worker Call Data' onClick={closeMobile}>
+                    <img src={call} alt="Worker Call Data" /> Worker Call Data
+                  </NavLink>
+                </li>
+                <li className="nav-item">
+                  <NavLink to='WorkerCallDelete' className="nav-link" title='Worker Call Delete' onClick={closeMobile}>
+                    <img src={callDelete} alt="" /> Worker Call Delete
+                  </NavLink>
+                </li>
+                <li className="nav-item">
+                  <NavLink to='EmployeeAggrement' className="nav-link" title='Worker Aggrement' onClick={closeMobile}>
+                    <img src={WorkerAggrement} alt="" /> Worker Aggremnt
+                  </NavLink>
+                </li>
+                <hr />
+              </>
+            )}
 
-            <hr />
+            {canView('Client Data') && (
+              <>
+                <li className="nav-item">
+                  <NavLink to='ClientInfo' className="nav-link" title='ClientInfo' onClick={closeMobile}>
+                    <img src={client} alt="" /> Client Data
+                  </NavLink>
+                </li>
+                <li className="nav-item">
+                  <NavLink to='ClientExit' className="nav-link" title='ClientExit' onClick={closeMobile}>
+                    <img src={ClientExitIcon} alt="" /> ClientExit
+                  </NavLink>
+                </li>
+              </>
+            )}
 
-            <li className="nav-item">
-              <NavLink to='HospitalList' className="nav-link" title='Hospital List' onClick={closeMobile}>
-                <img src={HospitalIcon} alt="" /> Hospital List
-              </NavLink>
-            </li>
+            {canView('Enquiries') && (
+              <>
+                <li className="nav-item">
+                  <NavLink to='Enquiry' className="nav-link" title='Enquiry' onClick={closeMobile}>
+                    <img src={inquiry} alt="" /> Enquiry
+                  </NavLink>
+                </li>
+                <li className="nav-item">
+                  <NavLink to='EnquiryExit' className="nav-link" title='Old Enquirys' onClick={closeMobile}>
+                    <img src={inquiryDelete} alt="" /> Old Enquiry
+                  </NavLink>
+                </li>
+                <hr />
+              </>
+            )}
 
-            <li className="nav-item">
-              <NavLink to='HospitalDeleteList' className="nav-link" title='Deleted Hospital' onClick={closeMobile}>
-                <img src={HospitalDeleteIcon} alt="" /> Deleted Hospitals
-              </NavLink>
-            </li>
+            {canView('Hospital List') && (
+              <>
+                <li className="nav-item">
+                  <NavLink to='HospitalList' className="nav-link" title='Hospital List' onClick={closeMobile}>
+                    <img src={HospitalIcon} alt="" /> Hospital List
+                  </NavLink>
+                </li>
+                <li className="nav-item">
+                  <NavLink to='HospitalDeleteList' className="nav-link" title='Deleted Hospital' onClick={closeMobile}>
+                    <img src={HospitalDeleteIcon} alt="" /> Deleted Hospitals
+                  </NavLink>
+                </li>
+              </>
+            )}
 
-            <li className="nav-item">
-              <NavLink to='Expenses' className="nav-link" title='Expenses' onClick={closeMobile}>
-                <img src={accounts} alt="" /> Petty Cash
-              </NavLink>
-            </li>
-            <li className="nav-item">
-              <NavLink to='ExpenceDelete' className="nav-link" title='Delete Expenses' onClick={closeMobile}>
-                <img src={expences} alt="" /> Delete Petty Cash
-              </NavLink>
-            </li>
+            {canView('Expenses') && (
+              <>
+                <li className="nav-item">
+                  <NavLink to='Expenses' className="nav-link" title='Expenses' onClick={closeMobile}>
+                    <img src={accounts} alt="" /> Petty Cash
+                  </NavLink>
+                </li>
+                <li className="nav-item">
+                  <NavLink to='ExpenceDelete' className="nav-link" title='Delete Expenses' onClick={closeMobile}>
+                    <img src={expences} alt="" /> Delete Petty Cash
+                  </NavLink>
+                </li>
+                <hr />
+              </>
+            )}
 
-            <hr />
+            {canView('Task') && (
+              <li className="nav-item">
+                <NavLink to='Task' className="nav-link" title='Task' onClick={closeMobile}>
+                  <img src={task} alt="" /> Task
+                </NavLink>
+              </li>
+            )}
 
-            <li className="nav-item">
-              <NavLink to='Task' className="nav-link" title='Task' onClick={closeMobile}>
-                <img src={task} alt="" /> Task
-              </NavLink>
-            </li>
+            {(isAdmin || canView('Admin')) && (
+              <li className="nav-item">
+                <NavLink to='Admin' className="nav-link" title='Admin' onClick={closeMobile}>
+                  <img src={admin} alt="" /> Admin
+                </NavLink>
+              </li>
+            )}
 
-            <li className="nav-item">
-              <NavLink to='Admin' className="nav-link" title='Admin' onClick={closeMobile}>
-                <img src={admin} alt="" /> Admin
-              </NavLink>
-            </li>
-
-
-
-            <li className="nav-item">
-              <NavLink to='Accounts' className="nav-link" title='Accounts' onClick={closeMobile}>
-                <img src={accounts} alt="" /> Accounts
-              </NavLink>
-            </li>
-
-
+            {canView('Accounts') && (
+              <li className="nav-item">
+                <NavLink to='Accounts' className="nav-link" title='Accounts' onClick={closeMobile}>
+                  <img src={accounts} alt="" /> Accounts
+                </NavLink>
+              </li>
+            )}
           </ul>
         </div>
       </nav>
@@ -259,7 +295,6 @@ export default function LeftNav() {
         <Route path="Expenses" element={<Expenses />} />
         <Route path="ExpenceDelete" element={<ExpenceDelete />} />
         <Route path="Task" element={<Task />} />
-        {/* <Route path="Admin" element={<Admin />} /> */}
         <Route path="WorkerCallDelete" element={<WorkerCallDelete />} />
         <Route path="Accounts" element={<Accounts />} />
         <Route path="HospitalList" element={<HospitalList />} />

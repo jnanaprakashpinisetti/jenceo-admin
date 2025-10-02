@@ -153,7 +153,7 @@ export default function EnquiryCard({
 
     // gradient card (request #2)
     const cardStyle = {
-        background: "linear-gradient(135deg, rgba(14,165,233,0.15), rgba(99,102,241,0.15))",
+        background: "linear-gradient(135deg, rgb(45 62 189), rgb(133 123 219 / 72%))",
         border: "1px solid #1f2937",
         color: "#e5e7eb",
         boxShadow: "0 8px 24px rgba(0,0,0,0.25), inset 0 1px 0 rgba(255,255,255,0.04)"

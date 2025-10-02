@@ -63,11 +63,11 @@ function parseDateRobust(v) {
   // “DD Mon YYYY” or “Mon DD, YYYY”
   m = s.match(/^(\d{1,2})\s+([A-Za-z]+)\s+(\d{4})$/) || s.match(/^([A-Za-z]+)\s+(\d{1,2}),?\s+(\d{4})$/);
   if (m) {
-    const months = ["jan","feb","mar","apr","may","jun","jul","aug","sep","oct","nov","dec"];
+    const months = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"];
     let dd, monStr, yyyy;
     if (isNaN(m[1])) { monStr = m[1]; dd = m[2]; yyyy = m[3]; }
     else { dd = m[1]; monStr = m[2]; yyyy = m[3]; }
-    const mi = months.indexOf(String(monStr).slice(0,3).toLowerCase());
+    const mi = months.indexOf(String(monStr).slice(0, 3).toLowerCase());
     if (mi >= 0) return new Date(Number(yyyy), mi, Number(dd));
   }
   return null;
@@ -86,8 +86,8 @@ function classifyStatus(raw) {
     v === undefined || v === null
       ? ""
       : typeof v === "boolean"
-      ? v ? "true" : "false"
-      : String(v).trim().toLowerCase();
+        ? v ? "true" : "false"
+        : String(v).trim().toLowerCase();
 
   const candidates = [
     norm(raw?.approval),
@@ -117,7 +117,7 @@ function classifyStatus(raw) {
 
 function pickAmount(raw) {
   // try common total/amount fields
-  const order = ["total","amount","pettyAmount","value","cost","price","amountPaid","payment","paid"];
+  const order = ["total", "amount", "pettyAmount", "value", "cost", "price", "amountPaid", "payment", "paid"];
   for (const k of order) {
     const n = safeNumber(raw?.[k]);
     if (n) return n;
@@ -189,7 +189,7 @@ export default function PettyCashCard({ pettyCollection = "PettyCash" }) {
       const expanded = [];
       combined.forEach(r => {
         let pushed = false;
-        ["payments","items","rows","list"].forEach(k => {
+        ["payments", "items", "rows", "list"].forEach(k => {
           if (r?.[k] && typeof r[k] === "object") {
             const arr = Array.isArray(r[k]) ? r[k] : Object.values(r[k]);
             arr.forEach(p => expanded.push({ ...p, __parentId: r.id, __origin: r.__origin }));
@@ -221,8 +221,9 @@ export default function PettyCashCard({ pettyCollection = "PettyCash" }) {
           seen.set(sig, true);
           const deleted = detectDeleted(r);
           const status = classifyStatus(r);
-          normalized.push({ sig,
-            id: r.id ?? `${r.__origin || "pc"}-${Math.random().toString(36).slice(2,9)}`,
+          normalized.push({
+            sig,
+            id: r.id ?? `${r.__origin || "pc"}-${Math.random().toString(36).slice(2, 9)}`,
             raw: r,
             __origin: r.__origin || "",
             dateRaw, dateParsed,
@@ -241,7 +242,7 @@ export default function PettyCashCard({ pettyCollection = "PettyCash" }) {
       });
 
       // totals (EXCLUDE deleted & reject)
-      
+
       let grand = 0;
       let gcount = 0;
       const stat = {
@@ -271,8 +272,8 @@ export default function PettyCashCard({ pettyCollection = "PettyCash" }) {
           }
         }
       });
-setEntries(
-        normalized.sort((a,b) => (b.dateParsed?.getTime()||0) - (a.dateParsed?.getTime()||0))
+      setEntries(
+        normalized.sort((a, b) => (b.dateParsed?.getTime() || 0) - (a.dateParsed?.getTime() || 0))
       );
       setUnknownDateCount(normalized.filter(e => !e.dateParsed).length);
       setOverallTotal(grand);
@@ -293,11 +294,11 @@ setEntries(
         };
         ref.on("value", cb);
         listeners.push({ ref, cb });
-      } catch {}
+      } catch { }
     });
 
     return () => {
-      try { listeners.forEach(({ ref, cb }) => ref.off("value", cb)); } catch {}
+      try { listeners.forEach(({ ref, cb }) => ref.off("value", cb)); } catch { }
     };
   }, [pettyCollection]);
 
@@ -318,7 +319,7 @@ setEntries(
         mo.categories[cat] = (mo.categories[cat] || 0) + Number(e.amountNum || 0);
       }
     });
-    const yearKeys = Object.keys(years).sort((a,b) => (a==="Unknown") ? 1 : (b==="Unknown") ? -1 : Number(b)-Number(a));
+    const yearKeys = Object.keys(years).sort((a, b) => (a === "Unknown") ? 1 : (b === "Unknown") ? -1 : Number(b) - Number(a));
     return { years, yearKeys };
   }, [entries]);
 
@@ -335,10 +336,10 @@ setEntries(
       const months = new Array(13).fill(0).map((_, i) =>
         yearObj ? Number(yearObj.months[i]?.categories?.[cat] || 0) : 0
       );
-      const grand = months.reduce((s,v)=>s+v,0);
+      const grand = months.reduce((s, v) => s + v, 0);
       return { category: cat, months, grand };
     });
-    const yearTotal = rows.reduce((s,r)=>s+r.grand,0);
+    const yearTotal = rows.reduce((s, r) => s + r.grand, 0);
     return { rows, yearTotal };
   }, [modalYear, grouped]);
 
@@ -351,11 +352,11 @@ setEntries(
     const pool = (monthsObj[mk]?.entries || []);
     const filtered = pool.filter(e => e.categoryNormalized === cat);
     // Show all (including rejects), but style rejects in red
-    return filtered.sort((a,b) => (b.dateParsed?.getTime()||0) - (a.dateParsed?.getTime()||0));
+    return filtered.sort((a, b) => (b.dateParsed?.getTime() || 0) - (a.dateParsed?.getTime() || 0));
   }, [expanded, modalYear, grouped]);
 
-  const formatINR = (n) => new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 }).format(Number(n||0));
-  const monthNames = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec","Unknown"];
+  const formatINR = (n) => new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 }).format(Number(n || 0));
+  const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec", "Unknown"];
 
   const openDetails = (category, monthIndex) => {
     setExpanded({ category, monthIndex });
@@ -373,12 +374,13 @@ setEntries(
               <div className="invest-card__label">Petty Cash</div>
               {/* GRAND TOTAL (non-deleted, non-rejected) */}
               <div className="invest-card__total">{formatINR(overallTotal)} ({overallCount})</div>
-              <div style={{ fontSize: 12, opacity: .85 }}>
-                Ack: {formatINR(statusTotals.acknowledge?.total || 0)} | Pend: {formatINR(statusTotals.pending?.total || 0)} | Clar: {formatINR(statusTotals.clarification?.total || 0)} | <span style={{ color:"#ff6b6b" }}>Rej: {formatINR(statusTotals.reject?.total || 0)}</span>
-              </div>
+
             </div>
           </div>
           <div className="invest-card__divider" />
+          <div style={{ fontSize: 12, opacity: .85, paddingLeft: "20px" }}>
+            Ack: {formatINR(statusTotals.acknowledge?.total || 0)} | Pend: {formatINR(statusTotals.pending?.total || 0)} | Clar: {formatINR(statusTotals.clarification?.total || 0)} | <span style={{ color: "#ff6b6b" }}>Rej: {formatINR(statusTotals.reject?.total || 0)}</span>
+          </div>
         </div>
       </div>
 
@@ -412,7 +414,7 @@ setEntries(
                   </div>
                   <div className="petty-header-card" style={{ background: "#3a1a1a", padding: 10, border: "1px solid #ff6b6b" }}>
                     <div style={{ fontSize: 12 }}>Rejected</div>
-                    <div style={{ fontWeight: 700, color:"#ff6b6b" }}>{formatINR(statusTotals.reject?.total || 0)}</div>
+                    <div style={{ fontWeight: 700, color: "#ff6b6b" }}>{formatINR(statusTotals.reject?.total || 0)}</div>
                     <div style={{ fontSize: 11 }}>{statusTotals.reject?.count || 0} entries</div>
                   </div>
                 </div>
@@ -453,7 +455,7 @@ setEntries(
                       <tr>
                         <th style={{ width: 60 }}>S No</th>
                         <th style={{ minWidth: 220 }}>Category</th>
-                        {["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec","Unknown"].map((m) => (
+                        {["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec", "Unknown"].map((m) => (
                           <th key={m} style={{ width: 80 }}>{m}</th>
                         ))}
                         <th style={{ width: 140 }}>Grand Total</th>
@@ -472,7 +474,7 @@ setEntries(
                                   <button
                                     className="btn btn-link text-white p-0 m-0 text-decoration-none"
                                     onClick={(e) => { e.stopPropagation(); openDetails(r.category, mi); }}
-                                    title={`Show details for ${r.category} in ${["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec","Unknown"][mi]}`}
+                                    title={`Show details for ${r.category} in ${["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec", "Unknown"][mi]}`}
                                   >
                                     {val.toLocaleString("en-IN")}
                                   </button>
@@ -489,10 +491,10 @@ setEntries(
                             <tr className="table-info">
                               <td colSpan={16}>
                                 <div className="d-flex justify-content-between align-items-center">
-                                  <div style={{color:"#444"}}>
+                                  <div style={{ color: "#444" }}>
                                     <strong>Details — {r.category}</strong>
                                     <span className="ms-2">
-                                      (Month: {["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec","Unknown"][expanded.monthIndex]})
+                                      (Month: {["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec", "Unknown"][expanded.monthIndex]})
                                     </span>
                                   </div>
                                   <div>

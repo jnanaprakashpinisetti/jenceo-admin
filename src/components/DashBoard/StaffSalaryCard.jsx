@@ -327,11 +327,12 @@ export default function StaffSalaryCard() {
                     <div className="invest-card__meta">
                         <div className="invest-card__label">Staff Salaries</div>
                         <div className="invest-card__total">{loading ? "Loading..." : formatINR(overallTotals.paid)}</div>
-                        <div className="invest-card__small">{loading ? "" : `Payments: ${overallTotals.count}`}</div>
+
                     </div>
                 </div>
 
                 <div className="invest-card__divider" />
+                <div className="invest-card__small" style={{ paddingLeft: "20px" }}>{loading ? "" : `Payments: ${overallTotals.count}`}</div>
             </div>
 
             {modalOpen && (

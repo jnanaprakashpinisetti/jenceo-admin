@@ -206,7 +206,7 @@ export default function LeftNav() {
 
             <li className="nav-item">
               <NavLink to='Expenses' className="nav-link" title='Expenses' onClick={closeMobile}>
-                <img src={expences} alt="" /> Petty Cash
+                <img src={accounts} alt="" /> Petty Cash
               </NavLink>
             </li>
             <li className="nav-item">

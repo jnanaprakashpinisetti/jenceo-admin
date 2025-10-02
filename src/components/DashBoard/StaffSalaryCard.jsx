@@ -261,6 +261,11 @@ export default function StaffSalaryCard() {
     const [modalOpen, setModalOpen] = useState(false);
     const [activeYear, setActiveYear] = useState(null);
     const [activeMonth, setActiveMonth] = useState(null); // "0".."11" or "Unknown"
+    const [selectedStaff, setSelectedStaff] = useState(null);
+    const [staffDetailModal, setStaffDetailModal] = useState(false);
+    const [page, setPage] = useState(1);
+    const [pageSize, setPageSize] = useState(10);
+    const [showZeroRows, setShowZeroRows] = useState(false);
     const modalRef = useRef(null);
 
     useEffect(() => {
@@ -362,11 +367,25 @@ export default function StaffSalaryCard() {
         if (!mObj) return [];
         return mObj.rows.slice().sort((a, b) => (b.parsedDate?.getTime() || 0) - (a.parsedDate?.getTime() || 0));
     }, [activeYear, activeMonth, grouped]);
-    // Show only rows with Paid Amount > 0 in the table (without changing existing totals/count logic)
+
+    // rows actually displayed in table (amount > 0 unless toggled)
     const displayRows = useMemo(() => {
-        const base = currentMonthRows || [];
-        return base.filter(r => Number(r?.paidAmount || 0) > 0);
-    }, [currentMonthRows]);
+        if (!currentMonthRows) return [];
+        if (showZeroRows) return currentMonthRows;
+        return currentMonthRows.filter(r => Number(r?.paidAmount || 0) > 0);
+    }, [currentMonthRows, showZeroRows]);
+
+    // Pagination derived values for the month table
+    const totalEntries = displayRows.length;
+    const totalPages = Math.max(1, Math.ceil(totalEntries / pageSize));
+    const pageSafe = Math.min(Math.max(1, page), totalPages);
+    const pageStart = (pageSafe - 1) * pageSize;
+    const pageEnd = Math.min(pageStart + pageSize, totalEntries);
+    const currentMonthRowsPage = useMemo(() => displayRows.slice(pageStart, pageEnd), [displayRows, pageStart, pageEnd]);
+
+    useEffect(() => {
+        if (page > totalPages) setPage(totalPages);
+    }, [totalPages]);
 
     const currentYearRows = useMemo(() => {
         if (!activeYear) return [];
@@ -454,6 +473,27 @@ export default function StaffSalaryCard() {
         return r.date || "-";
     };
 
+    // Function to get staff details for modal
+    const getStaffDetails = (staff) => {
+        const details = [];
+
+        details.push({ label: "Staff ID", value: staff.employeeId || "-" });
+        details.push({ label: "Staff Name", value: staff.employeeName || "-" });
+        details.push({ label: "Payment Type", value: staff.typeOfPayment || "-" });
+        details.push({ label: "Date", value: formatDateCell(staff) });
+        details.push({ label: "Receipt No", value: staff.receiptNo || "-" });
+        details.push({ label: "Paid Amount", value: formatINR(staff.paidAmount) });
+        details.push({ label: "Payment For", value: staff.paymentFor || "-" });
+        details.push({ label: "Source", value: staff.sourceCollection || "-" });
+
+        return details;
+    };
+
+    const handleRowClick = (staff) => {
+        setSelectedStaff(staff);
+        setStaffDetailModal(true);
+    };
+
     useEffect(() => {
         if (modalOpen) document.body.classList.add("modal-open");
         else document.body.classList.remove("modal-open");
@@ -506,7 +546,7 @@ export default function StaffSalaryCard() {
                                     </div>
                                 </div>
 
-                                {/* Charts Section */}
+                                {/* Charts Section - Same layout as WorkerSalaryCard */}
                                 {activeYear && activeMonth && currentMonthRows.length > 0 && (
                                     <div className="row g-3 mb-4">
                                         <div className="col-lg-8">
@@ -562,15 +602,6 @@ export default function StaffSalaryCard() {
                                             ))}
                                         </ul>
 
-                                        <div className="invest-month-toolbar d-flex justify-content-between align-items-center mb-3">
-                                            <div className="small text-center">
-                                                {activeMonth !== null && activeMonth !== undefined ? <>{safeMonthLabel(activeYear, activeMonth)} {activeYear}</> : "Select a month"}
-                                            </div>
-
-                                            <div className="btn-group ms-2">
-                                            </div>
-                                        </div>
-
                                         <div className="table-responsive">
                                             <table className="table table-sm table-hover invest-table">
                                                 <thead>
@@ -589,8 +620,12 @@ export default function StaffSalaryCard() {
                                                     {(!activeMonth || displayRows.length === 0) && (
                                                         <tr><td colSpan={8} className="text-center small text-muted">No payments for selected month/year</td></tr>
                                                     )}
-                                                    {displayRows.map((r, i) => (
-                                                        <tr key={`${r._employeeDbKey}_${i}`}>
+                                                    {currentMonthRowsPage.map((r, i) => (
+                                                        <tr
+                                                            key={`${r._employeeDbKey}_${i}`}
+                                                            style={{ cursor: 'pointer' }}
+                                                            onClick={() => handleRowClick(r)}
+                                                        >
                                                             <td>{i + 1}</td>
                                                             <td>
                                                                 {r.employeePhoto ? (
@@ -621,6 +656,52 @@ export default function StaffSalaryCard() {
                                             </table>
                                         </div>
 
+                                        <div className="d-flex justify-content-between align-items-center p-2 border-top">
+                                            <div className="invest-month-toolbar d-flex justify-content-between align-items-center mb-3">
+                                                <div className="d-flex align-items-center gap-3">
+                                                    <div className="form-check form-switch ms-3">
+                                                        <input className="form-check-input" type="checkbox" id="toggleZeroRows" checked={showZeroRows} onChange={(e) => { setShowZeroRows(e.target.checked); setPage(1); }} />
+                                                        <label className="form-check-label tiny" htmlFor="toggleZeroRows">Show zero-amount rows</label>
+                                                    </div>
+                                                    <div className="d-flex align-items-center gap-2">
+                                                        <span className="tiny ">Show</span>
+                                                        <select
+                                                            className="form-select form-select-sm"
+                                                            style={{ width: 90 }}
+                                                            value={pageSize}
+                                                            onChange={(e) => { setPageSize(Number(e.target.value) || 10); setPage(1); }}
+                                                        >
+                                                            {[10, 20, 30, 40, 50].map(sz => <option key={sz} value={sz}>{sz}</option>)}
+                                                        </select>
+                                                        <span className="tiny ">entries</span>
+                                                    </div>
+                                                    <div className="tiny ">
+                                                        {totalEntries ? `Showing ${pageStart + 1} to ${pageEnd} of ${totalEntries} entries` : "No entries"}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <nav style={{ backgroundColor: "transparent" }}>
+                                                <ul className="pagination pagination-sm mb-0">
+                                                    <li className={`page-item ${pageSafe <= 1 ? "disabled" : ""}`}>
+                                                        <button className="page-link" onClick={() => pageSafe > 1 && setPage(pageSafe - 1)}>Prev</button>
+                                                    </li>
+                                                    {[...Array(totalPages)].map((_, idx) => {
+                                                        const num = idx + 1;
+                                                        const show = num === 1 || num === totalPages || (num >= pageSafe - 2 && num <= pageSafe + 2);
+                                                        if (!show) return null;
+                                                        return (
+                                                            <li key={num} className={`page-item ${num === pageSafe ? "active" : ""}`}>
+                                                                <button className="page-link" onClick={() => setPage(num)}>{num}</button>
+                                                            </li>
+                                                        );
+                                                    })}
+                                                    <li className={`page-item ${pageSafe >= totalPages ? "disabled" : ""}`}>
+                                                        <button className="page-link" onClick={() => pageSafe < totalPages && setPage(pageSafe + 1)}>Next</button>
+                                                    </li>
+                                                </ul>
+                                            </nav>
+                                        </div>
+
                                     </div>
                                 )}
 
@@ -631,6 +712,58 @@ export default function StaffSalaryCard() {
                                 <button className="btn btn-secondary btn-sm" onClick={() => setModalOpen(false)}>Close</button>
                             </div>
 
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Staff Detail Modal */}
+            {staffDetailModal && selectedStaff && (
+                <div className="modal fade show" style={{ display: "block", background: "rgba(2,6,23,0.6)", zIndex: 3000 }} onClick={() => setStaffDetailModal(false)}>
+                    <div className="modal-dialog modal-lg modal-dialog-centered" onClick={(e) => e.stopPropagation()} style={{ zIndex: 3001 }}>
+                        <div className="modal-content bg-white">
+                            <div className="modal-header bg-warning text-white">
+                                <h6 className="modal-title mb-0">Staff Payment Details</h6>
+                                <button className="btn-close btn-close-white" onClick={() => setStaffDetailModal(false)} />
+                            </div>
+                            <div className="modal-body">
+                                <div className="row g-3">
+                                    {/* Staff Photo and Basic Info */}
+                                    <div className="col-12 mb-3">
+                                        <div className="d-flex align-items-center gap-3">
+                                            {selectedStaff.employeePhoto ? (
+                                                <img src={selectedStaff.employeePhoto} alt="Staff" className="rounded-circle" style={{ width: 80, height: 80, objectFit: 'cover' }} />
+                                            ) : (
+                                                <div className="rounded-circle bg-secondary d-flex align-items-center justify-content-center" style={{ width: 80, height: 80 }}>
+                                                    <span className="text-white fs-4">👩‍💼</span>
+                                                </div>
+                                            )}
+                                            <div>
+                                                <h5 className="mb-1">{selectedStaff.employeeName}</h5>
+                                                <p className="text-muted mb-0">ID: {selectedStaff.employeeId}</p>
+                                            </div>
+                                            <div className="ms-auto">
+                                                <div className="fw-bold fs-4 text-success">
+                                                    {formatINR(selectedStaff.paidAmount)}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* Staff Details */}
+                                    {getStaffDetails(selectedStaff).map((detail, idx) => (
+                                        <div key={idx} className="col-md-6">
+                                            <div className="p-3 rounded-3 border">
+                                                <div className="small mb-1">{detail.label}</div>
+                                                <div className="fw-semibold text-dark">{detail.value}</div>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                            <div className="modal-footer">
+                                <button className="btn btn-secondary" onClick={() => setStaffDetailModal(false)}>Close</button>
+                            </div>
                         </div>
                     </div>
                 </div>

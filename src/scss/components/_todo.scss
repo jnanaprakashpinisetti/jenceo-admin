@@ -1,0 +1,175 @@
+/* ===== ToDo Theme (Dark Neon) ===== */
+:root {
+    --td-bg: #0b1220;
+    --td-card: #0f172a;
+    --td-soft: #111827;
+    --td-border: #1f2937;
+    --td-text: #e5e7eb;
+    --td-text-90: rgba(229, 231, 235, 0.9);
+    --td-text-80: rgba(229, 231, 235, 0.8);
+    --td-text-400: #9ca3af;
+    --td-muted-300: #cbd5e1;
+    --td-muted-200: #d1d5db;
+    --td-input: #182235;
+    --td-input-border: #334155;
+}
+
+/* Container */
+.todo-wrap {
+    color: var(--td-text);
+    background: transparent;
+}
+
+/* Header gradient card */
+.todo-head {
+    background: linear-gradient(135deg, rgba(14, 165, 233, .25), rgba(168, 85, 247, .2));
+    border: 1px solid var(--td-border);
+}
+
+/* Inputs (dark) */
+.dark-input {
+    background: var(--td-input) !important;
+    color: var(--td-text) !important;
+    border-color: var(--td-input-border) !important;
+}
+
+.dark-input::placeholder {
+    color: #94a3b8;
+}
+
+/* Text helpers */
+.text-white-80 {
+    color: var(--td-text-80) !important;
+}
+
+.text-white-90 {
+    color: var(--td-text-90) !important;
+}
+
+.text-muted-200 {
+    color: var(--td-muted-200) !important;
+}
+
+.text-muted-300 {
+    color: var(--td-muted-300) !important;
+}
+
+.text-muted-400 {
+    color: var(--td-text-400) !important;
+}
+
+.mut-dot {
+    color: #94a3b8;
+}
+
+/* Cards */
+.neo-card {
+    background: var(--td-card);
+    border: 1px solid var(--td-border);
+    color: var(--td-text);
+    border-radius: 12px;
+}
+
+/* Task card shell */
+.task-card {
+    position: relative;
+    background: var(--td-card);
+    border-radius: 14px;
+    border: 1px solid var(--td-border);
+    overflow: hidden;
+}
+
+.task-card .task-category-bar {
+    height: 6px;
+    width: 100%;
+}
+
+.task-card .task-border {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border: 2px solid transparent;
+    border-radius: 14px;
+    pointer-events: none;
+}
+
+/* Priority badge */
+.priority-badge {
+    color: #0b1220;
+    font-weight: 700;
+}
+
+/* Label chip */
+.label-chip {
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    font-weight: 600;
+}
+
+/* Comments row */
+.comment-row {
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    color: var(--td-text);
+}
+
+/* Modal overrides (dark mode) */
+.modal-content-dark {
+    background: var(--td-card);
+    color: var(--td-text);
+    border: 1px solid var(--td-border);
+}
+
+.modal-header-grad {
+    background: linear-gradient(90deg, #f59e0b, #ec4899);
+    color: #fff;
+}
+
+.modal-body-dark {
+    background: var(--td-soft);
+}
+
+.modal-footer-dark {
+    background: #0b1220;
+}
+
+/* Detail modal overlay + shell */
+.modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(2, 6, 23, .75);
+    z-index: 2100;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.modal-modern {
+    width: min(920px, 96vw);
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, .35);
+    border: 1px solid var(--td-border);
+    background: var(--td-card);
+}
+
+/* Soft panels inside detail modal */
+.panel-soft {
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: var(--td-text);
+    border-radius: 12px;
+    padding: 12px;
+    margin-bottom: 10px;
+}
+
+/* Bootstrap buttons look nicer on dark */
+.btn-outline-light {
+    color: #e5e7eb;
+    border-color: #64748b;
+}
+
+.btn-outline-light:hover {
+    background: #e5e7eb;
+    color: #0b1220;
+}

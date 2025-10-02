@@ -11,6 +11,52 @@ const HEADER_IMG =
 const HEADER_IMG_SECOND =
   "https://firebasestorage.googleapis.com/v0/b/jenceo-admin.firebasestorage.app/o/OfficeFiles%2FHeadder-2.svg?alt=media&token=83a00c4b-a170-418b-b38b-63c4155b4d6b";
 
+// utils/numberToWords.js
+export function numberToWords(num) {
+  if (num === 0) return "Zero";
+
+  const a = [
+    "", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine",
+    "Ten", "Eleven", "Twelve", "Thirteen", "Fourteen", "Fifteen",
+    "Sixteen", "Seventeen", "Eighteen", "Nineteen"
+  ];
+  const b = [
+    "", "", "Twenty", "Thirty", "Forty", "Fifty",
+    "Sixty", "Seventy", "Eighty", "Ninety"
+  ];
+
+  const toWords = (n) => {
+    if (n < 20) return a[n];
+    if (n < 100) return b[Math.floor(n / 10)] + (n % 10 ? " " + a[n % 10] : "");
+    if (n < 1000)
+      return (
+        a[Math.floor(n / 100)] +
+        " Hundred" +
+        (n % 100 ? " " + toWords(n % 100) : "")
+      );
+    if (n < 1000000)
+      return (
+        toWords(Math.floor(n / 1000)) +
+        " Thousand" +
+        (n % 1000 ? " " + toWords(n % 1000) : "")
+      );
+    if (n < 1000000000)
+      return (
+        toWords(Math.floor(n / 1000000)) +
+        " Million" +
+        (n % 1000000 ? " " + toWords(n % 1000000) : "")
+      );
+    return (
+      toWords(Math.floor(n / 1000000000)) +
+      " Billion" +
+      (n % 1000000000 ? " " + toWords(n % 1000000000) : "")
+    );
+  };
+
+  return toWords(num);
+}
+
+
 const safe = (v, fb = "—") =>
   v !== undefined && v !== null && String(v).trim() !== "" ? v : fb;
 
@@ -75,6 +121,7 @@ const htmlFullData = (data) => {
   const qual = safe(data.qualification);
   const college = safe(data.schoolCollege);
   const pskill = safe(data.primarySkill);
+  const salary = safe(data.basicSalary);
   const health = Array.isArray(data.healthIssues)
     ? data.healthIssues.filter(Boolean)
     : [];
@@ -572,30 +619,56 @@ const htmlAggHin = (data) =>
         </div>
       </div>
     </div>
-    <div class="footer"><div><strong>Doc Ref:</strong> JC-HR-AGG-HI</div></div>`
+    <div class="footer">
+      <div><strong>Doc Ref:</strong> JC-HR-02 | Revision: 1 | Date: 1st May 2025 | Page 1 of 1 </div>
+    </div>`
   );
 
 /* === Offer Letters: EN/TEL/HI (own HTML, same layout wrapper) === */
+const today = new Date().toLocaleDateString()
 const htmlOffEng = (data) =>
   buildTemplate(
-    "OFFER LETTER — ENGLISH",
+    "OFFER LETTER",
     "Official offer letter preview with employee information.",
     data,
     `<div class="section">
       <div class="hd">Offer Details</div>
       <div class="bd prose">
-        <p>We are pleased to offer <strong>${fullName(data)}</strong> the role of <strong>${safe(
-      data.primarySkill
-    )}</strong>. Joining date and compensation are as per HR confirmation.</p>
-        <ul>
-          <li>Role and responsibilities as discussed</li>
-          <li>Compensation as per policy</li>
-          <li>Confidentiality is mandatory</li>
-        </ul>
-        <p>Please sign and return a copy of this offer.</p>
-      </div>
+        <h5> Dear Mr. / Mrs. / Kumari. <strong>${fullName(data)}</strong> We are pleased to offer you the position of <strong>${safe(data.primarySkill)} </strong>at JenCeo Homecare, and compensation are as per HR confirmation.</h5>
+        <p> Joining date <strong>${today} </strong></p>
+        <p>Salary: <strong>${safe(data.basicSalary)}</strong> <small> in words (${numberToWords(Number(data.basicSalary))} Only)</small></p>
+        <h4>Employee Benefits</h4>
+        <ol>
+          <li>An employee who completes six months of continuous service will be eligible for a bonus of Rs.6,000/-.</li>
+          <li>An employee who completes twelve months of continuous service will be eligible for a bonus of Rs.15,000/- and an increment </li>
+          <li>An employee who completes six months of continuous service will be provided with travel expenses to visit their home.</li>
+          <li>An employee who completes one year of continuous service will receive a salary increment ranging from Rs.1,000/- to Rs.3,000/- starting from the following month</li>
+        </ol>
+        <h4>Employee Acknowledgment</h4>
+        <p>I have carefully read/heard and understood the above-mentioned guidelines. I wholeheartedly agree to them and assure full responsibility for adhering to these terms.</p>
+<div class="p-3">
+<br><br>
+  <div class="fot">
+    <div>
+      <p class="mb-0"><strong>Employee Signature</strong></p>
+      <p class="mb-0">Date: ________________</p>
     </div>
-    <div class="footer"><div><strong>Doc Ref:</strong> JC-HR-OFF-EN</div></div>`
+    <div>
+      <p class="mb-0"><strong>Authorized Signatory</strong></p>
+      <p class="mb-0">JenCeo Home Care Services</p>
+    </div>
+  </div>
+  <br><br><br>
+  <p>This document serves as a formal agreement between the employee and JenCeo Homecare, ensuring clarity, professionalism, and
+mutual understanding of the terms and conditions of employment</p>
+</div>
+      </div>
+      <br><br>
+   
+    </div>
+    <div class="footer">
+      <div><strong>Doc Ref:</strong> JC-HR-02 | Revision: 1 | Date: 1st May 2025 | Page 1 of 1 </div>
+    </div>`
   );
 
 const htmlOffTel = (data) =>

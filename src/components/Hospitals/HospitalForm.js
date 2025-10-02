@@ -27,19 +27,68 @@ const HospitalForm = ({
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [showDuplicateModal, setShowDuplicateModal] = useState(false);
   const [showThankYouModal, setShowThankYouModal] = useState(false);
+  const [showDiscardModal, setShowDiscardModal] = useState(false); // NEW: Discard changes modal
   const [duplicateHospital, setDuplicateHospital] = useState(null);
   const [submittedHospital, setSubmittedHospital] = useState(null);
 
   // NEW: lock flag so ID is disabled when auto-generated
   const [autoIdLock, setAutoIdLock] = useState(false);
+  
+  // NEW: Track initial form data to detect changes
+  const [initialFormData, setInitialFormData] = useState({});
+
+  // Initialize initialFormData when modal opens with initialData
+  useEffect(() => {
+    if (show) {
+      setInitialFormData({
+        idNo: initialData.idNo || "",
+        hospitalName: initialData.hospitalName || "",
+        hospitalType: initialData.hospitalType || "",
+        location: initialData.location || "",
+        noOfBeds: initialData.noOfBeds || "",
+        timing: initialData.timing || "",
+        address: initialData.address || "",
+        locationLink: initialData.locationLink || "",
+      });
+    }
+  }, [show, initialData]);
+
+  // Check if form has changes
+  const hasFormChanges = () => {
+    return JSON.stringify(formData) !== JSON.stringify(initialFormData);
+  };
+
+  // Enhanced close handler
+  const handleClose = () => {
+    if (hasFormChanges()) {
+      setShowDiscardModal(true);
+    } else {
+      onClose();
+    }
+  };
+
+  // Confirm discard changes
+  const confirmDiscard = () => {
+    setShowDiscardModal(false);
+    onClose();
+  };
+
+  // Cancel discard
+  const cancelDiscard = () => {
+    setShowDiscardModal(false);
+  };
 
   // Close on ESC when modal open
   useEffect(() => {
     if (!show) return;
-    const onKey = (e) => { if (e.key === "Escape") onClose(); };
+    const onKey = (e) => { 
+      if (e.key === "Escape") {
+        handleClose();
+      }
+    };
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
-  }, [show, onClose]);
+  }, [show, formData, initialFormData]); // Added dependencies
 
   // ---------- NEW: Auto-generate next Hospital ID when opening "Add New" ----------
   useEffect(() => {
@@ -262,7 +311,7 @@ const HospitalForm = ({
   return (
     <>
       {/* Modal Shell */}
-      <div className="wb-backdrop hospitalForm" onClick={onClose}>
+      <div className="wb-backdrop hospitalForm" onClick={handleClose}>
         <div
           className="wb-card"
           onClick={(e) => e.stopPropagation()}
@@ -275,10 +324,9 @@ const HospitalForm = ({
               <div id="hospitalFormTitle" className="wb-title">
                 {title || (isEdit ? "Edit Hospital" : "Add New Hospital")}
               </div>
-              <div className="wb-step-counter">Form</div>
             </div>
             <div>
-              <button className="wb-close-btn" title="Close" onClick={onClose}>✕</button>
+              <button className="wb-close-btn" title="Close" onClick={handleClose}>✕</button>
             </div>
           </div>
 
@@ -399,7 +447,7 @@ const HospitalForm = ({
 
                     {/* Address */}
                     <div className="col-12">
-                      <label htmlFor="address, setShowThankYouModal" className="form-label">Address</label>
+                      <label htmlFor="address" className="form-label">Address</label>
                       <textarea
                         className="form-control"
                         id="address"
@@ -443,23 +491,19 @@ const HospitalForm = ({
                           isEdit ? "Update Hospital" : "Add Hospital"
                         )}
                       </button>
-                      <button type="button" className="btn btn-secondary" onClick={onClose}>Close</button>
+                      <button type="button" className="btn btn-secondary" onClick={handleClose}>Close</button>
                     </div>
                   </div>
                 </form>
               </div>
             </div>
           </div>
-
-          <div className="wb-footer d-flex justify-content-end">
-            <button className="wb-secondary-btn" onClick={onClose}>Close</button>
-          </div>
         </div>
       </div>
 
       {/* Confirmation Modal */}
       {showConfirmModal && (
-        <div className="modal fade show" style={{ display: "block", backgroundColor: "rgba(0,0,0,0.5)" }}>
+        <div className="modal fade show" style={{ display: "block", backgroundColor: "rgba(0,0,0,0.5)",zIndex:"3000" }}>
           <div className="modal-dialog modal-dialog-centered">
             <div className="modal-content">
               <div className="modal-header">
@@ -525,6 +569,31 @@ const HospitalForm = ({
               <div className="modal-footer justify-content-center">
                 <button type="button" className="btn btn-success" onClick={() => setShowThankYouModal(false)}>
                   Continue
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* NEW: Discard Changes Modal */}
+      {showDiscardModal && (
+        <div className="modal fade show" style={{ display: "block", backgroundColor: "rgba(0,0,0,0.5)" }}>
+          <div className="modal-dialog modal-dialog-centered">
+            <div className="modal-content">
+              <div className="modal-header bg-warning">
+                <h5 className="modal-title">Discard Changes?</h5>
+                <button type="button" className="btn-close" onClick={cancelDiscard}></button>
+              </div>
+              <div className="modal-body">
+                <p>You have unsaved changes. Are you sure you want to close without saving?</p>
+              </div>
+              <div className="modal-footer">
+                <button type="button" className="btn btn-secondary" onClick={cancelDiscard}>
+                  Cancel
+                </button>
+                <button type="button" className="btn btn-warning" onClick={confirmDiscard}>
+                  Discard Changes
                 </button>
               </div>
             </div>

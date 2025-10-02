@@ -272,6 +272,11 @@ export default function StaffSalaryCard() {
         if (!mObj) return [];
         return mObj.rows.slice().sort((a, b) => (b.parsedDate?.getTime() || 0) - (a.parsedDate?.getTime() || 0));
     }, [activeYear, activeMonth, grouped]);
+    // Show only rows with Paid Amount > 0 in the table (without changing existing totals/count logic)
+    const displayRows = useMemo(() => {
+        const base = currentMonthRows || [];
+        return base.filter(r => Number(r?.paidAmount || 0) > 0);
+    }, [currentMonthRows]);
 
     const currentYearRows = useMemo(() => {
         if (!activeYear) return [];
@@ -405,10 +410,10 @@ export default function StaffSalaryCard() {
                                                     </tr>
                                                 </thead>
                                                 <tbody>
-                                                    {(!activeMonth || currentMonthRows.length === 0) && (
+                                                    {(!activeMonth || displayRows.length === 0) && (
                                                         <tr><td colSpan={8} className="text-center small text-muted">No payments for selected month/year</td></tr>
                                                     )}
-                                                    {currentMonthRows.map((r, i) => (
+                                                    {displayRows.map((r, i) => (
                                                         <tr key={`${r._employeeDbKey}_${i}`}>
                                                             <td>{i + 1}</td>
                                                             <td>

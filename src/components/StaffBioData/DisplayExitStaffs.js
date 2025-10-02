@@ -18,13 +18,16 @@ export default function DisplayExitWorkers() {
     Male: false,
     Female: false
   });
-  const [skillFilters, setSkillFilters] = useState({
-    Nursing: false,
-    Diaper: false,
-    'Patent Care': false,
-    'Baby Care': false,
-    Cook: false
-  });
+    const [skillFilters, setSkillFilters] = useState({
+        Admin: false,
+        Coordinator: false,
+        Manager: false,
+        HR:false,
+        Operations:false,
+        Accounts:false,
+        User:false
+       
+    });
 
   const [selectedEmployee, setSelectedEmployee] = useState(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -349,7 +352,7 @@ setShowReturnReasonModal(false);
     <div className="container-fluid py-4">
       {/* Search Bar */}
       <div className="row mb-3">
-        <div className="col-md-6 m-auto">
+        <div className="col-md-12 m-auto">
           <div className="input-group">
             <span className="input-group-text">
               <i className="bi bi-search"></i>
@@ -367,7 +370,7 @@ setShowReturnReasonModal(false);
 
       {/* Filter Checkboxes */}
       <div className="row mb-3">
-        <div className="col-md-8 m-auto">
+        <div className="col-md-12 m-auto">
           <div className="chec-box-card">
             <div className="card-body py-2 justify-content-between filter-wrapper">
               <div className="row w-100">

@@ -1,7 +1,15 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import firebaseDB from "../../firebase";
 
-const HospitalForm = ({ onSubmit, initialData = {}, isEdit = false }) => {
+const HospitalForm = ({
+  onSubmit,
+  initialData = {},
+  isEdit = false,
+  // NEW modal API like EnquiryForm:
+  show = false,
+  onClose = () => {},
+  title = "Add New Hospital",
+}) => {
   const [formData, setFormData] = useState({
     idNo: initialData.idNo || "",
     hospitalName: initialData.hospitalName || "",
@@ -21,6 +29,14 @@ const HospitalForm = ({ onSubmit, initialData = {}, isEdit = false }) => {
   const [showThankYouModal, setShowThankYouModal] = useState(false);
   const [duplicateHospital, setDuplicateHospital] = useState(null);
   const [submittedHospital, setSubmittedHospital] = useState(null); // Store submitted data
+
+  // Close on ESC when modal open
+  useEffect(() => {
+    if (!show) return;
+    const onKey = (e) => { if (e.key === "Escape") onClose(); };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [show, onClose]);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -172,169 +188,205 @@ const HospitalForm = ({ onSubmit, initialData = {}, isEdit = false }) => {
     }
   };
 
+  // If modal not requested, render nothing (same pattern as EnquiryForm usage)
+  if (!show) return null;
+
   return (
-    <div className="">
-      <div className="form-card shadow">
-        <div className="form-card-header mb-4">
-          <h3 className="text-center">{isEdit ? "Edit Hospital" : "Add New Hospital"}</h3>
-        </div>
-        <div className="form-card-body">
-          {submitStatus.success !== null && (
-            <div className={`alert ${submitStatus.success ? "alert-success" : "alert-danger"} mb-4`}>
-              {submitStatus.message}
+    <>
+      {/* Modal Shell (click outside to close, ESC handled above) */}
+      <div className="wb-backdrop hospitalForm" onClick={onClose}>
+        <div
+          className="wb-card"
+          onClick={(e) => e.stopPropagation()}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="hospitalFormTitle"
+        >
+          {/* Header */}
+          <div className="wb-header">
+            <div style={{ display: "flex", flexDirection: "column" }}>
+              <div id="hospitalFormTitle" className="wb-title">
+                {title || (isEdit ? "Edit Hospital" : "Add New Hospital")}
+              </div>
+              <div className="wb-step-counter">Form</div>
             </div>
-          )}
+            <div>
+              <button className="wb-close-btn" title="Close" onClick={onClose}>✕</button>
+            </div>
+          </div>
 
-          <form onSubmit={handleSubmit}>
-            <div className="row g-3">
-              {/* ID No */}
-              <div className="col-md-6">
-                <label htmlFor="idNo" className="form-label">
-                  ID No<span className="text-danger">*</span>
-                </label>
-                <input
-                  type="text"
-                  className={`form-control ${errors.idNo ? "is-invalid" : ""}`}
-                  id="idNo"
-                  name="idNo"
-                  value={formData.idNo}
-                  onChange={handleChange}
-                  placeholder="Enter ID (e.g., H1, H25, H9999)"
-                  maxLength="5"
-                  disabled={isEdit}
-                />
-                {errors.idNo && <div className="invalid-feedback">{errors.idNo}</div>}
+          {/* Body – your existing form markup preserved */}
+          <div className="wb-body">
+            <div className="form-card shadow">
+              <div className="form-card-header mb-4">
+                <h3 className="text-center">{isEdit ? "Edit Hospital" : "Add New Hospital"}</h3>
               </div>
+              <div className="form-card-body">
+                {submitStatus.success !== null && (
+                  <div className={`alert ${submitStatus.success ? "alert-success" : "alert-danger"} mb-4`}>
+                    {submitStatus.message}
+                  </div>
+                )}
 
-              {/* Hospital Name */}
-              <div className="col-md-6">
-                <label htmlFor="hospitalName" className="form-label">
-                  Hospital Name<span className="text-danger">*</span>
-                </label>
-                <input
-                  type="text"
-                  className={`form-control ${errors.hospitalName ? "is-invalid" : ""}`}
-                  id="hospitalName"
-                  name="hospitalName"
-                  value={formData.hospitalName}
-                  onChange={handleChange}
-                  placeholder="Enter hospital name"
-                />
-                {errors.hospitalName && <div className="invalid-feedback">{errors.hospitalName}</div>}
-              </div>
+                <form onSubmit={handleSubmit}>
+                  <div className="row g-3">
+                    {/* ID No */}
+                    <div className="col-md-6">
+                      <label htmlFor="idNo" className="form-label">
+                        ID No<span className="text-danger">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        className={`form-control ${errors.idNo ? "is-invalid" : ""}`}
+                        id="idNo"
+                        name="idNo"
+                        value={formData.idNo}
+                        onChange={handleChange}
+                        placeholder="Enter ID (e.g., H1, H25, H9999)"
+                        maxLength="5"
+                        disabled={isEdit}
+                      />
+                      {errors.idNo && <div className="invalid-feedback">{errors.idNo}</div>}
+                    </div>
 
-              {/* Hospital Type */}
-              <div className="col-md-6">
-                <label htmlFor="hospitalType" className="form-label">Hospital Type</label>
-                <select className="form-select" id="hospitalType" name="hospitalType" value={formData.hospitalType} onChange={handleChange}>
-                  <option value="">Select Hospital Type</option>
-                  <option value="Government">Government</option>
-                  <option value="Private">Private</option>
-                  <option value="Community">Community Health Center</option>
-                  <option value="Specialty">Specialty Hospital</option>
-                  <option value="Multi-Specialty">Multi-Specialty Hospital</option>
-                  <option value="Clinic">Clinic</option>
-                </select>
-              </div>
+                    {/* Hospital Name */}
+                    <div className="col-md-6">
+                      <label htmlFor="hospitalName" className="form-label">
+                        Hospital Name<span className="text-danger">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        className={`form-control ${errors.hospitalName ? "is-invalid" : ""}`}
+                        id="hospitalName"
+                        name="hospitalName"
+                        value={formData.hospitalName}
+                        onChange={handleChange}
+                        placeholder="Enter hospital name"
+                      />
+                      {errors.hospitalName && <div className="invalid-feedback">{errors.hospitalName}</div>}
+                    </div>
 
-              {/* Location */}
-              <div className="col-md-6">
-                <label htmlFor="location" className="form-label">
-                  Location<span className="text-danger">*</span>
-                </label>
-                <input
-                  type="text"
-                  className={`form-control ${errors.location ? "is-invalid" : ""}`}
-                  id="location"
-                  name="location"
-                  value={formData.location}
-                  onChange={handleChange}
-                  placeholder="Enter location"
-                />
-                {errors.location && <div className="invalid-feedback">{errors.location}</div>}
-              </div>
+                    {/* Hospital Type */}
+                    <div className="col-md-6">
+                      <label htmlFor="hospitalType" className="form-label">Hospital Type</label>
+                      <select className="form-select" id="hospitalType" name="hospitalType" value={formData.hospitalType} onChange={handleChange}>
+                        <option value="">Select Hospital Type</option>
+                        <option value="Government">Government</option>
+                        <option value="Private">Private</option>
+                        <option value="Community">Community Health Center</option>
+                        <option value="Specialty">Specialty Hospital</option>
+                        <option value="Multi-Specialty">Multi-Specialty Hospital</option>
+                        <option value="Clinic">Clinic</option>
+                      </select>
+                    </div>
 
-              {/* No of Beds */}
-              <div className="col-md-6">
-                <label htmlFor="noOfBeds" className="form-label">
-                  No of Beds<span className="text-danger">*</span>
-                </label>
-                <input
-                  type="number"
-                  className={`form-control ${errors.noOfBeds ? "is-invalid" : ""}`}
-                  id="noOfBeds"
-                  name="noOfBeds"
-                  value={formData.noOfBeds}
-                  onChange={handleChange}
-                  placeholder="Enter number of beds"
-                  min="1"
-                />
-                {errors.noOfBeds && <div className="invalid-feedback">{errors.noOfBeds}</div>}
-              </div>
+                    {/* Location */}
+                    <div className="col-md-6">
+                      <label htmlFor="location" className="form-label">
+                        Location<span className="text-danger">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        className={`form-control ${errors.location ? "is-invalid" : ""}`}
+                        id="location"
+                        name="location"
+                        value={formData.location}
+                        onChange={handleChange}
+                        placeholder="Enter location"
+                      />
+                      {errors.location && <div className="invalid-feedback">{errors.location}</div>}
+                    </div>
 
-              {/* Timing */}
-              <div className="col-md-6">
-                <label htmlFor="timing" className="form-label">Timing</label>
-                <input
-                  type="text"
-                  className="form-control"
-                  id="timing"
-                  name="timing"
-                  value={formData.timing}
-                  onChange={handleChange}
-                  placeholder="e.g., 24/7, 9AM-9PM"
-                />
-              </div>
+                    {/* No of Beds */}
+                    <div className="col-md-6">
+                      <label htmlFor="noOfBeds" className="form-label">
+                        No of Beds<span className="text-danger">*</span>
+                      </label>
+                      <input
+                        type="number"
+                        className={`form-control ${errors.noOfBeds ? "is-invalid" : ""}`}
+                        id="noOfBeds"
+                        name="noOfBeds"
+                        value={formData.noOfBeds}
+                        onChange={handleChange}
+                        placeholder="Enter number of beds"
+                        min="1"
+                      />
+                      {errors.noOfBeds && <div className="invalid-feedback">{errors.noOfBeds}</div>}
+                    </div>
 
-              {/* Address */}
-              <div className="col-12">
-                <label htmlFor="address, setShowThankYouModal" className="form-label">Address</label>
-                <textarea
-                  className="form-control"
-                  id="address"
-                  name="address"
-                  value={formData.address}
-                  onChange={handleChange}
-                  rows="3"
-                  placeholder="Enter full address"
-                />
-              </div>
+                    {/* Timing */}
+                    <div className="col-md-6">
+                      <label htmlFor="timing" className="form-label">Timing</label>
+                      <input
+                        type="text"
+                        className="form-control"
+                        id="timing"
+                        name="timing"
+                        value={formData.timing}
+                        onChange={handleChange}
+                        placeholder="e.g., 24/7, 9AM-9PM"
+                      />
+                    </div>
 
-              {/* Location Link */}
-              <div className="col-12">
-                <label htmlFor="locationLink" className="form-label">Location Link</label>
-                <div className="input-group">
-                  <input
-                    type="url"
-                    className={`form-control ${errors.locationLink ? "is-invalid" : ""}`}
-                    id="locationLink"
-                    name="locationLink"
-                    value={formData.locationLink}
-                    onChange={handleChange}
-                    placeholder="https://maps.google.com/..."
-                  />
-                  <button type="button" className="btn btn-outline-primary mb-0" onClick={getCurrentLocation}>
-                    Location
-                  </button>
-                </div>
-                {errors.locationLink && <div className="invalid-feedback">{errors.locationLink}</div>}
-              </div>
+                    {/* Address */}
+                    <div className="col-12">
+                      <label htmlFor="address, setShowThankYouModal" className="form-label">Address</label>
+                      <textarea
+                        className="form-control"
+                        id="address"
+                        name="address"
+                        value={formData.address}
+                        onChange={handleChange}
+                        rows="3"
+                        placeholder="Enter full address"
+                      />
+                    </div>
 
-              {/* Submit */}
-              <div className="col-12 mt-4">
-                <button type="submit" className="btn btn-success me-2" disabled={isSubmitting}>
-                  {isSubmitting ? (
-                    <>
-                      <span className="spinner-border spinner-border-sm me-2"></span>
-                      {isEdit ? "Updating..." : "Adding..."}
-                    </>
-                  ) : (
-                    isEdit ? "Update Hospital" : "Add Hospital"
-                  )}
-                </button>
+                    {/* Location Link */}
+                    <div className="col-12">
+                      <label htmlFor="locationLink" className="form-label">Location Link</label>
+                      <div className="input-group">
+                        <input
+                          type="url"
+                          className={`form-control ${errors.locationLink ? "is-invalid" : ""}`}
+                          id="locationLink"
+                          name="locationLink"
+                          value={formData.locationLink}
+                          onChange={handleChange}
+                          placeholder="https://maps.google.com/..."
+                        />
+                        <button type="button" className="btn btn-outline-primary mb-0" onClick={getCurrentLocation}>
+                          Location
+                        </button>
+                      </div>
+                      {errors.locationLink && <div className="invalid-feedback">{errors.locationLink}</div>}
+                    </div>
+
+                    {/* Submit */}
+                    <div className="col-12 mt-4">
+                      <button type="submit" className="btn btn-success me-2" disabled={isSubmitting}>
+                        {isSubmitting ? (
+                          <>
+                            <span className="spinner-border spinner-border-sm me-2"></span>
+                            {isEdit ? "Updating..." : "Adding..."}
+                          </>
+                        ) : (
+                          isEdit ? "Update Hospital" : "Add Hospital"
+                        )}
+                      </button>
+                      <button type="button" className="btn btn-secondary" onClick={onClose}>Close</button>
+                    </div>
+                  </div>
+                </form>
               </div>
             </div>
-          </form>
+          </div>
+
+          {/* Optional footer area to match your modal pattern */}
+          <div className="wb-footer d-flex justify-content-end">
+            <button className="wb-secondary-btn" onClick={onClose}>Close</button>
+          </div>
         </div>
       </div>
 
@@ -412,7 +464,7 @@ const HospitalForm = ({ onSubmit, initialData = {}, isEdit = false }) => {
           </div>
         </div>
       )}
-    </div>
+    </>
   );
 };
 

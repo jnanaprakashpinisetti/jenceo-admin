@@ -5,10 +5,13 @@ import { useAuth } from "../../context/AuthContext";
 
 export default function ProtectedRoute({ allowedRoles = [] }) {
   const { currentUser, userRole, loading } = useAuth();
-  if (loading) return null; // or spinner
+  if (loading) return null; // or a spinner
+
   if (!currentUser) return <Navigate to="/login" replace />;
-  if (allowedRoles.length > 0 && !allowedRoles.includes(userRole)) {
+
+  if (allowedRoles.length > 0 && !allowedRoles.includes(String(userRole || "").toLowerCase())) {
     return <Navigate to="/unauthorized" replace />;
   }
+
   return <Outlet />;
 }

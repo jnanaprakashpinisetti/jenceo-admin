@@ -70,7 +70,8 @@ function BarChart({ data = [], width = 520, height = 160, pad = 28, colorId = "e
                                 textAnchor="middle"
                                 dominantBaseline="middle"
                                 fontSize="10"
-                                fill="#fff"
+                                fontWeight="bold"
+                                fill="#000"
                                 transform={`rotate(-90 ${x + w / 2} ${y + h / 2})`}
                             >
                                 {d.value}
@@ -146,8 +147,17 @@ export default function EnquiryCard({
     const [pageSize, setPageSize] = useState(10);
     const modalRef = useRef(null);
 
-    // subtle darker grid bg to match ResultsCard layout
-    const cardStyle = { background: "#0b1220", border: "1px solid #1f2937", color: "#e5e7eb" };
+    // row-details modal
+    const [detailOpen, setDetailOpen] = useState(false);
+    const [detailRow, setDetailRow] = useState(null);
+
+    // gradient card (request #2)
+    const cardStyle = {
+        background: "linear-gradient(135deg, rgba(14,165,233,0.15), rgba(99,102,241,0.15))",
+        border: "1px solid #1f2937",
+        color: "#e5e7eb",
+        boxShadow: "0 8px 24px rgba(0,0,0,0.25), inset 0 1px 0 rgba(255,255,255,0.04)"
+    };
 
     /* -------- Firebase live attach (same style as ResultsCard) -------- */
     useEffect(() => {
@@ -296,19 +306,24 @@ export default function EnquiryCard({
     return (
         <>
             <div className="col-12 mb-3">
-                <div className="neo-card hover-rise" role="button" onClick={() => setModalOpen(true)} style={cardStyle}>
+                <div className="neo-card hover-rise p-3" role="button" onClick={() => setModalOpen(true)} style={cardStyle}>
                     <div className="d-flex justify-content-between align-items-center">
                         <div>
-                            <div className="tiny text-white-80 text-uppercase">Total {tab === "enquiries" ? "Enquiries" : "Worker Calls"} ({activeYear})</div>
-                            <div className="h3 fw-bold mb-0">
-                                {currentSummary.total}
+                            <div className="tiny text-white-80 text-uppercase">{title}</div>
+                            {/* request #1: show both counts on the card */}
+                            <div className="d-flex gap-3 mt-1">
+                                <div className="d-flex flex-column">
+                                    <span className="tiny text-white-50">Enquiries ({activeYear})</span>
+                                    <span className="h4 mb-0 fw-bold">{enqSummary.total}</span>
+                                </div>
+                                <div className="vr" />
+                                <div className="d-flex flex-column">
+                                    <span className="tiny text-white-50">Worker Calls ({activeYear})</span>
+                                    <span className="h4 mb-0 fw-bold">{workerSummary.total}</span>
+                                </div>
                             </div>
+                        </div>
 
-                        </div>
-                        <div className="text-end">
-                            <div className="tiny text-white-80">Click to view full report</div>
-                            <div className="tiny text-white-50">Includes charts, breakdown & table</div>
-                        </div>
                     </div>
                 </div>
             </div>
@@ -318,23 +333,23 @@ export default function EnquiryCard({
                 <div className="modal fade show" style={{ display: "block", background: "rgba(2,6,23,0.9)", zIndex: 2000 }} onClick={() => setModalOpen(false)}>
                     <div className="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable" style={{ zIndex: 2001 }} onClick={(e) => e.stopPropagation()} ref={modalRef}>
                         <div className="modal-content overflow-hidden">
-                            <div className="modal-header gradient-header text-white" style={{ position: "sticky", top: 0, zIndex: 2002 }}>
+                            <div className="modal-header gradient-header text-white justify-content-between" style={{ position: "sticky", top: 0, zIndex: 2002, justfyContent: "sapceBetween" }}>
                                 <h5 className="modal-title">Enquiries & Worker Calls</h5>
-                                <button className="btn-close btn-close-white" onClick={() => setModalOpen(false)} />
+                                <button className="btn-close btn-close-white ms-2" onClick={() => setModalOpen(false)} />
                             </div>
 
+
+
                             <div className="modal-body bg-surface">
-                                {/* Tabs */}
-                                <div className="mb-2">
+                                <div className="ms-auto text-center">{/* request #3: move tabs to right */}
                                     <div className="btn-group">
-                                        <button className={classNames("btn btn-sm", tab === "enquiries" ? "btn-primary" : "btn-outline-primary")} onClick={() => setTab("enquiries")}>Enquiries</button>
-                                        <button className={classNames("btn btn-sm", tab === "workers" ? "btn-primary" : "btn-outline-primary")} onClick={() => setTab("workers")}>Worker Calls</button>
+                                        <button className={classNames("btn btn-sm", tab === "enquiries" ? "btn-info text-dark" : "btn-outline-info")} onClick={() => setTab("enquiries")}>Enquiries</button>
+                                        <button className={classNames("btn btn-sm", tab === "workers" ? "btn-info text-dark" : "btn-outline-info")} onClick={() => setTab("workers")}>Worker Calls</button>
                                     </div>
                                 </div>
-
                                 {/* Year & Month selectors & search */}
-                                <div className="row g-3 align-items-end mb-4">
-                                    <div className="col-md-1">
+                                <div className="row g-3 align-items-end mb-3">
+                                    <div className="col-md-2">
                                         <label className="form-label">Year</label>
                                         <select className="form-select" value={activeYear} onChange={e => setActiveYear(Number(e.target.value))}>
                                             {years.map(y => <option key={y} value={y}>{y}</option>)}
@@ -349,7 +364,7 @@ export default function EnquiryCard({
                                             ))}
                                         </div>
                                     </div>
-                                    <div className="col-md-3 d-flex align-items-end">
+                                    <div className="col-md-2 d-flex align-items-end">
                                         <input className="form-control ms-auto" placeholder="Search name/mobile/service..." value={search} onChange={e => { setSearch(e.target.value); setPage(1); }} />
                                     </div>
                                 </div>
@@ -384,8 +399,22 @@ export default function EnquiryCard({
                                     </div>
                                 </div>
 
+                                {/* ===== Table toolbar (request #4: move entries dropdown to top) ===== */}
+                                <div className="d-flex flex-wrap justify-content-between align-items-center mt-4 mb-2">
+                                    <div className="d-flex align-items-center gap-2">
+                                        <span className="tiny text-muted">Show</span>
+                                        <select className="form-select form-select-sm" value={pageSize} onChange={e => { setPageSize(parseInt(e.target.value, 10) || 10); setPage(1); }} style={{ width: 80 }}>
+                                            {[10, 20, 30, 40, 50].map(n => <option key={n} value={n}>{n}</option>)}
+                                        </select>
+                                        <span className="tiny text-muted">entries</span>
+                                    </div>
+                                    <div className="tiny text-muted">
+                                        Showing <strong>{Math.min(start + 1, totalEntries) || 0}</strong> to <strong>{Math.min(start + pageSize, totalEntries)}</strong> of <strong>{totalEntries}</strong> entries
+                                    </div>
+                                </div>
+
                                 {/* Table */}
-                                <div className="table-responsive mt-3">
+                                <div className="table-responsive">
                                     <table className="table table-sm align-middle table-modern">
                                         <thead style={{ background: "linear-gradient(90deg,#0ea5e9,#6366f1)", color: "white" }}>
                                             <tr>
@@ -403,7 +432,7 @@ export default function EnquiryCard({
                                                 const d = parseDateRobust(date);
                                                 const dt = d ? d.toLocaleDateString("en-GB") : "—";
                                                 return (
-                                                    <tr key={it.id || idx}>
+                                                    <tr key={it.id || idx} onClick={() => { setDetailRow(it); setDetailOpen(true); }} style={{ cursor: "pointer" }}>
                                                         <td>{start + idx + 1}</td>
                                                         <td>{it.name || "-"}</td>
                                                         <td>{it.mobile || it.mobileNo || "-"}</td>
@@ -420,16 +449,13 @@ export default function EnquiryCard({
                                     </table>
                                 </div>
 
-                                {/* Pagination & entries (same pattern as ResultsCard) */}
-                                <div className="d-flex flex-wrap align-items-center justify-content-between mt-2">
-                                    <div className="tiny text-muted">
-                                        Showing <strong>{Math.min(start + 1, totalEntries) || 0}</strong> to <strong>{Math.min(start + pageSize, totalEntries)}</strong> of <strong>{totalEntries}</strong> entries
-                                    </div>
+                                {/* Pagination (request #5: keep bottom, themed) */}
+                                <div className="d-flex flex-wrap align-items-center justify-content-center mt-2">
                                     <div>
                                         <nav style={{ backgroundColor: "transparent" }}>
                                             <ul className="pagination pagination-sm mb-0 ms-2">
                                                 <li className={classNames("page-item", safePage === 1 && "disabled")}>
-                                                    <button className="page-link" onClick={() => setPage(1)}>«</button>
+                                                    <button className="page-link" onClick={() => setPage(1)}>Previous</button>
                                                 </li>
                                                 <li className={classNames("page-item", safePage === 1 && "disabled")}>
                                                     <button className="page-link" onClick={() => setPage(safePage - 1)}>‹</button>
@@ -448,23 +474,55 @@ export default function EnquiryCard({
                                                     <button className="page-link" onClick={() => setPage(safePage + 1)}>›</button>
                                                 </li>
                                                 <li className={classNames("page-item", safePage === totalPages && "disabled")}>
-                                                    <button className="page-link" onClick={() => setPage(totalPages)}>»</button>
+                                                    <button className="page-link" onClick={() => setPage(totalPages)}>Next</button>
                                                 </li>
                                             </ul>
                                         </nav>
-                                    </div>
-                                    <div className="d-flex align-items-center gap-2">
-                                        <span className="me-1 tiny">Show</span>
-                                        <select className="form-select form-select-sm" value={pageSize} onChange={e => { setPageSize(parseInt(e.target.value, 10) || 10); setPage(1); }} style={{ width: 80 }}>
-                                            {[10, 20, 30, 40, 50].map(n => <option key={n} value={n}>{n}</option>)}
-                                        </select>
-
                                     </div>
                                 </div>
                             </div>
 
                             <div className="modal-footer bg-surface">
                                 <button className="btn btn-secondary" onClick={() => setModalOpen(false)}>Close</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* ===== Row Details Modal (request #6) ===== */}
+            {detailOpen && (
+                <div className="modal fade show" style={{ display: "block", background: "rgba(2,6,23,0.5)", zIndex: 2100 }} onClick={() => setDetailOpen(false)}>
+                    <div className="modal-dialog modal-lg modal-dialog-centered" onClick={(e) => e.stopPropagation()}>
+                        <div className="modal-content">
+                            <div className="modal-header" style={{ background: "linear-gradient(90deg,#0ea5e9,#6366f1)", color: "#fff" }}>
+                                <h5 className="modal-title">{tab === "enquiries" ? "Enquiry Details" : "Worker Call Details"}</h5>
+                                <button className="btn-close btn-close-white" onClick={() => setDetailOpen(false)} />
+                            </div>
+                            <div className="modal-body bg-white EnquiryDetails">
+                                {detailRow ? (
+                                    <div className="row g-3">
+                                        <div className="col-md-6">
+                                            <div><strong>Name: </strong> {detailRow.name || "-"}</div>
+                                            <div><strong>Mobile: </strong> {detailRow.mobile || detailRow.mobileNo || "-"}</div>
+                                            <div><strong>{tab === "enquiries" ? "Service" : "Location"}:</strong> {tab === "enquiries" ? (detailRow.service || "-") : (detailRow.location || "-")}</div>
+
+                                        </div>
+                                        <div className="col-md-6">
+                                            {(() => {
+                                                const d = parseDateRobust(detailRow.date || detailRow.createdAt || detailRow.reminderDate || detailRow.callReminderDate);
+                                                return <div><strong>Date: </strong> {d ? d.toLocaleString() : "—"}</div>;
+                                            })()}
+                                            <div><strong>{tab === "enquiries" ? "Through" : "Call Through"}: </strong> {tab === "enquiries" ? (detailRow.through || "-") : (detailRow.callThrough || detailRow.through || detailRow.source || "-")}</div>
+                                            <div><strong>Notes: </strong> {detailRow.notes || detailRow.remark || detailRow.message || "-"}</div>
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <div className="text-muted">No data</div>
+                                )}
+                            </div>
+                            <div className="modal-footer bg-light">
+                                <button className="btn btn-secondary" onClick={() => setDetailOpen(false)}>Close</button>
                             </div>
                         </div>
                     </div>

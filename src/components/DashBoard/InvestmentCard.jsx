@@ -295,10 +295,11 @@ export default function InvestmentCard({ partners = ["Sudheer", "Suresh", "Praka
           <div className="invest-card__meta">
             <div className="invest-card__label">Investment</div>
             <div className="invest-card__total">{loading ? "Loading..." : formatINR(grandTotalAll)}</div>
-            <div className="invest-card__small">Payments: {records.length}</div>
+
           </div>
         </div>
         <div className="invest-card__divider" />
+        <div className="invest-card__small" style={{ paddingLeft: "20px" }}>Payments: {records.length}</div>
       </div>
 
       {/* modal */}
@@ -312,29 +313,29 @@ export default function InvestmentCard({ partners = ["Sudheer", "Suresh", "Praka
               </div>
 
               <div className="invest-modal-body">
-                  <div className="invest-modal-summary">
-                    <div className="summary-item small-cards">
-                      <div className="invest-card-status-row">
-                        {["Acknowledge", "Clarification", "Pending", "Reject"].map((s, idx) => {
-                          const st = overallStatusTotals[s] || { count: 0, amount: 0 };
-                          return (
-                            <div key={s} className={`invest-status-card invest-status-${s.toLowerCase()} grad-${idx}`}>
-                              <div className="status-label">{s}</div>
-                              <div className="status-amount">{formatINR(st.amount)}</div>
-                              <div className="status-count">{st.count} items</div>
-                            </div>
-                          );
-                        })}
+                <div className="invest-modal-summary">
+                  <div className="summary-item small-cards">
+                    <div className="invest-card-status-row">
+                      {["Acknowledge", "Clarification", "Pending", "Reject"].map((s, idx) => {
+                        const st = overallStatusTotals[s] || { count: 0, amount: 0 };
+                        return (
+                          <div key={s} className={`invest-status-card invest-status-${s.toLowerCase()} grad-${idx}`}>
+                            <div className="status-label">{s}</div>
+                            <div className="status-amount">{formatINR(st.amount)}</div>
+                            <div className="status-count">{st.count} items</div>
+                          </div>
+                        );
+                      })}
 
-                        {/* Grand total card (overall) - retained */}
-                        <div className="invest-status-all">
-                          <div className="status-label">Grand Total</div>
-                          <div className="status-amount">{formatINR(grandTotalAll)}</div>
-                          <div className="status-count">Records: {records.length}</div>
-                        </div>
+                      {/* Grand total card (overall) - retained */}
+                      <div className="invest-status-all">
+                        <div className="status-label">Grand Total</div>
+                        <div className="status-amount">{formatINR(grandTotalAll)}</div>
+                        <div className="status-count">Records: {records.length}</div>
                       </div>
                     </div>
                   </div>
+                </div>
                 <div className="investors-year-section">
                   <div className="investors-list small">
                     <h6>Investors</h6>

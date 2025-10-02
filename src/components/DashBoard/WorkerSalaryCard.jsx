@@ -392,14 +392,14 @@ export default function WorkerSalaryCard() {
         if (!mObj) return [];
         return mObj.rows.slice().sort((a, b) => (b.parsedDate?.getTime() || 0) - (a.parsedDate?.getTime() || 0));
 
-    
+
     }, [activeYear, activeMonth, grouped]);
-        // rows actually displayed in table (amount > 0 unless toggled)
-        const displayRows = React.useMemo(() => {
-            if (!currentMonthRows) return [];
-            if (showZeroRows) return currentMonthRows;
-            return currentMonthRows.filter(r => Number(r.paidAmount || 0) > 0);
-        }, [currentMonthRows, showZeroRows]);
+    // rows actually displayed in table (amount > 0 unless toggled)
+    const displayRows = React.useMemo(() => {
+        if (!currentMonthRows) return [];
+        if (showZeroRows) return currentMonthRows;
+        return currentMonthRows.filter(r => Number(r.paidAmount || 0) > 0);
+    }, [currentMonthRows, showZeroRows]);
     // Pagination derived values for the month table
     const totalEntries = displayRows.length;
     const totalPages = Math.max(1, Math.ceil(totalEntries / pageSize));
@@ -538,11 +538,12 @@ export default function WorkerSalaryCard() {
                     <div className="invest-card__meta">
                         <div className="invest-card__label">Worker Salaries</div>
                         <div className="invest-card__total">{loading ? "Loading..." : formatINR(overallTotals.paid)}</div>
-                        <div className="invest-card__small">{loading ? "" : `Payments: ${overallTotals.count}`}</div>
+
                     </div>
                 </div>
 
                 <div className="invest-card__divider" />
+                <div className="invest-card__small" style={{ paddingLeft: "20px" }}>{loading ? "" : `Payments: ${overallTotals.count}`}</div>
             </div>
 
             {modalOpen && (

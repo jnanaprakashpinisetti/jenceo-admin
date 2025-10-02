@@ -396,12 +396,13 @@ export default function AssetsCard({ assetsCollection = "Assets" }) {
             <div className="invest-card__meta">
               <div className="invest-card__label">Assets</div>
               <div className="invest-card__total">{loading ? "Loading..." : formatINR(totalValue)}</div>
-              <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
-                <div style={{ fontSize: 12 }}>{entries.length} Items</div>
-              </div>
+
             </div>
           </div>
           <div className="invest-card__divider" />
+          <div style={{ display: "flex", gap: 8, marginTop: 8, paddingLeft: "20px" }}>
+            <div style={{ fontSize: 12 }}>{entries.length} Items</div>
+          </div>
         </div>
       </div>
 

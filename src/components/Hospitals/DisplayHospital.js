@@ -303,14 +303,14 @@ export default function DisplayHospital() {
 
     if (loading) return <div className="text-center my-5">Loading hospitals...</div>;
     if (error) return <div className="alert alert-danger">Error: {error}</div>;
-    if (hospitals.length === 0) return <div className="alert alert-info">No hospitals found</div>;
+    if (hospitals.length === 0) return <div className="alert alert-info text-info">No hospitals found</div>;
 
     // unique filter options
     const types = [...new Set(hospitals.map((h) => h.type).filter(Boolean))];
     const locations = [...new Set(hospitals.map((h) => h.location).filter(Boolean))];
 
     return (
-        <div className="p-3">
+        <>
      
 
             {/* Reminder badges (same class scheme as ClientDisplay) */}
@@ -568,6 +568,6 @@ export default function DisplayHospital() {
                     </div>
                 </div>
             )}
-        </div>
+        </>
     );
 }

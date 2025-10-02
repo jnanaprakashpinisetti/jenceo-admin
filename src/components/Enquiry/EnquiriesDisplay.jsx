@@ -333,7 +333,7 @@ const EnquiriesDisplay = () => {
   };
 
   return (
-    <div className="container-fluid mt-4">
+    <>
       <h3 className="mb-3">Enquiries</h3>
 
       {/* Reminder counts with clickable badges */}
@@ -619,7 +619,7 @@ const EnquiriesDisplay = () => {
           onSaveSuccess={() => fetchEnquiries()}
         />
       )}
-    </div>
+    </>
   );
 };
 

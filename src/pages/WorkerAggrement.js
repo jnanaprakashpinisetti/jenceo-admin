@@ -195,7 +195,7 @@ const htmlFullData = (data) => {
 </style>
 </head>
 <body>
-<div class="container">
+<div>
 
   <!-- PAGE 1 -->
   <div class="page" id="page1">

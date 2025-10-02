@@ -346,7 +346,7 @@ setShowReturnReasonModal(false);
   }
 
   return (
-    <div className="container-fluid py-4">
+    <>
       {/* Search Bar */}
       <div className="row mb-3">
         <div className="col-md-6 m-auto">
@@ -732,7 +732,7 @@ setShowReturnReasonModal(false);
           </div>
         </div>
       )}
-    </div>
+    </>
   );
 }
 

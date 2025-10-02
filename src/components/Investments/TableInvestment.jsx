@@ -313,7 +313,7 @@ export default function TableInvestment({
     };
 
     return (
-        <div className="container py-3">
+        <>
             <h4 className="mb-3">Investments</h4>
 
             {/* Top: cards per investor (name + acknowledged total + count) */}
@@ -509,7 +509,7 @@ export default function TableInvestment({
                     fmtCurrency={fmtCurrency}
                 />
             )}
-        </div>
+        </>
     );
 }
 

@@ -1,6 +1,6 @@
 // src/layout/LeftNav.jsx
-import React, { useState, useEffect } from 'react';
-import { Routes, Route, NavLink, useLocation, Navigate } from 'react-router-dom';
+import React, { useState, useEffect, useRef } from 'react';
+import { Routes, Route, NavLink, useLocation, useNavigate, Navigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 
 import logo from "../assets/jencio-logo.svg";
@@ -24,13 +24,12 @@ import expences from "../assets/expence.svg";
 import task from "../assets/task.svg";
 import admin from "../assets/admin.svg";
 import accounts from "../assets/accounts.svg";
-import enquiry from "../assets/enquiry.svg";
-import call from "../assets/Call.svg";
-import callDelete from "../assets/CallDelete.svg";
 import inquiry from "../assets/inquiry.svg";
 import inquiryDelete from "../assets/inquiryDelete.svg";
 import Staff from "../assets/Staff.svg";
 import StaffExit from "../assets/StaffExit.svg";
+import call from "../assets/Call.svg";
+import callDelete from "../assets/CallDelete.svg";
 
 import Dashboard from '../pages/Dashboard';
 // Employee Data
@@ -55,33 +54,78 @@ import EnquiryExit from '../pages/EnquiryExit';
 import SearchResults from '../pages/SearchResults';
 
 export default function LeftNav() {
-  const { user } = useAuth();
+  const { user, logout } = useAuth();
   const perms = user?.permissions || {};
+  const role = String(user?.role || "").toLowerCase();
+  const isAdminRole = role === "admin";
 
-  // Only allow via explicit permissions (no role-based override).
+  // Admin role can see everything by default
   const canView = (key) => {
+    if (isAdminRole) return true;
     const p = perms[key];
     return !!(p && (p.view === true || p.read === true));
   };
 
-  // Route guard wrapper (blocks rendering without permission)
+  // Route guard (blocks rendering without permission)
   const PermRoute = ({ permKey, children }) => {
     return canView(permKey) ? children : <Navigate to="/" replace />;
   };
 
   const [isActive, setIsActive] = useState(false);
   const [isShow, setIsShow] = useState(false);
+  const [query, setQuery] = useState("");
+  const [showNotif, setShowNotif] = useState(false);
+  const [showProfile, setShowProfile] = useState(false);
+
   const location = useLocation();
+  const navigate = useNavigate();
+
+  const notifRef = useRef(null);
+  const profileRef = useRef(null);
+  const notifBtnRef = useRef(null);
+  const profileBtnRef = useRef(null);
 
   useEffect(() => {
     setIsShow(false);
+    setShowNotif(false);
+    setShowProfile(false);
   }, [location.pathname]);
+
+  // simple search -> /search?q=...
+  const submitSearch = (e) => {
+    e?.preventDefault();
+    const q = (query || "").trim();
+    const params = new URLSearchParams();
+    if (q) params.set("q", q);
+    navigate({ pathname: "/search", search: params.toString() ? `?${params.toString()}` : "" });
+  };
+
+  // outside click for desktop dropdowns
+  useEffect(() => {
+    const handler = (e) => {
+      if (showNotif) {
+        const outside = notifRef.current && !notifRef.current.contains(e.target) &&
+          notifBtnRef.current && !notifBtnRef.current.contains(e.target);
+        if (outside) setShowNotif(false);
+      }
+      if (showProfile) {
+        const outside = profileRef.current && !profileRef.current.contains(e.target) &&
+          profileBtnRef.current && !profileBtnRef.current.contains(e.target);
+        if (outside) setShowProfile(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [showNotif, showProfile]);
 
   const toggleSide = () => setIsActive((v) => !v);
   const toggleMobile = () => setIsShow((v) => !v);
   const closeMobile = () => setIsShow(false);
 
   const collapseClass = `collapse navbar-collapse${isShow ? ' show' : ''}`;
+
+  const userName = user?.name || user?.email || "User";
+  const userRole = user?.role || "Member";
 
   return (
     <>
@@ -108,17 +152,34 @@ export default function LeftNav() {
         </button>
 
         <div className={collapseClass} id="collapsibleNavbar">
+
+          {/* ===== Mobile quick links (≤991px) ===== */}
           <div className="mobile-top d-block d-lg-none mb-3">
-            <div className="d-flex justify-content-between align-items-center px-2">
-              <NavLink to='Profile' className="nav-link p-0" onClick={closeMobile} title="Profile">
-                <span style={{ fontSize: 14 }}>👤 Profile</span>
-              </NavLink>
-              <NavLink to='Notifications' className="nav-link p-0" onClick={closeMobile} title="Notifications">
-                <span style={{ fontSize: 14 }}>🔔 Notifications</span>
-              </NavLink>
+            <div className="d-flex flex-column gap-2 px-2">
+              <form className="input-group input-group-sm" onSubmit={(e) => { submitSearch(e); closeMobile(); }}>
+                <input
+                  type="search"
+                  className="form-control"
+                  placeholder="Search..."
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                />
+                <button className="btn btn-outline-secondary" type="submit">Go</button>
+              </form>
+              <div className="d-flex justify-content-between align-items-center">
+                <NavLink to='Profile' className="nav-link p-0" onClick={closeMobile} title="Profile">
+                  <span style={{ fontSize: 14 }}>👤 Profile</span>
+                </NavLink>
+                <button className="btn btn-sm btn-outline-secondary" onClick={() => alert('No notifications')} type="button">
+                  🔔 Notifications
+                </button>
+              </div>
+
+              <hr className='d-lg-none'></hr>
             </div>
           </div>
 
+          {/* ===== Main nav ===== */}
           <ul className="navbar-nav">
             {canView('Dashboard') && (
               <li className="nav-item">
@@ -259,7 +320,8 @@ export default function LeftNav() {
               </li>
             )}
 
-            {canView('Admin') && (
+            {/* Always visible for Admin role */}
+            {(canView('Admin') || isAdminRole) && (
               <li className="nav-item">
                 <NavLink to='Admin' className="nav-link" title='Admin' onClick={closeMobile}>
                   <img src={admin} alt="" /> Admin
@@ -278,63 +340,35 @@ export default function LeftNav() {
         </div>
       </nav>
 
-      {/* Routes with permission guards */}
+      {/* ===== Routes with permission guards ===== */}
       <Routes>
-        <Route path="/" element={
-          <PermRoute permKey="Dashboard"><Dashboard /></PermRoute>
-        } />
-        <Route path="WorkersData" element={
-          <PermRoute permKey="Workers Data"><WorkersData /></PermRoute>
-        } />
-        <Route path="ExistingEmployees" element={
-          <PermRoute permKey="Workers Data"><ExistingEmployees /></PermRoute>
-        } />
-        <Route path="EmployeeAggrement" element={
-          <PermRoute permKey="Workers Data"><EmployeeAggrement /></PermRoute>
-        } />
-        <Route path="WorkerCallsData" element={
-          <PermRoute permKey="Worker Call Data"><WorkerCallsData /></PermRoute>
-        } />
-        <Route path="WorkerCallDelete" element{
-          ...undefined
-        } />
-        <Route path="Investments" element={
-          <PermRoute permKey="Investments"><Investments /></PermRoute>
-        } />
-        <Route path="ClientInfo" element={
-          <PermRoute permKey="Client Data"><ClientInfo /></PermRoute>
-        } />
-        <Route path="ClientExit" element={
-          <PermRoute permKey="Client Data"><ClientExit /></PermRoute>
-        } />
-        <Route path="Enquiry" element={
-          <PermRoute permKey="Enquiries"><Enquiry /></PermRoute>
-        } />
-        <Route path="EnquiryExit" element={
-          <PermRoute permKey="Enquiries"><EnquiryExit /></PermRoute>
-        } />
-        <Route path="Expenses" element={
-          <PermRoute permKey="Expenses"><Expenses /></PermRoute>
-        } />
-        <Route path="ExpenceDelete" element={
-          <PermRoute permKey="Expenses"><ExpenceDelete /></PermRoute>
-        } />
-        <Route path="Task" element={
-          <PermRoute permKey="Task"><Task /></PermRoute>
-        } />
-        <Route path="Accounts" element={
-          <PermRoute permKey="Accounts"><Accounts /></PermRoute>
-        } />
-        <Route path="HospitalList" element{
-          ...undefined
-        } />
-        <Route path="HospitalDeleteList" element{
-          ...undefined
-        } />
+        <Route path="/" element={<PermRoute permKey="Dashboard"><Dashboard /></PermRoute>} />
+
+        <Route path="WorkersData" element={<PermRoute permKey="Workers Data"><WorkersData /></PermRoute>} />
+        <Route path="ExistingEmployees" element={<PermRoute permKey="Workers Data"><ExistingEmployees /></PermRoute>} />
+        <Route path="EmployeeAggrement" element={<PermRoute permKey="Workers Data"><EmployeeAggrement /></PermRoute>} />
+        <Route path="WorkerCallsData" element={<PermRoute permKey="Worker Call Data"><WorkerCallsData /></PermRoute>} />
+        <Route path="WorkerCallDelete" element={<PermRoute permKey="Worker Call Data"><WorkerCallDelete /></PermRoute>} />
+
+        <Route path="Investments" element={<PermRoute permKey="Investments"><Investments /></PermRoute>} />
+
+        <Route path="ClientInfo" element={<PermRoute permKey="Client Data"><ClientInfo /></PermRoute>} />
+        <Route path="ClientExit" element={<PermRoute permKey="Client Data"><ClientExit /></PermRoute>} />
+
+        <Route path="Enquiry" element={<PermRoute permKey="Enquiries"><Enquiry /></PermRoute>} />
+        <Route path="EnquiryExit" element={<PermRoute permKey="Enquiries"><EnquiryExit /></PermRoute>} />
+
+        <Route path="Expenses" element={<PermRoute permKey="Expenses"><Expenses /></PermRoute>} />
+        <Route path="ExpenceDelete" element={<PermRoute permKey="Expenses"><ExpenceDelete /></PermRoute>} />
+
+        <Route path="Task" element={<PermRoute permKey="Task"><Task /></PermRoute>} />
+        <Route path="Accounts" element={<PermRoute permKey="Accounts"><Accounts /></PermRoute>} />
+
+        <Route path="HospitalList" element={<PermRoute permKey="Hospital List"><HospitalList /></PermRoute>} />
+        <Route path="HospitalDeleteList" element={<PermRoute permKey="Hospital List"><HospitalDeleteList /></PermRoute>} />
+
         <Route path="search" element={<SearchResults />} />
-        <Route path="Admin" element={
-          <PermRoute permKey="Admin"><AdminUsers /></PermRoute>
-        } />
+        <Route path="Admin" element={<PermRoute permKey="Admin"><AdminUsers /></PermRoute>} />
       </Routes>
     </>
   );

@@ -204,4 +204,12 @@ nav {
         display: block;
         width: 100%;
     }
+
+    @include res {
+        .btn {
+        margin-bottom: 0;
+
+
+        }
+    }
 }

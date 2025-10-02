@@ -346,6 +346,7 @@ const commonHeadCSS = `
   .footer {padding:3px; background:#0a84ff; color:#fff; font-size:8px; text-align:center}
   .p-3 {padding:5px}
   .mb-0 {margin-bottom:0}
+  .telugu { font-family: 'Ramabhadra', sans-serif;}
   @media print { .no-print { display:none !important; } }
   @media (max-width: 768px){
     .grid-2{display:block}
@@ -415,16 +416,16 @@ const buildTemplate = (heading, sub, data, trailingContentHTML) => {
    Agreement / Offer tab HTMLs
    ============================= */
 const htmlAggEng = (data) =>
-buildTemplate(
-"WORKER AGREEMENT",
-"H.R Department (Reg No: SEA/HYD/ALO/26/1040178/2025)",
-data,
-`<div class="section">
+  buildTemplate(
+    "WORKER AGREEMENT",
+    "H.R Department (Reg No: SEA/HYD/ALO/26/1040178/2025)",
+    data,
+    `<div class="section">
   <div class="hd">1. Terms & Conditions</div>
   <div class="bd">
     <div class="prose">
       <p>This agreement is made between JenCeo Home Care Services and <strong>${fullName(data)}</strong> (Employee ID:
-        <strong>${safe( data.idNo || data.employeeId)}</strong>) for employment as
+        <strong>${safe(data.idNo || data.employeeId)}</strong>) for employment as
         <strong>${safe(data.primarySkill)}</strong> under the following terms:</p>
       <p>I, Shri/Srimati/Kumari <strong>${fullName(data)}</strong> , hereby declare that I have voluntarily joined
         JenCeo Homecare
@@ -487,25 +488,38 @@ data,
 <div class="footer">
   <div><strong>Doc Ref:</strong> JC-HR-02 | Revision: 1 | Date: 1st May 2025 | Page 1 of 1 </div>
 </div>`
-);
+  );
 
 const htmlAggTel = (data) =>
   buildTemplate(
-    "ఉద్యోగి ఒప్పందం — తెలుగు",
+    "ఉద్యోగి ఒప్పందం",
     "హెచ్.ఆర్ విభాగం (Reg No: SEA/HYD/ALO/26/1040178/2025)",
     data,
     `<div class="section">
-      <div class="hd">నిబంధనలు & షరతులు</div>
+      <div class="hd telugu">నియమ నిబంధనలు మరియు షరతులు</div>
       <div class="bd">
         <div class="prose">
-          <h4>1. ఉద్యోగ షరతులు</h4>
-          <p>ఈ ఒప్పందం జెన్‌సియో హోంకేర్ సర్వీసెస్ మరియు ${fullName(
-      data
-    )} (Employee ID: ${safe(data.idNo || data.employeeId)}) మధ్య కుదిరినది.</p>
-          <h4>2. పారితోషికం</h4>
-          <p>కంపెనీ నియమావళి ప్రకారం వేతనం/ప్రయోజనలు.</p>
-          <h4>3. పని గంటలు</h4>
-          <p>రోజుకు 8 గంటలు, వారానికి 6 రోజులు.</p>
+          <h5 class="telugu">ఈ ఒప్పందం జెన్‌సియో హోంకేర్ సర్వీసెస్ మరియు <strong>${fullName(data)}</strong> (Employee ID: ${safe(data.idNo || data.employeeId)}) మధ్య కుదిరినది.</h5>
+          <p class="telugu">శ్రీ / శ్రీమతి / కుమారి <strong>${fullName(data)}</strong> అను నేను JenCeo Homecare నందు  <strong>${safe(data.primarySkill)}</strong> గా పనిచ చేయుటకు నా సొంత ఆసక్తి తో కుదిరినాను. నేను JenCeo Homecare నియమ
+నిబంధనలకు కట్టుబడి, కంపెనీ నియమంచిన చోట మనసా, వాచా, కర్మణా, త్రికరణ శుద్దితో, అంకిత భావముతో, సేవా భావముతో నియమంచిన పని చేస్తూ,
+నూటికి నూరుపాళ్ళు న్యాయం చేస్తానని, నా మనసాక్షిగా, దైవసాక్షిగా హామీ ఇస్తున్నాను.</p>
+          <h4 class="telugu">నియమ నిబంధనలు</h4>
+          <ol class="telugu">
+          <li>ప్రతీ ఉద్యోగీ తన నెల జీతం 30 రోజులు పూర్తి అయిన తరువాత చెల్లంచబడును, మరియు 30 రోజుల లోపు ఎటువంటి అడ్వానుసులు ఇవ్వబడవు</li>
+          <li>సంస్థ ద్వార్య నియమంచబడిన పనిని సంస్థకు మాత్రమే చేయాలి, ఉద్యోగి ఆ ఆపని స్వలాభం కోసం క్లంట్ తో పని కుదుర్చుకోకూడదు</li>
+          <li>క్లంట్ యొక్క వ్యక్తిగత / కుటుంబ / మతపర / ఆచార వ్యవహారాలకు ఎలాంటి బంగం కలగకుండా నడుచుకోవాలి</li>
+          <li>క్లంట్ కి సంబందించిన డబ్బు / బంగారము/ సెల్ ఫోనులు / ల్యాప్టాప్ / మరియు ఏ ఇతర విలువైన వస్తువులు తాకరాదు / తీసుకోరాదు</li>
+          <li>ఇచ్చిన పని సక్రమముగా చేస్తూ క్లంట్ పట్ల గౌరవ మర్యాదలతో వుండాలి</li>
+          <li>క్లంట్ పట్ల చెడుగా ప్రవర్తించినా / ఏదైనా వస్తువు దొంగాలించినా చట్టబద్ధమైన చర్యలు తీసుకొనబడును. కంపెనీ ఎట్టవంటి బాధ్యతా వహించదు</li>
+          <li>డ్యూటీ దిగాలి అనుకున్న యడల సంస్థకు 5 రోజుల ముందుగా తెలపాలి</li>
+          <li>ఎటువంటి పరిస్థితులలోనూ సరైన అనుమతి లేకుండా ఉద్యోగి తన పని గాని / పేషెంట్ ని గాని విడిచి పెట్టి వెళ్ళకూడదు.</li>
+          <li>ఒకవేళ పేషంట్ మరణిచినట్లు అయితే వెంటనే ఆఫీసుకు తెలియజేయాలి</li>
+          <li> క్లంట్ నుండి పిర్యాదులు వచ్చినా / పని సరిగా చేయక పోయినా/ ప్రవర్తన సరిగా లేకపోయినా ఉద్యోగం నుండి తక్షణమే తొలగించడం జరుగును</li>
+          </ol>
+          <h4 class="telugu">ఉద్యోగి అంగీకార విభాగం</h4>
+          <p>పైన తెలిపిన నీయమాలు, నిబంధనలు, సూచనలు చదివి / విని అందులోని చిక్కులను అర్ధం చేసుకుని మనస్పుర్తినా అంగీకరిస్తూ పూర్తి బాధ్యతగా ఉంటానని, నేను
+కంపెనీ నియమ నిబంధనలు అతిక్రమంచిన యడల కంపెనీ తీసుకునే ఎటువంటి క్రమశిక్షణా / చట్టపరమైన చర్యలకు కట్టుబడి ఉంటానని, ఇందుకు గాను JenCeo వారికి సర్వ హక్కులు, అధికారాలు కలవని అంగీకరిస్తూ ఇస్తున్న వీలునామా పత్రం.
+.</p>
         </div>
       </div>
     </div>
@@ -521,7 +535,9 @@ const htmlAggTel = (data) =>
         </div>
       </div>
     </div>
-    <div class="footer"><div><strong>Doc Ref:</strong> JC-HR-AGG-TE</div></div>`
+    <div class="footer">
+    <div><strong>Doc Ref:</strong> JC-HR-02 | Revision: 1 | Date: 1st May 2025 | Page 1 of 1 </div>
+    </div>`
   );
 
 const htmlAggHin = (data) =>

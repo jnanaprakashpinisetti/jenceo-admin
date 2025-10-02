@@ -16,6 +16,7 @@
 @import 'scss/layout/leftNav';
 
 // Components
+@import 'scss/components/todo'; 
 @import 'scss/components/card.scss';
 @import 'scss/components/table';
 @import 'scss/components/form'; 
@@ -23,6 +24,5 @@
 @import 'scss/components/boidata'; 
 @import 'scss/components/dashboard'; 
 @import 'scss/components/_WorkerBioDataForm'; 
-@import 'scss/components/todo'; 
 
 // Pages

@@ -2026,7 +2026,7 @@ const WorkerModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode }
                                                                         value={p.receiptNo || ""}
                                                                         onChange={(e) => handleArrayChange("payments", i, "receiptNo", e.target.value)}
                                                                         disabled={locked}
-                                                                        maxLength={3}
+                                                                        maxLength={5}
                                                                     />
                                                                 ) : (
                                                                     <div className="form-control form-control-sm bg-light">{p.receiptNo || "N/A"}</div>

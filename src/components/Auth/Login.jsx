@@ -153,11 +153,11 @@ export default function Login() {
             </div>
             <div className="info-item">
               <i className="bi bi-envelope me-2"></i>
-              Use email for Firebase Authentication
+              Use email for Authentication
             </div>
             <div className="info-item">
               <i className="bi bi-person me-2"></i>
-              Use username for database authentication
+              Use Username for authentication
             </div>
           </div>
         </div>

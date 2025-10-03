@@ -208,6 +208,7 @@ nav {
     @include res {
         .btn {
         margin-bottom: 0;
+        z-index: 0;
 
 
         }

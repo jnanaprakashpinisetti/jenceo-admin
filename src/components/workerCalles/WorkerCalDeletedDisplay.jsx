@@ -102,7 +102,7 @@ export default function WorkerCalDeletedDisplay() {
   const [rowsPerPage, setRowsPerPage] = useState(10);
 
   // Options for filters
-  const skillOptions = ["Nursing", "Patient Care", "Care Taker", "Old Age Care", "Baby Care", "Bedside Attender", "Supporting", "Any duty", "Daiper", "Any Duty", "Others"];
+  const skillOptions = ["Nursing", "Cooking", "Patient Care", "Care Taker", "Old Age Care", "Baby Care", "Bedside Attender", "Supporting", "Any duty", "Daiper",  "Others"];
   const roleOptions = [
     "Computer Operating", "Tele Calling", "Driving", "Supervisor", "Manager", "Attender", "Security",
     "Carpenter", "Painter", "Plumber", "Electrician", "Mason (Home maker)", "Tailor", "Labour", "Farmer", "Delivery Boy"

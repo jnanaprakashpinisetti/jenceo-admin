@@ -154,30 +154,74 @@ export default function LeftNav() {
         <div className={collapseClass} id="collapsibleNavbar">
 
           {/* ===== Mobile quick links (≤991px) ===== */}
-          <div className="mobile-top d-block d-lg-none mb-3">
-            <div className="d-flex flex-column gap-2 px-2">
-              <form className="input-group input-group-sm" onSubmit={(e) => { submitSearch(e); closeMobile(); }}>
-                <input
-                  type="search"
-                  className="form-control"
-                  placeholder="Search..."
-                  value={query}
-                  onChange={(e) => setQuery(e.target.value)}
-                />
-                <button className="btn btn-outline-secondary" type="submit">Go</button>
-              </form>
-              <div className="d-flex justify-content-between align-items-center">
-                <NavLink to='Profile' className="nav-link p-0" onClick={closeMobile} title="Profile">
-                  <span style={{ fontSize: 14 }}>👤 Profile</span>
-                </NavLink>
-                <button className="btn btn-sm btn-outline-secondary" onClick={() => alert('No notifications')} type="button">
-                  🔔 Notifications
-                </button>
-              </div>
+          {/* ===== Mobile quick links (≤991px) ===== */}
+<div className="mobile-top d-block d-lg-none mb-3">
+  <div className="d-flex flex-column gap-2 px-2">
+    {/* Search box */}
+    <form
+      className="input-group input-group-sm"
+      onSubmit={(e) => {
+        submitSearch(e);
+        closeMobile();
+      }}
+    >
+      <input
+        type="search"
+        className="form-control"
+        placeholder="Search..."
+        value={query}
+        onChange={(e) => setQuery(e.target.value)}
+      />
+      <button className="btn btn-outline-secondary" type="submit">
+        Go
+      </button>
+    </form>
 
-              <hr className='d-lg-none'></hr>
-            </div>
-          </div>
+    {/* Profile + Notifications */}
+    <div className="d-flex justify-content-between align-items-center">
+      <NavLink
+        to="Profile"
+        className="nav-link p-0"
+        onClick={closeMobile}
+        title="Profile"
+      >
+        <span style={{ fontSize: 14 }}>👤 Profile</span>
+      </NavLink>
+      <button
+        className="btn btn-sm btn-outline-secondary"
+        onClick={() => alert("No notifications")}
+        type="button"
+      >
+        🔔 Notifications
+      </button>
+    </div>
+
+    {/* Login time + Logout */}
+    <div className="d-flex justify-content-between align-items-center mt-2">
+      <small className="text-muted">
+        Login:{" "}
+        {new Date(
+          Number(sessionStorage.getItem("loginAt") || Date.now())
+        ).toLocaleTimeString()}
+      </small>
+      <button
+        className="btn btn-sm btn-warning"
+        type="button"
+        onClick={() => {
+          logout().finally(() => {
+            navigate("/login");
+            closeMobile();
+          });
+        }}
+      >
+      Logout
+      </button>
+    </div>
+
+    <hr className="d-lg-none" />
+  </div>
+</div>
+
 
           {/* ===== Main nav ===== */}
           <ul className="navbar-nav">

@@ -204,62 +204,111 @@ export function AuthProvider({ children }) {
   const loginUsername = async (username, password) => {
     const uname = norm(username);
     const auth = getAuth();
-
-    // 1) Make sure we have a Firebase Auth session so rules with "auth != null" pass
+  
+    // 1) Ensure we have Firebase Auth session
     if (!auth.currentUser) {
       try {
         await signInAnonymously(auth);
       } catch (e) {
-        // If already signed in (email mode), ignore
         if (!/already/.test(String(e?.message || ""))) throw e;
       }
     }
-
-    // 2) Read username store
+    const uid = auth.currentUser.uid;
+  
+    // 2) FIRST: Try to find user by username directly in Users collection
+    console.log("Searching for username:", uname);
+    
     const usersSnap = await db.ref("JenCeo-DataBase/Users").once("value");
-    const map = usersSnap.val() || {};
-    if (!Object.keys(map).length) {
-      throw new Error("No users found. Please check database permissions.");
+    const usersMap = usersSnap.val() || {};
+    
+    console.log("Available users:", Object.keys(usersMap));
+    
+    // Find user by username (case insensitive)
+    let userKey = null;
+    let userData = null;
+    
+    for (const [key, user] of Object.entries(usersMap)) {
+      const userUsername = norm(user?.username || user?.name || '');
+      const userEmail = norm(user?.email || '');
+      
+      console.log(`Checking ${key}: username="${userUsername}", email="${userEmail}"`);
+      
+      if (userUsername === uname || userEmail === uname) {
+        userKey = key;
+        userData = user;
+        break;
+      }
     }
-
-    const list = Object.keys(map).map((id) => ({ id, ...map[id] }));
-    const me = list.find((u) => norm(u.name || u.username || u.displayName) === uname);
-    if (!me) throw new Error("User not found");
-
-    if (me.active === false || me.disabled === true) throw new Error("Account is inactive");
-
-    // 3) Verify password (hash or plain)
-    const storedHash = me.passwordHash || me.pwdHash || null;
-    const storedPlain = me.password || me.pwd || null;
+  
+    if (!userData) {
+      // 3) SECOND: Try UserIndex approach if direct search fails
+      console.log("Trying UserIndex approach...");
+      try {
+        const idxSnap = await db.ref(`JenCeo-DataBase/UserIndex/${uid}/key`).once("value");
+        const key = idxSnap.val();
+        
+        if (key) {
+          userKey = key;
+          const userSnap = await db.ref(`JenCeo-DataBase/Users/${key}`).once("value");
+          userData = userSnap.val();
+        }
+      } catch (error) {
+        console.log("UserIndex approach failed:", error.message);
+      }
+    }
+  
+    // 4) If still no user found
+    if (!userData) {
+      throw new Error("User not found. Please check your username.");
+    }
+  
+    console.log("Found user data:", userData);
+  
+    // 5) Check if account is active
+    if (userData.active === false || userData.disabled === true) {
+      throw new Error("Account is inactive");
+    }
+  
+    // 6) Verify password
+    const storedHash = userData.passwordHash || userData.pwdHash || null;
+    const storedPlain = userData.password || userData.pwd || null;
     const incomingHash = await sha256Base64(password);
+    
+    console.log("Password check:", { storedHash: !!storedHash, storedPlain: !!storedPlain });
+    
     const ok =
       (storedHash && storedHash === incomingHash) ||
       (storedPlain && storedPlain === password);
+    
     if (!ok) throw new Error("Invalid password");
-
-    // 4) Upsert a profile under authentication/users/{auth.uid} so rules can check permissions
-    const uid = auth.currentUser.uid;
+  
+    // 7) Create or update profile in authentication
     const profileRef = db.ref(`authentication/users/${uid}`);
+
     const profile = {
-      name: me.name || me.username || username,
-      role: me.role || "user",
-      permissions: normalizePermissions(me.permissions || {}),
+      name: userData.name || userData.username || username,
+      role: userData.role || "user",
+      permissions: normalizePermissions(userData.permissions || {}),
       mode: "username",
-      usernameLinked: me.id,
+      usernameLinked: userKey,
+      email: userData.email || null,
+      lastLogin: new Date().toISOString()
     };
+    
     await profileRef.update(profile);
 
-    // 5) Build session used by LeftNav/guards
+  
+    // 8) Create session
     const session = {
       uid,
       name: profile.name,
-      email: me.email || null,
+      email: userData.email || null,
       role: profile.role,
       permissions: profile.permissions,
       mode: "username",
       _source: "jenCeo_database",
     };
-
+  
     setUser(session);
     localStorage.setItem("app_user", JSON.stringify(session));
     return session;
@@ -357,3 +406,38 @@ export function AuthProvider({ children }) {
 export function useAuth() {
   return useContext(AuthContext);
 }
+
+const debugUserDatabase = async () => {
+  console.log("=== USER DATABASE DEBUG ===");
+  
+  const paths = [
+    "JenCeo-DataBase/Users",
+    "JenCeo-DataBase/UserIndex", 
+    "Users",
+    "UserIndex",
+    "authentication/users"
+  ];
+  
+  for (const path of paths) {
+    try {
+      const data = await safeRead(path);
+      console.log(`📁 ${path}:`, data);
+      
+      if (data && typeof data === 'object') {
+        console.log(`   Found ${Object.keys(data).length} entries`);
+        // Show first few entries for inspection
+        Object.entries(data).slice(0, 3).forEach(([key, value]) => {
+          console.log(`   🔑 ${key}:`, {
+            username: value?.username,
+            name: value?.name,
+            email: value?.email,
+            hasPassword: !!(value?.password || value?.passwordHash),
+            role: value?.role
+          });
+        });
+      }
+    } catch (error) {
+      console.log(`   ❌ Error: ${error.message}`);
+    }
+  }
+};

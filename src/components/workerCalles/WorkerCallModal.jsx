@@ -515,7 +515,7 @@ export default function WorkerCallModal({ worker, isOpen, onClose, isEditMode })
                             </div>
                           ))
                         ) : (
-                          <div className="text-center text-muted py-3">
+                          <div className="text-center py-3">
                             <i className="bi bi-chat-square-text display-6"></i>
                             <p className="mt-2">No comments yet</p>
                           </div>
@@ -665,7 +665,7 @@ export default function WorkerCallModal({ worker, isOpen, onClose, isEditMode })
                       {/* Skills */}
                       <div className="col-12">
                         <div className=" border-0 shadow-sm">
-                          <div className="card-header bg-primary text-white p-2">
+                          <div className="card-header p-2">
                             <h6 className="mb-0">
                               <i className="bi bi-tools me-2"></i>Skills
                             </h6>
@@ -720,7 +720,7 @@ export default function WorkerCallModal({ worker, isOpen, onClose, isEditMode })
                       {/* Home Care Skills */}
                       <div className="col-12 mt-3">
                         <div className=" border-0 shadow-sm">
-                          <div className="card-header bg-success text-white p-2">
+                          <div className="card-header p-2">
                             <h6 className="mb-0">
                               <i className="bi bi-house-heart me-2"></i>Home Care Skills
                             </h6>
@@ -775,7 +775,7 @@ export default function WorkerCallModal({ worker, isOpen, onClose, isEditMode })
                       {/* Other Skills */}
                       <div className="col-12 mt-3">
                         <div className=" border-0 shadow-sm">
-                          <div className="card-header bg-warning text-dark p-2">
+                          <div className="card-header  p-2">
                             <h6 className="mb-0">
                               <i className="bi bi-briefcase me-2"></i>Other Skills
                             </h6>

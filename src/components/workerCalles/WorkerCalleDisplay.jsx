@@ -79,8 +79,6 @@ const formatTime = (dateLike, mode = "12") => {
   return d.toLocaleTimeString([], opts);
 };
 
-
-
 /* ------------ flatten up to depth=3 under WorkerCallData ------------ */
 function collectWorkersFromSnapshot(rootSnap) {
   const rows = [];
@@ -713,7 +711,9 @@ export default function WorkerCalleDisplay() {
           </select>
         </div>
 
-
+        <div className="text-white d-flex align-items-center">
+          Showing <strong className="mx-1">{pageItems.length}</strong> of <strong className="mx-1">{sorted.length}</strong> records
+        </div>
       </div>
 
       {/* reminder badges as filters */}
@@ -875,7 +875,6 @@ export default function WorkerCalleDisplay() {
             </div>
           </div>
 
-
           {/* Time Format */}
           <div className="col-md-3 text-center">
             <label className="form-label text-white small mb-2">Time Format</label>
@@ -899,15 +898,11 @@ export default function WorkerCalleDisplay() {
 
           <div className="col-md-3 text-center">
             <label className="form-label text-white small mb-2">Actions</label>
-
             <div className="d-flex gap-2 justify-content-center">
               <button className="btn btn-success" onClick={handleExport}>Export Excel</button>
               <button className="btn btn-danger" onClick={resetFilters}>Reset</button>
             </div>
           </div>
-
-
-
         </div>
       </div>
 
@@ -971,7 +966,6 @@ export default function WorkerCalleDisplay() {
           </div>
         </div>
 
-
         <div className="jobrols mt-3">
           {/* Job Roles Toggle Switch */}
           <div className="col-md-2 mb-3">
@@ -988,7 +982,6 @@ export default function WorkerCalleDisplay() {
               </label>
             </div>
           </div>
-
 
           {/* Render Job Roles section ONLY if toggle is ON */}
           {showJobRoles && (
@@ -1023,13 +1016,36 @@ export default function WorkerCalleDisplay() {
             </div>
           )}
         </div>
+      </div>
+      <div className="text-white d-flex align-items-center justify-content-center text-warning">
+        <p className=" text-warning mb-0">Showing <strong className="mx-1  text-warning">{pageItems.length}</strong> of <strong className="mx-1  text-warning">{sorted.length}</strong> records</p>
 
       </div>
 
-
-      <div className="text-warning mb-3">
-        Showing {pageItems.length} of {sorted.length} records
-      </div>
+      {/* TOP pagination */}
+      {totalPages > 1 && (
+        <nav aria-label="Workers" className="pagination-top py-2 mb-3 bg-dark rounded">
+          <ul className="pagination justify-content-center mb-0">
+            <li className={`page-item ${safePage === 1 ? "disabled" : ""}`}>
+              <button className="page-link bg-secondary text-white border-secondary" onClick={() => setCurrentPage(1)} disabled={safePage === 1}>«</button>
+            </li>
+            <li className={`page-item ${safePage === 1 ? "disabled" : ""}`}>
+              <button className="page-link bg-secondary text-white border-secondary" onClick={() => setCurrentPage(safePage - 1)} disabled={safePage === 1}>‹</button>
+            </li>
+            {getDisplayedPageNumbers().map((num) => (
+              <li key={num} className={`page-item ${safePage === num ? "active" : ""}`}>
+                <button className={`page-link ${safePage === num ? 'bg-primary border-primary' : 'bg-secondary text-white border-secondary'}`} onClick={() => setCurrentPage(num)}>{num}</button>
+              </li>
+            ))}
+            <li className={`page-item ${safePage === totalPages ? "disabled" : ""}`}>
+              <button className="page-link bg-secondary text-white border-secondary" onClick={() => setCurrentPage(safePage + 1)} disabled={safePage === totalPages}>›</button>
+            </li>
+            <li className={`page-item ${safePage === totalPages ? "disabled" : ""}`}>
+              <button className="page-link bg-secondary text-white border-secondary" onClick={() => setCurrentPage(totalPages)} disabled={safePage === totalPages}>»</button>
+            </li>
+          </ul>
+        </nav>
+      )}
 
       {/* table */}
       <div className="table-responsive">
@@ -1044,13 +1060,8 @@ export default function WorkerCalleDisplay() {
               <th>Age</th>
               <th>Experience</th>
               <th>Skills</th>
-              {/* {showJobRoles && <th>Job Roles</th>} */}
-              {/* <th>Languages</th> */}
               <th>Reminder Date</th>
-              {/* <th>Days Until</th> */}
               <th>Mobile</th>
-              {/* <th>Location</th> */}
-              {/* <th>Status</th> */}
               <th>Talkin</th>
               <th>Call Through</th>
               <th>Actions</th>
@@ -1080,7 +1091,12 @@ export default function WorkerCalleDisplay() {
                   <td>{globalIndex + 1}</td>
                   <td>{formatWorkerId(w.id, globalIndex)}</td>
                   <td>{formatDDMMYYYY(w?.date || w?.createdAt || w?.callReminderDate)}</td>
-                  <td>{w?.name || "—"}</td>
+                  <td>
+                    <div>{w?.name || "—"}</div>
+                    <small className="text-muted">
+                      Added by: {w?.addedBy || w?.createdBy || "System"}
+                    </small>
+                  </td>
                   <td>
                     <span className={`badge ${w?.gender === "Male" ? "bg-primary" : w?.gender === "Female" ? "bg-pink" : "bg-secondary"}`}>
                       {w?.gender || "—"}
@@ -1098,28 +1114,6 @@ export default function WorkerCalleDisplay() {
                       )}
                     </div>
                   </td>
-                  {/* {showJobRoles && (
-                    <td>
-                      <div className="d-flex flex-wrap gap-1">
-                        {roles.slice(0, 3).map((role, idx) => (
-                          <span key={idx} className="badge bg-warning text-dark">{role}</span>
-                        ))}
-                        {roles.length > 3 && (
-                          <span className="badge bg-secondary">+{roles.length - 3}</span>
-                        )}
-                      </div>
-                    </td>
-                  )} */}
-                  {/* <td>
-                    <div className="d-flex flex-wrap gap-1">
-                      {languages.slice(0, 2).map((lang, idx) => (
-                        <span key={idx} className="badge bg-success">{lang}</span>
-                      ))}
-                      {languages.length > 2 && (
-                        <span className="badge bg-secondary">+{languages.length - 2}</span>
-                      )}
-                    </div>
-                  </td> */}
                   <td>
                     <span className={`badge ${reminderBadgeClass(w?.callReminderDate || w?.reminderDate || w?.date || w?.createdAt)}`}>
                       {formatDDMMYYYY(w?.callReminderDate || w?.reminderDate || w?.date || w?.createdAt)}
@@ -1129,13 +1123,14 @@ export default function WorkerCalleDisplay() {
                         ? formatTime(w?.callReminderDate || w?.reminderDate, "24")
                         : formatTime(w?.callReminderDate || w?.reminderDate, "12")}
                     </small>
-                  </td>
-
-                  {/* <td>
-                    <span className={`badge ${du < 0 ? "bg-danger" : du === 0 ? "bg-warning text-dark" : du === 1 ? "bg-info" : "bg-secondary"}`}>
+                    <small className={`d-block fw-bold ${du < 0 ? "text-danger" :
+                        du === 0 ? "text-warning" :
+                          du === 1 ? "text-info" :
+                            "text-success"
+                      }`}>
                       {duText}
-                    </span>
-                  </td> */}
+                    </small>
+                  </td>
                   <td className="text-white">
                     <div className="fw-normal">{w?.mobileNo || "N/A"}</div>
                     {w?.mobileNo && (
@@ -1161,13 +1156,6 @@ export default function WorkerCalleDisplay() {
                       </div>
                     )}
                   </td>
-
-                  {/* <td>{w?.location || "—"}</td>
-                  <td>
-                    <span className={`badge ${w?.status === "active" ? "bg-success" : w?.status === "hired" ? "bg-primary" : "bg-secondary"}`}>
-                      {w?.status || "active"}
-                    </span>
-                  </td> */}
                   <td>
                     <span className={`badge ${comms.toLowerCase().includes("good") ? "bg-success" : comms.toLowerCase().includes("average") ? "bg-warning text-dark" : "bg-secondary"}`}>
                       {comms || "—"}
@@ -1189,19 +1177,13 @@ export default function WorkerCalleDisplay() {
                       )}
                       {permissions.canEdit && (
                         <button
-                          className="btn btn-sm btn-outline-light border-warning rounded-pill"
+                          className="btn btn-sm btn-outline-warning"
+                          onClick={() => handleEdit(w)}
                           title="Edit"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setSelectedWorker(w);
-                            setIsEditMode(true);
-                            setIsModalOpen(true);
-                          }}
                         >
-                          <img src={editIcon} alt="edit" width="16" height="16" />
+                          <img src={editIcon} alt="Edit" width="16" height="16" />
                         </button>
                       )}
-
                       {permissions.canDelete && (
                         <button
                           className="btn btn-sm btn-outline-danger"
@@ -1219,33 +1201,6 @@ export default function WorkerCalleDisplay() {
           </tbody>
         </table>
       </div>
-
-      {/* pagination */}
-      {/* TOP pagination (keep this, remove the bottom one) */}
-      {totalPages > 1 && (
-        <nav aria-label="Workers" className="pagination-top py-2 mb-3">
-          <ul className="pagination justify-content-center mb-0">
-            <li className={`page-item ${safePage === 1 ? "disabled" : ""}`}>
-              <button className="page-link" onClick={() => setCurrentPage(1)} disabled={safePage === 1}>«</button>
-            </li>
-            <li className={`page-item ${safePage === 1 ? "disabled" : ""}`}>
-              <button className="page-link" onClick={() => setCurrentPage(safePage - 1)} disabled={safePage === 1}>‹</button>
-            </li>
-            {getDisplayedPageNumbers().map((num) => (
-              <li key={num} className={`page-item ${safePage === num ? "active" : ""}`}>
-                <button className="page-link" onClick={() => setCurrentPage(num)}>{num}</button>
-              </li>
-            ))}
-            <li className={`page-item ${safePage === totalPages ? "disabled" : ""}`}>
-              <button className="page-link" onClick={() => setCurrentPage(safePage + 1)} disabled={safePage === totalPages}>›</button>
-            </li>
-            <li className={`page-item ${safePage === totalPages ? "disabled" : ""}`}>
-              <button className="page-link" onClick={() => setCurrentPage(totalPages)} disabled={safePage === totalPages}>»</button>
-            </li>
-          </ul>
-        </nav>
-      )}
-
 
       {/* summary table */}
       <div className="mt-5">
@@ -1329,23 +1284,18 @@ export default function WorkerCalleDisplay() {
           onClose={() => {
             setIsModalOpen(false);
             setSelectedWorker(null);
+            setIsEditMode(false);
           }}
-          worker={selectedWorker ?? { comments: [] }}  // <= safe default
+          worker={selectedWorker}
           isEdit={isEditMode}
           onSave={(updatedWorker) => {
-            if (isEditMode && selectedWorker) {
-              setWorkers(prev =>
-                prev.map(w => w.id === selectedWorker.id ? { ...w, ...updatedWorker } : w)
-              );
-            } else {
-              setWorkers(prev => [...prev, { ...updatedWorker, id: Date.now().toString() }]);
-            }
+            // This will be handled by the real-time Firebase listener
             setIsModalOpen(false);
             setSelectedWorker(null);
+            setIsEditMode(false);
           }}
         />
       )}
-
 
       {/* delete confirmation modal */}
       {showDeleteConfirm && (

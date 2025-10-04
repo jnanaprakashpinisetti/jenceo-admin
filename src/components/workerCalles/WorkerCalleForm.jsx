@@ -8,7 +8,11 @@ export default function WorkerCallForm({ isOpen, onClose }) {
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [showDuplicateModal, setShowDuplicateModal] = useState(false);
   const [existingWorker, setExistingWorker] = useState(null);
+
+  // 👉 Added: callId and callDate
   const [formData, setFormData] = useState({
+    callId: "",                 // e.g., "C-01"
+    callDate: getToday(),       // default today (YYYY-MM-DD)
     mobileNo: "",
     name: "",
     location: "",
@@ -32,10 +36,69 @@ export default function WorkerCallForm({ isOpen, onClose }) {
 
   const [errors, setErrors] = useState({});
 
+  // ===== Helpers =====
+  function getToday() {
+    const d = new Date();
+    const yyyy = d.getFullYear();
+    const mm = String(d.getMonth() + 1).padStart(2, "0");
+    const dd = String(d.getDate()).padStart(2, "0");
+    return `${yyyy}-${mm}-${dd}`;
+  }
+
+  // Generate next Call ID by scanning existing WorkerCallData callId values
+  const fetchNextCallId = async () => {
+    try {
+      const snap = await firebaseDB.child("WorkerCallData").once("value");
+      let maxN = 0;
+      if (snap.exists()) {
+        snap.forEach((child) => {
+          const item = child.val() || {};
+          const id = item.callId || "";
+          // expect format "C-XX"
+          const match = /^C-(\d+)$/.exec(id);
+          if (match) {
+            const n = parseInt(match[1], 10);
+            if (!Number.isNaN(n)) maxN = Math.max(maxN, n);
+          }
+        });
+      }
+      const next = maxN + 1;
+      // pad to 2 digits; if you want 3, change to padStart(3, "0")
+      return `C-${String(next).padStart(2, "0")}`;
+    } catch (e) {
+      console.error("Failed to compute next Call ID:", e);
+      // fallback to C-01
+      return "C-01";
+    }
+  };
+
+  // On open, prefill callId and callDate
+  useEffect(() => {
+    let isMounted = true;
+    const init = async () => {
+      const nextId = await fetchNextCallId();
+      if (!isMounted) return;
+      setFormData((prev) => ({
+        ...prev,
+        callId: nextId,
+        callDate: prev.callDate || getToday(),
+      }));
+    };
+    if (isOpen) init();
+    return () => {
+      isMounted = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen]);
+
   // Check for duplicate mobile number
   const checkDuplicateMobile = async (mobileNo) => {
     try {
-      const snapshot = await firebaseDB.child("WorkerCallData").orderByChild("mobileNo").equalTo(mobileNo).once("value");
+      const snapshot = await firebaseDB
+        .child("WorkerCallData")
+        .orderByChild("mobileNo")
+        .equalTo(mobileNo)
+        .once("value");
       return snapshot.exists() ? snapshot.val() : null;
     } catch (err) {
       console.error("Error checking duplicate:", err);
@@ -72,6 +135,10 @@ export default function WorkerCallForm({ isOpen, onClose }) {
   const validateStep = () => {
     const newErrors = {};
     if (step === 1) {
+      // Call ID + Date (auto-filled/disabled, so just be safe)
+      if (!formData.callId) newErrors.callId = "Call ID is required";
+      if (!formData.callDate) newErrors.callDate = "Call Date is required";
+
       if (!formData.mobileNo) {
         newErrors.mobileNo = "Mobile No is required";
       } else if (!/^\d{10}$/.test(formData.mobileNo)) {
@@ -138,10 +205,9 @@ export default function WorkerCallForm({ isOpen, onClose }) {
 
       const dataToSave = {
         ...formData,
-        commentDateTime: formData.comment
-          ? new Date().toISOString()
-          : "", // save comment timestamp if comment exists
+        commentDateTime: formData.comment ? new Date().toISOString() : "",
       };
+
       await firebaseDB.child("WorkerCallData").push(dataToSave);
 
       setShowSuccessModal(true);
@@ -177,17 +243,57 @@ export default function WorkerCallForm({ isOpen, onClose }) {
                   <div>
                     <h5 className="mb-3">Basic Details</h5>
                     <hr />
+
+                    {/* 👉 NEW: Call ID + Date row at the very top */}
                     <div className="row mb-3">
                       <div className="col-md-6">
-                        <label className="form-label">Mobile No <span className="star">*</span></label>
+                        <label className="form-label">
+                          Call ID <span className="star">*</span>
+                        </label>
+                        <input
+                          type="text"
+                          name="callId"
+                          value={formData.callId}
+                          className={`form-control ${errors.callId ? "is-invalid" : ""}`}
+                          disabled
+                          readOnly
+                          style={{ backgroundColor: "transparent" }}
+                        />
+                        {errors.callId && (
+                          <div className="invalid-feedback">{errors.callId}</div>
+                        )}
+                      </div>
+                      <div className="col-md-6">
+                        <label className="form-label">
+                          Date <span className="star">*</span>
+                        </label>
+                        <input
+                          type="date"
+                          name="callDate"
+                          value={formData.callDate}
+                          onChange={handleChange}
+                          onBlur={handleBlur}
+                          className={`form-control ${errors.callDate ? "is-invalid" : ""}`}
+                          max={getToday()}
+                        />
+                        {errors.callDate && (
+                          <div className="invalid-feedback">{errors.callDate}</div>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="row mb-3">
+                      <div className="col-md-6">
+                        <label className="form-label">
+                          Mobile No <span className="star">*</span>
+                        </label>
                         <input
                           type="tel"
                           name="mobileNo"
                           value={formData.mobileNo}
                           onChange={handleChange}
                           onBlur={handleBlur}
-                          className={`form-control ${errors.mobileNo ? "is-invalid" : ""
-                            }`}
+                          className={`form-control ${errors.mobileNo ? "is-invalid" : ""}`}
                           maxLength={10}
                         />
                         {errors.mobileNo && (
@@ -195,15 +301,16 @@ export default function WorkerCallForm({ isOpen, onClose }) {
                         )}
                       </div>
                       <div className="col-md-6">
-                        <label className="form-label">Name <span className="star">*</span></label>
+                        <label className="form-label">
+                          Name <span className="star">*</span>
+                        </label>
                         <input
                           type="text"
                           name="name"
                           value={formData.name}
                           onChange={handleChange}
                           onBlur={handleBlur}
-                          className={`form-control ${errors.name ? "is-invalid" : ""
-                            }`}
+                          className={`form-control ${errors.name ? "is-invalid" : ""}`}
                         />
                         {errors.name && (
                           <div className="invalid-feedback">{errors.name}</div>
@@ -214,29 +321,31 @@ export default function WorkerCallForm({ isOpen, onClose }) {
                     {/* Location + Source */}
                     <div className="row mb-3">
                       <div className="col-md-6">
-                        <label className="form-label">From / Location <span className="star">*</span></label>
+                        <label className="form-label">
+                          From / Location <span className="star">*</span>
+                        </label>
                         <input
                           type="text"
                           name="location"
                           value={formData.location}
                           onChange={handleChange}
                           onBlur={handleBlur}
-                          className={`form-control ${errors.location ? "is-invalid" : ""
-                            }`}
+                          className={`form-control ${errors.location ? "is-invalid" : ""}`}
                         />
                         {errors.location && (
                           <div className="invalid-feedback">{errors.location}</div>
                         )}
                       </div>
                       <div className="col-md-6">
-                        <label className="form-label">Source <span className="star">*</span></label>
+                        <label className="form-label">
+                          Source <span className="star">*</span>
+                        </label>
                         <select
                           name="source"
                           value={formData.source}
                           onChange={handleChange}
                           onBlur={handleBlur}
-                          className={`form-select ${errors.source ? "is-invalid" : ""
-                            }`}
+                          className={`form-select ${errors.source ? "is-invalid" : ""}`}
                         >
                           <option value="">Select</option>
                           {[
@@ -267,14 +376,15 @@ export default function WorkerCallForm({ isOpen, onClose }) {
                     {/* Gender + Marital Status + Age */}
                     <div className="row mb-3">
                       <div className="col-md-6">
-                        <label className="form-label">Gender <span className="star">*</span></label>
+                        <label className="form-label">
+                          Gender <span className="star">*</span>
+                        </label>
                         <select
                           name="gender"
                           value={formData.gender}
                           onChange={handleChange}
                           onBlur={handleBlur}
-                          className={`form-select ${errors.gender ? "is-invalid" : ""
-                            }`}
+                          className={`form-select ${errors.gender ? "is-invalid" : ""}`}
                         >
                           <option value="">Select</option>
                           <option value="Male">Male</option>
@@ -304,22 +414,25 @@ export default function WorkerCallForm({ isOpen, onClose }) {
 
                     <div className="row mb-3">
                       <div className="col-md-6">
-                        <label className="form-label">Age <span className="star">*</span></label>
+                        <label className="form-label">
+                          Age <span className="star">*</span>
+                        </label>
                         <input
                           type="number"
                           name="age"
                           value={formData.age}
                           onChange={handleChange}
                           onBlur={handleBlur}
-                          className={`form-control ${errors.age ? "is-invalid" : ""
-                            }`}
+                          className={`form-control ${errors.age ? "is-invalid" : ""}`}
                         />
                         {errors.age && (
                           <div className="invalid-feedback">{errors.age}</div>
                         )}
                       </div>
                       <div className="col-md-6">
-                        <label className="form-label">Experience <span className="star">*</span></label>
+                        <label className="form-label">
+                          Experience <span className="star">*</span>
+                        </label>
                         <div>
                           <div className="form-check form-check-inline">
                             <input
@@ -355,8 +468,7 @@ export default function WorkerCallForm({ isOpen, onClose }) {
                             value={formData.years}
                             onChange={handleChange}
                             onBlur={handleBlur}
-                            className={`form-control ${errors.years ? "is-invalid" : ""
-                              }`}
+                            className={`form-control ${errors.years ? "is-invalid" : ""}`}
                           />
                           {errors.years && (
                             <div className="invalid-feedback">{errors.years}</div>
@@ -383,7 +495,7 @@ export default function WorkerCallForm({ isOpen, onClose }) {
                               "Any duty",
                               "Daiper",
                               "Others",
-                              "Any Duty"
+                              "Any Duty",
                             ].map((skill) => (
                               <option key={skill} value={skill}>
                                 {skill}
@@ -394,7 +506,6 @@ export default function WorkerCallForm({ isOpen, onClose }) {
                             <div className="invalid-feedback">{errors.skills}</div>
                           )}
                         </div>
-
                       </div>
                     )}
                   </div>
@@ -479,15 +590,16 @@ export default function WorkerCallForm({ isOpen, onClose }) {
 
                     <div className="row mb-3">
                       <div className="col-md-6">
-                        <label className="form-label">Education<span className="star">*</span></label>
+                        <label className="form-label">
+                          Education<span className="star">*</span>
+                        </label>
                         <input
                           type="text"
                           name="education"
                           value={formData.education}
                           onChange={handleChange}
                           onBlur={handleBlur}
-                          className={`form-control ${errors.education ? "is-invalid" : ""
-                            }`}
+                          className={`form-control ${errors.education ? "is-invalid" : ""}`}
                         />
                         {errors.education && (
                           <div className="invalid-feedback">{errors.education}</div>
@@ -504,8 +616,10 @@ export default function WorkerCallForm({ isOpen, onClose }) {
                               checked={formData.workingHours === "12"}
                               onChange={handleChange}
                             />
-
-                            <label className="form-check-label"> &nbsp;&nbsp;12 Hours</label>
+                            <label className="form-check-label">
+                              {" "}
+                              &nbsp;&nbsp;12 Hours
+                            </label>
                           </div>
                           <div className="form-check form-check-inline">
                             <input
@@ -515,7 +629,9 @@ export default function WorkerCallForm({ isOpen, onClose }) {
                               checked={formData.workingHours === "24"}
                               onChange={handleChange}
                             />
-                            <label className="form-check-label">&nbsp;&nbsp;24 Hours</label>
+                            <label className="form-check-label">
+                              &nbsp;&nbsp;24 Hours
+                            </label>
                           </div>
                         </div>
                       </div>
@@ -554,14 +670,15 @@ export default function WorkerCallForm({ isOpen, onClose }) {
 
                     <div className="row mb-3">
                       <div className="col-md-6">
-                        <label className="form-label">Conversation Level<span className="star">*</span></label>
+                        <label className="form-label">
+                          Conversation Level<span className="star">*</span>
+                        </label>
                         <select
                           name="conversationLevel"
                           value={formData.conversationLevel}
                           onChange={handleChange}
                           onBlur={handleBlur}
-                          className={`form-select ${errors.conversationLevel ? "is-invalid" : ""
-                            }`}
+                          className={`form-select ${errors.conversationLevel ? "is-invalid" : ""}`}
                         >
                           <option value="">Select</option>
                           <option value="Very Good">Very Good</option>
@@ -585,9 +702,8 @@ export default function WorkerCallForm({ isOpen, onClose }) {
                             name="callReminderDate"
                             value={formData.callReminderDate}
                             onChange={handleChange}
-                            className={`form-control ${errors.callReminderDate ? "is-invalid" : ""
-                              }`}
-                            min={new Date().toISOString().split("T")[0]}
+                            className={`form-control ${errors.callReminderDate ? "is-invalid" : ""}`}
+                            min={getToday()}
                           />
                           {formData.callReminderDate && (
                             <button
@@ -662,6 +778,8 @@ export default function WorkerCallForm({ isOpen, onClose }) {
           setShowSuccessModal(false);
           // Reset form after successful submission
           setFormData({
+            callId: "",
+            callDate: getToday(),
             mobileNo: "",
             name: "",
             location: "",
@@ -705,9 +823,15 @@ export default function WorkerCallForm({ isOpen, onClose }) {
               </div>
               <div className="modal-body">
                 <p>This mobile number already exists in our system:</p>
-                <p ><strong>Name:</strong> {existingWorker.name}</p>
-                <p className="text-danger"><strong>Mobile:</strong> {existingWorker.mobileNo}</p>
-                <p><strong>Location:</strong> {existingWorker.location}</p>
+                <p>
+                  <strong>Name:</strong> {existingWorker.name}
+                </p>
+                <p className="text-danger">
+                  <strong>Mobile:</strong> {existingWorker.mobileNo}
+                </p>
+                <p>
+                  <strong>Location:</strong> {existingWorker.location}
+                </p>
               </div>
               <div className="modal-footer">
                 <button

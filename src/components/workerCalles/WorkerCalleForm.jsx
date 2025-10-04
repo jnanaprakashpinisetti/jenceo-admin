@@ -54,8 +54,8 @@ export default function WorkerCallForm({ isOpen, onClose }) {
         snap.forEach((child) => {
           const item = child.val() || {};
           const id = item.callId || "";
-          // expect format "C-XX"
-          const match = /^C-(\d+)$/.exec(id);
+          // expect format "WC-XX"
+          const match = /^WC-(\d+)$/.exec(id);
           if (match) {
             const n = parseInt(match[1], 10);
             if (!Number.isNaN(n)) maxN = Math.max(maxN, n);
@@ -64,11 +64,11 @@ export default function WorkerCallForm({ isOpen, onClose }) {
       }
       const next = maxN + 1;
       // pad to 2 digits; if you want 3, change to padStart(3, "0")
-      return `C-${String(next).padStart(2, "0")}`;
+      return `WC-${String(next).padStart(2, "0")}`;
     } catch (e) {
       console.error("Failed to compute next Call ID:", e);
       // fallback to C-01
-      return "C-01";
+      return "WC-01";
     }
   };
 

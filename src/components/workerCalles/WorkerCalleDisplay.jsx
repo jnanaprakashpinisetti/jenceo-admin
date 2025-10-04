@@ -59,6 +59,28 @@ const isWorkerShape = (v) => {
   return Boolean(v.name || v.mobileNo || v.location || v.gender || v.skills || v.conversationLevel || v.callThrough || v.through || v.source);
 };
 
+const reminderBadgeClass = (v) => {
+  const du = daysUntil(v);
+  if (!isFinite(du)) return "bg-secondary";
+  if (du < 0) return "bg-danger";
+  if (du === 0) return "bg-warning text-dark";
+  if (du === 1) return "bg-info text-dark";
+  return "bg-success";
+};
+
+// Format time in 12hr or 24hr
+const formatTime = (dateLike, mode = "12") => {
+  const d = new Date(dateLike);
+  if (isNaN(d.getTime())) return "";
+  const opts =
+    mode === "24"
+      ? { hour12: false, hour: "2-digit", minute: "2-digit" }
+      : { hour12: true, hour: "numeric", minute: "2-digit" };
+  return d.toLocaleTimeString([], opts);
+};
+
+
+
 /* ------------ flatten up to depth=3 under WorkerCallData ------------ */
 function collectWorkersFromSnapshot(rootSnap) {
   const rows = [];
@@ -1098,17 +1120,48 @@ export default function WorkerCalleDisplay() {
                       )}
                     </div>
                   </td> */}
-                  <td>{formatDDMMYYYY(w?.callReminderDate || w?.reminderDate || w?.date || w?.createdAt)}</td>
+                  <td>
+                    <span className={`badge ${reminderBadgeClass(w?.callReminderDate || w?.reminderDate || w?.date || w?.createdAt)}`}>
+                      {formatDDMMYYYY(w?.callReminderDate || w?.reminderDate || w?.date || w?.createdAt)}
+                    </span>
+                    <small className="d-block text-muted">
+                      {timeFormat === "24hr"
+                        ? formatTime(w?.callReminderDate || w?.reminderDate, "24")
+                        : formatTime(w?.callReminderDate || w?.reminderDate, "12")}
+                    </small>
+                  </td>
+
                   {/* <td>
                     <span className={`badge ${du < 0 ? "bg-danger" : du === 0 ? "bg-warning text-dark" : du === 1 ? "bg-info" : "bg-secondary"}`}>
                       {duText}
                     </span>
                   </td> */}
-                  <td>
-                    <a href={`tel:${w?.mobileNo}`} className="text-decoration-none" onClick={(e) => e.stopPropagation()}>
-                      {w?.mobileNo || "—"}
-                    </a>
+                  <td className="text-white">
+                    <div className="fw-normal">{w?.mobileNo || "N/A"}</div>
+                    {w?.mobileNo && (
+                      <div className="mt-1">
+                        <a
+                          href={`tel:${w.mobileNo}`}
+                          className="btn btn-sm btn-outline-info me-1 rounded-pill"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          Call
+                        </a>
+                        <a
+                          className="btn btn-sm btn-outline-success rounded-pill"
+                          href={`https://wa.me/${String(w.mobileNo).replace(/\D/g, "")}?text=${encodeURIComponent(
+                            "Hello, This is Sudheer From JenCeo Home Care Services"
+                          )}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          WAP
+                        </a>
+                      </div>
+                    )}
                   </td>
+
                   {/* <td>{w?.location || "—"}</td>
                   <td>
                     <span className={`badge ${w?.status === "active" ? "bg-success" : w?.status === "hired" ? "bg-primary" : "bg-secondary"}`}>
@@ -1136,13 +1189,19 @@ export default function WorkerCalleDisplay() {
                       )}
                       {permissions.canEdit && (
                         <button
-                          className="btn btn-sm btn-outline-warning"
-                          onClick={() => handleEdit(w)}
+                          className="btn btn-sm btn-outline-light border-warning rounded-pill"
                           title="Edit"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSelectedWorker(w);
+                            setIsEditMode(true);
+                            setIsModalOpen(true);
+                          }}
                         >
-                          <img src={editIcon} alt="Edit" width="16" height="16" />
+                          <img src={editIcon} alt="edit" width="16" height="16" />
                         </button>
                       )}
+
                       {permissions.canDelete && (
                         <button
                           className="btn btn-sm btn-outline-danger"
@@ -1162,52 +1221,31 @@ export default function WorkerCalleDisplay() {
       </div>
 
       {/* pagination */}
-      <div className="d-flex justify-content-between align-items-center mt-3">
-        <div className="text-white">
-          Showing {pageItems.length} of {sorted.length} records
-        </div>
-        <div className="d-flex gap-2 align-items-center">
-          <button
-            className="btn btn-sm btn-outline-light"
-            onClick={goToFirstPage}
-            disabled={safePage === 1}
-          >
-            First
-          </button>
-          <button
-            className="btn btn-sm btn-outline-light"
-            onClick={() => setCurrentPage(Math.max(1, safePage - 1))}
-            disabled={safePage === 1}
-          >
-            Previous
-          </button>
+      {/* TOP pagination (keep this, remove the bottom one) */}
+      {totalPages > 1 && (
+        <nav aria-label="Workers" className="pagination-top py-2 mb-3">
+          <ul className="pagination justify-content-center mb-0">
+            <li className={`page-item ${safePage === 1 ? "disabled" : ""}`}>
+              <button className="page-link" onClick={() => setCurrentPage(1)} disabled={safePage === 1}>«</button>
+            </li>
+            <li className={`page-item ${safePage === 1 ? "disabled" : ""}`}>
+              <button className="page-link" onClick={() => setCurrentPage(safePage - 1)} disabled={safePage === 1}>‹</button>
+            </li>
+            {getDisplayedPageNumbers().map((num) => (
+              <li key={num} className={`page-item ${safePage === num ? "active" : ""}`}>
+                <button className="page-link" onClick={() => setCurrentPage(num)}>{num}</button>
+              </li>
+            ))}
+            <li className={`page-item ${safePage === totalPages ? "disabled" : ""}`}>
+              <button className="page-link" onClick={() => setCurrentPage(safePage + 1)} disabled={safePage === totalPages}>›</button>
+            </li>
+            <li className={`page-item ${safePage === totalPages ? "disabled" : ""}`}>
+              <button className="page-link" onClick={() => setCurrentPage(totalPages)} disabled={safePage === totalPages}>»</button>
+            </li>
+          </ul>
+        </nav>
+      )}
 
-          {getDisplayedPageNumbers().map((num) => (
-            <button
-              key={num}
-              className={`btn btn-sm ${safePage === num ? "btn-primary" : "btn-outline-light"}`}
-              onClick={() => setCurrentPage(num)}
-            >
-              {num}
-            </button>
-          ))}
-
-          <button
-            className="btn btn-sm btn-outline-light"
-            onClick={() => setCurrentPage(Math.min(totalPages, safePage + 1))}
-            disabled={safePage === totalPages}
-          >
-            Next
-          </button>
-          <button
-            className="btn btn-sm btn-outline-light"
-            onClick={goToLastPage}
-            disabled={safePage === totalPages}
-          >
-            Last
-          </button>
-        </div>
-      </div>
 
       {/* summary table */}
       <div className="mt-5">

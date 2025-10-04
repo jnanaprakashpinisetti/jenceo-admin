@@ -374,4 +374,22 @@
   .btn-outline-info {
     border: 1px solid #0dcaf0;
   }
+
+  .pagination-top {
+    background: #0f172a;
+    /* dark slate to match layout */
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 12px;
+  }
+
+  .pagination-top .page-link {
+    background: transparent;
+    border: none;
+  }
+
+  .pagination-top .page-item.active .page-link {
+    background: rgba(255, 255, 255, 0.12);
+    border-radius: 8px;
+  }
+
 }

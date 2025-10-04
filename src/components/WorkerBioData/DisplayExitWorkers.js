@@ -414,7 +414,7 @@ setShowReturnReasonModal(false);
       <hr />
 
       <div className="d-flex justify-content-between align-items-center mb-3">
-        <h4 className="mb-0">Exit Employees</h4>
+        <h4 className="mb-0">Exit Workers</h4>
 
         <div className="d-flex align-items-center">
           <label className="me-2 mb-0">Rows:</label>
@@ -530,7 +530,7 @@ setShowReturnReasonModal(false);
             ) : (
               <tr>
                 <td colSpan="8" className="text-center py-4">
-                  No exit employees found matching your search criteria
+                  No exit Workers found matching your search criteria
                 </td>
               </tr>
             )}

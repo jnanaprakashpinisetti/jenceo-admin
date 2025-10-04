@@ -102,6 +102,7 @@ const normalizeArray = (val) =>
         .map((s) => s.trim())
         .filter(Boolean)
     : [];
+
 const isWorkerShape = (v) => {
   if (!v || typeof v !== "object") return false;
   return Boolean(
@@ -155,7 +156,7 @@ const parseExperienceYears = (exp) => {
 };
 const calculateExperience = (w) => {
   const candidates = [
-    w?.years, // <— YOUR DB field
+    w?.years, // DB field
     w?.experience,
     w?.exp,
     w?.workExperience,
@@ -237,6 +238,17 @@ const getWorkerLanguages = (w) => {
 const formatWorkerId = (firebaseId, index) =>
   `WC-${String(index + 1).padStart(3, "0")}`;
 
+// Added: more robust base date resolver (keeps logic, just extra fallbacks)
+const getBaseDate = (w) =>
+  w?.date ??
+  w?.createdAt ??
+  w?.createdDate ??
+  w?.createdOn ??
+  w?.timestamp ??
+  w?.created_time ??
+  w?.created_time_ms ??
+  null;
+
 /* =============================
    Permissions
    ============================= */
@@ -300,8 +312,8 @@ export default function WorkerCalleDisplay({
   const [skillMode, setSkillMode] = useState("single");
   const [timeFormat, setTimeFormat] = useState("12hr");
 
-  // NEW/RESTORED: Age & Experience filters
-  const [ageRange, setAgeRange] = useState({ min: "", max: "" }); // 18..55 likely
+  // Age & Experience filters
+  const [ageRange, setAgeRange] = useState({ min: "", max: "" });
   const [experienceRange, setExperienceRange] = useState({ min: "", max: "" });
 
   const [showJobRoles, setShowJobRoles] = useState(false);
@@ -406,7 +418,7 @@ export default function WorkerCalleDisplay({
         const list = collectWorkersFromSnapshot(snap);
         const enriched = list.map((w) => ({
           ...w,
-          date: w?.date || w?.createdAt || null,
+          date: getBaseDate(w),
         }));
         setWorkers(enriched);
         setLoading(false);
@@ -577,7 +589,7 @@ export default function WorkerCalleDisplay({
   const years = useMemo(() => {
     const ys = new Set();
     workers.forEach((w) => {
-      const d = parseDate(w?.date || w?.createdAt);
+      const d = parseDate(getBaseDate(w));
       if (isValidDate(d)) ys.add(d.getFullYear());
     });
     const sortedYs = Array.from(ys).sort((a, b) => a - b);
@@ -598,7 +610,7 @@ export default function WorkerCalleDisplay({
     });
 
     workers.forEach((w) => {
-      const d = parseDate(w?.date || w?.createdAt);
+      const d = parseDate(getBaseDate(w));
       if (!isValidDate(d) || d.getFullYear() !== activeYear) return;
 
       const m = d.getMonth();
@@ -624,7 +636,7 @@ export default function WorkerCalleDisplay({
     });
 
     workers.forEach((w) => {
-      const d = parseDate(w?.date || w?.createdAt);
+      const d = parseDate(getBaseDate(w));
       if (
         !isValidDate(d) ||
         d.getFullYear() !== activeYear ||
@@ -756,7 +768,7 @@ export default function WorkerCalleDisplay({
   const handleExport = () => {
     if (!permissions.canExport) return;
     const exportData = sorted.map((w, i) => {
-      const baseDate = w?.date || w?.createdAt;
+      const baseDate = getBaseDate(w);
       const reminder = w?.callReminderDate || w?.reminderDate;
       const du = daysUntil(reminder);
       const duText = isFinite(du)
@@ -964,7 +976,7 @@ export default function WorkerCalleDisplay({
             </div>
           </div>
 
-          <div className="col-lg-1 col-md-3 text-center">
+          <div className="col-lg-2 col-md-3 text-center">
             <label className="form-label text-white small mb-2">
               Skill Match
             </label>
@@ -976,7 +988,7 @@ export default function WorkerCalleDisplay({
                 } btn-sm`}
                 onClick={() => setSkillMode("single")}
               >
-                Any
+                Any Skill
               </button>
               <button
                 type="button"
@@ -985,7 +997,7 @@ export default function WorkerCalleDisplay({
                 } btn-sm`}
                 onClick={() => setSkillMode("multi")}
               >
-                All
+                All Skills
               </button>
             </div>
           </div>
@@ -1014,7 +1026,7 @@ export default function WorkerCalleDisplay({
             </div>
           </div>
 
-          {/* NEW: Age filter (18–55) */}
+          {/* Age filter (18–55) */}
           <div className="col-lg-3 col-md-6 text-center">
             <label className="form-label text-white small mb-1">Age</label>
             <div className="d-flex gap-2">
@@ -1043,7 +1055,7 @@ export default function WorkerCalleDisplay({
             </div>
           </div>
 
-          {/* NEW: Experience filter (years) */}
+          {/* Experience filter (years) */}
           <div className="col-lg-3 col-md-6 text-center">
             <label className="form-label text-white small mb-1">
               Experience (yrs)
@@ -1074,11 +1086,12 @@ export default function WorkerCalleDisplay({
             </div>
           </div>
 
+          {/* Toggle: Job Roles — styled via CSS below */}
           <div className="col-lg-1 col-md-2 text-center">
             <label className="form-label text-white small mb-2">
               Job Roles
             </label>
-            <div className="d-flex justify-content-center align-items-center gap-2">
+            <div className="d-flex justify-content-center align-items-center gap-2 toggle-pill">
               <input
                 type="checkbox"
                 className="form-check-input"
@@ -1269,10 +1282,12 @@ export default function WorkerCalleDisplay({
               <th>Experience</th>
               <th>Reminder</th>
               <th>Skills</th>
-              <th>Languages</th>
+
+              {/* Keep but hide: Languages, Call Through */}
+              <th style={{ display: "none" }}>Languages</th>
               <th>Mobile</th>
               <th>Talking</th>
-              <th>Call Through</th>
+              <th style={{ display: "none" }}>Call Through</th>
               <th>Actions</th>
             </tr>
           </thead>
@@ -1315,23 +1330,34 @@ export default function WorkerCalleDisplay({
               );
               const experience = calculateExperience(w);
 
-              const addedBy =
+              // Username fallbacks (added more)
+              const rawUser =
                 w?.addedBy ||
                 w?.createdBy ||
                 w?.userName ||
-                w?.username || // new
-                w?.addedUserName || // new
-                w?.addedByName || // new
-                w?.added_user || // new
+                w?.username ||
+                w?.addedUserName ||
+                w?.addedByName ||
+                w?.added_user ||
                 w?.createdUser ||
                 w?.created_by ||
                 w?.createdByName ||
+                w?.createdUserName ||
+                w?.createdby ||
                 (w?.user &&
                   (w?.user?.name ||
                     w?.user?.displayName ||
-                    w?.user?.userName)) ||
-                (w?.meta && (w?.meta?.userName || w?.meta?.createdBy)) || // nested
+                    w?.user?.userName ||
+                    w?.user?.email)) ||
+                (w?.meta &&
+                  (w?.meta?.userName ||
+                    w?.meta?.createdBy ||
+                    w?.meta?.email)) ||
                 "";
+
+              const addedBy = String(rawUser || "")
+                .replace(/@.*/, "") // if email, keep prefix
+                .trim();
 
               return (
                 <tr
@@ -1342,17 +1368,17 @@ export default function WorkerCalleDisplay({
                 >
                   <td>{globalIndex + 1}</td>
                   <td>{formatWorkerId(w.id, globalIndex)}</td>
-                  <td>{formatDDMMYYYY(w?.date || w?.createdAt)}</td>
+                  <td>{formatDDMMYYYY(getBaseDate(w))}</td>
                   <td>{w?.name || "—"}</td>
                   <td>
                     <span
-                      className={`badge ${
+                      className={
                         w?.gender === "Male"
-                          ? "bg-primary"
+                          ? "badge bg-primary"
                           : w?.gender === "Female"
-                          ? "bg-danger"
-                          : "bg-secondary"
-                      }`}
+                          ? "badge badge-female"
+                          : "badge bg-secondary"
+                      }
                     >
                       {w?.gender || "—"}
                     </span>
@@ -1393,7 +1419,9 @@ export default function WorkerCalleDisplay({
                       )}
                     </div>
                   </td>
-                  <td>
+
+                  {/* Keep but hide: Languages */}
+                  <td style={{ display: "none" }}>
                     <div className="d-flex flex-wrap gap-1">
                       {getWorkerLanguages(w)
                         .slice(0, 3)
@@ -1409,6 +1437,7 @@ export default function WorkerCalleDisplay({
                       )}
                     </div>
                   </td>
+
                   <td className="text-white">
                     <div className="fw-normal">{w?.mobileNo || "N/A"}</div>
                     {w?.mobileNo && (
@@ -1423,7 +1452,7 @@ export default function WorkerCalleDisplay({
                           Call
                         </a>
                         <a
-                          className="btn btn-sm btn-outline-success rounded-pill"
+                          className="btn btn-sm btn-outline-warning rounded-pill"
                           href={`https://wa.me/${String(w.mobileNo).replace(
                             /\D/g,
                             ""
@@ -1451,9 +1480,12 @@ export default function WorkerCalleDisplay({
                       {comms || "—"}
                     </span>
                   </td>
-                  <td>
+
+                  {/* Keep but hide: Call Through */}
+                  <td style={{ display: "none" }}>
                     <span className="badge bg-secondary">{callThrough}</span>
                   </td>
+
                   <td
                     className="text-nowrap"
                     onClick={(e) => e.stopPropagation()}
@@ -1985,6 +2017,35 @@ export default function WorkerCalleDisplay({
           </div>
         </div>
       )}
+
+      {/* Inline styles for requested tweaks */}
+      <style>{`
+        /* Female badge color */
+        .badge-female { background: #ff6ea8 !important; color: #111 !important; }
+
+        /* Nicer toggle styling for the Job Roles checkbox */
+        .toggle-pill .form-check-input {
+          width: 42px; height: 22px; cursor: pointer; position: relative;
+          appearance: none; -webkit-appearance: none; outline: none;
+          background: linear-gradient(180deg, #efb819, #f5d516); border: 1px solid rgba(255,255,255,0.15);
+          border-radius: 9px !important; transition: all .2s ease;
+        }
+        .toggle-pill .form-check-input::after {
+          content: ""; position: absolute; top: 50%; left: 3px;
+          width: 16px; height: 16px; border-radius: 50%;
+          background: #a9771c; transform: translateY(-50%); transition: all .2s ease;
+          box-shadow: 0 1px 3px rgba(0,0,0,.4);
+        }
+        .toggle-pill .form-check-input:checked {
+          background: linear-gradient(135deg, #0ea5e9, #7c3aed);
+          border-color: transparent;
+        }
+        .toggle-pill .form-check-input:checked::after { left: 23px; background: #fff; }
+        .toggle-pill .form-check-label { padding-left: 4px; }
+
+        /* Pagination wrapper subtle style retained */
+        .pagination-wrapper { background: #0f172a; border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; }
+      `}</style>
     </div>
   );
 }

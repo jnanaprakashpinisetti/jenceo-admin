@@ -381,30 +381,7 @@ export default function WorkerCalleDisplay({ currentUserRole = "admin", permissi
   return (
     <div className="workerCalls">
 
-      {/* TOP pagination (centered with bg) */}
-      {Math.ceil(sorted.length / rowsPerPage) > 1 && (
-        <nav aria-label="Workers" className="pagination-top py-2 mb-3" style={{ background: "#0f172a", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 12 }}>
-          <ul className="pagination justify-content-center mb-0">
-            <li className={`page-item ${safePage === 1 ? "disabled" : ""}`}>
-              <button className="page-link" onClick={() => setCurrentPage(1)} disabled={safePage === 1}>«</button>
-            </li>
-            <li className={`page-item ${safePage === 1 ? "disabled" : ""}`}>
-              <button className="page-link" onClick={() => setCurrentPage(safePage - 1)} disabled={safePage === 1}>‹</button>
-            </li>
-            {getDisplayedPageNumbers().map(num => (
-              <li key={num} className={`page-item ${safePage === num ? "active" : ""}`}>
-                <button className="page-link" onClick={() => setCurrentPage(num)}>{num}</button>
-              </li>
-            ))}
-            <li className={`page-item ${safePage === totalPages ? "disabled" : ""}`}>
-              <button className="page-link" onClick={() => setCurrentPage(safePage + 1)} disabled={safePage === totalPages}>›</button>
-            </li>
-            <li className={`page-item ${safePage === totalPages ? "disabled" : ""}`}>
-              <button className="page-link" onClick={() => setCurrentPage(totalPages)} disabled={safePage === totalPages}>»</button>
-            </li>
-          </ul>
-        </nav>
-      )}
+
 
       {/* top controls */}
       <div className="d-flex justify-content-between flex-wrap gap-2 mb-3 p-2 bg-dark border rounded-3">
@@ -441,6 +418,30 @@ export default function WorkerCalleDisplay({ currentUserRole = "admin", permissi
           )}
           <button className="btn btn-danger" onClick={resetFilters}>Reset</button>
         </div>
+      </div>
+
+
+      {/* reminder badges as filters */}
+      <div className="alert alert-info text-info d-flex justify-content-around flex-wrap reminder-badges mb-4">
+        {["overdue", "today", "tomorrow", "upcoming"].map((k) => (
+          <span
+            key={k}
+            role="button"
+            className={`reminder-badge ${k} ${reminderFilter === k ? "active" : ""}`}
+            onClick={() => setReminderFilter(reminderFilter === k ? "" : k)}
+          >
+            {k[0].toUpperCase() + k.slice(1)}:{" "}
+            <strong>
+              {k === "overdue"
+                ? badgeCounts.overdue
+                : k === "today"
+                  ? badgeCounts.today
+                  : k === "tomorrow"
+                    ? badgeCounts.tomorrow
+                    : badgeCounts.upcoming}
+            </strong>
+          </span>
+        ))}
       </div>
 
       {/* Filter row: Gender + Skill match + Time + Job roles toggle */}
@@ -529,6 +530,37 @@ export default function WorkerCalleDisplay({ currentUserRole = "admin", permissi
         </div>
       )}
 
+      {/* status line - add this right before the table (around line 440) */}
+      <div className="mb-2 mt-4 small text-center" style={{ color: "yellow" }}>
+        Showing <strong>{pageItems.length}</strong> of <strong>{sorted.length}</strong> (from <strong>{workers.length}</strong> total)
+        {reminderFilter ? ` — ${reminderFilter}` : ""}
+      </div>
+      {/* TOP pagination (centered with bg) */}
+      {Math.ceil(sorted.length / rowsPerPage) > 1 && (
+
+        <nav aria-label="Workers" className="pagination-top py-2 mb-3 m-auto" style={{ background: "#0f172a", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 12 }}>
+          <ul className="pagination justify-content-center mb-0">
+            <li className={`page-item ${safePage === 1 ? "disabled" : ""}`}>
+              <button className="page-link" onClick={() => setCurrentPage(1)} disabled={safePage === 1}>«</button>
+            </li>
+            <li className={`page-item ${safePage === 1 ? "disabled" : ""}`}>
+              <button className="page-link" onClick={() => setCurrentPage(safePage - 1)} disabled={safePage === 1}>‹</button>
+            </li>
+            {getDisplayedPageNumbers().map(num => (
+              <li key={num} className={`page-item ${safePage === num ? "active" : ""}`}>
+                <button className="page-link" onClick={() => setCurrentPage(num)}>{num}</button>
+              </li>
+            ))}
+            <li className={`page-item ${safePage === totalPages ? "disabled" : ""}`}>
+              <button className="page-link" onClick={() => setCurrentPage(safePage + 1)} disabled={safePage === totalPages}>›</button>
+            </li>
+            <li className={`page-item ${safePage === totalPages ? "disabled" : ""}`}>
+              <button className="page-link" onClick={() => setCurrentPage(totalPages)} disabled={safePage === totalPages}>»</button>
+            </li>
+          </ul>
+        </nav>
+      )}
+
       {/* table */}
       <div className="table-responsive">
         <table className="table table-dark table-hover align-middle">
@@ -579,7 +611,8 @@ export default function WorkerCalleDisplay({ currentUserRole = "admin", permissi
                     </span>
                     <small className="d-block text-muted">{timeStr}</small>
                     {duText && <small className="d-block text-info">{duText}</small>}
-                    {addedBy && <small className="d-block text-success">by {addedBy}</small>}
+                    {/* Add this line for username */}
+                    {addedBy && <small className="d-block text-success">by {addedBy.toLowerCase()}</small>}
                   </td>
                   <td>
                     <div className="d-flex flex-wrap gap-1">

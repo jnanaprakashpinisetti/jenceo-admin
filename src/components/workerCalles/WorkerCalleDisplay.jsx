@@ -78,6 +78,22 @@ function collectWorkersFromSnapshot(rootSnap) {
   return rows;
 }
 
+// NEW: Permission hook (you can replace this with actual auth context)
+const usePermissions = () => {
+  // For now, returning all permissions. Later replace with actual user permissions
+  return {
+    canView: true,
+    canEdit: true,
+    canDelete: true,
+  };
+};
+
+// NEW: Format ID as WC-001, WC-002, etc.
+const formatWorkerId = (firebaseId, index) => {
+  const sequentialNumber = (index + 1).toString().padStart(3, '0');
+  return `WC-${sequentialNumber}`;
+};
+
 export default function WorkerCalleDisplay() {
   // data
   const [workers, setWorkers] = useState([]);
@@ -104,6 +120,22 @@ export default function WorkerCalleDisplay() {
   const [sortBy, setSortBy] = useState("id");
   const [sortDir, setSortDir] = useState("desc");
 
+  // NEW: Time format state
+  const [timeFormat, setTimeFormat] = useState("12hr");
+
+  // NEW: Skill selection mode and age filter
+  const [skillMode, setSkillMode] = useState("single");
+  const [ageRange, setAgeRange] = useState({ min: "", max: "" });
+  const [yearFilter, setYearFilter] = useState("");
+
+  // NEW: Additional filters
+  const [experienceFilter, setExperienceFilter] = useState("");
+  const [locationFilter, setLocationFilter] = useState("");
+  const [statusFilter, setStatusFilter] = useState("");
+
+  // NEW: Show job roles checkbox
+  const [showJobRoles, setShowJobRoles] = useState(false);
+
   // pagination
   const [currentPage, setCurrentPage] = useState(1);
   const [rowsPerPage, setRowsPerPage] = useState(10);
@@ -114,6 +146,38 @@ export default function WorkerCalleDisplay() {
   const callThroughOptions = [
     "Apana", "WorkerIndian", "Reference", "Poster", "Agent", "Facebook", "LinkedIn", "Instagram", "YouTube", "Website", "Just Dial", "News Paper", "Other"
   ];
+
+  // NEW: Year filter options
+  const yearOptions = [
+    { value: "", label: "All Years" },
+    { value: "current", label: "Current Year" },
+    { value: "1", label: "1 Year Above" },
+    { value: "2", label: "2 Years Above" },
+    { value: "6", label: "Last 6 Months" },
+    { value: "3", label: "Last 3 Months" },
+    { value: "1m", label: "Last 1 Month" }
+  ];
+
+  // NEW: Experience filter options
+  const experienceOptions = [
+    { value: "", label: "Any Experience" },
+    { value: "0-1", label: "0-1 Years" },
+    { value: "1-3", label: "1-3 Years" },
+    { value: "3-5", label: "3-5 Years" },
+    { value: "5+", label: "5+ Years" }
+  ];
+
+  // NEW: Status filter options
+  const statusOptions = [
+    { value: "", label: "All Status" },
+    { value: "active", label: "Active" },
+    { value: "inactive", label: "Inactive" },
+    { value: "pending", label: "Pending" },
+    { value: "hired", label: "Hired" }
+  ];
+
+  // Get user permissions
+  const permissions = usePermissions();
 
   // Canonicalize various spellings/inputs into a fixed set
   const normalizeSource = (raw) => {
@@ -153,7 +217,7 @@ export default function WorkerCalleDisplay() {
   };
 
   const [activeYear, setActiveYear] = useState(new Date().getFullYear());
-  const [activeMonth, setActiveMonth] = useState(null); // 0-11 or null
+  const [activeMonth, setActiveMonth] = useState(null);
 
   /* --- FETCH --- */
   useEffect(() => {
@@ -161,7 +225,6 @@ export default function WorkerCalleDisplay() {
     const cb = ref.on("value", (snap) => {
       try {
         const list = collectWorkersFromSnapshot(snap);
-        // ensure a 'date' exists in-memory (do not write to DB)
         const enriched = list.map(w => ({
           ...w,
           date: w?.date || w?.createdAt || w?.callReminderDate || new Date().toISOString()
@@ -191,68 +254,129 @@ export default function WorkerCalleDisplay() {
   }, [workers]);
 
   // Options for filters
-  const skillOptions = ["Nursing", "Cooking", "Patient Care", "Care Taker", "Old Age Care", "Baby Care", "Bedside Attender", "Supporting",  "Daiper", "Any Duty", "Others"];
+  const skillOptions = ["Nursing", "Cooking", "Patient Care", "Care Taker", "Old Age Care", "Baby Care", "Bedside Attender", "Supporting", "Daiper", "Any Duty", "Others"];
   const roleOptions = [
     "Computer Operating", "Tele Calling", "Driving", "Supervisor", "Manager", "Attender", "Security",
-    "Carpenter", "Painter", "Plumber", "Electrician", "Mason (Home maker)", "Tailor", "Labour", "Farmer", "Delivery Boy"
+    "Carpenter", "Painter", "Plumber", "Electrician", "Mason (Home maker)", "Tailor", "Labour", "Farmer", "Delivery Boy",
+    "House Keeping", "Cook", "Nanny", "Elderly Care", "Driver", "Office Boy", "Peon"
   ];
-  const languageOptions = ["Telugu", "English", "Hindi", "Urdu", "Kannada", "Malayalam", "Tamil"];
+  const languageOptions = ["Telugu", "English", "Hindi", "Urdu", "Kannada", "Malayalam", "Tamil", "Bengali", "Marati"];
 
-  // Helpers
-  const getWorkerRoles = (w) => {
-    const val = w?.jobRole ?? w?.role ?? w?.roles ?? w?.profession ?? w?.designation ?? w?.workType ?? w?.otherSkills ?? w?.otherskills ?? w?.other_skills ?? w?.["other skils"] ?? "";
-    return normalizeArray(val).map((s) => String(s).toLowerCase());
+  // NEW: Calculate age from date of birth
+  const calculateAge = (dob) => {
+    if (!dob) return null;
+    const birthDate = parseDate(dob);
+    if (!isValidDate(birthDate)) return null;
+    const today = new Date();
+    let age = today.getFullYear() - birthDate.getFullYear();
+    const monthDiff = today.getMonth() - birthDate.getMonth();
+    if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
+      age--;
+    }
+    return age;
   };
-  const getWorkerSkills = (w) => normalizeArray(w?.skills).map((s) => String(s).toLowerCase());
+
+  // NEW: Calculate experience
+  const calculateExperience = (exp) => {
+    if (!exp) return null;
+    if (typeof exp === 'number') return exp;
+    if (typeof exp === 'string') {
+      const match = exp.match(/(\d+)/);
+      return match ? parseInt(match[1]) : null;
+    }
+    return null;
+  };
+
+  // Helpers with null safety
+  const getWorkerRoles = (w) => {
+    if (!w) return [];
+    const val = w?.jobRole ?? w?.role ?? w?.roles ?? w?.profession ?? w?.designation ?? w?.workType ?? w?.otherSkills ?? w?.otherskills ?? w?.other_skills ?? w?.["other skils"] ?? "";
+    return normalizeArray(val).map((s) => String(s ?? "").toLowerCase());
+  };
+
+  const getWorkerSkills = (w) => {
+    if (!w) return [];
+    return normalizeArray(w?.skills).map((s) => String(s ?? "").toLowerCase());
+  };
+
   const getWorkerLanguages = (w) => {
+    if (!w) return [];
     const val = w?.languages ?? w?.language ?? w?.knownLanguages ?? w?.speaks ?? "";
-    return normalizeArray(val).map((s) => String(s).toLowerCase());
+    return normalizeArray(val).map((s) => String(s ?? "").toLowerCase());
   };
 
   /* filtering */
   const filtered = useMemo(() => {
     const term = searchTerm.trim().toLowerCase();
     return workers.filter((w) => {
-      if (selectedSource !== "All") {
-        const srcRaw = (w?.callThrough || w?.through || w?.source || "").trim();
-        const canon = normalizeSource(srcRaw);
-        if (canon !== selectedSource) return false;
-      }
       if (term) {
-        const hay = `${w?.name ?? ""} ${w?.location ?? ""} ${String(w?.mobileNo ?? "")}`.toLowerCase();
+        const name = String(w?.name ?? "").toLowerCase();
+        const location = String(w?.location ?? "").toLowerCase();
+        const mobileNo = String(w?.mobileNo ?? "").toLowerCase();
+        const hay = `${name} ${location} ${mobileNo}`;
         if (!hay.includes(term)) return false;
       }
+
       if (selectedGender.length > 0) {
         const g = String(w?.gender ?? "").toLowerCase();
-        const wanted = selectedGender.map((x) => String(x).toLowerCase());
+        const wanted = selectedGender.map((x) => String(x ?? "").toLowerCase());
         if (!wanted.includes(g)) return false;
       }
+
       if (selectedSkills.length > 0) {
         const have = getWorkerSkills(w);
-        const want = selectedSkills.map((s) => String(s).toLowerCase());
-        if (!want.some((s) => have.includes(s))) return false;
+        const want = selectedSkills.map((s) => String(s ?? "").toLowerCase());
+        if (skillMode === "single") {
+          if (!want.some((s) => have.includes(s))) return false;
+        } else {
+          if (!want.every((s) => have.includes(s))) return false;
+        }
       }
+
       if (selectedRoles.length > 0) {
         const have = getWorkerRoles(w);
-        const want = selectedRoles.map((s) => String(s).toLowerCase());
+        const want = selectedRoles.map((s) => String(s ?? "").toLowerCase());
         if (!want.some((s) => have.includes(s))) return false;
       }
+
       if (selectedLanguages.length > 0) {
         const have = getWorkerLanguages(w);
-        const want = selectedLanguages.map((s) => String(s).toLowerCase());
+        const want = selectedLanguages.map((s) => String(s ?? "").toLowerCase());
         if (!want.some((s) => have.includes(s))) return false;
       }
+
+      // Reminder filter
       if (reminderFilter) {
         const du = daysUntil(w?.callReminderDate);
-        if (!isFinite(du)) return false;
-        if (reminderFilter === "overdue" && !(du < 0)) return false;
+        if (reminderFilter === "overdue" && du >= 0) return false;
         if (reminderFilter === "today" && du !== 0) return false;
         if (reminderFilter === "tomorrow" && du !== 1) return false;
-        if (reminderFilter === "upcoming" && !(du >= 2)) return false;
+        if (reminderFilter === "upcoming" && (du <= 1 || !isFinite(du))) return false;
       }
+
+      // Source filter
+      if (selectedSource !== "All") {
+        const source = normalizeSource(w?.callThrough || w?.through || w?.source || "");
+        if (source !== selectedSource) return false;
+      }
+
+      // Age filter
+      const age = calculateAge(w?.dateOfBirth || w?.dob || w?.birthDate);
+      if (ageRange.min && age < parseInt(ageRange.min)) return false;
+      if (ageRange.max && age > parseInt(ageRange.max)) return false;
+
+      // Location filter
+      if (locationFilter) {
+        const location = String(w?.location ?? "").toLowerCase();
+        if (!location.includes(locationFilter.toLowerCase())) return false;
+      }
+
+      // Status filter
+      if (statusFilter && w?.status !== statusFilter) return false;
+
       return true;
     });
-  }, [workers, searchTerm, selectedGender, selectedSkills, selectedRoles, selectedLanguages, reminderFilter, selectedSource]);
+  }, [workers, searchTerm, selectedGender, selectedSkills, selectedRoles, selectedLanguages, reminderFilter, selectedSource, skillMode, ageRange, yearFilter, experienceFilter, locationFilter, statusFilter]);
 
   /* sorting */
   const sorted = useMemo(() => {
@@ -281,23 +405,61 @@ export default function WorkerCalleDisplay() {
   const indexOfFirst = indexOfLast - rowsPerPage;
   const pageItems = useMemo(() => sorted.slice(indexOfFirst, indexOfLast), [sorted, indexOfFirst, indexOfLast]);
 
-  useEffect(() => { setCurrentPage(1); }, [searchTerm, selectedGender, selectedSkills, selectedRoles, selectedLanguages, reminderFilter, rowsPerPage]);
+  useEffect(() => { setCurrentPage(1); }, [searchTerm, selectedGender, selectedSkills, selectedRoles, selectedLanguages, reminderFilter, rowsPerPage, skillMode, ageRange, yearFilter, experienceFilter, locationFilter, statusFilter]);
 
   /* actions */
-  const handleView = (w) => { setSelectedWorker(w); setIsEditMode(false); setIsModalOpen(true); };
-  const handleEdit = (w) => { setSelectedWorker(w); setIsEditMode(true); setIsModalOpen(true); };
-  const handleDelete = (w) => { setSelectedWorker(w); setShowDeleteConfirm(true); };
+  const handleView = (w) => {
+    if (!permissions.canView) return;
+    setSelectedWorker(w);
+    setIsEditMode(false);
+    setIsModalOpen(true);
+  };
+
+  const handleEdit = (w) => {
+    if (!permissions.canEdit) return;
+    setSelectedWorker(w);
+    setIsEditMode(true);
+    setIsModalOpen(true);
+  };
+
+  const handleDelete = (w) => {
+    if (!permissions.canDelete) return;
+    setSelectedWorker(w);
+    setShowDeleteConfirm(true);
+  };
+
+  const handleRowClick = (w, e) => {
+    if (e.target.closest('button, a, .btn')) return;
+    handleView(w);
+  };
 
   const handleDeleteConfirmed = () => {
-    if (!selectedWorker) return;
+    if (!selectedWorker || !permissions.canDelete) return;
     setShowDeleteConfirm(false);
     setDeleteReason("");
     setShowDeleteReason(true);
   };
 
+  // NEW: Log user actions
+  const logUserAction = async (action, workerId, details = {}) => {
+    try {
+      const logEntry = {
+        action,
+        workerId,
+        userId: "current-user-id",
+        timestamp: new Date().toISOString(),
+        details,
+        userAgent: navigator.userAgent
+      };
+      await firebaseDB.child(`UserActionLogs/${workerId}_${Date.now()}`).set(logEntry);
+    } catch (error) {
+      console.error("Failed to log user action:", error);
+    }
+  };
+
   // SOFT DELETE (MOVE): write to WorkerCalDeletedData and remove from WorkerCallData
   const performDeleteWithReason = async () => {
-    if (!selectedWorker) return;
+    if (!selectedWorker || !permissions.canDelete) return;
     if (!deleteReason.trim()) {
       alert("Please provide a reason for deletion");
       return;
@@ -313,6 +475,12 @@ export default function WorkerCalleDisplay() {
       };
       await firebaseDB.child(`WorkerCalDeletedData/${selectedWorker.id}`).set(payload);
       await firebaseDB.child(`WorkerCallData/${selectedWorker.id}`).remove();
+
+      await logUserAction("DELETE", selectedWorker.id, {
+        reason: deleteReason.trim(),
+        workerName: selectedWorker.name
+      });
+
       setShowDeleteReason(false);
       setSelectedWorker(null);
       setDeleteReason("");
@@ -325,9 +493,23 @@ export default function WorkerCalleDisplay() {
   };
 
   const resetFilters = () => {
-    setSearchTerm(""); setSelectedSkills([]); setSelectedRoles([]); setSelectedLanguages([]); setSelectedGender([]);
-    setReminderFilter(""); setSortBy("id"); setSortDir("desc");
-    setRowsPerPage(10); setCurrentPage(1);
+    setSearchTerm("");
+    setSelectedSkills([]);
+    setSelectedRoles([]);
+    setSelectedLanguages([]);
+    setSelectedGender([]);
+    setReminderFilter("");
+    setSortBy("id");
+    setSortDir("desc");
+    setRowsPerPage(10);
+    setCurrentPage(1);
+    setSkillMode("single");
+    setAgeRange({ min: "", max: "" });
+    setYearFilter("");
+    setExperienceFilter("");
+    setLocationFilter("");
+    setStatusFilter("");
+    setShowJobRoles(false);
   };
 
   /* export current filtered view */
@@ -342,17 +524,25 @@ export default function WorkerCalleDisplay() {
       const callThrough = normalizeSource(w?.callThrough || w?.through || w?.source || "");
       const roles = normalizeArray(w?.jobRole ?? w?.role ?? w?.roles ?? w?.profession ?? w?.designation ?? w?.workType ?? w?.otherSkills ?? w?.otherskills ?? w?.other_skills ?? w?.["other skils"] ?? "");
       const languages = normalizeArray(w?.languages ?? w?.language ?? w?.knownLanguages ?? w?.speaks ?? "");
+      const age = calculateAge(w?.dateOfBirth || w?.dob || w?.birthDate);
+      const experience = calculateExperience(w?.experience || w?.exp || w?.workExperience);
+
       return {
         "S.No": i + 1,
+        "ID": formatWorkerId(w.id, i),
         Date: formatDDMMYYYY(baseDate),
         Name: w?.name ?? "",
         Gender: w?.gender ?? "",
+        Age: age || "",
+        "Experience (Years)": experience || "",
         Skills: normalizeArray(w?.skills).join(", "),
         Roles: roles.join(", "),
         Languages: languages.join(", "),
         "Reminder Date": formatDDMMYYYY(w?.callReminderDate || w?.reminderDate || w?.date || w?.createdAt),
         "Days Until": duText,
         Mobile: w?.mobileNo ?? "",
+        Location: w?.location ?? "",
+        Status: w?.status || "active",
         Communications: comms,
         "Call Through": callThrough
       };
@@ -411,7 +601,7 @@ export default function WorkerCalleDisplay() {
       const d = parseDate(w?.date || w?.callReminderDate || w?.createdAt);
       if (!isValidDate(d) || d.getFullYear() !== activeYear || d.getMonth() !== activeMonth) return;
 
-      const day = d.getDate(); // 1..days
+      const day = d.getDate();
       const srcRaw = (w?.callThrough || w?.through || w?.source || "").trim();
       const normalizedSource = normalizeSource(srcRaw);
       const matchingOption = callThroughOptions.find(opt => opt === normalizedSource);
@@ -423,16 +613,26 @@ export default function WorkerCalleDisplay() {
     return summary;
   }, [workers, activeYear, activeMonth]);
 
+  // NEW: Enhanced pagination controls
   const getDisplayedPageNumbers = () => {
     const totalPagesCalc = totalPages;
-    const maxBtns = 10;
+    const maxBtns = 7;
     if (totalPagesCalc <= maxBtns) return Array.from({ length: totalPagesCalc }, (_, i) => i + 1);
+
     const half = Math.floor(maxBtns / 2);
     let start = Math.max(1, safePage - half);
     let end = start + maxBtns - 1;
-    if (end > totalPagesCalc) { end = totalPagesCalc; start = end - maxBtns + 1; }
+
+    if (end > totalPagesCalc) {
+      end = totalPagesCalc;
+      start = Math.max(1, end - maxBtns + 1);
+    }
+
     return Array.from({ length: end - start + 1 }, (_, i) => start + i);
   };
+
+  const goToFirstPage = () => setCurrentPage(1);
+  const goToLastPage = () => setCurrentPage(totalPages);
 
   /* ---- RENDER ---- */
   if (loading) return <div className="text-center my-5">Loading…</div>;
@@ -441,9 +641,9 @@ export default function WorkerCalleDisplay() {
   const totalRowStyle = { background: "#122438" };
 
   return (
-    <>
+    <div className="workerCalls">
       {/* top controls */}
-      <div className="alert alert-info d-flex justify-content-between flex-wrap reminder-badges">
+      <div className="alert alert-info d-flex justify-content-between flex-wrap">
         <div className="d-flex align-items-center">
           <span className="me-2 text-white opacity-75">Show</span>
           <select
@@ -491,14 +691,11 @@ export default function WorkerCalleDisplay() {
           </select>
         </div>
 
-        <div className="d-flex gap-2">
-          <button className="btn btn-success" onClick={handleExport}>Export Excel</button>
-          <button className="btn btn-secondary" onClick={resetFilters}>Reset</button>
-        </div>
+
       </div>
 
       {/* reminder badges as filters */}
-      <div className="alert alert-info text-info d-flex justify-content-around flex-wrap reminder-badges mb-4">
+      <div className="alert alert-info text-info d-flex justify-content-around flex-wrap mb-4">
         {["overdue", "today", "tomorrow", "upcoming"].map((k) => (
           <span
             key={k}
@@ -520,359 +717,614 @@ export default function WorkerCalleDisplay() {
         ))}
       </div>
 
-      {/* extra filters */}
-      <div className="filterData">
-        <div>
-          <h6 className="mb-1 text-info">Gender</h6>
-          {["Male", "Female"].map((g) => (
-            <label key={g} className="me-3">
+      {/* IMPROVED LAYOUT: All filters in one compact row */}
+      <div className="filter-section mb-4 p-3 border rounded bg-dark">
+        <h6 className="text-info mb-3">Basic Filters</h6>
+        <div className="row g-3">
+          {/* Year Filter */}
+          <div className="col-md-2">
+            <label className="form-label text-white small">Year Filter</label>
+            <select
+              className="form-select form-select-sm"
+              value={yearFilter}
+              onChange={(e) => setYearFilter(e.target.value)}
+            >
+              {yearOptions.map(option => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Age Filter */}
+          <div className="col-md-2">
+            <label className="form-label text-white small">Age Range</label>
+            <div className="d-flex gap-1">
               <input
-                type="checkbox"
-                className="form-check-input me-1"
-                checked={selectedGender.map(x => String(x).toLowerCase()).includes(String(g).toLowerCase())}
-                onChange={(e) =>
-                  setSelectedGender((prev) => {
-                    const low = String(g).toLowerCase();
-                    if (e.target.checked) {
-                      return Array.from(new Set([...prev.map(x => String(x).toLowerCase()), low]));
-                    } else {
-                      return prev.map(x => String(x).toLowerCase()).filter(x => x !== low);
-                    }
-                  })
-                }
-              />{g}
-            </label>
-          ))}
+                type="number"
+                className="form-control form-control-sm"
+                placeholder="Min"
+                min="18"
+                max="55"
+                value={ageRange.min}
+                onChange={(e) => setAgeRange(prev => ({ ...prev, min: e.target.value }))}
+              />
+              <input
+                type="number"
+                className="form-control form-control-sm"
+                placeholder="Max"
+                min="18"
+                max="55"
+                value={ageRange.max}
+                onChange={(e) => setAgeRange(prev => ({ ...prev, max: e.target.value }))}
+              />
+            </div>
+          </div>
+
+          {/* Experience Filter */}
+          <div className="col-md-2">
+            <label className="form-label text-white small">Experience</label>
+            <select
+              className="form-select form-select-sm"
+              value={experienceFilter}
+              onChange={(e) => setExperienceFilter(e.target.value)}
+            >
+              {experienceOptions.map(option => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Location Filter */}
+          <div className="col-md-4">
+            <label className="form-label text-white small">Location</label>
+            <input
+              type="text"
+              className="form-control form-control-sm"
+              placeholder="Enter location..."
+              value={locationFilter}
+              onChange={(e) => setLocationFilter(e.target.value)}
+            />
+          </div>
+
+          {/* Status Filter */}
+          <div className="col-md-2">
+            <label className="form-label text-white small">Status</label>
+            <select
+              className="form-select form-select-sm"
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+            >
+              {statusOptions.map(option => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+      </div>
+
+      {/* Control Buttons Row */}
+      <div className="filter-section mb-4 p-3 border rounded bg-dark">
+        <div className="row g-3 align-items-center">
+          {/* Gender */}
+          <div className="col-md-3 text-center">
+            <label className="form-label text-white small mb-2">Gender</label>
+            <div className="d-flex gap-2 justify-content-center">
+              {["Male", "Female"].map((g) => (
+                <button
+                  key={g}
+                  type="button"
+                  className={`btn ${selectedGender.includes(g) ? "btn-warning" : "btn-outline-warning"} btn-sm`}
+                  onClick={() => {
+                    setSelectedGender(prev =>
+                      prev.includes(g) ? prev.filter(x => x !== g) : [...prev, g]
+                    );
+                  }}
+                >
+                  {g}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Skill Mode */}
+          <div className="col-md-3 text-center">
+            <label className="form-label text-white small mb-2">Skill Match</label>
+            <div className="d-flex gap-2 justify-content-center">
+              <button
+                type="button"
+                className={`btn ${skillMode === "single" ? "btn-info" : "btn-outline-info"} btn-sm`}
+                onClick={() => setSkillMode("single")}
+              >
+                Any Skill
+              </button>
+              <button
+                type="button"
+                className={`btn ${skillMode === "multi" ? "btn-info" : "btn-outline-info"} btn-sm`}
+                onClick={() => setSkillMode("multi")}
+              >
+                All Skills
+              </button>
+            </div>
+          </div>
+
+
+          {/* Time Format */}
+          <div className="col-md-3 text-center">
+            <label className="form-label text-white small mb-2">Time Format</label>
+            <div className="d-flex gap-2 justify-content-center">
+              <button
+                type="button"
+                className={`btn ${timeFormat === "12hr" ? "btn-primary" : "btn-outline-primary"} btn-sm`}
+                onClick={() => setTimeFormat("12hr")}
+              >
+                12-Hour
+              </button>
+              <button
+                type="button"
+                className={`btn ${timeFormat === "24hr" ? "btn-primary" : "btn-outline-primary"} btn-sm`}
+                onClick={() => setTimeFormat("24hr")}
+              >
+                24-Hour
+              </button>
+            </div>
+          </div>
+
+          <div className="col-md-3 text-center">
+            <label className="form-label text-white small mb-2">Actions</label>
+
+            <div className="d-flex gap-2 justify-content-center">
+              <button className="btn btn-success" onClick={handleExport}>Export Excel</button>
+              <button className="btn btn-danger" onClick={resetFilters}>Reset</button>
+            </div>
+          </div>
+
+
+
+        </div>
+      </div>
+
+      {/* Skills, Roles, Languages in expandable sections */}
+      <div className="row mb-4">
+        {/* Skills */}
+        <div className="col-md-7">
+          <div className=" bg-dark border-secondary p-3">
+            <div className="card-header d-flex justify-content-between align-items-center">
+              <h4 className="mb-1 text-info">Skills</h4>
+            </div>
+            <div className="collapse show" id="skillsCollapse">
+              <div className="card-body">
+                <div className="d-flex flex-wrap gap-1">
+                  {skillOptions.map((skill) => (
+                    <button
+                      key={skill}
+                      type="button"
+                      className={`btn ${selectedSkills.includes(skill) ? "btn-warning" : "btn-outline-warning"} btn-sm`}
+                      onClick={() => {
+                        setSelectedSkills(prev =>
+                          prev.includes(skill) ? prev.filter(x => x !== skill) : [...prev, skill]
+                        );
+                      }}
+                    >
+                      {skill}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
 
-        <div>
-          <h6 className="mb-1 text-info">Languages</h6>
-          {languageOptions.map((l) => (
-            <label key={l} className="me-3">
+        {/* Languages */}
+        <div className="col-md-5">
+          <div className=" bg-dark border-secondary p-3">
+            <div className="card-header d-flex justify-content-between align-items-center">
+              <h4 className="mb-1 text-info">Languages</h4>
+            </div>
+            <div className="collapse show" id="languagesCollapse">
+              <div className="card-body">
+                <div className="d-flex flex-wrap gap-1">
+                  {languageOptions.map((lang) => (
+                    <button
+                      key={lang}
+                      type="button"
+                      className={`btn ${selectedLanguages.includes(lang) ? "btn-info" : "btn-outline-info"} btn-sm`}
+                      onClick={() => {
+                        setSelectedLanguages(prev =>
+                          prev.includes(lang) ? prev.filter(x => x !== lang) : [...prev, lang]
+                        );
+                      }}
+                    >
+                      {lang}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+
+        <div className="jobrols mt-3">
+          {/* Job Roles Toggle Switch */}
+          <div className="col-md-2 mb-3">
+            <div className="form-switch-custom">
               <input
                 type="checkbox"
-                className="form-check-input me-1"
-                checked={selectedLanguages.map(x => String(x).toLowerCase()).includes(String(l).toLowerCase())}
-                onChange={(e) =>
-                  setSelectedLanguages((prev) => {
-                    const low = String(l).toLowerCase();
-                    if (e.target.checked) {
-                      return Array.from(new Set([...prev.map(x => String(x).toLowerCase()), low]));
-                    } else {
-                      return prev.map(x => String(x).toLowerCase()).filter(x => x !== low);
-                    }
-                  })
-                }
-              />{l}
-            </label>
-          ))}
+                className="form-check-input toggle-switch"
+                id="showJobRoles"
+                checked={showJobRoles}
+                onChange={(e) => setShowJobRoles(e.target.checked)}
+              />
+              <label className="form-check-label ms-2 text-white small fw-bold mt-1" htmlFor="showJobRoles">
+                {showJobRoles ? "Job Roles ON" : "Job Roles OFF"}
+              </label>
+            </div>
+          </div>
+
+
+          {/* Render Job Roles section ONLY if toggle is ON */}
+          {showJobRoles && (
+            <div className="col-md-12">
+              <div className=" bg-dark border-secondary p-3">
+                <div className="card-header d-flex justify-content-between align-items-center">
+                  <h4 className="mb-2 text-warning">Job Roles</h4>
+                </div>
+                <div className="collapse show" id="rolesCollapse">
+                  <div className="card-body">
+                    <div className="d-flex flex-wrap gap-1">
+                      {roleOptions.map((role) => (
+                        <button
+                          key={role}
+                          type="button"
+                          className={`btn ${selectedRoles.includes(role) ? "btn-success" : "btn-outline-success"} btn-sm`}
+                          onClick={() => {
+                            setSelectedRoles((prev) =>
+                              prev.includes(role)
+                                ? prev.filter((x) => x !== role)
+                                : [...prev, role]
+                            );
+                          }}
+                        >
+                          {role}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
+
       </div>
 
-      <h6 className="mb-1 text-info">Skills</h6>
-      <div className="filterData">
-        {skillOptions.map((s) => (
-          <label key={s} className="me-3">
-            <input
-              type="checkbox"
-              className="form-check-input me-1"
-              checked={selectedSkills.map(x => String(x).toLowerCase()).includes(String(s).toLowerCase())}
-              onChange={(e) =>
-                setSelectedSkills((prev) => {
-                  const low = String(s).toLowerCase();
-                  if (e.target.checked) {
-                    return Array.from(new Set([...prev.map(x => String(x).toLowerCase()), low]));
-                  } else {
-                    return prev.map(x => String(x).toLowerCase()).filter(x => x !== low);
-                  }
-                })
-              }
-            />{s}
-          </label>
-        ))}
-      </div>
 
-      <h6 className="mb-1 text-info">Job Role</h6>
-      <div className="filterData">
-        {roleOptions.map((r) => (
-          <label key={r} className="me-3">
-            <input
-              type="checkbox"
-              className="form-check-input me-1"
-              checked={selectedRoles.map(x => String(x).toLowerCase()).includes(String(r).toLowerCase())}
-              onChange={(e) =>
-                setSelectedRoles((prev) => {
-                  const low = String(r).toLowerCase();
-                  if (e.target.checked) {
-                    return Array.from(new Set([...prev.map(x => String(x).toLowerCase()), low]));
-                  } else {
-                    return prev.map(x => String(x).toLowerCase()).filter(x => x !== low);
-                  }
-                })
-              }
-            />{r}
-          </label>
-        ))}
-      </div>
-
-      <hr />
-
-      {/* status line */}
-      <div className="mb-3 small" style={{ color: "yellow" }}>
-        Showing <strong>{pageItems.length}</strong> of <strong>{sorted.length}</strong> (from <strong>{workers.length}</strong> total)
-        {reminderFilter ? ` — ${reminderFilter}` : ""}
+      <div className="text-warning mb-3">
+        Showing {pageItems.length} of {sorted.length} records
       </div>
 
       {/* table */}
-      <div className="table-responsive workerCallTable">
-        <table className="table table-hover table-dark">
+      <div className="table-responsive">
+        <table className="table table-dark table-hover">
           <thead>
             <tr>
               <th>S.No</th>
+              <th>ID</th>
               <th>Date</th>
               <th>Name</th>
               <th>Gender</th>
-              <th>Reminder Date</th>
+              <th>Age</th>
+              <th>Experience</th>
               <th>Skills</th>
-              <th>Languages</th>
+              {/* {showJobRoles && <th>Job Roles</th>} */}
+              {/* <th>Languages</th> */}
+              <th>Reminder Date</th>
+              {/* <th>Days Until</th> */}
               <th>Mobile</th>
-              <th>Communications</th>
+              {/* <th>Location</th> */}
+              {/* <th>Status</th> */}
+              <th>Talkin</th>
               <th>Call Through</th>
               <th>Actions</th>
             </tr>
           </thead>
           <tbody>
-            {pageItems.map((w, idx) => {
-              const du = daysUntil(w?.callReminderDate);
-              const duLabel = isFinite(du)
+            {pageItems.map((w, i) => {
+              const globalIndex = sorted.findIndex(x => x.id === w.id);
+              const du = daysUntil(w?.callReminderDate || w?.reminderDate || w?.date || w?.createdAt);
+              const duText = isFinite(du)
                 ? du === 0 ? "Today" : du === 1 ? "Tomorrow" : du < 0 ? `${Math.abs(du)} days ago` : `${du} days`
                 : "";
+              const comms = (w?.communications ?? w?.communication ?? w?.conversation ?? w?.conversationLevel ?? "") || "";
               const callThrough = normalizeSource(w?.callThrough || w?.through || w?.source || "");
-              const comms = (w?.communications ?? w?.communication ?? w?.conversation ?? w?.conversationLevel ?? "") || "N/A";
-              const languages = normalizeArray(w?.languages ?? w?.language ?? w?.knownLanguages ?? w?.speaks ?? "");
+              const roles = getWorkerRoles(w);
+              const languages = getWorkerLanguages(w);
+              const age = calculateAge(w?.dateOfBirth || w?.dob || w?.birthDate);
+              const experience = calculateExperience(w?.experience || w?.exp || w?.workExperience);
+
               return (
                 <tr
-                  key={`${w.id}-${idx}`}
+                  key={w.id}
+                  onClick={(e) => handleRowClick(w, e)}
+                  style={{ cursor: 'pointer' }}
                   className={urgencyClass(w?.callReminderDate)}
-                  onClick={(e) => {
-                    if (e.target.closest("button, a, .btn, .page-link")) return;
-                    handleView(w);
-                  }}
-                  style={{ cursor: "pointer" }}
                 >
-                  <td>{indexOfFirst + idx + 1}</td>
+                  <td>{globalIndex + 1}</td>
+                  <td>{formatWorkerId(w.id, globalIndex)}</td>
                   <td>{formatDDMMYYYY(w?.date || w?.createdAt || w?.callReminderDate)}</td>
-                  <td>{w?.name || "N/A"}</td>
-                  <td>{w?.gender || "N/A"}</td>
+                  <td>{w?.name || "—"}</td>
                   <td>
-                    {formatDDMMYYYY(w?.callReminderDate || w?.reminderDate || w?.date || w?.createdAt)}
-                    {duLabel && <small className="d-block text-muted">{duLabel}</small>}
+                    <span className={`badge ${w?.gender === "Male" ? "bg-primary" : w?.gender === "Female" ? "bg-pink" : "bg-secondary"}`}>
+                      {w?.gender || "—"}
+                    </span>
                   </td>
-                  <td>{normalizeArray(w?.skills).join(", ") || "N/A"}</td>
-                  <td>{languages.join(", ") || "N/A"}</td>
-                  <td>{w?.mobileNo || "N/A"}{w?.mobileNo && (
-                    <>
-                      &nbsp;&nbsp;
-                      <a href={`tel:${w.mobileNo}`} className="btn btn-sm btn-info mb-2 me-2">Call</a>
-                      <a
-                        className="btn btn-sm btn-warning mb-2"
-                        href={`https://wa.me/${String(w.mobileNo).replace(/\D/g, "")}?text=${encodeURIComponent(
-                          "Hello, This is Sudheer From JenCeo Home Care Services"
-                        )}`}
-                        target="_blank" rel="noopener noreferrer"
-                      >
-                        WAP
-                      </a>
-                    </>
-                  )}</td>
-                  <td>{comms}</td>
-                  <td><span className="badge bg-secondary">{callThrough}</span></td>
+                  <td>{age || "—"}</td>
+                  <td>{experience ? `${experience} yrs` : "—"}</td>
                   <td>
-                    <button className="btn btn-sm me-2" title="View" onClick={() => handleView(w)}>
-                      <img src={viewIcon} alt="view" width="18" height="18" />
-                    </button>
-                    <button className="btn btn-sm me-2" title="Edit" onClick={() => handleEdit(w)}>
-                      <img src={editIcon} alt="edit" width="16" height="16" />
-                    </button>
-                    <button className="btn btn-sm " title="Delete" onClick={() => handleDelete(w)}>
-                      <img src={deleteIcon} alt="delete" width="14" height="14" />
-                    </button>
+                    <div className="d-flex flex-wrap gap-1">
+                      {getWorkerSkills(w).slice(0, 3).map((skill, idx) => (
+                        <span key={idx} className="badge bg-info">{skill}</span>
+                      ))}
+                      {getWorkerSkills(w).length > 3 && (
+                        <span className="badge bg-secondary">+{getWorkerSkills(w).length - 3}</span>
+                      )}
+                    </div>
+                  </td>
+                  {/* {showJobRoles && (
+                    <td>
+                      <div className="d-flex flex-wrap gap-1">
+                        {roles.slice(0, 3).map((role, idx) => (
+                          <span key={idx} className="badge bg-warning text-dark">{role}</span>
+                        ))}
+                        {roles.length > 3 && (
+                          <span className="badge bg-secondary">+{roles.length - 3}</span>
+                        )}
+                      </div>
+                    </td>
+                  )} */}
+                  {/* <td>
+                    <div className="d-flex flex-wrap gap-1">
+                      {languages.slice(0, 2).map((lang, idx) => (
+                        <span key={idx} className="badge bg-success">{lang}</span>
+                      ))}
+                      {languages.length > 2 && (
+                        <span className="badge bg-secondary">+{languages.length - 2}</span>
+                      )}
+                    </div>
+                  </td> */}
+                  <td>{formatDDMMYYYY(w?.callReminderDate || w?.reminderDate || w?.date || w?.createdAt)}</td>
+                  {/* <td>
+                    <span className={`badge ${du < 0 ? "bg-danger" : du === 0 ? "bg-warning text-dark" : du === 1 ? "bg-info" : "bg-secondary"}`}>
+                      {duText}
+                    </span>
+                  </td> */}
+                  <td>
+                    <a href={`tel:${w?.mobileNo}`} className="text-decoration-none" onClick={(e) => e.stopPropagation()}>
+                      {w?.mobileNo || "—"}
+                    </a>
+                  </td>
+                  {/* <td>{w?.location || "—"}</td>
+                  <td>
+                    <span className={`badge ${w?.status === "active" ? "bg-success" : w?.status === "hired" ? "bg-primary" : "bg-secondary"}`}>
+                      {w?.status || "active"}
+                    </span>
+                  </td> */}
+                  <td>
+                    <span className={`badge ${comms.toLowerCase().includes("good") ? "bg-success" : comms.toLowerCase().includes("average") ? "bg-warning text-dark" : "bg-secondary"}`}>
+                      {comms || "—"}
+                    </span>
+                  </td>
+                  <td>
+                    <span className="badge bg-purple">{callThrough}</span>
+                  </td>
+                  <td>
+                    <div className="d-flex gap-1" onClick={(e) => e.stopPropagation()}>
+                      {permissions.canView && (
+                        <button
+                          className="btn btn-sm btn-outline-info"
+                          onClick={() => handleView(w)}
+                          title="View"
+                        >
+                          <img src={viewIcon} alt="View" width="16" height="16" />
+                        </button>
+                      )}
+                      {permissions.canEdit && (
+                        <button
+                          className="btn btn-sm btn-outline-warning"
+                          onClick={() => handleEdit(w)}
+                          title="Edit"
+                        >
+                          <img src={editIcon} alt="Edit" width="16" height="16" />
+                        </button>
+                      )}
+                      {permissions.canDelete && (
+                        <button
+                          className="btn btn-sm btn-outline-danger"
+                          onClick={() => handleDelete(w)}
+                          title="Delete"
+                        >
+                          <img src={deleteIcon} alt="Delete" width="16" height="16" />
+                        </button>
+                      )}
+                    </div>
                   </td>
                 </tr>
               );
             })}
-            {pageItems.length === 0 && (
-              <tr>
-                <td colSpan="12"><div className="alert alert-warning mb-0">No records match your filters.</div></td>
-              </tr>
-            )}
           </tbody>
         </table>
       </div>
 
       {/* pagination */}
-      {totalPages > 1 && (
-        <nav aria-label="Worker pagination" className="pagination-wrapper">
-          <ul className="pagination justify-content-center">
-            <li className={`page-item ${safePage === 1 ? "disabled" : ""}`}>
-              <button className="page-link" onClick={() => setCurrentPage(safePage - 1)} disabled={safePage === 1}>
-                Previous
-              </button>
-            </li>
-            {getDisplayedPageNumbers().map((num) => (
-              <li key={num} className={`page-item ${safePage === num ? "active" : ""}`}>
-                <button className="page-link" onClick={() => setCurrentPage(num)}>{num}</button>
-              </li>
-            ))}
-            <li className={`page-item ${safePage === totalPages ? "disabled" : ""}`}>
-              <button className="page-link" onClick={() => setCurrentPage(safePage + 1)} disabled={safePage === totalPages}>
-                Next
-              </button>
-            </li>
-          </ul>
-        </nav>
-      )}
+      <div className="d-flex justify-content-between align-items-center mt-3">
+        <div className="text-white">
+          Showing {pageItems.length} of {sorted.length} records
+        </div>
+        <div className="d-flex gap-2 align-items-center">
+          <button
+            className="btn btn-sm btn-outline-light"
+            onClick={goToFirstPage}
+            disabled={safePage === 1}
+          >
+            First
+          </button>
+          <button
+            className="btn btn-sm btn-outline-light"
+            onClick={() => setCurrentPage(Math.max(1, safePage - 1))}
+            disabled={safePage === 1}
+          >
+            Previous
+          </button>
 
-      {/* ---------- YEAR / MONTH / DAY SUMMARY UI ---------- */}
-      <hr />
-      <h4 className="mt-4">Call Through Summary</h4>
-
-      {/* Year Tabs */}
-      <ul className="nav nav-tabs summary-tabs mb-3">
-        {years.map((y) => (
-          <li className="nav-item" key={y}>
+          {getDisplayedPageNumbers().map((num) => (
             <button
-              className={`nav-link summary-tab ${activeYear === y ? "active" : ""}`}
-              onClick={() => { setActiveYear(y); setActiveMonth(null); }}
+              key={num}
+              className={`btn btn-sm ${safePage === num ? "btn-primary" : "btn-outline-light"}`}
+              onClick={() => setCurrentPage(num)}
             >
-              {y}
+              {num}
             </button>
-          </li>
-        ))}
-      </ul>
+          ))}
 
-      {/* Month-wise table */}
-      <div className="table-responsive summary-table-container">
-        <table className="table table-dark table-sm summary-table table-hover" style={{ fontSize: "12px", tableLayout: "fixed" }}>
-          <thead className="summary-table-header">
-            <tr>
-              <th>Call Through</th>
-              {months.map((m, mi) => (
-                <th key={m} style={{ cursor: "pointer" }} onClick={() => setActiveMonth(mi)}>
-                  {m}
-                </th>
-              ))}
-              <th>Total</th>
-            </tr>
-          </thead>
-          <tbody>
-            {callThroughOptions.map((t) => (
-              <tr key={t} className="summary-table-row">
-                <td className="source-name text-info">{t}</td>
-                {(monthSummary[t] || Array(12).fill(0)).map((count, idx) => (
-                  <td key={idx} className={count > 0 ? "has-data" : ""} style={{ cursor: "pointer" }} onClick={() => setActiveMonth(idx)}>
-                    {count > 0 ? count : ""}
-                  </td>
-                ))}
-                <td className="total-cell">{(monthSummary[t] || Array(12).fill(0)).reduce((a, b) => a + b, 0)}</td>
-              </tr>
-            ))}
-            <tr className="summary-table-row fw-bold" style={totalRowStyle}>
-              <td className="source-name text-warning">Total</td>
-              {months.map((_, mi) => {
-                let sum = 0;
-                callThroughOptions.forEach((t) => {
-                  const arr = monthSummary[t] || Array(12).fill(0);
-                  sum += arr[mi] || 0;
-                });
-                return <td className="text-warning" key={mi}>{sum || ""}</td>;
-              })}
-              <td className="total-cell">
-                {callThroughOptions.reduce((acc, t) => acc + (monthSummary[t] || Array(12).fill(0)).reduce((a, b) => a + b, 0), 0)}
-              </td>
-            </tr>
-          </tbody>
-        </table>
+          <button
+            className="btn btn-sm btn-outline-light"
+            onClick={() => setCurrentPage(Math.min(totalPages, safePage + 1))}
+            disabled={safePage === totalPages}
+          >
+            Next
+          </button>
+          <button
+            className="btn btn-sm btn-outline-light"
+            onClick={goToLastPage}
+            disabled={safePage === totalPages}
+          >
+            Last
+          </button>
+        </div>
       </div>
 
-      {/* Day-wise table for selected month */}
-      {activeMonth !== null && (
-        <div className="mt-4">
-          <div className="d-flex justify-content-between align-items-center mb-2">
-            <h5 className="mb-0">
-              {months[activeMonth]} {activeYear} — Day-wise
-            </h5>
-            <button className="btn btn-sm btn-outline-light" onClick={() => setActiveMonth(null)}>Close</button>
-          </div>
-          <div className="table-responsive summary-table-container">
-            <table className="table table-dark table-sm summary-table table-hover" style={{ fontSize: "12px", tableLayout: "fixed" }}>
-              <thead className="summary-table-header">
-                <tr>
-                  <th>Call Through</th>
-                  {Array.from({ length: new Date(activeYear, activeMonth + 1, 0).getDate() }, (_, i) => i + 1).map((d) => (
-                    <th key={d} style={{ whiteSpace: "nowrap", padding: "2px 4px" }}>{d}</th>
-                  ))}
-                  <th>Total</th>
-                </tr>
-              </thead>
-              <tbody>
-                {callThroughOptions.map((t) => (
-                  <tr key={t} className="summary-table-row">
-                    <td className="source-name">{t}</td>
-                    {(daySummary && (daySummary[t] || Array(new Date(activeYear, activeMonth + 1, 0).getDate()).fill(0))).map((count, idx) => (
-                      <td key={idx} className={count > 0 ? "has-data" : ""} style={{ whiteSpace: "nowrap", padding: "2px 4px" }}>
-                        {count > 0 ? count : ""}
-                      </td>
-                    ))}
-                    <td className="total-cell">{daySummary ? (daySummary[t] || Array(new Date(activeYear, activeMonth + 1, 0).getDate()).fill(0)).reduce((a, b) => a + b, 0) : 0}</td>
-                  </tr>
-                ))}
-
-                <tr className="summary-table-row fw-bold" style={totalRowStyle}>
-                  <td className="source-name text-warning">Total</td>
-                  {Array.from({ length: new Date(activeYear, activeMonth + 1, 0).getDate() }, (_, di) => {
-                    let sum = 0;
-                    callThroughOptions.forEach((t) => {
-                      const arr = daySummary ? (daySummary[t] || Array(new Date(activeYear, activeMonth + 1, 0).getDate()).fill(0)) : [];
-                      sum += arr[di] || 0;
-                    });
-                    return <td className="text-warning" key={di}>{sum || ""}</td>;
-                  })}
-                  <td className="total-cell">
-                    {callThroughOptions.reduce((acc, t) => acc + (daySummary ? (daySummary[t] || Array(new Date(activeYear, activeMonth + 1, 0).getDate()).fill(0)).reduce((a, b) => a + b, 0) : 0), 0)}
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
+      {/* summary table */}
+      <div className="mt-5">
+        <h5 className="text-info">Summary by Call Through</h5>
+        <div className="d-flex gap-3 mb-3">
+          <select
+            className="form-select"
+            style={{ width: 120 }}
+            value={activeYear}
+            onChange={(e) => { setActiveYear(parseInt(e.target.value)); setActiveMonth(null); }}
+          >
+            {years.map((y) => (
+              <option key={y} value={y}>{y}</option>
+            ))}
+          </select>
+          <select
+            className="form-select"
+            style={{ width: 120 }}
+            value={activeMonth ?? ""}
+            onChange={(e) => setActiveMonth(e.target.value === "" ? null : parseInt(e.target.value))}
+          >
+            <option value="">All Months</option>
+            {months.map((m, idx) => (
+              <option key={idx} value={idx}>{m}</option>
+            ))}
+          </select>
         </div>
-      )}
 
-      {/* modal */}
-      {selectedWorker && isModalOpen && (
+        <div className="table-responsive">
+          <table className="table table-dark table-bordered">
+            <thead>
+              <tr>
+                <th>Call Through</th>
+                {activeMonth === null
+                  ? months.map((m, idx) => <th key={idx}>{m}</th>)
+                  : Array.from({ length: new Date(activeYear, activeMonth + 1, 0).getDate() }, (_, i) => i + 1).map((d) => <th key={d}>{d}</th>)}
+                <th>Total</th>
+              </tr>
+            </thead>
+            <tbody>
+              {callThroughOptions.map((opt) => {
+                const data = activeMonth === null ? monthSummary[opt] : daySummary[opt];
+                const total = data ? data.reduce((a, b) => a + b, 0) : 0;
+                return (
+                  <tr key={opt}>
+                    <td>{opt}</td>
+                    {data && data.map((count, idx) => (
+                      <td key={idx}>{count || 0}</td>
+                    ))}
+                    <td style={totalRowStyle} className="text-white"><strong>{total}</strong></td>
+                  </tr>
+                );
+              })}
+              {/* total row */}
+              <tr style={totalRowStyle}>
+                <td className="text-white"><strong>Total</strong></td>
+                {(() => {
+                  const data = activeMonth === null
+                    ? months.map((_, m) => callThroughOptions.reduce((sum, opt) => sum + (monthSummary[opt]?.[m] || 0), 0))
+                    : Array.from({ length: new Date(activeYear, activeMonth + 1, 0).getDate() }, (_, d) =>
+                      callThroughOptions.reduce((sum, opt) => sum + (daySummary[opt]?.[d] || 0), 0)
+                    );
+                  return data.map((total, idx) => <td key={idx} className="text-white"><strong>{total}</strong></td>);
+                })()}
+                <td className="text-white"><strong>
+                  {callThroughOptions.reduce((sum, opt) => {
+                    const data = activeMonth === null ? monthSummary[opt] : daySummary[opt];
+                    return sum + (data ? data.reduce((a, b) => a + b, 0) : 0);
+                  }, 0)}
+                </strong></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* modals */}
+      {isModalOpen && selectedWorker && (
         <WorkerCallModal
-          worker={selectedWorker}
           isOpen={isModalOpen}
-          onClose={() => { setIsModalOpen(false); setSelectedWorker(null); setIsEditMode(false); }}
-          isEditMode={isEditMode}
+          onClose={() => {
+            setIsModalOpen(false);
+            setSelectedWorker(null);
+          }}
+          worker={selectedWorker ?? { comments: [] }}  // <= safe default
+          isEdit={isEditMode}
+          onSave={(updatedWorker) => {
+            if (isEditMode && selectedWorker) {
+              setWorkers(prev =>
+                prev.map(w => w.id === selectedWorker.id ? { ...w, ...updatedWorker } : w)
+              );
+            } else {
+              setWorkers(prev => [...prev, { ...updatedWorker, id: Date.now().toString() }]);
+            }
+            setIsModalOpen(false);
+            setSelectedWorker(null);
+          }}
         />
       )}
 
-      {/* delete confirm */}
-      {showDeleteConfirm && selectedWorker && (
-        <div className="modal fade show" style={{ display: "block", background: "rgba(0,0,0,0.6)" }}>
-          <div className="modal-dialog modal-dialog-centered">
+
+      {/* delete confirmation modal */}
+      {showDeleteConfirm && (
+        <div className="modal show d-block" tabIndex="-1" style={{ backgroundColor: "rgba(0,0,0,0.8)" }}>
+          <div className="modal-dialog">
             <div className="modal-content">
-              <div className="modal-header bg-danger text-white">
+              <div className="modal-header">
                 <h5 className="modal-title">Confirm Delete</h5>
-                <button type="button" className="btn-close" onClick={() => setShowDeleteConfirm(false)} />
+                <button type="button" className="btn-close" onClick={() => setShowDeleteConfirm(false)}></button>
               </div>
               <div className="modal-body">
-                <p>Delete worker {selectedWorker?.name || ""}?</p>
+                <p>Are you sure you want to delete worker <strong>{selectedWorker?.name || 'this worker'}</strong>?</p>
+                <p className="text-danger">This action will move the worker to the deleted records.</p>
               </div>
               <div className="modal-footer">
-                <button className="btn btn-secondary" onClick={() => setShowDeleteConfirm(false)}>Cancel</button>
-                <button className="btn btn-danger" onClick={handleDeleteConfirmed}>Yes, Delete</button>
+                <button type="button" className="btn btn-secondary" onClick={() => setShowDeleteConfirm(false)}>Cancel</button>
+                <button type="button" className="btn btn-danger" onClick={handleDeleteConfirmed}>Delete</button>
               </div>
             </div>
           </div>
@@ -880,38 +1332,50 @@ export default function WorkerCalleDisplay() {
       )}
 
       {/* delete reason modal */}
-      {showDeleteReason && selectedWorker && (
-        <div className="modal fade show" style={{ display: "block", background: "rgba(0,0,0,0.6)" }}>
-          <div className="modal-dialog modal-dialog-centered">
+      {showDeleteReason && (
+        <div className="modal show d-block" tabIndex="-1" style={{ backgroundColor: "rgba(0,0,0,0.8)" }}>
+          <div className="modal-dialog">
             <div className="modal-content">
-              <div className="modal-header bg-warning text-dark">
+              <div className="modal-header">
                 <h5 className="modal-title">Delete Reason</h5>
-                <button type="button" className="btn-close" onClick={() => {
-                  setShowDeleteReason(false);
-                  setDeleteReason("");
-                }} />
+                <button
+                  type="button"
+                  className="btn-close"
+                  onClick={() => {
+                    setShowDeleteReason(false);
+                    setDeleteReason("");
+                  }}
+                  disabled={isDeleting}
+                ></button>
               </div>
               <div className="modal-body">
-                <p>Please provide a reason for deleting <strong>{selectedWorker?.name || ""}</strong>:</p>
+                <p>Please provide a reason for deleting <strong>{selectedWorker?.name || 'this worker'}</strong>:</p>
                 <textarea
                   className="form-control"
-                  rows="4"
-                  placeholder="Enter reason for deletion..."
+                  rows="3"
                   value={deleteReason}
                   onChange={(e) => setDeleteReason(e.target.value)}
+                  placeholder="Enter reason for deletion..."
+                  disabled={isDeleting}
                 />
               </div>
               <div className="modal-footer">
-                <button className="btn btn-secondary" onClick={() => {
-                  setShowDeleteReason(false);
-                  setDeleteReason("");
-                }}>
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={() => {
+                    setShowDeleteReason(false);
+                    setDeleteReason("");
+                  }}
+                  disabled={isDeleting}
+                >
                   Cancel
                 </button>
                 <button
+                  type="button"
                   className="btn btn-danger"
                   onClick={performDeleteWithReason}
-                  disabled={!deleteReason.trim() || isDeleting}
+                  disabled={isDeleting || !deleteReason.trim()}
                 >
                   {isDeleting ? "Deleting..." : "Confirm Delete"}
                 </button>
@@ -920,6 +1384,6 @@ export default function WorkerCalleDisplay() {
           </div>
         </div>
       )}
-    </>
+    </div>
   );
 }

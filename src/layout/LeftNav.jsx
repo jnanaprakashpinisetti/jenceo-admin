@@ -1,5 +1,5 @@
 // src/layout/LeftNav.jsx
-import React, { useState, useEffect, useRef } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   Routes,
   Route,
@@ -10,68 +10,75 @@ import {
 } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 
+// —— Brand & UI assets
 import logo from "../assets/jencio-logo.svg";
 import logoicon from "../assets/jenceo-icon.svg";
 import toggle from "../assets/toggle.svg";
 import close from "../assets/close.svg";
-
 import arrow from "../assets/arrow.svg";
+
+// —— Menu icons
 import home from "../assets/home.svg";
+import invest from "../assets/invest.svg";
+import accounts from "../assets/accounts.svg";
+import admin from "../assets/admin.svg";
+import task from "../assets/task.svg";
 
 import workerData from "../assets/workers-data.svg";
 import workerExit from "../assets/worker-exit.svg";
 import WorkerAggrement from "../assets/workers-aggrement.svg";
-import client from "../assets/client.svg";
-import ClientExitIcon from "../assets/client-exit.svg";
-import HospitalIcon from "../assets/hospital-icon.svg";
-import HospitalDeleteIcon from "../assets/hospital-delet-icon.svg";
-
-import invest from "../assets/invest.svg";
-import expences from "../assets/expence.svg";
-import task from "../assets/task.svg";
-import admin from "../assets/admin.svg";
-import accounts from "../assets/accounts.svg";
-import inquiry from "../assets/inquiry.svg";
-import inquiryDelete from "../assets/inquiryDelete.svg";
-import Staff from "../assets/Staff.svg";
-import StaffExit from "../assets/StaffExit.svg";
 import call from "../assets/Call.svg";
 import callDelete from "../assets/CallDelete.svg";
 
-import Dashboard from "../pages/Dashboard";
-// Employee/Worker
-import WorkersData from "../pages/WorkersData";
-import EmployeeAggrement from "../pages/WorkerAggrement";
-import ExistingEmployees from "../pages/ExistingWorker";
+import Staff from "../assets/Staff.svg";
+import StaffExit from "../assets/StaffExit.svg";
 
-// Staff (reusing worker pages as before)
+import client from "../assets/client.svg";
+import ClientExitIcon from "../assets/client-exit.svg";
+
+import inquiry from "../assets/inquiry.svg";
+import inquiryDelete from "../assets/inquiryDelete.svg";
+
+import HospitalIcon from "../assets/hospital-icon.svg";
+import HospitalDeleteIcon from "../assets/hospital-delet-icon.svg";
+
+import expences from "../assets/expence.svg";
+
+// —— Pages
+import Dashboard from "../pages/Dashboard";
 import Investments from "../pages/Investments";
+
+import WorkersData from "../pages/WorkersData";
+import ExistingEmployees from "../pages/ExistingWorker";
+import EmployeeAggrement from "../pages/WorkerAggrement";
+import WorkerCallsData from "../pages/WorkerCallsData";
+import WorkerCallDelete from "../pages/WorkerCallDelete";
+
 import ClientInfo from "../pages/ClientInfo";
 import ClientExit from "../pages/ClientExit";
+
+import Enquiry from "../pages/Enquiry";
+import EnquiryExit from "../pages/EnquiryExit";
+
+import HospitalList from "../pages/HospitalList";
+import HospitalDeleteList from "../pages/HospitalDeleteList";
+
 import Expenses from "../pages/Expenses";
 import ExpenceDelete from "../pages/ExpenceDelete";
+
 import Task from "../pages/Task";
 import AdminUsers from "../pages/AdminUsers";
 import Accounts from "../pages/Accounts";
-import HospitalList from "../pages/HospitalList";
-import HospitalDeleteList from "../pages/HospitalDeleteList";
-import WorkerCallsData from "../pages/WorkerCallsData";
-import WorkerCallDelete from "../pages/WorkerCallDelete";
-import Enquiry from "../pages/Enquiry";
-import EnquiryExit from "../pages/EnquiryExit";
 import SearchResults from "../pages/SearchResults";
 
 export default function LeftNav() {
   const { user, logout } = useAuth();
   const perms = user?.permissions || {};
-
-  // ---- roles (case-insensitive) ----
   const roleStr = String(user?.role || "").trim().toLowerCase();
   const isAdmin = /^(admin|administrator|superadmin)$/.test(roleStr);
   const isManager = /^(manager|managers|mgr)$/.test(roleStr);
 
-  // ---- permission helpers ----
-  // Accepts multiple keys; supports boolean or {view/read}
+  // ---- granular permission helpers ----
   const hasPerm = (keys = []) => {
     if (isAdmin || isManager) return true;
     return keys.some((k) => {
@@ -80,53 +87,62 @@ export default function LeftNav() {
     });
   };
 
-  // Granular access for EVERY item (aliases kept for backward-compat)
-  const canDashboard           = hasPerm(["Dashboard"]);
-  const canInvestments         = hasPerm(["Investments"]);
+  // Dashboard & core
+  const canDashboard = hasPerm(["Dashboard"]);
+  const canInvestments = hasPerm(["Investments"]);
+  const canTask = hasPerm(["Task"]);
+  const canAccounts = hasPerm(["Accounts"]);
+  const canAdmin = hasPerm(["Admin"]);
 
-  // Staff (explicit OR via workers block + role fallback)
-  const canStaffData           = isAdmin || isManager || hasPerm(["Staff", "Staff Data", "StaffData"]);
-  const canExistingStaff       = isAdmin || isManager || hasPerm(["Existing Staff", "ExistingStaff", "Staff Exit", "Exist Staff"]);
+  // Staff (separate from workers)
+  const canStaffData = isAdmin || isManager || hasPerm(["Staff", "Staff Data", "StaffData"]);
+  const canExistingStaff = isAdmin || isManager || hasPerm(["Existing Staff", "ExistingStaff", "Staff Exit", "Exist Staff"]);
 
-  // Workers group (each separated)
-  const canWorkersData         = hasPerm(["Workers Data", "Worker Data", "Workers"]);
-  const canExistingWorkers     = hasPerm(["Existing Workers", "ExistingEmployees", "Exit Worker", "Existing Worker"]);
-  const canWorkerAgreement     = hasPerm(["Worker Agreement", "Worker Aggrement", "Employee Aggrement"]);
-  const canWorkerCallData      = hasPerm(["Worker Call Data", "Worker Calls"]);
-  const canWorkerCallDelete    = hasPerm(["Worker Call Delete", "Worker Call Remove"]);
+  // Workers (split every item)
+  const canWorkersData = hasPerm(["Workers Data", "Worker Data", "Workers"]);
+  const canExistingWorkers = hasPerm(["Existing Workers", "ExistingEmployees", "Exit Worker", "Existing Worker"]);
+  const canWorkerAgreement = hasPerm(["Worker Agreement", "Worker Aggrement", "Employee Aggrement"]);
+  const canWorkerCallData = hasPerm(["Worker Call Data", "Worker Calls"]);
+  const canWorkerCallDelete = hasPerm(["Worker Call Delete", "Worker Call Remove"]);
 
   // Client
-  const canClientData          = hasPerm(["Client Data", "ClientInfo", "Clients"]);
-  const canClientExit          = hasPerm(["Client Exit", "ClientExit"]);
+  const canClientData = hasPerm(["Client Data", "ClientInfo", "Clients"]);
+  const canClientExit = hasPerm(["Client Exit", "ClientExit"]);
 
   // Enquiry
-  const canEnquiry             = hasPerm(["Enquiries", "Enquiry"]);
-  const canEnquiryExit         = hasPerm(["Enquiry Exit", "EnquiryExit", "Old Enquiries"]);
+  const canEnquiry = hasPerm(["Enquiries", "Enquiry"]);
+  const canEnquiryExit = hasPerm(["Enquiry Exit", "EnquiryExit", "Old Enquiries"]);
 
   // Hospital
-  const canHospitalList        = hasPerm(["Hospital List", "Hospitals"]);
-  const canHospitalDeleteList  = hasPerm(["Hospital Delete List", "HospitalDeleteList", "Deleted Hospitals"]);
+  const canHospitalList = hasPerm(["Hospital List", "Hospitals"]);
+  const canHospitalDeleteList = hasPerm(["Hospital Delete List", "HospitalDeleteList", "Deleted Hospitals"]);
 
   // Expenses
-  const canExpenses            = hasPerm(["Expenses", "Petty Cash"]);
-  const canExpenceDelete       = hasPerm(["Expence Delete", "Delete Expenses", "Delete Petty Cash"]);
-
-  // Task / Accounts / Admin
-  const canTask                = hasPerm(["Task"]);
-  const canAccounts            = hasPerm(["Accounts"]);
-  const canAdmin               = hasPerm(["Admin"]);
+  const canExpenses = hasPerm(["Expenses", "Petty Cash"]);
+  const canExpenceDelete = hasPerm(["Expence Delete", "Delete Expenses", "Delete Petty Cash"]);
 
   // ---- route guard ----
-  const PermRoute = ({ allowed, children }) => {
-    return allowed ? children : <Navigate to="/" replace />;
-  };
+  const PermRoute = ({ allowed, children }) => (allowed ? children : <Navigate to="/" replace />);
 
   // ---- UI state ----
-  const [isActive, setIsActive] = useState(false);  // sidebar collapse
-  const [isShow, setIsShow] = useState(false);      // mobile menu show
+  const [isActive, setIsActive] = useState(false); // collapse side
+  const [isShow, setIsShow] = useState(false); // mobile menu
   const [query, setQuery] = useState("");
 
-  // mobile user dropdown
+  // collapsible groups for a “richer” left nav
+  const [open, setOpen] = useState({
+    staff: true,
+    workers: true,
+    client: true,
+    enquiry: false,
+    hospital: false,
+    expenses: false,
+    admin: false,
+  });
+
+  const toggleGroup = (k) => setOpen((o) => ({ ...o, [k]: !o[k] }));
+
+  // mobile dropdown
   const [showUserMenu, setShowUserMenu] = useState(false);
   const userMenuRef = useRef(null);
   const userMenuBtnRef = useRef(null);
@@ -144,13 +160,11 @@ export default function LeftNav() {
   });
 
   useEffect(() => {
-    // close mobile & dropdown on route change
     setIsShow(false);
     setShowUserMenu(false);
   }, [location.pathname]);
 
   useEffect(() => {
-    // outside click for mobile dropdown
     const onDoc = (e) => {
       if (!showUserMenu) return;
       const outside =
@@ -179,7 +193,7 @@ export default function LeftNav() {
   const toggleMobile = () => setIsShow((v) => !v);
   const closeMobile = () => setIsShow(false);
 
-  // Do NOT make left nav scroll; keep container simple
+  // left nav should NOT scroll; keep container simple
   const collapseClass = `collapse navbar-collapse${isShow ? " show" : ""}`;
 
   const userName = user?.name || user?.email || "User";
@@ -194,6 +208,36 @@ export default function LeftNav() {
     onNavClick();
   };
 
+  // small helper for group headers
+  const Group = ({ k, label, children, when }) => {
+    if (!when) return null;
+    return (
+      <>
+        <li className="nav-item mt-2 mb-1 text-uppercase small text-muted px-2">{label}</li>
+        <li className="nav-item">
+          <button
+            className="btn btn-sm w-100 d-flex justify-content-between align-items-center"
+            style={{
+              background: open[k] ? "#111827" : "#0b1220",
+              color: "#e5e7eb",
+              border: "1px solid rgba(255,255,255,0.08)",
+              borderRadius: 10,
+              padding: "8px 10px",
+            }}
+            onClick={() => setOpen((o) => ({ ...o, [k]: !o[k] }))}
+            type="button"
+          >
+            <span>{label}</span>
+            <span style={{ opacity: 0.7 }}>{open[k] ? "▾" : "▸"}</span>
+          </button>
+        </li>
+        {open[k] && <div className="mt-2" />}
+        {open[k] && children}
+        <hr className="mt-3" />
+      </>
+    );
+  };
+
   return (
     <>
       <nav className={isActive ? "navbar navbar-expand-lg toggle" : "navbar navbar-expand-lg"}>
@@ -201,7 +245,7 @@ export default function LeftNav() {
           <img src={isActive ? logoicon : logo} alt="JenCeo Logo" />
         </button>
 
-        <button className="slide" type="button" onClick={toggleSide} aria-label="Toggle sidebar">
+        <button className="slide" type="button" onClick={toggleSide} aria-label="Toggle sidebar" title="Collapse sidebar">
           <img src={arrow} alt="arrow" />
         </button>
 
@@ -219,14 +263,14 @@ export default function LeftNav() {
         </button>
 
         <div className={collapseClass} id="collapsibleNavbar">
-          {/* ===== Mobile header bar (sticky, no left-nav scroll) ===== */}
+          {/* ===== Mobile header bar (sticky, non-scrolling nav) ===== */}
           <div
             className="d-block d-lg-none mb-2"
             style={{
               background: "#0b1220",
               color: "#e2e8f0",
               padding: "10px 12px",
-              borderRadius: 8,
+              borderRadius: 10,
               position: "sticky",
               top: 0,
               zIndex: 2,
@@ -267,7 +311,7 @@ export default function LeftNav() {
                       background: "#0f172a",
                       color: "#e2e8f0",
                       border: "1px solid rgba(255,255,255,0.08)",
-                      borderRadius: 8,
+                      borderRadius: 10,
                       boxShadow:
                         "0 10px 20px rgba(2, 8, 23, 0.35), 0 2px 6px rgba(2, 8, 23, 0.25)",
                       overflow: "hidden",
@@ -311,7 +355,6 @@ export default function LeftNav() {
                   Go
                 </button>
               </form>
-
               <div className="d-flex justify-content-end">
                 <button
                   className="btn btn-sm btn-outline-secondary"
@@ -321,234 +364,210 @@ export default function LeftNav() {
                   🔔 Notifications
                 </button>
               </div>
-
               <hr className="d-lg-none" />
             </div>
           </div>
 
-          {/* ===== Main nav (granular permissions) ===== */}
-          <ul className="navbar-nav">
+          {/* ===== Main nav with grouped, collapsible sections ===== */}
+          <ul className="navbar-nav" style={{ width: "100%" }}>
+            {/* Top / Dashboard */}
             {canDashboard && (
               <li className="nav-item">
-                <NavLink to="/" className="nav-link" title="Dash Board" onClick={onNavClick}>
-                  <img src={home} alt="" /> Dash Board
+                <NavLink to="/" className="nav-link" title="Dashboard" onClick={onNavClick}>
+                  <img src={home} alt="" /> <span className="ms-1">Dashboard</span>
                 </NavLink>
               </li>
             )}
-
             {canInvestments && (
               <li className="nav-item">
                 <NavLink to="Investments" className="nav-link" title="Investments" onClick={onNavClick}>
-                  <img src={invest} alt="" /> Investments
+                  <img src={invest} alt="" /> <span className="ms-1">Investments</span>
                 </NavLink>
               </li>
             )}
-
             {(canDashboard || canInvestments) && <hr />}
 
-            {/* ---- Staff (independent of worker permissions) ---- */}
-            {(canStaffData || canExistingStaff) && (
-              <>
-                {canStaffData && (
-                  <li className="nav-item">
-                    <NavLink to="StaffData" className="nav-link" title="Staff" onClick={onNavClick}>
-                      <img src={Staff} alt="" /> Staff
-                    </NavLink>
-                  </li>
-                )}
-                {canExistingStaff && (
-                  <li className="nav-item">
-                    <NavLink to="ExistingStaff" className="nav-link" title="Exist Staff" onClick={onNavClick}>
-                      <img src={StaffExit} alt="" /> Exist Staff
-                    </NavLink>
-                  </li>
-                )}
-                <hr />
-              </>
-            )}
+            {/* Staff */}
+            <Group
+              k="staff"
+              label="Staff"
+              when={canStaffData || canExistingStaff}
+            >
+              {canStaffData && (
+                <li className="nav-item">
+                  <NavLink to="StaffData" className="nav-link" title="Staff" onClick={onNavClick}>
+                    <img src={Staff} alt="" /> <span className="ms-1">Staff</span>
+                  </NavLink>
+                </li>
+              )}
+              {canExistingStaff && (
+                <li className="nav-item">
+                  <NavLink to="ExistingStaff" className="nav-link" title="Exist Staff" onClick={onNavClick}>
+                    <img src={StaffExit} alt="" /> <span className="ms-1">Exist Staff</span>
+                  </NavLink>
+                </li>
+              )}
+            </Group>
 
-            {/* ---- Workers (each item controlled separately) ---- */}
-            {(canWorkersData ||
-              canExistingWorkers ||
-              canWorkerCallData ||
-              canWorkerCallDelete ||
-              canWorkerAgreement) && (
-              <>
-                {canWorkersData && (
-                  <li className="nav-item">
-                    <NavLink to="WorkersData" className="nav-link" title="Worker Data" onClick={onNavClick}>
-                      <img src={workerData} alt="" /> Worker Data
-                    </NavLink>
-                  </li>
-                )}
+            {/* Workers */}
+            <Group
+              k="workers"
+              label="Workers"
+              when={
+                canWorkersData ||
+                canExistingWorkers ||
+                canWorkerAgreement ||
+                canWorkerCallData ||
+                canWorkerCallDelete
+              }
+            >
+              {canWorkersData && (
+                <li className="nav-item">
+                  <NavLink to="WorkersData" className="nav-link" title="Worker Data" onClick={onNavClick}>
+                    <img src={workerData} alt="" /> <span className="ms-1">Worker Data</span>
+                  </NavLink>
+                </li>
+              )}
+              {canExistingWorkers && (
+                <li className="nav-item">
+                  <NavLink to="ExistingEmployees" className="nav-link" title="Existing Workers" onClick={onNavClick}>
+                    <img src={workerExit} alt="" /> <span className="ms-1">Exit Worker</span>
+                  </NavLink>
+                </li>
+              )}
+              {canWorkerCallData && (
+                <li className="nav-item">
+                  <NavLink to="WorkerCallsData" className="nav-link" title="Worker Call Data" onClick={onNavClick}>
+                    <img src={call} alt="" /> <span className="ms-1">Worker Call Data</span>
+                  </NavLink>
+                </li>
+              )}
+              {canWorkerCallDelete && (
+                <li className="nav-item">
+                  <NavLink to="WorkerCallDelete" className="nav-link" title="Worker Call Delete" onClick={onNavClick}>
+                    <img src={callDelete} alt="" /> <span className="ms-1">Worker Call Delete</span>
+                  </NavLink>
+                </li>
+              )}
+              {canWorkerAgreement && (
+                <li className="nav-item">
+                  <NavLink to="EmployeeAggrement" className="nav-link" title="Worker Agreement" onClick={onNavClick}>
+                    <img src={WorkerAggrement} alt="" /> <span className="ms-1">Worker Agreement</span>
+                  </NavLink>
+                </li>
+              )}
+            </Group>
 
-                {canExistingWorkers && (
-                  <li className="nav-item">
-                    <NavLink
-                      to="ExistingEmployees"
-                      className="nav-link"
-                      title="Existing Workers"
-                      onClick={onNavClick}
-                    >
-                      <img src={workerExit} alt="Worker Exit" /> Exit Worker
-                    </NavLink>
-                  </li>
-                )}
+            {/* Client */}
+            <Group k="client" label="Client" when={canClientData || canClientExit}>
+              {canClientData && (
+                <li className="nav-item">
+                  <NavLink to="ClientInfo" className="nav-link" title="Client Data" onClick={onNavClick}>
+                    <img src={client} alt="" /> <span className="ms-1">Client Data</span>
+                  </NavLink>
+                </li>
+              )}
+              {canClientExit && (
+                <li className="nav-item">
+                  <NavLink to="ClientExit" className="nav-link" title="Client Exit" onClick={onNavClick}>
+                    <img src={ClientExitIcon} alt="" /> <span className="ms-1">Client Exit</span>
+                  </NavLink>
+                </li>
+              )}
+            </Group>
 
-                {canWorkerCallData && (
-                  <li className="nav-item">
-                    <NavLink
-                      to="WorkerCallsData"
-                      className="nav-link"
-                      title="Worker Call Data"
-                      onClick={onNavClick}
-                    >
-                      <img src={call} alt="Worker Call Data" /> Worker Call Data
-                    </NavLink>
-                  </li>
-                )}
+            {/* Enquiry */}
+            <Group k="enquiry" label="Enquiry" when={canEnquiry || canEnquiryExit}>
+              {canEnquiry && (
+                <li className="nav-item">
+                  <NavLink to="Enquiry" className="nav-link" title="Enquiry" onClick={onNavClick}>
+                    <img src={inquiry} alt="" /> <span className="ms-1">Enquiry</span>
+                  </NavLink>
+                </li>
+              )}
+              {canEnquiryExit && (
+                <li className="nav-item">
+                  <NavLink to="EnquiryExit" className="nav-link" title="Old Enquiry" onClick={onNavClick}>
+                    <img src={inquiryDelete} alt="" /> <span className="ms-1">Old Enquiry</span>
+                  </NavLink>
+                </li>
+              )}
+            </Group>
 
-                {canWorkerCallDelete && (
-                  <li className="nav-item">
-                    <NavLink
-                      to="WorkerCallDelete"
-                      className="nav-link"
-                      title="Worker Call Delete"
-                      onClick={onNavClick}
-                    >
-                      <img src={callDelete} alt="" /> Worker Call Delete
-                    </NavLink>
-                  </li>
-                )}
+            {/* Hospital */}
+            <Group
+              k="hospital"
+              label="Hospital"
+              when={canHospitalList || canHospitalDeleteList}
+            >
+              {canHospitalList && (
+                <li className="nav-item">
+                  <NavLink to="HospitalList" className="nav-link" title="Hospital List" onClick={onNavClick}>
+                    <img src={HospitalIcon} alt="" /> <span className="ms-1">Hospital List</span>
+                  </NavLink>
+                </li>
+              )}
+              {canHospitalDeleteList && (
+                <li className="nav-item">
+                  <NavLink to="HospitalDeleteList" className="nav-link" title="Deleted Hospitals" onClick={onNavClick}>
+                    <img src={HospitalDeleteIcon} alt="" /> <span className="ms-1">Deleted Hospitals</span>
+                  </NavLink>
+                </li>
+              )}
+            </Group>
 
-                {canWorkerAgreement && (
-                  <li className="nav-item">
-                    <NavLink
-                      to="EmployeeAggrement"
-                      className="nav-link"
-                      title="Worker Agreement"
-                      onClick={onNavClick}
-                    >
-                      <img src={WorkerAggrement} alt="" /> Worker Aggremnt
-                    </NavLink>
-                  </li>
-                )}
-                <hr />
-              </>
-            )}
+            {/* Expenses */}
+            <Group
+              k="expenses"
+              label="Expenses"
+              when={canExpenses || canExpenceDelete}
+            >
+              {canExpenses && (
+                <li className="nav-item">
+                  <NavLink to="Expenses" className="nav-link" title="Expenses" onClick={onNavClick}>
+                    <img src={accounts} alt="" /> <span className="ms-1">Petty Cash</span>
+                  </NavLink>
+                </li>
+              )}
+              {canExpenceDelete && (
+                <li className="nav-item">
+                  <NavLink to="ExpenceDelete" className="nav-link" title="Delete Petty Cash" onClick={onNavClick}>
+                    <img src={expences} alt="" /> <span className="ms-1">Delete Petty Cash</span>
+                  </NavLink>
+                </li>
+              )}
+            </Group>
 
-            {/* ---- Client ---- */}
-            {(canClientData || canClientExit) && (
-              <>
-                {canClientData && (
-                  <li className="nav-item">
-                    <NavLink to="ClientInfo" className="nav-link" title="ClientInfo" onClick={onNavClick}>
-                      <img src={client} alt="" /> Client Data
-                    </NavLink>
-                  </li>
-                )}
-                {canClientExit && (
-                  <li className="nav-item">
-                    <NavLink to="ClientExit" className="nav-link" title="ClientExit" onClick={onNavClick}>
-                      <img src={ClientExitIcon} alt="" /> ClientExit
-                    </NavLink>
-                  </li>
-                )}
-                <hr />
-              </>
-            )}
-
-            {/* ---- Enquiry ---- */}
-            {(canEnquiry || canEnquiryExit) && (
-              <>
-                {canEnquiry && (
-                  <li className="nav-item">
-                    <NavLink to="Enquiry" className="nav-link" title="Enquiry" onClick={onNavClick}>
-                      <img src={inquiry} alt="" /> Enquiry
-                    </NavLink>
-                  </li>
-                )}
-                {canEnquiryExit && (
-                  <li className="nav-item">
-                    <NavLink to="EnquiryExit" className="nav-link" title="Old Enquirys" onClick={onNavClick}>
-                      <img src={inquiryDelete} alt="" /> Old Enquiry
-                    </NavLink>
-                  </li>
-                )}
-                <hr />
-              </>
-            )}
-
-            {/* ---- Hospital ---- */}
-            {(canHospitalList || canHospitalDeleteList) && (
-              <>
-                {canHospitalList && (
-                  <li className="nav-item">
-                    <NavLink to="HospitalList" className="nav-link" title="Hospital List" onClick={onNavClick}>
-                      <img src={HospitalIcon} alt="" /> Hospital List
-                    </NavLink>
-                  </li>
-                )}
-                {canHospitalDeleteList && (
-                  <li className="nav-item">
-                    <NavLink
-                      to="HospitalDeleteList"
-                      className="nav-link"
-                      title="Deleted Hospital"
-                      onClick={onNavClick}
-                    >
-                      <img src={HospitalDeleteIcon} alt="" /> Deleted Hospitals
-                    </NavLink>
-                  </li>
-                )}
-                <hr />
-              </>
-            )}
-
-            {/* ---- Expenses ---- */}
-            {(canExpenses || canExpenceDelete) && (
-              <>
-                {canExpenses && (
-                  <li className="nav-item">
-                    <NavLink to="Expenses" className="nav-link" title="Expenses" onClick={onNavClick}>
-                      <img src={accounts} alt="" /> Petty Cash
-                    </NavLink>
-                  </li>
-                )}
-                {canExpenceDelete && (
-                  <li className="nav-item">
-                    <NavLink to="ExpenceDelete" className="nav-link" title="Delete Expenses" onClick={onNavClick}>
-                      <img src={expences} alt="" /> Delete Petty Cash
-                    </NavLink>
-                  </li>
-                )}
-                <hr />
-              </>
-            )}
-
-            {/* ---- Task / Admin / Accounts ---- */}
+            {/* Task / Accounts / Admin */}
             {canTask && (
-              <li className="nav-item">
-                <NavLink to="Task" className="nav-link" title="Task" onClick={onNavClick}>
-                  <img src={task} alt="" /> Task
-                </NavLink>
-              </li>
+              <>
+                <li className="nav-item mt-2 mb-1 text-uppercase small text-muted px-2">Productivity</li>
+                <li className="nav-item">
+                  <NavLink to="Task" className="nav-link" title="Task" onClick={onNavClick}>
+                    <img src={task} alt="" /> <span className="ms-1">Task</span>
+                  </NavLink>
+                </li>
+              </>
             )}
 
-            {(canAdmin || isAdmin) && (
-              <li className="nav-item">
-                <NavLink to="Admin" className="nav-link" title="Admin" onClick={onNavClick}>
-                  <img src={admin} alt="" /> Admin
-                </NavLink>
-              </li>
-            )}
-
-            {canAccounts && (
-              <li className="nav-item">
-                <NavLink to="Accounts" className="nav-link" title="Accounts" onClick={onNavClick}>
-                  <img src={accounts} alt="" /> Accounts
-                </NavLink>
-              </li>
+            {(canAccounts || canAdmin) && (
+              <>
+                <li className="nav-item mt-2 mb-1 text-uppercase small text-muted px-2">Management</li>
+                {canAccounts && (
+                  <li className="nav-item">
+                    <NavLink to="Accounts" className="nav-link" title="Accounts" onClick={onNavClick}>
+                      <img src={accounts} alt="" /> <span className="ms-1">Accounts</span>
+                    </NavLink>
+                  </li>
+                )}
+                {(canAdmin || isAdmin) && (
+                  <li className="nav-item">
+                    <NavLink to="Admin" className="nav-link" title="Admin" onClick={onNavClick}>
+                      <img src={admin} alt="" /> <span className="ms-1">Admin</span>
+                    </NavLink>
+                  </li>
+                )}
+              </>
             )}
           </ul>
         </div>
@@ -559,22 +578,8 @@ export default function LeftNav() {
         <Route path="/" element={<PermRoute allowed={canDashboard}><Dashboard /></PermRoute>} />
 
         {/* Staff */}
-        <Route
-          path="StaffData"
-          element={
-            <PermRoute allowed={canStaffData}>
-              <WorkersData />
-            </PermRoute>
-          }
-        />
-        <Route
-          path="ExistingStaff"
-          element={
-            <PermRoute allowed={canExistingStaff}>
-              <ExistingEmployees />
-            </PermRoute>
-          }
-        />
+        <Route path="StaffData" element={<PermRoute allowed={canStaffData}><WorkersData /></PermRoute>} />
+        <Route path="ExistingStaff" element={<PermRoute allowed={canExistingStaff}><ExistingEmployees /></PermRoute>} />
 
         {/* Workers */}
         <Route path="WorkersData" element={<PermRoute allowed={canWorkersData}><WorkersData /></PermRoute>} />
@@ -601,10 +606,8 @@ export default function LeftNav() {
         {/* Task / Accounts / Hospital / Admin */}
         <Route path="Task" element={<PermRoute allowed={canTask}><Task /></PermRoute>} />
         <Route path="Accounts" element={<PermRoute allowed={canAccounts}><Accounts /></PermRoute>} />
-
         <Route path="HospitalList" element={<PermRoute allowed={canHospitalList}><HospitalList /></PermRoute>} />
         <Route path="HospitalDeleteList" element={<PermRoute allowed={canHospitalDeleteList}><HospitalDeleteList /></PermRoute>} />
-
         <Route path="search" element={<SearchResults />} />
         <Route path="Admin" element={<PermRoute allowed={canAdmin || isAdmin}><AdminUsers /></PermRoute>} />
       </Routes>

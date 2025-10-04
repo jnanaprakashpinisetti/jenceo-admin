@@ -11,30 +11,6 @@ nav {
         margin-bottom: 0;
     }
 
-    .slide {
-        display: block;
-        text-align: right;
-        padding-right: 2px;
-        cursor: auto;
-        margin-bottom: 20px;
-        width: 100%;
-        border: none;
-        background-color: transparent;
-
-        @include mobile {
-            display: none;
-        }
-
-        img {
-            cursor: pointer;
-            padding: 5px 10px;
-            background-color: $prim-black;
-
-            &:hover {
-                opacity: .8;
-            }
-        }
-    }
 
     @include mobile {
         .hide.show {
@@ -111,6 +87,7 @@ nav {
         background-color: transparent;
         border: none;
         text-align: center;
+        padding-bottom: 15px;
 
         @include desktop {
             display: block;
@@ -207,10 +184,36 @@ nav {
 
     @include res {
         .btn {
-        margin-bottom: 0;
-        z-index: 0;
+            margin-bottom: 0;
+            z-index: 0;
 
 
         }
     }
+}
+
+.leftNav {
+    .groupBtn {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        width: 100%;
+        background-color: #3B3C3D;
+        font-weight: bold;
+        border-radius: 0;
+        color: $sec-white;
+        padding: 10px;
+
+    }
+
+    .nav-link {
+
+        &.active {
+            background-color: #363738;
+            border-radius: 0;
+            border: 0;
+            color: #02ACF2 !important;
+        }
+    }
+
 }

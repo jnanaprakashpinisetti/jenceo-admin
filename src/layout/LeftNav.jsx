@@ -48,6 +48,10 @@ import expences from "../assets/expence.svg";
 import Dashboard from "../pages/Dashboard";
 import Investments from "../pages/Investments";
 
+// ✅ Use proper Staff pages here (fixes “Staff shows Worker details”)
+import StaffData from "../pages/StaffData";
+import ExistingStaff from "../pages/ExistingStaff";
+
 import WorkersData from "../pages/WorkersData";
 import ExistingEmployees from "../pages/ExistingWorker";
 import EmployeeAggrement from "../pages/WorkerAggrement";
@@ -131,6 +135,7 @@ export default function LeftNav() {
 
   // collapsible groups for a “richer” left nav
   const [open, setOpen] = useState({
+    management: true, // ✅ new top group
     staff: true,
     workers: true,
     client: true,
@@ -213,17 +218,9 @@ export default function LeftNav() {
     if (!when) return null;
     return (
       <>
-        <li className="nav-item mt-2 mb-1 text-uppercase small text-muted px-2">{label}</li>
         <li className="nav-item">
           <button
-            className="btn btn-sm w-100 d-flex justify-content-between align-items-center"
-            style={{
-              background: open[k] ? "#111827" : "#0b1220",
-              color: "#e5e7eb",
-              border: "1px solid rgba(255,255,255,0.08)",
-              borderRadius: 10,
-              padding: "8px 10px",
-            }}
+            className="groupBtn btn btn-sm"
             onClick={() => setOpen((o) => ({ ...o, [k]: !o[k] }))}
             type="button"
           >
@@ -240,16 +237,15 @@ export default function LeftNav() {
 
   return (
     <>
-      <nav className={isActive ? "navbar navbar-expand-lg toggle" : "navbar navbar-expand-lg"}>
-        <button type="button" className="navbar-brand" onClick={() => {}}>
+      <nav className={isActive ? "navbar navbar-expand-lg toggle" : "navbar navbar-expand-lg leftNav"}>
+        <button type="button" className="navbar-brand" onClick={() => { }}>
           <img src={isActive ? logoicon : logo} alt="JenCeo Logo" />
         </button>
 
-        <button className="slide" type="button" onClick={toggleSide} aria-label="Toggle sidebar" title="Collapse sidebar">
+        {/* <button className="slide" type="button" onClick={toggleSide} aria-label="Toggle sidebar" title="Collapse sidebar">
           <img src={arrow} alt="arrow" />
-        </button>
+        </button> */}
 
-        <hr />
 
         <button
           className="navbar-toggler"
@@ -370,22 +366,34 @@ export default function LeftNav() {
 
           {/* ===== Main nav with grouped, collapsible sections ===== */}
           <ul className="navbar-nav" style={{ width: "100%" }}>
-            {/* Top / Dashboard */}
-            {canDashboard && (
-              <li className="nav-item">
-                <NavLink to="/" className="nav-link" title="Dashboard" onClick={onNavClick}>
-                  <img src={home} alt="" /> <span className="ms-1">Dashboard</span>
-                </NavLink>
-              </li>
-            )}
-            {canInvestments && (
-              <li className="nav-item">
-                <NavLink to="Investments" className="nav-link" title="Investments" onClick={onNavClick}>
-                  <img src={invest} alt="" /> <span className="ms-1">Investments</span>
-                </NavLink>
-              </li>
-            )}
-            {(canDashboard || canInvestments) && <hr />}
+            {/* ✅ Top: Management group with Admin + Dashboard + Investments */}
+            <Group
+              k="management"
+              label="Management"
+              when={canAdmin || canDashboard || canInvestments}
+            >
+              {(canAdmin || isAdmin) && (
+                <li className="nav-item">
+                  <NavLink to="Admin" className="nav-link" title="Admin" onClick={onNavClick}>
+                    <img src={admin} alt="" /> <span className="ms-1">Admin</span>
+                  </NavLink>
+                </li>
+              )}
+              {canDashboard && (
+                <li className="nav-item">
+                  <NavLink to="/" className="nav-link" title="Dashboard" onClick={onNavClick}>
+                    <img src={home} alt="" /> <span className="ms-1">Dashboard</span>
+                  </NavLink>
+                </li>
+              )}
+              {canInvestments && (
+                <li className="nav-item">
+                  <NavLink to="Investments" className="nav-link" title="Investments" onClick={onNavClick}>
+                    <img src={invest} alt="" /> <span className="ms-1">Investments</span>
+                  </NavLink>
+                </li>
+              )}
+            </Group>
 
             {/* Staff */}
             <Group
@@ -402,8 +410,8 @@ export default function LeftNav() {
               )}
               {canExistingStaff && (
                 <li className="nav-item">
-                  <NavLink to="ExistingStaff" className="nav-link" title="Exist Staff" onClick={onNavClick}>
-                    <img src={StaffExit} alt="" /> <span className="ms-1">Exist Staff</span>
+                  <NavLink to="ExistingStaff" className="nav-link" title="Existing Staff" onClick={onNavClick}>
+                    <img src={StaffExit} alt="" /> <span className="ms-1">Existing Staff</span>
                   </NavLink>
                 </li>
               )}
@@ -538,7 +546,7 @@ export default function LeftNav() {
               )}
             </Group>
 
-            {/* Task / Accounts / Admin */}
+            {/* Productivity */}
             {canTask && (
               <>
                 <li className="nav-item mt-2 mb-1 text-uppercase small text-muted px-2">Productivity</li>
@@ -550,23 +558,15 @@ export default function LeftNav() {
               </>
             )}
 
-            {(canAccounts || canAdmin) && (
+            {/* Keep Accounts separate as before (you asked to move Admin/Dashboard/Investments only) */}
+            {canAccounts && (
               <>
-                <li className="nav-item mt-2 mb-1 text-uppercase small text-muted px-2">Management</li>
-                {canAccounts && (
-                  <li className="nav-item">
-                    <NavLink to="Accounts" className="nav-link" title="Accounts" onClick={onNavClick}>
-                      <img src={accounts} alt="" /> <span className="ms-1">Accounts</span>
-                    </NavLink>
-                  </li>
-                )}
-                {(canAdmin || isAdmin) && (
-                  <li className="nav-item">
-                    <NavLink to="Admin" className="nav-link" title="Admin" onClick={onNavClick}>
-                      <img src={admin} alt="" /> <span className="ms-1">Admin</span>
-                    </NavLink>
-                  </li>
-                )}
+                <li className="nav-item mt-2 mb-1 text-uppercase small text-muted px-2">Finance</li>
+                <li className="nav-item">
+                  <NavLink to="Accounts" className="nav-link" title="Accounts" onClick={onNavClick}>
+                    <img src={accounts} alt="" /> <span className="ms-1">Accounts</span>
+                  </NavLink>
+                </li>
               </>
             )}
           </ul>
@@ -577,9 +577,9 @@ export default function LeftNav() {
       <Routes>
         <Route path="/" element={<PermRoute allowed={canDashboard}><Dashboard /></PermRoute>} />
 
-        {/* Staff */}
-        <Route path="StaffData" element={<PermRoute allowed={canStaffData}><WorkersData /></PermRoute>} />
-        <Route path="ExistingStaff" element={<PermRoute allowed={canExistingStaff}><ExistingEmployees /></PermRoute>} />
+        {/* ✅ Staff -> correct components */}
+        <Route path="StaffData" element={<PermRoute allowed={canStaffData}><StaffData /></PermRoute>} />
+        <Route path="ExistingStaff" element={<PermRoute allowed={canExistingStaff}><ExistingStaff /></PermRoute>} />
 
         {/* Workers */}
         <Route path="WorkersData" element={<PermRoute allowed={canWorkersData}><WorkersData /></PermRoute>} />

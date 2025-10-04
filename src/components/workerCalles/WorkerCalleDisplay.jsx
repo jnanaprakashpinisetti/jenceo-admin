@@ -207,6 +207,11 @@ export default function WorkerCalleDisplay({ currentUserRole = "admin", permissi
   const roleOptions = ["Computer Operating", "Tele Calling", "Driving", "Supervisor", "Manager", "Attender", "Security", "Carpenter", "Painter", "Plumber", "Electrician", "Mason (Home maker)", "Tailor", "Labour", "Farmer", "Delivery Boy", "House Keeping", "Cook", "Nanny", "Elderly Care", "Driver", "Office Boy", "Peon"];
   const languageOptions = ["Telugu", "English", "Hindi", "Urdu", "Kannada", "Malayalam", "Tamil", "Bengali", "Marati"];
 
+  // Add these with your other state declarations
+  const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  const [activeYear, setActiveYear] = useState(new Date().getFullYear());
+  const [activeMonth, setActiveMonth] = useState(null); // 0-11 or null
+
   /* --- FETCH --- */
   useEffect(() => {
     const ref = firebaseDB.child("WorkerCallData");
@@ -287,6 +292,70 @@ export default function WorkerCalleDisplay({ currentUserRole = "admin", permissi
     });
     return arr;
   }, [filtered, sortBy, sortDir]);
+
+  // Add these with your other useMemo calculations
+
+  // ---------- YEAR / MONTH / DAY SUMMARY ----------
+  const years = useMemo(() => {
+    const ys = new Set();
+    workers.forEach((w) => {
+      const d = parseDate(w?.date || w?.callReminderDate || w?.createdAt);
+      if (isValidDate(d)) ys.add(d.getFullYear());
+    });
+    const sortedYs = Array.from(ys).sort((a, b) => a - b);
+    return sortedYs.length ? sortedYs : [new Date().getFullYear()];
+  }, [workers]);
+
+  useEffect(() => {
+    if (!years.includes(activeYear)) {
+      setActiveYear(years[years.length - 1]);
+      setActiveMonth(null);
+    }
+  }, [years, activeYear]);
+
+  const monthSummary = useMemo(() => {
+    const summary = {};
+    callThroughOptions.forEach((t) => { summary[t] = Array(12).fill(0); });
+
+    workers.forEach((w) => {
+      const d = parseDate(w?.date || w?.callReminderDate || w?.createdAt);
+      if (!isValidDate(d) || d.getFullYear() !== activeYear) return;
+
+      const m = d.getMonth();
+      const srcRaw = (w?.callThrough || w?.through || w?.source || "").trim();
+      const normalizedSource = normalizeSource(srcRaw);
+      const matchingOption = callThroughOptions.find(opt => opt === normalizedSource);
+
+      if (matchingOption) {
+        summary[matchingOption][m] += 1;
+      }
+    });
+    return summary;
+  }, [workers, activeYear]);
+
+  const daySummary = useMemo(() => {
+    if (activeMonth === null) return null;
+    const daysInMonth = new Date(activeYear, activeMonth + 1, 0).getDate();
+    const summary = {};
+    callThroughOptions.forEach((t) => { summary[t] = Array(daysInMonth).fill(0); });
+
+    workers.forEach((w) => {
+      const d = parseDate(w?.date || w?.callReminderDate || w?.createdAt);
+      if (!isValidDate(d) || d.getFullYear() !== activeYear || d.getMonth() !== activeMonth) return;
+
+      const day = d.getDate(); // 1..days
+      const srcRaw = (w?.callThrough || w?.through || w?.source || "").trim();
+      const normalizedSource = normalizeSource(srcRaw);
+      const matchingOption = callThroughOptions.find(opt => opt === normalizedSource);
+
+      if (matchingOption) {
+        summary[matchingOption][day - 1] += 1;
+      }
+    });
+    return summary;
+  }, [workers, activeYear, activeMonth]);
+
+  const totalRowStyle = { background: "#122438" };
 
   /* pagination */
   const totalPages = useMemo(() => Math.max(1, Math.ceil(sorted.length / rowsPerPage)), [sorted, rowsPerPage]);
@@ -538,7 +607,7 @@ export default function WorkerCalleDisplay({ currentUserRole = "admin", permissi
       {/* TOP pagination (centered with bg) */}
       {Math.ceil(sorted.length / rowsPerPage) > 1 && (
 
-        <nav aria-label="Workers" className="pagination-top py-2 mb-3 m-auto" style={{ background: "#0f172a", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 12 }}>
+        <nav aria-label="Workers" className="pagination-top py-2 mb-3 m-auto pagination-wrapper" style={{ background: "#0f172a", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 12 }}>
           <ul className="pagination justify-content-center mb-0">
             <li className={`page-item ${safePage === 1 ? "disabled" : ""}`}>
               <button className="page-link" onClick={() => setCurrentPage(1)} disabled={safePage === 1}>«</button>
@@ -671,6 +740,123 @@ export default function WorkerCalleDisplay({ currentUserRole = "admin", permissi
           </tbody>
         </table>
       </div>
+
+
+      {/* ---------- YEAR / MONTH / DAY SUMMARY UI ---------- */}
+      <hr />
+      <h4 className="mt-4">Call Through Summary</h4>
+
+      {/* Year Tabs */}
+      <ul className="nav nav-tabs summary-tabs mb-3">
+        {years.map((y) => (
+          <li className="nav-item" key={y}>
+            <button
+              className={`nav-link summary-tab ${activeYear === y ? "active" : ""}`}
+              onClick={() => { setActiveYear(y); setActiveMonth(null); }}
+            >
+              {y}
+            </button>
+          </li>
+        ))}
+      </ul>
+
+      {/* Month-wise table */}
+      <div className="table-responsive summary-table-container">
+        <table className="table table-dark table-sm summary-table table-hover" style={{ fontSize: "12px", tableLayout: "fixed" }}>
+          <thead className="summary-table-header">
+            <tr>
+              <th>Call Through</th>
+              {months.map((m, mi) => (
+                <th key={m} style={{ cursor: "pointer" }} onClick={() => setActiveMonth(mi)}>
+                  {m}
+                </th>
+              ))}
+              <th>Total</th>
+            </tr>
+          </thead>
+
+          <tbody>
+            {callThroughOptions.map((t) => (
+              <tr key={t} className="summary-table-row">
+                <td className="source-name text-info">{t}</td>
+                {(monthSummary[t] || Array(12).fill(0)).map((count, idx) => (
+                  <td key={idx} className={count > 0 ? "has-data" : ""} style={{ cursor: "pointer" }} onClick={() => setActiveMonth(idx)}>
+                    {count > 0 ? count : ""}
+                  </td>
+                ))}
+                <td className="total-cell">{(monthSummary[t] || Array(12).fill(0)).reduce((a, b) => a + b, 0)}</td>
+              </tr>
+            ))}
+            <tr className="summary-table-row fw-bold" style={totalRowStyle}>
+              <td className="source-name text-warning">Total</td>
+              {months.map((_, mi) => {
+                let sum = 0;
+                callThroughOptions.forEach((t) => {
+                  const arr = monthSummary[t] || Array(12).fill(0);
+                  sum += arr[mi] || 0;
+                });
+                return <td className="text-warning" key={mi}>{sum || ""}</td>;
+              })}
+              <td className="total-cell">
+                {callThroughOptions.reduce((acc, t) => acc + (monthSummary[t] || Array(12).fill(0)).reduce((a, b) => a + b, 0), 0)}
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      {/* Day-wise table for selected month */}
+      {activeMonth !== null && (
+        <div className="mt-4">
+          <div className="d-flex justify-content-between align-items-center mb-2">
+            <h5 className="mb-0">
+              {months[activeMonth]} {activeYear} — Day-wise
+            </h5>
+            <button className="btn btn-sm btn-outline-light" onClick={() => setActiveMonth(null)}>Close</button>
+          </div>
+          <div className="table-responsive summary-table-container">
+            <table className="table table-dark table-sm summary-table table-hover" style={{ fontSize: "12px", tableLayout: "fixed" }}>
+              <thead className="summary-table-header">
+                <tr>
+                  <th>Call Through</th>
+                  {Array.from({ length: new Date(activeYear, activeMonth + 1, 0).getDate() }, (_, i) => i + 1).map((d) => (
+                    <th key={d} style={{ whiteSpace: "nowrap", padding: "2px 4px" }}>{d}</th>
+                  ))}
+                  <th>Total</th>
+                </tr>
+              </thead>
+              <tbody>
+                {callThroughOptions.map((t) => (
+                  <tr key={t} className="summary-table-row">
+                    <td className="source-name">{t}</td>
+                    {(daySummary && (daySummary[t] || Array(new Date(activeYear, activeMonth + 1, 0).getDate()).fill(0))).map((count, idx) => (
+                      <td key={idx} className={count > 0 ? "has-data" : ""} style={{ whiteSpace: "nowrap", padding: "2px 4px" }}>
+                        {count > 0 ? count : ""}
+                      </td>
+                    ))}
+                    <td className="total-cell">{daySummary ? (daySummary[t] || Array(new Date(activeYear, activeMonth + 1, 0).getDate()).fill(0)).reduce((a, b) => a + b, 0) : 0}</td>
+                  </tr>
+                ))}
+
+                <tr className="summary-table-row fw-bold" style={totalRowStyle}>
+                  <td className="source-name text-warning">Total</td>
+                  {Array.from({ length: new Date(activeYear, activeMonth + 1, 0).getDate() }, (_, di) => {
+                    let sum = 0;
+                    callThroughOptions.forEach((t) => {
+                      const arr = daySummary ? (daySummary[t] || Array(new Date(activeYear, activeMonth + 1, 0).getDate()).fill(0)) : [];
+                      sum += arr[di] || 0;
+                    });
+                    return <td className="text-warning" key={di}>{sum || ""}</td>;
+                  })}
+                  <td className="total-cell">
+                    {callThroughOptions.reduce((acc, t) => acc + (daySummary ? (daySummary[t] || Array(new Date(activeYear, activeMonth + 1, 0).getDate()).fill(0)).reduce((a, b) => a + b, 0) : 0), 0)}
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
 
       {/* MODAL */}
       {isModalOpen && selectedWorker && (

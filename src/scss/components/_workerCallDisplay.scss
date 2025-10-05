@@ -78,6 +78,49 @@
     border: none;
   }
 
+
+  .modal {
+
+    .btn-warning {
+      background-color: #f59e0b;
+      ;
+    }
+
+    .btn-outline-warning {
+      border-color: #f59e0b;
+      color: #f59e0b;
+    }
+
+    [disabled] {
+      background-color: #e6e4e4;
+      border: none;
+      color: #444;
+    }
+
+    .border {
+      border-color: #dfdada !important;
+    }
+    .comment-box {
+      padding: 10px;
+      border: 1px solid #e2e1e1;
+      border-radius: 10px;
+    }
+
+    .form-check {
+
+      .form-check-input {
+        border-color: #ccc;
+        background-color: #ccc;
+      }
+
+      .form-check-input:checked[type=checkbox] {
+        background: #ccc !important;
+      }
+
+    }
+
+  }
+
 }
 
 /* Reminder filter badges */

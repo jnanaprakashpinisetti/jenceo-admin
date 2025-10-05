@@ -872,7 +872,7 @@ export default function WorkerCallForm({ isOpen, onClose }) {
                   {step < 2 && (
                     <button
                       type="button"
-                      className="btn btn-primary"
+                      className="btn btn-info"
                       onClick={nextStep}
                     >
                       Next

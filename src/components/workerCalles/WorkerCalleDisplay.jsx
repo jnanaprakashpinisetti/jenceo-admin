@@ -100,9 +100,48 @@ const formatPrettyDate = (v) => {
   if (!isValidDate(d)) return "—";
   const day = d.getDate();
   const month = d.toLocaleString("en-GB", { month: "short" }); // Jan, Feb, Mar...
-  const year = String(d.getFullYear()).slice(-2); // only last 2 digits
-  return `${ordinal(day)}- ${month}- ${year}`;
+  const year = String(d.getFullYear()).slice(-2);              // 2-digit year
+  return `${ordinal(day)} ${month} ${year}`;
 };
+
+const calculateAge = (dob) => {
+  if (!dob) return null;
+  const d = parseDate(dob);
+  if (!isValidDate(d)) return null;
+
+  const today = new Date();
+  let age = today.getFullYear() - d.getFullYear();
+
+  const m = today.getMonth() - d.getMonth();
+  if (m < 0 || (m === 0 && today.getDate() < d.getDate())) {
+    age--;
+  }
+  return age >= 0 ? age : null; // never negative
+};
+
+
+
+// Parse a user-entered/DB value into years (or null), ignores "-" etc.
+const parseExperienceYears = (exp) => {
+  if (exp == null) return null;
+  const m = String(exp).match(/(\d+(?:\.\d+)?)/);
+  return m ? parseFloat(m[1]) : null;
+};
+
+// Read experience from a worker & clamp at 0
+const calculateExperience = (w) => {
+  const candidates = [
+    w?.years, w?.experience, w?.exp, w?.workExperience,
+    w?.experienceYears, w?.totalExperience, w?.expInYears, w?.experience_years,
+  ];
+  for (const c of candidates) {
+    const v = parseExperienceYears(c);
+    if (v != null && !Number.isNaN(v)) return Math.max(0, v);
+  }
+  return null;
+};
+
+
 
 
 /* =============================
@@ -134,61 +173,31 @@ const isWorkerShape = (v) => {
 };
 function collectWorkersFromSnapshot(rootSnap) {
   const rows = [];
-  if (!rootSnap.exists()) return rows;
+  if (!rootSnap || !rootSnap.exists()) return rows;
+
   const walk = (snap, depth = 1) => {
     if (!snap) return;
     const val = snap.val();
+
+    // If this node already looks like a worker row, collect it.
     if (isWorkerShape(val)) {
       rows.push({ id: snap.key, ...val });
       return;
     }
+
+    // Otherwise, traverse its children (limit depth to avoid huge walks)
     if (typeof val === "object" && snap.hasChildren() && depth < 3) {
       snap.forEach((child) => walk(child, depth + 1));
     }
   };
-  rootSnap.forEach((child) => walk(child, 1));
+
+  walk(rootSnap, 1);
   return rows;
 }
-const calculateAge = (dob, directAge = null) => {
-  if (directAge != null) {
-    const n = Number(String(directAge).replace(/[^\d.]/g, ""));
-    if (!Number.isNaN(n)) return Math.floor(n);
-  }
-  if (!dob) return null;
-  const d = parseDate(dob);
-  if (!isValidDate(d)) return null;
-  const t = new Date();
-  let a = t.getFullYear() - d.getFullYear();
-  const m = t.getMonth() - d.getMonth();
-  if (m < 0 || (m === 0 && t.getDate() < d.getDate())) a--;
-  return a;
-};
-const parseExperienceYears = (exp) => {
-  if (exp == null) return null;
-  if (typeof exp === "number") return exp;
-  const m = String(exp).match(/(\d+(?:\.\d+)?)/);
-  return m ? parseFloat(m[1]) : null;
-};
-const calculateExperience = (w) => {
-  const candidates = [
-    w?.years, // DB field
-    w?.experience,
-    w?.exp,
-    w?.workExperience,
-    w?.experienceYears,
-    w?.totalExperience,
-    w?.expInYears,
-    w?.experience_years,
-  ];
-  for (const c of candidates) {
-    const v = parseExperienceYears(c);
-    if (v != null && !Number.isNaN(v)) return v;
-  }
-  return null;
-};
+
+/* Normalize "Call Through" / source text to fixed set */
 const normalizeSource = (raw) => {
-  if (!raw) return "Other";
-  const s = String(raw).trim().toLowerCase();
+  const s = String(raw || "").trim().toLowerCase();
   const map = new Map([
     ["apna", "Apana"],
     ["apana", "Apana"],
@@ -220,14 +229,13 @@ const normalizeSource = (raw) => {
   if (s.includes("insta")) return "Instagram";
   if (s.includes("you") && s.includes("tube")) return "YouTube";
   if (s.includes("site") || s.includes("web")) return "Website";
-  if (
-    s.replace(/\s+/g, "") === "justdial" ||
-    s.replace(/\s+/g, "") === "justdail"
-  )
-    return "Just Dial";
+  if (s.replace(/\s+/g, "") === "justdial" || s.replace(/\s+/g, "") === "justdail") return "Just Dial";
   if (s.includes("news") && s.includes("paper")) return "News Paper";
   return "Other";
 };
+
+
+
 const getWorkerRoles = (w) => {
   const val =
     w?.jobRole ??
@@ -255,6 +263,7 @@ const formatWorkerId = (firebaseId, index) =>
 
 // Added: more robust base date resolver (keeps logic, just extra fallbacks)
 const getBaseDate = (w) =>
+  w?.callDate ??     // <-- added
   w?.date ??
   w?.createdAt ??
   w?.createdDate ??
@@ -263,6 +272,7 @@ const getBaseDate = (w) =>
   w?.created_time ??
   w?.created_time_ms ??
   null;
+
 
 /* =============================
    Permissions
@@ -326,6 +336,7 @@ export default function WorkerCalleDisplay({
   const [selectedSource, setSelectedSource] = useState("All");
   const [skillMode, setSkillMode] = useState("single");
   const [timeFormat, setTimeFormat] = useState("24hr");
+  const [usersMap, setUsersMap] = useState({});
 
   // Age & Experience filters
   const [ageRange, setAgeRange] = useState({ min: "", max: "" });
@@ -425,6 +436,15 @@ export default function WorkerCalleDisplay({
   const [activeYear, setActiveYear] = useState(new Date().getFullYear());
   const [activeMonth, setActiveMonth] = useState(null); // 0-11 or null
 
+  useEffect(() => {
+    const ref = firebaseDB.child("Users");
+    const cb = ref.on("value", (snap) => {
+      const val = snap.val() || {};
+      setUsersMap(val);
+    });
+    return () => ref.off("value", cb);
+  }, []);
+
   /* --- FETCH --- */
   useEffect(() => {
     const ref = firebaseDB.child("WorkerCallData");
@@ -444,6 +464,7 @@ export default function WorkerCalleDisplay({
     });
     return () => ref.off("value", cb);
   }, []);
+
 
   /* badge counts */
   const badgeCounts = useMemo(() => {
@@ -1336,7 +1357,7 @@ export default function WorkerCalleDisplay({
                 : "";
               const timeStr = hasReminder
                 ? timeFormat === "24hr"
-                  ? formatTime(reminder, "24")
+                  ? formatTime(reminder, "24hr")
                   : formatTime(reminder, "12hr")
                 : "";
 
@@ -1358,32 +1379,27 @@ export default function WorkerCalleDisplay({
               const experience = calculateExperience(w);
 
               // Username fallbacks (added more)
+              // Username (prefer explicit fields; else resolve via Users/<uid>)
               const rawUser =
-                w?.addedBy ||
-                w?.createdBy ||
-                w?.userName ||
-                w?.username ||
-                w?.addedUserName ||
-                w?.addedByName ||
-                w?.added_user ||
-                w?.createdUser ||
-                w?.created_by ||
-                w?.createdByName ||
-                w?.createdUserName ||
-                w?.createdby ||
-                (w?.user &&
-                  (w?.user?.name ||
-                    w?.user?.displayName ||
-                    w?.user?.userName ||
-                    w?.user?.email)) ||
-                (w?.meta &&
-                  (w?.meta?.userName ||
-                    w?.meta?.createdBy ||
-                    w?.meta?.email)) ||
+                w?.addedBy || w?.createdBy || w?.userName || w?.username ||
+                w?.addedUserName || w?.addedByName || w?.added_user ||
+                w?.createdUser || w?.created_by || w?.createdByName ||
+                w?.createdUserName || w?.createdby ||
+                (w?.user && (w?.user?.name || w?.user?.displayName || w?.user?.userName || w?.user?.email)) ||
+                (w?.meta && (w?.meta?.userName || w?.meta?.createdBy || w?.meta?.email)) ||
                 "";
 
-              const addedBy = String(rawUser || "")
-                .replace(/@.*/, "") // if email, keep prefix
+              // Try to resolve a uid against Users
+              const uid =
+                w?.addedByUid || w?.createdByUid || w?.userId || w?.uid || w?.createdUid || w?.created_user_id;
+
+              const fromUsers =
+                uid && usersMap && usersMap[uid]
+                  ? (usersMap[uid].name || usersMap[uid].displayName || usersMap[uid].username || usersMap[uid].email || "")
+                  : "";
+
+              const addedBy = String(rawUser || fromUsers || "")
+                .replace(/@.*/, "")  // strip email domain if present
                 .trim();
 
               return (
@@ -1394,7 +1410,13 @@ export default function WorkerCalleDisplay({
                   className={urgencyClass(reminder)}
                 >
                   <td>{globalIndex + 1}</td>
-                  <td>{formatWorkerId(w.id, globalIndex)}</td>
+                  <td>
+                    {formatWorkerId(w.id, globalIndex)}
+                    {addedBy && (
+                      <small className="d-block text-muted">by {String(addedBy).toLowerCase()}</small>
+                    )}
+                  </td>
+
                   <td>{formatPrettyDate(getBaseDate(w))}</td>
                   <td>{w?.name || "—"}</td>
                   <td>
@@ -1576,6 +1598,72 @@ export default function WorkerCalleDisplay({
           </tbody>
         </table>
       </div>
+
+      {/* Bottom pagination */}
+      {Math.ceil(sorted.length / rowsPerPage) > 1 && (
+        <nav
+          aria-label="Workers"
+          className="pagination-top py-2 mb-3 m-auto pagination-wrapper"
+        >
+          <ul className="pagination justify-content-center mb-0">
+            <li className={`page-item ${safePage === 1 ? "disabled" : ""}`}>
+              <button
+                className="page-link"
+                onClick={() => setCurrentPage(1)}
+                disabled={safePage === 1}
+              >
+                «
+              </button>
+            </li>
+            <li className={`page-item ${safePage === 1 ? "disabled" : ""}`}>
+              <button
+                className="page-link"
+                onClick={() => setCurrentPage(safePage - 1)}
+                disabled={safePage === 1}
+              >
+                ‹
+              </button>
+            </li>
+            {getDisplayedPageNumbers().map((num) => (
+              <li
+                key={num}
+                className={`page-item ${safePage === num ? "active" : ""}`}
+              >
+                <button
+                  className="page-link"
+                  onClick={() => setCurrentPage(num)}
+                >
+                  {num}
+                </button>
+              </li>
+            ))}
+            <li
+              className={`page-item ${safePage === totalPages ? "disabled" : ""
+                }`}
+            >
+              <button
+                className="page-link"
+                onClick={() => setCurrentPage(safePage + 1)}
+                disabled={safePage === totalPages}
+              >
+                ›
+              </button>
+            </li>
+            <li
+              className={`page-item ${safePage === totalPages ? "disabled" : ""
+                }`}
+            >
+              <button
+                className="page-link"
+                onClick={() => setCurrentPage(totalPages)}
+                disabled={safePage === totalPages}
+              >
+                »
+              </button>
+            </li>
+          </ul>
+        </nav>
+      )}
 
       {/* ---------- YEAR / MONTH / DAY SUMMARY UI ---------- */}
       <hr />
@@ -2043,34 +2131,6 @@ export default function WorkerCalleDisplay({
         </div>
       )}
 
-      {/* Inline styles for requested tweaks */}
-      <style>{`
-        /* Female badge color */
-        .badge-female { background: #ff6ea8 !important; color: #111 !important; }
-
-        /* Nicer toggle styling for the Job Roles checkbox */
-        .toggle-pill .form-check-input {
-          width: 42px; height: 22px; cursor: pointer; position: relative;
-          appearance: none; -webkit-appearance: none; outline: none;
-          background: linear-gradient(180deg, #efb819, #f5d516); border: 1px solid rgba(255,255,255,0.15);
-          border-radius: 9px !important; transition: all .2s ease;
-        }
-        .toggle-pill .form-check-input::after {
-          content: ""; position: absolute; top: 50%; left: 3px;
-          width: 16px; height: 16px; border-radius: 50%;
-          background: #a9771c; transform: translateY(-50%); transition: all .2s ease;
-          box-shadow: 0 1px 3px rgba(0,0,0,.4);
-        }
-        .toggle-pill .form-check-input:checked {
-          background: linear-gradient(135deg, #0ea5e9, #7c3aed);
-          border-color: transparent;
-        }
-        .toggle-pill .form-check-input:checked::after { left: 23px; background: #fff; }
-        .toggle-pill .form-check-label { padding-left: 4px; }
-
-        /* Pagination wrapper subtle style retained */
-        .pagination-wrapper { background: #0f172a; border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; }
-      `}</style>
     </div>
   );
 }

@@ -1,0 +1,22 @@
+.displayWorker {
+    .pagination-wrapper {
+        background-color: transparent !important;
+        border: 0;
+    }
+
+    .pagination {
+        margin-bottom: 0;
+    }
+
+    .border  {
+        border-color: #5e5e5e;
+    }
+
+    .form-control {
+        background-color: transparent;
+        border-color: #7a7676;
+        &::placeholder {
+            color: $sec-white;
+        }
+    }
+}

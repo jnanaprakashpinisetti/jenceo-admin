@@ -60,11 +60,7 @@ table {
 }
 
 .pagination-wrapper {
-
     background-color: transparent;
-    padding: 0;
-    margin: auto;
-
     @include mobile {
         position: static !important;
 

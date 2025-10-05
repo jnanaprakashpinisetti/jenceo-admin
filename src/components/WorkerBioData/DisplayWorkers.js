@@ -612,26 +612,26 @@ export default function DisplayWorkers() {
                                 </div>
                             </div>
 
-                           {/* Duty filter */}
-<div className="col-lg-2 col-md-4 text-center">
-    <label className="form-label text-info small mb-2">Duty</label>
-    <div className="d-flex gap-2 justify-content-center">
-        {[
-            { label: "All", value: "All" },
-            { label: "Duty", value: "On Duty" },
-            { label: "Off Duty", value: "Off Duty" }
-        ].map(opt => (
-            <button
-                key={opt.value}
-                type="button"
-                className={`btn ${dutyFilter === opt.value ? "btn-info" : "btn-outline-info"} btn-sm`}
-                onClick={() => setDutyFilter(opt.value)}
-            >
-                {opt.label}
-            </button>
-        ))}
-    </div>
-</div>
+                            {/* Duty filter */}
+                            <div className="col-lg-2 col-md-4 text-center">
+                                <label className="form-label text-info small mb-2">Duty</label>
+                                <div className="d-flex gap-2 justify-content-center">
+                                    {[
+                                        { label: "All", value: "All" },
+                                        { label: "Duty", value: "On Duty" },
+                                        { label: "Off Duty", value: "Off Duty" }
+                                    ].map(opt => (
+                                        <button
+                                            key={opt.value}
+                                            type="button"
+                                            className={`btn ${dutyFilter === opt.value ? "btn-info" : "btn-outline-info"} btn-sm`}
+                                            onClick={() => setDutyFilter(opt.value)}
+                                        >
+                                            {opt.label}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
 
                             {/* Reset filter */}
 
@@ -708,7 +708,7 @@ export default function DisplayWorkers() {
                                     <p className='text-warning mb-0'> Showing: {indexOfFirstEmployee + 1} - {Math.min(indexOfLastEmployee, filteredEmployees.length)} / {filteredEmployees.length}</p>
                                 </div>
 
-                                <div className="col-md-6">
+                                <div className="col-md-6 d-flex align-items-center justify-content-center">
                                     {totalPages > 1 && (
                                         <nav aria-label="Employee pagination" className="pagination-wrapper">
                                             <ul className="pagination justify-content-center align-items-center">
@@ -911,84 +911,89 @@ export default function DisplayWorkers() {
             </div>
 
             {/* Pagination controls */}
-            {totalPages > 1 && (
-                <nav aria-label="Employee pagination" className="pagination-wrapper">
-                    <ul className="pagination justify-content-center align-items-center">
-                        {/* First page button */}
-                        <li className={`page-item ${currentPage === 1 ? "disabled" : ""}`}>
-                            <button
-                                type="button"
-                                className="page-link"
-                                aria-label="First"
-                                onClick={() => paginate(1)}
-                                disabled={currentPage === 1}
-                            >
-                                «
-                            </button>
-                        </li>
-
-                        {/* Previous page */}
-                        <li className={`page-item ${currentPage === 1 ? "disabled" : ""}`}>
-                            <button
-                                type="button"
-                                className="page-link"
-                                aria-label="Previous"
-                                onClick={() => paginate(currentPage - 1)}
-                                disabled={currentPage === 1}
-                            >
-                                ‹
-                            </button>
-                        </li>
-
-                        {/* Page numbers */}
-                        {getDisplayedPageNumbers().map((number, index) => (
-                            <li
-                                key={index}
-                                className={`page-item ${number === currentPage ? "active" : ""} ${number === "..." ? "disabled" : ""
-                                    }`}
-                            >
-                                {number === "..." ? (
-                                    <span className="page-link">…</span>
-                                ) : (
-                                    <button
-                                        type="button"
-                                        className="page-link"
-                                        onClick={() => paginate(number)}
-                                    >
-                                        {number}
-                                    </button>
-                                )}
+            <div className='d-flex align-items-center justify-content-center'>
+                {totalPages > 1 && (
+                    <nav aria-label="Employee pagination" className="pagination-wrapper">
+                        <ul className="pagination justify-content-center align-items-center">
+                            {/* First page button */}
+                            <li className={`page-item ${currentPage === 1 ? "disabled" : ""}`}>
+                                <button
+                                    type="button"
+                                    className="page-link"
+                                    aria-label="First"
+                                    onClick={() => paginate(1)}
+                                    disabled={currentPage === 1}
+                                >
+                                    «
+                                </button>
                             </li>
-                        ))}
 
-                        {/* Next page */}
-                        <li className={`page-item ${currentPage === totalPages ? "disabled" : ""}`}>
-                            <button
-                                type="button"
-                                className="page-link"
-                                aria-label="Next"
-                                onClick={() => paginate(currentPage + 1)}
-                                disabled={currentPage === totalPages}
-                            >
-                                ›
-                            </button>
-                        </li>
+                            {/* Previous page */}
+                            <li className={`page-item ${currentPage === 1 ? "disabled" : ""}`}>
+                                <button
+                                    type="button"
+                                    className="page-link"
+                                    aria-label="Previous"
+                                    onClick={() => paginate(currentPage - 1)}
+                                    disabled={currentPage === 1}
+                                >
+                                    ‹
+                                </button>
+                            </li>
 
-                        {/* Last page button */}
-                        <li className={`page-item ${currentPage === totalPages ? "disabled" : ""}`}>
-                            <button
-                                type="button"
-                                className="page-link"
-                                aria-label="Last"
-                                onClick={() => paginate(totalPages)}
-                                disabled={currentPage === totalPages}
-                            >
-                                »
-                            </button>
-                        </li>
-                    </ul>
-                </nav>
-            )}
+                            {/* Page numbers */}
+                            {getDisplayedPageNumbers().map((number, index) => (
+                                <li
+                                    key={index}
+                                    className={`page-item ${number === currentPage ? "active" : ""} ${number === "..." ? "disabled" : ""
+                                        }`}
+                                >
+                                    {number === "..." ? (
+                                        <span className="page-link">…</span>
+                                    ) : (
+                                        <button
+                                            type="button"
+                                            className="page-link"
+                                            onClick={() => paginate(number)}
+                                        >
+                                            {number}
+                                        </button>
+                                    )}
+                                </li>
+                            ))}
+
+                            {/* Next page */}
+                            <li className={`page-item ${currentPage === totalPages ? "disabled" : ""}`}>
+                                <button
+                                    type="button"
+                                    className="page-link"
+                                    aria-label="Next"
+                                    onClick={() => paginate(currentPage + 1)}
+                                    disabled={currentPage === totalPages}
+                                >
+                                    ›
+                                </button>
+                            </li>
+
+                            {/* Last page button */}
+                            <li className={`page-item ${currentPage === totalPages ? "disabled" : ""}`}>
+                                <button
+                                    type="button"
+                                    className="page-link"
+                                    aria-label="Last"
+                                    onClick={() => paginate(totalPages)}
+                                    disabled={currentPage === totalPages}
+                                >
+                                    »
+                                </button>
+                            </li>
+                        </ul>
+                    </nav>
+                )}
+
+            </div>
+
+
 
 
 

@@ -1001,7 +1001,7 @@ export default function WorkerCalleDisplay({
       {/* top controls */}
       <div className="d-flex justify-content-between flex-wrap gap-2 mb-3 p-2 bg-dark border rounded-3">
         <div className="d-flex align-items-center">
-          <span className="me-2 text-white opacity-75">Show</span>
+          <span className="me-2 text-white">Show</span>
           <select
             className="form-select form-select-sm"
             style={{ width: 80 }}
@@ -1017,12 +1017,12 @@ export default function WorkerCalleDisplay({
               </option>
             ))}
           </select>
-          <span className="ms-2 text-white opacity-75">Entries</span>
+          <span className="ms-2 text-white ">Entries</span>
         </div>
 
         <input
           type="text"
-          className="form-control opacity-75"
+          className="form-control "
           placeholder="Search name, location, mobile…"
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
@@ -1030,7 +1030,7 @@ export default function WorkerCalleDisplay({
         />
 
         <select
-          className="form-select opacity-75"
+          className="form-select "
           style={{ maxWidth: 220 }}
           value={selectedSource}
           onChange={(e) => setSelectedSource(e.target.value)}
@@ -1059,7 +1059,7 @@ export default function WorkerCalleDisplay({
 
         <div className="d-flex gap-2">
           <select
-            className="form-select opacity-75"
+            className="form-select "
             value={sortBy}
             onChange={(e) => setSortBy(e.target.value)}
           >
@@ -1068,7 +1068,7 @@ export default function WorkerCalleDisplay({
             <option value="callReminderDate">Sort by Reminder Date</option>
           </select>
           <select
-            className="form-select opacity-75"
+            className="form-select "
             value={sortDir}
             onChange={(e) => setSortDir(e.target.value)}
           >

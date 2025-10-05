@@ -6,11 +6,11 @@ import deleteIcon from '../../assets/delete.svg';
 import WorkerModal from './WorkerModal';
 
 const LANG_OPTIONS = [
-    "Telugu", "English", "Hindi", "Urdu", "Kannada", "Malayalam", "Tamil", "Bengali", "Marathi"
+  "Telugu","English","Hindi","Urdu","Kannada","Malayalam","Tamil","Bengali","Marathi"
 ];
 const HOUSE_SKILL_OPTIONS = [
-    "Nursing", "Patient Care", "Care Taker", "Old Age Care", "Baby Care", "Bedside Attender",
-    "Supporting", "Maid", "Cook", "House Keeper", "Chauffeur", "Cleaner", "Compounder", "Diaper", "Elder Care"
+  "Nursing","Patient Care","Care Taker","Old Age Care","Baby Care","Bedside Attender",
+  "Supporting","Maid","Cook","House Keeper","Chauffeur","Cleaner","Compounder","Diaper","Elder Care"
 ];
 
 
@@ -22,7 +22,7 @@ export default function DisplayWorkers() {
     const [selectedEmployee, setSelectedEmployee] = useState(null);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [isEditMode, setIsEditMode] = useState(false);
-
+    
     // New unified filters
     const [skillMode, setSkillMode] = useState("single"); // 'single' (Any) or 'multi' (All)
     const [ageRange, setAgeRange] = useState({ min: "", max: "" });
@@ -47,7 +47,7 @@ export default function DisplayWorkers() {
         Diaper: false,
         'Patient Care': false,
         Cook: false,
-        Others: false,
+        Others:false,
 
     });
 
@@ -137,7 +137,7 @@ export default function DisplayWorkers() {
         // Languages & Housekeeping skills with Any/All logic
         const hasLangSel = selectedLanguages.length > 0;
         const hasHouseSel = selectedHouseSkills.length > 0;
-        const normArr = (v) => Array.isArray(v) ? v : (typeof v === 'string' ? v.split(',').map(s => s.trim()).filter(Boolean) : []);
+        const normArr = (v) => Array.isArray(v) ? v : (typeof v === 'string' ? v.split(',').map(s=>s.trim()).filter(Boolean) : []);
 
         filtered = filtered.filter(e => {
             // Langs
@@ -422,7 +422,7 @@ export default function DisplayWorkers() {
             };
             await firebaseDB.child(`ExitEmployees/${id}/removalHistory`).push(removalEntry);
             await firebaseDB.child(`EmployeeBioData/${id}`).remove();
-            // success -> close modal, clear states and show success modal
+// success -> close modal, clear states and show success modal
             setShowDeleteReasonModal(false);
             setEmployeeToDelete(null);
             setShowDeleteSuccessModal(true);
@@ -446,7 +446,7 @@ export default function DisplayWorkers() {
                 await firebaseDB.child(`ExitEmployees/${employeeId}`).set(employeeData);
                 const removalEntrySimple = { removedAt: new Date().toISOString(), removedBy: 'UI', removalReason: '', removalComment: '' };
                 await firebaseDB.child(`ExitEmployees/${employeeId}/removalHistory`).push(removalEntrySimple);
-
+                
                 await employeeRef.remove();
                 alert('Employee moved to ExitEmployees successfully!');
             }
@@ -474,7 +474,7 @@ export default function DisplayWorkers() {
     if (error) return <div className="alert alert-danger">Error: {error}</div>;
 
     return (
-        <div className='displayWorker'>
+        <div>
             {/* Search Bar */}
             <div className="row mb-3">
                 <div className="col-md-6 m-auto">
@@ -494,110 +494,200 @@ export default function DisplayWorkers() {
             </div>
 
             {/* Unified Filters Row (added) */}
-            <div className="row mb-4">
+      <div className="row mb-3">
+        <div className="col-12">
+          <div className="p-3 bg-dark border rounded-3">
+            <div className="row g-3 align-items-center">
+              {/* Gender */}
+              <div className="col-lg-2 col-md-3 text-center">
+                <label className="form-label text-white small mb-2">Gender</label>
+                <div className="d-flex gap-2 justify-content-center">
+                  {["Male","Female"].map(g => {
+                    const on = !!genderFilters[g];
+                    return (
+                      <button
+                        key={g}
+                        type="button"
+                        className={`btn ${on ? "btn-warning" : "btn-outline-warning"} btn-sm`}
+                        onClick={() => handleGenderFilterChange(g)}
+                      >
+                        {g}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Skill Match Mode */}
+              <div className="col-lg-2 col-md-3 text-center">
+                <label className="form-label text-white small mb-2">Skill Match</label>
+                <div className="d-flex gap-2 justify-content-center">
+                  <button
+                    type="button"
+                    className={`btn ${skillMode === "single" ? "btn-info" : "btn-outline-info"} btn-sm`}
+                    onClick={() => setSkillMode("single")}
+                  >
+                    Any Skill
+                  </button>
+                  <button
+                    type="button"
+                    className={`btn ${skillMode === "multi" ? "btn-info" : "btn-outline-info"} btn-sm`}
+                    onClick={() => setSkillMode("multi")}
+                  >
+                    All Skills
+                  </button>
+                </div>
+              </div>
+
+              {/* Age filter */}
+              <div className="col-lg-3 col-md-6 text-center">
+                <label className="form-label text-white small mb-1">Age</label>
+                <div className="d-flex gap-2">
+                  <input
+                    type="number"
+                    min={18} max={60}
+                    className="form-control form-control-sm"
+                    placeholder="Min"
+                    value={ageRange.min}
+                    onChange={(e)=>setAgeRange(r=>({...r, min: e.target.value}))}
+                  />
+                  <input
+                    type="number"
+                    min={18} max={60}
+                    className="form-control form-control-sm"
+                    placeholder="Max"
+                    value={ageRange.max}
+                    onChange={(e)=>setAgeRange(r=>({...r, max: e.target.value}))}
+                  />
+                </div>
+              </div>
+
+              {/* Experience filter */}
+              <div className="col-lg-3 col-md-6 text-center">
+                <label className="form-label text-white small mb-1">Experience (yrs)</label>
+                <div className="d-flex gap-2">
+                  <input
+                    type="number"
+                    min={0} step="0.5"
+                    className="form-control form-control-sm"
+                    placeholder="Min"
+                    value={experienceRange.min}
+                    onChange={(e)=>setExperienceRange(r=>({...r, min: e.target.value}))}
+                  />
+                  <input
+                    type="number"
+                    min={0} step="0.5"
+                    className="form-control form-control-sm"
+                    placeholder="Max"
+                    value={experienceRange.max}
+                    onChange={(e)=>setExperienceRange(r=>({...r, max: e.target.value}))}
+                  />
+                </div>
+              </div>
+
+              {/* Duty filter */}
+              <div className="col-lg-2 col-md-4 text-center">
+                <label className="form-label text-white small mb-2">Duty</label>
+                <div className="d-flex gap-2 justify-content-center">
+                  {["All","On Duty","Off Duty"].map(opt => (
+                    <button
+                      key={opt}
+                      type="button"
+                      className={`btn ${dutyFilter===opt ? "btn-primary" : "btn-outline-primary"} btn-sm`}
+                      onClick={()=>setDutyFilter(opt)}
+                    >
+                      {opt}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Languages & Housekeeping Skills Row (two columns) */}
+      <div className="row g-3 mb-3">
+        <div className="col-md-6">
+          <div className="p-3 bg-dark border rounded-3 h-100">
+            <h6 className="mb-2 text-info">Languages</h6>
+            <div className="d-flex flex-wrap gap-2">
+              {LANG_OPTIONS.map(l => {
+                const on = selectedLanguages.includes(l);
+                return (
+                  <button
+                    key={l}
+                    type="button"
+                    className={`btn btn-sm ${on ? "btn-info text-dark" : "btn-outline-info"} rounded-pill`}
+                    onClick={()=>setSelectedLanguages(prev => on ? prev.filter(x=>x!==l) : [...prev,l])}
+                  >
+                    {l}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+        <div className="col-md-6">
+          <div className="p-3 bg-dark border rounded-3 h-100">
+            <h6 className="mb-2 text-warning">Housekeeping Skills</h6>
+            <div className="d-flex flex-wrap gap-2">
+              {HOUSE_SKILL_OPTIONS.map(s => {
+                const on = selectedHouseSkills.includes(s);
+                return (
+                  <button
+                    key={s}
+                    type="button"
+                    className={`btn btn-sm ${on ? "btn-warning text-black" : "btn-outline-warning"} rounded-pill`}
+                    onClick={()=>setSelectedHouseSkills(prev => on ? prev.filter(x=>x!==s) : [...prev,s])}
+                  >
+                    {s}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Filter Checkboxes */}
+            <div className="row mb-3">
                 <div className="col-12">
-                    <div className="p-3 bg-dark border rounded-3">
-                        <div className="row g-3 align-items-center">
-                            {/* Gender */}
-                            <div className="col-lg-2 col-md-3 text-center">
-                                <label className="form-label text-warning small mb-2">Gender</label>
-                                <div className="d-flex gap-2 justify-content-center">
-                                    {["Male", "Female"].map(g => {
-                                        const on = !!genderFilters[g];
-                                        return (
-                                            <button
-                                                key={g}
-                                                type="button"
-                                                className={`btn ${on ? "btn-warning" : "btn-outline-warning"} btn-sm`}
-                                                onClick={() => handleGenderFilterChange(g)}
-                                            >
-                                                {g}
-                                            </button>
-                                        );
-                                    })}
+                    <div className="chec-box-card">
+                        <div className="card-body py-2 filter-wrapper">
+                            <div className="row w-100">
+                                <div className="col-md-3">
+                                    <strong className="me-2">Gender :</strong>
+                                    {Object.keys(genderFilters).map(gender => (
+                                        <div className="form-check form-check-inline" key={gender}>
+                                            <input
+                                                className="form-check-input"
+                                                type="checkbox"
+                                                checked={genderFilters[gender]}
+                                                onChange={() => handleGenderFilterChange(gender)}
+                                                id={`gender-${gender}`}
+                                            />
+                                            <label className="form-check-label" htmlFor={`gender-${gender}`}>
+                                                {gender}
+                                            </label>
+                                        </div>
+                                    ))}
                                 </div>
-                            </div>
-
-                            {/* Skill Match Mode */}
-                            <div className="col-lg-2 col-md-3 text-center">
-                                <label className="form-label text-info small mb-2">Skill Match</label>
-                                <div className="d-flex gap-2 justify-content-center">
-                                    <button
-                                        type="button"
-                                        className={`btn ${skillMode === "single" ? "btn-info" : "btn-outline-info"} btn-sm`}
-                                        onClick={() => setSkillMode("single")}
-                                    >
-                                        Any Skill
-                                    </button>
-                                    <button
-                                        type="button"
-                                        className={`btn ${skillMode === "multi" ? "btn-info" : "btn-outline-info"} btn-sm`}
-                                        onClick={() => setSkillMode("multi")}
-                                    >
-                                        All Skills
-                                    </button>
-                                </div>
-                            </div>
-
-                            {/* Age filter */}
-                            <div className="col-lg-2 col-md-6 text-center">
-                                <label className="form-label text-info small mb-1">Age</label>
-                                <div className="d-flex gap-2">
-                                    <input
-                                        type="number"
-                                        min={18} max={60}
-                                        className="form-control form-control-sm"
-                                        placeholder="Min"
-                                        value={ageRange.min}
-                                        onChange={(e) => setAgeRange(r => ({ ...r, min: e.target.value }))}
-                                    />
-                                    <input
-                                        type="number"
-                                        min={18} max={60}
-                                        className="form-control form-control-sm"
-                                        placeholder="Max"
-                                        value={ageRange.max}
-                                        onChange={(e) => setAgeRange(r => ({ ...r, max: e.target.value }))}
-                                    />
-                                </div>
-                            </div>
-
-                            {/* Experience filter */}
-                            <div className="col-lg-2 col-md-6 text-center">
-                                <label className="form-label text-info small mb-1">Experience (yrs)</label>
-                                <div className="d-flex gap-2">
-                                    <input
-                                        type="number"
-                                        min={0} step="0.5"
-                                        className="form-control form-control-sm"
-                                        placeholder="Min"
-                                        value={experienceRange.min}
-                                        onChange={(e) => setExperienceRange(r => ({ ...r, min: e.target.value }))}
-                                    />
-                                    <input
-                                        type="number"
-                                        min={0} step="0.5"
-                                        className="form-control form-control-sm"
-                                        placeholder="Max"
-                                        value={experienceRange.max}
-                                        onChange={(e) => setExperienceRange(r => ({ ...r, max: e.target.value }))}
-                                    />
-                                </div>
-                            </div>
-
-                            {/* Duty filter */}
-                            <div className="col-lg-2 col-md-4 text-center">
-                                <label className="form-label text-info small mb-2">Duty</label>
-                                <div className="d-flex gap-2 justify-content-center">
-                                    {["All", "On Duty", "Off Duty"].map(opt => (
-                                        <button
-                                            key={opt}
-                                            type="button"
-                                            className={`btn ${dutyFilter === opt ? "btn-primary" : "btn-outline-primary"} btn-sm`}
-                                            onClick={() => setDutyFilter(opt)}
-                                        >
-                                            {opt}
-                                        </button>
+                                <div className="col-md-9">
+                                    <strong className="me-2">Skills:</strong>
+                                    {Object.keys(skillFilters).map(skill => (
+                                        <div className="form-check form-check-inline" key={skill}>
+                                            <input
+                                                className="form-check-input"
+                                                type="checkbox"
+                                                checked={skillFilters[skill]}
+                                                onChange={() => handleSkillFilterChange(skill)}
+                                                id={`skill-${skill}`}
+                                            />
+                                            <label className="form-check-label" htmlFor={`skill-${skill}`}>
+                                                {skill}
+                                            </label>
+                                        </div>
                                     ))}
                                 </div>
                             </div>
@@ -606,161 +696,28 @@ export default function DisplayWorkers() {
                 </div>
             </div>
 
-            {/* Languages & Housekeeping Skills Row (two columns) */}
-            <div className="row g-3 mb-4">
-                <div className="col-md-6">
-                    <div className="p-3 bg-dark border rounded-3 h-100">
-                        <h6 className="mb-2 text-info">Languages</h6>
-                        <div className="d-flex flex-wrap gap-2">
-                            {LANG_OPTIONS.map(l => {
-                                const on = selectedLanguages.includes(l);
-                                return (
-                                    <button
-                                        key={l}
-                                        type="button"
-                                        className={`btn btn-sm ${on ? "btn-info text-dark" : "btn-outline-info"} rounded-pill`}
-                                        onClick={() => setSelectedLanguages(prev => on ? prev.filter(x => x !== l) : [...prev, l])}
-                                    >
-                                        {l}
-                                    </button>
-                                );
-                            })}
-                        </div>
-                    </div>
+            <hr></hr>
+
+            {/* Rows per page selector */}
+            <div className="d-flex justify-content-between align-items-center mb-3">
+                <div className="d-flex align-items-center">
+                    <span className="me-2">Show</span>
+                    <select
+                        className="form-select form-select-sm"
+                        style={{ width: '80px' }}
+                        value={rowsPerPage}
+                        onChange={handleRowsPerPageChange}
+                    >
+                        <option value={10}>10</option>
+                        <option value={20}>20</option>
+                        <option value={30}>30</option>
+                        <option value={40}>40</option>
+                        <option value={50}>50</option>
+                    </select>
+                    <span className="ms-2">entries</span>
                 </div>
-                <div className="col-md-6">
-                    <div className="p-3 bg-dark border rounded-3 h-100">
-                        <h6 className="mb-2 text-warning">Housekeeping Skills</h6>
-                        <div className="d-flex flex-wrap gap-2">
-                            {HOUSE_SKILL_OPTIONS.map(s => {
-                                const on = selectedHouseSkills.includes(s);
-                                return (
-                                    <button
-                                        key={s}
-                                        type="button"
-                                        className={`btn btn-sm ${on ? "btn-warning text-black" : "btn-outline-warning"} rounded-pill`}
-                                        onClick={() => setSelectedHouseSkills(prev => on ? prev.filter(x => x !== s) : [...prev, s])}
-                                    >
-                                        {s}
-                                    </button>
-                                );
-                            })}
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            {/* Filter Checkboxes */}
-            <div className="row mb-4">
-                <div className="col-12">
-                    <div className="chec-box-card">
-                        <div className="card-body py-2 filter-wrapper">
-                            <div className="row w-100">
-                                <div className="col-md-3 d-flex align-items-center">
-                                    <p className='text-warning mb-0'> Showing: {indexOfFirstEmployee + 1} - {Math.min(indexOfLastEmployee, filteredEmployees.length)} / {filteredEmployees.length}</p>
-                                </div>
-
-                                <div className="col-md-6">
-                                    {totalPages > 1 && (
-                                        <nav aria-label="Employee pagination" className="pagination-wrapper">
-                                            <ul className="pagination justify-content-center align-items-center">
-                                                {/* First page button */}
-                                                <li className={`page-item ${currentPage === 1 ? "disabled" : ""}`}>
-                                                    <button
-                                                        type="button"
-                                                        className="page-link"
-                                                        aria-label="First"
-                                                        onClick={() => paginate(1)}
-                                                        disabled={currentPage === 1}
-                                                    >
-                                                        «
-                                                    </button>
-                                                </li>
-
-                                                {/* Previous page */}
-                                                <li className={`page-item ${currentPage === 1 ? "disabled" : ""}`}>
-                                                    <button
-                                                        type="button"
-                                                        className="page-link"
-                                                        aria-label="Previous"
-                                                        onClick={() => paginate(currentPage - 1)}
-                                                        disabled={currentPage === 1}
-                                                    >
-                                                        ‹
-                                                    </button>
-                                                </li>
-
-                                                {/* Page numbers */}
-                                                {getDisplayedPageNumbers().map((number, index) => (
-                                                    <li
-                                                        key={index}
-                                                        className={`page-item ${number === currentPage ? "active" : ""} ${number === "..." ? "disabled" : ""
-                                                            }`}
-                                                    >
-                                                        {number === "..." ? (
-                                                            <span className="page-link">…</span>
-                                                        ) : (
-                                                            <button
-                                                                type="button"
-                                                                className="page-link"
-                                                                onClick={() => paginate(number)}
-                                                            >
-                                                                {number}
-                                                            </button>
-                                                        )}
-                                                    </li>
-                                                ))}
-
-                                                {/* Next page */}
-                                                <li className={`page-item ${currentPage === totalPages ? "disabled" : ""}`}>
-                                                    <button
-                                                        type="button"
-                                                        className="page-link"
-                                                        aria-label="Next"
-                                                        onClick={() => paginate(currentPage + 1)}
-                                                        disabled={currentPage === totalPages}
-                                                    >
-                                                        ›
-                                                    </button>
-                                                </li>
-
-                                                {/* Last page button */}
-                                                <li className={`page-item ${currentPage === totalPages ? "disabled" : ""}`}>
-                                                    <button
-                                                        type="button"
-                                                        className="page-link"
-                                                        aria-label="Last"
-                                                        onClick={() => paginate(totalPages)}
-                                                        disabled={currentPage === totalPages}
-                                                    >
-                                                        »
-                                                    </button>
-                                                </li>
-                                            </ul>
-                                        </nav>
-                                    )}
-
-                                </div>
-                                <div className="col-md-3 d-flex align-items-center justify-content-end">
-                                    <span className="me-2">Show</span>
-                                    <select
-                                        className="form-select form-select-sm"
-                                        style={{ width: '80px' }}
-                                        value={rowsPerPage}
-                                        onChange={handleRowsPerPageChange}
-                                    >
-                                        <option value={10}>10</option>
-                                        <option value={20}>20</option>
-                                        <option value={30}>30</option>
-                                        <option value={40}>40</option>
-                                        <option value={50}>50</option>
-                                    </select>
-                                    <span className="ms-2">entries</span>
-
-                                </div>
-                            </div>
-                        </div>
-                    </div>
+                <div>
+                    Showing: {indexOfFirstEmployee + 1} - {Math.min(indexOfLastEmployee, filteredEmployees.length)} / {filteredEmployees.length}
                 </div>
             </div>
 
@@ -781,7 +738,7 @@ export default function DisplayWorkers() {
                     <tbody>
                         {currentEmployees.length > 0 ? (
                             currentEmployees.map((employee) => (
-                                <tr key={employee.id} onClick={(e) => { e.stopPropagation(); handleView(employee); }} style={{ cursor: 'pointer' }}>
+                                <tr key={employee.id} onClick={(e)=>{e.stopPropagation(); handleView(employee);}} style={{ cursor: 'pointer' }}>
                                     <td>
                                         {employee.employeePhoto ? (
                                             <img
@@ -822,7 +779,7 @@ export default function DisplayWorkers() {
                                                 type="button"
                                                 className="btn btn-sm me-2"
                                                 title="View"
-                                                onClick={(e) => { e.stopPropagation(); handleView(employee); }}
+                                                onClick={(e)=>{e.stopPropagation(); handleView(employee);}}
                                             >
                                                 <img src={viewIcon} alt="view Icon" style={{ opacity: 0.6, width: '18px', height: '18px' }} />
                                             </button>
@@ -830,7 +787,7 @@ export default function DisplayWorkers() {
                                                 type="button"
                                                 className="btn btn-sm me-2"
                                                 title="Edit"
-                                                onClick={(e) => { e.stopPropagation(); handleEdit(employee); }}
+                                                onClick={(e)=>{e.stopPropagation(); handleEdit(employee);}}
                                             >
                                                 <img src={editIcon} alt="edit Icon" style={{ width: '15px', height: '15px' }} />
                                             </button>
@@ -864,43 +821,26 @@ export default function DisplayWorkers() {
 
             {/* Pagination controls */}
             {totalPages > 1 && (
-                <nav aria-label="Employee pagination" className="pagination-wrapper">
-                    <ul className="pagination justify-content-center align-items-center">
-                        {/* First page button */}
-                        <li className={`page-item ${currentPage === 1 ? "disabled" : ""}`}>
+                <nav aria-label="Employee pagination" className='pagination-wrapper'>
+                    <ul className="pagination justify-content-center">
+                        <li className={`page-item ${currentPage === 1 ? 'disabled' : ''}`}>
                             <button
                                 type="button"
                                 className="page-link"
-                                aria-label="First"
-                                onClick={() => paginate(1)}
-                                disabled={currentPage === 1}
-                            >
-                                «
-                            </button>
-                        </li>
-
-                        {/* Previous page */}
-                        <li className={`page-item ${currentPage === 1 ? "disabled" : ""}`}>
-                            <button
-                                type="button"
-                                className="page-link"
-                                aria-label="Previous"
                                 onClick={() => paginate(currentPage - 1)}
                                 disabled={currentPage === 1}
                             >
-                                ‹
+                                Previous
                             </button>
                         </li>
 
-                        {/* Page numbers */}
                         {getDisplayedPageNumbers().map((number, index) => (
                             <li
                                 key={index}
-                                className={`page-item ${number === currentPage ? "active" : ""} ${number === "..." ? "disabled" : ""
-                                    }`}
+                                className={`page-item ${number === currentPage ? 'active' : ''} ${number === '...' ? 'disabled' : ''}`}
                             >
-                                {number === "..." ? (
-                                    <span className="page-link">…</span>
+                                {number === '...' ? (
+                                    <span className="page-link">...</span>
                                 ) : (
                                     <button
                                         type="button"
@@ -913,29 +853,14 @@ export default function DisplayWorkers() {
                             </li>
                         ))}
 
-                        {/* Next page */}
-                        <li className={`page-item ${currentPage === totalPages ? "disabled" : ""}`}>
+                        <li className={`page-item ${currentPage === totalPages ? 'disabled' : ''}`}>
                             <button
                                 type="button"
                                 className="page-link"
-                                aria-label="Next"
                                 onClick={() => paginate(currentPage + 1)}
                                 disabled={currentPage === totalPages}
                             >
-                                ›
-                            </button>
-                        </li>
-
-                        {/* Last page button */}
-                        <li className={`page-item ${currentPage === totalPages ? "disabled" : ""}`}>
-                            <button
-                                type="button"
-                                className="page-link"
-                                aria-label="Last"
-                                onClick={() => paginate(totalPages)}
-                                disabled={currentPage === totalPages}
-                            >
-                                »
+                                Next
                             </button>
                         </li>
                     </ul>
@@ -943,42 +868,41 @@ export default function DisplayWorkers() {
             )}
 
 
+      {/* Delete Success Modal */}
+      {showDeleteSuccessModal && (
+        <div className="modal fade show" style={{ display: 'block', backgroundColor: 'rgba(0,0,0,0.5)' }} tabIndex="-1" role="dialog" aria-modal="true">
+          <div className="modal-dialog modal-dialog-centered">
+            <div className="modal-content">
+              <div className="modal-header bg-success text-white">
+                <h5 className="modal-title">Deleted</h5>
+                <button type="button" className="btn-close" onClick={() => setShowDeleteSuccessModal(false)}></button>
+              </div>
+              <div className="modal-body">
+                Employee moved to ExitEmployees successfully.
+              </div>
+              <div className="modal-footer">
+                <button type="button" className="btn btn-success" onClick={() => setShowDeleteSuccessModal(false)}>Done</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
-            {/* Delete Success Modal */}
-            {showDeleteSuccessModal && (
-                <div className="modal fade show" style={{ display: 'block', backgroundColor: 'rgba(0,0,0,0.5)' }} tabIndex="-1" role="dialog" aria-modal="true">
-                    <div className="modal-dialog modal-dialog-centered">
-                        <div className="modal-content">
-                            <div className="modal-header bg-success text-white">
-                                <h5 className="modal-title">Deleted</h5>
-                                <button type="button" className="btn-close" onClick={() => setShowDeleteSuccessModal(false)}></button>
-                            </div>
-                            <div className="modal-body">
-                                Employee moved to ExitEmployees successfully.
-                            </div>
-                            <div className="modal-footer">
-                                <button type="button" className="btn btn-success" onClick={() => setShowDeleteSuccessModal(false)}>Done</button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            )}
-
-            {/* Global delete/server error (keeps showing outside modals) */}
-            {deleteError && !showDeleteReasonModal && (
-                <div className="alert alert-danger mt-2">{deleteError}</div>
-            )}
-
-            {selectedEmployee && (
-                <WorkerModal
-                    employee={selectedEmployee}
-                    isOpen={isModalOpen}
-                    onClose={handleCloseModal}
-                    onSave={handleSave}
-                    onDelete={handleDelete}
-                    isEditMode={isEditMode}
-                />
-            )}
+      {/* Global delete/server error (keeps showing outside modals) */}
+      {deleteError && !showDeleteReasonModal && (
+        <div className="alert alert-danger mt-2">{deleteError}</div>
+      )}
+    
+      {selectedEmployee && (
+        <WorkerModal
+            employee={selectedEmployee}
+            isOpen={isModalOpen}
+            onClose={handleCloseModal}
+            onSave={handleSave}
+            onDelete={handleDelete}
+            isEditMode={isEditMode}
+        />
+      )}
 
             {/* Delete Confirm Modal */}
             {showDeleteConfirm && employeeToDelete && (

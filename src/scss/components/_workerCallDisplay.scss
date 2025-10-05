@@ -198,21 +198,23 @@
 
 /* Reset button pulse when filters active */
 @keyframes btn-pulse-kf {
-  0% {
-    transform: scale(1);
-  }
+        0% {
+            box-shadow: 0 0 0 0 rgba(255, 193, 7, 0.6);
+        }
 
-  50% {
-    transform: scale(1.06);
-  }
+        70% {
+            box-shadow: 0 0 0 10px rgba(255, 193, 7, 0);
+        }
 
-  100% {
-    transform: scale(1);
-  }
+        100% {
+            box-shadow: 0 0 0 0 rgba(255, 193, 7, 0);
+        }
 }
 
 .btn-pulse {
-  animation: btn-pulse-kf 1s infinite;
+   animation: pulseGlow 1.2s infinite;
+        border-color: #ffc107 !important;
+        color: #fff !important;
 }
 
 /* Female badge color */

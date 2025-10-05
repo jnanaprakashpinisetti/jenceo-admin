@@ -1083,7 +1083,7 @@ export default function WorkerCalleDisplay({
               Export Excel
             </button>
           )}
-          <button className={`btn btn-danger ${hasActiveFilters ? "btn-pulse" : ""}`} onClick={resetFilters}>
+          <button className={`btn btn-outline-warning text-warning  ${hasActiveFilters ? "btn-pulse" : ""}`} onClick={resetFilters}>
             Reset
           </button>
         </div>

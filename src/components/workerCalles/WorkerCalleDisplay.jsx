@@ -100,49 +100,9 @@ const formatPrettyDate = (v) => {
   if (!isValidDate(d)) return "—";
   const day = d.getDate();
   const month = d.toLocaleString("en-GB", { month: "short" }); // Jan, Feb, Mar...
-  const year = String(d.getFullYear()).slice(-2);              // 2-digit year
-  return `${ordinal(day)} ${month} ${year}`;
+  const year = String(d.getFullYear()).slice(-2); // only last 2 digits
+  return `${ordinal(day)}- ${month}- ${year}`;
 };
-
-const calculateAge = (dob) => {
-  if (!dob) return null;
-  const d = parseDate(dob);
-  if (!isValidDate(d)) return null;
-
-  const today = new Date();
-  let age = today.getFullYear() - d.getFullYear();
-
-  const m = today.getMonth() - d.getMonth();
-  if (m < 0 || (m === 0 && today.getDate() < d.getDate())) {
-    age--;
-  }
-  return age >= 0 ? age : null; // never negative
-};
-
-
-
-// Parse a user-entered/DB value into years (or null), ignores "-" etc.
-const parseExperienceYears = (exp) => {
-  if (exp == null) return null;
-  const m = String(exp).match(/(\d+(?:\.\d+)?)/);
-  return m ? parseFloat(m[1]) : null;
-};
-
-// Read experience from a worker & clamp at 0
-const calculateExperience = (w) => {
-  const candidates = [
-    w?.years, w?.experience, w?.exp, w?.workExperience,
-    w?.experienceYears, w?.totalExperience, w?.expInYears, w?.experience_years,
-  ];
-  for (const c of candidates) {
-    const v = parseExperienceYears(c);
-    if (v != null && !Number.isNaN(v)) return Math.max(0, v);
-  }
-  return null;
-};
-
-
-
 
 /* =============================
    Normalizers & misc helpers
@@ -171,6 +131,7 @@ const isWorkerShape = (v) => {
     v.source
   );
 };
+
 function collectWorkersFromSnapshot(rootSnap) {
   const rows = [];
   if (!rootSnap || !rootSnap.exists()) return rows;
@@ -195,7 +156,43 @@ function collectWorkersFromSnapshot(rootSnap) {
   return rows;
 }
 
-/* Normalize "Call Through" / source text to fixed set */
+// Calculate age from DOB or use provided age
+const calculateAge = (dob, ageFallback) => {
+  if (ageFallback != null && !isNaN(ageFallback)) return Number(ageFallback);
+  
+  const d = parseDate(dob);
+  if (!isValidDate(d)) return null;
+  
+  const today = new Date();
+  let age = today.getFullYear() - d.getFullYear();
+  const m = today.getMonth() - d.getMonth();
+  if (m < 0 || (m === 0 && today.getDate() < d.getDate())) age--;
+  return age;
+};
+
+// Calculate experience from various fields
+const calculateExperience = (w) => {
+  // Try various experience fields
+  const expFields = [
+    w?.experience,
+    w?.yearsOfExperience,
+    w?.experienceYears,
+    w?.expYears,
+    w?.totalExperience,
+    w?.workExperience,
+    w?.years,
+  ];
+  
+  for (const exp of expFields) {
+    if (exp != null) {
+      const m = String(exp).match(/(\d+(?:\.\d+)?)/);
+      if (m) return parseFloat(m[1]);
+    }
+  }
+  return null;
+};
+
+// Normalize source/call through field
 const normalizeSource = (raw) => {
   const s = String(raw || "").trim().toLowerCase();
   const map = new Map([
@@ -234,8 +231,6 @@ const normalizeSource = (raw) => {
   return "Other";
 };
 
-
-
 const getWorkerRoles = (w) => {
   const val =
     w?.jobRole ??
@@ -251,13 +246,16 @@ const getWorkerRoles = (w) => {
     "";
   return normalizeArray(val).map((s) => String(s).toLowerCase());
 };
+
 const getWorkerSkills = (w) =>
   normalizeArray(w?.skills).map((s) => String(s).toLowerCase());
+
 const getWorkerLanguages = (w) => {
   const val =
     w?.languages ?? w?.language ?? w?.knownLanguages ?? w?.speaks ?? "";
   return normalizeArray(val).map((s) => String(s).toLowerCase());
 };
+
 const formatWorkerId = (firebaseId, index) =>
   `WC-${String(index + 1).padStart(3, "0")}`;
 
@@ -272,7 +270,6 @@ const getBaseDate = (w) =>
   w?.created_time ??
   w?.created_time_ms ??
   null;
-
 
 /* =============================
    Permissions
@@ -465,7 +462,6 @@ export default function WorkerCalleDisplay({
     return () => ref.off("value", cb);
   }, []);
 
-
   /* badge counts */
   const badgeCounts = useMemo(() => {
     const c = { overdue: 0, today: 0, tomorrow: 0, upcoming: 0 };
@@ -563,18 +559,13 @@ export default function WorkerCalleDisplay({
 
       // Experience filter (includes w.years)
       const expYears = calculateExperience(w);
-      if (
-        experienceRange.min &&
-        expYears != null &&
-        expYears < parseFloat(experienceRange.min)
-      )
-        return false;
-      if (
-        experienceRange.max &&
-        expYears != null &&
-        expYears > parseFloat(experienceRange.max)
-      )
-        return false;
+      const minExp = parseFloat(experienceRange.min);
+      const maxExp = parseFloat(experienceRange.max);
+      const hasMinExp = Number.isFinite(minExp);
+      const hasMaxExp = Number.isFinite(maxExp);
+
+      if (hasMinExp && expYears != null && expYears < minExp) return false;
+      if (hasMaxExp && expYears != null && expYears > maxExp) return false;
 
       return true;
     });
@@ -747,9 +738,6 @@ export default function WorkerCalleDisplay({
   };
   const handleEdit = (w, e) => {
     e?.stopPropagation?.();
-    setSelectedWorker(w);
-    setIsEditMode(true);
-    setIsModalOpen(true);
     if (!permissions.canEdit) return;
     setSelectedWorker(w);
     setIsEditMode(true);
@@ -843,7 +831,6 @@ export default function WorkerCalleDisplay({
     XLSX.utils.book_append_sheet(wb, ws, "Workers");
     XLSX.writeFile(wb, "WorkerCallData.xlsx");
   };
-
 
   const hasActiveFilters = useMemo(() => {
     return Boolean(
@@ -1057,7 +1044,6 @@ export default function WorkerCalleDisplay({
           <div className="col-lg-1 col-md-3 text-center">
             <label className="form-label text-white small mb-2">Time</label>
             <div className="d-flex gap-2 justify-content-center">
-
               <button
                 type="button"
                 className={`btn ${timeFormat === "24hr" ? "btn-primary" : "btn-outline-primary"
@@ -1066,7 +1052,6 @@ export default function WorkerCalleDisplay({
               >
                 24hr
               </button>
-
               <button
                 type="button"
                 className={`btn ${timeFormat === "12hr" ? "btn-primary" : "btn-outline-primary"
@@ -1075,7 +1060,6 @@ export default function WorkerCalleDisplay({
               >
                 12hr
               </button>
-
             </div>
           </div>
 
@@ -1330,8 +1314,6 @@ export default function WorkerCalleDisplay({
               <th>Experience</th>
               <th>Reminder</th>
               <th>Skills</th>
-
-              {/* Keep but hide: Languages, Call Through */}
               <th style={{ display: "none" }}>Languages</th>
               <th>Mobile</th>
               <th>Talking</th>
@@ -1357,7 +1339,7 @@ export default function WorkerCalleDisplay({
                 : "";
               const timeStr = hasReminder
                 ? timeFormat === "24hr"
-                  ? formatTime(reminder, "24hr")
+                  ? formatTime(reminder, "24")
                   : formatTime(reminder, "12hr")
                 : "";
 
@@ -1378,8 +1360,7 @@ export default function WorkerCalleDisplay({
               );
               const experience = calculateExperience(w);
 
-              // Username fallbacks (added more)
-              // Username (prefer explicit fields; else resolve via Users/<uid>)
+              // Username fallbacks
               const rawUser =
                 w?.addedBy || w?.createdBy || w?.userName || w?.username ||
                 w?.addedUserName || w?.addedByName || w?.added_user ||
@@ -1445,11 +1426,6 @@ export default function WorkerCalleDisplay({
                     )}
                     {hasReminder && duText && (
                       <small className="d-block text-info">{duText}</small>
-                    )}
-                    {addedBy && (
-                      <small className="d-block text-success">
-                        by {addedBy}
-                      </small>
                     )}
                   </td>
                   <td>
@@ -1598,72 +1574,6 @@ export default function WorkerCalleDisplay({
           </tbody>
         </table>
       </div>
-
-      {/* Bottom pagination */}
-      {Math.ceil(sorted.length / rowsPerPage) > 1 && (
-        <nav
-          aria-label="Workers"
-          className="pagination-top py-2 mb-3 m-auto pagination-wrapper"
-        >
-          <ul className="pagination justify-content-center mb-0">
-            <li className={`page-item ${safePage === 1 ? "disabled" : ""}`}>
-              <button
-                className="page-link"
-                onClick={() => setCurrentPage(1)}
-                disabled={safePage === 1}
-              >
-                «
-              </button>
-            </li>
-            <li className={`page-item ${safePage === 1 ? "disabled" : ""}`}>
-              <button
-                className="page-link"
-                onClick={() => setCurrentPage(safePage - 1)}
-                disabled={safePage === 1}
-              >
-                ‹
-              </button>
-            </li>
-            {getDisplayedPageNumbers().map((num) => (
-              <li
-                key={num}
-                className={`page-item ${safePage === num ? "active" : ""}`}
-              >
-                <button
-                  className="page-link"
-                  onClick={() => setCurrentPage(num)}
-                >
-                  {num}
-                </button>
-              </li>
-            ))}
-            <li
-              className={`page-item ${safePage === totalPages ? "disabled" : ""
-                }`}
-            >
-              <button
-                className="page-link"
-                onClick={() => setCurrentPage(safePage + 1)}
-                disabled={safePage === totalPages}
-              >
-                ›
-              </button>
-            </li>
-            <li
-              className={`page-item ${safePage === totalPages ? "disabled" : ""
-                }`}
-            >
-              <button
-                className="page-link"
-                onClick={() => setCurrentPage(totalPages)}
-                disabled={safePage === totalPages}
-              >
-                »
-              </button>
-            </li>
-          </ul>
-        </nav>
-      )}
 
       {/* ---------- YEAR / MONTH / DAY SUMMARY UI ---------- */}
       <hr />

@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from "react";
 import firebaseDB from "../../firebase";
 import SuccessModal from "../common/SuccessModal";
-import DuplicateModal from "../common/DuplicateModal"; // You'll need to create this component
+import { useAuth } from "../../context/AuthContext";
+
 
 export default function WorkerCallForm({ isOpen, onClose }) {
   const [step, setStep] = useState(1);
@@ -32,7 +33,15 @@ export default function WorkerCallForm({ isOpen, onClose }) {
     callReminderDate: "",
     comment: "",
     commentDateTime: "",
+    addedBy: "",               // Username of creator
+    addedByUid: "",            // UID of creator
+    createdBy: "",             // Alternative username field
+    createdByName: "",         // Display name
+    userName: "",              // Another common field name
+    timestamp: "",             // Creation timestamp
   });
+
+  const { user: currentUser } = useAuth();
 
   const [errors, setErrors] = useState({});
 
@@ -73,15 +82,31 @@ export default function WorkerCallForm({ isOpen, onClose }) {
   };
 
   // On open, prefill callId and callDate
+  // Update the useEffect that initializes form data
   useEffect(() => {
     let isMounted = true;
     const init = async () => {
       const nextId = await fetchNextCallId();
       if (!isMounted) return;
+
+      // Get current user info
+      const userDisplayName = currentUser?.name ||
+        currentUser?.displayName ||
+        currentUser?.email?.split('@')[0] ||
+        "Unknown User";
+      const userUid = currentUser?.uid || "";
+
       setFormData((prev) => ({
         ...prev,
         callId: nextId,
         callDate: prev.callDate || getToday(),
+        // 👇 Populate user tracking fields
+        addedBy: userDisplayName,
+        addedByUid: userUid,
+        createdBy: userDisplayName,
+        createdByName: userDisplayName,
+        userName: userDisplayName,
+        timestamp: new Date().toISOString(),
       }));
     };
     if (isOpen) init();
@@ -89,8 +114,7 @@ export default function WorkerCallForm({ isOpen, onClose }) {
       isMounted = false;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isOpen]);
-
+  }, [isOpen, currentUser]); // Add currentUser to dependencies
   // Check for duplicate mobile number
   const checkDuplicateMobile = async (mobileNo) => {
     try {
@@ -203,8 +227,22 @@ export default function WorkerCallForm({ isOpen, onClose }) {
         return;
       }
 
+      // Ensure user fields are populated (in case component unmounted/remounted)
+      const userDisplayName = currentUser?.name ||
+        currentUser?.displayName ||
+        currentUser?.email?.split('@')[0] ||
+        "Unknown User";
+      const userUid = currentUser?.uid || "";
+
       const dataToSave = {
         ...formData,
+        // 👇 Ensure user fields are always set on submission
+        addedBy: formData.addedBy || userDisplayName,
+        addedByUid: formData.addedByUid || userUid,
+        createdBy: formData.createdBy || userDisplayName,
+        createdByName: formData.createdByName || userDisplayName,
+        userName: formData.userName || userDisplayName,
+        timestamp: formData.timestamp || new Date().toISOString(),
         commentDateTime: formData.comment ? new Date().toISOString() : "",
       };
 
@@ -763,6 +801,17 @@ export default function WorkerCallForm({ isOpen, onClose }) {
                     </button>
                   )}
                 </div>
+                {/* Hidden Fields */}
+                {/* Add these hidden fields in your form */}
+                <input type="hidden" name="addedBy" value={formData.addedBy} />
+                <input type="hidden" name="addedByUid" value={formData.addedByUid} />
+                <input type="hidden" name="createdBy" value={formData.createdBy} />
+                <input type="hidden" name="createdByName" value={formData.createdByName} />
+                <input type="hidden" name="userName" value={formData.userName} />
+                <input type="hidden" name="timestamp" value={formData.timestamp} />
+                <div>
+
+                </div>
               </form>
             </div>
           </div>
@@ -774,6 +823,7 @@ export default function WorkerCallForm({ isOpen, onClose }) {
         show={showSuccessModal}
         title="Worker Added Successfully"
         message={`Worker Name: ${formData.name}, Mobile: ${formData.mobileNo}`}
+        // In the SuccessModal onClose, update the reset:
         onClose={() => {
           setShowSuccessModal(false);
           // Reset form after successful submission
@@ -799,6 +849,13 @@ export default function WorkerCallForm({ isOpen, onClose }) {
             callReminderDate: "",
             comment: "",
             commentDateTime: "",
+            // 👇 Reset user fields too
+            addedBy: "",
+            addedByUid: "",
+            createdBy: "",
+            createdByName: "",
+            userName: "",
+            timestamp: "",
           });
           setStep(1);
           onClose();

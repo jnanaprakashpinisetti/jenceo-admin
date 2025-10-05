@@ -101,8 +101,112 @@ const formatPrettyDate = (v) => {
   const day = d.getDate();
   const month = d.toLocaleString("en-GB", { month: "short" }); // Jan, Feb, Mar...
   const year = String(d.getFullYear()).slice(-2); // only last 2 digits
-  return `${ordinal(day)}- ${month}- ${year}`;
+  return `${ordinal(day)} ${month} ${year}`;
 };
+
+// Resolve "added by" name using explicit string fields or Users/<uid>/name
+// Replace the existing resolveAddedBy function with this improved version:
+const resolveAddedBy = (w, usersMap = {}) => {
+  if (!w) return "";
+
+  // Priority 1: Direct username fields
+  const directFields = [
+    w?.addedBy,
+    w?.createdBy,
+    w?.userName,
+    w?.username,
+    w?.addedUserName,
+    w?.addedByName,
+    w?.createdUserName,
+    w?.createdByName,
+    w?.added_by,
+    w?.created_by
+  ];
+
+  for (const field of directFields) {
+    if (field && String(field).trim() !== "") {
+      const cleanName = String(field).trim().replace(/@.*/, ""); // Remove email domain
+      if (cleanName && cleanName !== "undefined" && cleanName !== "null") {
+        return cleanName;
+      }
+    }
+  }
+
+  // Priority 2: Resolve via UID from Users map (like TopNav does)
+  const uidFields = [
+    w?.addedByUid,
+    w?.createdByUid,
+    w?.userId,
+    w?.uid,
+    w?.createdUid,
+    w?.created_user_id
+  ];
+
+  for (const uid of uidFields) {
+    if (uid && usersMap[uid]) {
+      const userData = usersMap[uid];
+      const userFields = [
+        userData.name,
+        userData.displayName,
+        userData.username,
+        userData.email
+      ];
+
+      for (const userField of userFields) {
+        if (userField && String(userField).trim() !== "") {
+          const cleanName = String(userField).trim().replace(/@.*/, "");
+          if (cleanName && cleanName !== "undefined" && cleanName !== "null") {
+            return cleanName;
+          }
+        }
+      }
+    }
+  }
+
+  // Priority 3: Check nested user objects
+  if (w?.user && typeof w.user === 'object') {
+    const userObjFields = [
+      w.user.name,
+      w.user.displayName,
+      w.user.userName,
+      w.user.email
+    ];
+
+    for (const field of userObjFields) {
+      if (field && String(field).trim() !== "") {
+        const cleanName = String(field).trim().replace(/@.*/, "");
+        if (cleanName && cleanName !== "undefined" && cleanName !== "null") {
+          return cleanName;
+        }
+      }
+    }
+  }
+
+  // Priority 4: Check meta data
+  if (w?.meta && typeof w.meta === 'object') {
+    const metaFields = [
+      w.meta.userName,
+      w.meta.createdBy,
+      w.meta.email
+    ];
+
+    for (const field of metaFields) {
+      if (field && String(field).trim() !== "") {
+        const cleanName = String(field).trim().replace(/@.*/, "");
+        if (cleanName && cleanName !== "undefined" && cleanName !== "null") {
+          return cleanName;
+        }
+      }
+    }
+  }
+
+  return "";
+};
+
+
+
+
+
 
 /* =============================
    Normalizers & misc helpers
@@ -433,6 +537,18 @@ export default function WorkerCalleDisplay({
   const [activeYear, setActiveYear] = useState(new Date().getFullYear());
   const [activeMonth, setActiveMonth] = useState(null); // 0-11 or null
 
+  // Temporary debug - remove this after testing
+  useEffect(() => {
+    if (workers.length > 0 && Object.keys(usersMap).length > 0) {
+      console.log('Users Map:', usersMap);
+      console.log('First worker addedBy info:', {
+        worker: workers[0],
+        addedBy: resolveAddedBy(workers[0], usersMap),
+        usersMapKeys: Object.keys(usersMap)
+      });
+    }
+  }, [workers, usersMap]);
+
   useEffect(() => {
     const ref = firebaseDB.child("Users");
     const cb = ref.on("value", (snap) => {
@@ -717,10 +833,8 @@ export default function WorkerCalleDisplay({
   const safePage = Math.min(Math.max(1, currentPage), totalPages);
   const indexOfLast = safePage * rowsPerPage;
   const indexOfFirst = indexOfLast - rowsPerPage;
-  const pageItems = useMemo(
-    () => sorted.slice(indexOfFirst, indexOfLast),
-    [sorted, indexOfFirst, indexOfLast]
-  );
+  const pageItems = useMemo(() => sorted.slice(indexOfFirst, indexOfLast), [sorted, indexOfFirst, indexOfLast]);
+
   useEffect(() => {
     setCurrentPage(1);
   }, [
@@ -1344,8 +1458,12 @@ export default function WorkerCalleDisplay({
             </tr>
           </thead>
           <tbody>
+
             {pageItems.map((w, i) => {
               const globalIndex = sorted.findIndex((x) => x.id === w.id);
+
+              // Use the improved resolveAddedBy function
+              const addedBy = resolveAddedBy(w, usersMap);
 
               const reminder = w?.callReminderDate || w?.reminderDate || null;
               const hasReminder = isValidDate(parseDate(reminder));
@@ -1354,14 +1472,14 @@ export default function WorkerCalleDisplay({
                 : Number.POSITIVE_INFINITY;
               const duText = hasReminder
                 ? du === 0
-                  ? "in 0 days (today)"
+                  ? "in 0 days"
                   : du > 0
                     ? `in ${du} day${du > 1 ? "s" : ""}`
                     : `${Math.abs(du)} day${Math.abs(du) > 1 ? "s" : ""} ago`
                 : "";
               const timeStr = hasReminder
                 ? timeFormat === "24hr"
-                  ? formatTime(reminder, "24")
+                  ? formatTime(reminder, "24hr")
                   : formatTime(reminder, "12hr")
                 : "";
 
@@ -1382,29 +1500,6 @@ export default function WorkerCalleDisplay({
               );
               const experience = calculateExperience(w);
 
-              // Username fallbacks
-              const rawUser =
-                w?.addedBy || w?.createdBy || w?.userName || w?.username ||
-                w?.addedUserName || w?.addedByName || w?.added_user ||
-                w?.createdUser || w?.created_by || w?.createdByName ||
-                w?.createdUserName || w?.createdby ||
-                (w?.user && (w?.user?.name || w?.user?.displayName || w?.user?.userName || w?.user?.email)) ||
-                (w?.meta && (w?.meta?.userName || w?.meta?.createdBy || w?.meta?.email)) ||
-                "";
-
-              // Try to resolve a uid against Users
-              const uid =
-                w?.addedByUid || w?.createdByUid || w?.userId || w?.uid || w?.createdUid || w?.created_user_id;
-
-              const fromUsers =
-                uid && usersMap && usersMap[uid]
-                  ? (usersMap[uid].name || usersMap[uid].displayName || usersMap[uid].username || usersMap[uid].email || "")
-                  : "";
-
-              const addedBy = String(rawUser || fromUsers || "")
-                .replace(/@.*/, "")  // strip email domain if present
-                .trim();
-
               return (
                 <tr
                   key={w.id}
@@ -1416,9 +1511,12 @@ export default function WorkerCalleDisplay({
                   <td>
                     {formatWorkerId(w.id, globalIndex)}
                     {addedBy && (
-                      <small className="d-block text-muted">by {String(addedBy).toLowerCase()}</small>
+                      <small className="d-block small-text text-info" style={{ fontSize: '0.7rem', lineHeight: '1.2' }}>
+                        By {addedBy.toLowerCase()}
+                      </small>
                     )}
                   </td>
+
 
                   <td>{formatPrettyDate(getBaseDate(w))}</td>
                   <td>{w?.name || "—"}</td>
@@ -1584,6 +1682,7 @@ export default function WorkerCalleDisplay({
                 </tr>
               );
             })}
+
             {pageItems.length === 0 && (
               <tr>
                 <td colSpan="14">

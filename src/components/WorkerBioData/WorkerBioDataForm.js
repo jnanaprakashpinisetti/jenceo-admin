@@ -69,7 +69,7 @@ const initialFormData = {
   languages: "",
   healthIssues: [],
   otherIssues: "",
-  healthCardNo: "",
+  dietaryPreference: "",
   bloodGroup: "",
   height: "",
   weight: "",

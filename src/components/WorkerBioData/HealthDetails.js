@@ -64,15 +64,24 @@ const HealthDetails = ({ formData, handleChange, nextStep, prevStep }) => {
         </div>
 
         <div className="col-md-6">
-          <label className="form-label">Health Card No</label>
-          <input
+          <label className="form-label">Dietary Preference</label>
+          <select
             className="form-control"
-            type="text"
-            name="healthCardNo"
-            id="healthCardNo"
-            value={formData.healthCardNo}
+            name="dietaryPreference"
+            id="dietaryPreference"
+            value={formData.dietaryPreference || ""}
             onChange={handleChange}
-          />
+          >
+            <option value="">Select Dietary Preference</option>
+            <option value="Vegetarian">Vegetarian</option>
+            <option value="Non-Vegetarian">Non-Vegetarian</option>
+            <option value="Veg & Non-Veg">Veg & Non-Veg</option>
+            <option value="Eggetarian">Eggetarian</option>  
+            <option value="Vegan">Vegan</option>
+            <option value="Jain">Jain</option>
+            <option value="No Onion No Garlic">No Onion No Garlic</option>
+            <option value="Other">Other</option>
+          </select>
         </div>
         <div className="col-md-6">
           <label className="form-label">Height</label>

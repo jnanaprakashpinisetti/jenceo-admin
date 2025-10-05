@@ -12,9 +12,11 @@
         background-color: transparent;
         border-color: #7a7676;
 
-        &::placeholder {
-            color: $sec-white;
-        }
+
+    }
+
+    input::placeholder {
+        color: $sec-white !important;
     }
 
     /* Reset button pulse effect */
@@ -36,6 +38,26 @@
         100% {
             box-shadow: 0 0 0 0 rgba(255, 193, 7, 0);
         }
+    }
+
+    .workerFilter {
+        .btn {
+            @include mobile {
+                width: 48% !important;
+            }
+        }
+    }
+
+    .filter-wrapper {
+        .d-flex {
+            @include mobile {
+
+                width: 100%;
+                justify-content: center !important;
+                margin-bottom: 10px;
+            }
+        }
+
     }
 
 }

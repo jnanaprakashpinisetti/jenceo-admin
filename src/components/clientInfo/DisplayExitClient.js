@@ -161,7 +161,7 @@ export default function DisplayExitClient() {
   };
 
   if (loading) return <div className="text-center my-4">Loading exit clients...</div>;
-  if (clients.length === 0) return <div className="alert alert-info text-info">No exit clients</div>;
+  if (clients.length === 0) return <div className="alert alert-info text-info mmt-3">No exit clients</div>;
 
   return (
     <div>

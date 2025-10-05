@@ -523,7 +523,7 @@ export default function DisplayWorkers() {
             {/* Unified Filters Row (added) */}
             <div className="row mb-4">
                 <div className="col-12">
-                    <div className="p-3 bg-dark border rounded-3">
+                    <div className="p-3 bg-dark border rounded-3  workerFilter">
                         <div className="row g-3 align-items-center">
                             {/* Gender */}
                             <div className="col-lg-2 col-md-3 text-center">
@@ -574,15 +574,15 @@ export default function DisplayWorkers() {
                                         type="number"
                                         min={18} max={60}
                                         className="form-control form-control-sm"
-                                        placeholder="Min"
+                                        placeholder="Min-18"
                                         value={ageRange.min}
                                         onChange={(e) => setAgeRange(r => ({ ...r, min: e.target.value }))}
                                     />
                                     <input
                                         type="number"
-                                        min={18} max={60}
+                                        min={18} max={55}
                                         className="form-control form-control-sm"
-                                        placeholder="Max"
+                                        placeholder="Max-55"
                                         value={ageRange.max}
                                         onChange={(e) => setAgeRange(r => ({ ...r, max: e.target.value }))}
                                     />

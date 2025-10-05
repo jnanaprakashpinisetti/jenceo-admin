@@ -155,7 +155,7 @@ export default function DeletedHospital() {
   if (loading) return <div className="text-center my-5">Loading deleted hospitals...</div>;
   if (error) return <div className="alert alert-danger">Error: {error}</div>;
   if (hospitals.length === 0)
-    return <div className="alert alert-info text-info">No deleted hospitals found</div>;
+    return <div className="alert alert-info text-info mmt-3">No deleted hospitals found</div>;
 
   return (
     <>

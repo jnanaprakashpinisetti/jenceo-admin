@@ -9,7 +9,7 @@ export default function ClientInfo() {
       <div className='row'>
         <div className='col-md-12'>
           {/* <ClientInfoForm/> */}
-          <div className='text-center'>
+          <div className='text-center mmt-3'>
             <button
               className="btn btn-warning"
               onClick={() => setShowFormModal(true)}

@@ -1,5 +1,7 @@
 // src/layout/LeftNav.jsx
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import firebaseDB from "../firebase";
+
 import {
   Routes,
   Route,
@@ -237,9 +239,93 @@ export default function LeftNav() {
     );
   };
 
+  // Resolve avatar URL (use AuthContext value, session cache, or DB)
+  const [avatarUrl, setAvatarUrl] = useState(() => {
+    const key =
+      user?.dbId || user?.id || user?.key || user?.username || user?.name || "";
+    const cached = key ? sessionStorage.getItem(`avatar:${key}`) : "";
+    return user?.photoURL || cached || "";
+  });
+
+  useEffect(() => {
+    let cancel = false;
+
+    const fetchAvatar = async () => {
+      // If AuthContext already has it, cache and use it
+      if (user?.photoURL) {
+        const key =
+          user.dbId || user.id || user.key || user.username || user.name || "";
+        if (key) sessionStorage.setItem(`avatar:${key}`, user.photoURL);
+        setAvatarUrl(user.photoURL);
+        return;
+      }
+
+      // Find the dbId if missing (match on username, then name)
+      let dbId = user?.dbId || user?.id || user?.key || "";
+      const uname = (user?.username || user?.name || "")
+        .toString()
+        .trim()
+        .toLowerCase();
+
+      try {
+        if (!dbId) {
+          const usersSnap = await firebaseDB.child("JenCeo-DataBase/Users").get();
+          if (usersSnap.exists()) {
+            const all = usersSnap.val() || {};
+            for (const [k, v] of Object.entries(all)) {
+              const u = (v?.username || "").toString().trim().toLowerCase();
+              if (u && u === uname) {
+                dbId = k;
+                break;
+              }
+            }
+            if (!dbId && user?.name) {
+              const target = user.name.toString().trim().toLowerCase();
+              for (const [k, v] of Object.entries(all)) {
+                const n = (v?.name || "").toString().trim().toLowerCase();
+                if (n && n === target) {
+                  dbId = k;
+                  break;
+                }
+              }
+            }
+          }
+        }
+        if (!dbId) return;
+
+        // Try root mirror first, then profile node
+        let url = "";
+        const rootSnap = await firebaseDB
+          .child(`JenCeo-DataBase/Users/${dbId}/photoURL`)
+          .get();
+        if (rootSnap.exists()) url = rootSnap.val() || "";
+
+        if (!url) {
+          const profSnap = await firebaseDB
+            .child(`JenCeo-DataBase/Users/${dbId}/profile/photoURL`)
+            .get();
+          if (profSnap.exists()) url = profSnap.val() || "";
+        }
+
+        if (!cancel && url) {
+          setAvatarUrl(url);
+          sessionStorage.setItem(`avatar:${dbId}`, url);
+        }
+      } catch {
+        // ignore; falls back to initial
+      }
+    };
+
+    fetchAvatar();
+    return () => {
+      cancel = true;
+    };
+  }, [user]);
+
+
   return (
     <>
-      <nav className={isActive ? "navbar navbar-expand-lg toggle" : "navbar navbar-expand-lg leftNav"}>
+      <nav className={`navbar navbar-expand-lg leftNav ${isShow ? "mobilActive" : ""}`}>
         <button type="button" className="navbar-brand" onClick={() => { }}>
           <img src={isActive ? logoicon : logo} alt="JenCeo Logo" />
         </button>
@@ -275,15 +361,38 @@ export default function LeftNav() {
             }}
           >
             <div className="d-flex align-items-center justify-content-between">
-              <div className="d-flex flex-column">
-                <strong style={{ lineHeight: 1 }}>{userName}</strong>
-                <small className="text-secondary" style={{ lineHeight: 1 }}>
-                  {userRole}
-                </small>
-                <small className="text-muted" style={{ lineHeight: 1 }}>
-                  Login: {new Date(loginAt).toLocaleTimeString()}
-                </small>
+              <div className="d-flex align-items-center gap-2">
+                {avatarUrl ? (
+                  <img
+                    src={avatarUrl}
+                    alt="User"
+                    style={{
+                      width: 38, height: 38, borderRadius: "50%",
+                      objectFit: "cover", border: "2px solid #fff"
+                    }}
+                  />
+                ) : (
+                  <div
+                    style={{
+                      width: 38, height: 38, borderRadius: "50%",
+                      background: "#1e293b",
+                      display: "flex", alignItems: "center", justifyContent: "center",
+                      color: "#e2e8f0", fontWeight: "bold", fontSize: 14
+                    }}
+                  >
+                    {String(userName || "U").slice(0, 1).toUpperCase()}
+                  </div>
+                )}
+
+                <div className="d-flex flex-column">
+                  <strong style={{ lineHeight: 1 }}>{userName}</strong>
+                  <small className="text-secondary" style={{ lineHeight: 1 }}>
+                    {userRole}
+                  </small>
+                </div>
               </div>
+
+
 
               {/* User dropdown (Profile + Logout) */}
               <div className="position-relative">

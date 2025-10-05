@@ -8,8 +8,8 @@ export default function HospitalList() {
     const [showHospitalModal, setShowHospitalModal] = useState(false);
     return (
         <div className="layout-body">
-            <div className="m-auto text-center">
-                <button className="btn btn-warning" onClick={() => setShowHospitalModal(true)}>+ New Hospital</button>
+            <div className="m-auto text-center ">
+                <button className="btn btn-warning mmt-3" onClick={() => setShowHospitalModal(true)}>+ New Hospital</button>
                 <HospitalForm
                     show={showHospitalModal}
                     onClose={() => setShowHospitalModal(false)}

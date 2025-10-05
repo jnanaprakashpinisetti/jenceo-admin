@@ -9,6 +9,7 @@ export default function WorkerCallForm({ isOpen, onClose }) {
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [showDuplicateModal, setShowDuplicateModal] = useState(false);
   const [existingWorker, setExistingWorker] = useState(null);
+  const [showCloseConfirmModal, setShowCloseConfirmModal] = useState(false);
 
   // 👉 Added: callId and callDate
   const [formData, setFormData] = useState({
@@ -51,7 +52,39 @@ export default function WorkerCallForm({ isOpen, onClose }) {
     const yyyy = d.getFullYear();
     const mm = String(d.getMonth() + 1).padStart(2, "0");
     const dd = String(d.getDate()).padStart(2, "0");
-    return `${yyyy}
+    return `${yyyy}-${mm}-${dd}`;
+  }
+
+  // Check if form has unsaved changes
+  const hasUnsavedChanges = () => {
+    const initialEmptyState = {
+      mobileNo: "",
+      name: "",
+      location: "",
+      source: "",
+      gender: "",
+      maritalStatus: "",
+      age: "",
+      experience: "No",
+      years: "",
+      skills: "",
+      homeCareSkills: [],
+      otherSkills: [],
+      languages: [],
+      education: "",
+      workingHours: "",
+      conversationLevel: "",
+      callReminderDate: "",
+      comment: "",
+    };
+
+    for (const key in initialEmptyState) {
+      if (formData[key] !== initialEmptyState[key]) {
+        return true;
+      }
+    }
+    return false;
+  };
 
   // Toggle value in an array field inside formData (non-destructive)
   const toggleArrayField = (field, value) => {
@@ -61,8 +94,6 @@ export default function WorkerCallForm({ isOpen, onClose }) {
       return { ...prev, [field]: exists ? cur.filter(v => v !== value) : [...cur, value] };
     });
   };
--${mm}-${dd}`;
-  }
 
   // Generate next Call ID by scanning existing WorkerCallData callId values
   const fetchNextCallId = async () => {
@@ -125,6 +156,7 @@ export default function WorkerCallForm({ isOpen, onClose }) {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, currentUser]); // Add currentUser to dependencies
+
   // Check for duplicate mobile number
   const checkDuplicateMobile = async (mobileNo) => {
     try {
@@ -165,6 +197,62 @@ export default function WorkerCallForm({ isOpen, onClose }) {
     }
   };
 
+  // Handle close button click
+  const handleCloseClick = () => {
+    if (hasUnsavedChanges()) {
+      setShowCloseConfirmModal(true);
+    } else {
+      onClose();
+    }
+  };
+
+  // Confirm close and reset form
+  const confirmClose = () => {
+    setShowCloseConfirmModal(false);
+    resetForm();
+    onClose();
+  };
+
+  // Cancel close
+  const cancelClose = () => {
+    setShowCloseConfirmModal(false);
+  };
+
+  // Reset form to initial state
+  const resetForm = () => {
+    setFormData({
+      callId: "",
+      callDate: getToday(),
+      mobileNo: "",
+      name: "",
+      location: "",
+      source: "",
+      gender: "",
+      maritalStatus: "",
+      age: "",
+      experience: "No",
+      years: "",
+      skills: "",
+      homeCareSkills: [],
+      otherSkills: [],
+      languages: [],
+      education: "",
+      workingHours: "",
+      conversationLevel: "",
+      callReminderDate: "",
+      comment: "",
+      commentDateTime: "",
+      addedBy: "",
+      addedByUid: "",
+      createdBy: "",
+      createdByName: "",
+      userName: "",
+      timestamp: "",
+    });
+    setStep(1);
+    setErrors({});
+  };
+
   // Validation per step
   const validateStep = () => {
     const newErrors = {};
@@ -203,15 +291,6 @@ export default function WorkerCallForm({ isOpen, onClose }) {
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
-
-  const toggleArrayField = (field, value) => {
-  setFormData(prev => {
-    const cur = Array.isArray(prev[field]) ? prev[field] : [];
-    const exists = cur.includes(value);
-    return { ...prev, [field]: exists ? cur.filter(v => v !== value) : [...cur, value] };
-  });
-};
-
 
   const nextStep = async () => {
     if (validateStep()) {
@@ -289,7 +368,7 @@ export default function WorkerCallForm({ isOpen, onClose }) {
               <button
                 type="button"
                 className="btn-close btn-close-white"
-                onClick={onClose}
+                onClick={handleCloseClick}
               ></button>
             </div>
 
@@ -831,37 +910,7 @@ export default function WorkerCallForm({ isOpen, onClose }) {
         onClose={() => {
           setShowSuccessModal(false);
           // Reset form after successful submission
-          setFormData({
-            callId: "",
-            callDate: getToday(),
-            mobileNo: "",
-            name: "",
-            location: "",
-            source: "",
-            gender: "",
-            maritalStatus: "",
-            age: "",
-            experience: "No",
-            years: "",
-            skills: "",
-            homeCareSkills: [],
-            otherSkills: [],
-            languages: [],
-            education: "",
-            workingHours: "",
-            conversationLevel: "",
-            callReminderDate: "",
-            comment: "",
-            commentDateTime: "",
-            // 👇 Reset user fields too
-            addedBy: "",
-            addedByUid: "",
-            createdBy: "",
-            createdByName: "",
-            userName: "",
-            timestamp: "",
-          });
-          setStep(1);
+          resetForm();
           onClose();
         }}
       />
@@ -901,6 +950,46 @@ export default function WorkerCallForm({ isOpen, onClose }) {
                   onClick={() => setShowDuplicateModal(false)}
                 >
                   Close
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ✅ Close Confirmation Modal */}
+      {showCloseConfirmModal && (
+        <div
+          className="modal fade show"
+          style={{ display: "block", backgroundColor: "rgba(0,0,0,0.6)" }}
+        >
+          <div className="modal-dialog modal-dialog-centered">
+            <div className="modal-content">
+              <div className="modal-header bg-warning">
+                <h5 className="modal-title">Unsaved Changes</h5>
+                <button
+                  type="button"
+                  className="btn-close"
+                  onClick={cancelClose}
+                ></button>
+              </div>
+              <div className="modal-body">
+                <p>You have unsaved changes. Are you sure you want to close the form? All changes will be lost.</p>
+              </div>
+              <div className="modal-footer">
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={cancelClose}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-warning"
+                  onClick={confirmClose}
+                >
+                  Yes, Close
                 </button>
               </div>
             </div>

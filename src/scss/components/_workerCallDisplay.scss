@@ -61,6 +61,23 @@
     border-radius: 12px;
   }
 
+  .form-control {
+    background-color: transparent;
+    border-color: #6b6f70;
+    color: $sec-white;
+
+    &::placeholder {
+      color: #9da2a3;
+    }
+
+
+  }
+
+  .form-select {
+    background-color: #9c9e9e;
+    border: none;
+  }
+
 }
 
 /* Reminder filter badges */
@@ -71,6 +88,11 @@
 }
 
 .workerCallForm {
+
+  .rounded {
+    border-color: #505050;
+  }
+
   form {
     .btn {
       margin-bottom: 5px;

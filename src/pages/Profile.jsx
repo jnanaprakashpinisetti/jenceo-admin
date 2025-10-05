@@ -4,6 +4,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 // ⬇️ Adjust paths if needed
 import firebaseDB from "../firebase";
 import { useAuth } from "../context/AuthContext";
+import { useLocation } from "react-router-dom"
 
 /**
  * User Profile (self-service)
@@ -23,7 +24,6 @@ export default function Profile() {
     .trim()
     .toLowerCase();
 
-  const [dbId, setDbId] = useState(user?.dbId || user?.id || user?.key || "");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [savedAt, setSavedAt] = useState(null);
@@ -49,11 +49,136 @@ export default function Profile() {
   const skillInputRef = useRef(null);
 
   const knownLanguages = [
-    "Telugu","English","Hindi","Urdu","Kannada","Malayalam","Tamil","Bengali","Marathi",
+    "Telugu", "English", "Hindi", "Urdu", "Kannada", "Malayalam", "Tamil", "Bengali", "Marathi",
   ];
   const knownSkills = [
-    "UI/UX","JavaScript","React","Angular","Photoshop","Illustrator","CorelDraw","Premiere Pro","Cinema 4D","Branding","Wireframes",
+    "UI/UX", "JavaScript", "React", "Angular", "Photoshop", "Illustrator", "CorelDraw", "Premiere Pro", "Cinema 4D", "Branding", "Wireframes",
   ];
+
+  // read id from query string (e.g., /profile?id=-OahSHDNZqZG2YkKnaAb)
+  const location = useLocation();
+  const searchParams = new URLSearchParams(location.search);
+  const idFromQuery = (searchParams.get("id") || "").trim();
+
+  const [dbId, setDbId] = useState(
+    idFromQuery ||
+    user?.dbId ||
+    user?.id ||
+    user?.key ||
+    user?.uid ||
+    user?.userId ||
+    "" // will resolve via DB if empty
+  );
+
+  // Helper: normalize
+  const norm = (v) => (v == null ? "" : String(v).trim().toLowerCase());
+
+  // Build a set of “auth candidates” to match
+  const authCandidates = [
+    user?.dbId,
+    user?.id,
+    user?.key,
+    user?.uid,
+    user?.userId,
+    user?.username,
+    user?.userName,
+    user?.name,
+    user?.displayName,
+    user?.email,
+    user?.mobile,
+    user?.phone,
+  ]
+    .map(norm)
+    .filter(Boolean);
+
+  // Try session cache (fast path)
+  useEffect(() => {
+    if (dbId) return;
+    // try cache by username/name/email if present
+    const cacheKeysToTry = [
+      norm(user?.dbId || user?.id || user?.key || ""),
+      norm(user?.username || user?.userName || ""),
+      norm(user?.name || user?.displayName || ""),
+      norm(user?.email || ""),
+    ].filter(Boolean);
+
+    for (const k of cacheKeysToTry) {
+      const cached = sessionStorage.getItem(`dbId:${k}`);
+      if (cached) {
+        setDbId(cached);
+        return;
+      }
+    }
+  }, [dbId, user]);
+
+  // Resolve DB id by scanning Users and matching multiple fields
+  useEffect(() => {
+    const resolveDbId = async () => {
+      if (dbId) return; // already known or from URL
+
+      try {
+        const usersSnap = await firebaseDB.child("JenCeo-DataBase/Users").get();
+        if (!usersSnap.exists()) return;
+
+        const all = usersSnap.val() || {};
+        let foundKey = "";
+
+        // First pass: exact match on any candidate vs any record field
+        outer: for (const [key, val] of Object.entries(all)) {
+          const recordFields = [
+            val?.username,
+            val?.userName,
+            val?.name,
+            val?.displayName,
+            val?.email,
+            val?.mobile,
+            val?.phone,
+          ]
+            .map(norm)
+            .filter(Boolean);
+
+          for (const cand of authCandidates) {
+            if (recordFields.includes(cand)) {
+              foundKey = key;
+              break outer;
+            }
+          }
+        }
+
+        // Second pass: if multiple people share same name, prefer active:true
+        if (!foundKey && user?.name) {
+          const target = norm(user.name);
+          const candidates = Object.entries(all).filter(
+            ([, v]) =>
+              [v?.name, v?.displayName].map(norm).includes(target)
+          );
+          const activeFirst = candidates.find(([, v]) => v?.active === true);
+          if (activeFirst) foundKey = activeFirst[0];
+          else if (candidates.length) foundKey = candidates[0][0];
+        }
+
+        if (foundKey) {
+          setDbId(foundKey);
+          // cache by handy handles so future loads are instant
+          const handles = [
+            norm(user?.username || user?.userName || ""),
+            norm(user?.name || user?.displayName || ""),
+            norm(user?.email || ""),
+          ].filter(Boolean);
+          handles.forEach((h) => sessionStorage.setItem(`dbId:${h}`, foundKey));
+        } else {
+          // leave dbId empty; UI will show “Resolving…” message
+          // (You can also set a friendlier message here if you want)
+        }
+      } catch (e) {
+        console.error("DB id resolution failed", e);
+      }
+    };
+
+    resolveDbId();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dbId, JSON.stringify(authCandidates)]);
+
 
   // Resolve the DB id (e.g. "-OahSHDNZqZG2YkKnaAb") if we don't have it yet
   useEffect(() => {

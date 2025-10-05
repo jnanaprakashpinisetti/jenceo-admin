@@ -74,6 +74,8 @@ import Task from "../pages/Task";
 import AdminUsers from "../pages/AdminUsers";
 import Accounts from "../pages/Accounts";
 import SearchResults from "../pages/SearchResults";
+import Profile from "../pages/Profile";
+
 
 export default function LeftNav() {
   const { user, logout } = useAuth();
@@ -610,6 +612,8 @@ export default function LeftNav() {
         <Route path="HospitalDeleteList" element={<PermRoute allowed={canHospitalDeleteList}><HospitalDeleteList /></PermRoute>} />
         <Route path="search" element={<SearchResults />} />
         <Route path="Admin" element={<PermRoute allowed={canAdmin || isAdmin}><AdminUsers /></PermRoute>} />
+        <Route path="profile" element={<Profile />} />
+
       </Routes>
     </>
   );

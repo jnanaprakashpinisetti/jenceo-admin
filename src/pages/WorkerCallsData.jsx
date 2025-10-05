@@ -8,16 +8,12 @@ export default function WorkerCallsData() {
     return (
         <div className="layout-body">
             <div className="col-md-12 worker-call">
-                <div className='text-center'>
-
-
+                <div className='text-center mmt-3 mb-3'>
                     <button className="btn btn-warning" onClick={() => setShowForm(true)}>
                         Add Worker Call
                     </button>
                 </div>
                 <WorkerCalleForm isOpen={showForm} onClose={() => setShowForm(false)} />
-                <hr></hr>
-
                 <WorkerCalleDisplay />
             </div>
         </div>

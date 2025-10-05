@@ -1366,6 +1366,11 @@ const WorkerAggrement = () => {
         .help{font-size:12px;color:#6b7280;margin-top:4px}
         .input-group>.form-control{border-top-left-radius:10px;border-bottom-left-radius:10px}
         .input-group .btn{border-top-right-radius:10px;border-bottom-right-radius:10px}
+
+         @media (max-width: 992px) {
+         .soft {margin-top: 100px}
+         }
+
       `}</style>
 
       <div className="soft" style={{ marginBottom: 12 }}>

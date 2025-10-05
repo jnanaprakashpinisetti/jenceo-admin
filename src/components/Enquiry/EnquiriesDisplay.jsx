@@ -334,7 +334,7 @@ const EnquiriesDisplay = () => {
 
   return (
     <>
-      <h3 className="mb-3">Enquiries</h3>
+      <h3 className="mb-3 text-info">Enquiries</h3>
 
       {/* Reminder counts with clickable badges */}
       <div className="alert alert-info d-flex justify-content-around flex-wrap reminder-badges">
@@ -401,6 +401,24 @@ const EnquiriesDisplay = () => {
           <button className="btn btn-secondary flex-fill mb-2" onClick={resetFilters}>
             Reset
           </button>
+        </div>
+      </div>
+
+      <div className="row d-flex">
+        <div className="mb-3">
+          <select
+            className="form-select form-select-sm w-auto"
+            value={recordsPerPage}
+            onChange={(e) => {
+              setRecordsPerPage(Number(e.target.value));
+              setCurrentPage(1);
+            }}
+          >
+            <option value={10}>10 / Rows</option>
+            <option value={25}>25 / Rows</option>
+            <option value={50}>50 / Rows</option>
+            <option value={100}>100 / Rows</option>
+          </select>
         </div>
       </div>
 
@@ -485,22 +503,8 @@ const EnquiriesDisplay = () => {
       )}
 
       {/* Pagination controls */}
-      <div className="d-flex justify-content-between align-items-center mt-3 flex-wrap">
-        <div className="mb-2">
-          <select
-            className="form-select form-select-sm w-auto"
-            value={recordsPerPage}
-            onChange={(e) => {
-              setRecordsPerPage(Number(e.target.value));
-              setCurrentPage(1);
-            }}
-          >
-            <option value={10}>10 / Rows</option>
-            <option value={25}>25 / Rows</option>
-            <option value={50}>50 / Rows</option>
-            <option value={100}>100 / Rows</option>
-          </select>
-        </div>
+      <div className="d-flex justify-content-center align-items-center mt-3 flex-wrap">
+
         {totalPages > 1 && (
           <nav aria-label="Enquiry pagination" className="pagination-wrapper mb-2">
             <ul className="pagination justify-content-center">

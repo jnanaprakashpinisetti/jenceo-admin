@@ -287,7 +287,7 @@ export default function InvestmentCard({ partners = ["Sudheer", "Suresh", "Praka
   }, [yearQuickStatus]);
 
   return (
-    <div className="investments-card">
+    <div className="investments-card mmt-3">
       {/* collapsed card using requested structure & classes */}
       <div className="invest-card__box card-role" role="button" onClick={() => setModalOpen(true)}>
         <div className="invest-card__head">

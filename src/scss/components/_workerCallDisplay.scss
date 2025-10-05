@@ -70,6 +70,53 @@
   .form-select {
     background-color: #9c9e9e;
     border: none;
+
+    @include mobile {
+      max-width: 100% !important;
+      margin-bottom: 15px;
+    }
+  }
+
+  .d-flex.gap-2 {
+    @include mobile {
+      width: 100%;
+    }
+
+    .btn {
+      @include mobile {
+
+        width: 48%;
+      }
+    }
+  }
+
+  .h-100  {
+    @include mobile {
+      .btn {
+        width: auto !important;
+      }
+    }
+  }
+
+  .d-flex.align-items-center {
+    @include mobile {
+      width: 100%;
+      justify-content: center;
+      align-items: center;
+      margin-bottom: 15px;
+
+      .form-select {
+        margin-bottom: 0;
+      }
+      
+    }
+  }
+
+  .searchBar {
+    @include res {
+      max-width: none !important;
+      margin-bottom: 15px;
+    }
   }
 
 

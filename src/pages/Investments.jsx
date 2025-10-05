@@ -13,8 +13,8 @@ export default function Investments() {
   return (
     <div className="layout-body">
       <div className="investments">
-          <div className="m-auto text-center">
-            <button className="btn btn-warning" onClick={() => setShowInvestModal(true)}>
+          <div className="m-auto text-center ">
+            <button className="btn btn-warning mmt-3" onClick={() => setShowInvestModal(true)}>
               + New Investment
             </button>
             <InvestForm

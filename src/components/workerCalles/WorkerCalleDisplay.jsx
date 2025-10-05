@@ -1022,7 +1022,7 @@ export default function WorkerCalleDisplay({
 
         <input
           type="text"
-          className="form-control "
+          className="form-control searchBar "
           placeholder="Search name, location, mobile…"
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
@@ -1712,7 +1712,7 @@ export default function WorkerCalleDisplay({
       <div className="table-responsive summary-table-container">
         <table
           className="table table-dark table-sm summary-table table-hover"
-          style={{ fontSize: "12px", tableLayout: "fixed" }}
+          style={{ fontSize: "12px" }}
         >
           <thead className="summary-table-header">
             <tr>

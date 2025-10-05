@@ -18,6 +18,10 @@ nav {
         }
     }
 
+    &.mobilActive {
+        height: 100%;
+    }
+
     &.toggle {
 
         @include desktop {

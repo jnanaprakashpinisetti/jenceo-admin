@@ -144,7 +144,7 @@ const DeletedEnquiriesDisplay = () => {
 
   return (
     <>
-      <h3 className="mb-4 text-center">Deleted Enquiries</h3>
+      <h3 className="mb-4 text-center mmt-3">Deleted Enquiries</h3>
 
       {loading ? (
         <div className="text-center my-4">

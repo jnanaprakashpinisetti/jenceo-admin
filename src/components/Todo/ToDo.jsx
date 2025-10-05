@@ -297,7 +297,7 @@ export default function ToDo() {
   return (
     <div className="todo-wrap">
       {/* Header card */}
-      <div className="todo-head rounded-4 p-3 mb-3 shadow-sm">
+      <div className="todo-head rounded-4 p-3 mb-3 shadow-sm mmt-3">
         <div className="d-flex justify-content-between align-items-center">
           <div>
             <div className="tiny text-white-50 text-uppercase">Office Task Manager</div>

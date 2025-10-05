@@ -803,7 +803,7 @@ const WorkerModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode }
 
     // Build the same HTML for preview and PDF.
     // `opts.hideSensitive` will hide status + phones + aadhar in the downloaded PDF only.
-/* ------------------------------ Actions --------------------------------- */
+    /* ------------------------------ Actions --------------------------------- */
     const handleSaveClick = async () => {
         const { ok, errs } = validateSection(activeTab);
 
@@ -1832,7 +1832,28 @@ const WorkerModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode }
                                                 <div className="col-md-6">{renderInputField("Height", "otherIssues", formData.height)}</div>
                                                 <div className="col-md-6">{renderInputField("Weight", "otherIssues", formData.weight)}</div>
                                                 <div className="col-md-6">{renderInputField("Blood Group", "otherIssues", formData.bloodGroup)}</div>
-                                                <div className="col-md-6">{renderInputField("Health Card No", "otherIssues", formData.healthCardNo)}</div>
+                                                <div className="col-md-6">
+                                                    <label className="form-label">Dietary Preference</label>
+                                                    <select
+                                                        className="form-control"
+                                                        name="dietaryPreference"
+                                                        id="dietaryPreference"
+                                                        value={formData.dietaryPreference || ""}
+                                                        onChange={(e) =>
+                                                            setFormData((prev) => ({ ...prev, dietaryPreference: e.target.value }))
+                                                        }
+                                                    >
+                                                        <option value="">Select Dietary Preference</option>
+                                                        <option value="Vegetarian">Vegetarian</option>
+                                                        <option value="Non-Vegetarian">Non-Vegetarian</option>
+                                                        <option value="Veg & Non-Veg">Veg & Non-Veg</option>
+                                                        <option value="Eggetarian">Eggetarian</option>
+                                                        <option value="Vegan">Vegan</option>
+                                                        <option value="Jain">Jain</option>
+                                                        <option value="No Onion No Garlic">No Onion No Garlic</option>
+                                                        <option value="Other">Other</option>
+                                                    </select>
+                                                </div>
                                             </div>
                                         </div>
                                     </div>

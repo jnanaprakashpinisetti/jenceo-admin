@@ -1027,7 +1027,7 @@ export default function WorkerCalleDisplay({
           </div>
 
           {/* Age filter (18–55) */}
-          <div className="col-lg-3 col-md-6 text-center">
+          <div className="col-lg-2 col-md-6 text-center">
             <label className="form-label text-white small mb-1">Age</label>
             <div className="d-flex gap-2">
               <input
@@ -1056,7 +1056,7 @@ export default function WorkerCalleDisplay({
           </div>
 
           {/* Experience filter (years) */}
-          <div className="col-lg-3 col-md-6 text-center">
+          <div className="col-lg-2 col-md-6 text-center">
             <label className="form-label text-white small mb-1">
               Experience (yrs)
             </label>

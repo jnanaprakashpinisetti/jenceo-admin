@@ -90,6 +90,21 @@ const formatTime = (dateLike, mode = "12hr") => {
   return d.toLocaleTimeString([], opts);
 };
 
+const ordinal = (n) => {
+  const s = ["th", "st", "nd", "rd"], v = n % 100;
+  return n + (s[(v - 20) % 10] || s[v] || s[0]);
+};
+
+const formatPrettyDate = (v) => {
+  const d = parseDate(v);
+  if (!isValidDate(d)) return "—";
+  const day = d.getDate();
+  const month = d.toLocaleString("en-GB", { month: "short" }); // Jan, Feb, Mar...
+  const year = String(d.getFullYear()).slice(-2); // only last 2 digits
+  return `${ordinal(day)}- ${month}- ${year}`;
+};
+
+
 /* =============================
    Normalizers & misc helpers
    ============================= */
@@ -97,24 +112,24 @@ const normalizeArray = (val) =>
   Array.isArray(val)
     ? val.filter(Boolean)
     : typeof val === "string"
-    ? val
+      ? val
         .split(",")
         .map((s) => s.trim())
         .filter(Boolean)
-    : [];
+      : [];
 
 const isWorkerShape = (v) => {
   if (!v || typeof v !== "object") return false;
   return Boolean(
     v.name ||
-      v.mobileNo ||
-      v.location ||
-      v.gender ||
-      v.skills ||
-      v.conversationLevel ||
-      v.callThrough ||
-      v.through ||
-      v.source
+    v.mobileNo ||
+    v.location ||
+    v.gender ||
+    v.skills ||
+    v.conversationLevel ||
+    v.callThrough ||
+    v.through ||
+    v.source
   );
 };
 function collectWorkersFromSnapshot(rootSnap) {
@@ -310,7 +325,7 @@ export default function WorkerCalleDisplay({
   const [reminderFilter, setReminderFilter] = useState("");
   const [selectedSource, setSelectedSource] = useState("All");
   const [skillMode, setSkillMode] = useState("single");
-  const [timeFormat, setTimeFormat] = useState("12hr");
+  const [timeFormat, setTimeFormat] = useState("24hr");
 
   // Age & Experience filters
   const [ageRange, setAgeRange] = useState({ min: "", max: "" });
@@ -775,10 +790,10 @@ export default function WorkerCalleDisplay({
         ? du === 0
           ? "Today"
           : du === 1
-          ? "Tomorrow"
-          : du < 0
-          ? `${Math.abs(du)} days ago`
-          : `${du} days`
+            ? "Tomorrow"
+            : du < 0
+              ? `${Math.abs(du)} days ago`
+              : `${du} days`
         : "";
       const age = calculateAge(
         w?.dateOfBirth || w?.dob || w?.birthDate,
@@ -808,6 +823,26 @@ export default function WorkerCalleDisplay({
     XLSX.writeFile(wb, "WorkerCallData.xlsx");
   };
 
+
+  const hasActiveFilters = useMemo(() => {
+    return Boolean(
+      searchTerm ||
+      selectedSkills.length ||
+      selectedRoles.length ||
+      selectedLanguages.length ||
+      selectedGender.length ||
+      reminderFilter ||
+      (selectedSource && selectedSource !== "All") ||
+      skillMode !== "single" ||
+      timeFormat !== "24hr" ||
+      ageRange.min || ageRange.max ||
+      experienceRange.min || experienceRange.max ||
+      sortBy !== "id" || sortDir !== "desc" ||
+      rowsPerPage !== 10 || currentPage !== 1 ||
+      showJobRoles
+    );
+  }, [searchTerm, selectedSkills, selectedRoles, selectedLanguages, selectedGender, reminderFilter, selectedSource, skillMode, timeFormat, ageRange, experienceRange, sortBy, sortDir, rowsPerPage, currentPage, showJobRoles]);
+
   const resetFilters = () => {
     setSearchTerm("");
     setSelectedSkills([]);
@@ -817,7 +852,7 @@ export default function WorkerCalleDisplay({
     setReminderFilter("");
     setSelectedSource("All");
     setSkillMode("single");
-    setTimeFormat("12hr");
+    setTimeFormat("24hr");
     setAgeRange({ min: "", max: "" });
     setExperienceRange({ min: "", max: "" });
     setSortBy("id");
@@ -917,7 +952,7 @@ export default function WorkerCalleDisplay({
               Export Excel
             </button>
           )}
-          <button className="btn btn-danger" onClick={resetFilters}>
+          <button className={`btn btn-danger ${hasActiveFilters ? "btn-pulse" : ""}`} onClick={resetFilters}>
             Reset
           </button>
         </div>
@@ -929,9 +964,8 @@ export default function WorkerCalleDisplay({
           <span
             key={k}
             role="button"
-            className={`reminder-badge ${k} ${
-              reminderFilter === k ? "active" : ""
-            }`}
+            className={`reminder-badge ${k} ${reminderFilter === k ? "active" : ""
+              }`}
             onClick={() => setReminderFilter(reminderFilter === k ? "" : k)}
           >
             {k[0].toUpperCase() + k.slice(1)}:{" "}
@@ -939,10 +973,10 @@ export default function WorkerCalleDisplay({
               {k === "overdue"
                 ? badgeCounts.overdue
                 : k === "today"
-                ? badgeCounts.today
-                : k === "tomorrow"
-                ? badgeCounts.tomorrow
-                : badgeCounts.upcoming}
+                  ? badgeCounts.today
+                  : k === "tomorrow"
+                    ? badgeCounts.tomorrow
+                    : badgeCounts.upcoming}
             </strong>
           </span>
         ))}
@@ -960,9 +994,8 @@ export default function WorkerCalleDisplay({
                   <button
                     key={g}
                     type="button"
-                    className={`btn ${
-                      on ? "btn-warning" : "btn-outline-warning"
-                    } btn-sm`}
+                    className={`btn ${on ? "btn-warning" : "btn-outline-warning"
+                      } btn-sm`}
                     onClick={() =>
                       setSelectedGender((prev) =>
                         on ? prev.filter((x) => x !== g) : [...prev, g]
@@ -983,18 +1016,16 @@ export default function WorkerCalleDisplay({
             <div className="d-flex gap-2 justify-content-center">
               <button
                 type="button"
-                className={`btn ${
-                  skillMode === "single" ? "btn-info" : "btn-outline-info"
-                } btn-sm`}
+                className={`btn ${skillMode === "single" ? "btn-info" : "btn-outline-info"
+                  } btn-sm`}
                 onClick={() => setSkillMode("single")}
               >
                 Any Skill
               </button>
               <button
                 type="button"
-                className={`btn ${
-                  skillMode === "multi" ? "btn-info" : "btn-outline-info"
-                } btn-sm`}
+                className={`btn ${skillMode === "multi" ? "btn-info" : "btn-outline-info"
+                  } btn-sm`}
                 onClick={() => setSkillMode("multi")}
               >
                 All Skills
@@ -1005,24 +1036,25 @@ export default function WorkerCalleDisplay({
           <div className="col-lg-1 col-md-3 text-center">
             <label className="form-label text-white small mb-2">Time</label>
             <div className="d-flex gap-2 justify-content-center">
+
               <button
                 type="button"
-                className={`btn ${
-                  timeFormat === "12hr" ? "btn-primary" : "btn-outline-primary"
-                } btn-sm`}
-                onClick={() => setTimeFormat("12hr")}
-              >
-                12hr
-              </button>
-              <button
-                type="button"
-                className={`btn ${
-                  timeFormat === "24hr" ? "btn-primary" : "btn-outline-primary"
-                } btn-sm`}
+                className={`btn ${timeFormat === "24hr" ? "btn-primary" : "btn-outline-primary"
+                  } btn-sm`}
                 onClick={() => setTimeFormat("24hr")}
               >
                 24hr
               </button>
+
+              <button
+                type="button"
+                className={`btn ${timeFormat === "12hr" ? "btn-primary" : "btn-outline-primary"
+                  } btn-sm`}
+                onClick={() => setTimeFormat("12hr")}
+              >
+                12hr
+              </button>
+
             </div>
           </div>
 
@@ -1121,9 +1153,8 @@ export default function WorkerCalleDisplay({
                 return (
                   <button
                     key={l}
-                    className={`btn btn-sm ${
-                      active ? "btn-info text-dark" : "btn-outline-info"
-                    } rounded-pill`}
+                    className={`btn btn-sm ${active ? "btn-info text-dark" : "btn-outline-info"
+                      } rounded-pill`}
                     onClick={() =>
                       setSelectedLanguages((prev) =>
                         active ? prev.filter((x) => x !== l) : [...prev, l]
@@ -1146,11 +1177,10 @@ export default function WorkerCalleDisplay({
                 return (
                   <button
                     key={s}
-                    className={`btn btn-sm ${
-                      active
-                        ? "btn-outline-warning btn-warning text-black"
-                        : "btn-outline-warning"
-                    } rounded-pill`}
+                    className={`btn btn-sm ${active
+                      ? "btn-outline-warning btn-warning text-black"
+                      : "btn-outline-warning"
+                      } rounded-pill`}
                     onClick={() =>
                       setSelectedSkills((prev) =>
                         active ? prev.filter((x) => x !== s) : [...prev, s]
@@ -1175,9 +1205,8 @@ export default function WorkerCalleDisplay({
               return (
                 <button
                   key={r}
-                  className={`btn btn-sm ${
-                    active ? "btn-success" : "btn-outline-success"
-                  } rounded-pill`}
+                  className={`btn btn-sm ${active ? "btn-success" : "btn-outline-success"
+                    } rounded-pill`}
                   onClick={() =>
                     setSelectedRoles((prev) =>
                       active ? prev.filter((x) => x !== r) : [...prev, r]
@@ -1239,9 +1268,8 @@ export default function WorkerCalleDisplay({
               </li>
             ))}
             <li
-              className={`page-item ${
-                safePage === totalPages ? "disabled" : ""
-              }`}
+              className={`page-item ${safePage === totalPages ? "disabled" : ""
+                }`}
             >
               <button
                 className="page-link"
@@ -1252,9 +1280,8 @@ export default function WorkerCalleDisplay({
               </button>
             </li>
             <li
-              className={`page-item ${
-                safePage === totalPages ? "disabled" : ""
-              }`}
+              className={`page-item ${safePage === totalPages ? "disabled" : ""
+                }`}
             >
               <button
                 className="page-link"
@@ -1304,8 +1331,8 @@ export default function WorkerCalleDisplay({
                 ? du === 0
                   ? "in 0 days (today)"
                   : du > 0
-                  ? `in ${du} day${du > 1 ? "s" : ""}`
-                  : `${Math.abs(du)} day${Math.abs(du) > 1 ? "s" : ""} ago`
+                    ? `in ${du} day${du > 1 ? "s" : ""}`
+                    : `${Math.abs(du)} day${Math.abs(du) > 1 ? "s" : ""} ago`
                 : "";
               const timeStr = hasReminder
                 ? timeFormat === "24hr"
@@ -1368,7 +1395,7 @@ export default function WorkerCalleDisplay({
                 >
                   <td>{globalIndex + 1}</td>
                   <td>{formatWorkerId(w.id, globalIndex)}</td>
-                  <td>{formatDDMMYYYY(getBaseDate(w))}</td>
+                  <td>{formatPrettyDate(getBaseDate(w))}</td>
                   <td>{w?.name || "—"}</td>
                   <td>
                     <span
@@ -1376,8 +1403,8 @@ export default function WorkerCalleDisplay({
                         w?.gender === "Male"
                           ? "badge bg-primary"
                           : w?.gender === "Female"
-                          ? "badge badge-female"
-                          : "badge bg-secondary"
+                            ? "badge badge-female"
+                            : "badge bg-secondary"
                       }
                     >
                       {w?.gender || "—"}
@@ -1469,13 +1496,12 @@ export default function WorkerCalleDisplay({
                   </td>
                   <td>
                     <span
-                      className={`badge ${
-                        comms.toLowerCase().includes("good")
-                          ? "bg-success"
-                          : comms.toLowerCase().includes("average")
+                      className={`badge ${comms.toLowerCase().includes("good")
+                        ? "bg-success"
+                        : comms.toLowerCase().includes("average")
                           ? "bg-warning text-dark"
                           : "bg-secondary"
-                      }`}
+                        }`}
                     >
                       {comms || "—"}
                     </span>
@@ -1560,9 +1586,8 @@ export default function WorkerCalleDisplay({
         {years.map((y) => (
           <li className="nav-item" key={y}>
             <button
-              className={`nav-link summary-tab ${
-                activeYear === y ? "active" : ""
-              }`}
+              className={`nav-link summary-tab ${activeYear === y ? "active" : ""
+                }`}
               onClick={() => {
                 setActiveYear(y);
                 setActiveMonth(null);
@@ -1771,11 +1796,11 @@ export default function WorkerCalleDisplay({
                     <td className="total-cell">
                       {daySummary
                         ? (
-                            daySummary[t] ||
-                            Array(
-                              new Date(activeYear, activeMonth + 1, 0).getDate()
-                            ).fill(0)
-                          ).reduce((a, b) => a + b, 0)
+                          daySummary[t] ||
+                          Array(
+                            new Date(activeYear, activeMonth + 1, 0).getDate()
+                          ).fill(0)
+                        ).reduce((a, b) => a + b, 0)
                         : 0}
                     </td>
                   </tr>
@@ -1813,9 +1838,9 @@ export default function WorkerCalleDisplay({
                       ].forEach((t) => {
                         const arr = daySummary
                           ? daySummary[t] ||
-                            Array(
-                              new Date(activeYear, activeMonth + 1, 0).getDate()
-                            ).fill(0)
+                          Array(
+                            new Date(activeYear, activeMonth + 1, 0).getDate()
+                          ).fill(0)
                           : [];
                         sum += arr[di] || 0;
                       });
@@ -1846,15 +1871,15 @@ export default function WorkerCalleDisplay({
                         acc +
                         (daySummary
                           ? (
-                              daySummary[t] ||
-                              Array(
-                                new Date(
-                                  activeYear,
-                                  activeMonth + 1,
-                                  0
-                                ).getDate()
-                              ).fill(0)
-                            ).reduce((a, b) => a + b, 0)
+                            daySummary[t] ||
+                            Array(
+                              new Date(
+                                activeYear,
+                                activeMonth + 1,
+                                0
+                              ).getDate()
+                            ).fill(0)
+                          ).reduce((a, b) => a + b, 0)
                           : 0),
                       0
                     )}

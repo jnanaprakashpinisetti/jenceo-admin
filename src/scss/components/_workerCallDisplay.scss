@@ -1,0 +1,95 @@
+.workerCalls {
+  .border {
+    border-color: #555a5e !important;
+  }
+
+}
+
+/* Reminder filter badges */
+.reminder-badges .reminder-badge.active {
+  color: #111;
+  background: linear-gradient(135deg, #facc15, #fde68a);
+  border-color: #f59e0b;
+}
+
+/* Reset button pulse when filters active */
+@keyframes btn-pulse-kf {
+  0% {
+    transform: scale(1);
+  }
+
+  50% {
+    transform: scale(1.06);
+  }
+
+  100% {
+    transform: scale(1);
+  }
+}
+
+.btn-pulse {
+  animation: btn-pulse-kf 1s infinite;
+}
+
+/* Female badge color */
+.badge-female {
+  background: #ff6ea8 !important;
+  color: #111 !important;
+}
+
+/* Job roles toggle (pill) */
+.toggle-pill .form-check-input {
+  width: 42px;
+  height: 22px;
+  cursor: pointer;
+  position: relative;
+  appearance: none;
+  -webkit-appearance: none;
+  outline: none;
+  background: linear-gradient(180deg, #efb819, #f5d516);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 9px !important;
+  transition: all .2s ease;
+}
+
+.toggle-pill .form-check-input::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 3px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #a9771c;
+  transform: translateY(-50%);
+  transition: all .2s ease;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, .4);
+}
+
+.toggle-pill .form-check-input:checked {
+  background: linear-gradient(135deg, #0ea5e9, #7c3aed);
+  border-color: transparent;
+}
+
+.toggle-pill .form-check-input:checked::after {
+  left: 23px;
+  background: #fff;
+}
+
+.toggle-pill .form-check-label {
+  padding-left: 4px;
+}
+
+/* Pagination wrapper subtle style */
+.pagination-wrapper {
+  background: #0f172a;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+}
+
+.pagination-header-row {
+  background: #0b162e;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 10px;
+  padding: 6px 10px;
+}

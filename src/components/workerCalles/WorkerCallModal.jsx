@@ -579,7 +579,7 @@ export default function WorkerCallModal({ worker, isOpen, onClose, isEditMode })
                   <div className="fade show">
                     <div className="row g-3">
                       {/* Education */}
-                      <div className="col-md-6">
+                      <div className="col-md-4">
                         <div className="form-group">
                           <label className="form-label fw-semibold text-dark">
                             Education
@@ -600,7 +600,7 @@ export default function WorkerCallModal({ worker, isOpen, onClose, isEditMode })
                       </div>
 
                       {/* Working Hours */}
-                      <div className="col-md-6">
+                      <div className="col-md-4">
                         <div className="form-group">
                           <label className="form-label fw-semibold text-dark">
                             Working Hours
@@ -625,7 +625,7 @@ export default function WorkerCallModal({ worker, isOpen, onClose, isEditMode })
                       </div>
 
                       {/* Languages - Enhanced with Searchable Dropdown */}
-                      <div className="col-md-6">
+                      <div className="col-md-4">
                         <div className="form-group">
                           <label className="form-label fw-semibold text-dark">
                             Languages
@@ -688,10 +688,14 @@ export default function WorkerCallModal({ worker, isOpen, onClose, isEditMode })
                           </div>
                         </div>
                       </div>
+                    </div>
 
-                                            {/* Skills */}
-                      <div className="col-md-6">
-                        <div className=" ">
+                    {/* Skills Sections */}
+                    <div className="row mt-4">
+                      
+                      {/* Skills */}
+                      <div className="col-md-12">
+                        <div className=" skillBox">
                           <div className="card-header p-2">
                             <h6 className="mb-0">
                               Skills
@@ -743,13 +747,9 @@ export default function WorkerCallModal({ worker, isOpen, onClose, isEditMode })
                           </div>
                         </div>
                       </div>
-                    </div>
-
-                    {/* Skills Sections */}
-                    <div className="row mt-4">
                       {/* Home Care Skills */}
                       <div className="col-12 mt-3">
-                        <div className=" border-0 shadow-sm">
+                        <div className=" skillBox">
                           <div className="card-header p-2">
                             <h6 className="mb-0">
                               Home Care Skills
@@ -804,7 +804,7 @@ export default function WorkerCallModal({ worker, isOpen, onClose, isEditMode })
 
                       {/* Other Skills */}
                       <div className="col-12 mt-3">
-                        <div className=" border-0 shadow-sm">
+                        <div className=" skillBox">
                           <div className="card-header  p-2">
                             <h6 className="mb-0">
                               Other Skills
@@ -881,7 +881,7 @@ export default function WorkerCallModal({ worker, isOpen, onClose, isEditMode })
       {showSaveModal && (
         <div
           className="modal fade show"
-          style={{ display: "block", backgroundColor: "rgba(0,0,0,0.5)" }}
+          style={{ display: "block", backgroundColor: "rgba(0,0,0,0.8)" }}
         >
           <div className="modal-dialog modal-dialog-centered">
             <div className="modal-content border-0 shadow-lg">
@@ -915,7 +915,7 @@ export default function WorkerCallModal({ worker, isOpen, onClose, isEditMode })
       {showUnsavedConfirm && (
         <div
           className="modal fade show"
-          style={{ display: "block", background: "rgba(0,0,0,0.6)" }}
+          style={{ display: "block", background: "rgba(0,0,0,0.8)" }}
         >
           <div className="modal-dialog modal-dialog-centered">
             <div className="modal-content border-0 shadow-lg">

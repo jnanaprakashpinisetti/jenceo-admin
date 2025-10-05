@@ -81,6 +81,11 @@
 
   .modal {
 
+    .skillBox {
+      border: 1px solid #e7e6e6;
+      border-radius: 5px;
+    }
+
     .btn-warning {
       background-color: #f59e0b;
       ;
@@ -100,6 +105,7 @@
     .border {
       border-color: #dfdada !important;
     }
+
     .comment-box {
       padding: 10px;
       border: 1px solid #e2e1e1;
@@ -108,8 +114,12 @@
 
     .form-check {
 
+      .form-check-label {
+        color: #808080;
+      }
+
       .form-check-input {
-        border-color: #ccc;
+        border-color: #808080;
         background-color: #ccc;
       }
 
@@ -117,6 +127,11 @@
         background: #ccc !important;
       }
 
+    }
+
+    .form-select {
+      background-color: #fff !important;
+      border: 1px solid #929090 !important;
     }
 
   }
@@ -175,6 +190,8 @@
         color: #444
       }
     }
+
+
   }
 
 }

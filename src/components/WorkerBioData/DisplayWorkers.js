@@ -554,14 +554,14 @@ export default function DisplayWorkers() {
                                         className={`btn ${skillMode === "single" ? "btn-info" : "btn-outline-info"} btn-sm`}
                                         onClick={() => setSkillMode("single")}
                                     >
-                                        Any Skill
+                                        One Skill
                                     </button>
                                     <button
                                         type="button"
                                         className={`btn ${skillMode === "multi" ? "btn-info" : "btn-outline-info"} btn-sm`}
                                         onClick={() => setSkillMode("multi")}
                                     >
-                                        All Skills
+                                        Multy Skills
                                     </button>
                                 </div>
                             </div>
@@ -591,7 +591,7 @@ export default function DisplayWorkers() {
 
                             {/* Experience filter */}
                             <div className="col-lg-2 col-md-6 text-center">
-                                <label className="form-label text-info small mb-1">Experience (yrs)</label>
+                                <label className="form-label text-info small mb-1">Experience (Yrs)</label>
                                 <div className="d-flex gap-2">
                                     <input
                                         type="number"
@@ -632,7 +632,7 @@ export default function DisplayWorkers() {
                             {/* Reset filter */}
 
                             <div className="col-lg-2 col-md-4 text-center">
-                                <label className="form-label text-white small mb-2 text-warning">Reset Filters</label>
+                                <label className="form-label small mb-2 text-warning">Reset Filters</label>
                                 <div className="d-flex flex-column align-items-center gap-2">
                                     {/* Reset button */}
                                     <button

@@ -1031,7 +1031,7 @@ export default function WorkerCalleDisplay({
 
         <select
           className="form-select "
-          style={{ maxWidth: 220 }}
+          style={{ maxWidth: 180 }}
           value={selectedSource}
           onChange={(e) => setSelectedSource(e.target.value)}
         >
@@ -1059,6 +1059,7 @@ export default function WorkerCalleDisplay({
 
         <div className="d-flex gap-2">
           <select
+          style={{ maxWidth: 100 }}
             className="form-select "
             value={sortBy}
             onChange={(e) => setSortBy(e.target.value)}
@@ -1068,6 +1069,7 @@ export default function WorkerCalleDisplay({
             <option value="callReminderDate">Sort by Reminder Date</option>
           </select>
           <select
+          style={{ maxWidth: 100 }}
             className="form-select "
             value={sortDir}
             onChange={(e) => setSortDir(e.target.value)}
@@ -1080,7 +1082,7 @@ export default function WorkerCalleDisplay({
         <div className="d-flex gap-2">
           {permissions.canExport && (
             <button className="btn btn-success" onClick={handleExport}>
-              Export Excel
+              Export
             </button>
           )}
           <button className={`btn btn-outline-warning text-warning  ${hasActiveFilters ? "btn-pulse" : ""}`} onClick={resetFilters}>
@@ -1117,7 +1119,7 @@ export default function WorkerCalleDisplay({
       <div className="p-3 mb-3 bg-dark border rounded-3">
         <div className="row g-3 align-items-center justify-content-between">
           <div className="col-lg-2 col-md-3 text-center">
-            <label className="form-label text-white small mb-2">Gender</label>
+            <label className="form-label small mb-2 text-warning">Gender</label>
             <div className="d-flex gap-2 justify-content-center">
               {["Male", "Female"].map((g) => {
                 const on = selectedGender.includes(g);
@@ -1141,7 +1143,7 @@ export default function WorkerCalleDisplay({
           </div>
 
           <div className="col-lg-2 col-md-3 text-center">
-            <label className="form-label text-white small mb-2">
+            <label className="form-label small mb-2 text-info">
               Skill Match
             </label>
             <div className="d-flex gap-2 justify-content-center">
@@ -1151,7 +1153,7 @@ export default function WorkerCalleDisplay({
                   } btn-sm`}
                 onClick={() => setSkillMode("single")}
               >
-                Any Skill
+                One Skill
               </button>
               <button
                 type="button"
@@ -1159,13 +1161,13 @@ export default function WorkerCalleDisplay({
                   } btn-sm`}
                 onClick={() => setSkillMode("multi")}
               >
-                All Skills
+                Multy Skills
               </button>
             </div>
           </div>
 
           <div className="col-lg-1 col-md-3 text-center">
-            <label className="form-label text-white small mb-2">Time</label>
+            <label className="form-label small mb-2 text-info">Time</label>
             <div className="d-flex gap-2 justify-content-center">
               <button
                 type="button"
@@ -1173,7 +1175,7 @@ export default function WorkerCalleDisplay({
                   } btn-sm`}
                 onClick={() => setTimeFormat("24hr")}
               >
-                24hr
+                24HR
               </button>
               <button
                 type="button"
@@ -1181,14 +1183,14 @@ export default function WorkerCalleDisplay({
                   } btn-sm`}
                 onClick={() => setTimeFormat("12hr")}
               >
-                12hr
+                12HR
               </button>
             </div>
           </div>
 
           {/* Age filter (18–55) */}
           <div className="col-lg-2 col-md-6 text-center">
-            <label className="form-label text-white small mb-1">Age</label>
+            <label className="form-label text-info small mb-1">Age</label>
             <div className="d-flex gap-2">
               <input
                 type="number"
@@ -1217,8 +1219,8 @@ export default function WorkerCalleDisplay({
 
           {/* Experience filter (years) */}
           <div className="col-lg-2 col-md-6 text-center">
-            <label className="form-label text-white small mb-1">
-              Experience (yrs)
+            <label className="form-label text-info small mb-1">
+              Experience (Yrs)
             </label>
             <div className="d-flex gap-2">
               <input
@@ -1248,7 +1250,7 @@ export default function WorkerCalleDisplay({
 
           {/* Toggle: Job Roles — styled via CSS below */}
           <div className="col-lg-1 col-md-2 text-center">
-            <label className="form-label text-white small mb-2">
+            <label className="form-label text-warning small mb-2">
               Job Roles
             </label>
             <div className="d-flex justify-content-center align-items-center gap-2 toggle-pill">

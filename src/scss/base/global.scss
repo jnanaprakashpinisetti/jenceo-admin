@@ -48,6 +48,12 @@ body {
             margin-top: 60px;
         }
     }
+
+    .addFormBbtn {
+        @include res {
+            margin-top: 20px;
+        }
+    }
 }
 
 

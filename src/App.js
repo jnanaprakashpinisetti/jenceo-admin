@@ -6,6 +6,7 @@ import LeftNav from "./layout/LeftNav";
 import { AuthProvider } from "./context/AuthContext";
 import Login from "./components/Auth/Login";
 import ProtectedRoute from "./components/Auth/ProtectedRoute";
+import AdminSetup from './pages/AdminSetup'; // Make sure this import is correct
 
 // Ensure your existing pages remain imported in LeftNav or separate route files
 
@@ -28,6 +29,7 @@ function App() {
         <Routes>
           {/* Public */}
           <Route path="/login" element={<Login />} />
+           <Route path="/setup" element={<AdminSetup />} />
           {/* Protected: show main app layout only to authenticated users */}
           <Route element={<ProtectedRoute />}>
             <Route path="/*" element={<AppLayout />} />

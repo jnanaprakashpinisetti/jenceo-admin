@@ -323,6 +323,33 @@ export default function DisplayWorkers() {
         // keep employeeToDelete until modal closed/handled
     };
 
+    // Check if any filter is active
+    const hasActiveFilters = Boolean(
+        Object.values(genderFilters).some(Boolean) ||
+        Object.values(skillFilters).some(Boolean) ||
+        selectedLanguages.length ||
+        selectedHouseSkills.length ||
+        dutyFilter !== "All" ||
+        skillMode !== "single" ||
+        ageRange.min || ageRange.max ||
+        experienceRange.min || experienceRange.max ||
+        searchTerm
+    );
+
+    // Reset all filters
+    const resetFilters = () => {
+        setGenderFilters({});
+        setSkillFilters({});
+        setSelectedLanguages([]);
+        setSelectedHouseSkills([]);
+        setDutyFilter("All");
+        setSkillMode("single");
+        setAgeRange({ min: "", max: "" });
+        setExperienceRange({ min: "", max: "" });
+        setSearchTerm("");
+    };
+
+
     // When user confirms on the first confirm -> open reason modal
     const handleDeleteConfirmProceed = (e) => {
         if (e && e.preventDefault) e.preventDefault();
@@ -601,6 +628,23 @@ export default function DisplayWorkers() {
                                     ))}
                                 </div>
                             </div>
+
+                            {/* Reset filter */}
+
+                            <div className="col-lg-2 col-md-4 text-center">
+                                <label className="form-label text-white small mb-2 text-warning">Reset Filters</label>
+                                <div className="d-flex flex-column align-items-center gap-2">
+                                    {/* Reset button */}
+                                    <button
+                                        type="button"
+                                        className={`btn btn-outline-warning btn-sm mt-2 reset-btn ${hasActiveFilters ? "btn-pulse" : ""}`}
+                                        onClick={resetFilters}
+                                    >
+                                        Reset Filters
+                                    </button>
+                                </div>
+                            </div>
+
                         </div>
                     </div>
                 </div>

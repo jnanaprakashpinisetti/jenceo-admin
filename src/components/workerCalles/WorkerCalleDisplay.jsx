@@ -1161,36 +1161,15 @@ export default function WorkerCalleDisplay({
                   } btn-sm`}
                 onClick={() => setSkillMode("multi")}
               >
-                Multy Skills
+                Multi Skills
               </button>
             </div>
           </div>
 
-          <div className="col-lg-1 col-md-3 text-center">
-            <label className="form-label small mb-2 text-info">Time</label>
-            <div className="d-flex gap-2 justify-content-center">
-              <button
-                type="button"
-                className={`btn ${timeFormat === "24hr" ? "btn-primary" : "btn-outline-primary"
-                  } btn-sm`}
-                onClick={() => setTimeFormat("24hr")}
-              >
-                24HR
-              </button>
-              <button
-                type="button"
-                className={`btn ${timeFormat === "12hr" ? "btn-primary" : "btn-outline-primary"
-                  } btn-sm`}
-                onClick={() => setTimeFormat("12hr")}
-              >
-                12HR
-              </button>
-            </div>
-          </div>
 
           {/* Age filter (18–55) */}
           <div className="col-lg-2 col-md-6 text-center">
-            <label className="form-label text-info small mb-1">Age</label>
+            <label className="form-label text-info small mb-1">Age (18 - 55)</label>
             <div className="d-flex gap-2">
               <input
                 type="number"
@@ -1245,6 +1224,28 @@ export default function WorkerCalleDisplay({
                   setExperienceRange((r) => ({ ...r, max: e.target.value }))
                 }
               />
+            </div>
+          </div>
+
+          <div className="col-lg-1 col-md-3 text-center">
+            <label className="form-label small mb-2 text-info">Time</label>
+            <div className="d-flex gap-2 justify-content-center">
+              <button
+                type="button"
+                className={`btn ${timeFormat === "24hr" ? "btn-info" : "btn-outline-info"
+                  } btn-sm`}
+                onClick={() => setTimeFormat("24hr")}
+              >
+                24HR
+              </button>
+              <button
+                type="button"
+                className={`btn ${timeFormat === "12hr" ? "btn-info" : "btn-outline-info"
+                  } btn-sm`}
+                onClick={() => setTimeFormat("12hr")}
+              >
+                12HR
+              </button>
             </div>
           </div>
 

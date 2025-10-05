@@ -561,14 +561,14 @@ export default function DisplayWorkers() {
                                         className={`btn ${skillMode === "multi" ? "btn-info" : "btn-outline-info"} btn-sm`}
                                         onClick={() => setSkillMode("multi")}
                                     >
-                                        Multy Skills
+                                        Multi Skills
                                     </button>
                                 </div>
                             </div>
 
                             {/* Age filter */}
                             <div className="col-lg-2 col-md-6 text-center">
-                                <label className="form-label text-info small mb-1">Age</label>
+                                <label className="form-label text-info small mb-1">Age (18 - 55)</label>
                                 <div className="d-flex gap-2">
                                     <input
                                         type="number"
@@ -612,22 +612,26 @@ export default function DisplayWorkers() {
                                 </div>
                             </div>
 
-                            {/* Duty filter */}
-                            <div className="col-lg-2 col-md-4 text-center">
-                                <label className="form-label text-info small mb-2">Duty</label>
-                                <div className="d-flex gap-2 justify-content-center">
-                                    {["All", "On Duty", "Off Duty"].map(opt => (
-                                        <button
-                                            key={opt}
-                                            type="button"
-                                            className={`btn ${dutyFilter === opt ? "btn-primary" : "btn-outline-primary"} btn-sm`}
-                                            onClick={() => setDutyFilter(opt)}
-                                        >
-                                            {opt}
-                                        </button>
-                                    ))}
-                                </div>
-                            </div>
+                           {/* Duty filter */}
+<div className="col-lg-2 col-md-4 text-center">
+    <label className="form-label text-info small mb-2">Duty</label>
+    <div className="d-flex gap-2 justify-content-center">
+        {[
+            { label: "All", value: "All" },
+            { label: "Duty", value: "On Duty" },
+            { label: "Off Duty", value: "Off Duty" }
+        ].map(opt => (
+            <button
+                key={opt.value}
+                type="button"
+                className={`btn ${dutyFilter === opt.value ? "btn-info" : "btn-outline-info"} btn-sm`}
+                onClick={() => setDutyFilter(opt.value)}
+            >
+                {opt.label}
+            </button>
+        ))}
+    </div>
+</div>
 
                             {/* Reset filter */}
 

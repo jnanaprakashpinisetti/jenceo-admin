@@ -8,35 +8,38 @@
         margin-bottom: 0;
     }
 
-    .border  {
+    .border {
         border-color: #5e5e5e;
     }
 
     .form-control {
         background-color: transparent;
         border-color: #7a7676;
+
         &::placeholder {
             color: $sec-white;
         }
     }
 
     /* Reset button pulse effect */
-.btn-pulse {
-  animation: pulseGlow 1.2s infinite;
-  border-color: #ffc107 !important;
-  color: #fff !important;
-}
+    .btn-pulse {
+        animation: pulseGlow 1.2s infinite;
+        border-color: #ffc107 !important;
+        color: #fff !important;
+    }
 
-@keyframes pulseGlow {
-  0% {
-    box-shadow: 0 0 0 0 rgba(255, 193, 7, 0.6);
-  }
-  70% {
-    box-shadow: 0 0 0 10px rgba(255, 193, 7, 0);
-  }
-  100% {
-    box-shadow: 0 0 0 0 rgba(255, 193, 7, 0);
-  }
-}
+    @keyframes pulseGlow {
+        0% {
+            box-shadow: 0 0 0 0 rgba(255, 193, 7, 0.6);
+        }
+
+        70% {
+            box-shadow: 0 0 0 10px rgba(255, 193, 7, 0);
+        }
+
+        100% {
+            box-shadow: 0 0 0 0 rgba(255, 193, 7, 0);
+        }
+    }
 
 }

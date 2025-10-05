@@ -159,10 +159,10 @@ function collectWorkersFromSnapshot(rootSnap) {
 // Calculate age from DOB or use provided age
 const calculateAge = (dob, ageFallback) => {
   if (ageFallback != null && !isNaN(ageFallback)) return Number(ageFallback);
-  
+
   const d = parseDate(dob);
   if (!isValidDate(d)) return null;
-  
+
   const today = new Date();
   let age = today.getFullYear() - d.getFullYear();
   const m = today.getMonth() - d.getMonth();
@@ -182,7 +182,7 @@ const calculateExperience = (w) => {
     w?.workExperience,
     w?.years,
   ];
-  
+
   for (const exp of expFields) {
     if (exp != null) {
       const m = String(exp).match(/(\d+(?:\.\d+)?)/);
@@ -557,16 +557,38 @@ export default function WorkerCalleDisplay({
       if (ageRange.max && age != null && age > parseInt(ageRange.max, 10))
         return false;
 
-      // Experience filter (includes w.years)
-      const expYears = calculateExperience(w);
-      const minExp = parseFloat(experienceRange.min);
-      const maxExp = parseFloat(experienceRange.max);
-      const hasMinExp = Number.isFinite(minExp);
-      const hasMaxExp = Number.isFinite(maxExp);
+      // ==== EXPERIENCE FILTER (years) ====
+      // Only activate when user typed something (non-empty) in min or max.
+      const minRaw = String(experienceRange?.min ?? "").trim();
+      const maxRaw = String(experienceRange?.max ?? "").trim();
+      const minActive = minRaw !== "" && !Number.isNaN(Number(minRaw));
+      const maxActive = maxRaw !== "" && !Number.isNaN(Number(maxRaw));
 
-      if (hasMinExp && expYears != null && expYears < minExp) return false;
-      if (hasMaxExp && expYears != null && expYears > maxExp) return false;
+      if (minActive || maxActive) {
+        const min = minActive ? Number(minRaw) : -Infinity;
+        const max = maxActive ? Number(maxRaw) : Infinity;
 
+        // Pull a numeric experience from the worker (handles "-", text, etc.)
+        const takeNum = (v) => {
+          if (v == null) return null;
+          const m = String(v).match(/(\d+(?:\.\d+)?)/);
+          return m ? Number(m[1]) : null;
+        };
+        const raw =
+          takeNum(w?.years) ??
+          takeNum(w?.experience) ??
+          takeNum(w?.exp) ??
+          takeNum(w?.workExperience) ??
+          takeNum(w?.experienceYears) ??
+          null;
+
+        // When filtering by exp, hide rows without a numeric value
+        if (raw == null || Number.isNaN(raw)) return false;
+
+        const years = Math.max(0, raw); // never below 0
+        if (years < min || years > max) return false;
+      }
+      // ==== END EXPERIENCE FILTER ====
       return true;
     });
   }, [

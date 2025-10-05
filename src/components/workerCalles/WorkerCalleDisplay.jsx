@@ -536,19 +536,6 @@ export default function WorkerCalleDisplay({
   ];
   const [activeYear, setActiveYear] = useState(new Date().getFullYear());
   const [activeMonth, setActiveMonth] = useState(null); // 0-11 or null
-
-  // Temporary debug - remove this after testing
-  useEffect(() => {
-    if (workers.length > 0 && Object.keys(usersMap).length > 0) {
-      console.log('Users Map:', usersMap);
-      console.log('First worker addedBy info:', {
-        worker: workers[0],
-        addedBy: resolveAddedBy(workers[0], usersMap),
-        usersMapKeys: Object.keys(usersMap)
-      });
-    }
-  }, [workers, usersMap]);
-
   useEffect(() => {
     const ref = firebaseDB.child("Users");
     const cb = ref.on("value", (snap) => {
@@ -1511,8 +1498,8 @@ export default function WorkerCalleDisplay({
                   <td>
                     {formatWorkerId(w.id, globalIndex)}
                     {addedBy && (
-                      <small className="d-block small-text text-info" style={{ fontSize: '0.7rem', lineHeight: '1.2' }}>
-                        By {addedBy.toLowerCase()}
+                      <small className="d-block small-text text-primary" style={{ fontSize: '0.7rem', lineHeight: '1.2' }}>
+                        By {addedBy}
                       </small>
                     )}
                   </td>

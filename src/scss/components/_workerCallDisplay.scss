@@ -24,6 +24,8 @@
     transition: all .2s ease;
   }
 
+
+
   .toggle-pill .form-check-input::after {
     content: "";
     position: absolute;
@@ -66,6 +68,50 @@
   color: #111;
   background: linear-gradient(135deg, #facc15, #fde68a);
   border-color: #f59e0b;
+}
+
+.workerCallForm {
+  form {
+    .btn {
+      margin-bottom: 5px;
+      margin-left: 5px;
+      background-color: inherit;
+      color: inherit;
+
+      &.btn-warning {
+        background-color: #f59e0b;
+        ;
+      }
+
+      &.btn-outline-warning {
+        border-color: #f59e0b;
+        ;
+        color: #f59e0b;
+        ;
+      }
+
+      &.btn-outline-info {
+        color: #02ACF2;
+      }
+
+      &.btn-info {
+        background-color: #389ff3;
+        border-color: transparent;
+        color: #fff;
+      }
+
+      &.btn-secondary {
+        background-color: #02519b;
+        color: #02ACF2;
+      }
+
+      &.btn-success {
+        background-color: gold;
+        color: #444
+      }
+    }
+  }
+
 }
 
 /* Reset button pulse when filters active */

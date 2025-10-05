@@ -51,7 +51,17 @@ export default function WorkerCallForm({ isOpen, onClose }) {
     const yyyy = d.getFullYear();
     const mm = String(d.getMonth() + 1).padStart(2, "0");
     const dd = String(d.getDate()).padStart(2, "0");
-    return `${yyyy}-${mm}-${dd}`;
+    return `${yyyy}
+
+  // Toggle value in an array field inside formData (non-destructive)
+  const toggleArrayField = (field, value) => {
+    setFormData(prev => {
+      const cur = Array.isArray(prev[field]) ? prev[field] : [];
+      const exists = cur.includes(value);
+      return { ...prev, [field]: exists ? cur.filter(v => v !== value) : [...cur, value] };
+    });
+  };
+-${mm}-${dd}`;
   }
 
   // Generate next Call ID by scanning existing WorkerCallData callId values
@@ -194,6 +204,15 @@ export default function WorkerCallForm({ isOpen, onClose }) {
     return Object.keys(newErrors).length === 0;
   };
 
+  const toggleArrayField = (field, value) => {
+  setFormData(prev => {
+    const cur = Array.isArray(prev[field]) ? prev[field] : [];
+    const exists = cur.includes(value);
+    return { ...prev, [field]: exists ? cur.filter(v => v !== value) : [...cur, value] };
+  });
+};
+
+
   const nextStep = async () => {
     if (validateStep()) {
       // Check for duplicate mobile number only when moving to step 2
@@ -263,7 +282,7 @@ export default function WorkerCallForm({ isOpen, onClose }) {
         className="modal fade show"
         style={{ display: "block", backgroundColor: "rgba(0,0,0,0.6)" }}
       >
-        <div className="modal-dialog modal-lg modal-dialog-centered client-form">
+        <div className="modal-dialog modal-lg modal-dialog-centered client-form workerCallForm">
           <div className="modal-content shadow-lg border-0 rounded-4">
             <div className="modal-header">
               <h3 className="modal-title">Worker Call Form</h3>
@@ -554,76 +573,85 @@ export default function WorkerCallForm({ isOpen, onClose }) {
                   <div>
                     <h4 className="mb-3">Skills Details</h4>
                     <hr />
-                    <div className="row mb-3">
-                      <div className="col-md-6">
-                        <label className="form-label">
-                          <strong>Home Care Skills</strong>
-                        </label>
-                        {[
-                          "Nursing",
-                          "Patient Care",
-                          "Care Taker",
-                          "Old Age Care",
-                          "Baby Care",
-                          "Bedside Attender",
-                          "Supporting",
-                          "Maid",
-                          "Cook",
-                          "House Keeper",
-                          "Chauffeur",
-                          "Cleaner",
-                          "Compounder",
-                        ].map((skill) => (
-                          <div className="form-check" key={skill}>
-                            <input
-                              type="checkbox"
-                              className="form-check-input"
-                              name="homeCareSkills"
-                              value={skill}
-                              checked={formData.homeCareSkills.includes(skill)}
-                              onChange={handleChange}
-                            />
-                            <label className="form-check-label">{skill}</label>
+
+                    {/* Match WorkerCalleDisplay layout: two dark boxes with pill buttons */}
+                    <div className="row g-3 mb-3">
+                      {/* Home Care Skills */}
+                      <div className="col-md-12">
+                        <div className="p-3 bg-dark border rounded-3 h-100">
+                          <h6 className="mb-2 text-warning">Home Care Skills</h6>
+                          <div className="d-flex flex-wrap gap-2 justify-content-center">
+                            {[
+                              "Nursing",
+                              "Patient Care",
+                              "Care Taker",
+                              "Old Age Care",
+                              "Baby Care",
+                              "Bedside Attender",
+                              "Supporting",
+                              "Maid",
+                              "Cook",
+                              "House Keeper",
+                              "Chauffeur",
+                              "Cleaner",
+                              "Compounder"
+                            ].map((skill) => {
+                              const active = formData.homeCareSkills.includes(skill);
+                              return (
+                                <button
+                                  type="button"
+                                  key={skill}
+                                  className={`btn btn-sm ${active ? "btn-warning text-black" : "btn-outline-warning"} rounded-pill`}
+                                  onClick={() => toggleArrayField("homeCareSkills", skill)}
+                                >
+                                  {skill}
+                                </button>
+                              );
+                            })}
                           </div>
-                        ))}
+                        </div>
                       </div>
 
-                      <div className="col-md-6">
-                        <label className="form-label">
-                          <strong>Other Skills</strong>
-                        </label>
-                        {[
-                          "Computer Operating",
-                          "Tele Calling",
-                          "Driving",
-                          "Supervisor",
-                          "Manager",
-                          "Attender",
-                          "Security",
-                          "Carpenter",
-                          "Painter",
-                          "Plumber",
-                          "Electrician",
-                          "Mason (Home maker)",
-                          "Tailor",
-                          "Labour",
-                          "Farmer",
-                          "Delivery Boy",
-                        ].map((skill) => (
-                          <div className="form-check" key={skill}>
-                            <input
-                              type="checkbox"
-                              className="form-check-input"
-                              name="otherSkills"
-                              value={skill}
-                              checked={formData.otherSkills.includes(skill)}
-                              onChange={handleChange}
-                            />
-                            <label className="form-check-label">{skill}</label>
+                      {/* Other Skills */}
+                      <div className="col-md-12">
+                        <div className="p-3 bg-dark border rounded-3 h-100">
+                          <h6 className="mb-2 text-info">Other Skills</h6>
+                          <div className="d-flex flex-wrap gap-2 justify-content-center">
+                            {[
+                              "Computer Operating",
+                              "Tele Calling",
+                              "Driving",
+                              "Supervisor",
+                              "Manager",
+                              "Attender",
+                              "Security",
+                              "Carpenter",
+                              "Painter",
+                              "Plumber",
+                              "Electrician",
+                              "Mason (Home maker)",
+                              "Tailor",
+                              "Labour",
+                              "Farmer",
+                              "Delivery Boy"
+                            ].map((skill) => {
+                              const active = formData.otherSkills.includes(skill);
+                              return (
+                                <button
+                                  type="button"
+                                  key={skill}
+                                  className={`btn btn-sm ${active ? "btn-info" : "btn-outline-info"} rounded-pill`}
+                                  onClick={() => toggleArrayField("otherSkills", skill)}
+                                >
+                                  {skill}
+                                </button>
+                              );
+                            })}
                           </div>
-                        ))}
+                        </div>
                       </div>
                     </div>
+
                     <hr />
 
                     <div className="row mb-3">
@@ -654,10 +682,7 @@ export default function WorkerCallForm({ isOpen, onClose }) {
                               checked={formData.workingHours === "12"}
                               onChange={handleChange}
                             />
-                            <label className="form-check-label">
-                              {" "}
-                              &nbsp;&nbsp;12 Hours
-                            </label>
+                            <label className="form-check-label">&nbsp;&nbsp;12 Hours</label>
                           </div>
                           <div className="form-check form-check-inline">
                             <input
@@ -667,9 +692,7 @@ export default function WorkerCallForm({ isOpen, onClose }) {
                               checked={formData.workingHours === "24"}
                               onChange={handleChange}
                             />
-                            <label className="form-check-label">
-                              &nbsp;&nbsp;24 Hours
-                            </label>
+                            <label className="form-check-label">&nbsp;&nbsp;24 Hours</label>
                           </div>
                         </div>
                       </div>
@@ -677,9 +700,7 @@ export default function WorkerCallForm({ isOpen, onClose }) {
 
                     {/* Languages */}
                     <div className="mb-3">
-                      <p className="form-label">
-                        <strong>Languages Known</strong>
-                      </p>
+                      <p className="form-label"><strong>Languages Known</strong></p>
                       {[
                         "Telugu",
                         "Hindi",
@@ -690,7 +711,7 @@ export default function WorkerCallForm({ isOpen, onClose }) {
                         "Tamil",
                         "Oriya",
                         "Bengali",
-                        "Marathi",
+                        "Marathi"
                       ].map((lang) => (
                         <div className="form-check form-check-inline" key={lang}>
                           <input
@@ -727,9 +748,7 @@ export default function WorkerCallForm({ isOpen, onClose }) {
                           <option value="Very Bad">Very Bad</option>
                         </select>
                         {errors.conversationLevel && (
-                          <div className="invalid-feedback">
-                            {errors.conversationLevel}
-                          </div>
+                          <div className="invalid-feedback">{errors.conversationLevel}</div>
                         )}
                       </div>
                       <div className="col-md-6">
@@ -746,32 +765,17 @@ export default function WorkerCallForm({ isOpen, onClose }) {
                           {formData.callReminderDate && (
                             <button
                               type="button"
-                              className="btn btn-outline-secondary mb-0"
-                              onClick={() =>
-                                setFormData({ ...formData, callReminderDate: "" })
-                              }
+                              className="btn btn-outline-secondary"
+                              onClick={() => setFormData(prev => ({ ...prev, callReminderDate: "" }))}
                             >
-                              ×
+                              Clear
                             </button>
                           )}
                           {errors.callReminderDate && (
-                            <div className="invalid-feedback d-block">
-                              {errors.callReminderDate}
-                            </div>
+                            <div className="invalid-feedback d-block">{errors.callReminderDate}</div>
                           )}
                         </div>
                       </div>
-                    </div>
-
-                    <div className="mb-3">
-                      <label className="form-label">Comment</label>
-                      <textarea
-                        name="comment"
-                        value={formData.comment}
-                        onChange={handleChange}
-                        className="form-control"
-                        rows="3"
-                      ></textarea>
                     </div>
                   </div>
                 )}

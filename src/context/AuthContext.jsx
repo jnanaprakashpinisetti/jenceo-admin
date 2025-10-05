@@ -1,443 +1,441 @@
+// src/context/AuthContext.jsx
 import React, { createContext, useContext, useEffect, useMemo, useState } from "react";
-import {
-  getAuth,
-  signInWithEmailAndPassword,
-  signOut,
-  onAuthStateChanged,
-  signInAnonymously,
-} from "firebase/auth";
+import { getAuth, onAuthStateChanged, signInAnonymously, signOut } from "firebase/auth";
+import firebaseDB from "../firebase";
 
-import { db } from "../firebase";
+// Utility functions
+const normalizeText = (text) => (text ? String(text).trim().toLowerCase() : "");
+const getCurrentTimestamp = () => new Date().toISOString();
 
-/* ============ Helpers ============ */
-
-const norm = (s) => (s || "").trim().toLowerCase();
-
-async function sha256Base64(text) {
-  try {
-    const enc = new TextEncoder().encode(text);
-    const hash = await crypto.subtle.digest("SHA-256", enc);
-    const bytes = new Uint8Array(hash);
-    let bin = "";
-    bytes.forEach((b) => (bin += String.fromCharCode(b)));
-    return btoa(bin);
-  } catch {
-    return btoa(unescape(encodeURIComponent(text)));
-  }
+// Password hashing utilities
+async function generateSHA256Hash(text) {
+  const encoder = new TextEncoder();
+  const data = encoder.encode(text);
+  const hashBuffer = await crypto.subtle.digest("SHA-256", data);
+  return new Uint8Array(hashBuffer);
 }
 
-async function safeRead(path) {
+function convertToBase64(bytes) {
+  return btoa(String.fromCharCode(...bytes));
+}
+
+async function generatePasswordHash(password) {
+  const hashBytes = await generateSHA256Hash(password);
+  return convertToBase64(hashBytes);
+}
+
+// Database operations
+async function databaseGet(path) {
   try {
-    const snap = await db.ref(path).once("value");
-    return snap.exists() ? snap.val() : null;
-  } catch (e) {
-    console.error(`Database read error for path ${path}:`, e.message);
+    const snapshot = await firebaseDB.child(path).get();
+    return snapshot.exists() ? snapshot.val() : null;
+  } catch (error) {
+    console.error("Database read error:", path, error?.message || error);
     return null;
   }
 }
 
-// deep, case-insensitive scan for email somewhere in the object
-function deepFindEmail(node, email) {
-  const target = norm(email);
-  const scan = (v) => {
-    if (!v) return false;
-    if (typeof v === "string") return v.includes("@") && norm(v) === target;
-    if (Array.isArray(v)) return v.some(scan);
-    if (typeof v === "object") return Object.values(v).some(scan);
+async function databaseSet(path, data) {
+  try {
+    await firebaseDB.child(path).set(data);
+    return true;
+  } catch (error) {
+    console.error("Database write error:", path, error?.message || error);
     return false;
-  };
-  return scan(node);
+  }
 }
 
-/* ============ Constants (email store) ============ */
-const EMAIL_BASE = "authentication/users";
-const EMAIL_FIELDS = ["email", "Email", "userEmail", "emailId"];
+async function databaseUpdate(path, data) {
+  try {
+    await firebaseDB.child(path).update(data);
+    return true;
+  } catch (error) {
+    console.error("Database update error:", path, error?.message || error);
+    return false;
+  }
+}
 
-/* ============ Context ============ */
-
-const AuthContext = createContext({
-  user: null,
-  login: async () => { },
-  logout: async () => { },
-  loading: false,
-  currentUser: null,
-  userRole: null,
-  debugDatabase: async () => { },
-});
-
-// Add this normalization function at the top level
-const normalizePermissions = (perms) => {
-  if (!perms || typeof perms !== 'object') return {};
+// Permission management
+const normalizePermissions = (permissions) => {
+  if (!permissions || typeof permissions !== "object") return {};
   
-  // Ensure all permissions are proper objects
   const normalized = {};
-  Object.keys(perms).forEach(key => {
-    if (typeof perms[key] === 'boolean') {
-      normalized[key] = { view: perms[key], read: perms[key] };
-    } else if (typeof perms[key] === 'object') {
-      normalized[key] = { ...perms[key] };
+  Object.keys(permissions).forEach(key => {
+    const value = permissions[key];
+    if (typeof value === "boolean") {
+      normalized[key] = { view: value, read: value };
+    } else if (value && typeof value === "object") {
+      normalized[key] = { ...value };
     }
   });
   
   return normalized;
 };
 
+// Default admin permissions configuration
+const DEFAULT_ADMIN_PERMISSIONS = {
+  "Dashboard": true,
+  "Investments": true,
+  "Task": true,
+  "Accounts": true,
+  "Admin": true,
+  "Staff": true,
+  "Staff Data": true,
+  "Existing Staff": true,
+  "Workers Data": true,
+  "Existing Workers": true,
+  "Worker Agreement": true,
+  "Worker Call Data": true,
+  "Worker Call Delete": true,
+  "Client Data": true,
+  "Client Exit": true,
+  "Enquiries": true,
+  "Enquiry Exit": true,
+  "Hospital List": true,
+  "Hospital Delete List": true,
+  "Expenses": true,
+  "Expence Delete": true
+};
+
+// Session management
+function createUserSession(databaseId, userData, authUserId) {
+  const displayName = userData?.name || userData?.username || "User";
+  
+  return {
+    dbId: databaseId,
+    uid: authUserId,
+    username: userData?.username || "",
+    name: displayName,
+    email: userData?.email || "",
+    role: userData?.role || "user",
+    permissions: normalizePermissions(userData?.permissions || {}),
+    photoURL: userData?.photoURL || userData?.profile?.photoURL || "",
+    mode: "username",
+    lastSync: getCurrentTimestamp(),
+  };
+}
+
+// Context definition
+const AuthContext = createContext({
+  ready: false,
+  user: null,
+  loading: false,
+  login: async () => {},
+  logout: async () => {},
+  refreshUser: async () => {},
+  setUser: () => {},
+  createUser: async () => {},
+  initializeDefaultAdmin: async () => {},
+});
+
+export const useAuth = () => {
+  const context = useContext(AuthContext);
+  if (!context) {
+    throw new Error("useAuth must be used within an AuthProvider");
+  }
+  return context;
+};
+
 export function AuthProvider({ children }) {
   const auth = getAuth();
-  const [user, setUser] = useState(() => {
-    try {
-      const raw = localStorage.getItem("app_user");
-      return raw ? JSON.parse(raw) : null;
-    } catch {
-      return null;
-    }
-  });
+  const [ready, setReady] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [authLoading, setAuthLoading] = useState(true);
+  const [user, setUser] = useState(null);
 
-  // Debug function to check database contents
-  const debugDatabase = async () => {
-    console.log("=== DATABASE DEBUG ===");
-
-    const pathsToCheck = [
-      "JenCeo-DataBase/Users",
-      "Users",
-      "authentication/Users",
-      "jenceo-admin/Users",
-      "authentication/users",
-      "jenceo-admin/authentication/users"
-    ];
-
-    for (const path of pathsToCheck) {
-      try {
-        const data = await safeRead(path);
-        console.log(`Path: ${path}`);
-        if (data && typeof data === 'object') {
-          console.log(`  Found ${Object.keys(data).length} entries`);
-          Object.entries(data).forEach(([key, value]) => {
-            console.log(`  - ${key}:`, {
-              name: value?.name,
-              username: value?.username,
-              displayName: value?.displayName,
-              email: value?.email,
-              role: value?.role,
-              hasPassword: !!(value?.password || value?.passwordHash || value?.pwd || value?.pwdHash)
-            });
-          });
-        } else {
-          console.log("  No data found or empty");
-        }
-      } catch (error) {
-        console.log(`  Error reading ${path}:`, error.message);
-      }
-      console.log("---");
-    }
-  };
-
-  // Pull role/permissions for an email from RTDB (authentication/users)
-  const fetchEmailProfile = async (email) => {
-    if (!email) return null;
-
-    // Try exact child queries on common fields
-    for (const f of EMAIL_FIELDS) {
-      try {
-        const qsnap = await db.ref(EMAIL_BASE).orderByChild(f).equalTo(email).once("value");
-        if (qsnap.exists()) {
-          const obj = qsnap.val() || {};
-          const firstId = Object.keys(obj)[0];
-          if (firstId) return obj[firstId];
-        }
-      } catch { }
-    }
-
-    // Fallback: read whole node and deep-match the email (handles nesting)
-    const all = (await safeRead(EMAIL_BASE)) || {};
-    for (const u of Object.values(all)) {
-      const candidates = EMAIL_FIELDS.map((k) => (typeof u?.[k] === "string" ? norm(u[k]) : null)).filter(Boolean);
-      if (candidates.includes(norm(email)) || deepFindEmail(u, email)) return u;
-    }
-    return null;
-  };
-
-  // React to Firebase Auth session changes (email mode)
-  useEffect(() => {
-    const unsub = onAuthStateChanged(auth, async (fbUser) => {
-      setAuthLoading(true);
-      try {
-        if (!fbUser) {
-          setUser(null);
-          localStorage.removeItem("app_user");
-          return;
-        }
-
-        // Read profile by UID first (works for anonymous username sessions)
-        const profileByUid = await safeRead(`authentication/users/${fbUser.uid}`);
-
-        // fallback: for email users, try to fetch by email if UID record not present
-        let profile = profileByUid;
-        if (!profile && fbUser.email) {
-          profile = await fetchEmailProfile(fbUser.email);
-        }
-
-        const session = {
-          uid: fbUser.uid,
-          name: fbUser.displayName || profile?.name || (fbUser.email ? fbUser.email.split("@")[0] : "User"),
-          email: fbUser.email || profile?.email || profile?.Email || null,
-          role: profile?.role || "user",
-          permissions: normalizePermissions(profile?.permissions),
-          mode: fbUser.isAnonymous ? "username" : "email",
-          emailVerified: fbUser.emailVerified ?? false,
-          _source: fbUser.isAnonymous ? "anonymous_auth" : "firebase_auth",
-        };
-
-        setUser(session);
-        localStorage.setItem("app_user", JSON.stringify(session));
-      } finally {
-        setAuthLoading(false);
-      }
-    });
-    return () => unsub();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  /* ===== Username login: JenCeo-DataBase/Users ===== */
-  const loginUsername = async (username, password) => {
-    const uname = norm(username);
-    const auth = getAuth();
-  
-    // 1) Ensure we have Firebase Auth session
-    if (!auth.currentUser) {
-      try {
-        await signInAnonymously(auth);
-      } catch (e) {
-        if (!/already/.test(String(e?.message || ""))) throw e;
-      }
-    }
-    const uid = auth.currentUser.uid;
-  
-    // 2) FIRST: Try to find user by username directly in Users collection
-    console.log("Searching for username:", uname);
-    
-    const usersSnap = await db.ref("JenCeo-DataBase/Users").once("value");
-    const usersMap = usersSnap.val() || {};
-    
-    console.log("Available users:", Object.keys(usersMap));
-    
-    // Find user by username (case insensitive)
-    let userKey = null;
-    let userData = null;
-    
-    for (const [key, user] of Object.entries(usersMap)) {
-      const userUsername = norm(user?.username || user?.name || '');
-      const userEmail = norm(user?.email || '');
-      
-      console.log(`Checking ${key}: username="${userUsername}", email="${userEmail}"`);
-      
-      if (userUsername === uname || userEmail === uname) {
-        userKey = key;
-        userData = user;
-        break;
-      }
-    }
-  
-    if (!userData) {
-      // 3) SECOND: Try UserIndex approach if direct search fails
-      console.log("Trying UserIndex approach...");
-      try {
-        const idxSnap = await db.ref(`JenCeo-DataBase/UserIndex/${uid}/key`).once("value");
-        const key = idxSnap.val();
-        
-        if (key) {
-          userKey = key;
-          const userSnap = await db.ref(`JenCeo-DataBase/Users/${key}`).once("value");
-          userData = userSnap.val();
-        }
-      } catch (error) {
-        console.log("UserIndex approach failed:", error.message);
-      }
-    }
-  
-    // 4) If still no user found
-    if (!userData) {
-      throw new Error("User not found. Please check your username.");
-    }
-  
-    console.log("Found user data:", userData);
-  
-    // 5) Check if account is active
-    if (userData.active === false || userData.disabled === true) {
-      throw new Error("Account is inactive");
-    }
-  
-    // 6) Verify password
-    const storedHash = userData.passwordHash || userData.pwdHash || null;
-    const storedPlain = userData.password || userData.pwd || null;
-    const incomingHash = await sha256Base64(password);
-    
-    console.log("Password check:", { storedHash: !!storedHash, storedPlain: !!storedPlain });
-    
-    const ok =
-      (storedHash && storedHash === incomingHash) ||
-      (storedPlain && storedPlain === password);
-    
-    if (!ok) throw new Error("Invalid password");
-  
-    // 7) Create or update profile in authentication
-    const profileRef = db.ref(`authentication/users/${uid}`);
-
-    const profile = {
-      name: userData.name || userData.username || username,
-      role: userData.role || "user",
-      permissions: normalizePermissions(userData.permissions || {}),
-      mode: "username",
-      usernameLinked: userKey,
-      email: userData.email || null,
-      lastLogin: new Date().toISOString()
-    };
-    
-    await profileRef.update(profile);
-
-  
-    // 8) Create session
-    const session = {
-      uid,
-      name: profile.name,
-      email: userData.email || null,
-      role: profile.role,
-      permissions: profile.permissions,
-      mode: "username",
-      _source: "jenCeo_database",
-    };
-  
-    setUser(session);
-    localStorage.setItem("app_user", JSON.stringify(session));
-    return session;
-  };
-
-  /* ===== Email login: Firebase Auth + RTDB permissions ===== */
-  const loginEmail = async (email, password) => {
-    console.log("Attempting email login for:", email);
-
-    // Sign into Firebase Auth first
-    const cred = await signInWithEmailAndPassword(getAuth(), email, password);
-    const fbUser = cred.user;
-    console.log("Firebase auth successful:", fbUser.email);
-
-    // Immediately merge with RTDB profile so LeftNav/PermissionRoute know what to show
-    const profile = await fetchEmailProfile(fbUser.email);
-    console.log("Fetched profile:", profile);
-
-    const session = {
-      uid: fbUser.uid,
-      name: fbUser.displayName || profile?.name || fbUser.email?.split("@")[0] || "User",
-      email: fbUser.email || profile?.email || profile?.Email || null,
-      role: profile?.role || "user",
-      permissions: normalizePermissions(profile?.permissions),
-      mode: "email",
-      emailVerified: fbUser.emailVerified,
-      _source: "firebase_auth",
-    };
-
-    console.log("Creating email session:", session);
-    setUser(session);
-    localStorage.setItem("app_user", JSON.stringify(session));
-    return session;
-  };
-
-  /* ===== Single entry: accepts email or username ===== */
-  const login = async (identifier, password) => {
-    if (!identifier || !password) throw new Error("Please enter credentials");
-    setLoading(true);
+  // User state persistence
+  const cacheUser = (userData) => {
+    setUser(userData);
     try {
-      console.log("Login attempt with identifier:", identifier);
-
-      if (identifier.includes("@")) {
-        return await loginEmail(identifier.trim(), password);
+      if (userData) {
+        sessionStorage.setItem("auth:user", JSON.stringify(userData));
       } else {
-        return await loginUsername(identifier.trim(), password);
+        sessionStorage.removeItem("auth:user");
       }
     } catch (error) {
-      console.error("Login error details:", error);
+      console.warn("Session storage error:", error);
+    }
+  };
 
-      // nicer Firebase errors
-      if (error?.code) {
-        const map = {
-          "auth/invalid-email": "Invalid email address",
-          "auth/user-disabled": "This account has been disabled",
-          "auth/user-not-found": "No account found with this email",
-          "auth/wrong-password": "Incorrect password",
-          "auth/too-many-requests": "Too many failed attempts. Try again later",
+  // Authentication state initialization
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
+      console.log("Auth state changed:", firebaseUser ? "User logged in" : "No user");
+      
+      // Restore session from storage if available
+      try {
+        const storedUser = sessionStorage.getItem("auth:user");
+        if (storedUser) {
+          setUser(JSON.parse(storedUser));
+        }
+      } catch (error) {
+        console.warn("Failed to restore session:", error);
+      }
+      
+      setReady(true);
+      
+      // Establish anonymous authentication if no user is logged in
+      if (!firebaseUser) {
+        signInAnonymously(auth).catch(console.error);
+      }
+    });
+
+    return unsubscribe;
+  }, [auth]);
+
+  // User data refresh
+  const refreshUser = async () => {
+    if (!user?.dbId) return null;
+    
+    const userData = await databaseGet(`Users/${user.dbId}`);
+    if (!userData) return null;
+    
+    const session = createUserSession(user.dbId, userData, user.uid);
+    cacheUser(session);
+    return session;
+  };
+
+  // Default admin initialization
+  const initializeDefaultAdmin = async () => {
+    try {
+      console.log("🛠️ Checking for existing admin user...");
+      
+      const allUsers = await databaseGet("Users");
+      let adminExists = false;
+      let existingAdminId = null;
+      
+      if (allUsers) {
+        for (const [userId, userData] of Object.entries(allUsers)) {
+          if (userData?.username === "admin" || userData?.role === "admin") {
+            adminExists = true;
+            existingAdminId = userId;
+            console.log("✅ Admin user already exists:", userId);
+            break;
+          }
+        }
+      }
+      
+      if (!adminExists) {
+        console.log("🛠️ Creating default admin user...");
+        const adminId = `admin_${Date.now()}`;
+        const passwordHash = await generatePasswordHash("admin123");
+        
+        const adminUser = {
+          username: "admin",
+          name: "System Administrator",
+          email: "admin@jenceo.com",
+          role: "admin",
+          permissions: DEFAULT_ADMIN_PERMISSIONS,
+          passwordHash: passwordHash,
+          createdAt: getCurrentTimestamp(),
+          updatedAt: getCurrentTimestamp(),
+          isActive: true
         };
-        throw new Error(map[error.code] || error.message || "Login failed");
+        
+        const success = await databaseSet(`Users/${adminId}`, adminUser);
+        if (success) {
+          console.log("✅ Default admin user created!");
+          console.log("🔑 Username: admin");
+          console.log("🔑 Password: admin123");
+          console.log("🔑 User ID:", adminId);
+          return { success: true, userId: adminId };
+        } else {
+          throw new Error("Failed to create admin user in database");
+        }
+      } else {
+        console.log("ℹ️ Admin user already exists:", existingAdminId);
+        return { success: true, userId: existingAdminId, exists: true };
+      }
+    } catch (error) {
+      console.error("❌ Error initializing default admin:", error);
+      return { success: false, error: error.message };
+    }
+  };
+
+  // User creation
+  const createUser = async (userData) => {
+    try {
+      const { username, email, name, role = "user", permissions = {}, password } = userData;
+      
+      console.log("🛠️ Creating user with data:", { 
+        username, 
+        email, 
+        name, 
+        role, 
+        hasPassword: !!password 
+      });
+      
+      // Input validation
+      if (!username || !name || !password) {
+        throw new Error("Username, name, and password are required");
+      }
+      
+      // Check for existing username
+      const allUsers = await databaseGet("Users");
+      if (allUsers) {
+        const usernameExists = Object.values(allUsers).some(
+          existingUser => existingUser?.username === username
+        );
+        
+        if (usernameExists) {
+          throw new Error("Username already exists");
+        }
+      }
+      
+      // Generate unique user ID
+      const userId = `user_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      
+      // Create password hash
+      const passwordHash = await generatePasswordHash(password);
+      
+      const newUser = {
+        username: username.trim(),
+        email: email?.trim() || "",
+        name: name.trim(),
+        role,
+        permissions: role === "admin" ? DEFAULT_ADMIN_PERMISSIONS : permissions,
+        passwordHash,
+        createdAt: getCurrentTimestamp(),
+        updatedAt: getCurrentTimestamp(),
+        isActive: true
+      };
+      
+      console.log("💾 Saving user to database:", userId, newUser);
+      
+      const success = await databaseSet(`Users/${userId}`, newUser);
+      if (!success) {
+        throw new Error("Failed to create user in database");
+      }
+      
+      console.log("✅ User created successfully:", userId);
+      return { success: true, userId };
+    } catch (error) {
+      console.error("🚨 USER CREATION ERROR:", error.message);
+      throw error;
+    }
+  };
+
+  // User authentication
+  const login = async (identifier, password) => {
+    const normalizedIdentifier = normalizeText(identifier);
+    setLoading(true);
+    
+    try {
+      // Ensure Firebase authentication
+      if (!auth.currentUser) {
+        await signInAnonymously(auth);
       }
 
+      console.log("🔍 Searching for user:", identifier);
+
+      // Retrieve all users from database
+      const allUsers = await databaseGet("Users");
+      
+      if (!allUsers) {
+        console.log("❌ No users found in database");
+        throw new Error("User not found");
+      }
+
+      console.log("🔍 Total users in database:", Object.keys(allUsers).length);
+      
+      // Find matching user
+      let userDatabaseId = null;
+      let userData = null;
+      
+      for (const [databaseId, dbUser] of Object.entries(allUsers)) {
+        const dbUsername = normalizeText(dbUser?.username);
+        const dbName = normalizeText(dbUser?.name);
+        const dbEmail = normalizeText(dbUser?.email);
+        
+        if (dbUsername === normalizedIdentifier || 
+            dbName === normalizedIdentifier || 
+            dbEmail === normalizedIdentifier) {
+          userDatabaseId = databaseId;
+          userData = dbUser;
+          console.log("✅ Found user:", databaseId, "with username:", dbUser?.username);
+          break;
+        }
+      }
+
+      if (!userData) {
+        console.log("❌ No matching user found for:", identifier);
+        throw new Error("User not found");
+      }
+
+      // Password management
+      let storedPasswordHash = userData.passwordHash;
+
+      // Create password hash if none exists (first-time login)
+      if (!storedPasswordHash) {
+        console.log("⚠️ No password found. Creating authentication...");
+        storedPasswordHash = await generatePasswordHash(password);
+        
+        await databaseUpdate(`Users/${userDatabaseId}`, {
+          passwordHash: storedPasswordHash,
+          updatedAt: getCurrentTimestamp()
+        });
+        
+        console.log("✅ Password stored in user data");
+      }
+
+      // Password validation
+      const enteredPasswordHash = await generatePasswordHash(password);
+      
+      console.log("=== 🔐 Password Verification ===");
+      console.log("Stored hash:", storedPasswordHash);
+      console.log("Entered hash:", enteredPasswordHash);
+
+      if (storedPasswordHash !== enteredPasswordHash) {
+        throw new Error("Invalid password");
+      }
+
+      // Successful login
+      console.log("✅ Login successful!");
+      const session = createUserSession(userDatabaseId, userData, auth.currentUser?.uid);
+      cacheUser(session);
+
+      // Update last login timestamp
+      await databaseUpdate(`Users/${userDatabaseId}`, {
+        lastLogin: getCurrentTimestamp(),
+        updatedAt: getCurrentTimestamp()
+      });
+      
+      return session;
+    } catch (error) {
+      console.error("🚨 Login error:", error.message);
       throw error;
     } finally {
       setLoading(false);
     }
   };
 
+  // User logout
   const logout = async () => {
-    try {
-      await signOut(getAuth());
-    } finally {
-      setUser(null);
-      localStorage.removeItem("app_user");
+    try { 
+      await signOut(auth); 
+      // Maintain Firebase connection with anonymous auth
+      await signInAnonymously(auth);
+    } catch (error) {
+      console.error("Logout error:", error);
     }
+    cacheUser(null);
   };
 
-  const value = useMemo(
-    () => ({
-      user,
-      login,
-      logout,
-      loading: loading || authLoading,
-      currentUser: user,
-      userRole: user?.role || null,
-      setUser,
-      debugDatabase,
-    }),
-    [user, loading, authLoading]
+  // Context value
+  const contextValue = useMemo(() => ({
+    ready,
+    user, 
+    loading,
+    login,
+    logout,
+    refreshUser,
+    setUser: cacheUser,
+    createUser,
+    initializeDefaultAdmin
+  }), [ready, user, loading]);
+
+  return (
+    <AuthContext.Provider value={contextValue}>
+      {children}
+    </AuthContext.Provider>
   );
-
-  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
-
-export function useAuth() {
-  return useContext(AuthContext);
-}
-
-const debugUserDatabase = async () => {
-  console.log("=== USER DATABASE DEBUG ===");
-  
-  const paths = [
-    "JenCeo-DataBase/Users",
-    "JenCeo-DataBase/UserIndex", 
-    "Users",
-    "UserIndex",
-    "authentication/users"
-  ];
-  
-  for (const path of paths) {
-    try {
-      const data = await safeRead(path);
-      console.log(`📁 ${path}:`, data);
-      
-      if (data && typeof data === 'object') {
-        console.log(`   Found ${Object.keys(data).length} entries`);
-        // Show first few entries for inspection
-        Object.entries(data).slice(0, 3).forEach(([key, value]) => {
-          console.log(`   🔑 ${key}:`, {
-            username: value?.username,
-            name: value?.name,
-            email: value?.email,
-            hasPassword: !!(value?.password || value?.passwordHash),
-            role: value?.role
-          });
-        });
-      }
-    } catch (error) {
-      console.log(`   ❌ Error: ${error.message}`);
-    }
-  }
-};

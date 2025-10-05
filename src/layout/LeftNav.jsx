@@ -1,7 +1,5 @@
 // src/layout/LeftNav.jsx
-import React, { useEffect, useMemo, useRef, useState } from "react";
-import firebaseDB from "../firebase";
-
+import React, { useEffect, useRef, useState, useCallback } from "react";
 import {
   Routes,
   Route,
@@ -17,7 +15,7 @@ import logo from "../assets/jencio-logo.svg";
 import logoicon from "../assets/jenceo-icon.svg";
 import toggle from "../assets/toggle.svg";
 import close from "../assets/close.svg";
-import arrow from "../assets/arrow.svg";
+// import arrow from "../assets/arrow.svg"; // (optional) was used for a collapsed sidebar button
 
 // —— Menu icons
 import home from "../assets/home.svg";
@@ -50,7 +48,6 @@ import expences from "../assets/expence.svg";
 import Dashboard from "../pages/Dashboard";
 import Investments from "../pages/Investments";
 
-// ✅ Use proper Staff pages here (fixes “Staff shows Worker details”)
 import StaffData from "../pages/StaffData";
 import ExistingStaff from "../pages/ExistingStaff";
 
@@ -78,22 +75,29 @@ import Accounts from "../pages/Accounts";
 import SearchResults from "../pages/SearchResults";
 import Profile from "../pages/Profile";
 
+// FIXED: Move PermRoute outside the component to prevent re-renders
+const PermRoute = ({ allowed, children }) => {
+  return allowed ? children : <Navigate to="/" replace />;
+};
 
 export default function LeftNav() {
+  // 🔗 Global auth only
   const { user, logout } = useAuth();
+
+  // ---- role & permissions from global user ----
   const perms = user?.permissions || {};
   const roleStr = String(user?.role || "").trim().toLowerCase();
   const isAdmin = /^(admin|administrator|superadmin)$/.test(roleStr);
   const isManager = /^(manager|managers|mgr)$/.test(roleStr);
 
-  // ---- granular permission helpers ----
-  const hasPerm = (keys = []) => {
+  // FIXED: Use useCallback to memoize the hasPerm function
+  const hasPerm = useCallback((keys = []) => {
     if (isAdmin || isManager) return true;
     return keys.some((k) => {
       const p = perms?.[k];
       return p === true || p?.view === true || p?.read === true;
     });
-  };
+  }, [isAdmin, isManager, perms]);
 
   // Dashboard & core
   const canDashboard = hasPerm(["Dashboard"]);
@@ -102,11 +106,11 @@ export default function LeftNav() {
   const canAccounts = hasPerm(["Accounts"]);
   const canAdmin = hasPerm(["Admin"]);
 
-  // Staff (separate from workers)
+  // Staff
   const canStaffData = isAdmin || isManager || hasPerm(["Staff", "Staff Data", "StaffData"]);
   const canExistingStaff = isAdmin || isManager || hasPerm(["Existing Staff", "ExistingStaff", "Staff Exit", "Exist Staff"]);
 
-  // Workers (split every item)
+  // Workers
   const canWorkersData = hasPerm(["Workers Data", "Worker Data", "Workers"]);
   const canExistingWorkers = hasPerm(["Existing Workers", "ExistingEmployees", "Exit Worker", "Existing Worker"]);
   const canWorkerAgreement = hasPerm(["Worker Agreement", "Worker Aggrement", "Employee Aggrement"]);
@@ -129,17 +133,14 @@ export default function LeftNav() {
   const canExpenses = hasPerm(["Expenses", "Petty Cash"]);
   const canExpenceDelete = hasPerm(["Expence Delete", "Delete Expenses", "Delete Petty Cash"]);
 
-  // ---- route guard ----
-  const PermRoute = ({ allowed, children }) => (allowed ? children : <Navigate to="/" replace />);
-
   // ---- UI state ----
-  const [isActive, setIsActive] = useState(false); // collapse side
+  const [isActive, setIsActive] = useState(false); // (kept if you later want a desktop collapse)
   const [isShow, setIsShow] = useState(false); // mobile menu
   const [query, setQuery] = useState("");
 
-  // collapsible groups for a “richer” left nav
+  // collapsible groups
   const [open, setOpen] = useState({
-    management: true, // ✅ new top group
+    management: true,
     staff: true,
     workers: true,
     client: true,
@@ -151,7 +152,7 @@ export default function LeftNav() {
 
   const toggleGroup = (k) => setOpen((o) => ({ ...o, [k]: !o[k] }));
 
-  // mobile dropdown
+  // user dropdown (mobile)
   const [showUserMenu, setShowUserMenu] = useState(false);
   const userMenuRef = useRef(null);
   const userMenuBtnRef = useRef(null);
@@ -202,11 +203,12 @@ export default function LeftNav() {
   const toggleMobile = () => setIsShow((v) => !v);
   const closeMobile = () => setIsShow(false);
 
-  // left nav should NOT scroll; keep container simple
   const collapseClass = `collapse navbar-collapse${isShow ? " show" : ""}`;
 
+  // Pull display fields from global auth
   const userName = user?.name || user?.email || "User";
   const userRole = user?.role || "Member";
+  const avatarUrl = user?.photoURL || "";
 
   const onNavClick = () => {
     closeMobile();
@@ -217,7 +219,6 @@ export default function LeftNav() {
     onNavClick();
   };
 
-  // small helper for group headers
   const Group = ({ k, label, children, when }) => {
     if (!when) return null;
     return (
@@ -239,101 +240,18 @@ export default function LeftNav() {
     );
   };
 
-  // Resolve avatar URL (use AuthContext value, session cache, or DB)
-  const [avatarUrl, setAvatarUrl] = useState(() => {
-    const key =
-      user?.dbId || user?.id || user?.key || user?.username || user?.name || "";
-    const cached = key ? sessionStorage.getItem(`avatar:${key}`) : "";
-    return user?.photoURL || cached || "";
-  });
-
-  useEffect(() => {
-    let cancel = false;
-
-    const fetchAvatar = async () => {
-      // If AuthContext already has it, cache and use it
-      if (user?.photoURL) {
-        const key =
-          user.dbId || user.id || user.key || user.username || user.name || "";
-        if (key) sessionStorage.setItem(`avatar:${key}`, user.photoURL);
-        setAvatarUrl(user.photoURL);
-        return;
-      }
-
-      // Find the dbId if missing (match on username, then name)
-      let dbId = user?.dbId || user?.id || user?.key || "";
-      const uname = (user?.username || user?.name || "")
-        .toString()
-        .trim()
-        .toLowerCase();
-
-      try {
-        if (!dbId) {
-          const usersSnap = await firebaseDB.child("JenCeo-DataBase/Users").get();
-          if (usersSnap.exists()) {
-            const all = usersSnap.val() || {};
-            for (const [k, v] of Object.entries(all)) {
-              const u = (v?.username || "").toString().trim().toLowerCase();
-              if (u && u === uname) {
-                dbId = k;
-                break;
-              }
-            }
-            if (!dbId && user?.name) {
-              const target = user.name.toString().trim().toLowerCase();
-              for (const [k, v] of Object.entries(all)) {
-                const n = (v?.name || "").toString().trim().toLowerCase();
-                if (n && n === target) {
-                  dbId = k;
-                  break;
-                }
-              }
-            }
-          }
-        }
-        if (!dbId) return;
-
-        // Try root mirror first, then profile node
-        let url = "";
-        const rootSnap = await firebaseDB
-          .child(`JenCeo-DataBase/Users/${dbId}/photoURL`)
-          .get();
-        if (rootSnap.exists()) url = rootSnap.val() || "";
-
-        if (!url) {
-          const profSnap = await firebaseDB
-            .child(`JenCeo-DataBase/Users/${dbId}/profile/photoURL`)
-            .get();
-          if (profSnap.exists()) url = profSnap.val() || "";
-        }
-
-        if (!cancel && url) {
-          setAvatarUrl(url);
-          sessionStorage.setItem(`avatar:${dbId}`, url);
-        }
-      } catch {
-        // ignore; falls back to initial
-      }
-    };
-
-    fetchAvatar();
-    return () => {
-      cancel = true;
-    };
-  }, [user]);
-
-
   return (
     <>
+      {/* Add 'mobilActive' class based on your existing isShow toggle */}
       <nav className={`navbar navbar-expand-lg leftNav ${isShow ? "mobilActive" : ""}`}>
-        <button type="button" className="navbar-brand" onClick={() => { }}>
+        <button type="button" className="navbar-brand" onClick={() => {}}>
           <img src={isActive ? logoicon : logo} alt="JenCeo Logo" />
         </button>
 
+        {/* Optional desktop collapse button you had commented earlier */}
         {/* <button className="slide" type="button" onClick={toggleSide} aria-label="Toggle sidebar" title="Collapse sidebar">
           <img src={arrow} alt="arrow" />
         </button> */}
-
 
         <button
           className="navbar-toggler"
@@ -347,7 +265,7 @@ export default function LeftNav() {
         </button>
 
         <div className={collapseClass} id="collapsibleNavbar">
-          {/* ===== Mobile header bar (sticky, non-scrolling nav) ===== */}
+          {/* ===== Mobile header bar ===== */}
           <div
             className="d-block d-lg-none mb-2"
             style={{
@@ -367,17 +285,26 @@ export default function LeftNav() {
                     src={avatarUrl}
                     alt="User"
                     style={{
-                      width: 38, height: 38, borderRadius: "50%",
-                      objectFit: "cover", border: "2px solid #fff"
+                      width: 38,
+                      height: 38,
+                      borderRadius: "50%",
+                      objectFit: "cover",
+                      border: "2px solid #fff",
                     }}
                   />
                 ) : (
                   <div
                     style={{
-                      width: 38, height: 38, borderRadius: "50%",
+                      width: 38,
+                      height: 38,
+                      borderRadius: "50%",
                       background: "#1e293b",
-                      display: "flex", alignItems: "center", justifyContent: "center",
-                      color: "#e2e8f0", fontWeight: "bold", fontSize: 14
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      color: "#e2e8f0",
+                      fontWeight: "bold",
+                      fontSize: 14,
                     }}
                   >
                     {String(userName || "U").slice(0, 1).toUpperCase()}
@@ -389,10 +316,11 @@ export default function LeftNav() {
                   <small className="text-secondary" style={{ lineHeight: 1 }}>
                     {userRole}
                   </small>
+                  <small className="text-muted" style={{ lineHeight: 1 }}>
+                    Login: {new Date(loginAt).toLocaleTimeString()}
+                  </small>
                 </div>
               </div>
-
-
 
               {/* User dropdown (Profile + Logout) */}
               <div className="position-relative">
@@ -419,8 +347,7 @@ export default function LeftNav() {
                       color: "#e2e8f0",
                       border: "1px solid rgba(255,255,255,0.08)",
                       borderRadius: 10,
-                      boxShadow:
-                        "0 10px 20px rgba(2, 8, 23, 0.35), 0 2px 6px rgba(2, 8, 23, 0.25)",
+                      boxShadow: "0 10px 20px rgba(2,8,23,0.35), 0 2px 6px rgba(2,8,23,0.25)",
                       overflow: "hidden",
                       zIndex: 5,
                     }}
@@ -447,7 +374,7 @@ export default function LeftNav() {
             </div>
           </div>
 
-          {/* ===== Mobile quick links (≤991px) ===== */}
+          {/* ===== Mobile quick links ===== */}
           <div className="mobile-top d-block d-lg-none mb-3">
             <div className="d-flex flex-column gap-2 px-2">
               <form className="input-group input-group-sm" onSubmit={submitSearch}>
@@ -475,187 +402,259 @@ export default function LeftNav() {
             </div>
           </div>
 
-          {/* ===== Main nav with grouped, collapsible sections ===== */}
+          {/* ===== Main nav (grouped) ===== */}
           <ul className="navbar-nav" style={{ width: "100%" }}>
-            {/* ✅ Top: Management group with Admin + Dashboard + Investments */}
-            <Group
-              k="management"
-              label="Management"
-              when={canAdmin || canDashboard || canInvestments}
-            >
-              {(canAdmin || isAdmin) && (
+            {/* Management */}
+            {(canAdmin || canDashboard || canInvestments) && (
+              <>
                 <li className="nav-item">
-                  <NavLink to="Admin" className="nav-link" title="Admin" onClick={onNavClick}>
-                    <img src={admin} alt="" /> <span className="ms-1">Admin</span>
-                  </NavLink>
+                  <button className="groupBtn btn btn-sm" onClick={() => toggleGroup("management")} type="button">
+                    <span>Management</span>
+                    <span style={{ opacity: 0.7 }}>{open.management ? "▾" : "▸"}</span>
+                  </button>
                 </li>
-              )}
-              {canDashboard && (
-                <li className="nav-item">
-                  <NavLink to="/" className="nav-link" title="Dashboard" onClick={onNavClick}>
-                    <img src={home} alt="" /> <span className="ms-1">Dashboard</span>
-                  </NavLink>
-                </li>
-              )}
-              {canInvestments && (
-                <li className="nav-item">
-                  <NavLink to="Investments" className="nav-link" title="Investments" onClick={onNavClick}>
-                    <img src={invest} alt="" /> <span className="ms-1">Investments</span>
-                  </NavLink>
-                </li>
-              )}
-            </Group>
+                {open.management && <div className="mt-2" />}
+                {open.management && (
+                  <>
+                    {(canAdmin || isAdmin) && (
+                      <li className="nav-item">
+                        <NavLink to="Admin" className="nav-link" title="Admin" onClick={onNavClick}>
+                          <img src={admin} alt="" /> <span className="ms-1">Admin</span>
+                        </NavLink>
+                      </li>
+                    )}
+                    {canDashboard && (
+                      <li className="nav-item">
+                        <NavLink to="/" className="nav-link" title="Dashboard" onClick={onNavClick}>
+                          <img src={home} alt="" /> <span className="ms-1">Dashboard</span>
+                        </NavLink>
+                      </li>
+                    )}
+                    {canInvestments && (
+                      <li className="nav-item">
+                        <NavLink to="Investments" className="nav-link" title="Investments" onClick={onNavClick}>
+                          <img src={invest} alt="" /> <span className="ms-1">Investments</span>
+                        </NavLink>
+                      </li>
+                    )}
+                  </>
+                )}
+                <hr className="mt-3" />
+              </>
+            )}
 
             {/* Staff */}
-            <Group
-              k="staff"
-              label="Staff"
-              when={canStaffData || canExistingStaff}
-            >
-              {canStaffData && (
+            {(canStaffData || canExistingStaff) && (
+              <>
                 <li className="nav-item">
-                  <NavLink to="StaffData" className="nav-link" title="Staff" onClick={onNavClick}>
-                    <img src={Staff} alt="" /> <span className="ms-1">Staff</span>
-                  </NavLink>
+                  <button className="groupBtn btn btn-sm" onClick={() => toggleGroup("staff")} type="button">
+                    <span>Staff</span>
+                    <span style={{ opacity: 0.7 }}>{open.staff ? "▾" : "▸"}</span>
+                  </button>
                 </li>
-              )}
-              {canExistingStaff && (
-                <li className="nav-item">
-                  <NavLink to="ExistingStaff" className="nav-link" title="Existing Staff" onClick={onNavClick}>
-                    <img src={StaffExit} alt="" /> <span className="ms-1">Existing Staff</span>
-                  </NavLink>
-                </li>
-              )}
-            </Group>
+                {open.staff && <div className="mt-2" />}
+                {open.staff && (
+                  <>
+                    {canStaffData && (
+                      <li className="nav-item">
+                        <NavLink to="StaffData" className="nav-link" title="Staff" onClick={onNavClick}>
+                          <img src={Staff} alt="" /> <span className="ms-1">Staff</span>
+                        </NavLink>
+                      </li>
+                    )}
+                    {canExistingStaff && (
+                      <li className="nav-item">
+                        <NavLink to="ExistingStaff" className="nav-link" title="Existing Staff" onClick={onNavClick}>
+                          <img src={StaffExit} alt="" /> <span className="ms-1">Existing Staff</span>
+                        </NavLink>
+                      </li>
+                    )}
+                  </>
+                )}
+                <hr className="mt-3" />
+              </>
+            )}
 
             {/* Workers */}
-            <Group
-              k="workers"
-              label="Workers"
-              when={
-                canWorkersData ||
-                canExistingWorkers ||
-                canWorkerAgreement ||
-                canWorkerCallData ||
-                canWorkerCallDelete
-              }
-            >
-              {canWorkersData && (
+            {(canWorkersData || canExistingWorkers || canWorkerAgreement || canWorkerCallData || canWorkerCallDelete) && (
+              <>
                 <li className="nav-item">
-                  <NavLink to="WorkersData" className="nav-link" title="Worker Data" onClick={onNavClick}>
-                    <img src={workerData} alt="" /> <span className="ms-1">Worker Data</span>
-                  </NavLink>
+                  <button className="groupBtn btn btn-sm" onClick={() => toggleGroup("workers")} type="button">
+                    <span>Workers</span>
+                    <span style={{ opacity: 0.7 }}>{open.workers ? "▾" : "▸"}</span>
+                  </button>
                 </li>
-              )}
-              {canExistingWorkers && (
-                <li className="nav-item">
-                  <NavLink to="ExistingEmployees" className="nav-link" title="Existing Workers" onClick={onNavClick}>
-                    <img src={workerExit} alt="" /> <span className="ms-1">Exit Worker</span>
-                  </NavLink>
-                </li>
-              )}
-              {canWorkerCallData && (
-                <li className="nav-item">
-                  <NavLink to="WorkerCallsData" className="nav-link" title="Worker Call Data" onClick={onNavClick}>
-                    <img src={call} alt="" /> <span className="ms-1">Worker Call Data</span>
-                  </NavLink>
-                </li>
-              )}
-              {canWorkerCallDelete && (
-                <li className="nav-item">
-                  <NavLink to="WorkerCallDelete" className="nav-link" title="Worker Call Delete" onClick={onNavClick}>
-                    <img src={callDelete} alt="" /> <span className="ms-1">Worker Call Delete</span>
-                  </NavLink>
-                </li>
-              )}
-              {canWorkerAgreement && (
-                <li className="nav-item">
-                  <NavLink to="EmployeeAggrement" className="nav-link" title="Worker Agreement" onClick={onNavClick}>
-                    <img src={WorkerAggrement} alt="" /> <span className="ms-1">Worker Agreement</span>
-                  </NavLink>
-                </li>
-              )}
-            </Group>
+                {open.workers && <div className="mt-2" />}
+                {open.workers && (
+                  <>
+                    {canWorkersData && (
+                      <li className="nav-item">
+                        <NavLink to="WorkersData" className="nav-link" title="Worker Data" onClick={onNavClick}>
+                          <img src={workerData} alt="" /> <span className="ms-1">Worker Data</span>
+                        </NavLink>
+                      </li>
+                    )}
+                    {canExistingWorkers && (
+                      <li className="nav-item">
+                        <NavLink to="ExistingEmployees" className="nav-link" title="Existing Workers" onClick={onNavClick}>
+                          <img src={workerExit} alt="" /> <span className="ms-1">Exit Worker</span>
+                        </NavLink>
+                      </li>
+                    )}
+                    {canWorkerCallData && (
+                      <li className="nav-item">
+                        <NavLink to="WorkerCallsData" className="nav-link" title="Worker Call Data" onClick={onNavClick}>
+                          <img src={call} alt="" /> <span className="ms-1">Worker Call Data</span>
+                        </NavLink>
+                      </li>
+                    )}
+                    {canWorkerCallDelete && (
+                      <li className="nav-item">
+                        <NavLink to="WorkerCallDelete" className="nav-link" title="Worker Call Delete" onClick={onNavClick}>
+                          <img src={callDelete} alt="" /> <span className="ms-1">Worker Call Delete</span>
+                        </NavLink>
+                      </li>
+                    )}
+                    {canWorkerAgreement && (
+                      <li className="nav-item">
+                        <NavLink to="EmployeeAggrement" className="nav-link" title="Worker Agreement" onClick={onNavClick}>
+                          <img src={WorkerAggrement} alt="" /> <span className="ms-1">Worker Agreement</span>
+                        </NavLink>
+                      </li>
+                    )}
+                  </>
+                )}
+                <hr className="mt-3" />
+              </>
+            )}
 
             {/* Client */}
-            <Group k="client" label="Client" when={canClientData || canClientExit}>
-              {canClientData && (
+            {(canClientData || canClientExit) && (
+              <>
                 <li className="nav-item">
-                  <NavLink to="ClientInfo" className="nav-link" title="Client Data" onClick={onNavClick}>
-                    <img src={client} alt="" /> <span className="ms-1">Client Data</span>
-                  </NavLink>
+                  <button className="groupBtn btn btn-sm" onClick={() => toggleGroup("client")} type="button">
+                    <span>Client</span>
+                    <span style={{ opacity: 0.7 }}>{open.client ? "▾" : "▸"}</span>
+                  </button>
                 </li>
-              )}
-              {canClientExit && (
-                <li className="nav-item">
-                  <NavLink to="ClientExit" className="nav-link" title="Client Exit" onClick={onNavClick}>
-                    <img src={ClientExitIcon} alt="" /> <span className="ms-1">Client Exit</span>
-                  </NavLink>
-                </li>
-              )}
-            </Group>
+                {open.client && <div className="mt-2" />}
+                {open.client && (
+                  <>
+                    {canClientData && (
+                      <li className="nav-item">
+                        <NavLink to="ClientInfo" className="nav-link" title="Client Data" onClick={onNavClick}>
+                          <img src={client} alt="" /> <span className="ms-1">Client Data</span>
+                        </NavLink>
+                      </li>
+                    )}
+                    {canClientExit && (
+                      <li className="nav-item">
+                        <NavLink to="ClientExit" className="nav-link" title="Client Exit" onClick={onNavClick}>
+                          <img src={ClientExitIcon} alt="" /> <span className="ms-1">Client Exit</span>
+                        </NavLink>
+                      </li>
+                    )}
+                  </>
+                )}
+                <hr className="mt-3" />
+              </>
+            )}
 
             {/* Enquiry */}
-            <Group k="enquiry" label="Enquiry" when={canEnquiry || canEnquiryExit}>
-              {canEnquiry && (
+            {(canEnquiry || canEnquiryExit) && (
+              <>
                 <li className="nav-item">
-                  <NavLink to="Enquiry" className="nav-link" title="Enquiry" onClick={onNavClick}>
-                    <img src={inquiry} alt="" /> <span className="ms-1">Enquiry</span>
-                  </NavLink>
+                  <button className="groupBtn btn btn-sm" onClick={() => toggleGroup("enquiry")} type="button">
+                    <span>Enquiry</span>
+                    <span style={{ opacity: 0.7 }}>{open.enquiry ? "▾" : "▸"}</span>
+                  </button>
                 </li>
-              )}
-              {canEnquiryExit && (
-                <li className="nav-item">
-                  <NavLink to="EnquiryExit" className="nav-link" title="Old Enquiry" onClick={onNavClick}>
-                    <img src={inquiryDelete} alt="" /> <span className="ms-1">Old Enquiry</span>
-                  </NavLink>
-                </li>
-              )}
-            </Group>
+                {open.enquiry && <div className="mt-2" />}
+                {open.enquiry && (
+                  <>
+                    {canEnquiry && (
+                      <li className="nav-item">
+                        <NavLink to="Enquiry" className="nav-link" title="Enquiry" onClick={onNavClick}>
+                          <img src={inquiry} alt="" /> <span className="ms-1">Enquiry</span>
+                        </NavLink>
+                      </li>
+                    )}
+                    {canEnquiryExit && (
+                      <li className="nav-item">
+                        <NavLink to="EnquiryExit" className="nav-link" title="Old Enquiry" onClick={onNavClick}>
+                          <img src={inquiryDelete} alt="" /> <span className="ms-1">Old Enquiry</span>
+                        </NavLink>
+                      </li>
+                    )}
+                  </>
+                )}
+                <hr className="mt-3" />
+              </>
+            )}
 
             {/* Hospital */}
-            <Group
-              k="hospital"
-              label="Hospital"
-              when={canHospitalList || canHospitalDeleteList}
-            >
-              {canHospitalList && (
+            {(canHospitalList || canHospitalDeleteList) && (
+              <>
                 <li className="nav-item">
-                  <NavLink to="HospitalList" className="nav-link" title="Hospital List" onClick={onNavClick}>
-                    <img src={HospitalIcon} alt="" /> <span className="ms-1">Hospital List</span>
-                  </NavLink>
+                  <button className="groupBtn btn btn-sm" onClick={() => toggleGroup("hospital")} type="button">
+                    <span>Hospital</span>
+                    <span style={{ opacity: 0.7 }}>{open.hospital ? "▾" : "▸"}</span>
+                  </button>
                 </li>
-              )}
-              {canHospitalDeleteList && (
-                <li className="nav-item">
-                  <NavLink to="HospitalDeleteList" className="nav-link" title="Deleted Hospitals" onClick={onNavClick}>
-                    <img src={HospitalDeleteIcon} alt="" /> <span className="ms-1">Deleted Hospitals</span>
-                  </NavLink>
-                </li>
-              )}
-            </Group>
+                {open.hospital && <div className="mt-2" />}
+                {open.hospital && (
+                  <>
+                    {canHospitalList && (
+                      <li className="nav-item">
+                        <NavLink to="HospitalList" className="nav-link" title="Hospital List" onClick={onNavClick}>
+                          <img src={HospitalIcon} alt="" /> <span className="ms-1">Hospital List</span>
+                        </NavLink>
+                      </li>
+                    )}
+                    {canHospitalDeleteList && (
+                      <li className="nav-item">
+                        <NavLink to="HospitalDeleteList" className="nav-link" title="Deleted Hospitals" onClick={onNavClick}>
+                          <img src={HospitalDeleteIcon} alt="" /> <span className="ms-1">Deleted Hospitals</span>
+                        </NavLink>
+                      </li>
+                    )}
+                  </>
+                )}
+                <hr className="mt-3" />
+              </>
+            )}
 
             {/* Expenses */}
-            <Group
-              k="expenses"
-              label="Expenses"
-              when={canExpenses || canExpenceDelete}
-            >
-              {canExpenses && (
+            {(canExpenses || canExpenceDelete) && (
+              <>
                 <li className="nav-item">
-                  <NavLink to="Expenses" className="nav-link" title="Expenses" onClick={onNavClick}>
-                    <img src={accounts} alt="" /> <span className="ms-1">Petty Cash</span>
-                  </NavLink>
+                  <button className="groupBtn btn btn-sm" onClick={() => toggleGroup("expenses")} type="button">
+                    <span>Expenses</span>
+                    <span style={{ opacity: 0.7 }}>{open.expenses ? "▾" : "▸"}</span>
+                  </button>
                 </li>
-              )}
-              {canExpenceDelete && (
-                <li className="nav-item">
-                  <NavLink to="ExpenceDelete" className="nav-link" title="Delete Petty Cash" onClick={onNavClick}>
-                    <img src={expences} alt="" /> <span className="ms-1">Delete Petty Cash</span>
-                  </NavLink>
-                </li>
-              )}
-            </Group>
+                {open.expenses && <div className="mt-2" />}
+                {open.expenses && (
+                  <>
+                    {canExpenses && (
+                      <li className="nav-item">
+                        <NavLink to="Expenses" className="nav-link" title="Expenses" onClick={onNavClick}>
+                          <img src={accounts} alt="" /> <span className="ms-1">Petty Cash</span>
+                        </NavLink>
+                      </li>
+                    )}
+                    {canExpenceDelete && (
+                      <li className="nav-item">
+                        <NavLink to="ExpenceDelete" className="nav-link" title="Delete Petty Cash" onClick={onNavClick}>
+                          <img src={expences} alt="" /> <span className="ms-1">Delete Petty Cash</span>
+                        </NavLink>
+                      </li>
+                    )}
+                  </>
+                )}
+                <hr className="mt-3" />
+              </>
+            )}
 
             {/* Productivity */}
             {canTask && (
@@ -669,7 +668,7 @@ export default function LeftNav() {
               </>
             )}
 
-            {/* Keep Accounts separate as before (you asked to move Admin/Dashboard/Investments only) */}
+            {/* Finance */}
             {canAccounts && (
               <>
                 <li className="nav-item mt-2 mb-1 text-uppercase small text-muted px-2">Finance</li>
@@ -684,11 +683,11 @@ export default function LeftNav() {
         </div>
       </nav>
 
-      {/* ===== Routes with granular guards ===== */}
+      {/* ===== Routes with guards ===== */}
       <Routes>
         <Route path="/" element={<PermRoute allowed={canDashboard}><Dashboard /></PermRoute>} />
 
-        {/* ✅ Staff -> correct components */}
+        {/* Staff */}
         <Route path="StaffData" element={<PermRoute allowed={canStaffData}><StaffData /></PermRoute>} />
         <Route path="ExistingStaff" element={<PermRoute allowed={canExistingStaff}><ExistingStaff /></PermRoute>} />
 
@@ -722,7 +721,6 @@ export default function LeftNav() {
         <Route path="search" element={<SearchResults />} />
         <Route path="Admin" element={<PermRoute allowed={canAdmin || isAdmin}><AdminUsers /></PermRoute>} />
         <Route path="profile" element={<Profile />} />
-
       </Routes>
     </>
   );

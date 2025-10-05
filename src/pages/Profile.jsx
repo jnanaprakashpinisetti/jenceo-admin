@@ -1,42 +1,47 @@
 // src/pages/Profile.jsx
 import React, { useEffect, useMemo, useRef, useState } from "react";
 
-// ⬇️ Adjust these two import paths if your project structure differs
-import firebaseDB from "../firebase";            // e.g. ../firebase or ../../firebase
-import { useAuth } from "../context/AuthContext"; // e.g. ../context/AuthContext
+// ⬇️ Adjust paths if needed
+import firebaseDB from "../firebase";
+import { useAuth } from "../context/AuthContext";
 
 /**
  * User Profile (self-service)
- * - Loads/saves under: JenCeo-DataBase/Users/{uid}/profile
- * - Storage uploads are currently disabled (safe no-op), so ESLint won't complain.
+ * Works with username-based login (no Firebase Auth UID).
+ * - Resolves the user's DB key (e.g., "-OahSH...") by:
+ *   1) user.dbId || user.id || user.key
+ *   2) else scanning JenCeo-DataBase/Users to match username/name
+ * - Persists under: JenCeo-DataBase/Users/{dbId}/profile
+ * - Mirrors { name, photoURL } at JenCeo-DataBase/Users/{dbId}
+ * - Images saved as Data URLs (base64) so it works WITHOUT Firebase Storage.
  */
 export default function Profile() {
   const { user } = useAuth() || {};
-  const uid = user?.uid;
-  const readOnlyEmail = user?.email || "";
-  const readOnlyRole = user?.role || "Member";
+  // From your logs, you have user.name = "Prakash" and username records like "prakash"
+  const canonicalUsername = (user?.username || user?.name || "")
+    .toString()
+    .trim()
+    .toLowerCase();
 
-  // ------- local state -------
+  const [dbId, setDbId] = useState(user?.dbId || user?.id || user?.key || "");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [savedAt, setSavedAt] = useState(null);
   const [err, setErr] = useState("");
 
   const [form, setForm] = useState({
-    name: user?.name || "",
-    email: readOnlyEmail,
+    name: user?.name || "", // keep showing current header name initially
+    email: user?.email || "", // your users seemed to have empty email; still keep the field
     phone: "",
     about: "",
     location: "",
     languages: [],
     skills: [],
-    photoURL: "",
-    coverURL: "",
+    photoURL: "", // avatar (data URL / http URL)
+    coverURL: "", // cover  (data URL / http URL)
     social: { linkedin: "", twitter: "", instagram: "" },
   });
 
-  const [avatarFile, setAvatarFile] = useState(null);
-  const [coverFile, setCoverFile] = useState(null);
   const [avatarPreview, setAvatarPreview] = useState("");
   const [coverPreview, setCoverPreview] = useState("");
 
@@ -44,38 +49,72 @@ export default function Profile() {
   const skillInputRef = useRef(null);
 
   const knownLanguages = [
-    "Telugu",
-    "English",
-    "Hindi",
-    "Urdu",
-    "Kannada",
-    "Malayalam",
-    "Tamil",
-    "Bengali",
-    "Marathi",
+    "Telugu","English","Hindi","Urdu","Kannada","Malayalam","Tamil","Bengali","Marathi",
   ];
   const knownSkills = [
-    "UI/UX",
-    "JavaScript",
-    "React",
-    "Angular",
-    "Photoshop",
-    "Illustrator",
-    "CorelDraw",
-    "Premiere Pro",
-    "Cinema 4D",
-    "Branding",
-    "Wireframes",
+    "UI/UX","JavaScript","React","Angular","Photoshop","Illustrator","CorelDraw","Premiere Pro","Cinema 4D","Branding","Wireframes",
   ];
 
-  // ------- helpers -------
-  const dbPath = useMemo(
-    () => (uid ? `JenCeo-DataBase/Users/${uid}/profile` : null),
-    [uid]
+  // Resolve the DB id (e.g. "-OahSHDNZqZG2YkKnaAb") if we don't have it yet
+  useEffect(() => {
+    const resolveDbId = async () => {
+      if (dbId) return; // already known
+      try {
+        // Load all users once and search for a match by username/name (case-insensitive)
+        const usersSnap = await firebaseDB.child("JenCeo-DataBase/Users").get();
+        if (usersSnap.exists()) {
+          const all = usersSnap.val() || {};
+          let foundKey = "";
+
+          // Try username match first; your logs show "username" field exists.
+          for (const [key, val] of Object.entries(all)) {
+            const uname = (val?.username || "").toString().trim().toLowerCase();
+            if (uname && uname === canonicalUsername) {
+              foundKey = key;
+              break;
+            }
+          }
+
+          // Fallback: match by display name if username didn’t match
+          if (!foundKey && user?.name) {
+            const target = user.name.toString().trim().toLowerCase();
+            for (const [key, val] of Object.entries(all)) {
+              const nm = (val?.name || "").toString().trim().toLowerCase();
+              if (nm && nm === target) {
+                foundKey = key;
+                break;
+              }
+            }
+          }
+
+          if (foundKey) {
+            setDbId(foundKey);
+          } else {
+            setErr("Could not resolve your user record in the database.");
+          }
+        } else {
+          setErr("Users list not found in database.");
+        }
+      } catch (e) {
+        console.error(e);
+        setErr("Failed to look up your user record.");
+      }
+    };
+
+    resolveDbId();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [canonicalUsername]);
+
+  const userRootPath = useMemo(
+    () => (dbId ? `JenCeo-DataBase/Users/${dbId}` : ""),
+    [dbId]
+  );
+  const profilePath = useMemo(
+    () => (dbId ? `${userRootPath}/profile` : ""),
+    [userRootPath]
   );
 
   const onChange = (k, v) => setForm((f) => ({ ...f, [k]: v }));
-
   const addChip = (k, v) => {
     const val = String(v || "").trim();
     if (!val) return;
@@ -85,42 +124,59 @@ export default function Profile() {
       return { ...f, [k]: [...arr, val] };
     });
   };
-
   const removeChip = (k, v) =>
     setForm((f) => ({ ...f, [k]: (f[k] || []).filter((x) => x !== v) }));
 
-  const handleAvatarPick = (e) => {
+  // Read a File -> Data URL (base64)
+  const fileToDataURL = (file) =>
+    new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+
+  const handleAvatarPick = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    setAvatarFile(file);
-    setAvatarPreview(URL.createObjectURL(file));
+    const dataURL = await fileToDataURL(file);
+    setAvatarPreview(dataURL);
+    setForm((f) => ({ ...f, photoURL: dataURL }));
   };
 
-  const handleCoverPick = (e) => {
+  const handleCoverPick = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    setCoverFile(file);
-    setCoverPreview(URL.createObjectURL(file));
+    const dataURL = await fileToDataURL(file);
+    setCoverPreview(dataURL);
+    setForm((f) => ({ ...f, coverURL: dataURL }));
   };
 
-  // ------- load existing profile -------
+  // Load existing profile once we know dbId
   useEffect(() => {
     const load = async () => {
-      if (!dbPath) return;
+      if (!profilePath) return;
       setLoading(true);
       setErr("");
       try {
-        const snap = await firebaseDB.child(dbPath).get();
+        const snap = await firebaseDB.child(profilePath).get();
         if (snap.exists()) {
           const data = snap.val() || {};
           setForm((f) => ({
             ...f,
             ...data,
-            email: readOnlyEmail || data.email || "",
-            name: data.name || user?.name || "",
+            email: data.email || f.email || user?.email || "",
+            name: data.name || f.name || user?.name || "",
           }));
           setAvatarPreview(data.photoURL || "");
           setCoverPreview(data.coverURL || "");
+        } else {
+          // Seed some defaults
+          setForm((f) => ({
+            ...f,
+            email: f.email || user?.email || "",
+            name: f.name || user?.name || "",
+          }));
         }
       } catch (e) {
         console.error(e);
@@ -130,58 +186,55 @@ export default function Profile() {
       }
     };
     load();
-  }, [dbPath, readOnlyEmail, user?.name]);
+  }, [profilePath, user?.email, user?.name]);
 
-  // ------- upload helpers (no-op; ESLint safe) -------
-  // If/when you enable Firebase Storage, replace this with real upload code.
-  const uploadIfPossible = async () => null;
-
-  // ------- save -------
+  // Save (writes both profile and a couple of mirrored fields at user root)
   const handleSave = async (e) => {
     e?.preventDefault?.();
-    if (!uid || !dbPath) return;
+    if (!profilePath || !userRootPath) {
+      setErr("User record not resolved yet. Please try again.");
+      return;
+    }
 
     setSaving(true);
     setErr("");
     try {
-      let newPhotoURL = form.photoURL;
-      let newCoverURL = form.coverURL;
-
-      // These return null for now (no-op). Hook up storage later if needed.
-      if (avatarFile) {
-        const url = await uploadIfPossible("avatar", avatarFile);
-        if (url) newPhotoURL = url;
-      }
-      if (coverFile) {
-        const url = await uploadIfPossible("cover", coverFile);
-        if (url) newCoverURL = url;
-      }
-
       const toSave = {
         ...form,
-        email: readOnlyEmail,
-        photoURL: newPhotoURL || form.photoURL || "",
-        coverURL: newCoverURL || form.coverURL || "",
+        // keep email as-is; your DB shows blank emails, that’s okay
         updatedAt: new Date().toISOString(),
       };
 
-      await firebaseDB.child(dbPath).set(toSave);
+      // Save profile
+      await firebaseDB.child(profilePath).set(toSave);
+
+      // Mirror name/photoURL at user root
+      const mirror = {
+        name: toSave.name || "",
+        photoURL: toSave.photoURL || "",
+      };
+      await firebaseDB.child(userRootPath).update(mirror);
+
       setForm(toSave);
       setSavedAt(new Date());
       if (toSave.photoURL) setAvatarPreview(toSave.photoURL);
       if (toSave.coverURL) setCoverPreview(toSave.coverURL);
     } catch (e) {
       console.error(e);
-      setErr("Could not save your profile. Please try again.");
+      setErr("Could not save your profile. Please check database rules and try again.");
     } finally {
       setSaving(false);
     }
   };
 
-  if (!uid) {
+  // If we still don't know which record to modify, show a gentle notice
+  if (!dbId) {
     return (
       <div className="container py-5">
-        <div className="alert alert-warning">Please log in to view your profile.</div>
+        <div className="alert alert-info">
+          Resolving your profile record… If this stays here, ensure your Users node has
+          <code> username: "{canonicalUsername}"</code> or pass <code>dbId</code> in AuthContext.
+        </div>
       </div>
     );
   }
@@ -234,7 +287,7 @@ export default function Profile() {
             <div className="flex-grow-1">
               <h4 className="mb-1">{form.name || "Your Name"}</h4>
               <div className="text-muted small">
-                {readOnlyRole} • {form.location || "Add location"}
+                {(user?.role || "Member")} • {form.location || "Add location"}
               </div>
               {!!savedAt && (
                 <div className="text-success small mt-1">
@@ -347,12 +400,7 @@ export default function Profile() {
                   </datalist>
                   <div className="chips">
                     {(form.languages || []).map((l) => (
-                      <span
-                        className="chip"
-                        key={l}
-                        onClick={() => removeChip("languages", l)}
-                        title="Remove"
-                      >
+                      <span className="chip" key={l} onClick={() => removeChip("languages", l)} title="Remove">
                         {l} ✕
                       </span>
                     ))}
@@ -395,12 +443,7 @@ export default function Profile() {
                   </datalist>
                   <div className="chips">
                     {(form.skills || []).map((s) => (
-                      <span
-                        className="chip"
-                        key={s}
-                        onClick={() => removeChip("skills", s)}
-                        title="Remove"
-                      >
+                      <span className="chip" key={s} onClick={() => removeChip("skills", s)} title="Remove">
                         {s} ✕
                       </span>
                     ))}
@@ -413,9 +456,7 @@ export default function Profile() {
                   <input
                     className="form-control"
                     value={form.social?.linkedin || ""}
-                    onChange={(e) =>
-                      onChange("social", { ...form.social, linkedin: e.target.value })
-                    }
+                    onChange={(e) => onChange("social", { ...form.social, linkedin: e.target.value })}
                     placeholder="https://linkedin.com/in/username"
                   />
                 </div>
@@ -424,9 +465,7 @@ export default function Profile() {
                   <input
                     className="form-control"
                     value={form.social?.twitter || ""}
-                    onChange={(e) =>
-                      onChange("social", { ...form.social, twitter: e.target.value })
-                    }
+                    onChange={(e) => onChange("social", { ...form.social, twitter: e.target.value })}
                     placeholder="https://x.com/username"
                   />
                 </div>
@@ -435,9 +474,7 @@ export default function Profile() {
                   <input
                     className="form-control"
                     value={form.social?.instagram || ""}
-                    onChange={(e) =>
-                      onChange("social", { ...form.social, instagram: e.target.value })
-                    }
+                    onChange={(e) => onChange("social", { ...form.social, instagram: e.target.value })}
                     placeholder="https://instagram.com/username"
                   />
                 </div>
@@ -453,17 +490,16 @@ export default function Profile() {
         </div>
       </form>
 
-      {/* Small tips card */}
+      {/* Tips */}
       <div className=" border-0 shadow-soft">
         <div className="card-body p-3 p-md-4">
           <div className="small text-muted">
-            Tip: Click on any language/skill chip to remove it. Your role is shown from your
-            account (<em>{readOnlyRole}</em>).
+            Tip: Click on any language/skill chip to remove it.
           </div>
         </div>
       </div>
 
-      {/* Scoped styles */}
+      {/* Styles */}
       <style>{`
         .profile-fade-in { animation: pf-fade .35s ease-out both; }
         @keyframes pf-fade { from { opacity: 0; transform: translateY(6px) } to { opacity: 1; transform: none } }

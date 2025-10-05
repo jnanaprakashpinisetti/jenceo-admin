@@ -1685,7 +1685,7 @@ export default function WorkerCalleDisplay({
 
       {/* ---------- YEAR / MONTH / DAY SUMMARY UI ---------- */}
       <hr />
-      <h4 className="mt-4">Call Through Summary</h4>
+      <h4 className="mt-4 text-info">Call Through Summary</h4>
 
       {/* Year Tabs */}
       <ul className="nav nav-tabs summary-tabs mb-3">

@@ -2,8 +2,13 @@
 import React, { useState } from "react";
 import firebaseDB from "../../firebase";
 import SuccessModal from "../common/SuccessModal";
+// ✅ NEW: pull global user from AuthContext
+import { useAuth } from "../../context/AuthContext";
 
 export default function PettyCashForm() {
+  // ✅ NEW: access the authenticated user
+  const { user } = useAuth();
+
   const today = new Date();
   const minDate = new Date(today);
   minDate.setDate(today.getDate() - 1000);
@@ -246,14 +251,26 @@ export default function PettyCashForm() {
     e.preventDefault();
     if (!validateForm()) return;
 
+    // ✅ NEW: pick employeeName and path from global auth (keep old behavior as fallback)
+    const employeeName = user?.name || user?.username || "Admin";
+    const userId = user?.dbId || null;
+    // Prefer userId bucket; otherwise fall back to role-based, then legacy "admin"
+    const bucket =
+      userId
+        ? `PettyCash/${userId}`
+        : user?.role
+        ? `PettyCash/${String(user.role).toLowerCase()}`
+        : "PettyCash/admin";
+
     const dataToSave = {
       ...formData,
       createdAt: new Date().toISOString(),
-      employeeName: "Admin",
+      employeeName,
+      userId: userId || null,
     };
 
     try {
-      const newRef = await firebaseDB.child("PettyCash/admin").push(dataToSave);
+      const newRef = await firebaseDB.child(bucket).push(dataToSave);
       const expenseObj = { id: newRef.key, ...dataToSave };
       setSavedExpense(expenseObj);
       setShowSuccessModal(true);
@@ -318,12 +335,6 @@ export default function PettyCashForm() {
   return (
     <div className="container mt-4 client-form">
       <h3 className="mb-4 text-center opacity-75 text-white">Petty Cash Form</h3>
-      <hr className="text-white" />
-      <div className="d-flex justify-content-between align-items-center p-3 opacity-75">
-        <p className="text-white">Admin</p>
-        <p className="text-white">{formatMonth(today)}</p>
-      </div>
-
       <form onSubmit={handleSubmit} noValidate className="pb-5">
         {/* Main & Sub Category */}
         <div className="row mb-0">

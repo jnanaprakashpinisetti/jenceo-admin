@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import firebaseDB from "../../firebase";
+import { div } from "framer-motion/client";
 
 // Resolve current user name for comments (lowercase, strip domain)
 const resolveCurrentUserName = (workerLike = {}) => {
@@ -10,11 +11,10 @@ const resolveCurrentUserName = (workerLike = {}) => {
   return raw.replace(/@.*/, "").toLowerCase();
 };
 
-
 export default function WorkerCallModal({ worker, isOpen, onClose, isEditMode }) {
   const homeCareSkillOptions = [
     "Nursing", "Patient Care", "Care Taker", "Old Age Care", "Baby Care",
-    "Bedside Attender", "Supporting", "Any duty", "Daiper"
+    "Bedside Attender", "Supporting", "Any duty", "Daiper", "Cooking"
   ];
   const otherSkillOptions = [
     "Computer Operating", "Tele Calling", "Driving", "Supervisor", "Manager", "Attender", "Security",
@@ -107,7 +107,7 @@ export default function WorkerCallModal({ worker, isOpen, onClose, isEditMode })
     const commentObj = {
       text: newComment,
       date: new Date().toISOString(),
-      user: resolveCurrentUserName(localWorker) || "unknown", // lowercase as requested
+      user: resolveCurrentUserName(localWorker) || "unknown",
     };
     const updated = [commentObj, ...comments];
     setComments(updated);
@@ -171,405 +171,419 @@ export default function WorkerCallModal({ worker, isOpen, onClose, isEditMode })
         className="modal fade show"
         style={{ display: "block", background: "rgba(0,0,0,0.8)" }}
       >
-        <div className="modal-dialog modal-lg modal-dialog-centered weker-call-modal">
-          <div className="modal-content border-0 shadow-lg">
+        <div className="modal-dialog modal-xl modal-dialog-centered">
+          <div className="modal-content border-0 shadow-lg" style={{ borderRadius: "15px", maxWidth:"800px", margin:"auto" }}>
             {/* Enhanced Header */}
-            <div className="modal-header bg-warning text-dark">
-              <h5 className="modal-title fw-bold">
-                Worker Call Details
-              </h5>
-              <button
-                type="button"
-                className="btn-close btn-close-white"
-                onClick={confirmClose}
-              ></button>
-            </div>
-            <div className="px-3 py-2 bg-light border-bottom d-flex flex-wrap align-items-center justify-content-between">
-              <div className="fw-bold">{localWorker?.name || "—"}</div>
-              <div className="d-flex align-items-center gap-2">
-                <span className="text-muted">{localWorker?.mobileNo || "—"}</span>
-                {localWorker?.mobileNo && (
-                  <>
-                    <a className="btn btn-sm btn-success" href={`tel:${localWorker.mobileNo}`} target="_blank" rel="noreferrer">Call</a>
-                    <a className="btn btn-sm btn-success" href={`https://wa.me/${localWorker.mobileNo.replace(/\D/g,)}`} target="_blank" rel="noreferrer">WhatsApp</a>
-                  </>
-                )}
+            <div className="modal-header bg-gradient-primary text-white" style={{ background: "#69656e" }}>
+              <div className="d-flex align-items-center w-100">
+                <div className="flex-grow-1">
+                  <h5 className="modal-title fw-bold mb-1">
+                    {isEditMode ? "✏️ Edit Worker" : "👤 Worker Details"}
+                  </h5>
+                  <div className="d-flex align-items-center gap-3 text-white-50 small">
+                    <span>{localWorker?.mobileNo || "—"}</span>
+                    <span>{localWorker?.location || "—"}</span>
+                    <span>{localWorker?.name || "—"}</span>
+                  </div>
+                </div>
+                <div className="d-flex align-items-center gap-2">
+                  {localWorker?.mobileNo && (
+                    <>
+                      <a className="btn btn-sm btn-light btn-circle" href={`tel:${localWorker.mobileNo}`} target="_blank" rel="noreferrer" title="Call">
+                        📞
+                      </a>
+                      <a className="btn btn-sm btn-light btn-circle" href={`https://wa.me/${localWorker.mobileNo.replace(/\D/g, '')}`} target="_blank" rel="noreferrer" title="WhatsApp">
+                        💬
+                      </a>
+                    </>
+                  )}
+                  <button
+                    type="button"
+                    className="btn-close btn-close-white"
+                    onClick={confirmClose}
+                  ></button>
+                </div>
               </div>
             </div>
 
             <div className="modal-body p-0">
               {/* Enhanced Tabs */}
-              <ul className="nav nav-tabs nav-justified bg-light">
-                <li className="nav-item">
-                  <button
-                    className={`nav-link ${activeTab === "basic" ? "active btn-warning" : "btn-outline-warning text-dark"}`}
-                    onClick={() => setActiveTab("basic")}
-                  >
-                    Basic Info
-                  </button>
-                </li>
-                <li className="nav-item">
-                  <button
-                    className={`nav-link ${activeTab === "skills" ? "active btn-warning" : "btn-outline-warning text-dark"}`}
-                    onClick={() => setActiveTab("skills")}
-                  >
-                    Skills Info
-                  </button>
-                </li>
-              </ul>
+              <div className="bg-light border-bottom">
+                <div className="container-fluid">
+                  <ul className="nav nav-pills nav-justified gap-2 p-2">
+                    <li className="nav-item">
+                      <button
+                        className={`nav-link ${activeTab === "basic" ? "active btn-primary text-white" : "btn-outline-primary text-dark"}`}
+                        onClick={() => setActiveTab("basic")}
+                        style={{ borderRadius: "5px", fontWeight: "600" }}
+                      >
+                        Basic Information
+                      </button>
+                    </li>
+                    <li className="nav-item">
+                      <button
+                        className={`nav-link ${activeTab === "skills" ? "active btn-primary text-white" : "btn-outline-primary text-dark"}`}
+                        onClick={() => setActiveTab("skills")}
+                        style={{ borderRadius: "5px", fontWeight: "600" }}
+                      >
+                        Skills & Languages
+                      </button>
+                    </li>
+                  </ul>
+                </div>
+              </div>
 
-              <div className="tab-content p-4 bg-white">
+              <div className="tab-content p-2 bg-white" style={{ minHeight: "500px" }}>
                 {/* Basic Info Tab */}
                 {activeTab === "basic" && (
                   <div className="fade show">
-                    <div className="row g-3">
-                      {/* Mobile */}
-                      <div className="col-md-6">
-                        <div className="form-group">
-                          <label className="form-label fw-semibold text-dark">
-                            Mobile
-                          </label>
-                          <input
-                            type="text"
-                            name="mobileNo"
-                            value={localWorker.mobileNo || ""}
-                            disabled
-                            className="form-control border-secondary bg-light"
-                          />
-                        </div>
-                      </div>
-
-                      {/* Name */}
-                      <div className="col-md-6">
-                        <div className="form-group">
-                          <label className="form-label fw-semibold text-dark">
-                            Name
-                          </label>
-                          {isEditMode ? (
-                            <input
-                              type="text"
-                              name="name"
-                              value={localWorker.name || ""}
-                              onChange={handleChange}
-                              className="form-control border-primary"
-                              placeholder="Enter worker name"
-                            />
-                          ) : (
-                            <p className="form-control-plaintext border rounded p-2 bg-light">{localWorker.name || "—"}</p>
-                          )}
-                        </div>
-                      </div>
-
-                      {/* Gender */}
-                      <div className="col-md-6">
-                        <div className="form-group">
-                          <label className="form-label fw-semibold text-dark">
-                            Gender
-                          </label>
-                          {isEditMode ? (
-                            <div className="d-flex gap-4">
-                              {["Male", "Female", "Others"].map((g) => (
-                                <div key={g} className="form-check">
-                                  <input
-                                    type="radio"
-                                    name="gender"
-                                    value={g}
-                                    checked={localWorker.gender === g}
-                                    onChange={handleChange}
-                                    className="form-check-input"
-                                    id={`gender-${g}`}
-                                  />
-                                  <label className="form-check-label" htmlFor={`gender-${g}`}>
-                                    {g}
-                                  </label>
-                                </div>
-                              ))}
-                            </div>
-                          ) : (
-                            <span className={`badge ${localWorker.gender === "Male" ? "bg-primary" : localWorker.gender === "Female" ? "bg-danger" : "bg-secondary"} fs-6 p-2`}>
-                              {localWorker.gender || "—"}
-                            </span>
-                          )}
-                        </div>
-                      </div>
-
-                      {/* Location */}
-                      <div className="col-md-6">
-                        <div className="form-group">
-                          <label className="form-label fw-semibold text-dark">
-                            Location
-                          </label>
-                          {isEditMode ? (
-                            <input
-                              type="text"
-                              name="location"
-                              value={localWorker.location || ""}
-                              onChange={handleChange}
-                              className="form-control border-primary"
-                              placeholder="Enter location"
-                            />
-                          ) : (
-                            <p className="form-control-plaintext border rounded p-2 bg-light">{localWorker.location || "—"}</p>
-                          )}
-                        </div>
-                      </div>
-
-                      {/* Source */}
-                      <div className="col-md-6">
-                        <div className="form-group">
-                          <label className="form-label fw-semibold text-dark">
-                            Source
-                          </label>
-                          {isEditMode ? (
-                            <select
-                              name="source"
-                              value={localWorker.source || ""}
-                              onChange={handleChange}
-                              className="form-select border-primary"
-                            >
-                              <option value="">Select Source</option>
-                              {sourceOptions.map(s => <option key={s} value={s}>{s}</option>)}
-                            </select>
-                          ) : (
-                            <p className="text-dark fw-semibold">{localWorker.source || "—"}</p>
-                          )}
-                        </div>
-                      </div>
-
-                      {/* Marital Status */}
-                      <div className="col-md-6">
-                        <div className="form-group">
-                          <label className="form-label fw-semibold text-dark">
-                            Marital Status
-                          </label>
-                          {isEditMode ? (
-                            <select
-                              name="maritalStatus"
-                              value={localWorker.maritalStatus || ""}
-                              onChange={handleChange}
-                              className="form-select border-primary"
-                            >
-                              <option value="">Select Status</option>
-                              <option value="Single">Single</option>
-                              <option value="Married">Married</option>
-                              <option value="Separated">Separated</option>
-                              <option value="Widow">Widow</option>
-                            </select>
-                          ) : (
-                            <p className="text-dark fw-semibold">{localWorker.maritalStatus || "—"}</p>
-                          )}
-                        </div>
-                      </div>
-
-                      {/* Age */}
-                      <div className="col-md-4">
-                        <div className="form-group">
-                          <label className="form-label fw-semibold text-dark">
-                            Age
-                          </label>
-                          {isEditMode ? (
-                            <input
-                              type="tel"
-                              maxLength={2}
-                              name="age"
-                              value={localWorker.age || ""}
-                              onChange={handleChange}
-                              className="form-control border-primary text-center"
-                              min="10"
-                              max="80"
-                              placeholder="Age"
-                            />
-                          ) : (
-                            <p className="form-control-plaintext border rounded p-2 bg-light text-center">{localWorker.age || "—"}</p>
-                          )}
-                        </div>
-                      </div>
-
-                      {/* Experience */}
-                      <div className="col-md-4">
-                        <div className="form-group">
-                          <label className="form-label fw-semibold text-dark">
-                            Experience
-                          </label>
-                          {isEditMode ? (
-                            <select
-                              name="experience"
-                              value={localWorker.experience || "No"}
-                              onChange={handleChange}
-                              className="form-select border-primary"
-                            >
-                              <option value="No">No</option>
-                              <option value="Yes">Yes</option>
-                            </select>
-                          ) : (
-                            <span className="text-dark fw-semibold">
-                              {localWorker.experience || "No"}
-                            </span>
-                          )}
-                        </div>
-                      </div>
-
-                      {/* Years */}
-                      <div className="col-md-4">
-                        <div className="form-group">
-                          <label className="form-label fw-semibold text-dark">
-                            Years
-                          </label>
-                          {isEditMode ? (
-                            <input
-                              type="tel"
-                              maxLength={2}
-                              name="years"
-                              value={localWorker.years || ""}
-                              onChange={handleChange}
-                              className="form-control border-primary text-center"
-                              min="0"
-                              max="50"
-                              placeholder="Years"
-                            />
-                          ) : (
-                            <p className="form-control-plaintext border rounded p-2 bg-light text-center">{localWorker.years || "—"}</p>
-                          )}
-                        </div>
-                      </div>
-
-                      {/* Recent Comment */}
+                    <div className="row g-4">
+                      {/* Personal Information Section */}
                       <div className="col-12">
-                        <div className="form-group">
-                          <label className="form-label fw-semibold text-dark">
-                            Recent Comment
-                          </label>
-                          {isEditMode ? (
-                            <textarea
-                              name="comment"
-                              value={localWorker.comment || ""}
-                              onChange={handleChange}
-                              className="form-control border-primary"
-                              rows="2"
-                              placeholder="Add recent comment..."
-                            />
-                          ) : (
-                            <p className="form-control-plaintext border rounded p-2 bg-light">{localWorker.comment || "—"}</p>
-                          )}
-                        </div>
-                      </div>
+                        <div className=" border-0 shadow-sm p-3">
+                          <div className="card-header bg-light">
+                            <h6 className="mb-0 fw-bold text-primary">Personal Information</h6>
+                          </div>
+                          <div className="card-body">
+                            <div className="row g-3">
+                              <div className="col-md-6">
+                                <label className="form-label fw-semibold text-dark">
+                                  Mobile Number
+                                </label>
+                                <input
+                                  type="text"
+                                  name="mobileNo"
+                                  value={localWorker.mobileNo || ""}
+                                  disabled
+                                  className="form-control border-secondary bg-light"
+                                />
+                              </div>
 
-                      {/* Conversation Level */}
-                      <div className="col-md-6">
-                        <div className="form-group">
-                          <label className="form-label fw-semibold text-dark">
-                            Conversation Level
-                          </label>
-                          {isEditMode ? (
-                            <select
-                              name="conversationLevel"
-                              value={localWorker.conversationLevel || ""}
-                              onChange={handleChange}
-                              className="form-select border-primary"
-                            >
-                              <option value="">Select Level</option>
-                              <option value="Very Good">Very Good</option>
-                              <option value="Good">Good</option>
-                              <option value="Average">Average</option>
-                              <option value="Below Average">Below Average</option>
-                              <option value="Bad">Bad</option>
-                              <option value="Very Bad">Very Bad</option>
-                            </select>
-                          ) : (
-                            <span
-                              className={`badge ${localWorker.conversationLevel === "Very Good" ? "bg-success" :
-                                  localWorker.conversationLevel === "Good" ? "bg-primary" :
-                                    localWorker.conversationLevel === "Average" ? "bg-warning" :
-                                      "bg-danger"
-                                } fs-6 p-2`}
-                            >
-                              {localWorker.conversationLevel || "N/A"}
-                            </span>
-                          )}
-                        </div>
-                      </div>
+                              <div className="col-md-6">
+                                <label className="form-label fw-semibold text-dark">
+                                  Full Name
+                                </label>
+                                {isEditMode ? (
+                                  <input
+                                    type="text"
+                                    name="name"
+                                    value={localWorker.name || ""}
+                                    onChange={handleChange}
+                                    className="form-control border-primary"
+                                    placeholder="Enter worker name"
+                                  />
+                                ) : (
+                                  <div className="form-control border bg-light">{localWorker.name || "—"}</div>
+                                )}
+                              </div>
 
-                      {/* Reminder Date */}
-                      <div className="col-md-6">
-                        <div className="form-group">
-                          <label className="form-label fw-semibold text-dark">
-                            Reminder Date
-                          </label>
-                          {isEditMode ? (
-                            <input
-                              type="date"
-                              name="callReminderDate"
-                              value={localWorker.callReminderDate || ""}
-                              onChange={handleChange}
-                              className="form-control border-primary"
-                            />
-                          ) : (
-                            <p className="form-control-plaintext border rounded p-2 bg-light">
-                              {localWorker.callReminderDate
-                                ? new Date(localWorker.callReminderDate).toLocaleDateString("en-GB")
-                                : "—"}
-                            </p>
-                          )}
-                        </div>
-                      </div>
-                    </div>
+                              <div className="col-md-6">
+                                <label className="form-label fw-semibold text-dark d-block">
+                                  Gender
+                                </label>
+                                {isEditMode ? (
+                                  <div className="d-flex gap-4">
+                                    {["Male", "Female", "Others"].map((g) => (
+                                      <div key={g} className="form-check">
+                                        <input
+                                          type="radio"
+                                          name="gender"
+                                          value={g}
+                                          checked={localWorker.gender === g}
+                                          onChange={handleChange}
+                                          className="form-check-input"
+                                          id={`gender-${g}`}
+                                        />
+                                        <label className="form-check-label" htmlFor={`gender-${g}`}>
+                                          {g}
+                                        </label>
+                                      </div>
+                                    ))}
+                                  </div>
+                                ) : (
+                                  <span className={`badge ${localWorker.gender === "Male" ? "bg-primary" : localWorker.gender === "Female" ? "bg-pink" : "bg-secondary"} fs-6 p-2`}>
+                                    {localWorker.gender || "—"}
+                                  </span>
+                                )}
+                              </div>
 
-                    {/* Enhanced Comments Section */}
-                    <div className="mt-4 p-3 border rounded bg-light">
-                      <h6 className="fw-bold text-dark mb-3">
-                        Comments
-                      </h6>
-
-                      {/* Comments List */}
-                      <div className="mb-3" style={{ maxHeight: "300px", overflowY: "auto" }}>
-                        {comments.length > 0 ? (
-                          comments.map((c, idx) => (
-                            <div key={idx} className=" mb-2 border-0 bg-white">
-                              <div className="comment-box">
-                                <div className="text-dark mb-2">{editIdx === idx ? (<textarea className="form-control" rows="2" value={editText} onChange={(e) => setEditText(e.target.value)} />) : (c.text)}</div>
-                                <div className="d-flex justify-content-between align-items-center">
-                                  <small className="small-text">Commented By: <strong>{c.user}</strong></small>
-                                  <small className="small-text">{formatCommentDate(c.date)}</small>
-                                </div>
-                                {/* <div className="mt-2 d-flex gap-2">
-                                  {editIdx === idx ? (
-                                    <>
-                                      <button className="btn btn-sm btn-success" onClick={async ()=>{ const next=[...comments]; next[idx]={...next[idx], text: editText}; setComments(next); await firebaseDB.child(`WorkerCallData/${worker.id}/comments`).set(next); setEditIdx(-1); setEditText(""); }}>Save</button>
-                                      <button className="btn btn-sm btn-secondary" onClick={()=>{setEditIdx(-1); setEditText("");}}>Cancel</button>
-                                    </>
-                                  ) : (
-                                    <button className="btn btn-sm btn-secondary" onClick={()=>{setEditIdx(idx); setEditText(c.text);}}>Edit</button>
-                                  )}
-                                </div> */}
+                              <div className="col-md-6">
+                                <label className="form-label fw-semibold text-dark">
+                                Location
+                                </label>
+                                {isEditMode ? (
+                                  <input
+                                    type="text"
+                                    name="location"
+                                    value={localWorker.location || ""}
+                                    onChange={handleChange}
+                                    className="form-control border-primary"
+                                    placeholder="Enter location"
+                                  />
+                                ) : (
+                                  <div className="form-control border bg-light">{localWorker.location || "—"}</div>
+                                )}
                               </div>
                             </div>
-                          ))
-                        ) : (
-                          <div className="text-center py-3">
-                            <p className="mt-2">No comments yet</p>
                           </div>
-                        )}
+                        </div>
                       </div>
 
-                      {/* Add Comment */}
-                      <div className="border-top pt-3">
-                        <textarea
-                          className="form-control border-primary"
-                          rows="3"
-                          value={newComment}
-                          onChange={(e) => setNewComment(e.target.value)}
-                          placeholder="Add a new comment..."
-                          disabled={!isEditMode} // disable in view mode
-                        />
-                        <button
-                          className="btn btn-primary mt-2"
-                          onClick={handleAddComment}
-                          disabled={!isEditMode || !newComment.trim()} // disable if view mode or empty
-                        >
-                          Add Comment
-                        </button>
+                      {/* Professional Information Section */}
+                      <div className="col-12">
+                        <div className=" border-0 shadow-sm p-3">
+                          <div className="card-header bg-light">
+                            <h6 className="mb-0 fw-bold text-primary">Professional Information</h6>
+                          </div>
+                          <div className="card-body">
+                            <div className="row g-3">
+                              <div className="col-md-4">
+                                <label className="form-label fw-semibold text-dark">
+                                  Source
+                                </label>
+                                {isEditMode ? (
+                                  <select
+                                    name="source"
+                                    value={localWorker.source || ""}
+                                    onChange={handleChange}
+                                    className="form-select border-primary"
+                                  >
+                                    <option value="">Select Source</option>
+                                    {sourceOptions.map(s => <option key={s} value={s}>{s}</option>)}
+                                  </select>
+                                ) : (
+                                  <div className="form-control border bg-light">{localWorker.source || "—"}</div>
+                                )}
+                              </div>
+
+                              <div className="col-md-4">
+                                <label className="form-label fw-semibold text-dark">
+                                  Marital Status
+                                </label>
+                                {isEditMode ? (
+                                  <select
+                                    name="maritalStatus"
+                                    value={localWorker.maritalStatus || ""}
+                                    onChange={handleChange}
+                                    className="form-select border-primary"
+                                  >
+                                    <option value="">Select Status</option>
+                                    <option value="Single">Single</option>
+                                    <option value="Married">Married</option>
+                                    <option value="Separated">Separated</option>
+                                    <option value="Widow">Widow</option>
+                                  </select>
+                                ) : (
+                                  <div className="form-control border bg-light">{localWorker.maritalStatus || "—"}</div>
+                                )}
+                              </div>
+
+                              <div className="col-md-4">
+                                <label className="form-label fw-semibold text-dark">
+                                  Education
+                                </label>
+                                {isEditMode ? (
+                                  <input
+                                    type="text"
+                                    name="education"
+                                    value={localWorker.education || ""}
+                                    onChange={handleChange}
+                                    className="form-control border-primary"
+                                    placeholder="Enter education"
+                                  />
+                                ) : (
+                                  <div className="form-control border bg-light">{localWorker.education || "—"}</div>
+                                )}
+                              </div>
+
+                              <div className="col-md-4">
+                                <label className="form-label fw-semibold text-dark">
+                                  Age
+                                </label>
+                                {isEditMode ? (
+                                  <input
+                                    type="number"
+                                    name="age"
+                                    value={localWorker.age || ""}
+                                    onChange={handleChange}
+                                    className="form-control border-primary text-center"
+                                    min="10"
+                                    max="80"
+                                    placeholder="Age"
+                                  />
+                                ) : (
+                                  <div className="form-control border bg-light text-center">{localWorker.age || "—"}</div>
+                                )}
+                              </div>
+
+                              <div className="col-md-4">
+                                <label className="form-label fw-semibold text-dark">
+                                  Experience
+                                </label>
+                                {isEditMode ? (
+                                  <select
+                                    name="experience"
+                                    value={localWorker.experience || "No"}
+                                    onChange={handleChange}
+                                    className="form-select border-primary"
+                                  >
+                                    <option value="No">No Experience</option>
+                                    <option value="Yes">Has Experience</option>
+                                  </select>
+                                ) : (
+                                  <div className="form-control border bg-light">{localWorker.experience || "No"}</div>
+                                )}
+                              </div>
+
+                              <div className="col-md-4">
+                                <label className="form-label fw-semibold text-dark">
+                                  Years
+                                </label>
+                                {isEditMode ? (
+                                  <input
+                                    type="number"
+                                    name="years"
+                                    value={localWorker.years || ""}
+                                    onChange={handleChange}
+                                    className="form-control border-primary text-center"
+                                    min="0"
+                                    max="50"
+                                    placeholder="Years"
+                                  />
+                                ) : (
+                                  <div className="form-control border bg-light text-center">{localWorker.years || "—"}</div>
+                                )}
+                              </div>
+
+                              <div className="col-md-6">
+                                <label className="form-label fw-semibold text-dark d-block">
+                                  Conversation Level
+                                </label>
+                                {isEditMode ? (
+                                  <select
+                                    name="conversationLevel"
+                                    value={localWorker.conversationLevel || ""}
+                                    onChange={handleChange}
+                                    className="form-select border-primary"
+                                  >
+                                    <option value="">Select Level</option>
+                                    <option value="Very Good">Very Good</option>
+                                    <option value="Good">Good</option>
+                                    <option value="Average">Average</option>
+                                    <option value="Below Average">Below Average</option>
+                                    <option value="Bad">Bad</option>
+                                    <option value="Very Bad">Very Bad</option>
+                                  </select>
+                                ) : (
+                                  <span
+                                    className={`badge ${localWorker.conversationLevel === "Very Good" ? "bg-success" :
+                                      localWorker.conversationLevel === "Good" ? "bg-primary" :
+                                        localWorker.conversationLevel === "Average" ? "bg-warning" :
+                                          "bg-danger"
+                                      } fs-6 p-2  text-center`}
+                                  >
+                                    {localWorker.conversationLevel || "N/A"}
+                                  </span>
+                                )}
+                              </div>
+
+                              <div className="col-md-6">
+                                <label className="form-label fw-semibold text-dark">
+                                  Reminder Date
+                                </label>
+                                {isEditMode ? (
+                                  <input
+                                    type="date"
+                                    name="callReminderDate"
+                                    value={localWorker.callReminderDate || ""}
+                                    onChange={handleChange}
+                                    className="form-control border-primary"
+                                  />
+                                ) : (
+                                  <div className="form-control border bg-light">
+                                    {localWorker.callReminderDate
+                                      ? new Date(localWorker.callReminderDate).toLocaleDateString("en-GB")
+                                      : "—"}
+                                  </div>
+                                )}
+                              </div>
+
+                              <div className="col-12">
+                                <label className="form-label fw-semibold text-dark">
+                                  Recent Comment
+                                </label>
+                                {isEditMode ? (
+                                  <textarea
+                                    name="comment"
+                                    value={localWorker.comment || ""}
+                                    onChange={handleChange}
+                                    className="form-control border-primary"
+                                    rows="3"
+                                    placeholder="Add recent comment..."
+                                  />
+                                ) : (
+                                  <div className="form-control border bg-light" style={{ padding:"10px" }}>
+                                    {localWorker.comment || "—"}
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
                       </div>
 
+                      {/* Comments Section */}
+                      <div className="col-12">
+                        <div className=" border-0 shadow-sm p-3">
+                          <div className="card-header bg-light">
+                            <h6 className="mb-0 fw-bold text-primary">Comments & Notes</h6>
+                          </div>
+                          <div className="card-body">
+                            {/* Comments List */}
+                            <div className="mb-4" style={{ maxHeight: "300px", overflowY: "auto" }}>
+                              {comments.length > 0 ? (
+                                comments.map((c, idx) => (
+                                  <div key={idx} className=" mb-3 border">
+                                    <div className="card-body p-3">
+                                      <div className="d-flex justify-content-between align-items-start mb-2">
+                                        <div className="d-flex align-items-center">
+                                          <span className="badge bg-primary me-2"></span>
+                                          <small className="text-muted fw-bold">{c.user}</small>
+                                        </div>
+                                        <small className="text-muted">{formatCommentDate(c.date)}</small>
+                                      </div>
+                                      <p className="mb-0 text-dark">{c.text}</p>
+                                    </div>
+                                  </div>
+                                ))
+                              ) : (
+                                <div className="text-center py-4">
+                                  <p className="mb-0">No comments yet</p>
+                                </div>
+                              )}
+                            </div>
+
+                            {/* Add Comment */}
+                            <div className="border-top pt-3">
+                              <textarea
+                                className="form-control border-primary"
+                                rows="3"
+                                value={newComment}
+                                onChange={(e) => setNewComment(e.target.value)}
+                                placeholder="Add a new comment..."
+                                disabled={!isEditMode}
+                              />
+                              {/* <button
+                                className="btn btn-primary mt-2"
+                                onClick={handleAddComment}
+                                disabled={!isEditMode || !newComment.trim()}
+                              >
+                                💬 Add Comment
+                              </button> */}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
                     </div>
                   </div>
                 )}
@@ -577,136 +591,85 @@ export default function WorkerCallModal({ worker, isOpen, onClose, isEditMode })
                 {/* Skills Info Tab */}
                 {activeTab === "skills" && (
                   <div className="fade show">
-                    <div className="row g-3">
-                      {/* Education */}
-                      <div className="col-md-4">
-                        <div className="form-group">
-                          <label className="form-label fw-semibold text-dark">
-                            Education
-                          </label>
-                          {isEditMode ? (
-                            <input
-                              type="text"
-                              name="education"
-                              value={localWorker.education || ""}
-                              onChange={handleChange}
-                              className="form-control border-primary"
-                              placeholder="Enter education"
-                            />
-                          ) : (
-                            <p className="form-control-plaintext border rounded p-2 bg-light">{localWorker.education || "—"}</p>
-                          )}
-                        </div>
-                      </div>
+                    <div className="row g-4">
+                      {/* Languages Section */}
+                      <div className="col-12">
+                        <div className=" border-0 shadow-sm p-3">
+                          <div className="card-header bg-light">
+                            <h6 className="mb-0 fw-bold text-primary">Languages</h6>
+                          </div>
+                          <div className="card-body">
+                            {isEditMode && (
+                              <div className="position-relative mb-3">
+                                <input
+                                  type="text"
+                                  className="form-control border-primary"
+                                  placeholder="Search or type language..."
+                                  value={languageSearch}
+                                  onChange={(e) => {
+                                    setLanguageSearch(e.target.value);
+                                    setShowLanguageDropdown(true);
+                                  }}
+                                  onFocus={() => setShowLanguageDropdown(true)}
+                                />
 
-                      {/* Working Hours */}
-                      <div className="col-md-4">
-                        <div className="form-group">
-                          <label className="form-label fw-semibold text-dark">
-                            Working Hours
-                          </label>
-                          {isEditMode ? (
-                            <select
-                              name="workingHours"
-                              value={localWorker.workingHours || ""}
-                              onChange={handleChange}
-                              className="form-select border-primary"
-                            >
-                              <option value="">Select Hours</option>
-                              <option value="12">12 Hours</option>
-                              <option value="24">24 Hours</option>
-                            </select>
-                          ) : (
-                            <span className="text-dark fw-semibold">
-                              {localWorker.workingHours ? `${localWorker.workingHours} Hours` : "—"}
-                            </span>
-                          )}
-                        </div>
-                      </div>
-
-                      {/* Languages - Enhanced with Searchable Dropdown */}
-                      <div className="col-md-4">
-                        <div className="form-group">
-                          <label className="form-label fw-semibold text-dark">
-                            Languages
-                          </label>
-
-                          {isEditMode && (
-                            <div className="position-relative">
-                              <input
-                                type="text"
-                                className="form-control border-primary"
-                                placeholder="Search or type language..."
-                                value={languageSearch}
-                                onChange={(e) => {
-                                  setLanguageSearch(e.target.value);
-                                  setShowLanguageDropdown(true);
-                                }}
-                                onFocus={() => setShowLanguageDropdown(true)}
-                              />
-
-                              {showLanguageDropdown && (
-                                <div
-                                  className="position-absolute top-100 start-0 end-0 bg-white border border-primary rounded mt-1 shadow-lg z-3"
-                                  style={{ maxHeight: "200px", overflowY: "auto" }}
-                                >
-                                  {filteredLanguages.map((lang) => (
-                                    <div
-                                      key={lang}
-                                      className="dropdown-item p-2 border-bottom"
-                                      onClick={() => handleLanguageSelect(lang)}
-                                      style={{ cursor: "pointer" }}
-                                    >
-                                      {lang}
-                                    </div>
-                                  ))}
-                                  {filteredLanguages.length === 0 && (
-                                    <div className="dropdown-item p-2 text-muted">
-                                      No languages found
-                                    </div>
-                                  )}
-                                </div>
-                              )}
-                            </div>
-                          )}
-
-                          {/* Language Tags */}
-                          <div className="d-flex flex-wrap gap-2 mt-2">
-                            {normalizeArray(localWorker.languages).map((lang, idx) => (
-                              <span key={idx} className="badge bg-success d-flex align-items-center">
-                                {lang}
-                                {isEditMode && (
-                                  <button
-                                    type="button"
-                                    className="btn-close btn-close-white ms-2"
-                                    onClick={() => handleTagRemove("languages", idx)}
-                                    style={{ fontSize: "0.7rem" }}
-                                  ></button>
+                                {showLanguageDropdown && (
+                                  <div
+                                    className="position-absolute top-100 start-0 end-0 bg-white border border-primary rounded mt-1 shadow-lg z-3"
+                                    style={{ maxHeight: "200px", overflowY: "auto" }}
+                                  >
+                                    {filteredLanguages.map((lang) => (
+                                      <div
+                                        key={lang}
+                                        className="dropdown-item p-2 border-bottom"
+                                        onClick={() => handleLanguageSelect(lang)}
+                                        style={{ cursor: "pointer" }}
+                                      >
+                                        {lang}
+                                      </div>
+                                    ))}
+                                    {filteredLanguages.length === 0 && (
+                                      <div className="dropdown-item p-2 text-muted">
+                                        No languages found
+                                      </div>
+                                    )}
+                                  </div>
                                 )}
-                              </span>
-                            ))}
+                              </div>
+                            )}
+
+                            {/* Language Tags */}
+                            <div className="d-flex flex-wrap gap-2">
+                              {normalizeArray(localWorker.languages).map((lang, idx) => (
+                                <span key={idx} className="badge bg-success d-flex align-items-center p-2">
+                                  {lang}
+                                  {isEditMode && (
+                                    <button
+                                      type="button"
+                                      className="btn-close btn-close-white ms-2"
+                                      onClick={() => handleTagRemove("languages", idx)}
+                                      style={{ fontSize: "0.7rem" }}
+                                    ></button>
+                                  )}
+                                </span>
+                              ))}
+                            </div>
                           </div>
                         </div>
                       </div>
-                    </div>
 
-                    {/* Skills Sections */}
-                    <div className="row mt-4">
-                      
-                      {/* Skills */}
-                      <div className="col-md-12">
-                        <div className=" skillBox">
-                          <div className="card-header p-2">
-                            <h6 className="mb-0">
-                              Skills
-                            </h6>
+                      {/* Skills Sections */}
+                      <div className="col-md-6">
+                        <div className=" border-0 shadow-sm p-3 h-100">
+                          <div className="card-header bg-light">
+                            <h6 className="mb-0 fw-bold text-primary">General Skills</h6>
                           </div>
                           <div className="card-body">
                             {isEditMode ? (
                               <>
-                                <div className="border rounded p-3 bg-light" style={{ maxHeight: "160px", overflowY: "auto" }}>
+                                <div className="border rounded p-3 bg-light mb-3">
                                   {homeCareSkillOptions.map(opt => (
-                                    <div key={opt} className="form-check form-check-inline me-3 mb-2">
+                                    <div key={opt} className="form-check mb-2">
                                       <input
                                         type="checkbox"
                                         className="form-check-input"
@@ -720,7 +683,7 @@ export default function WorkerCallModal({ worker, isOpen, onClose, isEditMode })
                                     </div>
                                   ))}
                                 </div>
-                                <div className="input-group mt-3">
+                                <div className="input-group">
                                   <input id="custom-skills" type="text" className="form-control border-primary" placeholder="Add custom skill" />
                                   <button type="button" className="btn btn-primary" onClick={() => handleAddCustom('skills', 'custom-skills')}>
                                     Add
@@ -729,14 +692,14 @@ export default function WorkerCallModal({ worker, isOpen, onClose, isEditMode })
                               </>
                             ) : null}
 
-                            <div className="d-flex flex-wrap gap-2 p-2">
+                            <div className="d-flex flex-wrap gap-2 mt-3">
                               {normalizeArray(localWorker.skills).map((skill, idx) => (
-                                <span key={idx} className="badge bg-info text-dark d-flex align-items-center">
+                                <span key={idx} className="badge bg-info text-dark d-flex align-items-center p-2">
                                   {skill}
                                   {isEditMode && (
                                     <button
                                       type="button"
-                                      className="btn-close btn-close-white ms-2"
+                                      className="btn-close btn-close-dark ms-2"
                                       onClick={() => handleTagRemove("skills", idx)}
                                       style={{ fontSize: "0.7rem" }}
                                     ></button>
@@ -747,20 +710,19 @@ export default function WorkerCallModal({ worker, isOpen, onClose, isEditMode })
                           </div>
                         </div>
                       </div>
+
                       {/* Home Care Skills */}
-                      <div className="col-12 mt-3">
-                        <div className=" skillBox">
-                          <div className="card-header p-2">
-                            <h6 className="mb-0">
-                              Home Care Skills
-                            </h6>
+                      <div className="col-md-6">
+                        <div className=" border-0 shadow-sm p-3 h-100">
+                          <div className="card-header bg-light">
+                            <h6 className="mb-0 fw-bold text-primary">Home Care Skills</h6>
                           </div>
                           <div className="card-body">
                             {isEditMode ? (
                               <>
-                                <div className="border rounded p-3 bg-light" style={{ maxHeight: "160px", overflowY: "auto" }}>
+                                <div className="border rounded p-3 bg-light mb-3">
                                   {homeCareSkillOptions.map(opt => (
-                                    <div key={opt} className="form-check form-check-inline me-3 mb-2">
+                                    <div key={opt} className="form-check mb-2">
                                       <input
                                         type="checkbox"
                                         className="form-check-input"
@@ -774,7 +736,7 @@ export default function WorkerCallModal({ worker, isOpen, onClose, isEditMode })
                                     </div>
                                   ))}
                                 </div>
-                                <div className="input-group mt-3">
+                                <div className="input-group">
                                   <input id="custom-homeCareSkills" type="text" className="form-control border-primary" placeholder="Add custom home care skill" />
                                   <button type="button" className="btn btn-success" onClick={() => handleAddCustom('homeCareSkills', 'custom-homeCareSkills')}>
                                     Add
@@ -783,9 +745,9 @@ export default function WorkerCallModal({ worker, isOpen, onClose, isEditMode })
                               </>
                             ) : null}
 
-                            <div className="d-flex flex-wrap gap-2 p-2">
+                            <div className="d-flex flex-wrap gap-2 mt-3">
                               {normalizeArray(localWorker.homeCareSkills).map((skill, idx) => (
-                                <span key={idx} className="badge bg-success text-white d-flex align-items-center">
+                                <span key={idx} className="badge bg-success text-white d-flex align-items-center p-2">
                                   {skill}
                                   {isEditMode && (
                                     <button
@@ -803,19 +765,17 @@ export default function WorkerCallModal({ worker, isOpen, onClose, isEditMode })
                       </div>
 
                       {/* Other Skills */}
-                      <div className="col-12 mt-3">
-                        <div className=" skillBox">
-                          <div className="card-header  p-2">
-                            <h6 className="mb-0">
-                              Other Skills
-                            </h6>
+                      <div className="col-12">
+                        <div className=" border-0 shadow-sm p-3">
+                          <div className="card-header bg-light">
+                            <h6 className="mb-0 fw-bold text-primary">Other Skills</h6>
                           </div>
                           <div className="card-body">
                             {isEditMode ? (
                               <>
-                                <div className="border rounded p-3 bg-light" style={{ maxHeight: "160px", overflowY: "auto" }}>
+                                <div className="border rounded p-3 bg-light mb-3">
                                   {otherSkillOptions.map(opt => (
-                                    <div key={opt} className="form-check form-check-inline me-3 mb-2">
+                                    <div key={opt} className="form-check mb-2">
                                       <input
                                         type="checkbox"
                                         className="form-check-input"
@@ -829,7 +789,7 @@ export default function WorkerCallModal({ worker, isOpen, onClose, isEditMode })
                                     </div>
                                   ))}
                                 </div>
-                                <div className="input-group mt-3">
+                                <div className="input-group">
                                   <input id="custom-otherSkills" type="text" className="form-control border-primary" placeholder="Add custom other skill" />
                                   <button type="button" className="btn btn-warning" onClick={() => handleAddCustom('otherSkills', 'custom-otherSkills')}>
                                     Add
@@ -838,9 +798,9 @@ export default function WorkerCallModal({ worker, isOpen, onClose, isEditMode })
                               </>
                             ) : null}
 
-                            <div className="d-flex flex-wrap gap-2 p-2">
+                            <div className="d-flex flex-wrap gap-2 mt-3">
                               {normalizeArray(localWorker.otherSkills).map((skill, idx) => (
-                                <span key={idx} className="badge bg-warning text-dark d-flex align-items-center">
+                                <span key={idx} className="badge bg-warning text-dark d-flex align-items-center p-2">
                                   {skill}
                                   {isEditMode && (
                                     <button
@@ -863,9 +823,9 @@ export default function WorkerCallModal({ worker, isOpen, onClose, isEditMode })
             </div>
 
             {/* Enhanced Footer */}
-            <div className="modal-footer bg-light">
+            <div className="modal-footer bg-light border-top">
               {isEditMode && (
-                <button className="btn btn-success px-4" onClick={handleSave}>
+                <button className="btn btn-success px-4 fw-bold" onClick={handleSave}>
                   Save Changes
                 </button>
               )}
@@ -881,29 +841,29 @@ export default function WorkerCallModal({ worker, isOpen, onClose, isEditMode })
       {showSaveModal && (
         <div
           className="modal fade show"
-          style={{ display: "block", backgroundColor: "rgba(0,0,0,0.8)" }}
+          style={{ display: "block", backgroundColor: "rgba(0,0,0,0.6)" }}
         >
           <div className="modal-dialog modal-dialog-centered">
-            <div className="modal-content border-0 shadow-lg">
+            <div className="modal-content border-0 shadow-lg" style={{ borderRadius: "15px", maxWidth:"800px", margin:"auto" }}>
               <div className="modal-header bg-success text-white">
-                <h5 className="modal-title">
-                  Saved Successfully
+                <h5 className="modal-title fw-bold">
+                  Successfully Saved
                 </h5>
               </div>
               <div className="modal-body text-center py-4">
-                <p className="mt-3 mb-0">
-                  Worker <strong className="text-success">{worker.name}</strong> details have been updated.
+                <p className="mb-0">
+                  Worker <strong className="text-success">{worker.name}</strong> details have been updated successfully!
                 </p>
               </div>
               <div className="modal-footer">
                 <button
-                  className="btn btn-success"
+                  className="btn btn-success fw-bold"
                   onClick={() => {
                     setShowSaveModal(false);
                     onClose();
                   }}
                 >
-                  OK
+                OK
                 </button>
               </div>
             </div>
@@ -915,24 +875,24 @@ export default function WorkerCallModal({ worker, isOpen, onClose, isEditMode })
       {showUnsavedConfirm && (
         <div
           className="modal fade show"
-          style={{ display: "block", background: "rgba(0,0,0,0.8)" }}
+          style={{ display: "block", background: "rgba(0,0,0,0.6)" }}
         >
           <div className="modal-dialog modal-dialog-centered">
-            <div className="modal-content border-0 shadow-lg">
+            <div className="modal-content border-0 shadow-lg" style={{ borderRadius: "15px" }}>
               <div className="modal-header bg-warning text-dark">
-                <h5 className="modal-title">
-                  Unsaved Changes
+                <h5 className="modal-title fw-bold">
+                   Unsaved Changes
                 </h5>
               </div>
               <div className="modal-body text-center py-4">
-                <p className="mt-3">You have unsaved changes. Are you sure you want to close?</p>
+                <p className="mb-0">You have unsaved changes. Are you sure you want to close?</p>
               </div>
               <div className="modal-footer">
                 <button
                   className="btn btn-secondary"
                   onClick={() => setShowUnsavedConfirm(false)}
                 >
-                  Cancel
+                 Cancel
                 </button>
                 <button
                   className="btn btn-danger"
@@ -949,6 +909,48 @@ export default function WorkerCallModal({ worker, isOpen, onClose, isEditMode })
           </div>
         </div>
       )}
+
+      <style jsx>{`
+        .btn-circle {
+          width: 40px;
+          height: 40px;
+          border-radius: 50%;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          padding: 0;
+        }
+        
+        .bg-gradient-primary {
+          background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+        
+        .bg-pink {
+          background-color: #e83e8c !important;
+        }
+        
+        .card {
+          border-radius: 10px;
+        }
+        
+        .form-control, .form-select {
+          border-radius: 8px;
+        }
+        
+        .badge {
+          border-radius: 20px;
+          font-size: 0.85rem;
+        }
+        
+        .nav-pills .nav-link {
+          border-radius: 10px;
+          transition: all 0.3s ease;
+        }
+        
+        .nav-pills .nav-link:hover {
+         opacity: .9
+        }
+      `}</style>
     </>
   );
 }

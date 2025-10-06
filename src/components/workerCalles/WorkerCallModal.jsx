@@ -1,169 +1,334 @@
-import React, { useState, useEffect } from "react";
+// src/components/workerCalles/WorkerCallModal.jsx
+import React, { useEffect, useMemo, useState } from "react";
 import firebaseDB from "../../firebase";
-import { div } from "framer-motion/client";
+import { useAuth } from "../../context/AuthContext";
 
-// Resolve current user name for comments (lowercase, strip domain)
-const resolveCurrentUserName = (workerLike = {}) => {
-  const local = (typeof window !== 'undefined' && window.localStorage) ? window.localStorage : { getItem: () => "" };
-  const fromWorker = workerLike.userName || workerLike.username || workerLike.createdByName || workerLike.addedByName || "";
-  const fromStore = local.getItem("name") || local.getItem("userName") || local.getItem("username") || local.getItem("displayName") || local.getItem("email") || "";
-  const raw = String(fromWorker || fromStore || "").trim();
-  return raw.replace(/@.*/, "").toLowerCase();
+/** Resolve a nice display name for a user id from the global Users node */
+const pickUserName = (u) => {
+  if (!u) return "";
+  return (
+    u.name ||
+    u.displayName ||
+    u.username ||
+    (u.email ? u.email.replace(/@.*/, "") : "") ||
+    ""
+  );
 };
 
-export default function WorkerCallModal({ worker, isOpen, onClose, isEditMode }) {
-  const homeCareSkillOptions = [
-    "Nursing", "Patient Care", "Care Taker", "Old Age Care", "Baby Care",
-    "Bedside Attender", "Supporting", "Any duty", "Daiper", "Cooking"
+const normalizeArray = (val) => {
+  if (!val) return [];
+  if (Array.isArray(val)) return val.filter(Boolean);
+  if (typeof val === "string") {
+    return val
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean);
+  }
+  return [];
+};
+
+const parseDate = (dLike) => {
+  if (dLike instanceof Date) return dLike;
+  if (typeof dLike === "number") return new Date(dLike);
+  return new Date(String(dLike));
+};
+
+const formatDateTime = (dLike) => {
+  const d = parseDate(dLike);
+  if (Number.isNaN(d.getTime())) return "—";
+  return (
+    d.toLocaleDateString("en-GB", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+    }) +
+    " " +
+    d.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", hour12: true })
+  );
+};
+
+export default function WorkerCallModal({
+  worker,
+  isOpen,
+  onClose,
+  isEditMode, // keep existing prop / behavior
+}) {
+  const { user: authUser } = useAuth();
+
+  // Global Users map (no local auth)
+  const [usersMap, setUsersMap] = useState({});
+  useEffect(() => {
+    const ref = firebaseDB.child("Users");
+    const cb = ref.on("value", (snap) => setUsersMap(snap.val() || {}));
+    return () => ref.off("value", cb);
+  }, []);
+
+  const currentUserId = authUser?.dbId || authUser?.uid || authUser?.id || null;
+  const currentUserName =
+    (currentUserId && pickUserName(usersMap[currentUserId])) ||
+    authUser?.displayName ||
+    (authUser?.email ? authUser.email.replace(/@.*/, "") : "") ||
+    "user";
+
+  // Distinct option catalogs
+  const primarySkillOptions = [
+    "Nursing",
+    "Patient Care",
+    "Care Taker",
+    "Old Age Care",
+    "Baby Care",
+    "Bedside Attender",
+    "Supporting",
+    "Any duty",
+    "Diaper",
+    "Cooking",
   ];
+
+  const homeCareSkillOptions = [
+    "Injection",
+    "BP Check",
+    "Sugar Check",
+    "Wound Dressing",
+    "Catheter Care",
+    "Ryle's Tube",
+    "IV Fluids",
+    "Nebulization",
+    "Physio Support",
+    "Post-Operative Care",
+  ];
+
   const otherSkillOptions = [
-    "Computer Operating", "Tele Calling", "Driving", "Supervisor", "Manager", "Attender", "Security",
-    "Carpenter", "Painter", "Plumber", "Electrician", "Mason (Home maker)", "Tailor", "Labour", "Farmer", "Delivery Boy"
+    "Computer Operating",
+    "Tele Calling",
+    "Driving",
+    "Supervisor",
+    "Manager",
+    "Attender",
+    "Security",
+    "Carpenter",
+    "Painter",
+    "Plumber",
+    "Electrician",
+    "Mason (Home maker)",
+    "Tailor",
+    "Labour",
+    "Farmer",
+    "Delivery Boy",
   ];
 
   const languageOptions = [
-    "Telugu", "English", "Hindi", "Urdu", "Kannada",
-    "Malayalam", "Tamil", "Bengali", "Marati"
+    "Telugu",
+    "English",
+    "Hindi",
+    "Urdu",
+    "Kannada",
+    "Malayalam",
+    "Tamil",
+    "Bengali",
+    "Marati",
   ];
 
   const sourceOptions = [
-    "Apana", "WorkerIndian", "Reference", "Poster", "Agent",
-    "Facebook", "LinkedIn", "Instagram", "YouTube", "Website",
-    "Just Dial", "News Paper", "Other"
+    "Apana",
+    "WorkerIndian",
+    "Reference",
+    "Poster",
+    "Agent",
+    "Facebook",
+    "LinkedIn",
+    "Instagram",
+    "YouTube",
+    "Website",
+    "Just Dial",
+    "News Paper",
+    "Other",
   ];
 
   const [activeTab, setActiveTab] = useState("basic");
   const [localWorker, setLocalWorker] = useState({ ...worker });
-  const [comments, setComments] = useState(worker.comments || []);
+
+  // Canonical comments array; ALWAYS sorted desc by date
+  const [comments, setComments] = useState([]);
   const [newComment, setNewComment] = useState("");
-  const [editIdx, setEditIdx] = useState(-1);
-  const [editText, setEditText] = useState("");
+
   const [showSaveModal, setShowSaveModal] = useState(false);
   const [dirty, setDirty] = useState(false);
   const [showUnsavedConfirm, setShowUnsavedConfirm] = useState(false);
   const [languageSearch, setLanguageSearch] = useState("");
   const [showLanguageDropdown, setShowLanguageDropdown] = useState(false);
 
+  // Save remains disabled until a comment is added this session
+  const [canSave, setCanSave] = useState(false);
+
+  // Rehydrate when the record changes
   useEffect(() => {
     setLocalWorker({ ...worker });
-    setComments(worker.comments || []);
-  }, [worker]);
+    const list = Array.isArray(worker?.comments) ? worker.comments.slice() : [];
+    list.sort((a, b) => {
+      const da = parseDate(a?.date).getTime() || 0;
+      const db = parseDate(b?.date).getTime() || 0;
+      return db - da; // latest first
+    });
+    setComments(list);
+    setNewComment("");
+    setDirty(false);
+    setCanSave(false); // locked until a comment is added
+  }, [worker?.id]);
+
+  // Hooks above any early returns
+  const filteredLanguages = useMemo(
+    () =>
+      languageOptions.filter((lang) =>
+        lang.toLowerCase().includes(languageSearch.toLowerCase())
+      ),
+    [languageSearch]
+  );
 
   if (!isOpen) return null;
 
-  const normalizeArray = (val) => {
-    if (!val) return [];
-    if (Array.isArray(val)) return val;
-    if (typeof val === "string") {
-      return val.split(",").map((s) => s.trim()).filter((s) => s);
-    }
-    return [];
-  };
-
+  // ====== Handlers ======
   const handleMultiToggle = (field, value) => {
-    setLocalWorker(prev => {
+    if (!isEditMode) return; // ignore in view mode
+    setLocalWorker((prev) => {
       const arr = normalizeArray(prev[field]);
-      const has = arr.some(v => String(v).toLowerCase() === String(value).toLowerCase());
-      return { ...prev, [field]: has ? arr.filter(v => String(v).toLowerCase() !== String(value).toLowerCase()) : [...arr, value] };
+      const lower = String(value).toLowerCase();
+      const hit = arr.some((v) => String(v).toLowerCase() === lower);
+      const next = hit
+        ? arr.filter((v) => String(v).toLowerCase() !== lower)
+        : [...arr, value];
+      return { ...prev, [field]: next };
     });
     setDirty(true);
+    // Save is gated by "Add Comment", so do NOT enable here.
   };
 
   const handleAddCustom = (field, inputId) => {
+    if (!isEditMode) return;
     const el = document.getElementById(inputId);
     if (!el) return;
-    const value = (el.value || '').trim();
+    const value = (el.value || "").trim();
     if (!value) return;
-    setLocalWorker(prev => {
+    setLocalWorker((prev) => {
       const arr = normalizeArray(prev[field]);
-      if (arr.some(v => String(v).toLowerCase() === value.toLowerCase())) return prev;
+      if (arr.some((v) => String(v).toLowerCase() === value.toLowerCase()))
+        return prev;
       return { ...prev, [field]: [...arr, value] };
     });
     el.value = "";
     setDirty(true);
+    // still gated by comment
   };
 
   const handleChange = (e) => {
     const { name, value } = e.target;
-    setLocalWorker({ ...localWorker, [name]: value });
+    setLocalWorker((prev) => ({ ...prev, [name]: value }));
     setDirty(true);
   };
 
+  /** Save worker details (disabled until a comment is added) */
   const handleSave = async () => {
-    const toSave = {
-      ...localWorker,
-      skills: normalizeArray(localWorker.skills),
-      languages: normalizeArray(localWorker.languages),
-      homeCareSkills: normalizeArray(localWorker.homeCareSkills),
-      otherSkills: normalizeArray(localWorker.otherSkills),
-    };
-    await firebaseDB.child(`WorkerCallData/${worker.id}`).update(toSave);
-    setShowSaveModal(true);
-    setDirty(false);
-  };
+    if (!canSave) return;
+    try {
+      const now = Date.now();
+      const toSave = {
+        ...localWorker,
+        skills: normalizeArray(localWorker.skills),
+        languages: normalizeArray(localWorker.languages),
+        homeCareSkills: normalizeArray(localWorker.homeCareSkills),
+        otherSkills: normalizeArray(localWorker.otherSkills),
+        updatedAt: now,
+        updatedById: currentUserId || localWorker.updatedById || null,
+        updatedByName: currentUserName || localWorker.updatedByName || "",
+      };
 
-  const handleAddComment = async () => {
-    if (!newComment.trim()) return;
-    const commentObj = {
-      text: newComment,
-      date: new Date().toISOString(),
-      user: resolveCurrentUserName(localWorker) || "unknown",
-    };
-    const updated = [commentObj, ...comments];
-    setComments(updated);
-    setNewComment("");
-    await firebaseDB.child(`WorkerCallData/${worker.id}/comments`).set(updated);
-    setDirty(true);
-  };
+      if (!localWorker.createdAt) {
+        toSave.createdAt = localWorker.date || now;
+      }
+      if (!localWorker.createdById && currentUserId) {
+        toSave.createdById = currentUserId;
+        toSave.createdByName = currentUserName;
+      }
 
-  const handleTagAdd = (field, value) => {
-    if (!value.trim()) return;
-    setLocalWorker((prev) => {
-      const arr = normalizeArray(prev[field]);
-      return { ...prev, [field]: [...arr, value.trim()] };
-    });
-    setDirty(true);
-  };
-
-  const handleTagRemove = (field, idx) => {
-    setLocalWorker((prev) => {
-      const arr = normalizeArray(prev[field]);
-      arr.splice(idx, 1);
-      return { ...prev, [field]: arr };
-    });
-    setDirty(true);
-  };
-
-  const handleLanguageSelect = (language) => {
-    handleTagAdd("languages", language);
-    setLanguageSearch("");
-    setShowLanguageDropdown(false);
-  };
-
-  const confirmClose = () => {
-    if (dirty) {
-      setShowUnsavedConfirm(true);
-    } else {
-      onClose();
+      await firebaseDB.child(`WorkerCallData/${worker.id}`).update(toSave);
+      setLocalWorker((prev) => ({ ...prev, ...toSave }));
+      setShowSaveModal(true);
+      setDirty(false);
+    } catch (err) {
+      console.error("Save failed:", err);
+      alert("Failed to save worker details.");
     }
   };
 
-  const filteredLanguages = languageOptions.filter(lang =>
-    lang.toLowerCase().includes(languageSearch.toLowerCase())
-  );
+  /** Add a comment → enables Save; shows at the top; never overwrites history */
+  const handleAddComment = async () => {
+    if (!isEditMode) return;
+    const text = newComment.trim();
+    if (!text) return;
+    try {
+      const entry = {
+        text,
+        date: new Date().toISOString(),
+        userId: currentUserId || null,
+        user: currentUserName || "user",
+      };
 
-  const formatCommentDate = (dateString) => {
-    const date = new Date(dateString);
-    return date.toLocaleDateString('en-GB', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric'
-    }) + ' ' + date.toLocaleTimeString('en-GB', {
-      hour: '2-digit',
-      minute: '2-digit',
-      hour12: true
-    });
+      const updated = [entry, ...comments]; // latest on top
+      setComments(updated);
+      setNewComment("");
+
+      // Persist full array back (keeps existing, adds new on top)
+      await firebaseDB.child(`WorkerCallData/${worker.id}/comments`).set(updated);
+
+      // Reflect in localWorker (helpful if other parts rely on it)
+      setLocalWorker((prev) => ({ ...prev, comments: updated, updatedAt: Date.now(), updatedById: currentUserId || null, updatedByName: currentUserName || "" }));
+
+      // Now Save can be used
+      setCanSave(true);
+      setDirty(true);
+    } catch (err) {
+      console.error("Adding comment failed:", err);
+      alert("Failed to add comment.");
+    }
   };
+
+  const handleTagRemove = (field, idx) => {
+    if (!isEditMode) return;
+    setLocalWorker((prev) => {
+      const arr = normalizeArray(prev[field]);
+      arr.splice(idx, 1);
+      return { ...prev, [field]: [...arr] };
+    });
+    setDirty(true);
+    // still gated by comment
+  };
+
+  const handleLanguageSelect = (language) => {
+    if (!isEditMode) return;
+    setLocalWorker((prev) => {
+      const arr = normalizeArray(prev.languages);
+      if (arr.some((v) => String(v).toLowerCase() === language.toLowerCase()))
+        return prev;
+      return { ...prev, languages: [...arr, language] };
+    });
+    setLanguageSearch("");
+    setShowLanguageDropdown(false);
+    setDirty(true);
+  };
+
+  const confirmClose = () => {
+    if (dirty) setShowUnsavedConfirm(true);
+    else onClose();
+  };
+
+  // Created/Updated stamps (global Users)
+  const createdByName =
+    pickUserName(usersMap[localWorker?.createdById]) ||
+    localWorker?.createdByName ||
+    "";
+  const updatedByName =
+    pickUserName(usersMap[localWorker?.updatedById]) ||
+    localWorker?.updatedByName ||
+    "";
 
   return (
     <>
@@ -172,48 +337,49 @@ export default function WorkerCallModal({ worker, isOpen, onClose, isEditMode })
         style={{ display: "block", background: "rgba(0,0,0,0.8)" }}
       >
         <div className="modal-dialog modal-xl modal-dialog-centered">
-          <div className="modal-content border-0 shadow-lg" style={{ borderRadius: "15px", maxWidth:"800px", margin:"auto" }}>
-            {/* Enhanced Header */}
-            <div className="modal-header bg-gradient-primary text-white" style={{ background: "#69656e" }}>
+          <div
+            className="modal-content border-0 shadow-lg"
+            style={{ borderRadius: "15px", maxWidth: "800px", margin: "auto" }}
+          >
+            {/* Header */}
+            <div
+              className="modal-header bg-gradient-primary text-white"
+              style={{ background: "#69656e" }}
+            >
               <div className="d-flex align-items-center w-100">
                 <div className="flex-grow-1">
                   <h5 className="modal-title fw-bold mb-1">
-                    {isEditMode ? "✏️ Edit Worker" : "👤 Worker Details"}
+                    {isEditMode ? "Edit Worker" : "Worker Details"}
                   </h5>
-                  <div className="d-flex align-items-center gap-3 text-white-50 small">
+                  <div className="d-flex flex-wrap align-items-center gap-3 text-white-50 small">
+                    <span>{localWorker?.name || "—"}</span>
                     <span>{localWorker?.mobileNo || "—"}</span>
                     <span>{localWorker?.location || "—"}</span>
-                    <span>{localWorker?.name || "—"}</span>
                   </div>
+ 
                 </div>
-                <div className="d-flex align-items-center gap-2">
-                  {localWorker?.mobileNo && (
-                    <>
-                      <a className="btn btn-sm btn-light btn-circle" href={`tel:${localWorker.mobileNo}`} target="_blank" rel="noreferrer" title="Call">
-                        📞
-                      </a>
-                      <a className="btn btn-sm btn-light btn-circle" href={`https://wa.me/${localWorker.mobileNo.replace(/\D/g, '')}`} target="_blank" rel="noreferrer" title="WhatsApp">
-                        💬
-                      </a>
-                    </>
-                  )}
-                  <button
-                    type="button"
-                    className="btn-close btn-close-white"
-                    onClick={confirmClose}
-                  ></button>
-                </div>
+
+                {/* Close */}
+                <button
+                  type="button"
+                  className="btn-close btn-close-white"
+                  onClick={confirmClose}
+                ></button>
               </div>
             </div>
 
             <div className="modal-body p-0">
-              {/* Enhanced Tabs */}
+              {/* Tabs */}
               <div className="bg-light border-bottom">
                 <div className="container-fluid">
                   <ul className="nav nav-pills nav-justified gap-2 p-2">
                     <li className="nav-item">
                       <button
-                        className={`nav-link ${activeTab === "basic" ? "active btn-primary text-white" : "btn-outline-primary text-dark"}`}
+                        className={`nav-link ${
+                          activeTab === "basic"
+                            ? "active btn-primary text-white"
+                            : "btn-outline-primary text-dark"
+                        }`}
                         onClick={() => setActiveTab("basic")}
                         style={{ borderRadius: "5px", fontWeight: "600" }}
                       >
@@ -222,7 +388,11 @@ export default function WorkerCallModal({ worker, isOpen, onClose, isEditMode })
                     </li>
                     <li className="nav-item">
                       <button
-                        className={`nav-link ${activeTab === "skills" ? "active btn-primary text-white" : "btn-outline-primary text-dark"}`}
+                        className={`nav-link ${
+                          activeTab === "skills"
+                            ? "active btn-primary text-white"
+                            : "btn-outline-primary text-dark"
+                        }`}
                         onClick={() => setActiveTab("skills")}
                         style={{ borderRadius: "5px", fontWeight: "600" }}
                       >
@@ -238,11 +408,13 @@ export default function WorkerCallModal({ worker, isOpen, onClose, isEditMode })
                 {activeTab === "basic" && (
                   <div className="fade show">
                     <div className="row g-4">
-                      {/* Personal Information Section */}
+                      {/* Personal Information */}
                       <div className="col-12">
-                        <div className=" border-0 shadow-sm p-3">
+                        <div className="border-0 shadow-sm p-3">
                           <div className="card-header bg-light">
-                            <h6 className="mb-0 fw-bold text-primary">Personal Information</h6>
+                            <h6 className="mb-0 fw-bold text-primary">
+                              Personal Information
+                            </h6>
                           </div>
                           <div className="card-body">
                             <div className="row g-3">
@@ -273,7 +445,9 @@ export default function WorkerCallModal({ worker, isOpen, onClose, isEditMode })
                                     placeholder="Enter worker name"
                                   />
                                 ) : (
-                                  <div className="form-control border bg-light">{localWorker.name || "—"}</div>
+                                  <div className="form-control border bg-light">
+                                    {localWorker.name || "—"}
+                                  </div>
                                 )}
                               </div>
 
@@ -282,26 +456,36 @@ export default function WorkerCallModal({ worker, isOpen, onClose, isEditMode })
                                   Gender
                                 </label>
                                 {isEditMode ? (
-                                  <div className="d-flex gap-4">
+                                  <div className="d-flex gap-2 flex-wrap">
                                     {["Male", "Female", "Others"].map((g) => (
-                                      <div key={g} className="form-check">
-                                        <input
-                                          type="radio"
-                                          name="gender"
-                                          value={g}
-                                          checked={localWorker.gender === g}
-                                          onChange={handleChange}
-                                          className="form-check-input"
-                                          id={`gender-${g}`}
-                                        />
-                                        <label className="form-check-label" htmlFor={`gender-${g}`}>
-                                          {g}
-                                        </label>
-                                      </div>
+                                      <button
+                                        key={g}
+                                        type="button"
+                                        onClick={() =>
+                                          handleChange({
+                                            target: { name: "gender", value: g },
+                                          })
+                                        }
+                                        className={`btn ${
+                                          localWorker.gender === g
+                                            ? "btn-info"
+                                            : "btn-outline-secondary"
+                                        } btn-sm`}
+                                      >
+                                        {g}
+                                      </button>
                                     ))}
                                   </div>
                                 ) : (
-                                  <span className={`badge ${localWorker.gender === "Male" ? "bg-primary" : localWorker.gender === "Female" ? "bg-pink" : "bg-secondary"} fs-6 p-2`}>
+                                  <span
+                                    className={`badge ${
+                                      localWorker.gender === "Male"
+                                        ? "bg-primary"
+                                        : localWorker.gender === "Female"
+                                        ? "bg-pink"
+                                        : "bg-secondary"
+                                    } fs-6 p-2`}
+                                  >
                                     {localWorker.gender || "—"}
                                   </span>
                                 )}
@@ -309,7 +493,7 @@ export default function WorkerCallModal({ worker, isOpen, onClose, isEditMode })
 
                               <div className="col-md-6">
                                 <label className="form-label fw-semibold text-dark">
-                                Location
+                                  Location
                                 </label>
                                 {isEditMode ? (
                                   <input
@@ -321,7 +505,9 @@ export default function WorkerCallModal({ worker, isOpen, onClose, isEditMode })
                                     placeholder="Enter location"
                                   />
                                 ) : (
-                                  <div className="form-control border bg-light">{localWorker.location || "—"}</div>
+                                  <div className="form-control border bg-light">
+                                    {localWorker.location || "—"}
+                                  </div>
                                 )}
                               </div>
                             </div>
@@ -329,11 +515,13 @@ export default function WorkerCallModal({ worker, isOpen, onClose, isEditMode })
                         </div>
                       </div>
 
-                      {/* Professional Information Section */}
+                      {/* Professional Information */}
                       <div className="col-12">
-                        <div className=" border-0 shadow-sm p-3">
+                        <div className="border-0 shadow-sm p-3">
                           <div className="card-header bg-light">
-                            <h6 className="mb-0 fw-bold text-primary">Professional Information</h6>
+                            <h6 className="mb-0 fw-bold text-primary">
+                              Professional Information
+                            </h6>
                           </div>
                           <div className="card-body">
                             <div className="row g-3">
@@ -349,10 +537,16 @@ export default function WorkerCallModal({ worker, isOpen, onClose, isEditMode })
                                     className="form-select border-primary"
                                   >
                                     <option value="">Select Source</option>
-                                    {sourceOptions.map(s => <option key={s} value={s}>{s}</option>)}
+                                    {sourceOptions.map((s) => (
+                                      <option key={s} value={s}>
+                                        {s}
+                                      </option>
+                                    ))}
                                   </select>
                                 ) : (
-                                  <div className="form-control border bg-light">{localWorker.source || "—"}</div>
+                                  <div className="form-control border bg-light">
+                                    {localWorker.source || "—"}
+                                  </div>
                                 )}
                               </div>
 
@@ -374,7 +568,9 @@ export default function WorkerCallModal({ worker, isOpen, onClose, isEditMode })
                                     <option value="Widow">Widow</option>
                                   </select>
                                 ) : (
-                                  <div className="form-control border bg-light">{localWorker.maritalStatus || "—"}</div>
+                                  <div className="form-control border bg-light">
+                                    {localWorker.maritalStatus || "—"}
+                                  </div>
                                 )}
                               </div>
 
@@ -392,7 +588,9 @@ export default function WorkerCallModal({ worker, isOpen, onClose, isEditMode })
                                     placeholder="Enter education"
                                   />
                                 ) : (
-                                  <div className="form-control border bg-light">{localWorker.education || "—"}</div>
+                                  <div className="form-control border bg-light">
+                                    {localWorker.education || "—"}
+                                  </div>
                                 )}
                               </div>
 
@@ -412,7 +610,9 @@ export default function WorkerCallModal({ worker, isOpen, onClose, isEditMode })
                                     placeholder="Age"
                                   />
                                 ) : (
-                                  <div className="form-control border bg-light text-center">{localWorker.age || "—"}</div>
+                                  <div className="form-control border bg-light text-center">
+                                    {localWorker.age || "—"}
+                                  </div>
                                 )}
                               </div>
 
@@ -431,7 +631,9 @@ export default function WorkerCallModal({ worker, isOpen, onClose, isEditMode })
                                     <option value="Yes">Has Experience</option>
                                   </select>
                                 ) : (
-                                  <div className="form-control border bg-light">{localWorker.experience || "No"}</div>
+                                  <div className="form-control border bg-light">
+                                    {localWorker.experience || "No"}
+                                  </div>
                                 )}
                               </div>
 
@@ -451,7 +653,9 @@ export default function WorkerCallModal({ worker, isOpen, onClose, isEditMode })
                                     placeholder="Years"
                                   />
                                 ) : (
-                                  <div className="form-control border bg-light text-center">{localWorker.years || "—"}</div>
+                                  <div className="form-control border bg-light text-center">
+                                    {localWorker.years || "—"}
+                                  </div>
                                 )}
                               </div>
 
@@ -476,11 +680,15 @@ export default function WorkerCallModal({ worker, isOpen, onClose, isEditMode })
                                   </select>
                                 ) : (
                                   <span
-                                    className={`badge ${localWorker.conversationLevel === "Very Good" ? "bg-success" :
-                                      localWorker.conversationLevel === "Good" ? "bg-primary" :
-                                        localWorker.conversationLevel === "Average" ? "bg-warning" :
-                                          "bg-danger"
-                                      } fs-6 p-2  text-center`}
+                                    className={`badge ${
+                                      localWorker.conversationLevel === "Very Good"
+                                        ? "bg-success"
+                                        : localWorker.conversationLevel === "Good"
+                                        ? "bg-primary"
+                                        : localWorker.conversationLevel === "Average"
+                                        ? "bg-warning"
+                                        : "bg-danger"
+                                    } fs-6 p-2  text-center`}
                                   >
                                     {localWorker.conversationLevel || "N/A"}
                                   </span>
@@ -502,85 +710,71 @@ export default function WorkerCallModal({ worker, isOpen, onClose, isEditMode })
                                 ) : (
                                   <div className="form-control border bg-light">
                                     {localWorker.callReminderDate
-                                      ? new Date(localWorker.callReminderDate).toLocaleDateString("en-GB")
+                                      ? new Date(localWorker.callReminderDate).toLocaleDateString(
+                                          "en-GB"
+                                        )
                                       : "—"}
                                   </div>
                                 )}
                               </div>
 
-                              <div className="col-12">
-                                <label className="form-label fw-semibold text-dark">
-                                  Recent Comment
-                                </label>
-                                {isEditMode ? (
-                                  <textarea
-                                    name="comment"
-                                    value={localWorker.comment || ""}
-                                    onChange={handleChange}
-                                    className="form-control border-primary"
-                                    rows="3"
-                                    placeholder="Add recent comment..."
-                                  />
-                                ) : (
-                                  <div className="form-control border bg-light" style={{ padding:"10px" }}>
-                                    {localWorker.comment || "—"}
-                                  </div>
-                                )}
-                              </div>
+                              {/* Removed "Recent Comment" section as requested */}
                             </div>
                           </div>
                         </div>
                       </div>
 
-                      {/* Comments Section */}
+                      {/* Comments (All, latest first). In view mode: no textarea/button */}
                       <div className="col-12">
-                        <div className=" border-0 shadow-sm p-3">
+                        <div className="border-0 shadow-sm p-3">
                           <div className="card-header bg-light">
-                            <h6 className="mb-0 fw-bold text-primary">Comments & Notes</h6>
+                            <h6 className="mb-0 fw-bold text-primary mb-2">
+                              Comments
+                            </h6>
                           </div>
                           <div className="card-body">
-                            {/* Comments List */}
-                            <div className="mb-4" style={{ maxHeight: "300px", overflowY: "auto" }}>
-                              {comments.length > 0 ? (
+                            <div className="mb-3" style={{ maxHeight: "420px", overflowY: "auto" }}>
+                              {comments && comments.length > 0 ? (
                                 comments.map((c, idx) => (
-                                  <div key={idx} className=" mb-3 border">
-                                    <div className="card-body p-3">
-                                      <div className="d-flex justify-content-between align-items-start mb-2">
-                                        <div className="d-flex align-items-center">
-                                          <span className="badge bg-primary me-2"></span>
-                                          <small className="text-muted fw-bold">{c.user}</small>
-                                        </div>
-                                        <small className="text-muted">{formatCommentDate(c.date)}</small>
-                                      </div>
-                                      <p className="mb-0 text-dark">{c.text}</p>
+                                  <div key={idx} className="border rounded p-2 mb-3 bg-light">
+                                    <p className="mb-0 text-dark">{c.text}</p>
+                                    <div className="d-flex justify-content-between align-items-start mt-2">
+                                      <small className="text-primary small-text">
+                                        {c.user || pickUserName(usersMap[c.userId]) || "user"}
+                                      </small>
+                                      <small className="small-text">
+                                        {formatDateTime(c.date)}
+                                      </small>
                                     </div>
                                   </div>
                                 ))
                               ) : (
                                 <div className="text-center py-4">
-                                  <p className="mb-0">No comments yet</p>
+                                  <p className="mb-0 small-text">No comments yet</p>
                                 </div>
                               )}
                             </div>
 
-                            {/* Add Comment */}
-                            <div className="border-top pt-3">
-                              <textarea
-                                className="form-control border-primary"
-                                rows="3"
-                                value={newComment}
-                                onChange={(e) => setNewComment(e.target.value)}
-                                placeholder="Add a new comment..."
-                                disabled={!isEditMode}
-                              />
-                              {/* <button
-                                className="btn btn-primary mt-2"
-                                onClick={handleAddComment}
-                                disabled={!isEditMode || !newComment.trim()}
-                              >
-                                💬 Add Comment
-                              </button> */}
-                            </div>
+                            {isEditMode && (
+                              <div className="align-items-start gap-2 border-top pt-3">
+                                <textarea
+                                  className="form-control border-primary"
+                                  rows="3"
+                                  value={newComment}
+                                  onChange={(e) => setNewComment(e.target.value)}
+                                  placeholder="Add a new comment..."
+                                />
+                                <div className="">
+                                  <button
+                                    className="btn btn-primary mt-3"
+                                    onClick={handleAddComment}
+                                    disabled={!newComment.trim()}
+                                  >
+                                    Add Comment
+                                  </button>
+                                </div>
+                              </div>
+                            )}
                           </div>
                         </div>
                       </div>
@@ -588,15 +782,15 @@ export default function WorkerCallModal({ worker, isOpen, onClose, isEditMode })
                   </div>
                 )}
 
-                {/* Skills Info Tab */}
+                {/* Skills Tab */}
                 {activeTab === "skills" && (
                   <div className="fade show">
                     <div className="row g-4">
-                      {/* Languages Section */}
+                      {/* Languages */}
                       <div className="col-12">
-                        <div className=" border-0 shadow-sm p-3">
+                        <div className="border-0 shadow-sm p-3">
                           <div className="card-header bg-light">
-                            <h6 className="mb-0 fw-bold text-primary">Languages</h6>
+                            <h6 className="fw-bold text-primary">Languages</h6>
                           </div>
                           <div className="card-body">
                             {isEditMode && (
@@ -612,7 +806,6 @@ export default function WorkerCallModal({ worker, isOpen, onClose, isEditMode })
                                   }}
                                   onFocus={() => setShowLanguageDropdown(true)}
                                 />
-
                                 {showLanguageDropdown && (
                                   <div
                                     className="position-absolute top-100 start-0 end-0 bg-white border border-primary rounded mt-1 shadow-lg z-3"
@@ -638,10 +831,12 @@ export default function WorkerCallModal({ worker, isOpen, onClose, isEditMode })
                               </div>
                             )}
 
-                            {/* Language Tags */}
                             <div className="d-flex flex-wrap gap-2">
                               {normalizeArray(localWorker.languages).map((lang, idx) => (
-                                <span key={idx} className="badge bg-success d-flex align-items-center p-2">
+                                <span
+                                  key={idx}
+                                  className="badge bg-success d-flex align-items-center p-2"
+                                >
                                   {lang}
                                   {isEditMode && (
                                     <button
@@ -658,162 +853,207 @@ export default function WorkerCallModal({ worker, isOpen, onClose, isEditMode })
                         </div>
                       </div>
 
-                      {/* Skills Sections */}
+                      {/* Primary Skills (pill buttons) */}
                       <div className="col-md-6">
-                        <div className=" border-0 shadow-sm p-3 h-100">
-                          <div className="card-header bg-light">
-                            <h6 className="mb-0 fw-bold text-primary">General Skills</h6>
-                          </div>
-                          <div className="card-body">
-                            {isEditMode ? (
-                              <>
-                                <div className="border rounded p-3 bg-light mb-3">
-                                  {homeCareSkillOptions.map(opt => (
-                                    <div key={opt} className="form-check mb-2">
-                                      <input
-                                        type="checkbox"
-                                        className="form-check-input"
-                                        checked={normalizeArray(localWorker.skills).map(x => String(x).toLowerCase()).includes(String(opt).toLowerCase())}
-                                        onChange={() => handleMultiToggle('skills', opt)}
-                                        id={`skill-${opt}`}
-                                      />
-                                      <label className="form-check-label" htmlFor={`skill-${opt}`}>
-                                        {opt}
-                                      </label>
-                                    </div>
-                                  ))}
-                                </div>
-                                <div className="input-group">
-                                  <input id="custom-skills" type="text" className="form-control border-primary" placeholder="Add custom skill" />
-                                  <button type="button" className="btn btn-primary" onClick={() => handleAddCustom('skills', 'custom-skills')}>
-                                    Add
-                                  </button>
-                                </div>
-                              </>
-                            ) : null}
+                        <h6 className="fw-bold">Primary Skills</h6>
+                        <div className="d-flex flex-wrap gap-2 border rounded p-3 bg-light mb-3">
+                          {primarySkillOptions.map((opt) => {
+                            const active = normalizeArray(localWorker.skills)
+                              .map((x) => String(x).toLowerCase())
+                              .includes(String(opt).toLowerCase());
+                            return (
+                              <button
+                                type="button"
+                                key={`primary-${opt}`}
+                                className={`btn btn-sm rounded-pill ${
+                                  active
+                                    ? "btn-outline-info btn-info text-black"
+                                    : "btn-outline-info"
+                                } disabled-keep`}
+                                onClick={() => handleMultiToggle("skills", opt)}
+                                disabled={!isEditMode}
+                                aria-pressed={active}
+                                title={!isEditMode ? "Switch to Edit to modify skills" : ""}
+                              >
+                                {opt}
+                              </button>
+                            );
+                          })}
+                        </div>
 
-                            <div className="d-flex flex-wrap gap-2 mt-3">
-                              {normalizeArray(localWorker.skills).map((skill, idx) => (
-                                <span key={idx} className="badge bg-info text-dark d-flex align-items-center p-2">
-                                  {skill}
-                                  {isEditMode && (
-                                    <button
-                                      type="button"
-                                      className="btn-close btn-close-dark ms-2"
-                                      onClick={() => handleTagRemove("skills", idx)}
-                                      style={{ fontSize: "0.7rem" }}
-                                    ></button>
-                                  )}
-                                </span>
-                              ))}
-                            </div>
-                          </div>
+                        {/* Custom primary skill */}
+                        <div className="input-group mb-2">
+                          <input
+                            id="custom-skills"
+                            type="text"
+                            className="form-control border-primary"
+                            placeholder="Add custom skill"
+                            disabled={!isEditMode}
+                          />
+                          <button
+                            type="button"
+                            className="btn btn-primary disabled-keep"
+                            onClick={() => handleAddCustom("skills", "custom-skills")}
+                            disabled={!isEditMode}
+                          >
+                            Add
+                          </button>
+                        </div>
+
+                        <div className="d-flex flex-wrap gap-2 mt-2">
+                          {normalizeArray(localWorker.skills).map((skill, idx) => (
+                            <span
+                              key={idx}
+                              className="badge bg-info text-dark d-flex align-items-center p-2"
+                            >
+                              {skill}
+                              {isEditMode && (
+                                <button
+                                  type="button"
+                                  className="btn-close btn-close-dark ms-2"
+                                  onClick={() => handleTagRemove("skills", idx)}
+                                  style={{ fontSize: "0.7rem" }}
+                                ></button>
+                              )}
+                            </span>
+                          ))}
                         </div>
                       </div>
 
-                      {/* Home Care Skills */}
+                      {/* Home Care Skills (pill buttons) */}
                       <div className="col-md-6">
-                        <div className=" border-0 shadow-sm p-3 h-100">
-                          <div className="card-header bg-light">
-                            <h6 className="mb-0 fw-bold text-primary">Home Care Skills</h6>
-                          </div>
-                          <div className="card-body">
-                            {isEditMode ? (
-                              <>
-                                <div className="border rounded p-3 bg-light mb-3">
-                                  {homeCareSkillOptions.map(opt => (
-                                    <div key={opt} className="form-check mb-2">
-                                      <input
-                                        type="checkbox"
-                                        className="form-check-input"
-                                        checked={normalizeArray(localWorker.homeCareSkills).map(x => String(x).toLowerCase()).includes(String(opt).toLowerCase())}
-                                        onChange={() => handleMultiToggle('homeCareSkills', opt)}
-                                        id={`homecare-${opt}`}
-                                      />
-                                      <label className="form-check-label" htmlFor={`homecare-${opt}`}>
-                                        {opt}
-                                      </label>
-                                    </div>
-                                  ))}
-                                </div>
-                                <div className="input-group">
-                                  <input id="custom-homeCareSkills" type="text" className="form-control border-primary" placeholder="Add custom home care skill" />
-                                  <button type="button" className="btn btn-success" onClick={() => handleAddCustom('homeCareSkills', 'custom-homeCareSkills')}>
-                                    Add
-                                  </button>
-                                </div>
-                              </>
-                            ) : null}
+                        <h6 className="fw-bold">Home Care Skills</h6>
+                        <div className="d-flex flex-wrap gap-2 border rounded p-3 bg-light mb-3">
+                          {homeCareSkillOptions.map((opt) => {
+                            const active = normalizeArray(localWorker.homeCareSkills)
+                              .map((x) => String(x).toLowerCase())
+                              .includes(String(opt).toLowerCase());
+                            return (
+                              <button
+                                type="button"
+                                key={`homecare-${opt}`}
+                                className={`btn btn-sm rounded-pill ${
+                                  active
+                                    ? "btn-outline-success btn-success text-black"
+                                    : "btn-outline-success"
+                                } disabled-keep`}
+                                onClick={() => handleMultiToggle("homeCareSkills", opt)}
+                                disabled={!isEditMode}
+                                aria-pressed={active}
+                                title={!isEditMode ? "Switch to Edit to modify home care skills" : ""}
+                              >
+                                {opt}
+                              </button>
+                            );
+                          })}
+                        </div>
 
-                            <div className="d-flex flex-wrap gap-2 mt-3">
-                              {normalizeArray(localWorker.homeCareSkills).map((skill, idx) => (
-                                <span key={idx} className="badge bg-success text-white d-flex align-items-center p-2">
-                                  {skill}
-                                  {isEditMode && (
-                                    <button
-                                      type="button"
-                                      className="btn-close btn-close-white ms-2"
-                                      onClick={() => handleTagRemove("homeCareSkills", idx)}
-                                      style={{ fontSize: "0.7rem" }}
-                                    ></button>
-                                  )}
-                                </span>
-                              ))}
-                            </div>
-                          </div>
+                        {/* Custom home care */}
+                        <div className="input-group mb-2">
+                          <input
+                            id="custom-homeCareSkills"
+                            type="text"
+                            className="form-control border-primary"
+                            placeholder="Add custom home care skill"
+                            disabled={!isEditMode}
+                          />
+                          <button
+                            type="button"
+                            className="btn btn-success disabled-keep"
+                            onClick={() =>
+                              handleAddCustom("homeCareSkills", "custom-homeCareSkills")
+                            }
+                            disabled={!isEditMode}
+                          >
+                            Add
+                          </button>
+                        </div>
+
+                        <div className="d-flex flex-wrap gap-2 mt-2">
+                          {normalizeArray(localWorker.homeCareSkills).map((skill, idx) => (
+                            <span
+                              key={idx}
+                              className="badge bg-success text-white d-flex align-items-center p-2"
+                            >
+                              {skill}
+                              {isEditMode && (
+                                <button
+                                  type="button"
+                                  className="btn-close btn-close-white ms-2"
+                                  onClick={() => handleTagRemove("homeCareSkills", idx)}
+                                  style={{ fontSize: "0.7rem" }}
+                                ></button>
+                              )}
+                            </span>
+                          ))}
                         </div>
                       </div>
 
-                      {/* Other Skills */}
+                      {/* Other Skills — two columns, pill buttons */}
                       <div className="col-12">
-                        <div className=" border-0 shadow-sm p-3">
-                          <div className="card-header bg-light">
-                            <h6 className="mb-0 fw-bold text-primary">Other Skills</h6>
-                          </div>
-                          <div className="card-body">
-                            {isEditMode ? (
-                              <>
-                                <div className="border rounded p-3 bg-light mb-3">
-                                  {otherSkillOptions.map(opt => (
-                                    <div key={opt} className="form-check mb-2">
-                                      <input
-                                        type="checkbox"
-                                        className="form-check-input"
-                                        checked={normalizeArray(localWorker.otherSkills).map(x => String(x).toLowerCase()).includes(String(opt).toLowerCase())}
-                                        onChange={() => handleMultiToggle('otherSkills', opt)}
-                                        id={`other-${opt}`}
-                                      />
-                                      <label className="form-check-label" htmlFor={`other-${opt}`}>
-                                        {opt}
-                                      </label>
-                                    </div>
-                                  ))}
-                                </div>
-                                <div className="input-group">
-                                  <input id="custom-otherSkills" type="text" className="form-control border-primary" placeholder="Add custom other skill" />
-                                  <button type="button" className="btn btn-warning" onClick={() => handleAddCustom('otherSkills', 'custom-otherSkills')}>
-                                    Add
+                        <h6 className="fw-bold">Other Skills</h6>
+                        <div className="border rounded p-3 bg-light mb-3">
+                          <div className="row row-cols-1 row-cols-sm-2 g-2">
+                            {otherSkillOptions.map((opt) => {
+                              const active = normalizeArray(localWorker.otherSkills)
+                                .map((x) => String(x).toLowerCase())
+                                .includes(String(opt).toLowerCase());
+                              return (
+                                  <button
+                                  key={`other-${opt}`}
+                                    type="button"
+                                    className={` w-auto me-2 btn btn-sm rounded-pill ${
+                                      active
+                                        ? "btn-outline-warning btn-warning text-black"
+                                        : "btn-outline-warning"
+                                    } disabled-keep`}
+                                    onClick={() => handleMultiToggle("otherSkills", opt)}
+                                    disabled={!isEditMode}
+                                    aria-pressed={active}
+                                    title={!isEditMode ? "Switch to Edit to modify other skills" : ""}
+                                  >
+                                    {opt}
                                   </button>
-                                </div>
-                              </>
-                            ) : null}
-
-                            <div className="d-flex flex-wrap gap-2 mt-3">
-                              {normalizeArray(localWorker.otherSkills).map((skill, idx) => (
-                                <span key={idx} className="badge bg-warning text-dark d-flex align-items-center p-2">
-                                  {skill}
-                                  {isEditMode && (
-                                    <button
-                                      type="button"
-                                      className="btn-close btn-close-dark ms-2"
-                                      onClick={() => handleTagRemove("otherSkills", idx)}
-                                      style={{ fontSize: "0.7rem" }}
-                                    ></button>
-                                  )}
-                                </span>
-                              ))}
-                            </div>
+                              );
+                            })}
                           </div>
+                        </div>
+
+                        <div className="input-group mb-2">
+                          <input
+                            id="custom-otherSkills"
+                            type="text"
+                            className="form-control border-primary"
+                            placeholder="Add custom other skill"
+                            disabled={!isEditMode}
+                          />
+                          <button
+                            type="button"
+                            className="btn btn-warning disabled-keep"
+                            onClick={() => handleAddCustom("otherSkills", "custom-otherSkills")}
+                            disabled={!isEditMode}
+                          >
+                            Add
+                          </button>
+                        </div>
+
+                        <div className="d-flex flex-wrap gap-2 mt-2">
+                          {normalizeArray(localWorker.otherSkills).map((skill, idx) => (
+                            <span
+                              key={idx}
+                              className="badge bg-warning text-dark d-flex align-items-center p-2"
+                            >
+                              {skill}
+                              {isEditMode && (
+                                <button
+                                  type="button"
+                                  className="btn-close btn-close-dark ms-2"
+                                  onClick={() => handleTagRemove("otherSkills", idx)}
+                                  style={{ fontSize: "0.7rem" }}
+                                ></button>
+                              )}
+                            </span>
+                          ))}
                         </div>
                       </div>
                     </div>
@@ -822,10 +1062,15 @@ export default function WorkerCallModal({ worker, isOpen, onClose, isEditMode })
               </div>
             </div>
 
-            {/* Enhanced Footer */}
+            {/* Footer */}
             <div className="modal-footer bg-light border-top">
               {isEditMode && (
-                <button className="btn btn-success px-4 fw-bold" onClick={handleSave}>
+                <button
+                  className="btn btn-success px-4 fw-bold disabled-keep"
+                  onClick={handleSave}
+                  disabled={!canSave}
+                  title={!canSave ? "Add a comment first to enable saving" : ""}
+                >
                   Save Changes
                 </button>
               )}
@@ -844,15 +1089,20 @@ export default function WorkerCallModal({ worker, isOpen, onClose, isEditMode })
           style={{ display: "block", backgroundColor: "rgba(0,0,0,0.6)" }}
         >
           <div className="modal-dialog modal-dialog-centered">
-            <div className="modal-content border-0 shadow-lg" style={{ borderRadius: "15px", maxWidth:"800px", margin:"auto" }}>
+            <div
+              className="modal-content border-0 shadow-lg"
+              style={{ borderRadius: "15px", maxWidth: "800px", margin: "auto" }}
+            >
               <div className="modal-header bg-success text-white">
-                <h5 className="modal-title fw-bold">
-                  Successfully Saved
-                </h5>
+                <h5 className="modal-title fw-bold">Successfully Saved</h5>
               </div>
               <div className="modal-body text-center py-4">
                 <p className="mb-0">
-                  Worker <strong className="text-success">{worker.name}</strong> details have been updated successfully!
+                  Worker{" "}
+                  <strong className="text-success">
+                    {localWorker?.name || "record"}
+                  </strong>{" "}
+                  details have been updated successfully!
                 </p>
               </div>
               <div className="modal-footer">
@@ -863,7 +1113,7 @@ export default function WorkerCallModal({ worker, isOpen, onClose, isEditMode })
                     onClose();
                   }}
                 >
-                OK
+                  OK
                 </button>
               </div>
             </div>
@@ -878,21 +1128,24 @@ export default function WorkerCallModal({ worker, isOpen, onClose, isEditMode })
           style={{ display: "block", background: "rgba(0,0,0,0.6)" }}
         >
           <div className="modal-dialog modal-dialog-centered">
-            <div className="modal-content border-0 shadow-lg" style={{ borderRadius: "15px" }}>
+            <div
+              className="modal-content border-0 shadow-lg"
+              style={{ borderRadius: "15px" }}
+            >
               <div className="modal-header bg-warning text-dark">
-                <h5 className="modal-title fw-bold">
-                   Unsaved Changes
-                </h5>
+                <h5 className="modal-title fw-bold">Unsaved Changes</h5>
               </div>
               <div className="modal-body text-center py-4">
-                <p className="mb-0">You have unsaved changes. Are you sure you want to close?</p>
+                <p className="mb-0">
+                  You have unsaved changes. Are you sure you want to close?
+                </p>
               </div>
               <div className="modal-footer">
                 <button
                   className="btn btn-secondary"
                   onClick={() => setShowUnsavedConfirm(false)}
                 >
-                 Cancel
+                  Cancel
                 </button>
                 <button
                   className="btn btn-danger"
@@ -910,45 +1163,26 @@ export default function WorkerCallModal({ worker, isOpen, onClose, isEditMode })
         </div>
       )}
 
-      <style jsx>{`
-        .btn-circle {
-          width: 40px;
-          height: 40px;
-          border-radius: 50%;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          padding: 0;
-        }
-        
+      {/* Keep disabled buttons' colors the same */}
+      <style>{`
         .bg-gradient-primary {
           background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
         }
-        
-        .bg-pink {
-          background-color: #e83e8c !important;
-        }
-        
-        .card {
-          border-radius: 10px;
-        }
-        
-        .form-control, .form-select {
-          border-radius: 8px;
-        }
-        
-        .badge {
-          border-radius: 20px;
-          font-size: 0.85rem;
-        }
-        
-        .nav-pills .nav-link {
-          border-radius: 10px;
-          transition: all 0.3s ease;
-        }
-        
-        .nav-pills .nav-link:hover {
-         opacity: .9
+        .bg-pink { background-color: #e83e8c !important; }
+        .form-control, .form-select { border-radius: 8px; }
+        .badge { border-radius: 20px; font-size: 0.85rem; }
+        .nav-pills .nav-link { border-radius: 10px; transition: all 0.3s ease; }
+        .nav-pills .nav-link:hover { opacity: 0.9; }
+
+        /* Keep same look even when disabled */
+        .btn.disabled-keep:disabled { opacity: 1 !important; }
+        .btn-outline-info.btn-info.text-black:disabled,
+        .btn-outline-success.btn-success.text-black:disabled,
+        .btn-outline-warning.btn-warning.text-black:disabled,
+        .btn-success:disabled,
+        .btn-primary:disabled,
+        .btn-warning:disabled {
+          opacity: 1 !important;
         }
       `}</style>
     </>

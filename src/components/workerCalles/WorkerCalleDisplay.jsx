@@ -720,7 +720,7 @@ export default function WorkerCalleDisplay({ permissions: permissionsProp }) {
         </nav>
       )}
 
-      {/* table */}
+      {/* Table -1 */}
       <div className="table-responsive">
         <table className="table table-dark table-hover align-middle">
           <thead>
@@ -843,7 +843,7 @@ export default function WorkerCalleDisplay({ permissions: permissionsProp }) {
         </table>
       </div>
 
-            {/* Bottom pagination */}
+      {/* Bottom pagination */}
       {Math.ceil(sorted.length / rowsPerPage) > 1 && (
         <nav aria-label="Workers" className="pagination-top py-2 mb-3 m-auto pagination-wrapper">
           <ul className="pagination justify-content-center mb-0">
@@ -858,23 +858,24 @@ export default function WorkerCalleDisplay({ permissions: permissionsProp }) {
 
       {/* ---------- Daily Activity — {UserName} ---------- */}
       <hr />
-      <h4 className="mt-2 text-info">Daily Activity — {currentUserName}</h4>
-      <div className="d-flex align-items-center justify-content-between mb-3">
-        <div className="d-flex flex-wrap gap-2 mt-2">
+      <h4 className="mt-2 mb-3 text-info">Daily Activity — <span className="text-warning">{currentUserName}</span></h4>
+      <div className="d-flex align-items-center justify-content-between flex-wrap">
+        <div className="d-flex flex-wrap gap-2 mb-3">
           {months.map((m, mi) => (
-            <button key={m} type="button" className={`btn btn-sm ${mi === activeMonth ? "btn-warning text-dark" : "btn-outline-warning"}`} onClick={() => setActiveMonth(mi)}>{m}</button>
+            <button key={m} type="button" className={`btn btn-sm w-auto ${mi === activeMonth ? "btn-warning text-dark" : "btn-outline-warning"}`} onClick={() => setActiveMonth(mi)}>{m}</button>
           ))}
         </div>
-        <div className="d-flex gap-2">
+        <div className="d-flex gap-2 mb-3">
           <select className="form-select form-select-sm" value={activeYear} onChange={(e) => setActiveYear(parseInt(e.target.value, 10))}>
             {years.map((y) => (<option key={y} value={y}>{y}</option>))}
           </select>
         </div>
       </div>
 
+      {/* Table -1 */}
       {/* Month x Day grid */}
       <div className="table-responsive mb-3">
-        <table className="table table-dark table-sm table-hover" style={{ fontSize: "12px" }}>
+        <table className="table table-dark table-hover" style={{ fontSize: "12px" }}>
           <thead>
             <tr>
               <th style={{ whiteSpace: "nowrap" }}>Month \\ Day</th>
@@ -925,7 +926,7 @@ export default function WorkerCalleDisplay({ permissions: permissionsProp }) {
                     </div>
                   ))}
                 </div>
-                <div className="mt-3 small d-flex flex-wrap gap-3 align-items-center pt-3">
+                <div className="mt-3 small d-flex flex-wrap gap-3 align-items-center pt-3 justify-content-between">
                   <span className="legend perf-none">No Calls (0)</span>
                   <span className="legend perf-poor">Poor (1–8)</span>
                   <span className="legend perf-avg">Average (9–15)</span>
@@ -1130,9 +1131,10 @@ function CallThroughSummary({ months, workers, activeYear, normalizeSource, getB
 
   const grandTotal = useMemo(() => totalsPerMonth.reduce((a, b) => a + b, 0), [totalsPerMonth]);
 
+  {/* Table -3 */ }
   return (
-    <div className="table-responsive summary-table-container mt-2">
-      <table className="table table-dark table-sm summary-table table-hover" style={{ fontSize: "12px" }}>
+    <div className="table-responsive mt-2">
+      <table className="table table-dark summary-table table-hover" style={{ fontSize: "12px" }}>
         <thead className="summary-table-header">
           <tr>
             <th>Call Through</th>

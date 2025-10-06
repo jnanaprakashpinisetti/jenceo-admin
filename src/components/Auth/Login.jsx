@@ -80,27 +80,42 @@ export default function Login() {
             </div>
 
             <div className="form-group">
-              <label className="form-label d-flex justify-content-between">
-                <span>Password</span>
+              <label className="form-label">Password</label>
+
+              {/* Password with eye icon */}
+              <div className="password-wrapper">
+                <input
+                  className={getInputClass("password")}
+                  type={showPassword ? "text" : "password"}
+                  required
+                  value={password}
+                  onChange={(e)=>setPassword(e.target.value)}
+                  placeholder="Enter your password"
+                  disabled={isSubmitting}
+                />
                 <button
                   type="button"
-                  className="btn btn-link btn-sm p-0"
+                  className="password-toggle"
                   onClick={() => setShowPassword((v) => !v)}
+                  aria-label={showPassword ? "Hide password" : "Show password"}
                   disabled={isSubmitting}
-                  aria-label="Toggle password visibility"
                 >
-                  {showPassword ? "Hide" : "Show"}
+                  {/* Inline SVG icon */}
+                  {showPassword ? (
+                    // Eye-off icon
+                    <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                      <path d="M17.94 17.94A10.94 10.94 0 0 1 12 20C7 20 2.73 16.11 1 12c.46-1.1 1.12-2.12 1.96-3.03M10.58 10.58A2 2 0 0 0 12 14a2 2 0 0 0 1.42-.59M6.1 6.1A10.94 10.94 0 0 1 12 4c5 0 9.27 3.89 11 8-.58 1.37-1.44 2.62-2.5 3.64M1 1l22 22" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                    </svg>
+                  ) : (
+                    // Eye icon
+                    <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                      <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8S1 12 1 12Z" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                      <circle cx="12" cy="12" r="3" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                    </svg>
+                  )}
                 </button>
-              </label>
-              <input
-                className={getInputClass("password")}
-                type={showPassword ? "text" : "password"}
-                required
-                value={password}
-                onChange={(e)=>setPassword(e.target.value)}
-                placeholder="Enter your password"
-                disabled={isSubmitting}
-              />
+              </div>
+
               {fieldErrors.password && <div className="error-message">{fieldErrors.password}</div>}
             </div>
 
@@ -136,10 +151,20 @@ export default function Login() {
         .submit-container { display: flex; justify-content: center; }
         .submit-button { min-width: 120px; padding: 10px 30px; }
         .spinner { display: inline-block; width: 1rem; height: 1rem; border: 2px solid currentColor; border-right-color: transparent; border-radius: 50%; animation: spinner-border 0.75s linear infinite; }
-        .login-info { margin-top: 1.5rem; font-size: 0.875rem; color: #6c757d; text-align: center; }
+        .login-info { margin-top: 1.5rem; font-size: 0.875rem; color: #adb5bd; text-align: center; }
         .info-title { margin-bottom: 0.5rem; }
         .info-item { margin-bottom: 0.25rem; }
-        @keyframes spinner-border { to { transform: rotate(360deg); } }
+
+        /* password field with icon */
+        .password-wrapper { position: relative; }
+        .password-wrapper input { padding-right: 44px; }
+        .password-toggle {
+          position: absolute; right: 10px; top: 50%; transform: translateY(-50%);
+          display: inline-flex; align-items: center; justify-content: center;
+          width: 28px; height: 28px; border-radius: 6px; border: 0; background: transparent; color: #e9ecef;
+        }
+        .password-toggle:hover { color: #fff; }
+        .password-toggle:disabled { opacity: .6; cursor: not-allowed; }
       `}</style>
     </div>
   );

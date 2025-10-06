@@ -1,20 +1,22 @@
+// src/components/workerCalles/WorkerCalleForm.jsx
 import React, { useState, useEffect } from "react";
 import firebaseDB from "../../firebase";
 import SuccessModal from "../common/SuccessModal";
 import { useAuth } from "../../context/AuthContext";
 
-
 export default function WorkerCallForm({ isOpen, onClose }) {
+  const { user: currentUser } = useAuth(); // <- GLOBAL AUTH (has dbId, name, email, role, etc.)
+
   const [step, setStep] = useState(1);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [showDuplicateModal, setShowDuplicateModal] = useState(false);
   const [existingWorker, setExistingWorker] = useState(null);
   const [showCloseConfirmModal, setShowCloseConfirmModal] = useState(false);
+  const [errors, setErrors] = useState({});
 
-  // 👉 Added: callId and callDate
   const [formData, setFormData] = useState({
-    callId: "",                 // e.g., "C-01"
-    callDate: getToday(),       // default today (YYYY-MM-DD)
+    callId: "",
+    callDate: today(),
     mobileNo: "",
     name: "",
     location: "",
@@ -34,20 +36,18 @@ export default function WorkerCallForm({ isOpen, onClose }) {
     callReminderDate: "",
     comment: "",
     commentDateTime: "",
-    addedBy: "",               // Username of creator
-    addedByUid: "",            // UID of creator
-    createdBy: "",             // Alternative username field
-    createdByName: "",         // Display name
-    userName: "",              // Another common field name
-    timestamp: "",             // Creation timestamp
+
+    // 🔗 GLOBAL AUTH FIELDS (no local auth)
+    createdById: "",     // <-- global Users/<dbId>
+    createdByName: "",   // convenience label
+    createdAt: "",       // ISO
+
+    // keep legacy aliases (optional; helps old views/exports)
+    addedBy: "",
+    userName: "",
   });
 
-  const { user: currentUser } = useAuth();
-
-  const [errors, setErrors] = useState({});
-
-  // ===== Helpers =====
-  function getToday() {
+  function today() {
     const d = new Date();
     const yyyy = d.getFullYear();
     const mm = String(d.getMonth() + 1).padStart(2, "0");
@@ -55,9 +55,8 @@ export default function WorkerCallForm({ isOpen, onClose }) {
     return `${yyyy}-${mm}-${dd}`;
   }
 
-  // Check if form has unsaved changes
   const hasUnsavedChanges = () => {
-    const initialEmptyState = {
+    const base = {
       mobileNo: "",
       name: "",
       location: "",
@@ -77,114 +76,63 @@ export default function WorkerCallForm({ isOpen, onClose }) {
       callReminderDate: "",
       comment: "",
     };
-
-    for (const key in initialEmptyState) {
-      if (formData[key] !== initialEmptyState[key]) {
-        return true;
-      }
-    }
+    for (const k in base) if (formData[k] !== base[k]) return true;
     return false;
   };
 
-  // Toggle value in an array field inside formData (non-destructive)
-  const toggleArrayField = (field, value) => {
-    setFormData(prev => {
-      const cur = Array.isArray(prev[field]) ? prev[field] : [];
-      const exists = cur.includes(value);
-      return { ...prev, [field]: exists ? cur.filter(v => v !== value) : [...cur, value] };
-    });
-  };
-
-  // Generate next Call ID by scanning existing WorkerCallData callId values
   const fetchNextCallId = async () => {
     try {
       const snap = await firebaseDB.child("WorkerCallData").once("value");
       let maxN = 0;
       if (snap.exists()) {
         snap.forEach((child) => {
-          const item = child.val() || {};
-          const id = item.callId || "";
-          // expect format "WC-XX"
-          const match = /^WC-(\d+)$/.exec(id);
-          if (match) {
-            const n = parseInt(match[1], 10);
-            if (!Number.isNaN(n)) maxN = Math.max(maxN, n);
-          }
+          const id = (child.val()?.callId || "").trim();
+          const m = /^WC-(\d+)$/.exec(id);
+          if (m) maxN = Math.max(maxN, parseInt(m[1], 10) || 0);
         });
       }
-      const next = maxN + 1;
-      // pad to 2 digits; if you want 3, change to padStart(3, "0")
-      return `WC-${String(next).padStart(2, "0")}`;
-    } catch (e) {
-      console.error("Failed to compute next Call ID:", e);
-      // fallback to C-01
+      return `WC-${String(maxN + 1).padStart(2, "0")}`;
+    } catch {
       return "WC-01";
     }
   };
 
-  // On open, prefill callId and callDate
-  // Update the useEffect that initializes form data
+  // Prefill IDs/dates + creator from GLOBAL AUTH
   useEffect(() => {
-    let isMounted = true;
+    let alive = true;
     const init = async () => {
+      if (!isOpen) return;
       const nextId = await fetchNextCallId();
-      if (!isMounted) return;
+      if (!alive) return;
 
-      // Get current user info
-      const userDisplayName = currentUser?.name ||
-        currentUser?.displayName ||
-        currentUser?.email?.split('@')[0] ||
-        "Unknown User";
-      const userUid = currentUser?.uid || "";
+      const createdById = currentUser?.dbId || "";            // <- global Users/<dbId>
+      const createdByName =
+        currentUser?.name ||
+        currentUser?.username ||
+        currentUser?.email?.split("@")[0] ||
+        "Unknown";
 
-      setFormData((prev) => ({
-        ...prev,
+      setFormData((p) => ({
+        ...p,
         callId: nextId,
-        callDate: prev.callDate || getToday(),
-        // 👇 Populate user tracking fields
-        addedBy: userDisplayName,
-        addedByUid: userUid,
-        createdBy: userDisplayName,
-        createdByName: userDisplayName,
-        userName: userDisplayName,
-        timestamp: new Date().toISOString(),
+        callDate: p.callDate || today(),
+        createdById,
+        createdByName,
+        createdAt: new Date().toISOString(),
+        // legacy aliases for compatibility
+        addedBy: createdByName,
+        userName: createdByName,
       }));
     };
-    if (isOpen) init();
-    return () => {
-      isMounted = false;
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isOpen, currentUser]); // Add currentUser to dependencies
-
-  // Check for duplicate mobile number
-  const checkDuplicateMobile = async (mobileNo) => {
-    try {
-      const snapshot = await firebaseDB
-        .child("WorkerCallData")
-        .orderByChild("mobileNo")
-        .equalTo(mobileNo)
-        .once("value");
-      return snapshot.exists() ? snapshot.val() : null;
-    } catch (err) {
-      console.error("Error checking duplicate:", err);
-      return null;
-    }
-  };
+    init();
+    return () => { alive = false; };
+  }, [isOpen, currentUser]);
 
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
-
     if (type === "checkbox") {
-      const updated = formData[name] || [];
-      if (checked) {
-        setFormData({ ...formData, [name]: [...updated, value] });
-      } else {
-        setFormData({
-          ...formData,
-          [name]: updated.filter((item) => item !== value),
-        });
-      }
+      const arr = Array.isArray(formData[name]) ? formData[name] : [];
+      setFormData({ ...formData, [name]: checked ? [...arr, value] : arr.filter((x) => x !== value) });
     } else {
       setFormData({ ...formData, [name]: value });
     }
@@ -192,37 +140,69 @@ export default function WorkerCallForm({ isOpen, onClose }) {
 
   const handleBlur = (e) => {
     const { name } = e.target;
-    if (errors[name]) {
-      setErrors({ ...errors, [name]: "" });
+    if (errors[name]) setErrors((p) => ({ ...p, [name]: "" }));
+  };
+
+  const validateStep = () => {
+    const err = {};
+    if (step === 1) {
+      if (!formData.callId) err.callId = "Call ID is required";
+      if (!formData.callDate) err.callDate = "Call Date is required";
+      if (!formData.mobileNo) err.mobileNo = "Mobile No is required";
+      else if (!/^\d{10}$/.test(formData.mobileNo)) err.mobileNo = "Mobile No must be 10 digits";
+      if (!formData.name) err.name = "Name is required";
+      if (!formData.location) err.location = "Location is required";
+      if (!formData.source) err.source = "Source is required";
+      if (!formData.gender) err.gender = "Gender is required";
+      if (!formData.age) err.age = "Age is required";
+      if (formData.experience === "Yes") {
+        if (!formData.years) err.years = "Years required";
+        if (!formData.skills) err.skills = "Skills required";
+      }
+    } else if (step === 2) {
+      if (!formData.education) err.education = "Education is required";
+      if (!formData.conversationLevel) err.conversationLevel = "Conversation level is required";
+      if (formData.callReminderDate) {
+        const d = new Date(formData.callReminderDate);
+        if (d < new Date().setHours(0, 0, 0, 0)) err.callReminderDate = "Reminder date cannot be in the past";
+      }
+    }
+    setErrors(err);
+    return Object.keys(err).length === 0;
+  };
+
+  const checkDuplicateMobile = async (mobileNo) => {
+    try {
+      const snap = await firebaseDB
+        .child("WorkerCallData")
+        .orderByChild("mobileNo")
+        .equalTo(mobileNo)
+        .once("value");
+      return snap.exists() ? snap.val() : null;
+    } catch {
+      return null;
     }
   };
 
-  // Handle close button click
-  const handleCloseClick = () => {
-    if (hasUnsavedChanges()) {
-      setShowCloseConfirmModal(true);
-    } else {
-      onClose();
+  const nextStep = async () => {
+    if (!validateStep()) return;
+    if (step === 1) {
+      const dup = await checkDuplicateMobile(formData.mobileNo);
+      if (dup) {
+        const existing = Object.values(dup)[0];
+        setExistingWorker(existing);
+        setShowDuplicateModal(true);
+        return;
+      }
     }
+    setStep((s) => s + 1);
   };
+  const prevStep = () => setStep((s) => s - 1);
 
-  // Confirm close and reset form
-  const confirmClose = () => {
-    setShowCloseConfirmModal(false);
-    resetForm();
-    onClose();
-  };
-
-  // Cancel close
-  const cancelClose = () => {
-    setShowCloseConfirmModal(false);
-  };
-
-  // Reset form to initial state
   const resetForm = () => {
     setFormData({
       callId: "",
-      callDate: getToday(),
+      callDate: today(),
       mobileNo: "",
       name: "",
       location: "",
@@ -242,117 +222,84 @@ export default function WorkerCallForm({ isOpen, onClose }) {
       callReminderDate: "",
       comment: "",
       commentDateTime: "",
-      addedBy: "",
-      addedByUid: "",
-      createdBy: "",
+
+      createdById: "",
       createdByName: "",
+      createdAt: "",
+
+      addedBy: "",
       userName: "",
-      timestamp: "",
     });
     setStep(1);
     setErrors({});
   };
 
-  // Validation per step
-  const validateStep = () => {
-    const newErrors = {};
-    if (step === 1) {
-      // Call ID + Date (auto-filled/disabled, so just be safe)
-      if (!formData.callId) newErrors.callId = "Call ID is required";
-      if (!formData.callDate) newErrors.callDate = "Call Date is required";
-
-      if (!formData.mobileNo) {
-        newErrors.mobileNo = "Mobile No is required";
-      } else if (!/^\d{10}$/.test(formData.mobileNo)) {
-        newErrors.mobileNo = "Mobile No must be exactly 10 digits";
-      }
-
-      if (!formData.name) newErrors.name = "Name is required";
-      if (!formData.location) newErrors.location = "Location is required";
-      if (!formData.source) newErrors.source = "Source is required";
-      if (!formData.gender) newErrors.gender = "Gender is required";
-      if (!formData.age) newErrors.age = "Age is required";
-      if (formData.experience === "Yes") {
-        if (!formData.years) newErrors.years = "Years required";
-        if (!formData.skills) newErrors.skills = "Skills required";
-      }
-    } else if (step === 2) {
-      if (!formData.education) newErrors.education = "Education is required";
-      if (!formData.conversationLevel)
-        newErrors.conversationLevel = "Conversation level is required";
-      if (formData.callReminderDate) {
-        const today = new Date();
-        const reminderDate = new Date(formData.callReminderDate);
-        if (reminderDate < today.setHours(0, 0, 0, 0)) {
-          newErrors.callReminderDate = "Reminder date cannot be in the past";
-        }
-      }
-    }
-    setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
-  };
-
-  const nextStep = async () => {
-    if (validateStep()) {
-      // Check for duplicate mobile number only when moving to step 2
-      if (step === 1) {
-        const duplicate = await checkDuplicateMobile(formData.mobileNo);
-        if (duplicate) {
-          // Get the first existing worker data
-          const existingWorkerData = Object.values(duplicate)[0];
-          setExistingWorker(existingWorkerData);
-          setShowDuplicateModal(true);
-          return;
-        }
-      }
-      setStep(step + 1);
-    }
-  };
-
-  const prevStep = () => setStep(step - 1);
+  const handleCloseClick = () => (hasUnsavedChanges() ? setShowCloseConfirmModal(true) : onClose());
+  const confirmClose = () => { setShowCloseConfirmModal(false); resetForm(); onClose(); };
+  const cancelClose = () => setShowCloseConfirmModal(false);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!validateStep()) return;
 
+    // final duplicate check
+    const dup = await checkDuplicateMobile(formData.mobileNo);
+    if (dup) {
+      const existing = Object.values(dup)[0];
+      setExistingWorker(existing);
+      setShowDuplicateModal(true);
+      return;
+    }
+
+    // ensure GLOBAL creator fields
+    const createdById = currentUser?.dbId || "";
+    const createdByName =
+      currentUser?.name ||
+      currentUser?.username ||
+      currentUser?.email?.split("@")[0] ||
+      "Unknown";
+
+    const payload = {
+      ...formData,
+      createdById,
+      createdByName,
+      createdAt: formData.createdAt || new Date().toISOString(),
+      // legacy aliases
+      addedBy: formData.addedBy || createdByName,
+      userName: formData.userName || createdByName,
+      commentDateTime: formData.comment ? new Date().toISOString() : "",
+    };
+
     try {
-      // Final duplicate check before submission
-      const duplicate = await checkDuplicateMobile(formData.mobileNo);
-      if (duplicate) {
-        const existingWorkerData = Object.values(duplicate)[0];
-        setExistingWorker(existingWorkerData);
-        setShowDuplicateModal(true);
-        return;
-      }
-
-      // Ensure user fields are populated (in case component unmounted/remounted)
-      const userDisplayName = currentUser?.name ||
-        currentUser?.displayName ||
-        currentUser?.email?.split('@')[0] ||
-        "Unknown User";
-      const userUid = currentUser?.uid || "";
-
-      const dataToSave = {
-        ...formData,
-        // 👇 Ensure user fields are always set on submission
-        addedBy: formData.addedBy || userDisplayName,
-        addedByUid: formData.addedByUid || userUid,
-        createdBy: formData.createdBy || userDisplayName,
-        createdByName: formData.createdByName || userDisplayName,
-        userName: formData.userName || userDisplayName,
-        timestamp: formData.timestamp || new Date().toISOString(),
-        commentDateTime: formData.comment ? new Date().toISOString() : "",
-      };
-
-      await firebaseDB.child("WorkerCallData").push(dataToSave);
-
+      await firebaseDB.child("WorkerCallData").push(payload);
       setShowSuccessModal(true);
     } catch (err) {
       console.error("Error saving Worker:", err);
+      alert("Error saving worker call. Please try again.");
     }
   };
 
   if (!isOpen) return null;
+
+  // --- Helper functions (inside component for ESLint/local scope) ---
+  const getToday = () => {
+    const d = new Date();
+    const yyyy = d.getFullYear();
+    const mm = String(d.getMonth() + 1).padStart(2, "0");
+    const dd = String(d.getDate()).padStart(2, "0");
+    return `${yyyy}-${mm}-${dd}`;
+  };
+
+  // Toggle array field helper used by pill buttons (skills)
+  const toggleArrayField = (field, value) => {
+    setFormData((prev) => {
+      const current = Array.isArray(prev[field]) ? prev[field] : [];
+      const updated = current.includes(value)
+        ? current.filter((v) => v !== value)
+        : [...current, value];
+      return { ...prev, [field]: updated };
+    });
+  };
 
   return (
     <>
@@ -380,7 +327,7 @@ export default function WorkerCallForm({ isOpen, onClose }) {
                     <h5 className="mb-3">Basic Details</h5>
                     <hr />
 
-                    {/* 👉 NEW: Call ID + Date row at the very top */}
+                    {/* Call ID + Date */}
                     <div className="row mb-3">
                       <div className="col-md-6">
                         <label className="form-label">
@@ -653,7 +600,6 @@ export default function WorkerCallForm({ isOpen, onClose }) {
                     <h4 className="mb-3">Skills Details</h4>
                     <hr />
 
-                    {/* Match WorkerCalleDisplay layout: two dark boxes with pill buttons */}
                     <div className="row g-3 mb-3">
                       {/* Home Care Skills */}
                       <div className="col-md-12">
@@ -680,7 +626,7 @@ export default function WorkerCallForm({ isOpen, onClose }) {
                                 <button
                                   type="button"
                                   key={skill}
-                                  className={`btn btn-sm ${active ? "btn-warning text-black" : "btn-outline-warning"} rounded-pill`}
+                                  className={`btn btn-sm ${active ? "btn-warning text-black" : "btn-outline-warning"} rounded-pill skill-pill`}
                                   onClick={() => toggleArrayField("homeCareSkills", skill)}
                                 >
                                   {skill}
@@ -719,7 +665,7 @@ export default function WorkerCallForm({ isOpen, onClose }) {
                                 <button
                                   type="button"
                                   key={skill}
-                                  className={`btn btn-sm ${active ? "btn-info" : "btn-outline-info"} rounded-pill`}
+                                  className={`btn btn-sm ${active ? "btn-info" : "btn-outline-info"} rounded-pill skill-pill`}
                                   onClick={() => toggleArrayField("otherSkills", skill)}
                                 >
                                   {skill}
@@ -885,37 +831,32 @@ export default function WorkerCallForm({ isOpen, onClose }) {
                   )}
                 </div>
                 {/* Hidden Fields */}
-                {/* Add these hidden fields in your form */}
                 <input type="hidden" name="addedBy" value={formData.addedBy} />
                 <input type="hidden" name="addedByUid" value={formData.addedByUid} />
                 <input type="hidden" name="createdBy" value={formData.createdBy} />
                 <input type="hidden" name="createdByName" value={formData.createdByName} />
                 <input type="hidden" name="userName" value={formData.userName} />
                 <input type="hidden" name="timestamp" value={formData.timestamp} />
-                <div>
-
-                </div>
+                <div></div>
               </form>
             </div>
           </div>
         </div>
       </div>
 
-      {/* ✅ Success Modal */}
+      {/* Success Modal */}
       <SuccessModal
         show={showSuccessModal}
         title="Worker Added Successfully"
         message={`Worker Name: ${formData.name}, Mobile: ${formData.mobileNo}`}
-        // In the SuccessModal onClose, update the reset:
         onClose={() => {
           setShowSuccessModal(false);
-          // Reset form after successful submission
           resetForm();
           onClose();
         }}
       />
 
-      {/* ✅ Duplicate Modal */}
+      {/* Duplicate Modal */}
       {showDuplicateModal && existingWorker && (
         <div
           className="modal fade show"
@@ -957,7 +898,7 @@ export default function WorkerCallForm({ isOpen, onClose }) {
         </div>
       )}
 
-      {/* ✅ Close Confirmation Modal */}
+      {/* Close Confirmation Modal */}
       {showCloseConfirmModal && (
         <div
           className="modal fade show"
@@ -996,6 +937,17 @@ export default function WorkerCallForm({ isOpen, onClose }) {
           </div>
         </div>
       )}
+
+      {/* Subtle animation for skill pills */}
+      <style>{`
+        .skill-pill {
+          transition: transform .12s ease, box-shadow .12s ease;
+        }
+        .skill-pill:hover {
+          transform: translateY(-1px);
+          box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+        }
+      `}</style>
     </>
   );
 }

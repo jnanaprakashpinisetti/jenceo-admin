@@ -855,7 +855,7 @@ export default function WorkerCalleDisplay({ permissions: permissionsProp }) {
           <div className="col-md-8">
             <div className="bg-dark border p-3">
               <div className="d-flex justify-content-between align-items-center">
-                <div><strong>Daily Calls</strong> — {months[activeMonth]} {activeYear} (0–100)</div>
+                <div className="text-info"><strong>Daily Calls</strong> — {months[activeMonth]} {activeYear} (0–100)</div>
                 <span className="small text-muted">New + Modified</span>
               </div>
               <div className="mt-3">
@@ -880,7 +880,7 @@ export default function WorkerCalleDisplay({ permissions: permissionsProp }) {
           </div>
           <div className="col-md-4">
             <div className="bg-dark border p-3 h-100">
-              <div><strong>Performance Mix</strong> — {months[activeMonth]} {activeYear}</div>
+              <div className="text-info"><strong>Performance Mix</strong> — {months[activeMonth]} {activeYear}</div>
               <div className="d-flex flex-column align-items-center justify-content-center mt-3">
                 {(() => {
                   const total = Object.values(pieAgg).reduce((a, b) => a + b, 0) || 1;

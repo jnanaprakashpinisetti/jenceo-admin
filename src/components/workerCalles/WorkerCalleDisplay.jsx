@@ -432,11 +432,11 @@ export default function WorkerCalleDisplay({ permissions: permissionsProp }) {
   }, [workers, activeYear, currentUserId, selectedSource]);
   const classifyCount = (n) => {
     if (!n || n === 0) return { label: "No Calls", cls: "perf-none" };
-    if (n <= 8) return { label: "Poor Performance", cls: "perf-poor" };
-    if (n <= 15) return { label: "Average", cls: "perf-avg" };
-    if (n <= 20) return { label: "Good", cls: "perf-good" };
-    if (n <= 30) return { label: "Very Good", cls: "perf-vgood" };
-    if (n <= 40) return { label: "Excellent", cls: "perf-exc" };
+    if (n <= 10) return { label: "Poor Performance", cls: "perf-poor" };
+    if (n <= 20) return { label: "Average", cls: "perf-avg" };
+    if (n <= 30) return { label: "Good", cls: "perf-good" };
+    if (n <= 40) return { label: "Very Good", cls: "perf-vgood" };
+    if (n <= 50) return { label: "Excellent", cls: "perf-exc" };
     return { label: "Marvelous", cls: "perf-marv" };
   };
 
@@ -475,7 +475,7 @@ export default function WorkerCalleDisplay({ permissions: permissionsProp }) {
   useEffect(() => { setCurrentPage(1); }, [searchTerm, selectedSkills, selectedRoles, selectedLanguages, selectedGender, reminderFilter, selectedSource, skillMode, timeFormat, ageRange, experienceRange, rowsPerPage]);
 
   const getDisplayedPageNumbers = () => {
-    const maxBtns = 9, tp = totalPages;
+    const maxBtns = 5, tp = totalPages;
     if (tp <= maxBtns) return Array.from({ length: tp }, (_, i) => i + 1);
     const half = Math.floor(maxBtns / 2);
     let start = Math.max(1, safePage - half), end = start + maxBtns - 1;
@@ -928,9 +928,9 @@ export default function WorkerCalleDisplay({ permissions: permissionsProp }) {
                 </div>
                 <div className="mt-3 small d-flex flex-wrap gap-3 align-items-center pt-3 justify-content-between">
                   <span className="legend perf-none">No Calls (0)</span>
-                  <span className="legend perf-poor">Poor (1–8)</span>
-                  <span className="legend perf-avg">Average (9–15)</span>
-                  <span className="legend perf-good">Good (16–20)</span>
+                  <span className="legend perf-poor">Poor (1–10)</span>
+                  <span className="legend perf-avg">Average (11–20)</span>
+                  <span className="legend perf-good">Good (21–30)</span>
                   <span className="legend perf-vgood">Very Good (21–30)</span>
                   <span className="legend perf-exc">Excellent (31–40)</span>
                   <span className="legend perf-marv">Marvelous (41–100)</span>

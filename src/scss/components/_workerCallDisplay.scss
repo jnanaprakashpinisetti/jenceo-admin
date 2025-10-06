@@ -90,7 +90,7 @@
     }
   }
 
-  .h-100  {
+  .h-100 {
     @include mobile {
       .btn {
         width: auto !important;
@@ -108,7 +108,7 @@
       .form-select {
         margin-bottom: 0;
       }
-      
+
     }
   }
 
@@ -177,6 +177,180 @@
 
   }
 
+  /* Remove red backgrounds on table rows; keep text/badge colors only */
+  .reminder-overdue,
+  .reminder-today,
+  .reminder-tomorrow,
+  .reminder-upcoming {
+    background-color: transparent !important;
+  }
+
+  /* Female badge color tweak */
+  .badge-female {
+    background: #e83e8c;
+    color: #fff;
+  }
+
+  /* Pulse on Reset when active filters */
+  .btn-pulse {
+    animation: pulse 1.2s infinite;
+  }
+
+  @keyframes pulse {
+    0% {
+      box-shadow: 0 0 0 0 rgba(255, 193, 7, .4);
+    }
+
+    70% {
+      box-shadow: 0 0 0 12px rgba(255, 193, 7, 0);
+    }
+
+    100% {
+      box-shadow: 0 0 0 0 rgba(255, 193, 7, 0);
+    }
+  }
+
+  /* Bars & Pie styles */
+
+
+  .bar-graph {
+    display: grid;
+    grid-template-columns: repeat(31, minmax(6px, 1fr));
+    gap: 6px;
+    align-items: end;
+    height: 220px;
+  }
+
+  .bar {
+    position: relative;
+    background: var(--perf-avg);
+    border-radius: 3px 3px 0 0;
+  }
+
+  .bar .bar-label {
+    position: absolute;
+    bottom: -18px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 10px;
+    color: #999;
+  }
+
+  .legend {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 2px 8px;
+    border-radius: 999px;
+  }
+
+  .legend::before {
+    content: "";
+    display: inline-block;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: currentColor;
+  }
+
+  .legend.perf-none {
+    background: var(--perf-none);
+    color: #fff;
+  }
+
+  .legend.perf-poor {
+    background: var(--perf-poor);
+    color: #fff;
+  }
+
+  .legend.perf-avg {
+    background: var(--perf-avg);
+    color: #000;
+  }
+
+  .legend.perf-good {
+    background: var(--perf-good);
+    color: #000;
+  }
+
+  .legend.perf-vgood {
+    background: var(--perf-vgood);
+    color: #000;
+  }
+
+  .legend.perf-exc {
+    background: var(--perf-exc);
+    color: #fff;
+  }
+
+  .legend.perf-marv {
+    background: var(--perf-marv);
+    color: #fff;
+  }
+
+  .bar.perf-none {
+    background: var(--perf-none);
+    color: #fff;
+  }
+
+  .bar.perf-poor {
+    background: var(--perf-poor);
+    color: #fff;
+  }
+
+  .bar.perf-avg {
+    background: var(--perf-avg);
+    color: #000;
+  }
+
+  .bar.perf-good {
+    background: var(--perf-good);
+    color: #000;
+  }
+
+  .bar.perf-vgood {
+    background: var(--perf-vgood);
+    color: #000;
+  }
+
+  .bar.perf-exc {
+    background: var(--perf-exc);
+    color: #fff;
+  }
+
+  .bar.perf-marv {
+    background: var(--perf-marv);
+    color: #fff;
+  }
+
+  .perf-text.perf-none {
+    color: var(--perf-none) !important;
+  }
+
+  .perf-text.perf-poor {
+    color: var(--perf-poor) !important;
+  }
+
+  .perf-text.perf-avg {
+    color: var(--perf-avg) !important;
+  }
+
+  .perf-text.perf-good {
+    color: var(--perf-good) !important;
+  }
+
+  .perf-text.perf-vgood {
+    color: var(--perf-exc) !important;
+  }
+
+  .perf-text.perf-marv {
+    color: var(--perf-marv) !important;
+  }
+
+
+  .bg-secondary-subtle {
+    opacity: .1;
+  }
 }
 
 /* Reminder filter badges */
@@ -239,23 +413,23 @@
 
 /* Reset button pulse when filters active */
 @keyframes btn-pulse-kf {
-        0% {
-            box-shadow: 0 0 0 0 rgba(255, 193, 7, 0.6);
-        }
+  0% {
+    box-shadow: 0 0 0 0 rgba(255, 193, 7, 0.6);
+  }
 
-        70% {
-            box-shadow: 0 0 0 10px rgba(255, 193, 7, 0);
-        }
+  70% {
+    box-shadow: 0 0 0 10px rgba(255, 193, 7, 0);
+  }
 
-        100% {
-            box-shadow: 0 0 0 0 rgba(255, 193, 7, 0);
-        }
+  100% {
+    box-shadow: 0 0 0 0 rgba(255, 193, 7, 0);
+  }
 }
 
 .btn-pulse {
-   animation: pulseGlow 1.2s infinite;
-        border-color: #ffc107 !important;
-        color: #fff !important;
+  animation: pulseGlow 1.2s infinite;
+  border-color: #ffc107 !important;
+  color: #fff !important;
 }
 
 /* Female badge color */

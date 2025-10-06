@@ -370,20 +370,66 @@ export default function WorkerCalleDisplay({ permissions: permissionsProp }) {
     authUser?.displayName || (authUser?.email ? authUser.email.replace(/@.*/, "") : "") || "User";
 
   /* Monthly Day Grid (per user) */
+  /* Monthly Day Grid (per user) - One record counts once per day */
   const dayGrid = useMemo(() => {
-    const grid = {}; if (!currentUserId) return grid;
-    const bump = (m, d, kind) => { if (!grid[m]) grid[m] = {}; if (!grid[m][d]) grid[m][d] = { new: 0, modified: 0, total: 0 }; grid[m][d][kind] += 1; grid[m][d].total += 1; };
-    workers.forEach((w) => {
-      const createdAt = parseDate(w?.createdAt || w?.created_date || w?.createdOn || w?.date);
-      const createdBy = w?.createdById || w?.addedById || w?.createdByUid || w?.addedByUid || w?.uid || w?.userId;
-      if (isValidDate(createdAt) && createdAt.getFullYear() === activeYear && createdBy === currentUserId) bump(createdAt.getMonth(), createdAt.getDate(), "new");
-      const updatedAt = parseDate(w?.updatedAt || w?.updated_on || w?.editedAt);
-      const updatedBy = w?.updatedById || w?.updatedByUid;
-      if (isValidDate(updatedAt) && updatedAt.getFullYear() === activeYear && updatedBy === currentUserId) bump(updatedAt.getMonth(), updatedAt.getDate(), "modified");
-    });
-    return grid;
-  }, [workers, activeYear, currentUserId]);
+    const grid = {};
+    if (!currentUserId) return grid;
 
+    const bump = (m, d, kind) => {
+      if (!grid[m]) grid[m] = {};
+      if (!grid[m][d]) grid[m][d] = { new: 0, modified: 0, total: 0 };
+      grid[m][d][kind] += 1;
+      grid[m][d].total += 1;
+    };
+
+    // Track ALL records per day to avoid double counting
+    const recordsPerDay = {};
+
+    workers.forEach((w) => {
+      // Apply source filter
+      if (selectedSource && selectedSource !== "All") {
+        const workerSource = normalizeSource(w?.callThrough || w?.through || w?.source || "");
+        if (workerSource !== selectedSource) return;
+      }
+
+      const createdBy = w?.createdById || w?.addedById || w?.createdByUid || w?.addedByUid || w?.uid || w?.userId;
+      const updatedBy = w?.updatedById || w?.updatedByUid;
+
+      // Check if this record was created by current user
+      const createdAt = parseDate(w?.createdAt || w?.created_date || w?.createdOn || w?.date);
+      const isNewRecord = isValidDate(createdAt) &&
+        createdAt.getFullYear() === activeYear &&
+        createdBy === currentUserId;
+
+      // Check if this record was modified by current user  
+      const updatedAt = parseDate(w?.updatedAt || w?.updated_on || w?.editedAt);
+      const isModifiedRecord = isValidDate(updatedAt) &&
+        updatedAt.getFullYear() === activeYear &&
+        updatedBy === currentUserId;
+
+      // Process creation (only if not already counted for this day)
+      if (isNewRecord) {
+        const dayKey = `${createdAt.getMonth()}-${createdAt.getDate()}-${w.id}`;
+
+        if (!recordsPerDay[dayKey]) {
+          recordsPerDay[dayKey] = true;
+          bump(createdAt.getMonth(), createdAt.getDate(), "new");
+        }
+      }
+
+      // Process modification (only if not already counted for this day)
+      if (isModifiedRecord) {
+        const dayKey = `${updatedAt.getMonth()}-${updatedAt.getDate()}-${w.id}`;
+
+        if (!recordsPerDay[dayKey]) {
+          recordsPerDay[dayKey] = true;
+          bump(updatedAt.getMonth(), updatedAt.getDate(), "modified");
+        }
+      }
+    });
+
+    return grid;
+  }, [workers, activeYear, currentUserId, selectedSource]);
   const classifyCount = (n) => {
     if (!n || n === 0) return { label: "No Calls", cls: "perf-none" };
     if (n <= 8) return { label: "Poor Performance", cls: "perf-poor" };
@@ -609,7 +655,7 @@ export default function WorkerCalleDisplay({ permissions: permissionsProp }) {
           </div>
 
           <div className="col-lg-1 col-md-2 text-center">
-            <label className="form-label text-warning small mb-2">Job Roles</label>
+            <label className="form-label text-warning small mb-2">Other Skills</label>
             <div className="d-flex justify-content-center align-items-center gap-2 toggle-pill">
               <input type="checkbox" className="form-check-input" id="showJobRoles" checked={showJobRoles} onChange={(e) => setShowJobRoles(e.target.checked)} />
               <label className="form-check-label text-white small fw-bold" htmlFor="showJobRoles">{showJobRoles ? "ON" : "OFF"}</label>
@@ -646,7 +692,7 @@ export default function WorkerCalleDisplay({ permissions: permissionsProp }) {
 
       {showJobRoles && (
         <div className="p-3 bg-dark border rounded-3 mb-3">
-          <h6 className="mb-2 text-warning">Job Roles</h6>
+          <h6 className="mb-2 text-warning">Other Skills</h6>
           <div className="d-flex flex-wrap gap-2">
             {roleOptions.map((r) => {
               const active = selectedRoles.includes(r);
@@ -797,6 +843,19 @@ export default function WorkerCalleDisplay({ permissions: permissionsProp }) {
         </table>
       </div>
 
+            {/* Bottom pagination */}
+      {Math.ceil(sorted.length / rowsPerPage) > 1 && (
+        <nav aria-label="Workers" className="pagination-top py-2 mb-3 m-auto pagination-wrapper">
+          <ul className="pagination justify-content-center mb-0">
+            <li className={`page-item ${safePage === 1 ? "disabled" : ""}`}><button className="page-link" onClick={() => setCurrentPage(1)} disabled={safePage === 1}>«</button></li>
+            <li className={`page-item ${safePage === 1 ? "disabled" : ""}`}><button className="page-link" onClick={() => setCurrentPage(safePage - 1)} disabled={safePage === 1}>‹</button></li>
+            {getDisplayedPageNumbers().map((num) => (<li key={num} className={`page-item ${safePage === num ? "active" : ""}`}><button className="page-link" onClick={() => setCurrentPage(num)}>{num}</button></li>))}
+            <li className={`page-item ${safePage === totalPages ? "disabled" : ""}`}><button className="page-link" onClick={() => setCurrentPage(safePage + 1)} disabled={safePage === totalPages}>›</button></li>
+            <li className={`page-item ${safePage === totalPages ? "disabled" : ""}`}><button className="page-link" onClick={() => setCurrentPage(totalPages)} disabled={safePage === totalPages}>»</button></li>
+          </ul>
+        </nav>
+      )}
+
       {/* ---------- Daily Activity — {UserName} ---------- */}
       <hr />
       <h4 className="mt-2 text-info">Daily Activity — {currentUserName}</h4>
@@ -922,6 +981,7 @@ export default function WorkerCalleDisplay({ permissions: permissionsProp }) {
         normalizeSource={normalizeSource}
         getBaseDate={getBaseDate}
         callThroughOptions={callThroughOptions}
+        selectedSource={selectedSource}
       />
 
       {/* MODAL */}
@@ -1029,22 +1089,39 @@ export default function WorkerCalleDisplay({ permissions: permissionsProp }) {
   );
 }
 
-/* ---------- Call Through Summary (counts fixed, markup preserved) ---------- */
-function CallThroughSummary({ months, workers, activeYear, normalizeSource, getBaseDate, callThroughOptions }) {
+/* ---------- Call Through Summary (with Unknown month for no-date records) ---------- */
+function CallThroughSummary({ months, workers, activeYear, normalizeSource, getBaseDate, callThroughOptions, selectedSource }) {
   const monthSummary = useMemo(() => {
-    const summary = {}; callThroughOptions.forEach((t) => { summary[t] = Array(12).fill(0); });
+    const summary = {};
+    callThroughOptions.forEach((t) => {
+      summary[t] = Array(13).fill(0); // 12 months + 1 Unknown column
+    });
+
     workers.forEach((w) => {
-      const d = parseDate(getBaseDate(w)); if (!isValidDate(d) || d.getFullYear() !== activeYear) return;
-      const m = d.getMonth();
+      // Apply source filter
+      if (selectedSource && selectedSource !== "All") {
+        const workerSource = normalizeSource(w?.callThrough || w?.through || w?.source || "");
+        if (workerSource !== selectedSource) return;
+      }
+
+      const d = parseDate(getBaseDate(w));
       const srcLabel = normalizeSource(w?.callThrough || w?.through || w?.source || "");
       const bucket = callThroughOptions.includes(srcLabel) ? srcLabel : "Other";
-      summary[bucket][m] = (summary[bucket][m] || 0) + 1;
+
+      if (isValidDate(d) && d.getFullYear() === activeYear) {
+        // Has valid date and matches active year - put in proper month
+        const m = d.getMonth();
+        summary[bucket][m] = (summary[bucket][m] || 0) + 1;
+      } else {
+        // No valid date or wrong year - put in Unknown column (index 12)
+        summary[bucket][12] = (summary[bucket][12] || 0) + 1;
+      }
     });
     return summary;
-  }, [workers, activeYear, callThroughOptions]);
+  }, [workers, activeYear, callThroughOptions, selectedSource]);
 
   const totalsPerMonth = useMemo(() => {
-    const t = Array(12).fill(0);
+    const t = Array(13).fill(0); // 12 months + 1 Unknown
     Object.keys(monthSummary).forEach((k) => {
       monthSummary[k].forEach((v, mi) => { t[mi] += v; });
     });
@@ -1060,20 +1137,40 @@ function CallThroughSummary({ months, workers, activeYear, normalizeSource, getB
           <tr>
             <th>Call Through</th>
             {months.map((m, mi) => (<th key={m}>{m}</th>))}
+            <th className="unKnonMonth">Unknown</th>
             <th>Total</th>
           </tr>
         </thead>
         <tbody>
-          {callThroughOptions.map((t) => (
-            <tr key={t} className="summary-table-row">
-              <td className="source-name text-info">{t}</td>
-              {(monthSummary[t] || Array(12).fill(0)).map((count, idx) => (<td key={idx}>{count > 0 ? count : ""}</td>))}
-              <td className="total-cell">{(monthSummary[t] || Array(12).fill(0)).reduce((a, b) => a + b, 0)}</td>
-            </tr>
-          ))}
+          {callThroughOptions.map((t) => {
+            const rowData = monthSummary[t] || Array(13).fill(0);
+            const rowTotal = rowData.reduce((a, b) => a + b, 0);
+
+            return (
+              <tr key={t} className="summary-table-row">
+                <td className="source-name text-info">{t}</td>
+                {/* Monthly counts */}
+                {rowData.slice(0, 12).map((count, idx) => (
+                  <td key={idx}>{count > 0 ? count : ""}</td>
+                ))}
+                {/* Unknown month count */}
+                <td className="unKnonMonth text-center fw-bold">
+                  {rowData[12] > 0 ? rowData[12] : ""}
+                </td>
+                <td className="total-cell">{rowTotal}</td>
+              </tr>
+            );
+          })}
           <tr className="summary-table-row fw-bold">
-            <td className="source-name text-warning">Total</td>
-            {totalsPerMonth.map((sum, mi) => (<td key={mi}>{sum || ""}</td>))}
+            <td className="totalRow">Total</td>
+            {/* Monthly totals */}
+            {totalsPerMonth.slice(0, 12).map((sum, mi) => (
+              <td className="totalRow" key={mi}>{sum > 0 ? sum : ""}</td>
+            ))}
+            {/* Unknown month total */}
+            <td className="unKnonMonth text-center fw-bold">
+              {totalsPerMonth[12] > 0 ? totalsPerMonth[12] : ""}
+            </td>
             <td className="total-cell">{grandTotal}</td>
           </tr>
         </tbody>

@@ -134,20 +134,37 @@ function StatCard({ title, value, icon, color, trend }) {
 }
 
 // User Card Component
+// User Card Component
 function UserCard({ user, selected, onSelect, onEdit, onToggleActive, onResetPassword, onImpersonate, onRemove }) {
+  // Get user photo from different possible locations in user object
+  const userPhoto = user.photoURL || user.photoUrl || user.avatar || user.profilePicture;
+  const userName = user.name || user.displayName || user.username || 'Unnamed User';
+  const userInitial = userName.charAt(0).toUpperCase();
+
   return (
     <div className={`user-card ${!user.active ? 'inactive' : ''}`}>
       <div className="user-card-header">
         <div className="user-avatar-container">
-          {user.photoURL ? (
-            <img src={user.photoURL} alt="User" className="user-photo" />
-          ) : (
-            <div className="user-avatar">
-              {user.name ? user.name.charAt(0).toUpperCase() : 'U'}
-            </div>
-          )}
+          {userPhoto ? (
+            <img
+              src={userPhoto}
+              alt="User"
+              className="user-photo"
+              onError={(e) => {
+                // If photo fails to load, show avatar instead
+                e.target.style.display = 'none';
+                e.target.nextSibling.style.display = 'flex';
+              }}
+            />
+          ) : null}
+          <div
+            className="user-avatar"
+            style={{ display: userPhoto ? 'none' : 'flex' }}
+          >
+            {userInitial}
+          </div>
           <div className="user-info">
-            <h6 className="user-name">{user.name || 'Unnamed User'}</h6>
+            <h6 className="user-name">{userName}</h6>
             <span className="user-uid">{user.uid}</span>
           </div>
         </div>
@@ -159,6 +176,7 @@ function UserCard({ user, selected, onSelect, onEdit, onToggleActive, onResetPas
         />
       </div>
 
+      {/* Rest of your UserCard JSX remains the same */}
       <div className="user-details">
         <div className="user-role-badge">
           <span className={`role-badge role-${user.role || 'user'}`}>
@@ -198,7 +216,6 @@ function UserCard({ user, selected, onSelect, onEdit, onToggleActive, onResetPas
     </div>
   );
 }
-
 // Confirmation Modal Component
 // Confirmation Modal Component
 function ConfirmationModal({ show, title, message, onConfirm, onCancel, confirmText = "Yes", cancelText = "No", type = "warning" }) {
@@ -439,29 +456,41 @@ export default function AdminMain() {
   // Force logout user by clearing their session data
   const forceLogoutUser = async (userId) => {
     try {
-      // Clear session storage for the user
-      const sessionData = sessionStorage.getItem("auth:user");
-      if (sessionData) {
-        const userData = JSON.parse(sessionData);
-        if (userData.dbId === userId || userData.uid === userId) {
-          sessionStorage.removeItem("auth:user");
+      // Clear all possible session storage locations
+      const sessionKeys = ["auth:user", "firebase:authUser", "userSession", "currentUser"];
+      sessionKeys.forEach(key => {
+        const sessionData = sessionStorage.getItem(key);
+        if (sessionData) {
+          try {
+            const userData = JSON.parse(sessionData);
+            if (userData.dbId === userId || userData.uid === userId || userData.id === userId) {
+              sessionStorage.removeItem(key);
+            }
+          } catch (e) {
+            // If parsing fails, remove it anyway
+            sessionStorage.removeItem(key);
+          }
         }
-      }
-
-      // Clear any localStorage data
-      localStorage.removeItem("impersonateUid");
-
-      // Update user's lastSync to force re-login
-      await safeUpdate(`Users/${userId}`, {
-        lastSync: null,
-        lastLogout: Date.now()
       });
+
+      // Clear localStorage
+      const localKeys = ["impersonateUid", "firebaseToken", "userToken"];
+      localKeys.forEach(key => localStorage.removeItem(key));
+
+      // Update user's lastSync and lastLogout to force re-login
+      await firebaseDB.child(`Users/${userId}`).update({
+        lastSync: null,
+        lastLogout: Date.now(),
+        forceLogout: Date.now() // Additional field to force logout
+      });
+
+      console.log(`User ${userId} has been forcefully logged out`);
 
     } catch (error) {
       console.error("Error forcing logout:", error);
+      // Even if Firebase fails, we still clear local storage
     }
   };
-
   // Save permissions with confirmation
   const savePerms = async () => {
     if (!editingUser) return;

@@ -2,7 +2,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 
 // ⬇️ Adjust paths if needed
-import firebaseDB from "../firebase";
+import firebaseDB, { firebaseStorage, uploadFile, getDownloadURL } from "../firebase";
 import { useAuth } from "../context/AuthContext";
 import { useLocation } from "react-router-dom"
 
@@ -14,7 +14,7 @@ import { useLocation } from "react-router-dom"
  *   2) else scanning JenCeo-DataBase/Users to match username/name
  * - Persists under: JenCeo-DataBase/Users/{dbId}/profile
  * - Mirrors { name, photoURL } at JenCeo-DataBase/Users/{dbId}
- * - Images saved as Data URLs (base64) so it works WITHOUT Firebase Storage.
+ * - Images saved in Firebase Storage with proper URLs
  */
 export default function Profile() {
   const { user } = useAuth() || {};
@@ -26,6 +26,7 @@ export default function Profile() {
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [uploading, setUploading] = useState(false);
   const [savedAt, setSavedAt] = useState(null);
   const [err, setErr] = useState("");
 
@@ -37,8 +38,8 @@ export default function Profile() {
     location: "",
     languages: [],
     skills: [],
-    photoURL: "", // avatar (data URL / http URL)
-    coverURL: "", // cover  (data URL / http URL)
+    photoURL: "", // avatar (storage URL)
+    coverURL: "", // cover  (storage URL)
     social: { linkedin: "", twitter: "", instagram: "" },
   });
 
@@ -73,7 +74,7 @@ export default function Profile() {
   // Helper: normalize
   const norm = (v) => (v == null ? "" : String(v).trim().toLowerCase());
 
-  // Build a set of “auth candidates” to match
+  // Build a set of "auth candidates" to match
   const authCandidates = [
     user?.dbId,
     user?.id,
@@ -117,7 +118,7 @@ export default function Profile() {
       if (dbId) return; // already known or from URL
 
       try {
-        const usersSnap = await firebaseDB.child("JenCeo-DataBase/Users").get();
+        const usersSnap = await firebaseDB.child("Users").get();
         if (!usersSnap.exists()) return;
 
         const all = usersSnap.val() || {};
@@ -167,8 +168,7 @@ export default function Profile() {
           ].filter(Boolean);
           handles.forEach((h) => sessionStorage.setItem(`dbId:${h}`, foundKey));
         } else {
-          // leave dbId empty; UI will show “Resolving…” message
-          // (You can also set a friendlier message here if you want)
+          // leave dbId empty; UI will show "Resolving..." message
         }
       } catch (e) {
         console.error("DB id resolution failed", e);
@@ -179,59 +179,8 @@ export default function Profile() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dbId, JSON.stringify(authCandidates)]);
 
-
-  // Resolve the DB id (e.g. "-OahSHDNZqZG2YkKnaAb") if we don't have it yet
-  useEffect(() => {
-    const resolveDbId = async () => {
-      if (dbId) return; // already known
-      try {
-        // Load all users once and search for a match by username/name (case-insensitive)
-        const usersSnap = await firebaseDB.child("JenCeo-DataBase/Users").get();
-        if (usersSnap.exists()) {
-          const all = usersSnap.val() || {};
-          let foundKey = "";
-
-          // Try username match first; your logs show "username" field exists.
-          for (const [key, val] of Object.entries(all)) {
-            const uname = (val?.username || "").toString().trim().toLowerCase();
-            if (uname && uname === canonicalUsername) {
-              foundKey = key;
-              break;
-            }
-          }
-
-          // Fallback: match by display name if username didn’t match
-          if (!foundKey && user?.name) {
-            const target = user.name.toString().trim().toLowerCase();
-            for (const [key, val] of Object.entries(all)) {
-              const nm = (val?.name || "").toString().trim().toLowerCase();
-              if (nm && nm === target) {
-                foundKey = key;
-                break;
-              }
-            }
-          }
-
-          if (foundKey) {
-            setDbId(foundKey);
-          } else {
-            setErr("Could not resolve your user record in the database.");
-          }
-        } else {
-          setErr("Users list not found in database.");
-        }
-      } catch (e) {
-        console.error(e);
-        setErr("Failed to look up your user record.");
-      }
-    };
-
-    resolveDbId();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [canonicalUsername]);
-
   const userRootPath = useMemo(
-    () => (dbId ? `JenCeo-DataBase/Users/${dbId}` : ""),
+    () => (dbId ? `Users/${dbId}` : ""),
     [dbId]
   );
   const profilePath = useMemo(
@@ -252,29 +201,88 @@ export default function Profile() {
   const removeChip = (k, v) =>
     setForm((f) => ({ ...f, [k]: (f[k] || []).filter((x) => x !== v) }));
 
-  // Read a File -> Data URL (base64)
-  const fileToDataURL = (file) =>
-    new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => resolve(reader.result);
-      reader.onerror = reject;
-      reader.readAsDataURL(file);
-    });
+  // Upload file to Firebase Storage and return download URL
+  const uploadToStorage = async (file, filePath) => {
+    try {
+      const snapshot = await uploadFile(filePath, file);
+      const downloadURL = await getDownloadURL(snapshot);
+      return downloadURL;
+    } catch (error) {
+      console.error("Upload error:", error);
+      throw new Error(`Failed to upload image: ${error.message}`);
+    }
+  };
 
+  // Handle avatar image upload
   const handleAvatarPick = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    const dataURL = await fileToDataURL(file);
-    setAvatarPreview(dataURL);
-    setForm((f) => ({ ...f, photoURL: dataURL }));
+
+    // Validate file type and size
+    if (!file.type.startsWith('image/')) {
+      setErr('Please select a valid image file');
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) { // 5MB limit
+      setErr('Image size should be less than 5MB');
+      return;
+    }
+
+    setUploading(true);
+    setErr("");
+
+    try {
+      // Create preview
+      const previewURL = URL.createObjectURL(file);
+      setAvatarPreview(previewURL);
+
+      // Upload to Firebase Storage
+      const filePath = `user-avatars/${dbId}/avatar_${Date.now()}.jpg`;
+      const downloadURL = await uploadToStorage(file, filePath);
+      
+      setForm((f) => ({ ...f, photoURL: downloadURL }));
+    } catch (error) {
+      setErr(error.message);
+      setAvatarPreview("");
+    } finally {
+      setUploading(false);
+    }
   };
 
+  // Handle cover image upload
   const handleCoverPick = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    const dataURL = await fileToDataURL(file);
-    setCoverPreview(dataURL);
-    setForm((f) => ({ ...f, coverURL: dataURL }));
+
+    // Validate file type and size
+    if (!file.type.startsWith('image/')) {
+      setErr('Please select a valid image file');
+      return;
+    }
+    if (file.size > 10 * 1024 * 1024) { // 10MB limit
+      setErr('Cover image size should be less than 10MB');
+      return;
+    }
+
+    setUploading(true);
+    setErr("");
+
+    try {
+      // Create preview
+      const previewURL = URL.createObjectURL(file);
+      setCoverPreview(previewURL);
+
+      // Upload to Firebase Storage
+      const filePath = `user-covers/${dbId}/cover_${Date.now()}.jpg`;
+      const downloadURL = await uploadToStorage(file, filePath);
+      
+      setForm((f) => ({ ...f, coverURL: downloadURL }));
+    } catch (error) {
+      setErr(error.message);
+      setCoverPreview("");
+    } finally {
+      setUploading(false);
+    }
   };
 
   // Load existing profile once we know dbId
@@ -326,24 +334,34 @@ export default function Profile() {
     try {
       const toSave = {
         ...form,
-        // keep email as-is; your DB shows blank emails, that’s okay
+        // Remove any base64 data URLs if they exist (shouldn't happen now)
+        photoURL: form.photoURL && form.photoURL.startsWith('data:') ? '' : form.photoURL,
+        coverURL: form.coverURL && form.coverURL.startsWith('data:') ? '' : form.coverURL,
         updatedAt: new Date().toISOString(),
       };
 
       // Save profile
       await firebaseDB.child(profilePath).set(toSave);
 
-      // Mirror name/photoURL at user root
+      // Mirror name/photoURL at user root for Admin panel to see
       const mirror = {
         name: toSave.name || "",
         photoURL: toSave.photoURL || "",
+        updatedAt: toSave.updatedAt,
       };
       await firebaseDB.child(userRootPath).update(mirror);
 
       setForm(toSave);
       setSavedAt(new Date());
-      if (toSave.photoURL) setAvatarPreview(toSave.photoURL);
-      if (toSave.coverURL) setCoverPreview(toSave.coverURL);
+      
+      // Clean up object URLs
+      if (avatarPreview.startsWith('blob:')) {
+        URL.revokeObjectURL(avatarPreview);
+      }
+      if (coverPreview.startsWith('blob:')) {
+        URL.revokeObjectURL(coverPreview);
+      }
+      
     } catch (e) {
       console.error(e);
       setErr("Could not save your profile. Please check database rules and try again.");
@@ -351,6 +369,18 @@ export default function Profile() {
       setSaving(false);
     }
   };
+
+  // Clean up object URLs on unmount
+  useEffect(() => {
+    return () => {
+      if (avatarPreview.startsWith('blob:')) {
+        URL.revokeObjectURL(avatarPreview);
+      }
+      if (coverPreview.startsWith('blob:')) {
+        URL.revokeObjectURL(coverPreview);
+      }
+    };
+  }, [avatarPreview, coverPreview]);
 
   // If we still don't know which record to modify, show a gentle notice
   if (!dbId) {
@@ -366,6 +396,14 @@ export default function Profile() {
 
   return (
     <div className="container py-3 profile-fade-in">
+      {/* Uploading indicator */}
+      {uploading && (
+        <div className="alert alert-info text-center">
+          <div className="spinner-border spinner-border-sm me-2"></div>
+          Uploading image...
+        </div>
+      )}
+
       {/* Cover */}
       <div className=" border-0 shadow-soft overflow-hidden mb-3">
         <div className="profile-cover position-relative">
@@ -380,8 +418,8 @@ export default function Profile() {
             style={{ maxHeight: 220, objectFit: "cover", filter: "saturate(1.05)" }}
           />
           <label className="btn btn-sm btn-light position-absolute" style={{ right: 16, bottom: 16 }}>
-            Change cover
-            <input type="file" accept="image/*" onChange={handleCoverPick} hidden />
+            {uploading ? "Uploading..." : "Change cover"}
+            <input type="file" accept="image/*" onChange={handleCoverPick} hidden disabled={uploading} />
           </label>
         </div>
 
@@ -404,8 +442,8 @@ export default function Profile() {
                 style={{ right: -6, bottom: -6 }}
                 title="Change avatar"
               >
-                ✎
-                <input type="file" accept="image/*" onChange={handleAvatarPick} hidden />
+                {uploading ? "⏳" : "✎"}
+                <input type="file" accept="image/*" onChange={handleAvatarPick} hidden disabled={uploading} />
               </label>
             </div>
 
@@ -428,7 +466,7 @@ export default function Profile() {
               >
                 Scroll top
               </button>
-              <button className="btn btn-primary btn-sm" onClick={handleSave} disabled={saving}>
+              <button className="btn btn-primary btn-sm" onClick={handleSave} disabled={saving || uploading}>
                 {saving ? "Saving..." : "Save changes"}
               </button>
             </div>
@@ -606,7 +644,7 @@ export default function Profile() {
               </div>
 
               <div className="d-flex justify-content-end mt-4">
-                <button className="btn btn-primary" type="submit" disabled={saving}>
+                <button className="btn btn-primary" type="submit" disabled={saving || uploading}>
                   {saving ? "Saving..." : "Save changes"}
                 </button>
               </div>

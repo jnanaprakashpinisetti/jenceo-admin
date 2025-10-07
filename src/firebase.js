@@ -32,7 +32,7 @@ export const firebaseDB = db.ref("JenCeo-DataBase");
 export const firebaseStorage = storage;
 export const storageRef = storage.ref();
 
-// upload helpers (kept from your file)
+// Enhanced upload helper with better error handling
 export const uploadFile = async (filePath, file) => {
   try {
     let fileRef;
@@ -43,7 +43,13 @@ export const uploadFile = async (filePath, file) => {
     } else {
       throw new Error("Invalid filePath parameter.");
     }
+    
+    console.log('Uploading file to:', fileRef.fullPath);
+    
+    // Upload the file
     const snapshot = await fileRef.put(file);
+    console.log('Upload completed:', snapshot.metadata.name);
+    
     return snapshot;
   } catch (error) {
     console.error("Upload error:", error);
@@ -51,14 +57,39 @@ export const uploadFile = async (filePath, file) => {
   }
 };
 
+// Enhanced download URL getter
 export const getDownloadURL = async (refOrSnapshot) => {
   try {
     const fileRef = refOrSnapshot?.ref ? refOrSnapshot.ref : refOrSnapshot;
     const url = await fileRef.getDownloadURL();
+    console.log('Download URL:', url);
     return url;
   } catch (error) {
     console.error("Get download URL error:", error);
     throw error;
+  }
+};
+
+// Helper to delete file from storage
+export const deleteFile = async (filePath) => {
+  try {
+    const fileRef = storageRef.child(filePath);
+    await fileRef.delete();
+    console.log('File deleted:', filePath);
+  } catch (error) {
+    console.error("Delete file error:", error);
+    throw error;
+  }
+};
+
+// Helper to check if file exists
+export const fileExists = async (filePath) => {
+  try {
+    const fileRef = storageRef.child(filePath);
+    const url = await fileRef.getDownloadURL();
+    return !!url;
+  } catch (error) {
+    return false;
   }
 };
 

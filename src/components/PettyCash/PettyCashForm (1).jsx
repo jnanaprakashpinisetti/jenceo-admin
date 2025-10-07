@@ -586,5 +586,3 @@ export default function PettyCashForm() {
     </div>
   );
 }
-
-// We got conflits so i am pushting this code again

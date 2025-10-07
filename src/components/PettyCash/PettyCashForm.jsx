@@ -1,12 +1,34 @@
-// src/.../PettyCashForm.jsx
+// src/components/PettyCash/PettyCashForm.jsx
 import React, { useState } from "react";
 import firebaseDB from "../../firebase";
 import SuccessModal from "../common/SuccessModal";
+import { useAuth } from "../../context/AuthContext";
 
 export default function PettyCashForm() {
+  const authCtx = useAuth() || {};
+  const { currentUser, user, dbUser, profile } = authCtx;
   const today = new Date();
   const minDate = new Date(today);
   minDate.setDate(today.getDate() - 1000);
+  // Robust name resolver across common shapes your AuthContext may expose
+  const signedInName =
+    dbUser?.name ||
+    dbUser?.username ||
+    profile?.name ||
+    profile?.username ||
+    user?.name ||
+    user?.username ||
+    currentUser?.displayName ||
+    currentUser?.name ||
+    currentUser?.username ||
+    (currentUser?.email ? currentUser.email.split("@")[0] : "") ||
+    "User";
+
+  // Also a robust UID (covers different shapes)
+  const signedInUid =
+    currentUser?.uid || currentUser?.dbId || user?.uid || user?.dbId || null;
+
+
 
   const [formData, setFormData] = useState({
     mainCategory: "",
@@ -230,7 +252,7 @@ export default function PettyCashForm() {
       config.forEach((label, idx) => {
         const fieldName = `extraField${idx + 1}`;
         if (!formData[fieldName]) {
-          newErrors[fieldName] = `${label} is required`;
+          newErrors[fieldName] = `${label} is required"`;
         }
       });
     }
@@ -246,15 +268,42 @@ export default function PettyCashForm() {
     e.preventDefault();
     if (!validateForm()) return;
 
+    // --- GLOBAL AUTH KEYS (fix userKey usage before refs) ---
+    const userKey = currentUser?.uid
+    const superiorId =
+      currentUser?.superiorId ||
+      dbUser?.superiorId ||
+      user?.superiorId ||
+      profile?.superiorId ||
+      null;
+
+
     const dataToSave = {
       ...formData,
       createdAt: new Date().toISOString(),
-      employeeName: "Admin",
+      createdById: userKey,
+      employeeName: signedInName || "Unknown",
+      // workflow fields (keep your "approval" field as-is for UI)
+      status: "pending",
+      approvedById: null,
+      approvedAt: null,
+      superiorId,
     };
 
     try {
-      const newRef = await firebaseDB.child("PettyCash/admin").push(dataToSave);
+      // push under user's list
+      const listRef = firebaseDB.child(`PettyCash/${userKey}`);
+      const newRef = listRef.push();
       const expenseObj = { id: newRef.key, ...dataToSave };
+
+      // fan-out to superior inbox if exists, single multipath update
+      const updates = {};
+      updates[`/PettyCash/${userKey}/${expenseObj.id}`] = expenseObj;
+      if (superiorId) {
+        updates[`/PettyCashInbox/${superiorId}/${expenseObj.id}`] = expenseObj;
+      }
+      await firebaseDB.update(updates);
+
       setSavedExpense(expenseObj);
       setShowSuccessModal(true);
 
@@ -268,6 +317,7 @@ export default function PettyCashForm() {
         price: "",
         total: "",
         comments: "",
+        approval: "pending",
         extraField1: "",
         extraField2: "",
         extraField3: "",
@@ -291,6 +341,9 @@ export default function PettyCashForm() {
       <div className="row mb-0">
         {config.map((label, idx) => {
           const fieldName = `extraField${idx + 1}`;
+          const isDate =
+            label.toLowerCase().includes("date") ||
+            label.toLowerCase().includes("renewal");
           return (
             <div key={fieldName} className="col-md-6 mb-3">
               <label>
@@ -300,7 +353,7 @@ export default function PettyCashForm() {
                 </strong>
               </label>
               <input
-                type={label.toLowerCase().includes("date") || label.toLowerCase().includes("renewal") ? "date" : "text"}
+                type={isDate ? "date" : "text"}
                 name={fieldName}
                 value={formData[fieldName] || ""}
                 onChange={handleChange}
@@ -320,7 +373,9 @@ export default function PettyCashForm() {
       <h3 className="mb-4 text-center opacity-75 text-white">Petty Cash Form</h3>
       <hr className="text-white" />
       <div className="d-flex justify-content-between align-items-center p-3 opacity-75">
-        <p className="text-white">Admin</p>
+        {/* Show signed-in user instead of hardcoded Admin */}
+        <p className="text-white">{signedInName}</p>
+
         <p className="text-white">{formatMonth(today)}</p>
       </div>
 

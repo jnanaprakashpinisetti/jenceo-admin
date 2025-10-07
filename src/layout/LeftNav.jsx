@@ -90,53 +90,62 @@ export default function LeftNav() {
   const isAdmin = /^(admin|administrator|superadmin)$/.test(roleStr);
   const isManager = /^(manager|managers|mgr)$/.test(roleStr);
 
-  // FIXED: Use useCallback to memoize the hasPerm function
-  const hasPerm = useCallback((keys = []) => {
+  // IMPROVED: Better permission checking that matches AdminMain.jsx structure
+  const hasPerm = useCallback((moduleKey, action = "view") => {
     if (isAdmin || isManager) return true;
-    return keys.some((k) => {
-      const p = perms?.[k];
-      return p === true || p?.view === true || p?.read === true;
-    });
+    
+    const modulePerms = perms?.[moduleKey];
+    if (!modulePerms) return false;
+    
+    // Check if it's a boolean (legacy) or object structure
+    if (typeof modulePerms === 'boolean') {
+      return modulePerms;
+    }
+    
+    // Check for specific action or fallback to view
+    return modulePerms[action] === true || modulePerms.view === true;
   }, [isAdmin, isManager, perms]);
 
   // Dashboard & core
-  const canDashboard = hasPerm(["Dashboard"]);
-  const canInvestments = hasPerm(["Investments"]);
-  const canTask = hasPerm(["Task"]);
-  const canAccounts = hasPerm(["Accounts"]);
-  const canAdmin = hasPerm(["Admin"]);
+  const canDashboard = hasPerm("Dashboard");
+  const canInvestments = hasPerm("Investments");
+  const canTask = hasPerm("Task");
+  const canAccounts = hasPerm("Accounts");
+  const canAdmin = hasPerm("Admin");
 
-  // Staff
-  const canStaffData = isAdmin || isManager || hasPerm(["Staff", "Staff Data", "StaffData"]);
-  const canExistingStaff = isAdmin || isManager || hasPerm(["Existing Staff", "ExistingStaff", "Staff Exit", "Exist Staff"]);
+  // Staff - Using the actual module keys from AdminMain.jsx
+  const canStaffData = hasPerm("Staff Data") || hasPerm("Staff");
+  const canExistingStaff = hasPerm("Staff Data") || hasPerm("Staff"); // Existing staff typically uses same perms as staff data
 
-  // Workers
-  const canWorkersData = hasPerm(["Workers Data", "Worker Data", "Workers"]);
-  const canExistingWorkers = hasPerm(["Existing Workers", "ExistingEmployees", "Exit Worker", "Existing Worker"]);
-  const canWorkerAgreement = hasPerm(["Worker Agreement", "Worker Aggrement", "Employee Aggrement"]);
-  const canWorkerCallData = hasPerm(["Worker Call Data", "Worker Calls"]);
-  const canWorkerCallDelete = hasPerm(["Worker Call Delete", "Worker Call Remove"]);
+  // Workers - Using exact module keys from AdminMain.jsx MODULES array
+  const canWorkersData = hasPerm("Workers Data");
+  const canExistingWorkers = hasPerm("Workers Data"); // Existing workers typically part of Workers Data
+  const canWorkerAgreement = hasPerm("Workers Data"); // Worker agreement typically part of Workers Data
+  const canWorkerCallData = hasPerm("Worker Call Data");
+  const canWorkerCallDelete = hasPerm("Worker Call Data"); // Delete typically part of Worker Call Data
 
   // Client
-  const canClientData = hasPerm(["Client Data", "ClientInfo", "Clients"]);
-  const canClientExit = hasPerm(["Client Exit", "ClientExit"]);
+  const canClientData = hasPerm("Client Data");
+  const canClientExit = hasPerm("Client Data"); // Client exit typically part of Client Data
 
   // Enquiry
-  const canEnquiry = hasPerm(["Enquiries", "Enquiry"]);
-  const canEnquiryExit = hasPerm(["Enquiry Exit", "EnquiryExit", "Old Enquiries"]);
+  const canEnquiry = hasPerm("Enquiries");
+  const canEnquiryExit = hasPerm("Enquiries"); // Enquiry exit typically part of Enquiries
 
   // Hospital
-  const canHospitalList = hasPerm(["Hospital List", "Hospitals"]);
-  const canHospitalDeleteList = hasPerm(["Hospital Delete List", "HospitalDeleteList", "Deleted Hospitals"]);
+  const canHospitalList = hasPerm("Hospital List");
+  const canHospitalDeleteList = hasPerm("Hospital List"); // Delete typically part of Hospital List
 
   // Expenses
-  const canExpenses = hasPerm(["Expenses", "Petty Cash"]);
-  const canExpenceDelete = hasPerm(["Expence Delete", "Delete Expenses", "Delete Petty Cash"]);
+  const canExpenses = hasPerm("Expenses");
+  const canExpenceDelete = hasPerm("Expenses"); // Delete typically part of Expenses
 
   // ---- UI state ----
   const [isActive, setIsActive] = useState(false); // (kept if you later want a desktop collapse)
   const [isShow, setIsShow] = useState(false); // mobile menu
   const [query, setQuery] = useState("");
+
+  
 
   // collapsible groups
   const [open, setOpen] = useState({

@@ -5,7 +5,7 @@ import AdminMain from '../components/Admin/AdminMain'
 
 export default function AdminUsers() {
   return (
-     <div className="layout-body">
+     <div className="layout-body adminUsers">
      <AdminMain />
     </div>
   )

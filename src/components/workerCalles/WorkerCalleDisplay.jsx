@@ -547,8 +547,6 @@ export default function WorkerCalleDisplay({ permissions: permissionsProp }) {
       <div className="small text-center mt-2" style={{ color: "yellow" }}>
         Showing <strong>{pageItems.length}</strong> of <strong>{sorted.length}</strong> (from <strong>{workers.length}</strong> total){reminderFilter ? ` — ${reminderFilter}` : ""}
       </div>
-
-
         <input
           type="text"
           className="form-control searchBar workerCallSearch"
@@ -557,9 +555,7 @@ export default function WorkerCalleDisplay({ permissions: permissionsProp }) {
           onChange={(e) => setSearchTerm(e.target.value)}
           style={{ maxWidth: 380 }}
         />
-
-
-        <select className="form-select" value={selectedSource} onChange={(e) => setSelectedSource(e.target.value)}>
+        <select className="form-select d-filter" value={selectedSource} onChange={(e) => setSelectedSource(e.target.value)}>
           <option value="All">All Call Through</option>
           {callThroughOptions.map((opt) => (<option key={opt} value={opt}>{opt}</option>))}
         </select>

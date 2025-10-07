@@ -517,7 +517,9 @@ export default function DisplayClient() {
 
       {/* Pagination */}
       {totalPages > 1 && (
-        <nav aria-label="Client pagination" className="pagination-wrapper">
+        <div className='d-flex justify-content-center'>
+
+            <nav aria-label="Client pagination" className="pagination-wrapper w-auto p-0 mt-3">
           <ul className="pagination justify-content-center">
             <li className={`page-item ${currentPage === 1 ? 'disabled' : ''}`}>
               <button className="page-link" onClick={() => setCurrentPage(currentPage - 1)} disabled={currentPage === 1}>
@@ -536,6 +538,9 @@ export default function DisplayClient() {
             </li>
           </ul>
         </nav>
+          
+           </div>
+      
       )}
 
       {/* Client View/Edit Modal */}

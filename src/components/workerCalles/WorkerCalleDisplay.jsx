@@ -559,7 +559,7 @@ export default function WorkerCalleDisplay({ permissions: permissionsProp }) {
         />
 
 
-        <select className="form-select d-filter" value={selectedSource} onChange={(e) => setSelectedSource(e.target.value)}>
+        <select className="form-select" value={selectedSource} onChange={(e) => setSelectedSource(e.target.value)}>
           <option value="All">All Call Through</option>
           {callThroughOptions.map((opt) => (<option key={opt} value={opt}>{opt}</option>))}
         </select>

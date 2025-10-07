@@ -874,46 +874,88 @@ export default function WorkerCalleDisplay({ permissions: permissionsProp }) {
 
       {/* Table -1 */}
       {/* Month x Day grid */}
-      <div className="table-responsive mb-3">
-        <table className="table table-dark table-hover" style={{ fontSize: "12px" }}>
-          <thead>
-            <tr>
-              <th style={{ whiteSpace: "nowrap" }}>Month \\ Day</th>
-              {Array.from({ length: 31 }, (_, i) => i + 1).map((d) => (<th key={d} style={{ textAlign: "center" }}>{d}</th>))}
-              <th>Total</th>
-            </tr>
-          </thead>
-          <tbody>
-            {months.map((m, mi) => {
-              const dim = new Date(activeYear, mi + 1, 0).getDate();
-              let rowTotal = 0;
-              return (
-                <tr key={m}>
-                  <td className="text-info fw-bold">{m}</td>
-                  {Array.from({ length: 31 }, (_, i) => i + 1).map((d) => {
-                    const cell = (dayGrid[mi] && dayGrid[mi][d]) || { new: 0, modified: 0, total: 0 };
-                    const within = d <= dim; const total = within ? cell.total : 0; rowTotal += total;
-                    const { cls, label } = classifyCount(total);
-                    return (
-                      <td key={d} className={within ? `text-center perf-text ${cls}` : "bg-secondary-subtle"}>
-                        {within ? (total > 0 ? `${cell.new}/${cell.modified} (${total})` : "") : ""}
-                        {within && total === 0 && <span className="visually-hidden">{label}</span>}
-                      </td>
-                    );
-                  })}
-                  <td className="fw-bold">{rowTotal}</td>
+      {/* Desktop Table - hidden on mobile */}
+      <div className="table-responsive mb-3 d-none d-lg-block">
+        <div className="bg-dark border rounded p-3">
+          <table className="table table-dark table-hover" style={{ fontSize: "12px" }}>
+            <thead>
+              <tr>
+                <th style={{ whiteSpace: "nowrap" }}>Month \\ Day</th>
+                {Array.from({ length: 31 }, (_, i) => i + 1).map((d) => (<th key={d} style={{ textAlign: "center" }}>{d}</th>))}
+                <th>Total</th>
+              </tr>
+            </thead>
+            <tbody>
+              {months.map((m, mi) => {
+                const dim = new Date(activeYear, mi + 1, 0).getDate();
+                let rowTotal = 0;
+                return (
+                  <tr key={m}>
+                    <td className="text-info fw-bold">{m}</td>
+                    {Array.from({ length: 31 }, (_, i) => i + 1).map((d) => {
+                      const cell = (dayGrid[mi] && dayGrid[mi][d]) || { new: 0, modified: 0, total: 0 };
+                      const within = d <= dim; const total = within ? cell.total : 0; rowTotal += total;
+                      const { cls, label } = classifyCount(total);
+                      return (
+                        <td key={d} className={within ? `text-center perf-text ${cls}` : "bg-secondary-subtle"}>
+                          {within ? (total > 0 ? `${cell.new}/${cell.modified} (${total})` : "•") : ""}
+                          {within && total === 0 && <span className="visually-hidden">{label}</span>}
+                        </td>
+                      );
+                    })}
+                    <td className="fw-bold">{rowTotal}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* Mobile Table - hidden on desktop */}
+      <div className="d-lg-none mb-3">
+        <div className="bg-dark border rounded p-3">
+          <h6 className="text-info mb-3">Monthly Performance - {activeYear}</h6>
+          <div className="table-responsive">
+            <table className="table table-dark table-sm" style={{ fontSize: "11px" }}>
+              <thead>
+                <tr>
+                  <th>Day</th>
+                  {months.map((month, index) => (
+                    <th key={month} className="text-center">{month.substring(0, 3)}</th>
+                  ))}
                 </tr>
-              );
-            })}
-          </tbody>
-        </table>
+              </thead>
+              <tbody>
+                {Array.from({ length: 31 }, (_, dayIndex) => dayIndex + 1).map((day) => (
+                  <tr key={day}>
+                    <td className="fw-bold text-info">{day}</td>
+                    {months.map((month, monthIndex) => {
+                      const dim = new Date(activeYear, monthIndex + 1, 0).getDate();
+                      const within = day <= dim;
+                      const cell = (dayGrid[monthIndex] && dayGrid[monthIndex][day]) || { new: 0, modified: 0, total: 0 };
+                      const { cls } = classifyCount(cell.total);
+
+                      return (
+                        <td key={`${month}-${day}`} className={`text-center ${within ? `perf-text ${cls}` : "bg-secondary"}`}>
+                          {within ? (cell.total > 0 ? cell.total : "•") : ""}
+                        </td>
+                      );
+                    })}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
       </div>
 
       {/* Charts */}
       {activeMonth != null && (
         <div className="row g-4 mb-4">
-          <div className="col-md-8">
-            <div className="bg-dark border p-3">
+          {/* Desktop Bar Chart */}
+          <div className="col-md-8 d-none d-lg-block">
+            <div className="bg-dark border rounded p-3">
               <div className="d-flex justify-content-between align-items-center">
                 <div className="text-info"><strong>Daily Calls</strong> — {months[activeMonth]} {activeYear} (0–100)</div>
                 <span className="small text-muted">New + Modified</span>
@@ -938,10 +980,68 @@ export default function WorkerCalleDisplay({ permissions: permissionsProp }) {
               </div>
             </div>
           </div>
-          <div className="col-md-4">
-            <div className="bg-dark border p-3 h-100">
+
+          {/* Mobile Bar Chart */}
+          <div className="col-12 d-lg-none">
+            <div className="bg-dark p-3">
+              <div className="d-flex justify-content-between align-items-center">
+                <div className="text-info"><strong>Daily Calls</strong> — {months[activeMonth]} {activeYear}</div>
+                <span className="small text-muted">New + Modified</span>
+              </div>
+              <div className="mt-3">
+                <div className="horizontal-bar-graph">
+                  {graphDays.map((g) => (
+                    <div key={g.day} className="bar-row border rounded p-2 mb-2">
+                      <div className="d-flex justify-content-between align-items-center mb-0">
+                        <span className="bar-label small text-info">Day {g.day}</span>
+
+                        <div className="d-flex" style={{ width: "80%" }}>
+                          {g.total > 0 ? (
+                            <div
+                              className={`bar-horizontal mChart ${g.cls}`}
+                              style={{
+                                width: `${g.total}%`,
+                                height: "15px",
+                                minWidth: "8px" // Ensure small values are still visible
+                              }}
+                              title={`${months[activeMonth]} ${g.day}: ${g.total}`}
+                            ></div>
+                          ) : (
+                            <div
+                              className="bar-horizontal perf-none"
+                              style={{
+                                width: "8px",
+                                height: "15px"
+                              }}
+                              title={`${months[activeMonth]} ${g.day}: No calls`}
+                            ></div>
+                          )}
+
+                        </div>
+
+                        <span className="bar-value small text-warning">{g.total}</span>
+                      </div>
+
+                    </div>
+                  ))}
+                </div>
+                <div className="mt-3 small d-flex flex-wrap gap-2 align-items-center pt-3 justify-content-center">
+                  <span className="legend perf-none">0</span>
+                  <span className="legend perf-poor">1-10</span>
+                  <span className="legend perf-avg">11-20</span>
+                  <span className="legend perf-good">21-30</span>
+                  <span className="legend perf-vgood">31-40</span>
+                  <span className="legend perf-exc">41-50</span>
+                  <span className="legend perf-marv">51-100</span>
+                </div>
+              </div>
+            </div>
+          </div>
+          {/* Pie Chart - Same for both but with responsive sizing */}
+          <div className="col-md-4 col-12">
+            <div className="bg-dark border rounded p-3 h-100">
               <div className="text-info"><strong>Performance Mix</strong> — {months[activeMonth]} {activeYear}</div>
-              <div className="d-flex flex-column align-items-center justify-content-center mt-3">
+              <div className="d-flex flex-column align-items-center justify-content-center mt-3 gap-3">
                 {(() => {
                   const total = Object.values(pieAgg).reduce((a, b) => a + b, 0) || 1;
                   const seg = (k) => (pieAgg[k] / total) * 360;
@@ -954,7 +1054,18 @@ export default function WorkerCalleDisplay({ permissions: permissionsProp }) {
                     `var(--perf-exc) ${seg("none") + seg("poor") + seg("avg") + seg("good") + seg("vgood")}deg ${seg("none") + seg("poor") + seg("avg") + seg("good") + seg("vgood") + seg("exc")}deg`,
                     `var(--perf-marv) ${seg("none") + seg("poor") + seg("avg") + seg("good") + seg("vgood") + seg("exc")}deg 360deg`
                   ].join(", ");
-                  return (<div className="pie-wrap"><div className="pie" style={{ background: `conic-gradient(${grads})` }} /></div>);
+                  return (
+                    <div className="pie-wrap">
+                      <div
+                        className="pie"
+                        style={{
+                          background: `conic-gradient(${grads})`,
+                          width: window.innerWidth < 768 ? "150px" : "200px",
+                          height: window.innerWidth < 768 ? "150px" : "200px"
+                        }}
+                      />
+                    </div>
+                  );
                 })()}
                 <div className="mt-3 small w-100 d-flex flex-wrap justify-content-center gap-2">
                   <span className="legend perf-none">No Calls: {pieAgg.none}</span>
@@ -970,7 +1081,6 @@ export default function WorkerCalleDisplay({ permissions: permissionsProp }) {
           </div>
         </div>
       )}
-
       {/* ---------- Call Through Summary (kept markup, fixed counts) ---------- */}
       <div className="d-flex align-items-center justify-content-between">
         <h4 className="mt-2 text-info">Call Through Summary</h4>
@@ -1073,6 +1183,13 @@ export default function WorkerCalleDisplay({ permissions: permissionsProp }) {
         .perf-vgood { color: var(--perf-vgood); }
         .perf-exc { color: var(--perf-exc); }
         .perf-marv { color: var(--perf-marv); }
+
+        .mChart.perf-poor { background-color: var(--perf-poor); }
+        .mChart.perf-avg { background-color: var(--perf-avg); }
+        .mChart.perf-good { background-color: var(--perf-good); }
+        .mChart.perf-vgood { background-color: var(--perf-vgood); }
+        .mChart.perf-exc { background-color: var(--perf-exc); }
+        .mChart.perf-marv { background-color: var(--perf-marv); }
         .perf-text.perf-none, .perf-text.perf-poor, .perf-text.perf-avg, .perf-text.perf-good, .perf-text.perf-vgood, .perf-text.perf-exc, .perf-text.perf-marv { font-weight:600; }
         .pie-wrap { width:180px; height:180px; display:grid; place-items:center; }
         .pie { width:160px; height:160px; border-radius:50%; }

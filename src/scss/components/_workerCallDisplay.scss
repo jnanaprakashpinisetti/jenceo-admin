@@ -77,15 +77,32 @@
     }
   }
 
-  .d-flex.gap-2 {
+  .d-filterWrapper {
+    max-width: 180px;
     @include mobile {
       width: 100%;
+      max-width: none;
     }
 
-    .btn {
+    .form-select, .btn {
+      max-width: 180px;
       @include mobile {
-
         width: 48%;
+      }
+    }
+  }
+  .sillFilterWrapper {
+
+    .d-flex.gap-2 {
+      @include mobile {
+        width: 100%;
+      }
+
+      .btn {
+        @include mobile {
+
+          width: 48%;
+        }
       }
     }
   }
@@ -354,7 +371,7 @@
 
   .unKnonMonth {
     background-color: #262a2e;
-    max-width: 30px;
+    color: #0dcaf0;
   }
 
   .totalRow {
@@ -502,12 +519,18 @@
 
 /* Prevent page-level horizontal scroll while letting the table scroll */
 @media (max-width: 767.98px) {
-  .container-fluid.px-0.overflow-hidden { overflow-x: hidden; }
+  .container-fluid.px-0.overflow-hidden {
+    overflow-x: hidden;
+  }
+
   .table.table-dark th,
-  .table.table-dark td { white-space: nowrap; }
+  .table.table-dark td {
+    white-space: nowrap;
+  }
+
   /* subtle border on sticky cells so they stand out while scrolling */
   .table.table-dark th[style*="position: sticky"],
   .table.table-dark td[style*="position: sticky"] {
-    box-shadow: inset 0 0 0 1px rgba(255,255,255,0.06);
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.06);
   }
 }

@@ -542,14 +542,12 @@ export default function WorkerCalleDisplay({ permissions: permissionsProp }) {
   return (
     <div className="workerCalls">
       {/* top controls */}
-      <div className="d-flex justify-content-between flex-wrap gap-2 mb-3 p-2 bg-dark border rounded-3">
-        <div className="d-flex align-items-center">
-          <span className="me-2 text-white">Show</span>
-          <select className="form-select form-select-sm" style={{ width: 80 }} value={rowsPerPage} onChange={(e) => { setRowsPerPage(parseInt(e.target.value, 10) || 10); setCurrentPage(1); }}>
-            {[10, 20, 30, 40, 50].map((n) => (<option key={n} value={n}>{n}</option>))}
-          </select>
-          <span className="ms-2 text-white ">Entries</span>
-        </div>
+      <div className="d-flex justify-content-between flex-wrap gap-2 p-2 bg-dark border rounded-3 mb-3">
+      {/* status line */}
+      <div className="small text-center mt-2" style={{ color: "yellow" }}>
+        Showing <strong>{pageItems.length}</strong> of <strong>{sorted.length}</strong> (from <strong>{workers.length}</strong> total){reminderFilter ? ` — ${reminderFilter}` : ""}
+      </div>
+
 
         <input
           type="text"
@@ -561,13 +559,13 @@ export default function WorkerCalleDisplay({ permissions: permissionsProp }) {
         />
 
 
-        <select className="form-select" style={{ maxWidth: 180 }} value={selectedSource} onChange={(e) => setSelectedSource(e.target.value)}>
+        <select className="form-select d-filter" value={selectedSource} onChange={(e) => setSelectedSource(e.target.value)}>
           <option value="All">All Call Through</option>
           {callThroughOptions.map((opt) => (<option key={opt} value={opt}>{opt}</option>))}
         </select>
 
-        <div className="d-flex gap-2">
-          <select style={{ maxWidth: 180 }} className="form-select" value={sortBy} onChange={(e) => setSortBy(e.target.value)}>
+        <div className="d-flex gap-2 d-filterWrapper">
+          <select className="form-select" value={sortBy} onChange={(e) => setSortBy(e.target.value)}>
             <option value="id">Sort by ID</option>
             <option value="date">Sort by Date</option>
             <option value="name">Sort by Name</option>
@@ -579,13 +577,13 @@ export default function WorkerCalleDisplay({ permissions: permissionsProp }) {
             <option value="mobile">Sort by Mobile</option>
             <option value="talking">Sort by Talking</option>
           </select>
-          <select style={{ maxWidth: 100 }} className="form-select" value={sortDir} onChange={(e) => setSortDir(e.target.value)}>
+          <select className="form-select" value={sortDir} onChange={(e) => setSortDir(e.target.value)}>
             <option value="desc">Desc</option>
             <option value="asc">Asc</option>
           </select>
         </div>
 
-        <div className="d-flex gap-2">
+        <div className="d-flex gap-2 d-filterWrapper">
           <button
             className={`btn ${permissions.canExport ? "btn-success" : "btn-outline-secondary"}`}
             onClick={permissions.canExport ? handleExport : undefined}
@@ -609,7 +607,7 @@ export default function WorkerCalleDisplay({ permissions: permissionsProp }) {
 
       {/* Filter row (unchanged markup) */}
       <div className="p-3 mb-3 bg-dark border rounded-3">
-        <div className="row g-3 align-items-center justify-content-between">
+        <div className="row g-3 align-items-center justify-content-between sillFilterWrapper">
           <div className="col-lg-2 col-md-3 text-center">
             <label className="form-label small mb-2 text-warning">Gender</label>
             <div className="d-flex gap-2 justify-content-center">
@@ -702,10 +700,13 @@ export default function WorkerCalleDisplay({ permissions: permissionsProp }) {
         </div>
       )}
 
-      {/* status line */}
-      <div className="mb-2 mt-4 small text-center" style={{ color: "yellow" }}>
-        Showing <strong>{pageItems.length}</strong> of <strong>{sorted.length}</strong> (from <strong>{workers.length}</strong> total){reminderFilter ? ` — ${reminderFilter}` : ""}
-      </div>
+           <div className="d-flex align-items-center">
+          <span className="me-2 text-white">Show</span>
+          <select className="form-select me-2 form-select-sm" style={{ width: 80 }} value={rowsPerPage} onChange={(e) => { setRowsPerPage(parseInt(e.target.value, 10) || 10); setCurrentPage(1); }}>
+            {[10, 20, 30, 40, 50].map((n) => (<option key={n} value={n}>{n}</option>))}
+          </select>
+          <span className="text-white ">Entries</span>
+        </div>
 
       {/* TOP pagination */}
       {Math.ceil(sorted.length / rowsPerPage) > 1 && (
@@ -844,17 +845,35 @@ export default function WorkerCalleDisplay({ permissions: permissionsProp }) {
       </div>
 
       {/* Bottom pagination */}
-      {Math.ceil(sorted.length / rowsPerPage) > 1 && (
-        <nav aria-label="Workers" className="pagination-top py-2 mb-3 m-auto pagination-wrapper">
-          <ul className="pagination justify-content-center mb-0">
-            <li className={`page-item ${safePage === 1 ? "disabled" : ""}`}><button className="page-link" onClick={() => setCurrentPage(1)} disabled={safePage === 1}>«</button></li>
-            <li className={`page-item ${safePage === 1 ? "disabled" : ""}`}><button className="page-link" onClick={() => setCurrentPage(safePage - 1)} disabled={safePage === 1}>‹</button></li>
-            {getDisplayedPageNumbers().map((num) => (<li key={num} className={`page-item ${safePage === num ? "active" : ""}`}><button className="page-link" onClick={() => setCurrentPage(num)}>{num}</button></li>))}
-            <li className={`page-item ${safePage === totalPages ? "disabled" : ""}`}><button className="page-link" onClick={() => setCurrentPage(safePage + 1)} disabled={safePage === totalPages}>›</button></li>
-            <li className={`page-item ${safePage === totalPages ? "disabled" : ""}`}><button className="page-link" onClick={() => setCurrentPage(totalPages)} disabled={safePage === totalPages}>»</button></li>
-          </ul>
-        </nav>
-      )}
+
+      <div className="d-flex align-items-center m-3 d-none d-lg-block">
+
+           <div style={{ color: "yellow" }}>
+        Showing <strong>{pageItems.length}</strong> of <strong>{sorted.length}</strong> (from <strong>{workers.length}</strong> total){reminderFilter ? ` — ${reminderFilter}` : ""}
+      </div>
+ 
+        {Math.ceil(sorted.length / rowsPerPage) > 1 && (
+          <nav aria-label="Workers" className="pagination-top py-2 mb-3 m-auto pagination-wrapper">
+            <ul className="pagination justify-content-center mb-0">
+              <li className={`page-item ${safePage === 1 ? "disabled" : ""}`}><button className="page-link" onClick={() => setCurrentPage(1)} disabled={safePage === 1}>«</button></li>
+              <li className={`page-item ${safePage === 1 ? "disabled" : ""}`}><button className="page-link" onClick={() => setCurrentPage(safePage - 1)} disabled={safePage === 1}>‹</button></li>
+              {getDisplayedPageNumbers().map((num) => (<li key={num} className={`page-item ${safePage === num ? "active" : ""}`}><button className="page-link" onClick={() => setCurrentPage(num)}>{num}</button></li>))}
+              <li className={`page-item ${safePage === totalPages ? "disabled" : ""}`}><button className="page-link" onClick={() => setCurrentPage(safePage + 1)} disabled={safePage === totalPages}>›</button></li>
+              <li className={`page-item ${safePage === totalPages ? "disabled" : ""}`}><button className="page-link" onClick={() => setCurrentPage(totalPages)} disabled={safePage === totalPages}>»</button></li>
+            </ul>
+          </nav>
+        )}
+
+               <div className=" d-flex">
+          <span className="me-2 text-white">Show</span>
+          <select className="form-select me-2 form-select-sm" style={{ width: 80 }} value={rowsPerPage} onChange={(e) => { setRowsPerPage(parseInt(e.target.value, 10) || 10); setCurrentPage(1); }}>
+            {[10, 20, 30, 40, 50].map((n) => (<option key={n} value={n}>{n}</option>))}
+          </select>
+          <span className="text-white ">Entries</span>
+        </div>
+        
+      </div>
+
 
       {/* ---------- Daily Activity — {UserName} ---------- */}
       <hr />
@@ -1002,7 +1021,8 @@ export default function WorkerCalleDisplay({ permissions: permissionsProp }) {
                               style={{
                                 width: `${g.total}%`,
                                 height: "15px",
-                                minWidth: "8px" // Ensure small values are still visible
+                                minWidth: "8px", // Ensure small values are still visible
+                                borderRadius: "0px 4px 4px 0"
                               }}
                               title={`${months[activeMonth]} ${g.day}: ${g.total}`}
                             ></div>
@@ -1256,8 +1276,8 @@ function CallThroughSummary({ months, workers, activeYear, normalizeSource, getB
           <tr>
             <th>Call Through</th>
             {months.map((m, mi) => (<th key={m}>{m}</th>))}
-            <th className="unKnonMonth">Unknown</th>
-            <th>Total</th>
+            <th className="unKnonMonth text-info">Miss </th>
+            <th className="text-warning fw-bold">Total</th>
           </tr>
         </thead>
         <tbody>
@@ -1276,7 +1296,7 @@ function CallThroughSummary({ months, workers, activeYear, normalizeSource, getB
                 <td className="unKnonMonth text-center fw-bold">
                   {rowData[12] > 0 ? rowData[12] : ""}
                 </td>
-                <td className="total-cell">{rowTotal}</td>
+                <td className="total-cell text-warning fw-bold">{rowTotal}</td>
               </tr>
             );
           })}
@@ -1284,13 +1304,13 @@ function CallThroughSummary({ months, workers, activeYear, normalizeSource, getB
             <td className="totalRow">Total</td>
             {/* Monthly totals */}
             {totalsPerMonth.slice(0, 12).map((sum, mi) => (
-              <td className="totalRow" key={mi}>{sum > 0 ? sum : ""}</td>
+              <td className="totalRow " key={mi}>{sum > 0 ? sum : ""}</td>
             ))}
             {/* Unknown month total */}
             <td className="unKnonMonth text-center fw-bold">
               {totalsPerMonth[12] > 0 ? totalsPerMonth[12] : ""}
             </td>
-            <td className="total-cell">{grandTotal}</td>
+            <td className="total-cell bg-primary text-white">{grandTotal}</td>
           </tr>
         </tbody>
       </table>

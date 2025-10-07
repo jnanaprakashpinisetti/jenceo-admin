@@ -856,7 +856,7 @@ export default function WorkerCallModal({
                       {/* Primary Skills (pill buttons) */}
                       <div className="col-md-6">
                         <h6 className="fw-bold">Primary Skills</h6>
-                        <div className="d-flex flex-wrap gap-2 border rounded p-3 bg-light mb-3">
+                        <div className="d-flex flex-wrap justify-content-center gap-2 border rounded p-3 bg-light mb-3">
                           {primarySkillOptions.map((opt) => {
                             const active = normalizeArray(localWorker.skills)
                               .map((x) => String(x).toLowerCase())
@@ -904,7 +904,7 @@ export default function WorkerCallModal({
                           {normalizeArray(localWorker.skills).map((skill, idx) => (
                             <span
                               key={idx}
-                              className="badge bg-info text-dark d-flex align-items-center p-2"
+                              className="badge bg-info text-dark align-items-center p-2"
                             >
                               {skill}
                               {isEditMode && (
@@ -923,7 +923,7 @@ export default function WorkerCallModal({
                       {/* Home Care Skills (pill buttons) */}
                       <div className="col-md-6">
                         <h6 className="fw-bold">Home Care Skills</h6>
-                        <div className="d-flex flex-wrap gap-2 border rounded p-3 bg-light mb-3">
+                        <div className="d-flex flex-wrap gap-2 border rounded p-3 bg-light mb-3 justify-content-center">
                           {homeCareSkillOptions.map((opt) => {
                             const active = normalizeArray(localWorker.homeCareSkills)
                               .map((x) => String(x).toLowerCase())
@@ -969,11 +969,11 @@ export default function WorkerCallModal({
                           </button>
                         </div>
 
-                        <div className="d-flex flex-wrap gap-2 mt-2">
+                        <div className="d-flex flex-wrap gap-2 mt-3 justify-content-center">
                           {normalizeArray(localWorker.homeCareSkills).map((skill, idx) => (
                             <span
                               key={idx}
-                              className="badge bg-success text-white d-flex align-items-center p-2"
+                              className="badge bg-success text-white align-items-center p-2"
                             >
                               {skill}
                               {isEditMode && (
@@ -993,7 +993,7 @@ export default function WorkerCallModal({
                       <div className="col-12">
                         <h6 className="fw-bold">Other Skills</h6>
                         <div className="border rounded p-3 bg-light mb-3">
-                          <div className="row row-cols-1 row-cols-sm-2 g-2">
+                          <div className="row row-cols-1 row-cols-sm-2 g-2 justify-content-center">
                             {otherSkillOptions.map((opt) => {
                               const active = normalizeArray(localWorker.otherSkills)
                                 .map((x) => String(x).toLowerCase())
@@ -1041,7 +1041,7 @@ export default function WorkerCallModal({
                           {normalizeArray(localWorker.otherSkills).map((skill, idx) => (
                             <span
                               key={idx}
-                              className="badge bg-warning text-dark d-flex align-items-center p-2"
+                              className="badge bg-warning text-dark p-2"
                             >
                               {skill}
                               {isEditMode && (

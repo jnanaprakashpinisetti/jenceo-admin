@@ -551,7 +551,7 @@ export default function WorkerCalleDisplay({ permissions: permissionsProp }) {
 
         <input
           type="text"
-          className="form-control searchBar"
+          className="form-control searchBar workerCallSearch"
           placeholder="Search name, location, mobile, or ID (WC-01)…"
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
@@ -847,7 +847,6 @@ export default function WorkerCalleDisplay({ permissions: permissionsProp }) {
       {/* Bottom pagination */}
 
       <div className="d-flex align-items-center m-3 d-none d-lg-block">
-
            <div style={{ color: "yellow" }}>
         Showing <strong>{pageItems.length}</strong> of <strong>{sorted.length}</strong> (from <strong>{workers.length}</strong> total){reminderFilter ? ` — ${reminderFilter}` : ""}
       </div>

@@ -92,6 +92,10 @@
     }
   }
 
+   .d-filter {
+      max-width: 200px;
+    }
+
   .workerCallSearch {
     max-width: 180px;
     @include mobile {

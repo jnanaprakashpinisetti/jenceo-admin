@@ -78,30 +78,34 @@
   }
 
   .d-filterWrapper {
-    max-width: 180px;
+    max-width: 300px;
+
     @include mobile {
       width: 100%;
       max-width: none;
     }
 
-    .form-select, .btn {
+    .btn {
       max-width: 180px;
+
       @include mobile {
         width: 48%;
       }
     }
   }
 
-   .d-filter {
-      max-width: 200px;
-    }
+  .d-filter {
+    max-width: 200px;
+  }
 
   .workerCallSearch {
     max-width: 180px;
+
     @include mobile {
       max-width: 100%;
     }
   }
+
   .sillFilterWrapper {
 
     .d-flex.gap-2 {

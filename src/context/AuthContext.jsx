@@ -55,6 +55,26 @@ async function databaseUpdate(path, data) {
   }
 }
 
+async function databasePush(path, data) {
+  try {
+    const newRef = await firebaseDB.child(path).push(data);
+    return newRef.key;
+  } catch (error) {
+    console.error("Database push error:", path, error?.message || error);
+    return null;
+  }
+}
+
+async function databaseRemove(path) {
+  try {
+    await firebaseDB.child(path).remove();
+    return true;
+  } catch (error) {
+    console.error("Database remove error:", path, error?.message || error);
+    return false;
+  }
+}
+
 // Permission management
 const normalizePermissions = (permissions) => {
   if (!permissions || typeof permissions !== "object") return {};
@@ -125,7 +145,12 @@ const AuthContext = createContext({
   refreshUser: async () => {},
   setUser: () => {},
   createUser: async () => {},
+  updateUser: async () => {},
+  deleteUser: async () => {},
+  getAllUsers: async () => {},
   initializeDefaultAdmin: async () => {},
+  changePassword: async () => {},
+  hasPermission: () => false,
 });
 
 export const useAuth = () => {
@@ -165,7 +190,9 @@ export function AuthProvider({ children }) {
       try {
         const storedUser = sessionStorage.getItem("auth:user");
         if (storedUser) {
-          setUser(JSON.parse(storedUser));
+          const parsedUser = JSON.parse(storedUser);
+          setUser(parsedUser);
+          console.log("✅ Session restored for user:", parsedUser.username);
         }
       } catch (error) {
         console.warn("Failed to restore session:", error);
@@ -192,6 +219,29 @@ export function AuthProvider({ children }) {
     const session = createUserSession(user.dbId, userData, user.uid);
     cacheUser(session);
     return session;
+  };
+
+  // Permission checker
+  const hasPermission = (permissionKey, action = "view") => {
+    if (!user) return false;
+    
+    // Admin has all permissions
+    if (user.role === "admin") return true;
+    
+    const userPermissions = user.permissions || {};
+    const permission = userPermissions[permissionKey];
+    
+    if (!permission) return false;
+    
+    if (typeof permission === "boolean") {
+      return permission;
+    }
+    
+    if (typeof permission === "object") {
+      return permission[action] === true;
+    }
+    
+    return false;
   };
 
   // Default admin initialization
@@ -314,6 +364,114 @@ export function AuthProvider({ children }) {
     }
   };
 
+  // Update user
+  const updateUser = async (userId, updates) => {
+    try {
+      if (!userId) {
+        throw new Error("User ID is required");
+      }
+
+      const updateData = {
+        ...updates,
+        updatedAt: getCurrentTimestamp()
+      };
+
+      // Don't update password hash unless specifically provided
+      if (updateData.password) {
+        updateData.passwordHash = await generatePasswordHash(updateData.password);
+        delete updateData.password;
+      }
+
+      const success = await databaseUpdate(`Users/${userId}`, updateData);
+      
+      if (!success) {
+        throw new Error("Failed to update user in database");
+      }
+
+      // Refresh current user session if updating self
+      if (user?.dbId === userId) {
+        await refreshUser();
+      }
+
+      return { success: true };
+    } catch (error) {
+      console.error("🚨 USER UPDATE ERROR:", error.message);
+      throw error;
+    }
+  };
+
+  // Delete user
+  const deleteUser = async (userId) => {
+    try {
+      if (!userId) {
+        throw new Error("User ID is required");
+      }
+
+      // Prevent self-deletion
+      if (user?.dbId === userId) {
+        throw new Error("Cannot delete your own account");
+      }
+
+      const success = await databaseRemove(`Users/${userId}`);
+      
+      if (!success) {
+        throw new Error("Failed to delete user from database");
+      }
+
+      return { success: true };
+    } catch (error) {
+      console.error("🚨 USER DELETE ERROR:", error.message);
+      throw error;
+    }
+  };
+
+  // Get all users
+  const getAllUsers = async () => {
+    try {
+      const users = await databaseGet("Users");
+      return users || {};
+    } catch (error) {
+      console.error("🚨 GET ALL USERS ERROR:", error.message);
+      throw error;
+    }
+  };
+
+  // Change password
+  const changePassword = async (userId, currentPassword, newPassword) => {
+    try {
+      if (!userId || !currentPassword || !newPassword) {
+        throw new Error("All password fields are required");
+      }
+
+      // Verify current password
+      const userData = await databaseGet(`Users/${userId}`);
+      if (!userData) {
+        throw new Error("User not found");
+      }
+
+      const currentPasswordHash = await generatePasswordHash(currentPassword);
+      if (userData.passwordHash !== currentPasswordHash) {
+        throw new Error("Current password is incorrect");
+      }
+
+      // Update to new password
+      const newPasswordHash = await generatePasswordHash(newPassword);
+      const success = await databaseUpdate(`Users/${userId}`, {
+        passwordHash: newPasswordHash,
+        updatedAt: getCurrentTimestamp()
+      });
+
+      if (!success) {
+        throw new Error("Failed to update password");
+      }
+
+      return { success: true };
+    } catch (error) {
+      console.error("🚨 PASSWORD CHANGE ERROR:", error.message);
+      throw error;
+    }
+  };
+
   // User authentication
   const login = async (identifier, password) => {
     const normalizedIdentifier = normalizeText(identifier);
@@ -359,6 +517,11 @@ export function AuthProvider({ children }) {
       if (!userData) {
         console.log("❌ No matching user found for:", identifier);
         throw new Error("User not found");
+      }
+
+      // Check if user is active
+      if (userData.isActive === false) {
+        throw new Error("Account is deactivated");
       }
 
       // Password management
@@ -430,7 +593,12 @@ export function AuthProvider({ children }) {
     refreshUser,
     setUser: cacheUser,
     createUser,
-    initializeDefaultAdmin
+    updateUser,
+    deleteUser,
+    getAllUsers,
+    initializeDefaultAdmin,
+    changePassword,
+    hasPermission
   }), [ready, user, loading]);
 
   return (

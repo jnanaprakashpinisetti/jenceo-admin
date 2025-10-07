@@ -91,6 +91,13 @@
       }
     }
   }
+
+  .workerCallSearch {
+    max-width: 180px;
+    @include mobile {
+      max-width: 100%;
+    }
+  }
   .sillFilterWrapper {
 
     .d-flex.gap-2 {

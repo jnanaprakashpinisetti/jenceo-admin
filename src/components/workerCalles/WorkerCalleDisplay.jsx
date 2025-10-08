@@ -796,7 +796,7 @@ export default function WorkerCalleDisplay({ permissions: permissionsProp }) {
                     </div>
                   </td>
                   <td className="text-white">
-                    <div className="fw-normal">{w?.mobileNo || "N/A"}</div>
+                    {/* <div className="fw-normal">{w?.mobileNo || "N/A"}</div> */}
                     {w?.mobileNo && (
                       <div className="mt-1" onClick={(e) => e.stopPropagation()}>
                         <a href={`tel:${w.mobileNo}`} className="btn btn-sm btn-outline-info me-1 rounded-pill">Call</a>
@@ -987,9 +987,9 @@ export default function WorkerCalleDisplay({ permissions: permissionsProp }) {
                   <span className="legend perf-poor">Poor (1–10)</span>
                   <span className="legend perf-avg">Average (11–20)</span>
                   <span className="legend perf-good">Good (21–30)</span>
-                  <span className="legend perf-vgood">Very Good (21–30)</span>
-                  <span className="legend perf-exc">Excellent (31–40)</span>
-                  <span className="legend perf-marv">Marvelous (41–100)</span>
+                  <span className="legend perf-vgood">Very Good (31–40)</span>
+                  <span className="legend perf-exc">Excellent (41–50)</span>
+                  <span className="legend perf-marv">Marvelous (51–100)</span>
                 </div>
               </div>
             </div>
@@ -1165,15 +1165,15 @@ export default function WorkerCalleDisplay({ permissions: permissionsProp }) {
       {showDeleteReason && (
         <div className="modal show d-block" tabIndex="-1" style={{ backgroundColor: "rgba(0,0,0,0.8)" }}>
           <div className="modal-dialog modal-dialog-centered">
-            <div className="modal-content bg-dark text-white border-danger">
-              <div className="modal-header border-danger">
+            <div className="modal-content ">
+              <div className="modal-header">
                 <h5 className="modal-title">Delete Reason</h5>
                 <button type="button" className="btn-close btn-close-white" onClick={() => setShowDeleteReason(false)} />
               </div>
               <div className="modal-body">
                 <textarea className="form-control" rows="4" placeholder="Please describe why you are deleting this record…" value={deleteReason} onChange={(e) => setDeleteReason(e.target.value)} />
               </div>
-              <div className="modal-footer border-danger">
+              <div className="modal-footer">
                 <button type="button" className="btn btn-secondary" onClick={() => setShowDeleteReason(false)}>Cancel</button>
                 <button type="button" className="btn btn-danger" disabled={isDeleting} onClick={performDeleteWithReason}>
                   {isDeleting ? "Deleting…" : "Confirm Delete"}

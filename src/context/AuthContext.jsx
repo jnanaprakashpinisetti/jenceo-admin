@@ -78,7 +78,7 @@ async function databaseRemove(path) {
 // Permission management
 const normalizePermissions = (permissions) => {
   if (!permissions || typeof permissions !== "object") return {};
-  
+
   const normalized = {};
   Object.keys(permissions).forEach(key => {
     const value = permissions[key];
@@ -88,7 +88,7 @@ const normalizePermissions = (permissions) => {
       normalized[key] = { ...value };
     }
   });
-  
+
   return normalized;
 };
 
@@ -120,7 +120,7 @@ const DEFAULT_ADMIN_PERMISSIONS = {
 // Session management
 function createUserSession(databaseId, userData, authUserId) {
   const displayName = userData?.name || userData?.username || "User";
-  
+
   return {
     dbId: databaseId,
     uid: authUserId,
@@ -135,21 +135,102 @@ function createUserSession(databaseId, userData, authUserId) {
   };
 }
 
+// ========== SECURITY FUNCTIONS (DEFINED BEFORE USE) ==========
+
+// Session validation function
+const validateUserSession = async (userDatabaseId) => {
+  try {
+    if (!userDatabaseId) return false;
+
+    const userData = await databaseGet(`Users/${userDatabaseId}`);
+
+    // Check if user exists and is active
+    if (!userData) {
+      console.log("❌ User not found in database");
+      return false;
+    }
+
+    if (userData.isActive === false) {
+      console.log("❌ User account is deactivated");
+      return false;
+    }
+
+    return true;
+  } catch (error) {
+    console.error("Session validation error:", error);
+    return false;
+  }
+};
+
+// Enhanced logout function that prevents new anonymous users
+const enhancedLogout = async (auth, preventReauth = false) => {
+  try {
+    // Clear local state first
+    // cacheUser will be called from the component
+
+    // Sign out from Firebase Auth
+    await signOut(auth);
+
+    // Only re-establish anonymous auth if not prevented
+    if (!preventReauth) {
+      await signInAnonymously(auth);
+      console.log("✅ User logged out successfully, anonymous auth maintained");
+    } else {
+      console.log("✅ User logged out successfully, no re-authentication");
+    }
+  } catch (error) {
+    console.error("Logout error:", error);
+  }
+};
+// Real-time session monitoring
+// Enhanced session monitoring with controlled re-authentication
+const setupSessionMonitoring = (userDatabaseId, onInvalidSession, onPermissionsUpdate) => {
+  if (!userDatabaseId) return () => { };
+
+  // Listen for changes in user data
+  const userRef = firebaseDB.child(`Users/${userDatabaseId}`);
+
+  const onUserChange = userRef.on('value', (snapshot) => {
+    if (!snapshot.exists()) {
+      console.log("🚨 User deleted from database - forcing logout WITHOUT re-auth");
+      onInvalidSession(true); // Pass true to prevent re-auth
+      return;
+    }
+
+    const userData = snapshot.val();
+
+    // Check if user is deactivated
+    if (userData.isActive === false) {
+      console.log("🚨 User deactivated - forcing logout WITHOUT re-auth");
+      onInvalidSession(true); // Pass true to prevent re-auth
+      return;
+    }
+
+    // Check for permission updates
+    if (onPermissionsUpdate && userData.permissions) {
+      console.log("🔄 User permissions updated - refreshing session");
+      onPermissionsUpdate(userData);
+    }
+  });
+
+  return () => userRef.off('value', onUserChange);
+};
+
 // Context definition
 const AuthContext = createContext({
   ready: false,
   user: null,
   loading: false,
-  login: async () => {},
-  logout: async () => {},
-  refreshUser: async () => {},
-  setUser: () => {},
-  createUser: async () => {},
-  updateUser: async () => {},
-  deleteUser: async () => {},
-  getAllUsers: async () => {},
-  initializeDefaultAdmin: async () => {},
-  changePassword: async () => {},
+  login: async () => { },
+  logout: async () => { },
+  refreshUser: async () => { },
+  setUser: () => { },
+  createUser: async () => { },
+  updateUser: async () => { },
+  deleteUser: async () => { },
+  getAllUsers: async () => { },
+  initializeDefaultAdmin: async () => { },
+  changePassword: async () => { },
   hasPermission: () => false,
 });
 
@@ -166,56 +247,121 @@ export function AuthProvider({ children }) {
   const [ready, setReady] = useState(false);
   const [loading, setLoading] = useState(false);
   const [user, setUser] = useState(null);
+  const [sessionMonitor, setSessionMonitor] = useState(null);
 
-  // User state persistence
+  // User state persistence with enhanced security
+  // Enhanced cacheUser with better session monitoring setup
   const cacheUser = (userData) => {
     setUser(userData);
+
+    // Clean up previous session monitor
+    if (sessionMonitor && typeof sessionMonitor === 'function') {
+      sessionMonitor();
+    }
+
     try {
       if (userData) {
         sessionStorage.setItem("auth:user", JSON.stringify(userData));
+
+        // Start monitoring this user's session with permission updates
+        const cleanupMonitor = setupSessionMonitoring(
+          userData.dbId,
+          (preventReauth) => {
+            console.log("🛡️ Session invalidated - logging out", preventReauth ? "WITHOUT re-auth" : "");
+            handleLogout(preventReauth);
+          },
+          (updatedUserData) => {
+            console.log("🔄 Permissions updated - refreshing user session");
+            handlePermissionsUpdate(updatedUserData);
+          }
+        );
+        setSessionMonitor(() => cleanupMonitor);
       } else {
         sessionStorage.removeItem("auth:user");
+        setSessionMonitor(null);
       }
     } catch (error) {
       console.warn("Session storage error:", error);
     }
   };
 
-  // Authentication state initialization
+  // Handle logout with cleanup
+  const handleLogout = async (preventReauth = false) => {
+    await enhancedLogout(auth, preventReauth);
+    cacheUser(null);
+  };
+
+
+
+  // Handle permission updates
+  const handlePermissionsUpdate = (updatedUserData) => {
+    if (!user) return;
+
+    const updatedSession = createUserSession(user.dbId, updatedUserData, user.uid);
+    cacheUser(updatedSession);
+    console.log("✅ User permissions updated in real-time");
+  };
+
+
+  // Enhanced authentication state initialization
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
+    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       console.log("Auth state changed:", firebaseUser ? "User logged in" : "No user");
-      
-      // Restore session from storage if available
+
+      // Restore session from storage with validation
       try {
         const storedUser = sessionStorage.getItem("auth:user");
         if (storedUser) {
           const parsedUser = JSON.parse(storedUser);
-          setUser(parsedUser);
-          console.log("✅ Session restored for user:", parsedUser.username);
+
+          // Validate the stored session
+          const isValid = await validateUserSession(parsedUser.dbId);
+
+          if (isValid) {
+            setUser(parsedUser);
+            console.log("✅ Valid session restored for user:", parsedUser.username);
+
+            // Start monitoring this session
+            const cleanupMonitor = setupSessionMonitoring(parsedUser.dbId, () => {
+              console.log("🛡️ Session invalidated - logging out");
+              handleLogout();
+            });
+            setSessionMonitor(() => cleanupMonitor);
+          } else {
+            console.log("❌ Invalid session - clearing storage");
+            sessionStorage.removeItem("auth:user");
+            setUser(null);
+          }
         }
       } catch (error) {
         console.warn("Failed to restore session:", error);
+        sessionStorage.removeItem("auth:user");
       }
-      
+
       setReady(true);
-      
-      // Establish anonymous authentication if no user is logged in
-      if (!firebaseUser) {
+
+      // Establish anonymous authentication if no valid user is logged in
+      if (!firebaseUser || !user) {
         signInAnonymously(auth).catch(console.error);
       }
     });
 
-    return unsubscribe;
+    return () => {
+      unsubscribe();
+      // Clean up session monitor on unmount
+      if (sessionMonitor && typeof sessionMonitor === 'function') {
+        sessionMonitor();
+      }
+    };
   }, [auth]);
 
   // User data refresh
   const refreshUser = async () => {
     if (!user?.dbId) return null;
-    
+
     const userData = await databaseGet(`Users/${user.dbId}`);
     if (!userData) return null;
-    
+
     const session = createUserSession(user.dbId, userData, user.uid);
     cacheUser(session);
     return session;
@@ -224,23 +370,23 @@ export function AuthProvider({ children }) {
   // Permission checker
   const hasPermission = (permissionKey, action = "view") => {
     if (!user) return false;
-    
+
     // Admin has all permissions
     if (user.role === "admin") return true;
-    
+
     const userPermissions = user.permissions || {};
     const permission = userPermissions[permissionKey];
-    
+
     if (!permission) return false;
-    
+
     if (typeof permission === "boolean") {
       return permission;
     }
-    
+
     if (typeof permission === "object") {
       return permission[action] === true;
     }
-    
+
     return false;
   };
 
@@ -248,11 +394,11 @@ export function AuthProvider({ children }) {
   const initializeDefaultAdmin = async () => {
     try {
       console.log("🛠️ Checking for existing admin user...");
-      
+
       const allUsers = await databaseGet("Users");
       let adminExists = false;
       let existingAdminId = null;
-      
+
       if (allUsers) {
         for (const [userId, userData] of Object.entries(allUsers)) {
           if (userData?.username === "admin" || userData?.role === "admin") {
@@ -263,12 +409,12 @@ export function AuthProvider({ children }) {
           }
         }
       }
-      
+
       if (!adminExists) {
         console.log("🛠️ Creating default admin user...");
         const adminId = `admin_${Date.now()}`;
         const passwordHash = await generatePasswordHash("admin123");
-        
+
         const adminUser = {
           username: "admin",
           name: "System Administrator",
@@ -280,7 +426,7 @@ export function AuthProvider({ children }) {
           updatedAt: getCurrentTimestamp(),
           isActive: true
         };
-        
+
         const success = await databaseSet(`Users/${adminId}`, adminUser);
         if (success) {
           console.log("✅ Default admin user created!");
@@ -305,38 +451,38 @@ export function AuthProvider({ children }) {
   const createUser = async (userData) => {
     try {
       const { username, email, name, role = "user", permissions = {}, password } = userData;
-      
-      console.log("🛠️ Creating user with data:", { 
-        username, 
-        email, 
-        name, 
-        role, 
-        hasPassword: !!password 
+
+      console.log("🛠️ Creating user with data:", {
+        username,
+        email,
+        name,
+        role,
+        hasPassword: !!password
       });
-      
+
       // Input validation
       if (!username || !name || !password) {
         throw new Error("Username, name, and password are required");
       }
-      
+
       // Check for existing username
       const allUsers = await databaseGet("Users");
       if (allUsers) {
         const usernameExists = Object.values(allUsers).some(
           existingUser => existingUser?.username === username
         );
-        
+
         if (usernameExists) {
           throw new Error("Username already exists");
         }
       }
-      
+
       // Generate unique user ID
       const userId = `user_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-      
+
       // Create password hash
       const passwordHash = await generatePasswordHash(password);
-      
+
       const newUser = {
         username: username.trim(),
         email: email?.trim() || "",
@@ -348,14 +494,14 @@ export function AuthProvider({ children }) {
         updatedAt: getCurrentTimestamp(),
         isActive: true
       };
-      
+
       console.log("💾 Saving user to database:", userId, newUser);
-      
+
       const success = await databaseSet(`Users/${userId}`, newUser);
       if (!success) {
         throw new Error("Failed to create user in database");
       }
-      
+
       console.log("✅ User created successfully:", userId);
       return { success: true, userId };
     } catch (error) {
@@ -383,7 +529,7 @@ export function AuthProvider({ children }) {
       }
 
       const success = await databaseUpdate(`Users/${userId}`, updateData);
-      
+
       if (!success) {
         throw new Error("Failed to update user in database");
       }
@@ -413,10 +559,12 @@ export function AuthProvider({ children }) {
       }
 
       const success = await databaseRemove(`Users/${userId}`);
-      
+
       if (!success) {
         throw new Error("Failed to delete user from database");
       }
+
+      console.log(`✅ User ${userId} deleted from database`);
 
       return { success: true };
     } catch (error) {
@@ -476,7 +624,7 @@ export function AuthProvider({ children }) {
   const login = async (identifier, password) => {
     const normalizedIdentifier = normalizeText(identifier);
     setLoading(true);
-    
+
     try {
       // Ensure Firebase authentication
       if (!auth.currentUser) {
@@ -487,26 +635,26 @@ export function AuthProvider({ children }) {
 
       // Retrieve all users from database
       const allUsers = await databaseGet("Users");
-      
+
       if (!allUsers) {
         console.log("❌ No users found in database");
         throw new Error("User not found");
       }
 
       console.log("🔍 Total users in database:", Object.keys(allUsers).length);
-      
+
       // Find matching user
       let userDatabaseId = null;
       let userData = null;
-      
+
       for (const [databaseId, dbUser] of Object.entries(allUsers)) {
         const dbUsername = normalizeText(dbUser?.username);
         const dbName = normalizeText(dbUser?.name);
         const dbEmail = normalizeText(dbUser?.email);
-        
-        if (dbUsername === normalizedIdentifier || 
-            dbName === normalizedIdentifier || 
-            dbEmail === normalizedIdentifier) {
+
+        if (dbUsername === normalizedIdentifier ||
+          dbName === normalizedIdentifier ||
+          dbEmail === normalizedIdentifier) {
           userDatabaseId = databaseId;
           userData = dbUser;
           console.log("✅ Found user:", databaseId, "with username:", dbUser?.username);
@@ -531,18 +679,18 @@ export function AuthProvider({ children }) {
       if (!storedPasswordHash) {
         console.log("⚠️ No password found. Creating authentication...");
         storedPasswordHash = await generatePasswordHash(password);
-        
+
         await databaseUpdate(`Users/${userDatabaseId}`, {
           passwordHash: storedPasswordHash,
           updatedAt: getCurrentTimestamp()
         });
-        
+
         console.log("✅ Password stored in user data");
       }
 
       // Password validation
       const enteredPasswordHash = await generatePasswordHash(password);
-      
+
       console.log("=== 🔐 Password Verification ===");
       console.log("Stored hash:", storedPasswordHash);
       console.log("Entered hash:", enteredPasswordHash);
@@ -561,7 +709,7 @@ export function AuthProvider({ children }) {
         lastLogin: getCurrentTimestamp(),
         updatedAt: getCurrentTimestamp()
       });
-      
+
       return session;
     } catch (error) {
       console.error("🚨 Login error:", error.message);
@@ -573,20 +721,13 @@ export function AuthProvider({ children }) {
 
   // User logout
   const logout = async () => {
-    try { 
-      await signOut(auth); 
-      // Maintain Firebase connection with anonymous auth
-      await signInAnonymously(auth);
-    } catch (error) {
-      console.error("Logout error:", error);
-    }
-    cacheUser(null);
+    await handleLogout();
   };
 
   // Context value
   const contextValue = useMemo(() => ({
     ready,
-    user, 
+    user,
     loading,
     login,
     logout,

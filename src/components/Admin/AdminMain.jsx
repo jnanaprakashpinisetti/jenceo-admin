@@ -1177,7 +1177,7 @@ export default function AdminMain() {
               <button className="modal-close" onClick={() => setShowCreate(false)}>×</button>
             </div>
             <div className="modal-body">
-              <form onSubmit={handleCreate}>
+              <form onSubmit={handleCreate} className="bg-white">
                 <div className="form-group">
                   <label>Full Name</label>
                   <input

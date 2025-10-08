@@ -1,7 +1,8 @@
 // src/context/AuthContext.jsx
 import React, { createContext, useContext, useEffect, useMemo, useState } from "react";
 import { getAuth, onAuthStateChanged, signInAnonymously, signOut } from "firebase/auth";
-import firebaseDB from "../firebase";
+import {firebaseDB} from "../firebase";
+import { get, ref, set, remove, update } from "firebase/database";
 
 // Utility functions
 const normalizeText = (text) => (text ? String(text).trim().toLowerCase() : "");
@@ -135,7 +136,7 @@ function createUserSession(databaseId, userData, authUserId) {
   };
 }
 
-// ========== SECURITY FUNCTIONS (DEFINED BEFORE USE) ==========
+// ========== SECURITY FUNCTIONS ==========
 
 // Session validation function
 const validateUserSession = async (userDatabaseId) => {
@@ -162,12 +163,9 @@ const validateUserSession = async (userDatabaseId) => {
   }
 };
 
-// Enhanced logout function that prevents new anonymous users
+// Enhanced logout function
 const enhancedLogout = async (auth, preventReauth = false) => {
   try {
-    // Clear local state first
-    // cacheUser will be called from the component
-
     // Sign out from Firebase Auth
     await signOut(auth);
 
@@ -182,8 +180,8 @@ const enhancedLogout = async (auth, preventReauth = false) => {
     console.error("Logout error:", error);
   }
 };
+
 // Real-time session monitoring
-// Enhanced session monitoring with controlled re-authentication
 const setupSessionMonitoring = (userDatabaseId, onInvalidSession, onPermissionsUpdate) => {
   if (!userDatabaseId) return () => { };
 
@@ -193,7 +191,7 @@ const setupSessionMonitoring = (userDatabaseId, onInvalidSession, onPermissionsU
   const onUserChange = userRef.on('value', (snapshot) => {
     if (!snapshot.exists()) {
       console.log("🚨 User deleted from database - forcing logout WITHOUT re-auth");
-      onInvalidSession(true); // Pass true to prevent re-auth
+      onInvalidSession(true);
       return;
     }
 
@@ -202,7 +200,7 @@ const setupSessionMonitoring = (userDatabaseId, onInvalidSession, onPermissionsU
     // Check if user is deactivated
     if (userData.isActive === false) {
       console.log("🚨 User deactivated - forcing logout WITHOUT re-auth");
-      onInvalidSession(true); // Pass true to prevent re-auth
+      onInvalidSession(true);
       return;
     }
 
@@ -249,8 +247,7 @@ export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [sessionMonitor, setSessionMonitor] = useState(null);
 
-  // User state persistence with enhanced security
-  // Enhanced cacheUser with better session monitoring setup
+  // User state persistence
   const cacheUser = (userData) => {
     setUser(userData);
 
@@ -263,7 +260,7 @@ export function AuthProvider({ children }) {
       if (userData) {
         sessionStorage.setItem("auth:user", JSON.stringify(userData));
 
-        // Start monitoring this user's session with permission updates
+        // Start monitoring this user's session
         const cleanupMonitor = setupSessionMonitoring(
           userData.dbId,
           (preventReauth) => {
@@ -278,6 +275,9 @@ export function AuthProvider({ children }) {
         setSessionMonitor(() => cleanupMonitor);
       } else {
         sessionStorage.removeItem("auth:user");
+        if (user?.dbId) {
+          sessionStorage.removeItem(`avatar:${user.dbId}`);
+        }
         setSessionMonitor(null);
       }
     } catch (error) {
@@ -291,8 +291,6 @@ export function AuthProvider({ children }) {
     cacheUser(null);
   };
 
-
-
   // Handle permission updates
   const handlePermissionsUpdate = (updatedUserData) => {
     if (!user) return;
@@ -301,7 +299,6 @@ export function AuthProvider({ children }) {
     cacheUser(updatedSession);
     console.log("✅ User permissions updated in real-time");
   };
-
 
   // Enhanced authentication state initialization
   useEffect(() => {
@@ -330,12 +327,16 @@ export function AuthProvider({ children }) {
           } else {
             console.log("❌ Invalid session - clearing storage");
             sessionStorage.removeItem("auth:user");
+            sessionStorage.removeItem(`avatar:${parsedUser.dbId}`);
             setUser(null);
           }
         }
       } catch (error) {
         console.warn("Failed to restore session:", error);
         sessionStorage.removeItem("auth:user");
+        if (user?.dbId) {
+          sessionStorage.removeItem(`avatar:${user.dbId}`);
+        }
       }
 
       setReady(true);
@@ -412,23 +413,20 @@ export function AuthProvider({ children }) {
 
       if (!adminExists) {
         console.log("🛠️ Creating default admin user...");
-        const adminId = `admin_${Date.now()}`;
-        const passwordHash = await generatePasswordHash("admin123");
-
-        const adminUser = {
+        // Use Firebase push to generate proper key that matches existing structure
+        const adminId = await databasePush("Users", {
           username: "admin",
           name: "System Administrator",
           email: "admin@jenceo.com",
           role: "admin",
           permissions: DEFAULT_ADMIN_PERMISSIONS,
-          passwordHash: passwordHash,
+          passwordHash: await generatePasswordHash("admin123"),
           createdAt: getCurrentTimestamp(),
           updatedAt: getCurrentTimestamp(),
           isActive: true
-        };
+        });
 
-        const success = await databaseSet(`Users/${adminId}`, adminUser);
-        if (success) {
+        if (adminId) {
           console.log("✅ Default admin user created!");
           console.log("🔑 Username: admin");
           console.log("🔑 Password: admin123");
@@ -447,7 +445,7 @@ export function AuthProvider({ children }) {
     }
   };
 
-  // User creation
+  // User creation - FIXED: Use databasePush to match existing structure
   const createUser = async (userData) => {
     try {
       const { username, email, name, role = "user", permissions = {}, password } = userData;
@@ -477,32 +475,24 @@ export function AuthProvider({ children }) {
         }
       }
 
-      // Generate unique user ID
-      const userId = `user_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-
-      // Create password hash
-      const passwordHash = await generatePasswordHash(password);
-
-      const newUser = {
+      // ✅ FIXED: Use databasePush to generate Firebase push key (like -Ob1V8s2B78uJpvAgYXe)
+      const userId = await databasePush("Users", {
         username: username.trim(),
         email: email?.trim() || "",
         name: name.trim(),
         role,
         permissions: role === "admin" ? DEFAULT_ADMIN_PERMISSIONS : permissions,
-        passwordHash,
+        passwordHash: await generatePasswordHash(password),
         createdAt: getCurrentTimestamp(),
         updatedAt: getCurrentTimestamp(),
         isActive: true
-      };
+      });
 
-      console.log("💾 Saving user to database:", userId, newUser);
-
-      const success = await databaseSet(`Users/${userId}`, newUser);
-      if (!success) {
+      if (!userId) {
         throw new Error("Failed to create user in database");
       }
 
-      console.log("✅ User created successfully:", userId);
+      console.log("✅ User created successfully with ID:", userId);
       return { success: true, userId };
     } catch (error) {
       console.error("🚨 USER CREATION ERROR:", error.message);
@@ -546,7 +536,7 @@ export function AuthProvider({ children }) {
     }
   };
 
-  // Delete user
+  // Delete user - FIXED: Proper cleanup
   const deleteUser = async (userId) => {
     try {
       if (!userId) {
@@ -559,13 +549,15 @@ export function AuthProvider({ children }) {
       }
 
       const success = await databaseRemove(`Users/${userId}`);
-
+      
       if (!success) {
         throw new Error("Failed to delete user from database");
       }
 
-      console.log(`✅ User ${userId} deleted from database`);
+      // Clean up avatar from session storage
+      sessionStorage.removeItem(`avatar:${userId}`);
 
+      console.log(`✅ User ${userId} deleted from database`);
       return { success: true };
     } catch (error) {
       console.error("🚨 USER DELETE ERROR:", error.message);
@@ -620,7 +612,7 @@ export function AuthProvider({ children }) {
     }
   };
 
-  // User authentication
+  // User authentication - FIXED: Handle both old and new user structures
   const login = async (identifier, password) => {
     const normalizedIdentifier = normalizeText(identifier);
     setLoading(true);
@@ -642,22 +634,37 @@ export function AuthProvider({ children }) {
       }
 
       console.log("🔍 Total users in database:", Object.keys(allUsers).length);
+      console.log("🔍 Available users:", Object.keys(allUsers).map(id => ({
+        id,
+        username: allUsers[id]?.username,
+        name: allUsers[id]?.name,
+        email: allUsers[id]?.email
+      })));
 
-      // Find matching user
+      // Find matching user - FIXED: Better search with case-insensitive comparison
       let userDatabaseId = null;
       let userData = null;
 
       for (const [databaseId, dbUser] of Object.entries(allUsers)) {
-        const dbUsername = normalizeText(dbUser?.username);
-        const dbName = normalizeText(dbUser?.name);
-        const dbEmail = normalizeText(dbUser?.email);
+        if (!dbUser) continue;
+
+        const dbUsername = normalizeText(dbUser.username);
+        const dbName = normalizeText(dbUser.name);
+        const dbEmail = normalizeText(dbUser.email);
+
+        console.log(`🔍 Checking user: ${databaseId}`, {
+          username: dbUsername,
+          name: dbName,
+          email: dbEmail,
+          target: normalizedIdentifier
+        });
 
         if (dbUsername === normalizedIdentifier ||
           dbName === normalizedIdentifier ||
           dbEmail === normalizedIdentifier) {
           userDatabaseId = databaseId;
           userData = dbUser;
-          console.log("✅ Found user:", databaseId, "with username:", dbUser?.username);
+          console.log("✅ Found matching user:", databaseId, "with username:", dbUser.username);
           break;
         }
       }
@@ -694,6 +701,7 @@ export function AuthProvider({ children }) {
       console.log("=== 🔐 Password Verification ===");
       console.log("Stored hash:", storedPasswordHash);
       console.log("Entered hash:", enteredPasswordHash);
+      console.log("Match:", storedPasswordHash === enteredPasswordHash);
 
       if (storedPasswordHash !== enteredPasswordHash) {
         throw new Error("Invalid password");

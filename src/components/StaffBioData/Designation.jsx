@@ -198,6 +198,7 @@ export default function Designation({
             value={formData.superiorId || ""}
             onChange={handleChange}
             onBlur={handleBlur}
+            style={{ textTransform: "uppercase" }}
           />
         </div>
 
@@ -212,6 +213,8 @@ export default function Designation({
             value={formData.superiorName || ""}
             onChange={handleChange}
             onBlur={handleBlur}
+            readOnly
+            disabled
           />
         </div>
 

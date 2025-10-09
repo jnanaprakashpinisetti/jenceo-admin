@@ -1088,11 +1088,25 @@
       max-height: 95vh;
     }
 
+    .modal-header {
+     padding: 15px 24px ;
+    }
+
     .user-details-modal {
       display: flex;
       gap: 20px;
       align-items: center;
 
+    }
+
+    .user-avatar-modal {
+      img {
+        width: 40px;
+        height: 40px;
+        object-fit: cover;
+        border-radius: 50%;
+        border: 2px solid #adcae7;
+      }
     }
   }
 

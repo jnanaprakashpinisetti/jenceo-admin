@@ -29,7 +29,6 @@ const BankDetails = ({
             onChange={handleChange}
             onBlur={handleBlur}
             maxLength={18}
-            // placeholder="Enter account number"
           />
           {errors.accountNo && <div className="invalid-feedback">{errors.accountNo}</div>}
         </div>
@@ -45,7 +44,6 @@ const BankDetails = ({
             value={formData.bankName}
             onChange={handleChange}
             onBlur={handleBlur}
-            // placeholder="Enter bank name"
           />
           {errors.bankName && <div className="invalid-feedback">{errors.bankName}</div>}
         </div>
@@ -61,7 +59,6 @@ const BankDetails = ({
             value={formData.branchName}
             onChange={handleChange}
             onBlur={handleBlur}
-            // placeholder="Enter branch name"
           />
           {errors.branchName && <div className="invalid-feedback">{errors.branchName}</div>}
         </div>
@@ -77,7 +74,6 @@ const BankDetails = ({
             value={formData.ifscCode}
             onChange={handleChange}
             onBlur={handleBlur}
-            // placeholder="Enter IFSC code"
             style={{ textTransform: "uppercase" }}
             maxLength={11}
           />
@@ -103,7 +99,6 @@ const BankDetails = ({
               onChange={handleChange}
               onBlur={handleBlur}
               maxLength={10}
-              // placeholder="Enter PhonePe number"
             />
           </div>
           {errors.phonePayNo && <div className="invalid-feedback">{errors.phonePayNo}</div>}
@@ -119,7 +114,6 @@ const BankDetails = ({
             value={formData.phonePayName}
             onChange={handleChange}
             onBlur={handleBlur}
-            // placeholder="Enter name registered with PhonePe"
           />
           {errors.phonePayName && <div className="invalid-feedback">{errors.phonePayName}</div>}
         </div>
@@ -138,7 +132,6 @@ const BankDetails = ({
               onChange={handleChange}
               onBlur={handleBlur}
               maxLength={10}
-              // placeholder="Enter Google Pay number"
             />
           </div>
           {errors.googlePayNo && <div className="invalid-feedback">{errors.googlePayNo}</div>}
@@ -154,48 +147,11 @@ const BankDetails = ({
             value={formData.googlePayName}
             onChange={handleChange}
             onBlur={handleBlur}
-            // placeholder="Enter name registered with Google Pay"
           />
           {errors.googlePayName && <div className="invalid-feedback">{errors.googlePayName}</div>}
         </div>
 
-        {/* Salary Information */}
-        <div className="col-12 mt-3">
-          <h6 className="border-bottom pb-2">Salary Information</h6>
-        </div>
-
-        <div className="col-md-6">
-          <label htmlFor="basicSalary" className="form-label">Basic Salary <span className="star">*</span></label>
-          <input
-            type="tel"
-            className={`form-control ${errors.basicSalary ? "is-invalid" : ""}`}
-            id="basicSalary"
-            name="basicSalary"
-            value={formData.basicSalary}
-            onChange={handleChange}
-            onBlur={handleBlur}
-            // placeholder="Enter salary"
-            maxLength={5}
-          />
-          {errors.basicSalary && <div className="invalid-feedback">{errors.basicSalary}</div>}
-        </div>
-
-        <div className="col-md-6">
-          <label htmlFor="pageNo" className="form-label">Page No <span className="star">*</span></label>
-          <input
-            type="tel"
-            className={`form-control ${errors.pageNo ? "is-invalid" : ""}`}
-            id="pageNo"
-            name="pageNo"
-            value={formData.pageNo}
-            onChange={handleChange}
-            onBlur={handleBlur}
-            // placeholder="Enter page no"
-            maxLength={3}
-          />
-          {errors.pageNo && <div className="invalid-feedback">{errors.pageNo}</div>}
-        </div>
-
+        {/* About Staff */}
         <div className="col-12">
           <label htmlFor="aboutEmployee" className="form-label">About Staff</label>
           <textarea
@@ -208,20 +164,6 @@ const BankDetails = ({
           />
         </div>
       </div>
-
-      {/* <div className="d-flex justify-content-between mt-4">
-        <button type="button" className="btn btn-secondary" onClick={prevStep}>
-          Previous
-        </button>
-        <button
-          type="button"
-          className="btn btn-success"
-          onClick={handleSubmit}
-          disabled={isSubmitting}
-        >
-          {isSubmitting ? "Submitting..." : "Submit"}
-        </button>
-      </div> */}
     </div>
   );
 };

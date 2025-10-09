@@ -16,13 +16,15 @@ import EmergencyContact1 from "./EmergencyContact1";
 import EmergencyContact2 from "./EmergencyContact2";
 import EmergencyContact3 from "./EmergencyContact3";
 import BankDetails from "./BankDetails";
+import Designation from "./Designation";
+
 
 import "../../scss/components/_WorkerBioDataForm.scss";
 
 const DEFAULT_PHOTO_URL =
   "https://firebasestorage.googleapis.com/v0/b/jenceo-admin.firebasestorage.app/o/OfficeFiles%2FSample-Photo.jpg?alt=media&token=01855b47-c9c2-490e-b400-05851192dde7";
 
-const TOTAL_STEPS = 10;
+const TOTAL_STEPS = 11;
 
 const initialFormData = {
   idNo: "",
@@ -89,6 +91,20 @@ const initialFormData = {
   aboutEmployee: "",
   employeePhoto: null,
   employeePhotoFile: null,
+  department: "",
+  designation: "",
+  superiorId: "",
+  superiorName: "",
+  allowance: "",
+  hra: "",
+  travelAllowance: "",
+  panNo: "",
+  pfNo: "",
+  insuranceNo: "",
+  userId: "",
+  password: "",
+  role: "",
+
 };
 
 const WorkerBioDataForm = ({ isOpen = false, onClose = () => { }, onSaved }) => {
@@ -546,9 +562,14 @@ const WorkerBioDataForm = ({ isOpen = false, onClose = () => { }, onSaved }) => 
       }
       case 9:
         break;
-      case 10: {
+      case 10: { // Designation / Job & Payroll
+        if (!formData.department) e.department = "Select Department";
+        if (!formData.designation) e.designation = "Select Designation";
         if (!formData.basicSalary) e.basicSalary = "Enter valid Salary";
         if (!formData.pageNo) e.pageNo = "Enter Page No";
+        break;
+      }
+      case 11: { // Bank & Pay
         const pp = (formData.phonePayNo || "").trim();
         const gp = (formData.googlePayNo || "").trim();
         if (pp) {
@@ -561,6 +582,7 @@ const WorkerBioDataForm = ({ isOpen = false, onClose = () => { }, onSaved }) => 
         }
         break;
       }
+
       default: break;
     }
     return e;
@@ -714,7 +736,9 @@ const WorkerBioDataForm = ({ isOpen = false, onClose = () => { }, onSaved }) => 
       case 7: return <EmergencyContact1 {...common} />;
       case 8: return <EmergencyContact2 {...common} />;
       case 9: return <EmergencyContact3 {...common} />;
-      case 10: return <BankDetails {...common} handleSubmit={handlePrimaryAction} isSubmitting={isSubmitting} />;
+      case 10: return <Designation {...common} />;
+      case 11: return <BankDetails {...common} handleSubmit={handlePrimaryAction} isSubmitting={isSubmitting} />;
+
       default: return null;
     }
   };
@@ -861,7 +885,8 @@ function stepTitleFor(idx) {
     case 7: return "Emergency 1";
     case 8: return "Emergency 2";
     case 9: return "Emergency 3";
-    case 10: return "Bank & Pay";
+    case 10: return "Designation & Job";
+    case 11: return "Bank & Pay";
     default: return `Step ${idx}`;
   }
 }

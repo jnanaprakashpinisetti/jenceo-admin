@@ -608,7 +608,7 @@ export default function WorkerCalDeletedDisplay() {
                 <div className="row">
                   <div className="col-md-6">
                     <p><strong>Name:</strong> {selectedWorker.name || "N/A"}</p>
-                    <p><strong>Mobile:</strong> {selectedWorker.mobileNo || "N/A"}</p>
+                    <p style={{opacity:0}}><strong>Mobile:</strong> {selectedWorker.mobileNo || "N/A"}</p>
                     <p><strong>Gender:</strong> {selectedWorker.gender || "N/A"}</p>
                     <p><strong>Location:</strong> {selectedWorker.location || "N/A"}</p>
                   </div>

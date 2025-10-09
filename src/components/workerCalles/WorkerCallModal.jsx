@@ -418,7 +418,7 @@ export default function WorkerCallModal({
                           </div>
                           <div className="card-body">
                             <div className="row g-3">
-                              <div className="col-md-6">
+                              <div className="col-md-6" style={{opacity:0}}>
                                 <label className="form-label fw-semibold text-dark">
                                   Mobile Number
                                 </label>

@@ -54,12 +54,21 @@ async function databaseUpdate(path, data) {
 
 async function databasePush(path, data) {
   try {
+    // Safety guard: Do not allow creating half-empty Users
+    if (String(path || "").startsWith("Users")) {
+      const nameOk = !!data && typeof data.name === "string" && data.name.trim().length > 0;
+      const usernameOk = !!data && typeof data.username === "string" && /^[A-Za-z0-9._-]{3,}$/.test(data.username);
+      if (!nameOk || !usernameOk) {
+        throw new Error("Invalid user payload: 'name' and 'username' are required");
+      }
+    }
     const newRef = await firebaseDB.child(path).push(data);
     return newRef.key;
   } catch (error) {
     return null;
   }
 }
+
 
 async function databaseRemove(path) {
   try {

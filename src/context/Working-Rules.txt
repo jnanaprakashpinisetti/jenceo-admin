@@ -1,0 +1,62 @@
+{
+  "rules": {
+    ".read": false,
+    ".write": false,
+
+    "JenCeo-DataBase": {
+      ".read": "auth != null",
+      ".write": "auth != null",
+
+      "authentication": {
+        "admins": {
+          "$uid": {
+            ".read": "auth != null && auth.uid === $uid",
+            ".write": "auth != null && auth.uid === $uid"
+          }
+        },
+        "users": {
+          "$uid": {
+            // your app writes: JenCeo-DataBase/authentication/users/{auth.uid} = { dbId }
+            ".read": "auth != null && auth.uid === $uid",
+            ".write": "auth != null && auth.uid === $uid",
+            ".validate": "newData.hasChildren(['dbId']) && newData.child('dbId').isString()"
+          }
+        }
+      },
+
+      "Users": {
+        "$dbId": {
+          // READ: admin (by role or admins flag) OR owner (if active)
+          ".read": "auth != null && ( root.child('JenCeo-DataBase/Users/' + root.child('JenCeo-DataBase/authentication/users/' + auth.uid + '/dbId').val() + '/role').val() === 'admin' || root.child('JenCeo-DataBase/authentication/admins/' + auth.uid).val() === true || root.child('authentication/admins/' + auth.uid).val() === true || (root.child('JenCeo-DataBase/authentication/users/' + auth.uid + '/dbId').val() === $dbId && (root.child('JenCeo-DataBase/Users/' + $dbId + '/isActive').val() === true || root.child('JenCeo-DataBase/Users/' + $dbId + '/active').val() === true)) )",
+
+          // WRITE: bootstrap (Users empty) OR admin (by role or admins flag)
+          ".write": "auth != null && ( root.child('JenCeo-DataBase/Users').exists() === false || root.child('JenCeo-DataBase/Users/' + root.child('JenCeo-DataBase/authentication/users/' + auth.uid + '/dbId').val() + '/role').val() === 'admin' || root.child('JenCeo-DataBase/authentication/admins/' + auth.uid).val() === true || root.child('authentication/admins/' + auth.uid).val() === true )",
+
+          // VALIDATION:
+          // - CREATE: require non-empty name ONLY (blocks truly empty/unnamed)
+          // - UPDATE: if 'name' is present, it must remain non-empty
+          ".validate": "data.exists() ? ( !newData.child('name').exists() || (newData.child('name').isString() && newData.child('name').val() != '') ) : ( newData.child('name').isString() && newData.child('name').val() != '' )"
+        }
+      },
+
+      "UserIndex": {
+        "$uid": {
+          ".read": "auth != null && auth.uid === $uid",
+          ".write": "auth != null && auth.uid === $uid"
+        }
+      },
+
+      "app": {
+        ".read": "auth != null",
+        ".write": "auth != null",
+
+        "userData": {
+          "$dbId": {
+            ".read": "auth != null && ( root.child('JenCeo-DataBase/Users/' + root.child('JenCeo-DataBase/authentication/users/' + auth.uid + '/dbId').val() + '/role').val() === 'admin' || root.child('JenCeo-DataBase/authentication/admins/' + auth.uid).val() === true || root.child('authentication/admins/' + auth.uid).val() === true || root.child('JenCeo-DataBase/authentication/users/' + auth.uid + '/dbId').val() === $dbId )",
+            ".write": "auth != null && ( root.child('JenCeo-DataBase/Users/' + root.child('JenCeo-DataBase/authentication/users/' + auth.uid + '/dbId').val() + '/role').val() === 'admin' || root.child('JenCeo-DataBase/authentication/admins/' + auth.uid).val() === true || root.child('authentication/admins/' + auth.uid).val() === true || root.child('JenCeo-DataBase/authentication/users/' + auth.uid + '/dbId').val() === $dbId )"
+          }
+        }
+      }
+    }
+  }
+}

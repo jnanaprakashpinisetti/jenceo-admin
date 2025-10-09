@@ -1,14 +1,13 @@
 // src/context/AuthContext.jsx
-import React, { createContext, useContext, useEffect, useMemo, useState } from "react";
+import React, { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { getAuth, onAuthStateChanged, signInAnonymously, signOut } from "firebase/auth";
-import {firebaseDB} from "../firebase";
-import { get, ref, set, remove, update } from "firebase/database";
+import { firebaseDB } from "../firebase";
 
-// Utility functions
+// Utilities
 const normalizeText = (text) => (text ? String(text).trim().toLowerCase() : "");
 const getCurrentTimestamp = () => new Date().toISOString();
 
-// Password hashing utilities
+// Password hashing
 async function generateSHA256Hash(text) {
   const encoder = new TextEncoder();
   const data = encoder.encode(text);
@@ -31,7 +30,6 @@ async function databaseGet(path) {
     const snapshot = await firebaseDB.child(path).get();
     return snapshot.exists() ? snapshot.val() : null;
   } catch (error) {
-    console.error("Database read error:", path, error?.message || error);
     return null;
   }
 }
@@ -41,7 +39,6 @@ async function databaseSet(path, data) {
     await firebaseDB.child(path).set(data);
     return true;
   } catch (error) {
-    console.error("Database write error:", path, error?.message || error);
     return false;
   }
 }
@@ -51,7 +48,6 @@ async function databaseUpdate(path, data) {
     await firebaseDB.child(path).update(data);
     return true;
   } catch (error) {
-    console.error("Database update error:", path, error?.message || error);
     return false;
   }
 }
@@ -61,7 +57,6 @@ async function databasePush(path, data) {
     const newRef = await firebaseDB.child(path).push(data);
     return newRef.key;
   } catch (error) {
-    console.error("Database push error:", path, error?.message || error);
     return null;
   }
 }
@@ -71,7 +66,6 @@ async function databaseRemove(path) {
     await firebaseDB.child(path).remove();
     return true;
   } catch (error) {
-    console.error("Database remove error:", path, error?.message || error);
     return false;
   }
 }
@@ -81,7 +75,7 @@ const normalizePermissions = (permissions) => {
   if (!permissions || typeof permissions !== "object") return {};
 
   const normalized = {};
-  Object.keys(permissions).forEach(key => {
+  Object.keys(permissions).forEach((key) => {
     const value = permissions[key];
     if (typeof value === "boolean") {
       normalized[key] = { view: value, read: value };
@@ -89,18 +83,17 @@ const normalizePermissions = (permissions) => {
       normalized[key] = { ...value };
     }
   });
-
   return normalized;
 };
 
-// Default admin permissions configuration
+// Default admin permissions
 const DEFAULT_ADMIN_PERMISSIONS = {
-  "Dashboard": true,
-  "Investments": true,
-  "Task": true,
-  "Accounts": true,
-  "Admin": true,
-  "Staff": true,
+  Dashboard: true,
+  Investments: true,
+  Task: true,
+  Accounts: true,
+  Admin: true,
+  Staff: true,
   "Staff Data": true,
   "Existing Staff": true,
   "Workers Data": true,
@@ -110,12 +103,12 @@ const DEFAULT_ADMIN_PERMISSIONS = {
   "Worker Call Delete": true,
   "Client Data": true,
   "Client Exit": true,
-  "Enquiries": true,
+  Enquiries: true,
   "Enquiry Exit": true,
   "Hospital List": true,
   "Hospital Delete List": true,
-  "Expenses": true,
-  "Expence Delete": true
+  Expenses: true,
+  "Expence Delete": true,
 };
 
 // Session management
@@ -133,85 +126,87 @@ function createUserSession(databaseId, userData, authUserId) {
     photoURL: userData?.photoURL || userData?.profile?.photoURL || "",
     mode: "username",
     lastSync: getCurrentTimestamp(),
+    sessionVersion: Number(userData?.requiredSessionVersion || 0),
   };
 }
 
-// ========== SECURITY FUNCTIONS ==========
-
-// Session validation function
+// Session validation
 const validateUserSession = async (userDatabaseId) => {
   try {
     if (!userDatabaseId) return false;
-
     const userData = await databaseGet(`Users/${userDatabaseId}`);
-
-    // Check if user exists and is active
-    if (!userData) {
-      console.log("❌ User not found in database");
-      return false;
-    }
-
-    if (userData.isActive === false) {
-      console.log("❌ User account is deactivated");
-      return false;
-    }
-
+    if (!userData) return false;
+    if (userData.isActive === false) return false;
     return true;
   } catch (error) {
-    console.error("Session validation error:", error);
     return false;
   }
 };
 
-// Enhanced logout function
+// Enhanced logout
 const enhancedLogout = async (auth, preventReauth = false) => {
   try {
-    // Sign out from Firebase Auth
     await signOut(auth);
-
-    // Only re-establish anonymous auth if not prevented
-    if (!preventReauth) {
-      await signInAnonymously(auth);
-      console.log("✅ User logged out successfully, anonymous auth maintained");
-    } else {
-      console.log("✅ User logged out successfully, no re-authentication");
-    }
   } catch (error) {
-    console.error("Logout error:", error);
+    // Silent catch
+  } finally {
+    try {
+      localStorage?.clear?.();
+      sessionStorage?.clear?.();
+    } catch {}
+    if (!preventReauth) {
+      try {
+        await signInAnonymously(auth);
+      } catch (e) {
+        // Silent catch
+      }
+    }
   }
 };
 
 // Real-time session monitoring
-const setupSessionMonitoring = (userDatabaseId, onInvalidSession, onPermissionsUpdate) => {
-  if (!userDatabaseId) return () => { };
+const setupSessionMonitoring = (userDatabaseId, onInvalidSession, onPermissionsUpdate, getCurrentSessionVersion) => {
+  if (!userDatabaseId) return () => {};
 
-  // Listen for changes in user data
   const userRef = firebaseDB.child(`Users/${userDatabaseId}`);
+  const versionRef = firebaseDB.child(`Users/${userDatabaseId}/requiredSessionVersion`);
 
-  const onUserChange = userRef.on('value', (snapshot) => {
+  const onUserChange = userRef.on("value", (snapshot) => {
     if (!snapshot.exists()) {
-      console.log("🚨 User deleted from database - forcing logout WITHOUT re-auth");
-      onInvalidSession(true);
+      onInvalidSession?.(true);
       return;
     }
 
-    const userData = snapshot.val();
+    const val = snapshot.val();
 
-    // Check if user is deactivated
-    if (userData.isActive === false) {
-      console.log("🚨 User deactivated - forcing logout WITHOUT re-auth");
-      onInvalidSession(true);
+    // Check user activation status
+    const isActiveFlag = Object.prototype.hasOwnProperty.call(val || {}, "isActive") ? val.isActive : true;
+    const activeFlag = Object.prototype.hasOwnProperty.call(val || {}, "active") ? val.active : true;
+    const statusFlag = (val?.status || "").toLowerCase() !== "deactivated";
+
+    if (isActiveFlag === false || activeFlag === false || !statusFlag) {
+      onInvalidSession?.(true);
       return;
     }
 
-    // Check for permission updates
-    if (onPermissionsUpdate && userData.permissions) {
-      console.log("🔄 User permissions updated - refreshing session");
-      onPermissionsUpdate(userData);
+    // Handle permission updates
+    if (onPermissionsUpdate && val && typeof val === "object" && val.permissions) {
+      onPermissionsUpdate(val);
     }
   });
 
-  return () => userRef.off('value', onUserChange);
+  const onVersionChange = versionRef.on("value", (snapshot) => {
+    const required = Number(snapshot.val() || 0);
+    const current = Number(getCurrentSessionVersion?.() || 0);
+    if (required > current) {
+      onInvalidSession?.(true);
+    }
+  });
+
+  return () => {
+    userRef.off("value", onUserChange);
+    versionRef.off("value", onVersionChange);
+  };
 };
 
 // Context definition
@@ -219,24 +214,22 @@ const AuthContext = createContext({
   ready: false,
   user: null,
   loading: false,
-  login: async () => { },
-  logout: async () => { },
-  refreshUser: async () => { },
-  setUser: () => { },
-  createUser: async () => { },
-  updateUser: async () => { },
-  deleteUser: async () => { },
-  getAllUsers: async () => { },
-  initializeDefaultAdmin: async () => { },
-  changePassword: async () => { },
+  login: async () => {},
+  logout: async () => {},
+  refreshUser: async () => {},
+  setUser: () => {},
+  createUser: async () => {},
+  updateUser: async () => {},
+  deleteUser: async () => {},
+  getAllUsers: async () => {},
+  initializeDefaultAdmin: async () => {},
+  changePassword: async () => {},
   hasPermission: () => false,
 });
 
 export const useAuth = () => {
   const context = useContext(AuthContext);
-  if (!context) {
-    throw new Error("useAuth must be used within an AuthProvider");
-  }
+  if (!context) throw new Error("useAuth must be used within an AuthProvider");
   return context;
 };
 
@@ -246,47 +239,58 @@ export function AuthProvider({ children }) {
   const [loading, setLoading] = useState(false);
   const [user, setUser] = useState(null);
   const [sessionMonitor, setSessionMonitor] = useState(null);
+  const sessionVersionRef = useRef(0);
+
+  // Session version bump helper
+  const bumpSessionVersion = async (userId) => {
+    const current = Number((await databaseGet(`Users/${userId}/requiredSessionVersion`)) || 0);
+    await databaseUpdate(`Users/${userId}`, { 
+      requiredSessionVersion: current + 1, 
+      updatedAt: getCurrentTimestamp() 
+    });
+  };
 
   // User state persistence
   const cacheUser = (userData) => {
     setUser(userData);
 
     // Clean up previous session monitor
-    if (sessionMonitor && typeof sessionMonitor === 'function') {
+    if (sessionMonitor && typeof sessionMonitor === "function") {
       sessionMonitor();
     }
 
     try {
       if (userData) {
+        sessionVersionRef.current = Number(userData.sessionVersion || 0);
         sessionStorage.setItem("auth:user", JSON.stringify(userData));
 
         // Start monitoring this user's session
         const cleanupMonitor = setupSessionMonitoring(
           userData.dbId,
-          (preventReauth) => {
-            console.log("🛡️ Session invalidated - logging out", preventReauth ? "WITHOUT re-auth" : "");
-            handleLogout(preventReauth);
-          },
-          (updatedUserData) => {
-            console.log("🔄 Permissions updated - refreshing user session");
-            handlePermissionsUpdate(updatedUserData);
-          }
+          (preventReauth) => handleLogout(preventReauth),
+          (updatedUserData) => handlePermissionsUpdate(updatedUserData),
+          () => sessionVersionRef.current
         );
         setSessionMonitor(() => cleanupMonitor);
       } else {
         sessionStorage.removeItem("auth:user");
-        if (user?.dbId) {
-          sessionStorage.removeItem(`avatar:${user.dbId}`);
-        }
+        if (user?.dbId) sessionStorage.removeItem(`avatar:${user.dbId}`);
         setSessionMonitor(null);
       }
     } catch (error) {
-      console.warn("Session storage error:", error);
+      // Silent catch
     }
   };
 
-  // Handle logout with cleanup
+  // Handle logout
   const handleLogout = async (preventReauth = false) => {
+    try {
+      if (auth.currentUser) {
+        await databaseRemove(`authentication/users/${auth.currentUser.uid}`);
+      }
+    } catch (err) {
+      // Silent catch
+    }
     await enhancedLogout(auth, preventReauth);
     cacheUser(null);
   };
@@ -294,76 +298,74 @@ export function AuthProvider({ children }) {
   // Handle permission updates
   const handlePermissionsUpdate = (updatedUserData) => {
     if (!user) return;
-
+    
     const updatedSession = createUserSession(user.dbId, updatedUserData, user.uid);
+
+    // Force logout on ANY permissions change
+    const before = JSON.stringify(user.permissions || {});
+    const after = JSON.stringify(updatedUserData.permissions || {});
+    if (before !== after) {
+      handleLogout(true);
+      return;
+    }
+
+    // Update session version
+    sessionVersionRef.current = Number(updatedSession.sessionVersion || 0);
     cacheUser(updatedSession);
-    console.log("✅ User permissions updated in real-time");
   };
 
-  // Enhanced authentication state initialization
+  // Authentication state management
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
-      console.log("Auth state changed:", firebaseUser ? "User logged in" : "No user");
-
-      // Restore session from storage with validation
       try {
         const storedUser = sessionStorage.getItem("auth:user");
         if (storedUser) {
           const parsedUser = JSON.parse(storedUser);
-
-          // Validate the stored session
           const isValid = await validateUserSession(parsedUser.dbId);
-
+          
           if (isValid) {
             setUser(parsedUser);
-            console.log("✅ Valid session restored for user:", parsedUser.username);
-
-            // Start monitoring this session
-            const cleanupMonitor = setupSessionMonitoring(parsedUser.dbId, () => {
-              console.log("🛡️ Session invalidated - logging out");
-              handleLogout();
-            });
+            sessionVersionRef.current = Number(parsedUser.sessionVersion || 0);
+            
+            const cleanupMonitor = setupSessionMonitoring(
+              parsedUser.dbId,
+              () => handleLogout(true),
+              (updatedUserData) => handlePermissionsUpdate(updatedUserData),
+              () => sessionVersionRef.current
+            );
             setSessionMonitor(() => cleanupMonitor);
           } else {
-            console.log("❌ Invalid session - clearing storage");
             sessionStorage.removeItem("auth:user");
-            sessionStorage.removeItem(`avatar:${parsedUser.dbId}`);
+            if (parsedUser?.dbId) sessionStorage.removeItem(`avatar:${parsedUser.dbId}`);
             setUser(null);
           }
         }
       } catch (error) {
-        console.warn("Failed to restore session:", error);
         sessionStorage.removeItem("auth:user");
-        if (user?.dbId) {
-          sessionStorage.removeItem(`avatar:${user.dbId}`);
-        }
+        if (user?.dbId) sessionStorage.removeItem(`avatar:${user.dbId}`);
       }
-
+      
       setReady(true);
-
-      // Establish anonymous authentication if no valid user is logged in
+      
+      // Establish anonymous authentication if needed
       if (!firebaseUser || !user) {
-        signInAnonymously(auth).catch(console.error);
+        signInAnonymously(auth).catch(() => {});
       }
     });
 
     return () => {
       unsubscribe();
-      // Clean up session monitor on unmount
-      if (sessionMonitor && typeof sessionMonitor === 'function') {
-        sessionMonitor();
-      }
+      if (sessionMonitor && typeof sessionMonitor === "function") sessionMonitor();
     };
   }, [auth]);
 
-  // User data refresh
+  // Refresh user data
   const refreshUser = async () => {
     if (!user?.dbId) return null;
-
     const userData = await databaseGet(`Users/${user.dbId}`);
     if (!userData) return null;
-
     const session = createUserSession(user.dbId, userData, user.uid);
+    sessionVersionRef.current = Number(session.sessionVersion || 0);
     cacheUser(session);
     return session;
   };
@@ -371,49 +373,36 @@ export function AuthProvider({ children }) {
   // Permission checker
   const hasPermission = (permissionKey, action = "view") => {
     if (!user) return false;
-
-    // Admin has all permissions
     if (user.role === "admin") return true;
-
+    
     const userPermissions = user.permissions || {};
     const permission = userPermissions[permissionKey];
-
+    
     if (!permission) return false;
-
-    if (typeof permission === "boolean") {
-      return permission;
-    }
-
-    if (typeof permission === "object") {
-      return permission[action] === true;
-    }
-
+    if (typeof permission === "boolean") return permission;
+    if (typeof permission === "object") return permission[action] === true;
+    
     return false;
   };
 
-  // Default admin initialization
+  // Initialize default admin
   const initializeDefaultAdmin = async () => {
     try {
-      console.log("🛠️ Checking for existing admin user...");
-
       const allUsers = await databaseGet("Users");
       let adminExists = false;
       let existingAdminId = null;
-
+      
       if (allUsers) {
         for (const [userId, userData] of Object.entries(allUsers)) {
           if (userData?.username === "admin" || userData?.role === "admin") {
             adminExists = true;
             existingAdminId = userId;
-            console.log("✅ Admin user already exists:", userId);
             break;
           }
         }
       }
-
+      
       if (!adminExists) {
-        console.log("🛠️ Creating default admin user...");
-        // Use Firebase push to generate proper key that matches existing structure
         const adminId = await databasePush("Users", {
           username: "admin",
           name: "System Administrator",
@@ -423,311 +412,217 @@ export function AuthProvider({ children }) {
           passwordHash: await generatePasswordHash("admin123"),
           createdAt: getCurrentTimestamp(),
           updatedAt: getCurrentTimestamp(),
-          isActive: true
+          isActive: true,
+          requiredSessionVersion: 0,
         });
-
-        if (adminId) {
-          console.log("✅ Default admin user created!");
-          console.log("🔑 Username: admin");
-          console.log("🔑 Password: admin123");
-          console.log("🔑 User ID:", adminId);
-          return { success: true, userId: adminId };
-        } else {
-          throw new Error("Failed to create admin user in database");
-        }
+        
+        if (adminId) return { success: true, userId: adminId };
+        throw new Error("Failed to create admin user in database");
       } else {
-        console.log("ℹ️ Admin user already exists:", existingAdminId);
         return { success: true, userId: existingAdminId, exists: true };
       }
     } catch (error) {
-      console.error("❌ Error initializing default admin:", error);
       return { success: false, error: error.message };
     }
   };
 
-  // User creation - FIXED: Use databasePush to match existing structure
+  // Create user
   const createUser = async (userData) => {
-    try {
-      const { username, email, name, role = "user", permissions = {}, password } = userData;
-
-      console.log("🛠️ Creating user with data:", {
-        username,
-        email,
-        name,
-        role,
-        hasPassword: !!password
-      });
-
-      // Input validation
-      if (!username || !name || !password) {
-        throw new Error("Username, name, and password are required");
-      }
-
-      // Check for existing username
-      const allUsers = await databaseGet("Users");
-      if (allUsers) {
-        const usernameExists = Object.values(allUsers).some(
-          existingUser => existingUser?.username === username
-        );
-
-        if (usernameExists) {
-          throw new Error("Username already exists");
-        }
-      }
-
-      // ✅ FIXED: Use databasePush to generate Firebase push key (like -Ob1V8s2B78uJpvAgYXe)
-      const userId = await databasePush("Users", {
-        username: username.trim(),
-        email: email?.trim() || "",
-        name: name.trim(),
-        role,
-        permissions: role === "admin" ? DEFAULT_ADMIN_PERMISSIONS : permissions,
-        passwordHash: await generatePasswordHash(password),
-        createdAt: getCurrentTimestamp(),
-        updatedAt: getCurrentTimestamp(),
-        isActive: true
-      });
-
-      if (!userId) {
-        throw new Error("Failed to create user in database");
-      }
-
-      console.log("✅ User created successfully with ID:", userId);
-      return { success: true, userId };
-    } catch (error) {
-      console.error("🚨 USER CREATION ERROR:", error.message);
-      throw error;
+    const { username, email, name, role = "user", permissions = {}, password } = userData || {};
+    
+    if (!username || !name || !password) {
+      throw new Error("Username, name, and password are required");
     }
+    
+    const allUsers = await databaseGet("Users");
+    if (allUsers) {
+      const usernameExists = Object.values(allUsers).some((u) => u?.username === username);
+      if (usernameExists) throw new Error("Username already exists");
+    }
+    
+    const userId = await databasePush("Users", {
+      username: username.trim(),
+      email: email?.trim() || "",
+      name: name.trim(),
+      role,
+      permissions: role === "admin" ? DEFAULT_ADMIN_PERMISSIONS : permissions,
+      passwordHash: await generatePasswordHash(password),
+      createdAt: getCurrentTimestamp(),
+      updatedAt: getCurrentTimestamp(),
+      isActive: true,
+      requiredSessionVersion: 0,
+    });
+    
+    if (!userId) throw new Error("Failed to create user in database");
+    return { success: true, userId };
   };
 
   // Update user
   const updateUser = async (userId, updates) => {
     try {
-      if (!userId) {
-        throw new Error("User ID is required");
+      if (!userId) throw new Error("User ID is required");
+      
+      const payload = { ...updates, updatedAt: getCurrentTimestamp() };
+      
+      if (payload.password) {
+        payload.passwordHash = await generatePasswordHash(payload.password);
+        delete payload.password;
       }
+      
+      const success = await databaseUpdate(`Users/${userId}`, payload);
+      if (!success) throw new Error("Failed to update user in database");
 
-      const updateData = {
-        ...updates,
-        updatedAt: getCurrentTimestamp()
-      };
-
-      // Don't update password hash unless specifically provided
-      if (updateData.password) {
-        updateData.passwordHash = await generatePasswordHash(updateData.password);
-        delete updateData.password;
+      // Bump session version for sensitive changes
+      const sensitiveChange = (
+        Object.prototype.hasOwnProperty.call(updates, "permissions") ||
+        Object.prototype.hasOwnProperty.call(updates, "isActive") ||
+        Object.prototype.hasOwnProperty.call(payload, "passwordHash")
+      );
+      
+      if (sensitiveChange) {
+        await bumpSessionVersion(userId);
       }
-
-      const success = await databaseUpdate(`Users/${userId}`, updateData);
-
-      if (!success) {
-        throw new Error("Failed to update user in database");
+      
+      // Handle self-updates
+      if (user?.dbId === userId && updates.isActive === false) {
+        await handleLogout(true);
       }
-
-      // Refresh current user session if updating self
-      if (user?.dbId === userId) {
+      
+      if (user?.dbId === userId && updates.isActive !== false) {
         await refreshUser();
       }
-
+      
       return { success: true };
     } catch (error) {
-      console.error("🚨 USER UPDATE ERROR:", error.message);
       throw error;
     }
   };
 
-  // Delete user - FIXED: Proper cleanup
+  // Delete user
   const deleteUser = async (userId) => {
-    try {
-      if (!userId) {
-        throw new Error("User ID is required");
-      }
-
-      // Prevent self-deletion
-      if (user?.dbId === userId) {
-        throw new Error("Cannot delete your own account");
-      }
-
-      const success = await databaseRemove(`Users/${userId}`);
-      
-      if (!success) {
-        throw new Error("Failed to delete user from database");
-      }
-
-      // Clean up avatar from session storage
-      sessionStorage.removeItem(`avatar:${userId}`);
-
-      console.log(`✅ User ${userId} deleted from database`);
-      return { success: true };
-    } catch (error) {
-      console.error("🚨 USER DELETE ERROR:", error.message);
-      throw error;
-    }
+    if (!userId) throw new Error("User ID is required");
+    if (user?.dbId === userId) throw new Error("Cannot delete your own account");
+    
+    const success = await databaseRemove(`Users/${userId}`);
+    if (!success) throw new Error("Failed to delete user from database");
+    
+    sessionStorage.removeItem(`avatar:${userId}`);
+    return { success: true };
   };
 
   // Get all users
   const getAllUsers = async () => {
-    try {
-      const users = await databaseGet("Users");
-      return users || {};
-    } catch (error) {
-      console.error("🚨 GET ALL USERS ERROR:", error.message);
-      throw error;
-    }
+    const users = await databaseGet("Users");
+    return users || {};
   };
 
   // Change password
   const changePassword = async (userId, currentPassword, newPassword) => {
-    try {
-      if (!userId || !currentPassword || !newPassword) {
-        throw new Error("All password fields are required");
-      }
-
-      // Verify current password
-      const userData = await databaseGet(`Users/${userId}`);
-      if (!userData) {
-        throw new Error("User not found");
-      }
-
-      const currentPasswordHash = await generatePasswordHash(currentPassword);
-      if (userData.passwordHash !== currentPasswordHash) {
-        throw new Error("Current password is incorrect");
-      }
-
-      // Update to new password
-      const newPasswordHash = await generatePasswordHash(newPassword);
-      const success = await databaseUpdate(`Users/${userId}`, {
-        passwordHash: newPasswordHash,
-        updatedAt: getCurrentTimestamp()
-      });
-
-      if (!success) {
-        throw new Error("Failed to update password");
-      }
-
-      return { success: true };
-    } catch (error) {
-      console.error("🚨 PASSWORD CHANGE ERROR:", error.message);
-      throw error;
+    if (!userId || !currentPassword || !newPassword) {
+      throw new Error("All password fields are required");
     }
+    
+    const userData = await databaseGet(`Users/${userId}`);
+    if (!userData) throw new Error("User not found");
+    
+    const currentPasswordHash = await generatePasswordHash(currentPassword);
+    if (userData.passwordHash !== currentPasswordHash) {
+      throw new Error("Current password is incorrect");
+    }
+    
+    const newPasswordHash = await generatePasswordHash(newPassword);
+    const success = await databaseUpdate(`Users/${userId}`, {
+      passwordHash: newPasswordHash,
+      updatedAt: getCurrentTimestamp(),
+    });
+    
+    if (!success) throw new Error("Failed to update password");
+    
+    await bumpSessionVersion(userId);
+    
+    if (user?.dbId === userId) {
+      await handleLogout(true);
+    }
+    
+    return { success: true };
   };
 
-  // User authentication - FIXED: Handle both old and new user structures
+  // Login
   const login = async (identifier, password) => {
     const normalizedIdentifier = normalizeText(identifier);
     setLoading(true);
-
+    
     try {
-      // Ensure Firebase authentication
       if (!auth.currentUser) {
         await signInAnonymously(auth);
       }
-
-      console.log("🔍 Searching for user:", identifier);
-
-      // Retrieve all users from database
+      
       const allUsers = await databaseGet("Users");
-
-      if (!allUsers) {
-        console.log("❌ No users found in database");
-        throw new Error("User not found");
-      }
-
-      console.log("🔍 Total users in database:", Object.keys(allUsers).length);
-      console.log("🔍 Available users:", Object.keys(allUsers).map(id => ({
-        id,
-        username: allUsers[id]?.username,
-        name: allUsers[id]?.name,
-        email: allUsers[id]?.email
-      })));
-
-      // Find matching user - FIXED: Better search with case-insensitive comparison
+      if (!allUsers) throw new Error("User not found");
+      
       let userDatabaseId = null;
       let userData = null;
-
+      
       for (const [databaseId, dbUser] of Object.entries(allUsers)) {
         if (!dbUser) continue;
-
+        
         const dbUsername = normalizeText(dbUser.username);
         const dbName = normalizeText(dbUser.name);
         const dbEmail = normalizeText(dbUser.email);
-
-        console.log(`🔍 Checking user: ${databaseId}`, {
-          username: dbUsername,
-          name: dbName,
-          email: dbEmail,
-          target: normalizedIdentifier
-        });
-
-        if (dbUsername === normalizedIdentifier ||
-          dbName === normalizedIdentifier ||
-          dbEmail === normalizedIdentifier) {
+        
+        if (dbUsername === normalizedIdentifier || 
+            dbName === normalizedIdentifier || 
+            dbEmail === normalizedIdentifier) {
           userDatabaseId = databaseId;
           userData = dbUser;
-          console.log("✅ Found matching user:", databaseId, "with username:", dbUser.username);
           break;
         }
       }
-
-      if (!userData) {
-        console.log("❌ No matching user found for:", identifier);
-        throw new Error("User not found");
-      }
-
-      // Check if user is active
-      if (userData.isActive === false) {
-        throw new Error("Account is deactivated");
-      }
-
-      // Password management
+      
+      if (!userData) throw new Error("User not found");
+      if (userData.isActive === false) throw new Error("Account is deactivated");
+      
       let storedPasswordHash = userData.passwordHash;
-
-      // Create password hash if none exists (first-time login)
+      
+      // Create password hash if none exists
       if (!storedPasswordHash) {
-        console.log("⚠️ No password found. Creating authentication...");
         storedPasswordHash = await generatePasswordHash(password);
-
         await databaseUpdate(`Users/${userDatabaseId}`, {
           passwordHash: storedPasswordHash,
-          updatedAt: getCurrentTimestamp()
+          updatedAt: getCurrentTimestamp(),
         });
-
-        console.log("✅ Password stored in user data");
       }
-
-      // Password validation
+      
       const enteredPasswordHash = await generatePasswordHash(password);
-
-      console.log("=== 🔐 Password Verification ===");
-      console.log("Stored hash:", storedPasswordHash);
-      console.log("Entered hash:", enteredPasswordHash);
-      console.log("Match:", storedPasswordHash === enteredPasswordHash);
-
       if (storedPasswordHash !== enteredPasswordHash) {
         throw new Error("Invalid password");
       }
-
-      // Successful login
-      console.log("✅ Login successful!");
+      
+      // Update authentication mapping
+      await databaseSet(`authentication/users/${auth.currentUser.uid}`, {
+        dbId: userDatabaseId,
+        at: new Date().toISOString(),
+        active: true,
+      });
+      
       const session = createUserSession(userDatabaseId, userData, auth.currentUser?.uid);
+      sessionVersionRef.current = Number(session.sessionVersion || 0);
       cacheUser(session);
-
-      // Update last login timestamp
+      
       await databaseUpdate(`Users/${userDatabaseId}`, {
         lastLogin: getCurrentTimestamp(),
-        updatedAt: getCurrentTimestamp()
+        updatedAt: getCurrentTimestamp(),
       });
-
+      
       return session;
     } catch (error) {
-      console.error("🚨 Login error:", error.message);
       throw error;
     } finally {
       setLoading(false);
     }
   };
 
-  // User logout
+  // Logout
   const logout = async () => {
     await handleLogout();
   };
@@ -747,7 +642,7 @@ export function AuthProvider({ children }) {
     getAllUsers,
     initializeDefaultAdmin,
     changePassword,
-    hasPermission
+    hasPermission,
   }), [ready, user, loading]);
 
   return (

@@ -522,6 +522,9 @@ export default function AdminMain() {
           if (res.ok) {
             showToast("success", `Permissions saved for ${editingUser.name || editingUser.uid}. User has been logged out.`);
 
+            // ⏫ bump requiredSessionVersion to invalidate sessions
+            await firebaseDB.child(`Users/${editingUser.uid}/requiredSessionVersion`).transaction(v => (Number(v)||0) + 1);
+
             // Force logout the user
             await forceLogoutUser(editingUser.uid);
 
@@ -557,6 +560,7 @@ export default function AdminMain() {
           path,
           {
             active: newActiveState,
+            isActive: newActiveState,
             lastSync: null // Force logout
           },
           {
@@ -570,6 +574,9 @@ export default function AdminMain() {
 
         if (res.ok) {
           showToast("success", `User is now ${newActiveState ? "Active" : "Inactive"}. User has been logged out.`);
+
+          // ⏫ bump requiredSessionVersion to invalidate sessions
+          await firebaseDB.child(`Users/${user.uid}/requiredSessionVersion`).transaction(v => (Number(v)||0) + 1);
 
           // Force logout the user
           await forceLogoutUser(user.uid);
@@ -673,6 +680,9 @@ export default function AdminMain() {
 
         if (res.ok) {
           showToast("success", "Password reset. User has been logged out.");
+
+          // ⏫ bump requiredSessionVersion to invalidate sessions
+          await firebaseDB.child(`Users/${user.uid}/requiredSessionVersion`).transaction(v => (Number(v)||0) + 1);
 
           // Force logout the user
           await forceLogoutUser(user.uid);

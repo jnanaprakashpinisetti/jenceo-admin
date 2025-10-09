@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { storageRef, uploadFile, getDownloadURL } from "../../firebase";
+import { useAuth } from "../../context/AuthContext";
+
 
 
 const headerImage =
@@ -212,6 +214,24 @@ const StaffModal = ({ staff, isOpen, onClose, onSave, onDelete, isEditMode }) =>
             setWorkErrors([{}]);
         }
     }, [staff]);
+
+    // Current signed-in admin (from your AuthContext)
+    const { user: authUser } = useAuth() || {};
+
+    // Consider someone super admin if role === 'superadmin',
+    // OR if you keep a root admin flag via permissions.
+    const isSuperAdmin =
+        String(authUser?.role || "").toLowerCase() === "superadmin" ||
+        authUser?.isSuperAdmin === true ||
+        authUser?.permissions?.canManageAll === true;
+
+    // Toggle that a super admin can flip to enable editing sensitive fields
+    const [superAdminUnlock, setSuperAdminUnlock] = React.useState(false);
+
+    // These locks are true unless a super admin flips the switch
+    const lockBasic = isEditMode && (!isSuperAdmin || !superAdminUnlock);
+    const lockJob = isEditMode && (!isSuperAdmin || !superAdminUnlock);
+
 
     // Handle photo upload to Firebase Storage
     const handlePhotoUpload = async (file) => {
@@ -1703,9 +1723,20 @@ const StaffModal = ({ staff, isOpen, onClose, onSave, onDelete, isEditMode }) =>
                                             </div>
                                         </div>
 
-                                        <div className="modal-card-header">
+                                        <div className="modal-card-header d-flex align-items-center justify-content-between">
                                             <h4 className="mb-0">Basic Information</h4>
+                                            {isSuperAdmin && (
+                                                <button
+                                                    type="button"
+                                                    className={`btn btn-sm ${superAdminUnlock ? "btn-warning" : "btn-outline-warning"}`}
+                                                    onClick={() => setSuperAdminUnlock(v => !v)}
+                                                    title="Super Admin unlock for sensitive fields"
+                                                >
+                                                    {superAdminUnlock ? "Lock Sensitive Fields" : "Unlock Sensitive Fields"}
+                                                </button>
+                                            )}
                                         </div>
+
                                         <div className="modal-card-body">
                                             {/* Photo lives ONLY in Basic Info now */}
                                             <div className="row align-items-start">
@@ -1764,8 +1795,8 @@ const StaffModal = ({ staff, isOpen, onClose, onSave, onDelete, isEditMode }) =>
                                                     </div>
 
                                                     <div className="row">
-                                                        <div className="col-md-6">{renderInputField("First Name", "firstName", formData.firstName)}</div>
-                                                        <div className="col-md-6">{renderInputField("Last Name", "lastName", formData.lastName)}</div>
+                                                        <div className="col-md-6">{renderInputField("First Name", "firstName", formData.firstName, "text", "", false, { disabled: lockBasic })}</div>
+                                                        <div className="col-md-6">{renderInputField("Last Name", "lastName", formData.lastName, "text", "", false, { disabled: lockBasic })}</div>
                                                     </div>
 
                                                     <div className="row">
@@ -1774,7 +1805,7 @@ const StaffModal = ({ staff, isOpen, onClose, onSave, onDelete, isEditMode }) =>
                                                                 { value: "Male", label: "Male" },
                                                                 { value: "Female", label: "Female" },
                                                                 { value: "Other", label: "Other" },
-                                                            ])}
+                                                            ], { disabled: lockBasic })}
                                                         </div>
                                                         <div className="col-md-6">{renderInputField("Care Of", "co", formData.co)}</div>
                                                     </div>
@@ -1782,17 +1813,23 @@ const StaffModal = ({ staff, isOpen, onClose, onSave, onDelete, isEditMode }) =>
                                                     <div className="row">
                                                         <div className="col-md-6">
                                                             {renderInputField("Date of Birth", "dateOfBirth", formData.dateOfBirth, "date", "", false, {
-                                                                min: DOB_MIN,
-                                                                max: DOB_MAX,
+                                                                min: DOB_MIN, max: DOB_MAX, disabled: lockBasic
                                                             })}
                                                         </div>
-                                                        <div className="col-md-6">{renderInputField("Age", "years", formData.years, "number")}</div>
+                                                        <div className="col-md-6">
+                                                            {renderInputField("Age", "years", formData.years, "number")}
+                                                        </div>
                                                     </div>
-
                                                     <div className="row">
-                                                        <div className="col-md-4">{renderInputField("Department", "department", formData.department)}</div>
-                                                        <div className="col-md-4">{renderInputField("Designation", "designation", formData.designation)}</div>
-                                                        <div className="col-md-4">{renderInputField("Role", "role", formData.role)}</div>
+                                                        <div className="col-md-4">
+                                                            {renderInputField("Department", "department", formData.department, "text", "", false, { disabled: lockBasic })}
+                                                        </div>
+                                                        <div className="col-md-4">
+                                                            {renderInputField("Designation", "designation", formData.designation, "text", "", false, { disabled: lockBasic })}
+                                                        </div>
+                                                        <div className="col-md-4">
+                                                            {renderInputField("Role", "role", formData.role, "text", "", false, { disabled: lockBasic })}
+                                                        </div>
                                                     </div>
 
 
@@ -1814,14 +1851,20 @@ const StaffModal = ({ staff, isOpen, onClose, onSave, onDelete, isEditMode }) =>
 
                                                     <div className="row">
                                                         <div className="col-md-6">
-                                                            {renderInputField("Date of Joining", "date", formData.date || formData.dateOfJoining, "date")}
+                                                            {renderInputField("Date of Joining", "date", formData.date || formData.dateOfJoining, "date", "", false, { disabled: lockBasic })}
                                                         </div>
-                                                        <div className="col-md-6">{renderInputField("Page No", "pageNo", formData.pageNo)}</div>
+                                                        <div className="col-md-6">
+                                                            {renderInputField("Page No", "pageNo", formData.pageNo)}
+                                                        </div>
                                                     </div>
 
                                                     <div className="row">
-                                                        <div className="col-md-6">{renderInputField("Basic Salary", "basicSalary", formData.basicSalary, "number")}</div>
-                                                        <div className="col-md-6">{renderInputField("Allowance", "allowance", formData.allowance, "number")}</div>
+                                                        <div className="col-md-6">
+                                                            {renderInputField("Basic Salary", "basicSalary", formData.basicSalary, "number", "", false, { disabled: lockBasic })}
+                                                        </div>
+                                                        <div className="col-md-6">
+                                                            {renderInputField("Allowance", "allowance", formData.allowance, "number")}
+                                                        </div>
                                                     </div>
                                                 </div>
 
@@ -2129,9 +2172,20 @@ const StaffModal = ({ staff, isOpen, onClose, onSave, onDelete, isEditMode }) =>
                                 {/* Job (Designation) */}
                                 {activeTab === "job" && (
                                     <div className="modal-card ">
-                                        <div className="modal-card-header">
+                                        <div className="modal-card-header d-flex align-items-center justify-content-between">
                                             <h4 className="mb-0">Job / Designation & Payroll</h4>
+                                            {isSuperAdmin && (
+                                                <button
+                                                    type="button"
+                                                    className={`btn btn-sm ${superAdminUnlock ? "btn-warning" : "btn-outline-warning"}`}
+                                                    onClick={() => setSuperAdminUnlock(v => !v)}
+                                                    title="Super Admin unlock for sensitive fields"
+                                                >
+                                                    {superAdminUnlock ? "Lock Sensitive Fields" : "Unlock Sensitive Fields"}
+                                                </button>
+                                            )}
                                         </div>
+
                                         <div className="modal-card-body">
                                             <div className="row">
                                                 <div className="col-md-6">
@@ -2142,6 +2196,7 @@ const StaffModal = ({ staff, isOpen, onClose, onSave, onDelete, isEditMode }) =>
                                                         name="department"
                                                         value={formData.department || ""}
                                                         onChange={handleInputChange}
+                                                        disabled={(!formData.department) || lockJob}
                                                     >
                                                         <option value="">-- Select Department --</option>
                                                         {[
@@ -2194,18 +2249,30 @@ const StaffModal = ({ staff, isOpen, onClose, onSave, onDelete, isEditMode }) =>
                                             </div>
 
                                             <div className="row mt-2">
-                                                <div className="col-md-6">{renderInputField("Superior ID", "superiorId", formData.superiorId)}</div>
-                                                <div className="col-md-6">{renderInputField("Superior Name", "superiorName", formData.superiorName)}</div>
+                                                <div className="col-md-6">
+                                                    {renderInputField("Superior ID", "superiorId", formData.superiorId, "text", "", false, { disabled: lockJob })}
+                                                </div>
+                                                <div className="col-md-6">
+                                                    {renderInputField("Superior Name", "superiorName", formData.superiorName, "text", "", false, { disabled: lockJob })}
+                                                </div>
                                             </div>
 
                                             <div className="row mt-2">
-                                                <div className="col-md-6">{renderInputField("Basic Salary", "basicSalary", formData.basicSalary, "tel", "", false, { maxLength: 7 })}</div>
-                                                <div className="col-md-6">{renderInputField("Allowance", "allowance", formData.allowance, "tel", "", false, { maxLength: 7 })}</div>
+                                                <div className="col-md-6">
+                                                    {renderInputField("Basic Salary", "basicSalary", formData.basicSalary, "tel", "", false, { maxLength: 7, disabled: lockJob })}
+                                                </div>
+                                                <div className="col-md-6">
+                                                    {renderInputField("Allowance", "allowance", formData.allowance, "tel", "", false, { maxLength: 7, disabled: lockJob })}
+                                                </div>
                                             </div>
 
                                             <div className="row mt-2">
-                                                <div className="col-md-6">{renderInputField("HRA", "hra", formData.hra, "tel", "", false, { maxLength: 7 })}</div>
-                                                <div className="col-md-6">{renderInputField("Travel Allowance", "travelAllowance", formData.travelAllowance, "tel", "", false, { maxLength: 7 })}</div>
+                                                <div className="col-md-6">
+                                                    {renderInputField("HRA", "hra", formData.hra, "tel", "", false, { maxLength: 7, disabled: lockJob })}
+                                                </div>
+                                                <div className="col-md-6">
+                                                    {renderInputField("Travel Allowance", "travelAllowance", formData.travelAllowance, "tel", "", false, { maxLength: 7, disabled: lockJob })}
+                                                </div>
                                             </div>
 
                                             <div className="row mt-2">

@@ -432,11 +432,11 @@ export default function WorkerCalleDisplay({ permissions: permissionsProp }) {
   }, [workers, activeYear, currentUserId, selectedSource]);
   const classifyCount = (n) => {
     if (!n || n === 0) return { label: "No Calls", cls: "perf-none" };
-    if (n <= 10) return { label: "Poor Performance", cls: "perf-poor" };
-    if (n <= 20) return { label: "Average", cls: "perf-avg" };
-    if (n <= 30) return { label: "Good", cls: "perf-good" };
-    if (n <= 40) return { label: "Very Good", cls: "perf-vgood" };
-    if (n <= 50) return { label: "Excellent", cls: "perf-exc" };
+    if (n <= 15) return { label: "Poor Performance", cls: "perf-poor" };
+    if (n <= 35) return { label: "Average", cls: "perf-avg" };
+    if (n <= 50) return { label: "Good", cls: "perf-good" };
+    if (n <= 65) return { label: "Very Good", cls: "perf-vgood" };
+    if (n <= 80) return { label: "Excellent", cls: "perf-exc" };
     return { label: "Marvelous", cls: "perf-marv" };
   };
 
@@ -984,12 +984,12 @@ export default function WorkerCalleDisplay({ permissions: permissionsProp }) {
                 </div>
                 <div className="mt-3 small d-flex flex-wrap gap-3 align-items-center pt-3 justify-content-between">
                   <span className="legend perf-none">No Calls (0)</span>
-                  <span className="legend perf-poor">Poor (1–10)</span>
-                  <span className="legend perf-avg">Average (11–20)</span>
-                  <span className="legend perf-good">Good (21–30)</span>
-                  <span className="legend perf-vgood">Very Good (31–40)</span>
-                  <span className="legend perf-exc">Excellent (41–50)</span>
-                  <span className="legend perf-marv">Marvelous (51–100)</span>
+                  <span className="legend perf-poor">Poor (1–15)</span>
+                  <span className="legend perf-avg">Average (16–35)</span>
+                  <span className="legend perf-good">Good (36–50)</span>
+                  <span className="legend perf-vgood">Very Good (51–65)</span>
+                  <span className="legend perf-exc">Excellent (66–80)</span>
+                  <span className="legend perf-marv">Marvelous (80–100)</span>
                 </div>
               </div>
             </div>
@@ -1042,12 +1042,12 @@ export default function WorkerCalleDisplay({ permissions: permissionsProp }) {
                 </div>
                 <div className="mt-3 small d-flex flex-wrap gap-2 align-items-center pt-3 justify-content-center">
                   <span className="legend perf-none">0</span>
-                  <span className="legend perf-poor">1-10</span>
-                  <span className="legend perf-avg">11-20</span>
-                  <span className="legend perf-good">21-30</span>
-                  <span className="legend perf-vgood">31-40</span>
-                  <span className="legend perf-exc">41-50</span>
-                  <span className="legend perf-marv">51-100</span>
+                  <span className="legend perf-poor">1-15</span>
+                  <span className="legend perf-avg">16-35</span>
+                  <span className="legend perf-good">36-50</span>
+                  <span className="legend perf-vgood">51-65</span>
+                  <span className="legend perf-exc">66-80</span>
+                  <span className="legend perf-marv">81-100</span>
                 </div>
               </div>
             </div>

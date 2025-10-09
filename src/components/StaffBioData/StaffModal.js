@@ -901,7 +901,7 @@ const StaffModal = ({ staff, isOpen, onClose, onSave, onDelete, isEditMode }) =>
     .page{border:none;margin:0;padding:6mm;border-radius:0}
   }
 
- @media (max-width: 992px) {
+ @media (max-width: 776px) {
 
   .header {display:block; text-align:center; padding-top:10px}
   .header-inner {display:block}
@@ -1058,27 +1058,31 @@ const StaffModal = ({ staff, isOpen, onClose, onSave, onDelete, isEditMode }) =>
     </div>
 
     <div class="sec" style="margin-top:12px">
-      <div class="sec-title">Emergency Contact 3 & Bank Details</div>
-      <div class="sec-body" style="padding-top:10px">
-        <div class="two-col">
-          <div>
-            <div class="kv-row"><div class="kv-label">Name</div><div class="kv-colon">:</div><div class="kv-value">${safe(emergency3.name)}</div></div>
-            <div class="kv-row"><div class="kv-label">Relation</div><div class="kv-colon">:</div><div class="kv-value">${safe(emergency3.relation)}</div></div>
-            <div class="kv-row"><div class="kv-label">Mobile 1</div><div class="kv-colon">:</div><div class="kv-value">${opts.hideSensitive ? "" : safe(emergency3.mobile1)}</div></div>
-            <div class="kv-row"><div class="kv-label">Mobile 2</div><div class="kv-colon">:</div><div class="kv-value">${opts.hideSensitive ? "" : safe(emergency3.mobile2)}</div></div>
-            <div class="kv-row"><div class="kv-label">Address</div><div class="kv-colon">:</div><div class="kv-value">${safe(emergency3.address)}, ${safe(emergency3.village)}, ${safe(emergency3.mandal)}, ${safe(emergency3.state)}</div></div>
-          </div>
-          <div>
-            <div class="kv-row"><div class="kv-label">Account No</div><div class="kv-colon">:</div><div class="kv-value">${opts.hideSensitive ? "—" : bank.accountNo}</div></div>
-            <div class="kv-row"><div class="kv-label">Bank Name</div><div class="kv-colon">:</div><div class="kv-value">${bank.bankName}</div></div>
-            <div class="kv-row"><div class="kv-label">Branch</div><div class="kv-colon">:</div><div class="kv-value">${bank.branchName}</div></div>
-            <div class="kv-row"><div class="kv-label">IFSC</div><div class="kv-colon">:</div><div class="kv-value">${opts.hideSensitive ? "—" : bank.ifsc}</div></div>
-            <div class="kv-row"><div class="kv-label">PhonePe</div><div class="kv-colon">:</div><div class="kv-value">${opts.hideSensitive ? "—" : bank.phonePayNo + (bank.phonePayName ? " / " + bank.phonePayName : "")}</div></div>
-            <div class="kv-row"><div class="kv-label">GooglePay</div><div class="kv-colon">:</div><div class="kv-value">${opts.hideSensitive ? "—" : bank.googlePayNo + (bank.googlePayName ? " / " + bank.googlePayName : "")}</div></div>
-          </div>
-        </div>
+    <div class="sec" style="margin-top:12px">
+  <div class="sec-title">Job &amp; Bank Details</div>
+  <div class="sec-body" style="padding-top:10px">
+    <div class="two-col">
+      <div>
+        <div class="kv-row"><div class="kv-label">Department</div><div class="kv-colon">:</div><div class="kv-value">${safe(formData.department)}</div></div>
+        <div class="kv-row"><div class="kv-label">Designation</div><div class="kv-colon">:</div><div class="kv-value">${safe(formData.designation)}</div></div>
+        <div class="kv-row"><div class="kv-label">PAN No</div><div class="kv-colon">:</div><div class="kv-value">${safe(formData.panNo)}</div></div>
+        <div class="kv-row"><div class="kv-label">PF No</div><div class="kv-colon">:</div><div class="kv-value">${safe(formData.pfNo)}</div></div>
+        <div class="kv-row"><div class="kv-label">Insurance No</div><div class="kv-colon">:</div><div class="kv-value">${safe(formData.insuranceNo)}</div></div>
+        <div class="kv-row"><div class="kv-label">Health Card No</div><div class="kv-colon">:</div><div class="kv-value">${safe(formData.healthCardNo)}</div></div>
+        <div class="kv-row"><div class="kv-label">Role</div><div class="kv-colon">:</div><div class="kv-value">${safe(formData.role)}</div></div>
+        <div class="kv-row"><div class="kv-label">Page No</div><div class="kv-colon">:</div><div class="kv-value">${safe(formData.pageNo)}</div></div>
+      </div>
+      <div>
+        <div class="kv-row"><div class="kv-label">Account No</div><div class="kv-colon">:</div><div class="kv-value">${opts.hideSensitive ? "—" : bank.accountNo}</div></div>
+        <div class="kv-row"><div class="kv-label">Bank Name</div><div class="kv-colon">:</div><div class="kv-value">${bank.bankName}</div></div>
+        <div class="kv-row"><div class="kv-label">Branch</div><div class="kv-colon">:</div><div class="kv-value">${bank.branchName}</div></div>
+        <div class="kv-row"><div class="kv-label">IFSC</div><div class="kv-colon">:</div><div class="kv-value">${opts.hideSensitive ? "—" : bank.ifsc}</div></div>
+        <div class="kv-row"><div class="kv-label">PhonePe</div><div class="kv-colon">:</div><div class="kv-value">${opts.hideSensitive ? "—" : bank.phonePayNo + (bank.phonePayName ? " / " + bank.phonePayName : "")}</div></div>
+        <div class="kv-row"><div class="kv-label">GooglePay</div><div class="kv-colon">:</div><div class="kv-value">${opts.hideSensitive ? "—" : bank.googlePayNo + (bank.googlePayName ? " / " + bank.googlePayName : "")}</div></div>
       </div>
     </div>
+  </div>
+</div>
 
     <div class="decleration">
         <p><strong>Declaration:</strong> I hereby declare that the information provided in this document regarding my personal information, experience, skills,
@@ -1638,6 +1642,7 @@ const StaffModal = ({ staff, isOpen, onClose, onSave, onDelete, isEditMode }) =>
                                     ["qualification", "Skills"],
                                     ["health", "Health Info"],
                                     ["emergency", "Emg Contacts"],
+                                    ["job", "Job"],
                                     ["bank", "Bank Details"],
                                     ["payment", "Payment"],
                                     ["working", "Working"],
@@ -1653,7 +1658,7 @@ const StaffModal = ({ staff, isOpen, onClose, onSave, onDelete, isEditMode }) =>
                                 ))}
                             </ul>
 
-                            <div className="tab-content p-3">
+                            <div className="tab-content p-3 staffDataEdit">
                                 {/* Basic */}
                                 {activeTab === "basic" && (
                                     <div className="modal-card">
@@ -1783,6 +1788,13 @@ const StaffModal = ({ staff, isOpen, onClose, onSave, onDelete, isEditMode }) =>
                                                         </div>
                                                         <div className="col-md-6">{renderInputField("Age", "years", formData.years, "number")}</div>
                                                     </div>
+
+                                                    <div className="row">
+                                                        <div className="col-md-4">{renderInputField("Department", "department", formData.department)}</div>
+                                                        <div className="col-md-4">{renderInputField("Designation", "designation", formData.designation)}</div>
+                                                        <div className="col-md-4">{renderInputField("Role", "role", formData.role)}</div>
+                                                    </div>
+
 
                                                     <div className="row">
                                                         <div className="col-md-6">
@@ -2113,6 +2125,113 @@ const StaffModal = ({ staff, isOpen, onClose, onSave, onDelete, isEditMode }) =>
                                         </div>
                                     </div>
                                 )}
+
+                                {/* Job (Designation) */}
+                                {activeTab === "job" && (
+                                    <div className="modal-card ">
+                                        <div className="modal-card-header">
+                                            <h4 className="mb-0">Job / Designation & Payroll</h4>
+                                        </div>
+                                        <div className="modal-card-body">
+                                            <div className="row">
+                                                <div className="col-md-6">
+                                                    {/* Department — dropdown like Designation.jsx */}
+                                                    <label className="form-label"><strong>Department</strong></label>
+                                                    <select
+                                                        className="form-select form-select-sm"
+                                                        name="department"
+                                                        value={formData.department || ""}
+                                                        onChange={handleInputChange}
+                                                    >
+                                                        <option value="">-- Select Department --</option>
+                                                        {[
+                                                            "Founders", "Management / Executive", "Human Resources (HR)", "Finance & Accounts",
+                                                            "Administration", "Operations", "Information Technology (IT)", "Engineering / Technical",
+                                                            "Design / Creative", "Sales & Marketing", "Customer Support / Service",
+                                                            "Procurement / Purchase", "Quality Assurance (QA)", "Legal & Compliance",
+                                                            "Research & Development (R&D)", "Training & Development", "Security / Facility",
+                                                            "Logistics / Fleet"
+                                                        ].map((d) => <option key={d} value={d}>{d}</option>)}
+                                                    </select>
+                                                </div>
+
+                                                <div className="col-md-6">
+                                                    {/* Designation — depends on department */}
+                                                    <label className="form-label"><strong>Designation</strong></label>
+                                                    <select
+                                                        className="form-select form-select-sm"
+                                                        name="designation"
+                                                        value={formData.designation || ""}
+                                                        onChange={handleInputChange}
+                                                        disabled={!formData.department}
+                                                    >
+                                                        <option value="">{formData.department ? "-- Select Designation --" : "Select Department first"}</option>
+                                                        {(() => {
+                                                            const MAP = {
+                                                                "Founders": ["Founder", "Co-Founder", "Managing Director", "Executive Director"],
+                                                                "Management / Executive": ["CEO", "COO", "General Manager", "Assistant General Manager", "Branch / Unit Manager"],
+                                                                "Human Resources (HR)": ["HR Manager", "HR Executive", "Talent Acquisition Specialist", "Payroll Executive", "HR Assistant"],
+                                                                "Finance & Accounts": ["Chief Accountant", "Accounts Manager", "Accountant", "Billing Executive", "Finance Analyst"],
+                                                                "Administration": ["Admin Manager", "Admin Coordinator", "Front Office Executive", "Admin Assistent", "Receptionist"],
+                                                                "Operations": ["Operations Manager", "Operations Executive", "Field Supervisor", "Coordinator", "Operations Assistant"],
+                                                                "Information Technology (IT)": ["IT Manager", "System Administrator", "Software Developer", "Web Developer", "Network Engineer", "Technical Support Engineer", "QA Tester"],
+                                                                "Engineering / Technical": ["Project Engineer", "Mechanical Engineer", "Electrical Engineer", "Civil Engineer", "Technician"],
+                                                                "Design / Creative": ["Creative Director", "UI/UX Designer", "Graphic Designer", "Animator / Video Editor", "Brand Designer"],
+                                                                "Sales & Marketing": ["Sales Manager", "Marketing Executive", "Business Development Executive", "Sales Coordinator", "Digital Marketing Specialist"],
+                                                                "Customer Support / Service": ["Customer Service Manager", "Support Executive", "Call Center Agent", "Helpdesk Associate"],
+                                                                "Procurement / Purchase": ["Purchase Manager", "Procurement Officer", "Vendor Coordinator", "Storekeeper"],
+                                                                "Quality Assurance (QA)": ["QA Manager", "QA Engineer", "Quality Inspector"],
+                                                                "Legal & Compliance": ["Legal Advisor", "Compliance Officer", "Contract Manager"],
+                                                                "Research & Development (R&D)": ["R&D Manager", "Research Analyst", "Product Analyst"],
+                                                                "Training & Development": ["Training Manager", "L&D Executive", "Trainer / Mentor"],
+                                                                "Security / Facility": ["Security Manager", "Security Officer", "Housekeeping Supervisor", "Maintenance Staff"],
+                                                                "Logistics / Fleet": ["Fleet Manager", "Driver Supervisor", "Dispatcher", "Driver"],
+                                                            };
+                                                            return (MAP[formData.department] || []).map((r) => <option key={r} value={r}>{r}</option>);
+                                                        })()}
+                                                    </select>
+                                                </div>
+                                            </div>
+
+                                            <div className="row mt-2">
+                                                <div className="col-md-6">{renderInputField("Superior ID", "superiorId", formData.superiorId)}</div>
+                                                <div className="col-md-6">{renderInputField("Superior Name", "superiorName", formData.superiorName)}</div>
+                                            </div>
+
+                                            <div className="row mt-2">
+                                                <div className="col-md-6">{renderInputField("Basic Salary", "basicSalary", formData.basicSalary, "tel", "", false, { maxLength: 7 })}</div>
+                                                <div className="col-md-6">{renderInputField("Allowance", "allowance", formData.allowance, "tel", "", false, { maxLength: 7 })}</div>
+                                            </div>
+
+                                            <div className="row mt-2">
+                                                <div className="col-md-6">{renderInputField("HRA", "hra", formData.hra, "tel", "", false, { maxLength: 7 })}</div>
+                                                <div className="col-md-6">{renderInputField("Travel Allowance", "travelAllowance", formData.travelAllowance, "tel", "", false, { maxLength: 7 })}</div>
+                                            </div>
+
+                                            <div className="row mt-2">
+                                                <div className="col-md-6">{renderInputField("PAN No", "panNo", formData.panNo, "text", "ABCDE1234F", false, { maxLength: 10 })}</div>
+                                                <div className="col-md-6">{renderInputField("PF No", "pfNo", formData.pfNo)}</div>
+                                            </div>
+
+                                            <div className="row mt-2">
+                                                <div className="col-md-6">{renderInputField("Insurance No", "insuranceNo", formData.insuranceNo)}</div>
+                                                <div className="col-md-6">{renderInputField("Health Card No", "healthCardNo", formData.healthCardNo)}</div>
+                                            </div>
+
+                                            <div className="row mt-2">
+                                                <div className="col-md-6">{renderInputField("User ID", "userId", formData.userId)}</div>
+                                                <div className="col-md-6">{renderInputField("Password", "password", formData.password, "text")}</div>
+
+                                            </div>
+
+                                            <div className="row mt-2">
+                                                <div className="col-md-6">{renderInputField("Role", "role", formData.role)}</div>
+                                                <div className="col-md-6">{renderInputField("Page No", "pageNo", formData.pageNo, "tel", "", false, { maxLength: 4 })}</div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+
 
                                 {/* Bank */}
                                 {activeTab === "bank" && (
@@ -2733,3 +2852,16 @@ const StaffModal = ({ staff, isOpen, onClose, onSave, onDelete, isEditMode }) =>
 };
 
 export default StaffModal;
+
+{/*
+
+THIS CODDE FOR FULL DATA SALARY DETAILS
+    
+<div class="kv-row"><div class="kv-label">Superior ID</div><div class="kv-colon">:</div><div class="kv-value">${safe(formData.superiorId)}</div></div>
+<div class="kv-row"><div class="kv-label">Superior Name</div><div class="kv-colon">:</div><div class="kv-value">${safe(formData.superiorName)}</div></div>
+<div class="kv-row"><div class="kv-label">Basic Salary</div><div class="kv-colon">:</div><div class="kv-value">${safe(formData.basicSalary)}</div></div>
+<div class="kv-row"><div class="kv-label">Allowance</div><div class="kv-colon">:</div><div class="kv-value">${safe(formData.allowance)}</div></div>
+<div class="kv-row"><div class="kv-label">HRA</div><div class="kv-colon">:</div><div class="kv-value">${safe(formData.hra)}</div></div>
+<div class="kv-row"><div class="kv-label">Travel Allowance</div><div class="kv-colon">:</div><div class="kv-value">${safe(formData.travelAllowance)}</div></div>
+    
+    */}

@@ -305,7 +305,7 @@ export default function WorkerCallForm({ isOpen, onClose }) {
       {/* Main Modal */}
       <div
         className="modal fade show"
-        style={{ display: "block", backgroundColor: "rgba(0,0,0,0.6)" }}
+        style={{ display: "block", backgroundColor: "rgba(0,0,0,1)" }}
       >
         <div className="modal-dialog modal-lg modal-dialog-centered client-form workerCallForm">
           <div className="modal-content shadow-lg border-0 rounded-4">

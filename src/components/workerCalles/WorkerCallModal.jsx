@@ -1077,24 +1077,26 @@ export default function WorkerCallModal({
                         </div>
                       </div>
                     </div>
-                    {/* Footer */}
-                    <div className="modal-footer bg-light border-top wc mt-3">
-                      {isEditMode && (
-                        <button
-                          className="btn btn-success px-4 fw-bold "
-                          onClick={handleSave}
-                          disabled={!canSave}
-                          title={!canSave ? "Add a comment first to enable saving" : ""}
-                        >
-                          Save Changes
-                        </button>
-                      )}
-                      <button className="btn btn-secondary px-4" onClick={confirmClose}>
-                        Close
-                      </button>
-                    </div>
+
                   </div>
+
                 )}
+              </div>
+              {/* Footer */}
+              <div className="modal-footer bg-light border-top wc mt-3">
+                {isEditMode && (
+                  <button
+                    className="btn btn-success px-4 fw-bold "
+                    onClick={handleSave}
+                    disabled={!canSave}
+                    title={!canSave ? "Add a comment first to enable saving" : ""}
+                  >
+                    Save Changes
+                  </button>
+                )}
+                <button className="btn btn-secondary px-4" onClick={confirmClose}>
+                  Close
+                </button>
               </div>
             </div>
 

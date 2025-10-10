@@ -47,8 +47,17 @@ const hasTimeData = (w) => {
   const d = parseDate(baseDate);
   if (!isValidDate(d)) return false;
 
-  // Check if time component exists (not midnight or has non-zero time)
-  return !(d.getHours() === 0 && d.getMinutes() === 0 && d.getSeconds() === 0);
+  // Check if time component exists and is not midnight
+  const hasNonMidnightTime = !(d.getHours() === 0 && d.getMinutes() === 0 && d.getSeconds() === 0);
+
+  // Also check if we have time data in the original string
+  const dateString = String(baseDate || '');
+  const hasTimeInString = dateString.includes('T') ||
+    dateString.includes(':') ||
+    dateString.includes('AM') ||
+    dateString.includes('PM');
+
+  return hasNonMidnightTime || hasTimeInString;
 };
 
 
@@ -150,7 +159,16 @@ const getWorkerRoles = (w) => {
   if (!v) return [];
   return normalizeArray(v).map(s => String(s).toLowerCase().trim());
 };
-const getBaseDate = (w) => w?.callDate ?? w?.date ?? w?.createdAt ?? w?.createdDate ?? w?.createdOn ?? w?.timestamp ?? w?.created_time ?? w?.created_time_ms ?? null;
+const getBaseDate = (w) => {
+  // First check for explicit timestamp fields
+  if (w?.timestamp) return w.timestamp;
+  if (w?.createdAt) return w.createdAt;
+  if (w?.created_time) return w.created_time;
+  if (w?.created_time_ms) return new Date(w.created_time_ms);
+
+  // Fallback to existing fields
+  return w?.callDate ?? w?.date ?? w?.createdDate ?? w?.createdOn ?? null;
+};
 
 /* =============================
    Permissions (export gate)
@@ -1243,12 +1261,19 @@ export default function WorkerCalleDisplay({ permissions: permissionsProp }) {
                   <td>
                     {displayId}
                     {addedBy && (
-                      <small className="d-block small-text text-info" style={{ fontSize: "0.7rem", lineHeight: "1.2" }}>
+                      <small className="d-block small-text text-info">
                         By {addedBy}
                       </small>
                     )}
                   </td>
-                  <td>{formatPrettyDate(getBaseDate(w))}</td>
+                  <td>
+                    {formatPrettyDate(getBaseDate(w))}
+                    {hasTimeData(w) && (
+                      <small className="d-block text-info small-text">
+                        {formatTime(getBaseDate(w), timeFormat === "24" ? "24hr" : "12hr")}
+                      </small>
+                    )}
+                  </td>
                   <td>{w?.name || "—"}</td>
                   <td>
                     <span className={w?.gender === "Male" ? "badge bg-primary" : w?.gender === "Female" ? "badge badge-female" : "badge bg-secondary"}>
@@ -1259,7 +1284,7 @@ export default function WorkerCalleDisplay({ permissions: permissionsProp }) {
                   <td>{typeof experience === "number" ? `${experience} yrs` : "—"}</td>
                   <td className={reminderTextClass}>
                     <span className="d-block">{hasReminder ? formatDDMMYYYY(reminder) : "N/A"}</span>
-                    {hasReminder && <small className="d-block text-muted">{timeStr}</small>}
+                    {hasReminder}
                     {hasReminder && duText && <small className="d-block">{duText}</small>}
                   </td>
                   <td>

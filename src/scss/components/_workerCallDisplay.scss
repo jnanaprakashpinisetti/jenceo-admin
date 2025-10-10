@@ -550,10 +550,81 @@
   }
 }
 
-.wc  {
+.wc {
   :disabled {
-  opacity: .5 !important;
-  background-color: #ccc;
-  border: none;
+    opacity: .5 !important;
+    background-color: #ccc;
+    border: none;
+  }
 }
+
+.category-section {
+  padding: 15px;
+}
+
+.category-heading {
+  font-size: 0.9rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.skill-pill {
+  font-size: 0.8rem;
+  padding: 4px 12px;
+  margin: 2px;
+}
+
+.modal {
+
+  .category-section {
+    border-left: 3px solid;
+    padding-left: 12px;
+    margin-bottom: 15px;
+    border-radius: 5px;
+  }
+
+  .category-section:nth-child(1) {
+    border-color: #0d6efd;
+  }
+
+  /* Office - Primary */
+  .category-section:nth-child(2) {
+    border-color: #198754;
+  }
+
+  /* Customer Service - Success */
+  .category-section:nth-child(3) {
+    border-color: #ffc107;
+  }
+
+  /* Management - Warning */
+  .category-section:nth-child(4) {
+    border-color: #dc3545;
+  }
+
+  /* Security - Danger */
+  .category-section:nth-child(5) {
+    border-color: #0dcaf0;
+  }
+
+  /* Driving - Info */
+  .category-section:nth-child(6) {
+    border-color: #6c757d;
+  }
+
+  /* Technical - Secondary */
+  .category-section:nth-child(7) {
+    border-color: #0d6efd;
+  }
+
+  /* Retail - Primary */
+  .category-section:nth-child(8) {
+    border-color: #dc3545;
+  }
+
+  .category-section:nth-child(odd) {
+    background-color: #e5e5e5;
+  }
+
 }

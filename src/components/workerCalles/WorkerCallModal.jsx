@@ -75,57 +75,115 @@ export default function WorkerCallModal({
     "Nursing",
     "Patient Care",
     "Care Taker",
+    "Bedside Attender",
     "Old Age Care",
     "Baby Care",
-    "Bedside Attender",
     "Supporting",
-    "Any duty",
+    "Cook",
+    "Housekeeping",
     "Diaper",
-    "Cooking",
-  ];
-
-  const homeCareSkillOptions = [
     "Injection",
     "BP Check",
     "Sugar Check",
     "Wound Dressing",
-    "Catheter Care",
-    "Ryle's Tube",
-    "IV Fluids",
     "Nebulization",
-    "Physio Support",
     "Post-Operative Care",
+    "Any Duty"
+  ];
+
+  const homeCareSkillOptions = [
+    "Nursing",
+    "Patient Care",
+    "Care Taker",
+    "Bedside Attender",
+    "Old Age Care",
+    "Baby Care",
+    "Supporting",
+    "Cook",
+    "Housekeeping",
+    "Diaper",
+    "Injection",
+    "BP Check",
+    "Sugar Check",
+    "Wound Dressing",
+    "Nebulization",
+    "Post-Operative Care",
+    "Any Duty"
   ];
 
   const otherSkillOptions = [
+    // Office & Administrative
     "Computer Operating",
+    "Data Entry",
+    "Office Assistant",
+    "Receptionist",
+    "Front Desk Executive",
+    "Admin Assistant",
+    "Office Boy",
+    "Peon",
+    "Office Attendant",
+
+    // Customer Service & Telecommunication
     "Tele Calling",
-    "Driving",
+    "Customer Support",
+    "Telemarketing",
+    "BPO Executive",
+    "Call Center Agent",
+    "Customer Care Executive",
+
+    // Management & Supervision
     "Supervisor",
     "Manager",
-    "Attender",
-    "Security",
+    "Team Leader",
+    "Site Supervisor",
+    "Project Coordinator",
+
+    // Security
+    "Security Guard",
+    "Security Supervisor",
+    "Gatekeeper",
+    "Watchman",
+
+    // Driving & Logistics
+    "Driving",
+    "Delivery Boy",
+    "Delivery Executive",
+    "Rider",
+    "Driver",
+    "Car Driver",
+    "Bike Rider",
+    "Logistics Helper",
+
+    // Technical & Maintenance
+    "Electrician",
+    "Plumber",
     "Carpenter",
     "Painter",
-    "Plumber",
-    "Electrician",
-    "Mason (Home maker)",
-    "Tailor",
+    "Mason",
+    "AC Technician",
+    "Mechanic",
+    "Maintenance Staff",
+    "House Keeping",
+    "Housekeeping Supervisor",
+    // Retail & Sales
+    "Sales Boy",
+    "Sales Girl",
+    "Store Helper",
+    "Retail Assistant",
+    "Shop Attendant",
+
+    // Industrial & Labor
     "Labour",
-    "Farmer",
-    "Delivery Boy",
+    "Helper",
+    "Loading Unloading",
+    "Warehouse Helper",
+    "Factory Worker",
+    "Production Helper",
+    "Packaging Staff",
   ];
 
   const languageOptions = [
-    "Telugu",
-    "English",
-    "Hindi",
-    "Urdu",
-    "Kannada",
-    "Malayalam",
-    "Tamil",
-    "Bengali",
-    "Marati",
+    "Telugu", "English", "Hindi", "Urdu", "Kannada", "Malayalam", "Tamil", "Bengali", "Marati"
   ];
 
   const sourceOptions = [
@@ -1014,31 +1072,253 @@ export default function WorkerCallModal({
                       <div className="col-12">
                         <h6 className="fw-bold">Other Skills</h6>
                         <div className="border rounded p-3 bg-light mb-3">
-                          <div className="row row-cols-1 row-cols-sm-2 g-2 justify-content-center">
-                            {otherSkillOptions.map((opt) => {
-                              const active = normalizeArray(localWorker.otherSkills)
-                                .map((x) => String(x).toLowerCase())
-                                .includes(String(opt).toLowerCase());
-                              return (
-                                <button
-                                  key={`other-${opt}`}
-                                  type="button"
-                                  className={` w-auto me-2 btn btn-sm rounded-pill ${active
-                                    ? "btn-outline-warning btn-warning text-black"
-                                    : "btn-outline-warning"
-                                    } disabled-keep`}
-                                  onClick={() => handleMultiToggle("otherSkills", opt)}
-                                  disabled={!isEditMode}
-                                  aria-pressed={active}
-                                  title={!isEditMode ? "Switch to Edit to modify other skills" : ""}
-                                >
-                                  {opt}
-                                </button>
-                              );
-                            })}
+                          <div className="d-flex flex-column  ">
+                            {/* Office & Administrative */}
+                            <div className="category-section">
+                              <h6 className="category-heading text-primary mb-2">Office & Administrative</h6>
+                              <div className="d-flex flex-wrap gap-2">
+                                {[
+                                  "Computer Operating", "Data Entry", "Office Assistant", "Receptionist",
+                                  "Front Desk Executive", "Admin Assistant", "Office Boy", "Peon", "Office Attendant"
+                                ].map((opt) => {
+                                  const active = normalizeArray(localWorker.otherSkills)
+                                    .map((x) => String(x).toLowerCase())
+                                    .includes(String(opt).toLowerCase());
+                                  return (
+                                    <button
+                                      key={`other-${opt}`}
+                                      type="button"
+                                      className={`btn btn-sm rounded-pill ${active
+                                        ? "btn-primary"
+                                        : "btn-outline-primary"
+                                        } disabled-keep`}
+                                      onClick={() => handleMultiToggle("otherSkills", opt)}
+                                      disabled={!isEditMode}
+                                      aria-pressed={active}
+                                      title={!isEditMode ? "Switch to Edit to modify other skills" : ""}
+                                    >
+                                      {opt}
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            </div>
+
+                            {/* Customer Service & Telecommunication */}
+                            <div className="category-section">
+                              <h6 className="category-heading text-success mb-2">Customer Service & Telecommunication</h6>
+                              <div className="d-flex flex-wrap gap-2">
+                                {[
+                                  "Tele Calling", "Customer Support", "Telemarketing", "BPO Executive",
+                                  "Call Center Agent", "Customer Care Executive"
+                                ].map((opt) => {
+                                  const active = normalizeArray(localWorker.otherSkills)
+                                    .map((x) => String(x).toLowerCase())
+                                    .includes(String(opt).toLowerCase());
+                                  return (
+                                    <button
+                                      key={`other-${opt}`}
+                                      type="button"
+                                      className={`btn btn-sm rounded-pill ${active
+                                        ? "btn-success"
+                                        : "btn-outline-success"
+                                        } disabled-keep`}
+                                      onClick={() => handleMultiToggle("otherSkills", opt)}
+                                      disabled={!isEditMode}
+                                      aria-pressed={active}
+                                      title={!isEditMode ? "Switch to Edit to modify other skills" : ""}
+                                    >
+                                      {opt}
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            </div>
+
+                            {/* Management & Supervision */}
+                            <div className="category-section">
+                              <h6 className="category-heading text-warning mb-2">Management & Supervision</h6>
+                              <div className="d-flex flex-wrap gap-2">
+                                {[
+                                  "Supervisor", "Manager", "Team Leader", "Site Supervisor", "Project Coordinator"
+                                ].map((opt) => {
+                                  const active = normalizeArray(localWorker.otherSkills)
+                                    .map((x) => String(x).toLowerCase())
+                                    .includes(String(opt).toLowerCase());
+                                  return (
+                                    <button
+                                      key={`other-${opt}`}
+                                      type="button"
+                                      className={`btn btn-sm rounded-pill ${active
+                                        ? "btn-warning"
+                                        : "btn-outline-warning"
+                                        } disabled-keep`}
+                                      onClick={() => handleMultiToggle("otherSkills", opt)}
+                                      disabled={!isEditMode}
+                                      aria-pressed={active}
+                                      title={!isEditMode ? "Switch to Edit to modify other skills" : ""}
+                                    >
+                                      {opt}
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            </div>
+
+                            {/* Security */}
+                            <div className="category-section">
+                              <h6 className="category-heading text-danger mb-2">Security</h6>
+                              <div className="d-flex flex-wrap gap-2">
+                                {[
+                                  "Security Guard", "Security Supervisor", "Gatekeeper", "Watchman"
+                                ].map((opt) => {
+                                  const active = normalizeArray(localWorker.otherSkills)
+                                    .map((x) => String(x).toLowerCase())
+                                    .includes(String(opt).toLowerCase());
+                                  return (
+                                    <button
+                                      key={`other-${opt}`}
+                                      type="button"
+                                      className={`btn btn-sm rounded-pill ${active
+                                        ? "btn-danger"
+                                        : "btn-outline-danger"
+                                        } disabled-keep`}
+                                      onClick={() => handleMultiToggle("otherSkills", opt)}
+                                      disabled={!isEditMode}
+                                      aria-pressed={active}
+                                      title={!isEditMode ? "Switch to Edit to modify other skills" : ""}
+                                    >
+                                      {opt}
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            </div>
+
+                            {/* Driving & Logistics */}
+                            <div className="category-section">
+                              <h6 className="category-heading text-info mb-2">Driving & Logistics</h6>
+                              <div className="d-flex flex-wrap gap-2">
+                                {[
+                                  "Driving", "Delivery Boy", "Delivery Executive", "Rider", "Driver",
+                                  "Car Driver", "Bike Rider", "Logistics Helper"
+                                ].map((opt) => {
+                                  const active = normalizeArray(localWorker.otherSkills)
+                                    .map((x) => String(x).toLowerCase())
+                                    .includes(String(opt).toLowerCase());
+                                  return (
+                                    <button
+                                      key={`other-${opt}`}
+                                      type="button"
+                                      className={`btn btn-sm rounded-pill ${active
+                                        ? "btn-info"
+                                        : "btn-outline-info"
+                                        } disabled-keep`}
+                                      onClick={() => handleMultiToggle("otherSkills", opt)}
+                                      disabled={!isEditMode}
+                                      aria-pressed={active}
+                                      title={!isEditMode ? "Switch to Edit to modify other skills" : ""}
+                                    >
+                                      {opt}
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            </div>
+
+                            {/* Technical & Maintenance */}
+                            <div className="category-section">
+                              <h6 className="category-heading text-secondary mb-2">Technical & Maintenance</h6>
+                              <div className="d-flex flex-wrap gap-2">
+                                {[
+                                  "Electrician", "Plumber", "Carpenter", "Painter", "Mason", "AC Technician",
+                                  "Mechanic", "Maintenance Staff", "House Keeping", "Housekeeping Supervisor"
+                                ].map((opt) => {
+                                  const active = normalizeArray(localWorker.otherSkills)
+                                    .map((x) => String(x).toLowerCase())
+                                    .includes(String(opt).toLowerCase());
+                                  return (
+                                    <button
+                                      key={`other-${opt}`}
+                                      type="button"
+                                      className={`btn btn-sm rounded-pill ${active
+                                        ? "btn-secondary"
+                                        : "btn-outline-secondary"
+                                        } disabled-keep`}
+                                      onClick={() => handleMultiToggle("otherSkills", opt)}
+                                      disabled={!isEditMode}
+                                      aria-pressed={active}
+                                      title={!isEditMode ? "Switch to Edit to modify other skills" : ""}
+                                    >
+                                      {opt}
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            </div>
+
+                            {/* Retail & Sales */}
+                            <div className="category-section">
+                              <h6 className="category-heading text-primary mb-2">Retail & Sales</h6>
+                              <div className="d-flex flex-wrap gap-2">
+                                {[
+                                  "Sales Boy", "Sales Girl", "Store Helper", "Retail Assistant", "Shop Attendant"
+                                ].map((opt) => {
+                                  const active = normalizeArray(localWorker.otherSkills)
+                                    .map((x) => String(x).toLowerCase())
+                                    .includes(String(opt).toLowerCase());
+                                  return (
+                                    <button
+                                      key={`other-${opt}`}
+                                      type="button"
+                                      className={`btn btn-sm rounded-pill ${active
+                                        ? "btn-primary"
+                                        : "btn-outline-primary"
+                                        } disabled-keep`}
+                                      onClick={() => handleMultiToggle("otherSkills", opt)}
+                                      disabled={!isEditMode}
+                                      aria-pressed={active}
+                                      title={!isEditMode ? "Switch to Edit to modify other skills" : ""}
+                                    >
+                                      {opt}
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            </div>
+
+                            {/* Industrial & Labor */}
+                            <div className="category-section">
+                              <h6 className="category-heading text-danger mb-2">Industrial & Labor</h6>
+                              <div className="d-flex flex-wrap gap-2">
+                                {[
+                                  "Labour", "Helper", "Loading Unloading", "Warehouse Helper",
+                                  "Factory Worker", "Production Helper", "Packaging Staff"
+                                ].map((opt) => {
+                                  const active = normalizeArray(localWorker.otherSkills)
+                                    .map((x) => String(x).toLowerCase())
+                                    .includes(String(opt).toLowerCase());
+                                  return (
+                                    <button
+                                      key={`other-${opt}`}
+                                      type="button"
+                                      className={`btn btn-sm rounded-pill ${active
+                                        ? "btn-danger"
+                                        : "btn-outline-danger"
+                                        } disabled-keep`}
+                                      onClick={() => handleMultiToggle("otherSkills", opt)}
+                                      disabled={!isEditMode}
+                                      aria-pressed={active}
+                                      title={!isEditMode ? "Switch to Edit to modify other skills" : ""}
+                                    >
+                                      {opt}
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            </div>
                           </div>
                         </div>
-
                         <div className="input-group mb-2">
                           <input
                             id="custom-otherSkills"

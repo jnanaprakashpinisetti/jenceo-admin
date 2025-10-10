@@ -125,10 +125,17 @@ const normalizeSource = (raw) => {
 };
 // Update these functions to handle null/undefined better:
 const getWorkerSkills = (w) => {
-  const a = normalizeArray(w?.skills);
-  const b = normalizeArray(w?.homeCareSkills);
-  const c = normalizeArray(w?.otherSkills);
-  return [...a, ...b, ...c].map(s => String(s).toLowerCase());
+  const homeCareSkills = normalizeArray(w?.homeCareSkills);
+  const primarySkills = normalizeArray(w?.primarySkills || w?.skills);
+  const otherSkills = normalizeArray(w?.otherSkills);
+  const additionalSkills = normalizeArray(w?.additionalSkills);
+
+  return [
+    ...homeCareSkills,
+    ...primarySkills,
+    ...otherSkills,
+    ...additionalSkills
+  ].map(s => String(s).toLowerCase().trim()).filter(s => s);
 };
 
 
@@ -234,7 +241,7 @@ export default function WorkerCalleDisplay({ permissions: permissionsProp }) {
   const [reminderFilter, setReminderFilter] = useState("");
   const [selectedSource, setSelectedSource] = useState("All");
   const [skillMode, setSkillMode] = useState("single");
-  const [timeFormat, setTimeFormat] = useState("24hr");
+  const [timeFormat, setTimeFormat] = useState("all");
 
   const [ageRange, setAgeRange] = useState({ min: "", max: "" });
   const [experienceRange, setExperienceRange] = useState({ min: "", max: "" });
@@ -251,8 +258,26 @@ export default function WorkerCalleDisplay({ permissions: permissionsProp }) {
 
   // Options
   const callThroughOptions = ["Apana", "WorkerIndian", "Reference", "Poster", "Agent", "Facebook", "LinkedIn", "Instagram", "YouTube", "Website", "Just Dial", "News Paper", "Other", "Unknown"];
-  const skillOptions = ["Nursing", "Cook", "Patient Care", "Care Taker", "Old Age Care", "Baby Care", "Bedside Attender", "Supporting", "Daiper", "Any Duty", "Others"];
-  const roleOptions = ["Computer Operating", "Tele Calling", "Driving", "Supervisor", "Manager", "Attender", "Security", "Carpenter", "Painter", "Plumber", "Electrician", "Mason (Home maker)", "Tailor", "Labour", "Farmer", "Delivery Boy", "House Keeping", "Cook", "Nanny", "Elderly Care", "Driver", "Office Boy", "Peon"];
+  const skillOptions = [
+    "Nursing",
+    "Patient Care",
+    "Care Taker",
+    "Bedside Attender",
+    "Old Age Care",
+    "Baby Care",
+    "Supporting",
+    "Cook",
+    "Housekeeping",
+    "Diaper",
+    "Injection",
+    "BP Check",
+    "Sugar Check",
+    "Wound Dressing",
+    "Nebulization",
+    "Post-Operative Care",
+
+  ];
+  const roleOptions = ["Computer Operating", "Tele Calling", "Driving", "Supervisor", "Manager", "Attender", "Security", "Carpenter", "Painter", "Plumber", "Electrician", "Mason (Home maker)", "Tailor", "Labour", "Farmer", "Delivery Boy", "House Keeping", "Cook", "Nanny", "Elderly Care", "Office Boy", "Peon"];
   const languageOptions = ["Telugu", "English", "Hindi", "Urdu", "Kannada", "Malayalam", "Tamil", "Bengali", "Marati"];
 
   const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
@@ -293,20 +318,21 @@ export default function WorkerCalleDisplay({ permissions: permissionsProp }) {
   }, [workers]);
 
   /* Filtering (case-insensitive + ID-aware) */
-  /* Filtering (case-insensitive + ID-aware) */
   const filtered = useMemo(() => {
     const raw = searchTerm.trim().toLowerCase();
     const idTerm = normalizeIdText(raw);
 
     return workers.filter((w) => {
-      const hay = `${String(w?.name ?? "").toLowerCase()} ${String(w?.location ?? "").toLowerCase()} ${String(w?.mobileNo ?? "").toLowerCase()}`;
-      const textMatch = !raw || hay.includes(raw);
+      // Search filter
+      if (searchTerm) {
+        const matchesSearch =
+          String(w?.name || "").toLowerCase().includes(raw) ||
+          String(w?.location || "").toLowerCase().includes(raw) ||
+          String(w?.mobileNo || "").includes(raw) ||
+          normalizeIdText(w?.callId).includes(idTerm);
 
-      const id = getDisplayCallId(w, stableIndexMap);
-      const idNorm = normalizeIdText(id);
-      const idMatch = !raw || idTerm === "" || idNorm.includes(idTerm) || idTerm.includes(idNorm);
-
-      if (!textMatch && !idMatch) return false;
+        if (!matchesSearch) return false;
+      }
 
       // Gender filter
       if (selectedGender.length > 0) {
@@ -314,60 +340,64 @@ export default function WorkerCalleDisplay({ permissions: permissionsProp }) {
         if (!selectedGender.map(x => String(x).toLowerCase()).includes(g)) return false;
       }
 
-      const haveSkills = getWorkerSkills(w);
-      const haveRoles = getWorkerRoles(w);
-      const haveLangs = getWorkerLanguages(w);
-
-      const wantSkills = selectedSkills.map(s => String(s).toLowerCase());
-      const wantRoles = selectedRoles.map(s => String(s).toLowerCase());
-      const wantLangs = selectedLanguages.map(s => String(s).toLowerCase());
-
       // Skills filter
-      if (wantSkills.length > 0) {
+      if (selectedSkills.length > 0) {
+        const workerSkills = getWorkerSkills(w).map(s => s.toLowerCase());
+        const wantSkills = selectedSkills.map(s => s.toLowerCase());
+
         if (skillMode === "multi") {
           // ALL selected skills must be present
-          const allSkillsPresent = wantSkills.every(s => haveSkills.includes(s));
-          if (!allSkillsPresent) return false;
+          if (!wantSkills.every(s => workerSkills.includes(s))) return false;
         } else {
-          // ANY selected skill can be present
-          const anySkillPresent = wantSkills.some(s => haveSkills.includes(s));
-          if (!anySkillPresent) return false;
+          // ANY selected skill must be present (single mode)
+          if (!wantSkills.some(s => workerSkills.includes(s))) return false;
         }
       }
 
       // Roles filter
-      if (wantRoles.length > 0) {
+      if (selectedRoles.length > 0) {
+        const workerRoles = getWorkerRoles(w).map(r => r.toLowerCase());
+        const wantRoles = selectedRoles.map(r => r.toLowerCase());
+
         if (skillMode === "multi") {
-          const allRolesPresent = wantRoles.every(s => haveRoles.includes(s));
-          if (!allRolesPresent) return false;
+          if (!wantRoles.every(r => workerRoles.includes(r))) return false;
         } else {
-          const anyRolePresent = wantRoles.some(s => haveRoles.includes(s));
-          if (!anyRolePresent) return false;
+          if (!wantRoles.some(r => workerRoles.includes(r))) return false;
         }
       }
 
       // Languages filter
-      if (wantLangs.length > 0) {
+      if (selectedLanguages.length > 0) {
+        const workerLangs = getWorkerLanguages(w).map(l => l.toLowerCase());
+        const wantLangs = selectedLanguages.map(l => l.toLowerCase());
+
         if (skillMode === "multi") {
-          const allLangsPresent = wantLangs.every(s => haveLangs.includes(s));
-          if (!allLangsPresent) return false;
+          if (!wantLangs.every(l => workerLangs.includes(l))) return false;
         } else {
-          const anyLangPresent = wantLangs.some(s => haveLangs.includes(s));
-          if (!anyLangPresent) return false;
+          if (!wantLangs.some(l => workerLangs.includes(l))) return false;
         }
       }
 
       // Reminder filter
       if (reminderFilter) {
-        const r = w?.callReminderDate || w?.reminderDate;
-        const du = daysUntil(r);
-        if (!isFinite(du)) return false;
+        const reminder = w?.callReminderDate || w?.reminderDate;
+        const du = daysUntil(reminder);
 
         switch (reminderFilter) {
-          case "overdue": if (!(du < 0)) return false; break;
-          case "today": if (du !== 0) return false; break;
-          case "tomorrow": if (du !== 1) return false; break;
-          case "upcoming": if (!(du >= 2)) return false; break;
+          case "overdue":
+            if (!isFinite(du) || du >= 0) return false;
+            break;
+          case "today":
+            if (du !== 0) return false;
+            break;
+          case "tomorrow":
+            if (du !== 1) return false;
+            break;
+          case "upcoming":
+            if (!isFinite(du) || du <= 1) return false;
+            break;
+          default:
+            break;
         }
       }
 
@@ -377,30 +407,54 @@ export default function WorkerCalleDisplay({ permissions: permissionsProp }) {
         if (src !== selectedSource) return false;
       }
 
+      // Time Format filter
+      if (timeFormat !== "all") {
+        const workerHours = String(w?.workingHours || "").trim();
+        if (workerHours !== timeFormat) return false;
+      }
+
       // Age range filter
-      const age = calculateAge(w?.dateOfBirth || w?.dob || w?.birthDate, w?.age);
-      if (ageRange.min && age != null && age < parseInt(ageRange.min, 10)) return false;
-      if (ageRange.max && age != null && age > parseInt(ageRange.max, 10)) return false;
+      if (ageRange.min || ageRange.max) {
+        const age = calculateAge(w?.dateOfBirth || w?.dob || w?.birthDate, w?.age);
+        if (age !== null) {
+          const minAge = ageRange.min ? parseInt(ageRange.min) : 0;
+          const maxAge = ageRange.max ? parseInt(ageRange.max) : 999;
+          if (age < minAge || age > maxAge) return false;
+        } else {
+          // If age cannot be calculated and range is specified, exclude
+          if (ageRange.min || ageRange.max) return false;
+        }
+      }
 
       // Experience range filter
-      const minRaw = String(experienceRange?.min ?? "").trim();
-      const maxRaw = String(experienceRange?.max ?? "").trim();
-      const minActive = minRaw !== "" && !Number.isNaN(Number(minRaw));
-      const maxActive = maxRaw !== "" && !Number.isNaN(Number(maxRaw));
-
-      if (minActive || maxActive) {
-        const min = minActive ? Number(minRaw) : -Infinity;
-        const max = maxActive ? Number(maxRaw) : Infinity;
+      if (experienceRange.min || experienceRange.max) {
         const exp = calculateExperience(w);
-
-        if (exp == null || Number.isNaN(exp)) return false;
-        const yrs = Math.max(0, exp);
-        if (yrs < min || yrs > max) return false;
+        if (exp !== null) {
+          const minExp = experienceRange.min ? parseFloat(experienceRange.min) : 0;
+          const maxExp = experienceRange.max ? parseFloat(experienceRange.max) : 999;
+          if (exp < minExp || exp > maxExp) return false;
+        } else {
+          // If experience cannot be calculated and range is specified, exclude
+          if (experienceRange.min || experienceRange.max) return false;
+        }
       }
 
       return true;
     });
-  }, [workers, searchTerm, selectedGender, selectedSkills, selectedRoles, selectedLanguages, skillMode, reminderFilter, selectedSource, ageRange, experienceRange, stableIndexMap]);
+  }, [
+    workers,
+    searchTerm,
+    selectedGender,
+    selectedSkills,
+    selectedRoles,
+    selectedLanguages,
+    skillMode,
+    reminderFilter,
+    selectedSource,
+    timeFormat,
+    ageRange,
+    experienceRange
+  ]);
 
   /* Sorting — add all requested fields */
   const sorted = useMemo(() => {
@@ -712,10 +766,29 @@ export default function WorkerCalleDisplay({ permissions: permissionsProp }) {
   };
 
   const hasActiveFilters = useMemo(() => Boolean(
-    searchTerm || selectedSkills.length || selectedRoles.length || selectedLanguages.length || selectedGender.length || reminderFilter ||
-    (selectedSource && selectedSource !== "All") || skillMode !== "single" || timeFormat !== "24hr" || ageRange.min || ageRange.max ||
-    experienceRange.min || experienceRange.max || sortBy !== "id" || sortDir !== "desc" || rowsPerPage !== 10 || currentPage !== 1 || showJobRoles
-  ), [searchTerm, selectedSkills, selectedRoles, selectedLanguages, selectedGender, reminderFilter, selectedSource, skillMode, timeFormat, ageRange, experienceRange, sortBy, sortDir, rowsPerPage, currentPage, showJobRoles]);
+    searchTerm ||
+    selectedSkills.length ||
+    selectedRoles.length ||
+    selectedLanguages.length ||
+    selectedGender.length ||
+    reminderFilter ||
+    (selectedSource && selectedSource !== "All") ||
+    skillMode !== "single" ||
+    timeFormat !== "all" ||  // Fixed this line
+    ageRange.min ||
+    ageRange.max ||
+    experienceRange.min ||
+    experienceRange.max ||
+    sortBy !== "id" ||
+    sortDir !== "desc" ||
+    rowsPerPage !== 10 ||
+    currentPage !== 1 ||
+    showJobRoles
+  ), [
+    searchTerm, selectedSkills, selectedRoles, selectedLanguages, selectedGender,
+    reminderFilter, selectedSource, skillMode, timeFormat, ageRange, experienceRange,
+    sortBy, sortDir, rowsPerPage, currentPage, showJobRoles
+  ]);
 
   // Update the resetFilters function to properly reset arrays:
   const resetFilters = () => {
@@ -727,6 +800,7 @@ export default function WorkerCalleDisplay({ permissions: permissionsProp }) {
     setReminderFilter("");
     setSelectedSource("All");
     setSkillMode("single");
+    setTimeFormat("all"); // Reset time format to "all"
     setAgeRange({ min: "", max: "" });
     setExperienceRange({ min: "", max: "" });
     setSortBy("id");
@@ -735,7 +809,6 @@ export default function WorkerCalleDisplay({ permissions: permissionsProp }) {
     setCurrentPage(1);
     setShowJobRoles(false);
   };
-
   /* UI */
   if (loading) return <div className="text-center my-5">Loading…</div>;
   if (error) return <div className="alert alert-danger">Error: {error}</div>;
@@ -842,11 +915,31 @@ export default function WorkerCalleDisplay({ permissions: permissionsProp }) {
             </div>
           </div>
 
-          <div className="col-lg-1 col-md-3 text-center">
-            <label className="form-label small mb-2 text-info">Time</label>
+          {/* Time Format Filter */}
+          <div className="col-lg-2 col-md-3 text-center">
+            <label className="form-label small mb-2 text-info">Working Hours</label>
             <div className="d-flex gap-2 justify-content-center">
-              <button type="button" className={`btn ${timeFormat === "24hr" ? "btn-info" : "btn-outline-info"} btn-sm`} onClick={() => setTimeFormat("24hr")}>24HR</button>
-              <button type="button" className={`btn ${timeFormat === "12hr" ? "btn-info" : "btn-outline-info"} btn-sm`} onClick={() => setTimeFormat("12hr")}>12HR</button>
+              <button
+                type="button"
+                className={`btn ${timeFormat === "all" ? "btn-info" : "btn-outline-info"} btn-sm`}
+                onClick={() => setTimeFormat("all")}
+              >
+                All
+              </button>
+              <button
+                type="button"
+                className={`btn ${timeFormat === "12" ? "btn-info" : "btn-outline-info"} btn-sm`}
+                onClick={() => setTimeFormat("12")}
+              >
+                12HRS
+              </button>
+              <button
+                type="button"
+                className={`btn ${timeFormat === "24" ? "btn-info" : "btn-outline-info"} btn-sm`}
+                onClick={() => setTimeFormat("24")}
+              >
+                24HRS
+              </button>
             </div>
           </div>
 
@@ -889,15 +982,198 @@ export default function WorkerCalleDisplay({ permissions: permissionsProp }) {
       {showJobRoles && (
         <div className="p-3 bg-dark border rounded-3 mb-3">
           <h6 className="mb-2 text-warning">Other Skills</h6>
-          <div className="d-flex flex-wrap gap-2">
-            {roleOptions.map((r) => {
-              const active = selectedRoles.includes(r);
-              return <button key={r} className={`btn btn-sm ${active ? "btn-success" : "btn-outline-success"} rounded-pill`} onClick={() => setSelectedRoles(prev => active ? prev.filter(x => x !== r) : [...prev, r])}>{r}</button>;
-            })}
+          <div className="row g-3">
+            {/* Office & Administrative */}
+            <div className="col-md-3 col-lg-3">
+              <div className="category-section">
+                <h6 className="category-heading text-primary mb-2">Office & Administrative</h6>
+                <div className="d-flex flex-wrap gap-2">
+                  {[
+                    "Computer Operating", "Data Entry", "Office Assistant", "Receptionist",
+                    "Front Desk Executive", "Admin Assistant", "Office Boy", "Peon", "Office Attendant"
+                  ].map((r) => {
+                    const active = selectedRoles.includes(r);
+                    return (
+                      <button
+                        key={r}
+                        className={`btn btn-sm ${active ? "btn-primary" : "btn-outline-primary"} rounded-pill`}
+                        onClick={() => setSelectedRoles(prev => active ? prev.filter(x => x !== r) : [...prev, r])}
+                      >
+                        {r}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+
+            {/* Customer Service & Telecommunication */}
+            <div className="col-md-3 col-lg-3">
+              <div className="category-section">
+                <h6 className="category-heading text-success mb-2">Customer Service</h6>
+                <div className="d-flex flex-wrap gap-2">
+                  {[
+                    "Tele Calling", "Customer Support", "Telemarketing", "BPO Executive",
+                    "Call Center Agent", "Customer Care Executive"
+                  ].map((r) => {
+                    const active = selectedRoles.includes(r);
+                    return (
+                      <button
+                        key={r}
+                        className={`btn btn-sm ${active ? "btn-success" : "btn-outline-success"} rounded-pill`}
+                        onClick={() => setSelectedRoles(prev => active ? prev.filter(x => x !== r) : [...prev, r])}
+                      >
+                        {r}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+
+            {/* Management & Supervision */}
+            <div className="col-md-3 col-lg-3">
+              <div className="category-section">
+                <h6 className="category-heading text-warning mb-2">Management & Supervision</h6>
+                <div className="d-flex flex-wrap gap-2">
+                  {[
+                    "Supervisor", "Manager", "Team Leader", "Site Supervisor", "Project Coordinator"
+                  ].map((r) => {
+                    const active = selectedRoles.includes(r);
+                    return (
+                      <button
+                        key={r}
+                        className={`btn btn-sm ${active ? "btn-warning" : "btn-outline-warning"} rounded-pill`}
+                        onClick={() => setSelectedRoles(prev => active ? prev.filter(x => x !== r) : [...prev, r])}
+                      >
+                        {r}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+
+            {/* Security */}
+            <div className="col-md-3 col-lg-3">
+              <div className="category-section">
+                <h6 className="category-heading text-danger mb-2">Security</h6>
+                <div className="d-flex flex-wrap gap-2">
+                  {[
+                    "Security Guard", "Security Supervisor", "Gatekeeper", "Watchman"
+                  ].map((r) => {
+                    const active = selectedRoles.includes(r);
+                    return (
+                      <button
+                        key={r}
+                        className={`btn btn-sm ${active ? "btn-danger" : "btn-outline-danger"} rounded-pill`}
+                        onClick={() => setSelectedRoles(prev => active ? prev.filter(x => x !== r) : [...prev, r])}
+                      >
+                        {r}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+
+            {/* Driving & Logistics */}
+            <div className="col-md-3 col-lg-3">
+              <div className="category-section">
+                <h6 className="category-heading text-info mb-2">Driving & Logistics</h6>
+                <div className="d-flex flex-wrap gap-2">
+                  {[
+                    "Driving", "Delivery Boy", "Delivery Executive", "Rider", "Driver",
+                    "Car Driver", "Bike Rider", "Logistics Helper"
+                  ].map((r) => {
+                    const active = selectedRoles.includes(r);
+                    return (
+                      <button
+                        key={r}
+                        className={`btn btn-sm ${active ? "btn-info" : "btn-outline-info"} rounded-pill`}
+                        onClick={() => setSelectedRoles(prev => active ? prev.filter(x => x !== r) : [...prev, r])}
+                      >
+                        {r}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+
+            {/* Technical & Maintenance - Updated Color */}
+            <div className="col-md-3 col-lg-3">
+              <div className="category-section">
+                <h6 className="category-heading text-warning mb-2">Technical & Maintenance</h6>
+                <div className="d-flex flex-wrap gap-2">
+                  {[
+                    "Electrician", "Plumber", "Carpenter", "Painter", "Mason", "AC Technician",
+                    "Mechanic", "Maintenance Staff", "House Keeping", "Housekeeping Supervisor"
+                  ].map((r) => {
+                    const active = selectedRoles.includes(r);
+                    return (
+                      <button
+                        key={r}
+                        className={`btn btn-sm ${active ? "btn-warning" : "btn-outline-warning"} rounded-pill`}
+                        onClick={() => setSelectedRoles(prev => active ? prev.filter(x => x !== r) : [...prev, r])}
+                      >
+                        {r}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+
+            {/* Retail & Sales */}
+            <div className="col-md-3 col-lg-3">
+              <div className="category-section">
+                <h6 className="category-heading text-primary mb-2">Retail & Sales</h6>
+                <div className="d-flex flex-wrap gap-2">
+                  {[
+                    "Sales Boy", "Sales Girl", "Store Helper", "Retail Assistant", "Shop Attendant"
+                  ].map((r) => {
+                    const active = selectedRoles.includes(r);
+                    return (
+                      <button
+                        key={r}
+                        className={`btn btn-sm ${active ? "btn-primary" : "btn-outline-primary"} rounded-pill`}
+                        onClick={() => setSelectedRoles(prev => active ? prev.filter(x => x !== r) : [...prev, r])}
+                      >
+                        {r}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+
+            {/* Industrial & Labor */}
+            <div className="col-md-3 col-lg-3">
+              <div className="category-section">
+                <h6 className="category-heading text-danger mb-2">Industrial & Labor</h6>
+                <div className="d-flex flex-wrap gap-2">
+                  {[
+                    "Labour", "Helper", "Loading Unloading", "Warehouse Helper",
+                    "Factory Worker", "Production Helper", "Packaging Staff"
+                  ].map((r) => {
+                    const active = selectedRoles.includes(r);
+                    return (
+                      <button
+                        key={r}
+                        className={`btn btn-sm ${active ? "btn-danger" : "btn-outline-danger"} rounded-pill`}
+                        onClick={() => setSelectedRoles(prev => active ? prev.filter(x => x !== r) : [...prev, r])}
+                      >
+                        {r}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       )}
-
       <div className="d-flex align-items-center">
         <span className="me-2 text-white">Show</span>
         <select className="form-select me-2 form-select-sm" style={{ width: 80 }} value={rowsPerPage} onChange={(e) => { setRowsPerPage(parseInt(e.target.value, 10) || 10); setCurrentPage(1); }}>

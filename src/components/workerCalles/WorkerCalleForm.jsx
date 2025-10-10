@@ -222,13 +222,12 @@ export default function WorkerCallForm({ isOpen, onClose }) {
       callReminderDate: "",
       comment: "",
       commentDateTime: "",
-
       createdById: "",
       createdByName: "",
       createdAt: "",
-
       addedBy: "",
       userName: "",
+      formComment: ""
     });
     setStep(1);
     setErrors({});
@@ -358,6 +357,7 @@ export default function WorkerCallForm({ isOpen, onClose }) {
                           onBlur={handleBlur}
                           className={`form-control ${errors.callDate ? "is-invalid" : ""}`}
                           max={getToday()}
+                          disabled
                         />
                         {errors.callDate && (
                           <div className="invalid-feedback">{errors.callDate}</div>
@@ -378,6 +378,7 @@ export default function WorkerCallForm({ isOpen, onClose }) {
                           onBlur={handleBlur}
                           className={`form-control ${errors.mobileNo ? "is-invalid" : ""}`}
                           maxLength={10}
+                          autoFocus
                         />
                         {errors.mobileNo && (
                           <div className="invalid-feedback">{errors.mobileNo}</div>
@@ -800,6 +801,17 @@ export default function WorkerCallForm({ isOpen, onClose }) {
                             <div className="invalid-feedback d-block">{errors.callReminderDate}</div>
                           )}
                         </div>
+                      </div>
+
+                      <div className="col-md-12">
+                        <label className="form-label mt-2">Add Comment <span className="star">*</span></label>
+                        <textarea
+                          className="form-control border-secondary "
+                          name="formComment"
+                          value={formData.formComment}
+                          onChange={handleChange}
+                        >
+                        </textarea>
                       </div>
                     </div>
                   </div>

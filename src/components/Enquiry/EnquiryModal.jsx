@@ -9,13 +9,20 @@ const toDateStr = (iso) => {
   if (!iso) return "";
   try {
     const d = new Date(iso);
-    return isNaN(d.getTime()) ? "" : d.toLocaleString();
+    return isNaN(d.getTime()) ? "" : d.toLocaleString('en-IN', {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: true
+    });
   } catch {
     return "";
   }
 };
 
-/** Normalize raw comments to [{text, date, id}] */
+/** Normalize raw comments to [{text, date, id, user}] */
 const normalizeComments = (raw) => {
   if (!raw) return [];
   if (Array.isArray(raw)) {
@@ -23,13 +30,19 @@ const normalizeComments = (raw) => {
       .map((c, i) => {
         if (!c) return null;
         if (typeof c === "string") {
-          return { text: c, date: new Date().toISOString(), id: Date.now() + i };
+          return {
+            text: c,
+            date: new Date().toISOString(),
+            id: Date.now() + i,
+            user: "System"
+          };
         }
         if (typeof c === "object") {
           const text = c.text ?? c.message ?? "";
           const date = c.date ?? c.ts ?? new Date().toISOString();
           const id = c.id ?? Date.now() + i;
-          return text ? { text, date, id } : null;
+          const user = c.user ?? c.userName ?? c.by ?? "System";
+          return text ? { text, date, id, user } : null;
         }
         return null;
       })
@@ -42,19 +55,30 @@ const normalizeComments = (raw) => {
       .map((v, i) => {
         if (!v) return null;
         if (typeof v === "string") {
-          return { text: v, date: new Date().toISOString(), id: Date.now() + i };
+          return {
+            text: v,
+            date: new Date().toISOString(),
+            id: Date.now() + i,
+            user: "System"
+          };
         }
         if (typeof v === "object") {
           const text = v.text ?? v.message ?? "";
           const date = v.date ?? v.ts ?? new Date().toISOString();
           const id = v.id ?? Date.now() + i;
-          return text ? { text, date, id } : null;
+          const user = v.user ?? v.userName ?? v.by ?? "System";
+          return text ? { text, date, id, user } : null;
         }
         return null;
       })
       .filter(Boolean);
   }
-  if (typeof raw === "string") return [{ text: raw, date: new Date().toISOString(), id: Date.now() }];
+  if (typeof raw === "string") return [{
+    text: raw,
+    date: new Date().toISOString(),
+    id: Date.now(),
+    user: "System"
+  }];
   return [];
 };
 
@@ -62,8 +86,8 @@ export default function EnquiryModal({
   show,
   onClose,
   enquiry,
-  mode = "view",          // "view" | "edit"
-  currentUser,            // optional; not persisted per-comment
+  mode = "view",
+  currentUser,
   onSaveSuccess,
 }) {
   const [formData, setFormData] = useState(enquiry || {});
@@ -74,7 +98,6 @@ export default function EnquiryModal({
   const [showUnsavedConfirm, setShowUnsavedConfirm] = useState(false);
   const [isDirty, setIsDirty] = useState(false);
 
-  // local edit/view toggle
   const [localMode, setLocalMode] = useState(mode);
   useEffect(() => setLocalMode(mode), [mode, show]);
 
@@ -104,7 +127,12 @@ export default function EnquiryModal({
   const addComment = () => {
     const text = (newComment || "").trim();
     if (!text) return;
-    const entry = { text, date: new Date().toISOString(), id: Date.now() };
+    const entry = {
+      text,
+      date: new Date().toISOString(),
+      id: Date.now(),
+      user: currentUser?.name || currentUser?.displayName || "Unknown User"
+    };
     setComments((prev) => [entry, ...prev]);
     setNewComment("");
     setIsDirty(true);
@@ -144,8 +172,8 @@ export default function EnquiryModal({
 
   const badgeForStatus = useMemo(() => {
     const s = String(formData.status || "").toLowerCase();
-    if (s.includes("on boarding")) return "bg-info";
-    if (s.includes("pending")) return "bg-warning";
+    if (s.includes("on boarding")) return "bg-info text-dark";
+    if (s.includes("pending")) return "bg-warning text-dark";
     if (s.includes("no response")) return "bg-secondary";
     if (s.includes("enquiry")) return "bg-primary";
     return "bg-light text-dark";
@@ -156,49 +184,65 @@ export default function EnquiryModal({
   return (
     <>
       {/* Main Enquiry Modal */}
-      <div className="modal fade show d-block enquiry-modal" tabIndex="-1" style={{ background: "rgba(0,0,0,0.5)" }}>
-        <div className="modal-dialog modal-lg modal-dialog-centered">
-          <div className="modal-content shadow-lg border-0">
+      <div className="modal fade show d-block enquiry-modal" tabIndex="-1" style={{ background: "rgba(0,0,0,0.6)" }}>
+        <div className="modal-dialog modal-xl modal-dialog-centered">
+          <div className="modal-content shadow-lg border-0" style={{ borderRadius: "16px" }}>
             {/* Header */}
-            <div className="modal-header bg-primary text-white">
-              <div>
-                <h5 className="modal-title mb-0">{localMode === "edit" ? "Edit Enquiry" : "View Enquiry"}</h5>
-                {formData?.status ? <span className={`badge mt-1 ${badgeForStatus}`}>{formData.status}</span> : null}
+            <div className="modal-header bg-gradient-primary text-white" style={{
+              borderTopLeftRadius: "16px",
+              borderTopRightRadius: "16px",
+              background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)"
+            }}>
+              <div className="d-flex align-items-center gap-3">
+                <div>
+                  <h5 className="modal-title mb-0 fw-bold">{localMode === "edit" ? "✏️ Edit Enquiry" : "👁️ View Enquiry"}</h5>
+                  {formData?.status && (
+                    <span className={`badge mt-2 fw-normal ${badgeForStatus}`} style={{ fontSize: "0.75rem" }}>
+                      {formData.status}
+                    </span>
+                  )}
+                </div>
               </div>
               <button type="button" className="btn-close btn-close-white" onClick={handleClose}></button>
             </div>
 
             {/* Body */}
-            <div className="modal-body">
+            <div className="modal-body p-4">
               {/* Edit toggle in view mode */}
               {localMode === "view" && (
-                <div className="d-flex justify-content-end mb-2">
+                <div className="d-flex justify-content-end mb-3">
                   <button
-                    className="btn btn-sm btn-outline-warning"
+                    className="btn btn-outline-warning btn-sm fw-semibold d-flex align-items-center gap-2"
                     title="Switch to Edit"
                     onClick={(e) => { e.stopPropagation(); setLocalMode("edit"); }}
                   >
-                    ✏️ Edit
+                    <i className="fas fa-edit"></i>
+                    Edit Enquiry
                   </button>
                 </div>
               )}
 
               {/* Name / Mobile */}
-              <div className="modal-card border-0 mb-3">
-                <div className="modal-card-body">
+              <div className="card border-0 shadow-sm mb-4">
+                <div className="card-body">
+                  <h6 className="card-title text-primary mb-3 fw-semibold">
+                    <i className="fas fa-user me-2"></i>Contact Information
+                  </h6>
                   <div className="row g-3">
                     <div className="col-md-6">
                       <label className="form-label fw-semibold">Name</label>
-                      <input type="text" name="name" className="form-control" value={formData.name || ""} disabled />
+                      <input type="text" name="name" className="form-control form-control-lg" value={formData.name || ""} disabled />
                     </div>
                     <div className="col-md-6">
                       <label className="form-label fw-semibold">Mobile</label>
-                      <div className="input-group">
-                        <span className="input-group-text">+91</span>
+                      <div className="input-group input-group-lg">
+                        <span className="input-group-text bg-light">+91</span>
                         <input type="text" name="mobile" className="form-control" value={formData.mobile || ""} disabled />
                         {formData.mobile && (
                           <>
-                            <a className="btn btn-outline-primary" href={`tel:${formData.mobile}`} title="Call">Call</a>
+                            <a className="btn btn-outline-primary" href={`tel:${formData.mobile}`} title="Call">
+                              <i className="fas fa-phone"></i>
+                            </a>
                             <a
                               className="btn btn-outline-success"
                               href={`https://wa.me/${String(formData.mobile).replace(/\D/g, "")}`}
@@ -206,7 +250,7 @@ export default function EnquiryModal({
                               rel="noopener noreferrer"
                               title="WhatsApp"
                             >
-                              WAP
+                              <i className="fab fa-whatsapp"></i>
                             </a>
                           </>
                         )}
@@ -217,11 +261,14 @@ export default function EnquiryModal({
               </div>
 
               {/* Service / Amount */}
-              <div className="modal-card border-0 mb-3">
-                <div className="modal-card-body">
+              <div className="card border-0 shadow-sm mb-4">
+                <div className="card-body">
+                  <h6 className="card-title text-primary mb-3 fw-semibold">
+                    <i className="fas fa-concierge-bell me-2"></i>Service Details
+                  </h6>
                   <div className="row g-3">
                     <div className="col-md-6">
-                      <label className="form-label fw-semibold">Service</label>
+                      <label className="form-label fw-semibold">Service Type</label>
                       <input
                         type="text"
                         name="service"
@@ -235,7 +282,7 @@ export default function EnquiryModal({
                     <div className="col-md-6">
                       <label className="form-label fw-semibold">Amount</label>
                       <div className="input-group">
-                        <span className="input-group-text">₹</span>
+                        <span className="input-group-text bg-light">₹</span>
                         <input
                           type="number"
                           name="amount"
@@ -252,8 +299,11 @@ export default function EnquiryModal({
               </div>
 
               {/* Care Recipient Details */}
-              <div className="modal-card border-0 mb-3">
-                <div className="modal-card-body">
+              <div className="card border-0 shadow-sm mb-4">
+                <div className="card-body">
+                  <h6 className="card-title text-primary mb-3 fw-semibold">
+                    <i className="fas fa-user-injured me-2"></i>Care Recipient Details
+                  </h6>
                   <div className="row g-3">
                     <div className="col-md-6">
                       <label className="form-label fw-semibold">Care Recipient Name</label>
@@ -295,7 +345,7 @@ export default function EnquiryModal({
                           min="0"
                           step="0.1"
                         />
-                        <span className="input-group-text">kg</span>
+                        <span className="input-group-text bg-light">kg</span>
                       </div>
                     </div>
                   </div>
@@ -303,8 +353,11 @@ export default function EnquiryModal({
               </div>
 
               {/* Location & Service Period */}
-              <div className="modal-card border-0 mb-3">
-                <div className="modal-card-body">
+              <div className="card border-0 shadow-sm mb-4">
+                <div className="card-body">
+                  <h6 className="card-title text-primary mb-3 fw-semibold">
+                    <i className="fas fa-map-marker-alt me-2"></i>Location & Duration
+                  </h6>
                   <div className="row g-3">
                     <div className="col-md-6">
                       <label className="form-label fw-semibold">Location</label>
@@ -335,8 +388,11 @@ export default function EnquiryModal({
               </div>
 
               {/* Status / Through / Communication / Reminder */}
-              <div className="modal-card border-0 mb-3">
-                <div className="modal-card-body">
+              <div className="card border-0 shadow-sm mb-4">
+                <div className="card-body">
+                  <h6 className="card-title text-primary mb-3 fw-semibold">
+                    <i className="fas fa-cogs me-2"></i>Enquiry Management
+                  </h6>
                   <div className="row g-3">
                     <div className="col-md-6">
                       <label className="form-label fw-semibold">Status</label>
@@ -410,16 +466,54 @@ export default function EnquiryModal({
                 </div>
               </div>
 
-              {/* Comments */}
-              <div className="modal-card border-0">
-                  <h6 className="mb-0">Comments</h6>
-                <div className="modal-card-body">
+              {/* Comments Section */}
+              <div className="card border-0 shadow-sm">
+                <div className="card-body">
+                  {/* Comments History */}
+                  <div>
+                    {comments && comments.length > 0 ? (
+                      <div
+                        ref={listRef}
+                        className="mt-2"
+                        style={{ maxHeight: 280, overflowY: "auto" }}
+                      >
+                        {comments.map((c) => (
+                          <div key={c.id || c.date} className="p-3 border-bottom bg-white">
+                            <div className="d-flex justify-content-between align-items-start mb-2">
+                              <span className="text-primary small">
+                                <i className="fas fa-user me-1"></i>
+                                By {c.user}
+                              </span>
+                              <small className="text-muted">
+                                <i className="fas fa-clock me-1"></i>
+                                {toDateStr(c.date)}
+                              </small>
+                            </div>
+                            <p className="mb-0 text-dark" style={{ lineHeight: "1.5" }}>
+                              {c.text}
+                            </p>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="text-center py-4 text-muted">
+                        <i className="fas fa-comment-slash fa-2x mb-2"></i>
+                        <p className="mb-0">No comments added yet</p>
+                      </div>
+                    )}
+                  </div>
+
+                  <h6 className="card-title text-primary mb-3 fw-semibold">
+                    <i className="fas fa-comments me-2"></i>Comments & Notes
+                  </h6>
+
                   {/* Add new comment */}
                   {localMode === "edit" && (
-                    <div className="mb-3">
+                    <div className="mb-4 p-3 bg-light rounded">
+                      <label className="form-label fw-semibold">Add New Comment</label>
                       <textarea
                         className="form-control"
-                        placeholder="Add a comment"
+                        placeholder="Type your comment here..."
                         rows={3}
                         value={newComment}
                         maxLength={MAX_COMMENT_LEN}
@@ -430,50 +524,46 @@ export default function EnquiryModal({
                             addComment();
                           }
                         }}
+                        style={{ resize: "none" }}
                       />
                       <div className="d-flex justify-content-between align-items-center mt-2">
-                        <small className={commentLeft < 30 ? "text-danger" : "text-muted"}>
+                        <small className={commentLeft < 30 ? "text-danger fw-semibold" : "text-muted"}>
                           {commentLeft} characters left
                         </small>
-                        <button className="btn btn-sm btn-warning" onClick={addComment} disabled={!newComment.trim()}>
+                        <button
+                          className="btn btn-warning btn-sm fw-semibold d-flex align-items-center gap-2"
+                          onClick={addComment}
+                          disabled={!newComment.trim()}
+                        >
+                          <i className="fas fa-plus"></i>
                           Add Comment
                         </button>
                       </div>
                     </div>
-                  )}
-
-                  {/* History (newest first) */}
-                  {comments && comments.length > 0 ? (
-                    <div ref={listRef} className="mt-2" style={{ maxHeight: 240, overflowY: "auto" }}>
-                      {comments.map((c) => (
-                        <div key={c.id || c.date} className="border-bottom pb-2 mb-2">
-                          <p className="mb-0">{c.text}</p>
-                          <small className="text-muted">{toDateStr(c.date)}</small>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <p className="text-muted mb-0">No comments added</p>
                   )}
                 </div>
               </div>
             </div>
 
             {/* Footer */}
-            <div className="modal-footer">
+            <div className="modal-footer bg-light" style={{ borderBottomLeftRadius: "16px", borderBottomRightRadius: "16px" }}>
               {localMode === "edit" && (
-                <button className="btn btn-success" onClick={handleSave} disabled={isSaving}>
+                <button className="btn btn-success fw-semibold px-4 d-flex align-items-center gap-2" onClick={handleSave} disabled={isSaving}>
                   {isSaving ? (
                     <>
-                      <span className="spinner-border spinner-border-sm me-2" role="status" />
+                      <span className="spinner-border spinner-border-sm" role="status" />
                       Saving…
                     </>
                   ) : (
-                    "Save Changes"
+                    <>
+                      <i className="fas fa-save"></i>
+                      Save Changes
+                    </>
                   )}
                 </button>
               )}
-              <button className="btn btn-secondary" onClick={handleClose}>
+              <button className="btn btn-secondary fw-semibold px-4 d-flex align-items-center gap-2" onClick={handleClose}>
+                <i className="fas fa-times"></i>
                 Close
               </button>
             </div>
@@ -481,28 +571,36 @@ export default function EnquiryModal({
         </div>
       </div>
 
-      {/* Thank You */}
+      {/* Thank You Modal */}
       {showThankYou && (
-        <div className="modal fade show d-block" tabIndex="-1" style={{ background: "rgba(0,0,0,0.5)" }}>
+        <div className="modal fade show d-block" tabIndex="-1" style={{ background: "rgba(0,0,0,0.6)" }}>
           <div className="modal-dialog modal-dialog-centered">
-            <div className="modal-content border-0 shadow">
-              <div className="modal-header bg-success text-white">
-                <h5 className="modal-title mb-0">Success</h5>
+            <div className="modal-content border-0 shadow" style={{ borderRadius: "16px" }}>
+              <div className="modal-header bg-success text-white" style={{ borderTopLeftRadius: "16px", borderTopRightRadius: "16px" }}>
+                <h5 className="modal-title mb-0 fw-bold">
+                  <i className="fas fa-check-circle me-2"></i>
+                  Success
+                </h5>
               </div>
-              <div className="modal-body text-center">
-                <h5 className="mb-1">Enquiry Updated Successfully!</h5>
+              <div className="modal-body text-center py-4">
+                <div className="mb-3">
+                  <i className="fas fa-check-circle text-success" style={{ fontSize: "3rem" }}></i>
+                </div>
+                <h5 className="mb-2 fw-bold">Enquiry Updated Successfully!</h5>
                 <p className="text-muted mb-0">
-                  Enquiry for <strong>{formData.name}</strong> ({formData.mobile}) has been updated.
+                  Enquiry for <strong className="text-dark">{formData.name}</strong>
+                  ({formData.mobile}) has been updated.
                 </p>
               </div>
-              <div className="modal-footer justify-content-center">
+              <div className="modal-footer justify-content-center bg-light" style={{ borderBottomLeftRadius: "16px", borderBottomRightRadius: "16px" }}>
                 <button
-                  className="btn btn-success"
+                  className="btn btn-success fw-semibold px-4"
                   onClick={() => {
                     setShowThankYou(false);
                     onClose && onClose();
                   }}
                 >
+                  <i className="fas fa-thumbs-up me-2"></i>
                   OK
                 </button>
               </div>
@@ -511,30 +609,38 @@ export default function EnquiryModal({
         </div>
       )}
 
-      {/* Unsaved Confirmation */}
+      {/* Unsaved Confirmation Modal */}
       {showUnsavedConfirm && (
-        <div className="modal fade show d-block" tabIndex="-1" style={{ background: "rgba(0,0,0,0.5)" }}>
+        <div className="modal fade show d-block" tabIndex="-1" style={{ background: "rgba(0,0,0,0.6)" }}>
           <div className="modal-dialog modal-dialog-centered">
-            <div className="modal-content border-0 shadow">
-              <div className="modal-header bg-warning">
-                <h5 className="modal-title mb-0">Unsaved Changes</h5>
+            <div className="modal-content border-0 shadow" style={{ borderRadius: "16px" }}>
+              <div className="modal-header bg-warning" style={{ borderTopLeftRadius: "16px", borderTopRightRadius: "16px" }}>
+                <h5 className="modal-title mb-0 fw-bold">
+                  <i className="fas fa-exclamation-triangle me-2"></i>
+                  Unsaved Changes
+                </h5>
                 <button type="button" className="btn-close" onClick={() => setShowUnsavedConfirm(false)} />
               </div>
-              <div className="modal-body">
-                <p className="mb-1">You have unsaved changes. Are you sure you want to close?</p>
-                <small className="text-muted">All changes will be lost.</small>
+              <div className="modal-body py-4">
+                <div className="text-center mb-3">
+                  <i className="fas fa-exclamation-circle text-warning" style={{ fontSize: "2.5rem" }}></i>
+                </div>
+                <p className="mb-1 text-center fw-semibold">You have unsaved changes. Are you sure you want to close?</p>
+                <small className="text-muted text-center d-block">All changes will be lost.</small>
               </div>
-              <div className="modal-footer">
-                <button className="btn btn-secondary" onClick={() => setShowUnsavedConfirm(false)}>
+              <div className="modal-footer justify-content-center bg-light" style={{ borderBottomLeftRadius: "16px", borderBottomRightRadius: "16px" }}>
+                <button className="btn btn-secondary fw-semibold px-4" onClick={() => setShowUnsavedConfirm(false)}>
+                  <i className="fas fa-arrow-left me-2"></i>
                   Cancel
                 </button>
                 <button
-                  className="btn btn-danger"
+                  className="btn btn-danger fw-semibold px-4"
                   onClick={() => {
                     setShowUnsavedConfirm(false);
                     onClose && onClose();
                   }}
                 >
+                  <i className="fas fa-trash me-2"></i>
                   Discard Changes
                 </button>
               </div>

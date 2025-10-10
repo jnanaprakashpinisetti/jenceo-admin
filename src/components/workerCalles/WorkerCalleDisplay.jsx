@@ -113,9 +113,26 @@ const normalizeSource = (raw) => {
   if (s.includes("news") && s.includes("paper")) return "News Paper";
   return "Other";
 };
-const getWorkerRoles = (w) => { const v = w?.jobRole ?? w?.role ?? w?.roles ?? w?.profession ?? w?.designation ?? w?.workType ?? w?.otherSkills ?? w?.otherskills ?? w?.other_skills ?? w?.["other skils"] ?? ""; return normalizeArray(v).map(s => String(s).toLowerCase()); };
-const getWorkerSkills = (w) => normalizeArray(w?.skills).map(s => String(s).toLowerCase());
-const getWorkerLanguages = (w) => { const v = w?.languages ?? w?.language ?? w?.knownLanguages ?? w?.speaks ?? ""; return normalizeArray(v).map(s => String(s).toLowerCase()); };
+// Update these functions to handle null/undefined better:
+const getWorkerSkills = (w) => {
+  const a = normalizeArray(w?.skills);
+  const b = normalizeArray(w?.homeCareSkills);
+  const c = normalizeArray(w?.otherSkills);
+  return [...a, ...b, ...c].map(s => String(s).toLowerCase());
+};
+
+
+const getWorkerLanguages = (w) => {
+  const v = w?.languages ?? w?.language ?? w?.knownLanguages ?? w?.speaks ?? "";
+  if (!v) return [];
+  return normalizeArray(v).map(s => String(s).toLowerCase().trim());
+};
+
+const getWorkerRoles = (w) => {
+  const v = w?.jobRole ?? w?.role ?? w?.roles ?? w?.profession ?? w?.designation ?? w?.workType ?? w?.otherSkills ?? w?.otherskills ?? w?.other_skills ?? w?.["other skils"] ?? "";
+  if (!v) return [];
+  return normalizeArray(v).map(s => String(s).toLowerCase().trim());
+};
 const getBaseDate = (w) => w?.callDate ?? w?.date ?? w?.createdAt ?? w?.createdDate ?? w?.createdOn ?? w?.timestamp ?? w?.created_time ?? w?.created_time_ms ?? null;
 
 /* =============================
@@ -266,11 +283,26 @@ export default function WorkerCalleDisplay({ permissions: permissionsProp }) {
 
       const haveSkills = getWorkerSkills(w), haveRoles = getWorkerRoles(w), haveLangs = getWorkerLanguages(w);
       const wantSkills = selectedSkills.map(s => String(s).toLowerCase()), wantRoles = selectedRoles.map(s => String(s).toLowerCase()), wantLangs = selectedLanguages.map(s => String(s).toLowerCase());
-      if (skillMode === "single") {
-        if (wantSkills.length > 0 && !wantSkills.some(s => haveSkills.includes(s))) return false;
-        if (wantRoles.length > 0 && !wantRoles.some(s => haveRoles.includes(s))) return false;
-        if (wantLangs.length > 0 && !wantLangs.some(s => haveLangs.includes(s))) return false;
-      } else {
+      if (skillMode === "multi") {
+        if (wantSkills.length > 0) {
+          const allSkillsPresent = wantSkills.every(s => haveSkills.includes(s));
+          // debugMultiSkillFilter(w, wantSkills, haveSkills); // Uncomment to debug
+          if (!allSkillsPresent) return false;
+        }
+        if (wantRoles.length > 0 && !wantRoles.every(s => haveRoles.includes(s))) return false;
+        if (wantLangs.length > 0 && !wantLangs.every(s => haveLangs.includes(s))) return false;
+      } if (wantLangs.length > 0) {
+        let langMatch;
+        if (skillMode === "single") {
+          langMatch = wantLangs.some(s => haveLangs.includes(s));
+        } else {
+          langMatch = wantLangs.every(s => haveLangs.includes(s));
+        }
+        // debugLanguageFilter(w, wantLangs, haveLangs); // Uncomment to debug
+        if (!langMatch) return false;
+      }
+
+      else {
         if (wantSkills.length > 0 && !wantSkills.every(s => haveSkills.includes(s))) return false;
         if (wantRoles.length > 0 && !wantRoles.every(s => haveRoles.includes(s))) return false;
         if (wantLangs.length > 0 && !wantLangs.every(s => haveLangs.includes(s))) return false;
@@ -371,6 +403,7 @@ export default function WorkerCalleDisplay({ permissions: permissionsProp }) {
 
   /* Monthly Day Grid (per user) */
   /* Monthly Day Grid (per user) - One record counts once per day */
+  // Replace the entire dayGrid useMemo with this:
   const dayGrid = useMemo(() => {
     const grid = {};
     if (!currentUserId) return grid;
@@ -382,8 +415,8 @@ export default function WorkerCalleDisplay({ permissions: permissionsProp }) {
       grid[m][d].total += 1;
     };
 
-    // Track ALL records per day to avoid double counting
-    const recordsPerDay = {};
+    // Track records processed per day to avoid double counting
+    const processedRecords = new Set();
 
     workers.forEach((w) => {
       // Apply source filter
@@ -395,34 +428,34 @@ export default function WorkerCalleDisplay({ permissions: permissionsProp }) {
       const createdBy = w?.createdById || w?.addedById || w?.createdByUid || w?.addedByUid || w?.uid || w?.userId;
       const updatedBy = w?.updatedById || w?.updatedByUid;
 
-      // Check if this record was created by current user
+      // Check creation
       const createdAt = parseDate(w?.createdAt || w?.created_date || w?.createdOn || w?.date);
       const isNewRecord = isValidDate(createdAt) &&
         createdAt.getFullYear() === activeYear &&
         createdBy === currentUserId;
 
-      // Check if this record was modified by current user  
+      // Check modifications
       const updatedAt = parseDate(w?.updatedAt || w?.updated_on || w?.editedAt);
       const isModifiedRecord = isValidDate(updatedAt) &&
         updatedAt.getFullYear() === activeYear &&
         updatedBy === currentUserId;
 
-      // Process creation (only if not already counted for this day)
+      // Process creation
       if (isNewRecord) {
-        const dayKey = `${createdAt.getMonth()}-${createdAt.getDate()}-${w.id}`;
-
-        if (!recordsPerDay[dayKey]) {
-          recordsPerDay[dayKey] = true;
+        const recordKey = `new-${createdAt.getMonth()}-${createdAt.getDate()}-${w.id}`;
+        if (!processedRecords.has(recordKey)) {
+          processedRecords.add(recordKey);
           bump(createdAt.getMonth(), createdAt.getDate(), "new");
         }
       }
 
-      // Process modification (only if not already counted for this day)
+      // Process modification (only count if different from creation date)
       if (isModifiedRecord) {
-        const dayKey = `${updatedAt.getMonth()}-${updatedAt.getDate()}-${w.id}`;
+        const recordKey = `mod-${updatedAt.getMonth()}-${updatedAt.getDate()}-${w.id}`;
 
-        if (!recordsPerDay[dayKey]) {
-          recordsPerDay[dayKey] = true;
+        // Only count if this is a different day from creation OR it's a modification of existing record
+        if (!processedRecords.has(recordKey)) {
+          processedRecords.add(recordKey);
           bump(updatedAt.getMonth(), updatedAt.getDate(), "modified");
         }
       }
@@ -438,6 +471,28 @@ export default function WorkerCalleDisplay({ permissions: permissionsProp }) {
     if (n <= 65) return { label: "Very Good", cls: "perf-vgood" };
     if (n <= 80) return { label: "Excellent", cls: "perf-exc" };
     return { label: "Marvelous", cls: "perf-marv" };
+  };
+
+  const debugMultiSkillFilter = (w, wantSkills, haveSkills) => {
+    console.log('Multi-skill debug:', {
+      worker: w.name,
+      wantedSkills: wantSkills,
+      hasSkills: haveSkills,
+      allWantedPresent: wantSkills.every(s => haveSkills.includes(s)),
+      skillMode: skillMode
+    });
+  };
+
+  // Add debug for language filtering
+  const debugLanguageFilter = (w, wantLangs, haveLangs) => {
+    console.log('Language debug:', {
+      worker: w.name,
+      wantedLangs: wantLangs,
+      hasLangs: haveLangs,
+      match: skillMode === "single" ?
+        wantLangs.some(s => haveLangs.includes(s)) :
+        wantLangs.every(s => haveLangs.includes(s))
+    });
   };
 
   const graphDays = useMemo(() => {
@@ -528,11 +583,24 @@ export default function WorkerCalleDisplay({ permissions: permissionsProp }) {
     experienceRange.min || experienceRange.max || sortBy !== "id" || sortDir !== "desc" || rowsPerPage !== 10 || currentPage !== 1 || showJobRoles
   ), [searchTerm, selectedSkills, selectedRoles, selectedLanguages, selectedGender, reminderFilter, selectedSource, skillMode, timeFormat, ageRange, experienceRange, sortBy, sortDir, rowsPerPage, currentPage, showJobRoles]);
 
+  // Update the resetFilters function to properly reset arrays:
   const resetFilters = () => {
-    setSearchTerm(""); setSelectedSkills([]); setSelectedRoles([]); setSelectedLanguages([]);
-    setSelectedGender([]); setReminderFilter(""); setSelectedSource("All"); setSkillMode("single"); setTimeFormat("24hr");
-    setAgeRange({ min: "", max: "" }); setExperienceRange({ min: "", max: "" });
-    setSortBy("id"); setSortDir("desc"); setRowsPerPage(10); setCurrentPage(1); setShowJobRoles(false);
+    setSearchTerm("");
+    setSelectedSkills([]);
+    setSelectedRoles([]);
+    setSelectedLanguages([]);
+    setSelectedGender([]);
+    setReminderFilter("");
+    setSelectedSource("All");
+    setSkillMode("single");
+    setTimeFormat("24hr");
+    setAgeRange({ min: "", max: "" });
+    setExperienceRange({ min: "", max: "" });
+    setSortBy("id");
+    setSortDir("desc");
+    setRowsPerPage(10);
+    setCurrentPage(1);
+    setShowJobRoles(false);
   };
 
   /* UI */
@@ -543,10 +611,11 @@ export default function WorkerCalleDisplay({ permissions: permissionsProp }) {
     <div className="workerCalls">
       {/* top controls */}
       <div className="d-flex justify-content-between flex-wrap gap-2 p-2 bg-dark border rounded-3 mb-3">
-      {/* status line */}
-      <div className="small text-center mt-2" style={{ color: "yellow" }}>
-        Showing <strong>{pageItems.length}</strong> of <strong>{sorted.length}</strong> (from <strong>{workers.length}</strong> total){reminderFilter ? ` — ${reminderFilter}` : ""}
-      </div>
+
+        {/* status line */}
+        <div className="small text-center mt-2" style={{ color: "yellow" }}>
+          Showing <strong>{pageItems.length}</strong> of <strong>{sorted.length}</strong> (from <strong>{workers.length}</strong> total){reminderFilter ? ` — ${reminderFilter}` : ""}
+        </div>
         <input
           type="text"
           className="form-control searchBar workerCallSearch"
@@ -696,13 +765,13 @@ export default function WorkerCalleDisplay({ permissions: permissionsProp }) {
         </div>
       )}
 
-           <div className="d-flex align-items-center">
-          <span className="me-2 text-white">Show</span>
-          <select className="form-select me-2 form-select-sm" style={{ width: 80 }} value={rowsPerPage} onChange={(e) => { setRowsPerPage(parseInt(e.target.value, 10) || 10); setCurrentPage(1); }}>
-            {[10, 20, 30, 40, 50].map((n) => (<option key={n} value={n}>{n}</option>))}
-          </select>
-          <span className="text-white ">Entries</span>
-        </div>
+      <div className="d-flex align-items-center">
+        <span className="me-2 text-white">Show</span>
+        <select className="form-select me-2 form-select-sm" style={{ width: 80 }} value={rowsPerPage} onChange={(e) => { setRowsPerPage(parseInt(e.target.value, 10) || 10); setCurrentPage(1); }}>
+          {[10, 20, 30, 40, 50].map((n) => (<option key={n} value={n}>{n}</option>))}
+        </select>
+        <span className="text-white ">Entries</span>
+      </div>
 
       {/* TOP pagination */}
       {Math.ceil(sorted.length / rowsPerPage) > 1 && (
@@ -843,10 +912,10 @@ export default function WorkerCalleDisplay({ permissions: permissionsProp }) {
       {/* Bottom pagination */}
 
       <div className="d-flex align-items-center m-3 d-none d-lg-block">
-           <div style={{ color: "yellow" }}>
-        Showing <strong>{pageItems.length}</strong> of <strong>{sorted.length}</strong> (from <strong>{workers.length}</strong> total){reminderFilter ? ` — ${reminderFilter}` : ""}
-      </div>
- 
+        <div style={{ color: "yellow" }}>
+          Showing <strong>{pageItems.length}</strong> of <strong>{sorted.length}</strong> (from <strong>{workers.length}</strong> total){reminderFilter ? ` — ${reminderFilter}` : ""}
+        </div>
+
         {Math.ceil(sorted.length / rowsPerPage) > 1 && (
           <nav aria-label="Workers" className="pagination-top py-2 mb-3 m-auto pagination-wrapper">
             <ul className="pagination justify-content-center mb-0">
@@ -859,14 +928,14 @@ export default function WorkerCalleDisplay({ permissions: permissionsProp }) {
           </nav>
         )}
 
-               <div className=" d-flex">
+        <div className=" d-flex">
           <span className="me-2 text-white">Show</span>
           <select className="form-select me-2 form-select-sm" style={{ width: 80 }} value={rowsPerPage} onChange={(e) => { setRowsPerPage(parseInt(e.target.value, 10) || 10); setCurrentPage(1); }}>
             {[10, 20, 30, 40, 50].map((n) => (<option key={n} value={n}>{n}</option>))}
           </select>
           <span className="text-white ">Entries</span>
         </div>
-        
+
       </div>
 
 

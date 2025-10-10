@@ -686,10 +686,10 @@ export default function WorkerCalleDisplay({ permissions: permissionsProp }) {
           </div>
 
           <div className="col-lg-2 col-md-3 text-center">
-            <label className="form-label small mb-2 text-info">Skill Match</label>
+            <label className="form-label small mb-2 text-info">Select Options</label>
             <div className="d-flex gap-2 justify-content-center">
-              <button type="button" className={`btn ${skillMode === "single" ? "btn-info" : "btn-outline-info"} btn-sm`} onClick={() => setSkillMode("single")}>One Skill</button>
-              <button type="button" className={`btn ${skillMode === "multi" ? "btn-info" : "btn-outline-info"} btn-sm`} onClick={() => setSkillMode("multi")}>Multi Skills</button>
+              <button type="button" className={`btn ${skillMode === "single" ? "btn-info" : "btn-outline-info"} btn-sm`} onClick={() => setSkillMode("single")}>Single Sel</button>
+              <button type="button" className={`btn ${skillMode === "multi" ? "btn-info" : "btn-outline-info"} btn-sm`} onClick={() => setSkillMode("multi")}>Multi Sel</button>
             </div>
           </div>
 

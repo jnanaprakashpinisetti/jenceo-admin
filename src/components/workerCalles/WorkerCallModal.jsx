@@ -356,7 +356,7 @@ export default function WorkerCallModal({
                     <span>{localWorker?.mobileNo || "—"}</span>
                     <span>{localWorker?.location || "—"}</span>
                   </div>
- 
+
                 </div>
 
                 {/* Close */}
@@ -375,11 +375,10 @@ export default function WorkerCallModal({
                   <ul className="nav nav-pills nav-justified gap-2 p-2">
                     <li className="nav-item">
                       <button
-                        className={`nav-link ${
-                          activeTab === "basic"
-                            ? "active btn-primary text-white"
-                            : "btn-outline-primary text-dark"
-                        }`}
+                        className={`nav-link ${activeTab === "basic"
+                          ? "active btn-primary text-white"
+                          : "btn-outline-primary text-primary"
+                          }`}
                         onClick={() => setActiveTab("basic")}
                         style={{ borderRadius: "5px", fontWeight: "600" }}
                       >
@@ -388,11 +387,10 @@ export default function WorkerCallModal({
                     </li>
                     <li className="nav-item">
                       <button
-                        className={`nav-link ${
-                          activeTab === "skills"
-                            ? "active btn-primary text-white"
-                            : "btn-outline-primary text-dark"
-                        }`}
+                        className={`nav-link ${activeTab === "skills"
+                          ? "active btn-primary text-white"
+                          : "btn-outline-primary text-primary"
+                          }`}
                         onClick={() => setActiveTab("skills")}
                         style={{ borderRadius: "5px", fontWeight: "600" }}
                       >
@@ -418,7 +416,7 @@ export default function WorkerCallModal({
                           </div>
                           <div className="card-body">
                             <div className="row g-3">
-                              <div className="col-md-6" style={{opacity:0}}>
+                              <div className="col-md-6" style={{ opacity: 0 }}>
                                 <label className="form-label fw-semibold text-dark">
                                   Mobile Number
                                 </label>
@@ -466,11 +464,10 @@ export default function WorkerCallModal({
                                             target: { name: "gender", value: g },
                                           })
                                         }
-                                        className={`btn ${
-                                          localWorker.gender === g
-                                            ? "btn-info"
-                                            : "btn-outline-secondary"
-                                        } btn-sm`}
+                                        className={`btn ${localWorker.gender === g
+                                          ? "btn-info"
+                                          : "btn-outline-secondary"
+                                          } btn-sm`}
                                       >
                                         {g}
                                       </button>
@@ -478,13 +475,12 @@ export default function WorkerCallModal({
                                   </div>
                                 ) : (
                                   <span
-                                    className={`badge ${
-                                      localWorker.gender === "Male"
-                                        ? "bg-primary"
-                                        : localWorker.gender === "Female"
+                                    className={`badge ${localWorker.gender === "Male"
+                                      ? "bg-primary"
+                                      : localWorker.gender === "Female"
                                         ? "bg-pink"
                                         : "bg-secondary"
-                                    } fs-6 p-2`}
+                                      } fs-6 p-2`}
                                   >
                                     {localWorker.gender || "—"}
                                   </span>
@@ -659,7 +655,29 @@ export default function WorkerCallModal({
                                 )}
                               </div>
 
-                              <div className="col-md-6">
+                              <div className="col-md-4">
+                                <label className="form-label fw-semibold text-dark d-block">
+                                  Working Hours
+                                </label>
+                                {isEditMode ? (
+                                  <select
+                                    name="workingHours"
+                                    value={localWorker.workingHours || ""}
+                                    onChange={handleChange}
+                                    className="form-select border-primary"
+                                  >
+                                    <option value="">Select Working Hours</option>
+                                    <option value="24">24HR</option>
+                                    <option value="12">12HR</option>
+                                  </select>
+                                ) : (
+                                  <div className="p-2 bg-light rounded">
+                                    {localWorker.workingHours || "N/A"}
+                                  </div>
+                                )}
+                              </div>
+
+                              <div className="col-md-4">
                                 <label className="form-label fw-semibold text-dark d-block">
                                   Conversation Level
                                 </label>
@@ -680,22 +698,21 @@ export default function WorkerCallModal({
                                   </select>
                                 ) : (
                                   <span
-                                    className={`badge ${
-                                      localWorker.conversationLevel === "Very Good"
-                                        ? "bg-success"
-                                        : localWorker.conversationLevel === "Good"
+                                    className={`badge ${localWorker.conversationLevel === "Very Good"
+                                      ? "bg-success"
+                                      : localWorker.conversationLevel === "Good"
                                         ? "bg-primary"
                                         : localWorker.conversationLevel === "Average"
-                                        ? "bg-warning"
-                                        : "bg-danger"
-                                    } fs-6 p-2  text-center`}
+                                          ? "bg-warning"
+                                          : "bg-danger"
+                                      } fs-6 p-2  text-center`}
                                   >
                                     {localWorker.conversationLevel || "N/A"}
                                   </span>
                                 )}
                               </div>
 
-                              <div className="col-md-6">
+                              <div className="col-md-4">
                                 <label className="form-label fw-semibold text-dark">
                                   Reminder Date
                                 </label>
@@ -711,8 +728,8 @@ export default function WorkerCallModal({
                                   <div className="form-control border bg-light">
                                     {localWorker.callReminderDate
                                       ? new Date(localWorker.callReminderDate).toLocaleDateString(
-                                          "en-GB"
-                                        )
+                                        "en-GB"
+                                      )
                                       : "—"}
                                   </div>
                                 )}
@@ -727,12 +744,17 @@ export default function WorkerCallModal({
                       {/* Comments (All, latest first). In view mode: no textarea/button */}
                       <div className="col-12">
                         <div className="border-0 shadow-sm p-3">
-                          <div className="card-header bg-light">
+                          <div className="card-header">
                             <h6 className="mb-0 fw-bold text-primary mb-2">
                               Comments
                             </h6>
                           </div>
                           <div className="card-body">
+                            <div className="border rounded p-2 mb-3 bg-light">
+                              <p className="mb-0 text-dark">{localWorker.formComment}</p>
+
+                            </div>
+
                             <div className="mb-3" style={{ maxHeight: "420px", overflowY: "auto" }}>
                               {comments && comments.length > 0 ? (
                                 comments.map((c, idx) => (
@@ -757,14 +779,15 @@ export default function WorkerCallModal({
 
                             {isEditMode && (
                               <div className="align-items-start gap-2 border-top pt-3">
+                                <p>Add Comment  <span className="star">*</span></p>
                                 <textarea
-                                  className="form-control border-primary"
+                                  className="form-control border-primary wc"
                                   rows="3"
                                   value={newComment}
                                   onChange={(e) => setNewComment(e.target.value)}
                                   placeholder="Add a new comment..."
                                 />
-                                <div className="">
+                                <div className="wc">
                                   <button
                                     className="btn btn-primary mt-3"
                                     onClick={handleAddComment}
@@ -865,11 +888,10 @@ export default function WorkerCallModal({
                               <button
                                 type="button"
                                 key={`primary-${opt}`}
-                                className={`btn btn-sm rounded-pill ${
-                                  active
-                                    ? "btn-outline-info btn-info text-black"
-                                    : "btn-outline-info"
-                                } disabled-keep`}
+                                className={`btn btn-sm rounded-pill ${active
+                                  ? "btn-outline-info btn-info text-black"
+                                  : "btn-outline-info"
+                                  } disabled-keep`}
                                 onClick={() => handleMultiToggle("skills", opt)}
                                 disabled={!isEditMode}
                                 aria-pressed={active}
@@ -932,11 +954,10 @@ export default function WorkerCallModal({
                               <button
                                 type="button"
                                 key={`homecare-${opt}`}
-                                className={`btn btn-sm rounded-pill ${
-                                  active
-                                    ? "btn-outline-success btn-success text-black"
-                                    : "btn-outline-success"
-                                } disabled-keep`}
+                                className={`btn btn-sm rounded-pill ${active
+                                  ? "btn-outline-success btn-success text-black"
+                                  : "btn-outline-success"
+                                  } disabled-keep`}
                                 onClick={() => handleMultiToggle("homeCareSkills", opt)}
                                 disabled={!isEditMode}
                                 aria-pressed={active}
@@ -999,21 +1020,20 @@ export default function WorkerCallModal({
                                 .map((x) => String(x).toLowerCase())
                                 .includes(String(opt).toLowerCase());
                               return (
-                                  <button
+                                <button
                                   key={`other-${opt}`}
-                                    type="button"
-                                    className={` w-auto me-2 btn btn-sm rounded-pill ${
-                                      active
-                                        ? "btn-outline-warning btn-warning text-black"
-                                        : "btn-outline-warning"
+                                  type="button"
+                                  className={` w-auto me-2 btn btn-sm rounded-pill ${active
+                                    ? "btn-outline-warning btn-warning text-black"
+                                    : "btn-outline-warning"
                                     } disabled-keep`}
-                                    onClick={() => handleMultiToggle("otherSkills", opt)}
-                                    disabled={!isEditMode}
-                                    aria-pressed={active}
-                                    title={!isEditMode ? "Switch to Edit to modify other skills" : ""}
-                                  >
-                                    {opt}
-                                  </button>
+                                  onClick={() => handleMultiToggle("otherSkills", opt)}
+                                  disabled={!isEditMode}
+                                  aria-pressed={active}
+                                  title={!isEditMode ? "Switch to Edit to modify other skills" : ""}
+                                >
+                                  {opt}
+                                </button>
                               );
                             })}
                           </div>
@@ -1057,27 +1077,28 @@ export default function WorkerCallModal({
                         </div>
                       </div>
                     </div>
+                    {/* Footer */}
+                    <div className="modal-footer bg-light border-top wc mt-3">
+                      {isEditMode && (
+                        <button
+                          className="btn btn-success px-4 fw-bold "
+                          onClick={handleSave}
+                          disabled={!canSave}
+                          title={!canSave ? "Add a comment first to enable saving" : ""}
+                        >
+                          Save Changes
+                        </button>
+                      )}
+                      <button className="btn btn-secondary px-4" onClick={confirmClose}>
+                        Close
+                      </button>
+                    </div>
                   </div>
                 )}
               </div>
             </div>
 
-            {/* Footer */}
-            <div className="modal-footer bg-light border-top">
-              {isEditMode && (
-                <button
-                  className="btn btn-success px-4 fw-bold disabled-keep"
-                  onClick={handleSave}
-                  disabled={!canSave}
-                  title={!canSave ? "Add a comment first to enable saving" : ""}
-                >
-                  Save Changes
-                </button>
-              )}
-              <button className="btn btn-secondary px-4" onClick={confirmClose}>
-                Close
-              </button>
-            </div>
+
           </div>
         </div>
       </div>

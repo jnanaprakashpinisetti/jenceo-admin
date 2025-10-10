@@ -42,6 +42,16 @@ const formatTime = (dateLike, mode = "12hr") => { const d = parseDate(dateLike);
 const ordinal = (n) => { const s = ["th", "st", "nd", "rd"], v = n % 100; return n + (s[(v - 20) % 10] || s[v] || s[0]); };
 const formatPrettyDate = (v) => { const d = parseDate(v); if (!isValidDate(d)) return "—"; const day = d.getDate(); const month = d.toLocaleString("en-GB", { month: "short" }); const year = String(d.getFullYear()).slice(-2); return `${ordinal(day)} ${month} ${year}`; };
 
+const hasTimeData = (w) => {
+  const baseDate = getBaseDate(w);
+  const d = parseDate(baseDate);
+  if (!isValidDate(d)) return false;
+
+  // Check if time component exists (not midnight or has non-zero time)
+  return !(d.getHours() === 0 && d.getMinutes() === 0 && d.getSeconds() === 0);
+};
+
+
 /* =============================
    ID helpers (stable + 2-digit WC-01)
    ============================= */
@@ -138,32 +148,52 @@ const getBaseDate = (w) => w?.callDate ?? w?.date ?? w?.createdAt ?? w?.createdD
 /* =============================
    Permissions (export gate)
    ============================= */
+/* =============================
+   Enhanced Permissions System
+   ============================= */
 const derivePermissions = (authUser, explicit) => {
-  const role = String(authUser?.role || "viewer").toLowerCase();
-  let perms = {
-    canView: true,
-    canEdit: ["admin", "editor", "manager"].includes(role),
-    canDelete: role === "admin",
-    canExport: role === "admin",
-  };
-  if (authUser?.permissions && typeof authUser.permissions === "object") {
-    const p = authUser.permissions;
-    perms.canView = p.view ?? perms.canView;
-    perms.canEdit = p.edit ?? perms.canEdit;
-    perms.canDelete = p.delete ?? perms.canDelete;
-    perms.canExport = p.export ?? perms.canExport;
-  }
+  // Start with explicit permissions if provided
   if (explicit && typeof explicit === "object") {
-    perms = {
-      canView: explicit.view ?? perms.canView,
-      canEdit: explicit.edit ?? perms.canEdit,
-      canDelete: explicit.delete ?? perms.canDelete,
-      canExport: explicit.export ?? perms.canExport,
+    return {
+      canView: explicit.view ?? true,
+      canEdit: explicit.edit ?? false,
+      canDelete: explicit.delete ?? false,
+      canExport: explicit.export ?? false,
+      canManageUsers: explicit.manageUsers ?? false,
+      canViewAnalytics: explicit.viewAnalytics ?? false,
+      canBulkOperations: explicit.bulkOperations ?? false,
     };
   }
-  return perms;
-};
 
+  // Fallback to role-based permissions
+  const role = String(authUser?.role || "viewer").toLowerCase();
+
+  const basePerms = {
+    canView: true,
+    canEdit: ["admin", "editor", "manager", "supervisor"].includes(role),
+    canDelete: ["admin", "manager"].includes(role),
+    canExport: ["admin", "manager", "supervisor"].includes(role),
+    canManageUsers: role === "admin",
+    canViewAnalytics: ["admin", "manager", "supervisor"].includes(role),
+    canBulkOperations: ["admin", "manager"].includes(role),
+  };
+
+  // Override with user-specific permissions if available
+  if (authUser?.permissions && typeof authUser.permissions === "object") {
+    const userPerms = authUser.permissions["Worker Call Data"] || authUser.permissions["WorkerCallData"] || authUser.permissions;
+    return {
+      canView: userPerms.view ?? basePerms.canView,
+      canEdit: userPerms.edit ?? basePerms.canEdit,
+      canDelete: userPerms.delete ?? basePerms.canDelete,
+      canExport: userPerms.export ?? basePerms.canExport,
+      canManageUsers: userPerms.manageUsers ?? basePerms.canManageUsers,
+      canViewAnalytics: userPerms.viewAnalytics ?? basePerms.canViewAnalytics,
+      canBulkOperations: userPerms.bulkOperations ?? basePerms.canBulkOperations,
+    };
+  }
+
+  return basePerms;
+};
 /* =============================
    Component
    ============================= */
@@ -174,7 +204,6 @@ export default function WorkerCalleDisplay({ permissions: permissionsProp }) {
   const [workers, setWorkers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-
   const [stableIndexMap, setStableIndexMap] = useState({});
   const initializedOrder = useRef(false);
 
@@ -264,9 +293,11 @@ export default function WorkerCalleDisplay({ permissions: permissionsProp }) {
   }, [workers]);
 
   /* Filtering (case-insensitive + ID-aware) */
+  /* Filtering (case-insensitive + ID-aware) */
   const filtered = useMemo(() => {
     const raw = searchTerm.trim().toLowerCase();
     const idTerm = normalizeIdText(raw);
+
     return workers.filter((w) => {
       const hay = `${String(w?.name ?? "").toLowerCase()} ${String(w?.location ?? "").toLowerCase()} ${String(w?.mobileNo ?? "").toLowerCase()}`;
       const textMatch = !raw || hay.includes(raw);
@@ -274,68 +305,99 @@ export default function WorkerCalleDisplay({ permissions: permissionsProp }) {
       const id = getDisplayCallId(w, stableIndexMap);
       const idNorm = normalizeIdText(id);
       const idMatch = !raw || idTerm === "" || idNorm.includes(idTerm) || idTerm.includes(idNorm);
+
       if (!textMatch && !idMatch) return false;
 
+      // Gender filter
       if (selectedGender.length > 0) {
         const g = String(w?.gender ?? "").toLowerCase();
         if (!selectedGender.map(x => String(x).toLowerCase()).includes(g)) return false;
       }
 
-      const haveSkills = getWorkerSkills(w), haveRoles = getWorkerRoles(w), haveLangs = getWorkerLanguages(w);
-      const wantSkills = selectedSkills.map(s => String(s).toLowerCase()), wantRoles = selectedRoles.map(s => String(s).toLowerCase()), wantLangs = selectedLanguages.map(s => String(s).toLowerCase());
-      if (skillMode === "multi") {
-        if (wantSkills.length > 0) {
+      const haveSkills = getWorkerSkills(w);
+      const haveRoles = getWorkerRoles(w);
+      const haveLangs = getWorkerLanguages(w);
+
+      const wantSkills = selectedSkills.map(s => String(s).toLowerCase());
+      const wantRoles = selectedRoles.map(s => String(s).toLowerCase());
+      const wantLangs = selectedLanguages.map(s => String(s).toLowerCase());
+
+      // Skills filter
+      if (wantSkills.length > 0) {
+        if (skillMode === "multi") {
+          // ALL selected skills must be present
           const allSkillsPresent = wantSkills.every(s => haveSkills.includes(s));
-          // debugMultiSkillFilter(w, wantSkills, haveSkills); // Uncomment to debug
           if (!allSkillsPresent) return false;
-        }
-        if (wantRoles.length > 0 && !wantRoles.every(s => haveRoles.includes(s))) return false;
-        if (wantLangs.length > 0 && !wantLangs.every(s => haveLangs.includes(s))) return false;
-      } if (wantLangs.length > 0) {
-        let langMatch;
-        if (skillMode === "single") {
-          langMatch = wantLangs.some(s => haveLangs.includes(s));
         } else {
-          langMatch = wantLangs.every(s => haveLangs.includes(s));
+          // ANY selected skill can be present
+          const anySkillPresent = wantSkills.some(s => haveSkills.includes(s));
+          if (!anySkillPresent) return false;
         }
-        // debugLanguageFilter(w, wantLangs, haveLangs); // Uncomment to debug
-        if (!langMatch) return false;
       }
 
-      else {
-        if (wantSkills.length > 0 && !wantSkills.every(s => haveSkills.includes(s))) return false;
-        if (wantRoles.length > 0 && !wantRoles.every(s => haveRoles.includes(s))) return false;
-        if (wantLangs.length > 0 && !wantLangs.every(s => haveLangs.includes(s))) return false;
+      // Roles filter
+      if (wantRoles.length > 0) {
+        if (skillMode === "multi") {
+          const allRolesPresent = wantRoles.every(s => haveRoles.includes(s));
+          if (!allRolesPresent) return false;
+        } else {
+          const anyRolePresent = wantRoles.some(s => haveRoles.includes(s));
+          if (!anyRolePresent) return false;
+        }
       }
 
+      // Languages filter
+      if (wantLangs.length > 0) {
+        if (skillMode === "multi") {
+          const allLangsPresent = wantLangs.every(s => haveLangs.includes(s));
+          if (!allLangsPresent) return false;
+        } else {
+          const anyLangPresent = wantLangs.some(s => haveLangs.includes(s));
+          if (!anyLangPresent) return false;
+        }
+      }
+
+      // Reminder filter
       if (reminderFilter) {
-        const r = w?.callReminderDate || w?.reminderDate; const du = daysUntil(r); if (!isFinite(du)) return false;
-        if (reminderFilter === "overdue" && !(du < 0)) return false;
-        if (reminderFilter === "today" && du !== 0) return false;
-        if (reminderFilter === "tomorrow" && du !== 1) return false;
-        if (reminderFilter === "upcoming" && !(du >= 2)) return false;
+        const r = w?.callReminderDate || w?.reminderDate;
+        const du = daysUntil(r);
+        if (!isFinite(du)) return false;
+
+        switch (reminderFilter) {
+          case "overdue": if (!(du < 0)) return false; break;
+          case "today": if (du !== 0) return false; break;
+          case "tomorrow": if (du !== 1) return false; break;
+          case "upcoming": if (!(du >= 2)) return false; break;
+        }
       }
 
+      // Source filter
       if (selectedSource !== "All") {
         const src = normalizeSource(w?.callThrough || w?.through || w?.source || "");
         if (src !== selectedSource) return false;
       }
 
+      // Age range filter
       const age = calculateAge(w?.dateOfBirth || w?.dob || w?.birthDate, w?.age);
       if (ageRange.min && age != null && age < parseInt(ageRange.min, 10)) return false;
       if (ageRange.max && age != null && age > parseInt(ageRange.max, 10)) return false;
 
-      const minRaw = String(experienceRange?.min ?? "").trim(); const maxRaw = String(experienceRange?.max ?? "").trim();
-      const minActive = minRaw !== "" && !Number.isNaN(Number(minRaw)); const maxActive = maxRaw !== "" && !Number.isNaN(Number(maxRaw));
+      // Experience range filter
+      const minRaw = String(experienceRange?.min ?? "").trim();
+      const maxRaw = String(experienceRange?.max ?? "").trim();
+      const minActive = minRaw !== "" && !Number.isNaN(Number(minRaw));
+      const maxActive = maxRaw !== "" && !Number.isNaN(Number(maxRaw));
+
       if (minActive || maxActive) {
-        const min = minActive ? Number(minRaw) : -Infinity; const max = maxActive ? Number(maxRaw) : Infinity;
-        const num = (() => {
-          const take = (v) => { if (v == null) return null; const m = String(v).match(/(\d+(?:\.\d+)?)/); return m ? Number(m[1]) : null; };
-          return take(w?.years) ?? take(w?.experience) ?? take(w?.exp) ?? take(w?.workExperience) ?? take(w?.experienceYears) ?? null;
-        })();
-        if (num == null || Number.isNaN(num)) return false;
-        const yrs = Math.max(0, num); if (yrs < min || yrs > max) return false;
+        const min = minActive ? Number(minRaw) : -Infinity;
+        const max = maxActive ? Number(maxRaw) : Infinity;
+        const exp = calculateExperience(w);
+
+        if (exp == null || Number.isNaN(exp)) return false;
+        const yrs = Math.max(0, exp);
+        if (yrs < min || yrs > max) return false;
       }
+
       return true;
     });
   }, [workers, searchTerm, selectedGender, selectedSkills, selectedRoles, selectedLanguages, skillMode, reminderFilter, selectedSource, ageRange, experienceRange, stableIndexMap]);
@@ -404,6 +466,7 @@ export default function WorkerCalleDisplay({ permissions: permissionsProp }) {
   /* Monthly Day Grid (per user) */
   /* Monthly Day Grid (per user) - One record counts once per day */
   // Replace the entire dayGrid useMemo with this:
+  /* Monthly Day Grid - Fixed to count each record only once */
   const dayGrid = useMemo(() => {
     const grid = {};
     if (!currentUserId) return grid;
@@ -415,7 +478,7 @@ export default function WorkerCalleDisplay({ permissions: permissionsProp }) {
       grid[m][d].total += 1;
     };
 
-    // Track records processed per day to avoid double counting
+    // Track records to ensure each is only counted once
     const processedRecords = new Set();
 
     workers.forEach((w) => {
@@ -440,24 +503,17 @@ export default function WorkerCalleDisplay({ permissions: permissionsProp }) {
         updatedAt.getFullYear() === activeYear &&
         updatedBy === currentUserId;
 
-      // Process creation
-      if (isNewRecord) {
-        const recordKey = `new-${createdAt.getMonth()}-${createdAt.getDate()}-${w.id}`;
-        if (!processedRecords.has(recordKey)) {
-          processedRecords.add(recordKey);
-          bump(createdAt.getMonth(), createdAt.getDate(), "new");
-        }
-      }
+      // Unique key for this record in this year/month/day
+      const recordKey = `${w.id}-${activeYear}`;
 
-      // Process modification (only count if different from creation date)
-      if (isModifiedRecord) {
-        const recordKey = `mod-${updatedAt.getMonth()}-${updatedAt.getDate()}-${w.id}`;
-
-        // Only count if this is a different day from creation OR it's a modification of existing record
-        if (!processedRecords.has(recordKey)) {
-          processedRecords.add(recordKey);
-          bump(updatedAt.getMonth(), updatedAt.getDate(), "modified");
-        }
+      if (isNewRecord && !processedRecords.has(recordKey)) {
+        // Count as NEW only if not processed yet
+        processedRecords.add(recordKey);
+        bump(createdAt.getMonth(), createdAt.getDate(), "new");
+      } else if (isModifiedRecord && !processedRecords.has(recordKey)) {
+        // Count as MODIFIED only if not processed yet and not a new record
+        processedRecords.add(recordKey);
+        bump(updatedAt.getMonth(), updatedAt.getDate(), "modified");
       }
     });
 
@@ -577,6 +633,84 @@ export default function WorkerCalleDisplay({ permissions: permissionsProp }) {
     const wb = XLSX.utils.book_new(); const ws = XLSX.utils.json_to_sheet(exportData); XLSX.utils.book_append_sheet(wb, ws, "Workers"); XLSX.writeFile(wb, "WorkerCallData.xlsx");
   };
 
+  /* Export All Data (Admin Only) */
+  const handleExportAll = () => {
+    if (!permissions.canManageUsers) {
+      alert("Admin permission required for full data export.");
+      return;
+    }
+
+    const exportData = workers.map((w, index) => {
+      const baseDate = getBaseDate(w);
+      const reminder = w?.callReminderDate || w?.reminderDate;
+      const du = daysUntil(reminder);
+      const duText = isFinite(du) ? (du === 0 ? "Today" : du === 1 ? "Tomorrow" : du < 0 ? `${Math.abs(du)} days ago` : `${du} days`) : "";
+      const age = calculateAge(w?.dateOfBirth || w?.dob || w?.birthDate, w?.age);
+      const experience = calculateExperience(w);
+      const displayId = getDisplayCallId(w, stableIndexMap);
+      const addedBy = resolveAddedBy(w, usersMap);
+      const callThrough = normalizeSource(w?.callThrough || w?.through || w?.source || "");
+
+      return {
+        "S.No": index + 1,
+        "WC Id": displayId,
+        "Database ID": w.id,
+        "Date": formatDDMMYYYY(baseDate),
+        "Name": w?.name ?? "",
+        "Gender": w?.gender ?? "",
+        "Age": age ?? "",
+        "Experience (Years)": experience ?? "",
+        "Skills": normalizeArray(w?.skills).join(", "),
+        "Languages": getWorkerLanguages(w).join(", "),
+        "Roles": getWorkerRoles(w).join(", "),
+        "Mobile": w?.mobileNo ?? "",
+        "Location": w?.location ?? "",
+        "Communication Level": w?.conversationLevel ?? w?.communications ?? "",
+        "Call Through": callThrough,
+        "Reminder Date": isValidDate(parseDate(reminder)) ? formatDDMMYYYY(reminder) : "N/A",
+        "Reminder Status": isFinite(du) ? duText : "",
+        "Added By": addedBy,
+        "Created By ID": w?.createdById || w?.addedById || "",
+        "Comments": Array.isArray(w?.comments) ? w.comments.join("; ") : w?.comments || "",
+        "Last Modified": w?.updatedAt ? formatDDMMYYYY(w.updatedAt) : "N/A"
+      };
+    });
+
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.json_to_sheet(exportData);
+
+    // Set column widths for comprehensive export
+    const colWidths = [
+      { wch: 6 },   // S.No
+      { wch: 10 },  // WC Id
+      { wch: 20 },  // Database ID
+      { wch: 12 },  // Date
+      { wch: 20 },  // Name
+      { wch: 8 },   // Gender
+      { wch: 6 },   // Age
+      { wch: 12 },  // Experience
+      { wch: 25 },  // Skills
+      { wch: 15 },  // Languages
+      { wch: 20 },  // Roles
+      { wch: 15 },  // Mobile
+      { wch: 20 },  // Location
+      { wch: 15 },  // Communication
+      { wch: 15 },  // Call Through
+      { wch: 12 },  // Reminder Date
+      { wch: 15 },  // Reminder Status
+      { wch: 15 },  // Added By
+      { wch: 20 },  // Created By ID
+      { wch: 30 },  // Comments
+      { wch: 15 }   // Last Modified
+    ];
+    ws['!cols'] = colWidths;
+
+    XLSX.utils.book_append_sheet(wb, ws, "AllWorkerData");
+
+    const timestamp = new Date().toISOString().slice(0, 19).replace(/:/g, '-');
+    XLSX.writeFile(wb, `AllWorkerData_FullExport_${timestamp}.xlsx`);
+  };
+
   const hasActiveFilters = useMemo(() => Boolean(
     searchTerm || selectedSkills.length || selectedRoles.length || selectedLanguages.length || selectedGender.length || reminderFilter ||
     (selectedSource && selectedSource !== "All") || skillMode !== "single" || timeFormat !== "24hr" || ageRange.min || ageRange.max ||
@@ -593,7 +727,6 @@ export default function WorkerCalleDisplay({ permissions: permissionsProp }) {
     setReminderFilter("");
     setSelectedSource("All");
     setSkillMode("single");
-    setTimeFormat("24hr");
     setAgeRange({ min: "", max: "" });
     setExperienceRange({ min: "", max: "" });
     setSortBy("id");
@@ -785,6 +918,8 @@ export default function WorkerCalleDisplay({ permissions: permissionsProp }) {
           </ul>
         </nav>
       )}
+
+
 
       {/* Table -1 */}
       <div className="table-responsive">

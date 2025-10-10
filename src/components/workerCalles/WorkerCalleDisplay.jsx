@@ -222,7 +222,7 @@ export default function WorkerCalleDisplay({ permissions: permissionsProp }) {
 
   // Options
   const callThroughOptions = ["Apana", "WorkerIndian", "Reference", "Poster", "Agent", "Facebook", "LinkedIn", "Instagram", "YouTube", "Website", "Just Dial", "News Paper", "Other", "Unknown"];
-  const skillOptions = ["Nursing", "Cooking", "Patient Care", "Care Taker", "Old Age Care", "Baby Care", "Bedside Attender", "Supporting", "Daiper", "Any Duty", "Others"];
+  const skillOptions = ["Nursing", "Cook", "Patient Care", "Care Taker", "Old Age Care", "Baby Care", "Bedside Attender", "Supporting", "Daiper", "Any Duty", "Others"];
   const roleOptions = ["Computer Operating", "Tele Calling", "Driving", "Supervisor", "Manager", "Attender", "Security", "Carpenter", "Painter", "Plumber", "Electrician", "Mason (Home maker)", "Tailor", "Labour", "Farmer", "Delivery Boy", "House Keeping", "Cook", "Nanny", "Elderly Care", "Driver", "Office Boy", "Peon"];
   const languageOptions = ["Telugu", "English", "Hindi", "Urdu", "Kannada", "Malayalam", "Tamil", "Bengali", "Marati"];
 
@@ -1052,13 +1052,13 @@ export default function WorkerCalleDisplay({ permissions: permissionsProp }) {
                   ))}
                 </div>
                 <div className="mt-3 small d-flex flex-wrap gap-3 align-items-center pt-3 justify-content-between">
-                  <span className="legend perf-none">No Calls (0)</span>
+                  <span className="legend perf-none">No Call Days (0)</span>
                   <span className="legend perf-poor">Poor (1–15)</span>
                   <span className="legend perf-avg">Average (16–35)</span>
                   <span className="legend perf-good">Good (36–50)</span>
                   <span className="legend perf-vgood">Very Good (51–65)</span>
                   <span className="legend perf-exc">Excellent (66–80)</span>
-                  <span className="legend perf-marv">Marvelous (80–100)</span>
+                  <span className="legend perf-marv">Marvelous (81+)</span>
                 </div>
               </div>
             </div>
@@ -1152,7 +1152,7 @@ export default function WorkerCalleDisplay({ permissions: permissionsProp }) {
                   );
                 })()}
                 <div className="mt-3 small w-100 d-flex flex-wrap justify-content-center gap-2">
-                  <span className="legend perf-none">No Calls: {pieAgg.none}</span>
+                  <span className="legend perf-none">No Call Days: {pieAgg.none}</span>
                   <span className="legend perf-poor">Poor: {pieAgg.poor}</span>
                   <span className="legend perf-avg">Average: {pieAgg.avg}</span>
                   <span className="legend perf-good">Good: {pieAgg.good}</span>

@@ -467,7 +467,7 @@ export default function DisplayClient() {
                   <td>
                     {client.mobileNo1 ? (
                       <span>
-                        {client.mobileNo1} &nbsp;&nbsp;
+                        {/* {client.mobileNo1} &nbsp;&nbsp; */}
                         <a href={`tel:${client.mobileNo1}`} className="btn btn-sm btn-info" onClick={(e) => e.stopPropagation()}>Call</a>
                         <a
                           className="btn btn-sm btn-warning ms-1"

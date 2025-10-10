@@ -141,6 +141,17 @@ form {
         white-space: nowrap;
     }
 
+    &.enquiryForm {
+        ::placeholder {
+            color: #3c3d3f;
+        }
+
+        .idNo {
+            opacity: 1;
+            cursor: none;
+        }
+    }
+
 
 }
 

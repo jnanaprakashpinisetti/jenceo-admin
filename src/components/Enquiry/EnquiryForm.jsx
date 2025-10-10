@@ -72,7 +72,7 @@ const ThankYouModal = ({ open, onClose, name, mobile }) => {
                                 </p>
                             </>
                         ) : null}
-                        <p className="text-muted mt-3 mb-0">We’ll process it shortly.</p>
+                        <p className="text-muted mt-3 mb-0">We'll process it shortly.</p>
                     </div>
 
                     <div className="modal-footer justify-content-center">
@@ -89,12 +89,18 @@ const ThankYouModal = ({ open, onClose, name, mobile }) => {
 /* --------------------------------- Form ---------------------------------- */
 const EnquiryForm = ({ show, onClose, title = "Enquiry Form" }) => {
     const emptyForm = useMemo(() => ({
+        idNo: "",
         date: "",
         name: "",
         mobile: "",
         gender: "",
         service: "",
         amount: "",
+        careRecipientName: "",
+        age: "",
+        weight: "",
+        location: "",
+        serviceRequiredPeriod: "",
         through: "",
         status: "",
         communication: "",
@@ -106,6 +112,7 @@ const EnquiryForm = ({ show, onClose, title = "Enquiry Form" }) => {
     const [initialData, setInitialData] = useState(emptyForm); // used for pristine check
     const [errors, setErrors] = useState({});
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [isGeneratingId, setIsGeneratingId] = useState(false);
 
     // Data to show in thank-you modal
     const [submittedData, setSubmittedData] = useState({ name: "", mobile: "" });
@@ -114,18 +121,67 @@ const EnquiryForm = ({ show, onClose, title = "Enquiry Form" }) => {
     // Confirm close state
     const [showConfirmClose, setShowConfirmClose] = useState(false);
 
-    // Set default date to today whenever the modal opens; also reset pristine baseline
-    useEffect(() => {
-        if (show) {
-            const today = new Date();
-            const formatted = today.toISOString().split("T")[0];
-            const withToday = { ...emptyForm, date: formatted };
-            setFormData(withToday);
-            setInitialData(withToday);
-            setErrors({});
-            setShowThankYou(false);
-            setShowConfirmClose(false);
+    // Generate ID number
+    const generateIdNo = async () => {
+        setIsGeneratingId(true);
+        try {
+            // Get the latest enquiry to generate sequential ID
+            const snapshot = await firebaseDB.child("EnquiryData")
+                .orderByChild("timestamp")
+                .limitToLast(1)
+                .once("value");
+
+            let nextId = 1;
+            if (snapshot.exists()) {
+                const lastEnquiry = Object.values(snapshot.val())[0];
+                if (lastEnquiry.idNo) {
+                    const lastId = parseInt(lastEnquiry.idNo.replace('E-', '')) || 0;
+                    nextId = lastId + 1;
+                }
+            }
+
+            const newIdNo = `E-${String(nextId).padStart(2, '0')}`;
+            return newIdNo;
+        } catch (error) {
+            console.error("Error generating ID:", error);
+            // Fallback: use timestamp-based ID
+            const fallbackId = `E-${Date.now().toString().slice(-4)}`;
+            return fallbackId;
+        } finally {
+            setIsGeneratingId(false);
         }
+    };
+
+    // Set default date to today and generate ID whenever the modal opens; also reset pristine baseline
+    useEffect(() => {
+        const initializeForm = async () => {
+            if (show) {
+                setIsGeneratingId(true);
+                try {
+                    const today = new Date();
+                    const formatted = today.toISOString().split("T")[0];
+                    const generatedId = await generateIdNo();
+                    
+                    const initializedForm = { 
+                        ...emptyForm, 
+                        date: formatted, 
+                        idNo: generatedId 
+                    };
+                    
+                    setFormData(initializedForm);
+                    setInitialData(initializedForm);
+                    setErrors({});
+                    setShowThankYou(false);
+                    setShowConfirmClose(false);
+                } catch (error) {
+                    console.error("Error initializing form:", error);
+                } finally {
+                    setIsGeneratingId(false);
+                }
+            }
+        };
+
+        initializeForm();
     }, [show, emptyForm]);
 
     // Helpers for date comparisons as YYYY-MM-DD
@@ -139,6 +195,9 @@ const EnquiryForm = ({ show, onClose, title = "Enquiry Form" }) => {
         let error = "";
 
         switch (name) {
+            case "idNo":
+                if (!value.trim()) error = "ID number is required.";
+                break;
             case "date": {
                 const today = new Date();
                 const minDate = new Date();
@@ -217,7 +276,7 @@ const EnquiryForm = ({ show, onClose, title = "Enquiry Form" }) => {
 
         // Validate required fields (skip optional: service, comments, reminderDate)
         const fieldsToCheck = Object.keys(formData).filter(
-            (f) => !["service", "comments", "reminderDate"].includes(f)
+            (f) => !["service", "comments", "reminderDate", "careRecipientName", "age", "weight", "location", "serviceRequiredPeriod"].includes(f)
         );
 
         const newErrors = {};
@@ -244,12 +303,18 @@ const EnquiryForm = ({ show, onClose, title = "Enquiry Form" }) => {
                 // Reset form (keep today's date) and reset pristine baseline
                 const today = new Date().toISOString().split("T")[0];
                 const reset = {
+                    idNo: "",
                     date: today,
                     name: "",
                     mobile: "",
                     gender: "",
                     service: "",
                     amount: "",
+                    careRecipientName: "",
+                    age: "",
+                    weight: "",
+                    location: "",
+                    serviceRequiredPeriod: "",
                     through: "",
                     status: "",
                     communication: "",
@@ -302,7 +367,7 @@ const EnquiryForm = ({ show, onClose, title = "Enquiry Form" }) => {
                     tabIndex="-1"
                     aria-modal="true"
                     role="dialog"
-                    style={{ background: "rgba(0,0,0,0.8)", zIndex: 1050 }}
+                    style={{ background: "rgba(0,0,0,0.9)", zIndex: 1050 }}
                 >
                     <div className="modal-dialog modal-xl modal-dialog-centered client-form">
                         <div className="modal-content" style={{ borderRadius: 12 }}>
@@ -315,8 +380,35 @@ const EnquiryForm = ({ show, onClose, title = "Enquiry Form" }) => {
                             </div>
 
                             <div className="modal-body">
-                                <form onSubmit={handleSubmit}>
+                                <form onSubmit={handleSubmit} className="enquiryForm">
+                                    {/* ID No and Date */}
                                     <div className="row">
+                                        <div className="col-md-6 mb-3">
+                                            <label className="form-label">
+                                                ID No <span className="text-danger">*</span>
+                                            </label>
+                                            <div className="input-group">
+                                                <input
+                                                    type="text"
+                                                    name="idNo"
+                                                    className={`form-control idNo ${errors.idNo ? "is-invalid" : ""}`}
+                                                    value={formData.idNo}
+                                                    onChange={handleChange}
+                                                    onBlur={handleBlur}
+                                                    disabled
+                                                    placeholder={isGeneratingId ? "Generating ID..." : "Auto-generated ID"}
+                                                />
+                                                <div className="input-group-text">
+                                                    {isGeneratingId ? (
+                                                        <span className="spinner-border spinner-border-sm" />
+                                                    ) : (
+                                                        <i className="fas fa-check text-success" />
+                                                    )}
+                                                </div>
+                                            </div>
+                                            {errors.idNo && <div className="invalid-feedback">{errors.idNo}</div>}
+                                        </div>
+
                                         {/* Date */}
                                         <div className="col-md-6 mb-3">
                                             <label className="form-label">
@@ -333,7 +425,10 @@ const EnquiryForm = ({ show, onClose, title = "Enquiry Form" }) => {
                                             />
                                             {errors.date && <div className="invalid-feedback">{errors.date}</div>}
                                         </div>
+                                    </div>
 
+                                    {/* Mobile and Name */}
+                                    <div className="row">
                                         {/* Name */}
                                         <div className="col-md-6 mb-3">
                                             <label className="form-label">
@@ -347,13 +442,10 @@ const EnquiryForm = ({ show, onClose, title = "Enquiry Form" }) => {
                                                 value={formData.name}
                                                 onChange={handleChange}
                                                 onBlur={handleBlur}
+                                                placeholder="Enter Name"
                                             />
                                             {errors.name && <div className="invalid-feedback">{errors.name}</div>}
                                         </div>
-                                    </div>
-
-                                    <div className="row">
-                                        {/* Mobile */}
                                         <div className="col-md-6 mb-3">
                                             <label className="form-label">
                                                 Mobile No <span className="text-danger">*</span>
@@ -368,11 +460,16 @@ const EnquiryForm = ({ show, onClose, title = "Enquiry Form" }) => {
                                                 onBlur={handleBlur}
                                                 maxLength={10}
                                                 inputMode="numeric"
+                                                placeholder="Enter Mobile No"
                                             />
                                             {errors.mobile && <div className="invalid-feedback">{errors.mobile}</div>}
                                         </div>
 
-                                        {/* Gender */}
+
+                                    </div>
+
+                                    {/* Gender and Service */}
+                                    <div className="row">
                                         <div className="col-md-6 mb-3">
                                             <label className="form-label">
                                                 Gender <span className="text-danger">*</span>
@@ -392,10 +489,23 @@ const EnquiryForm = ({ show, onClose, title = "Enquiry Form" }) => {
                                             </select>
                                             {errors.gender && <div className="invalid-feedback">{errors.gender}</div>}
                                         </div>
+                                        <div className="col-md-6 mb-3">
+                                            <label className="form-label">Location</label>
+                                            <input
+                                                type="text"
+                                                name="location"
+                                                className="form-control"
+                                                value={formData.location}
+                                                onChange={handleChange}
+                                                placeholder="Enter location"
+                                            />
+                                        </div>
+
                                     </div>
 
+                                    {/* Amount and Care Recipient Name */}
                                     <div className="row">
-                                        {/* Service */}
+
                                         <div className="col-md-6 mb-3">
                                             <label className="form-label">Type of Service</label>
                                             <input
@@ -405,10 +515,9 @@ const EnquiryForm = ({ show, onClose, title = "Enquiry Form" }) => {
                                                 className="form-control"
                                                 value={formData.service}
                                                 onChange={handleChange}
+                                                placeholder="Enter Type of Service"
                                             />
                                         </div>
-
-                                        {/* Amount */}
                                         <div className="col-md-6 mb-3">
                                             <label className="form-label">
                                                 Amount <span className="text-danger">*</span>
@@ -421,13 +530,71 @@ const EnquiryForm = ({ show, onClose, title = "Enquiry Form" }) => {
                                                 value={formData.amount}
                                                 onChange={handleChange}
                                                 onBlur={handleBlur}
+                                                placeholder="Enter Amount"
                                             />
                                             {errors.amount && <div className="invalid-feedback">{errors.amount}</div>}
                                         </div>
+
+                                        <div className="col-md-6 mb-3">
+                                            <label className="form-label">Care Recipient Name</label>
+                                            <input
+                                                type="text"
+                                                name="careRecipientName"
+                                                className="form-control"
+                                                value={formData.careRecipientName}
+                                                onChange={handleChange}
+                                                placeholder="Enter care recipient name"
+                                            />
+                                        </div>
+
+                                        <div className="col-md-6 mb-3">
+                                            <label className="form-label">Age</label>
+                                            <input
+                                                type="number"
+                                                name="age"
+                                                className="form-control"
+                                                value={formData.age}
+                                                onChange={handleChange}
+                                                placeholder="Age"
+                                                min="0"
+                                                max="120"
+                                            />
+                                        </div>
                                     </div>
 
+                                    {/* Age and Weight */}
                                     <div className="row">
-                                        {/* Through */}
+
+
+                                        <div className="col-md-6 mb-3">
+                                            <label className="form-label">Weight (kg)</label>
+                                            <input
+                                                type="number"
+                                                name="weight"
+                                                className="form-control"
+                                                value={formData.weight}
+                                                onChange={handleChange}
+                                                placeholder="Weight"
+                                                min="0"
+                                                step="0.1"
+                                            />
+                                        </div>
+
+                                        <div className="col-md-6 mb-3">
+                                            <label className="form-label">Service Required Period</label>
+                                            <input
+                                                type="text"
+                                                name="serviceRequiredPeriod"
+                                                className="form-control"
+                                                value={formData.serviceRequiredPeriod}
+                                                onChange={handleChange}
+                                                placeholder="e.g., 1 month, 15 days, etc."
+                                            />
+                                        </div>
+                                    </div>
+
+                                    {/* Through and Status */}
+                                    <div className="row">
                                         <div className="col-md-6 mb-3">
                                             <label className="form-label">
                                                 Through <span className="text-danger">*</span>
@@ -456,7 +623,6 @@ const EnquiryForm = ({ show, onClose, title = "Enquiry Form" }) => {
                                             {errors.through && <div className="invalid-feedback">{errors.through}</div>}
                                         </div>
 
-                                        {/* Status */}
                                         <div className="col-md-6 mb-3">
                                             <label className="form-label">
                                                 Status <span className="text-danger">*</span>
@@ -479,8 +645,8 @@ const EnquiryForm = ({ show, onClose, title = "Enquiry Form" }) => {
                                         </div>
                                     </div>
 
+                                    {/* Communication and Reminder Date */}
                                     <div className="row">
-                                        {/* Communication */}
                                         <div className="col-md-6 mb-3">
                                             <label className="form-label">
                                                 Communication <span className="text-danger">*</span>
@@ -489,8 +655,8 @@ const EnquiryForm = ({ show, onClose, title = "Enquiry Form" }) => {
                                                 id="enq-communication"
                                                 name="communication"
                                                 className={`form-select ${errors.communication ? "is-invalid" : ""} ${formData.communication
-                                                        ? "communication-" + formData.communication.toLowerCase().replace(/\s+/g, "-")
-                                                        : ""
+                                                    ? "communication-" + formData.communication.toLowerCase().replace(/\s+/g, "-")
+                                                    : ""
                                                     }`}
                                                 value={formData.communication}
                                                 onChange={handleChange}
@@ -507,7 +673,6 @@ const EnquiryForm = ({ show, onClose, title = "Enquiry Form" }) => {
                                             {errors.communication && <div className="invalid-feedback">{errors.communication}</div>}
                                         </div>
 
-                                        {/* Reminder Date */}
                                         <div className="col-md-6 mb-3">
                                             <label className="form-label">Reminder Date</label>
                                             <input
@@ -535,6 +700,7 @@ const EnquiryForm = ({ show, onClose, title = "Enquiry Form" }) => {
                                                 value={formData.comments}
                                                 onChange={handleChange}
                                                 rows="3"
+                                                placeholder="Enter Comments"
                                             />
                                         </div>
                                     </div>
@@ -543,7 +709,7 @@ const EnquiryForm = ({ show, onClose, title = "Enquiry Form" }) => {
                                         <button type="button" className="btn btn-outline-secondary" onClick={requestClose}>
                                             Cancel
                                         </button>
-                                        <button type="submit" className="btn btn-primary" disabled={isSubmitting}>
+                                        <button type="submit" className="btn btn-primary" disabled={isSubmitting || !formData.idNo || isGeneratingId}>
                                             {isSubmitting ? (
                                                 <>
                                                     <span

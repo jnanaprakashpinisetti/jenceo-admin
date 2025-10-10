@@ -251,6 +251,89 @@ export default function EnquiryModal({
                 </div>
               </div>
 
+              {/* Care Recipient Details */}
+              <div className="modal-card border-0 mb-3">
+                <div className="modal-card-body">
+                  <div className="row g-3">
+                    <div className="col-md-6">
+                      <label className="form-label fw-semibold">Care Recipient Name</label>
+                      <input
+                        type="text"
+                        name="careRecipientName"
+                        className="form-control"
+                        value={formData.careRecipientName || ""}
+                        onChange={handleChange}
+                        disabled={localMode === "view"}
+                        placeholder="Enter care recipient name"
+                      />
+                    </div>
+                    <div className="col-md-3">
+                      <label className="form-label fw-semibold">Age</label>
+                      <input
+                        type="number"
+                        name="age"
+                        className="form-control"
+                        value={formData.age || ""}
+                        onChange={handleChange}
+                        disabled={localMode === "view"}
+                        placeholder="Age"
+                        min="0"
+                        max="120"
+                      />
+                    </div>
+                    <div className="col-md-3">
+                      <label className="form-label fw-semibold">Weight</label>
+                      <div className="input-group">
+                        <input
+                          type="number"
+                          name="weight"
+                          className="form-control"
+                          value={formData.weight || ""}
+                          onChange={handleChange}
+                          disabled={localMode === "view"}
+                          placeholder="Weight"
+                          min="0"
+                          step="0.1"
+                        />
+                        <span className="input-group-text">kg</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Location & Service Period */}
+              <div className="modal-card border-0 mb-3">
+                <div className="modal-card-body">
+                  <div className="row g-3">
+                    <div className="col-md-6">
+                      <label className="form-label fw-semibold">Location</label>
+                      <input
+                        type="text"
+                        name="location"
+                        className="form-control"
+                        value={formData.location || ""}
+                        onChange={handleChange}
+                        disabled={localMode === "view"}
+                        placeholder="Enter location"
+                      />
+                    </div>
+                    <div className="col-md-6">
+                      <label className="form-label fw-semibold">Service Required Period</label>
+                      <input
+                        type="text"
+                        name="serviceRequiredPeriod"
+                        className="form-control"
+                        value={formData.serviceRequiredPeriod || ""}
+                        onChange={handleChange}
+                        disabled={localMode === "view"}
+                        placeholder="e.g., 1 month, 15 days, etc."
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+
               {/* Status / Through / Communication / Reminder */}
               <div className="modal-card border-0 mb-3">
                 <div className="modal-card-body">
@@ -329,9 +412,7 @@ export default function EnquiryModal({
 
               {/* Comments */}
               <div className="modal-card border-0">
-                <div className="modal-card-header bg-light">
                   <h6 className="mb-0">Comments</h6>
-                </div>
                 <div className="modal-card-body">
                   {/* Add new comment */}
                   {localMode === "edit" && (

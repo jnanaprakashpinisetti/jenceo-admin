@@ -303,8 +303,8 @@ export default function EnquiryModal({
   return (
     <>
       {/* Main Enquiry Modal */}
-      <div className="modal fade show d-block enquiry-modal" tabIndex="-1" style={{ background: "rgba(0,0,0,0.6)" }}>
-        <div className="modal-dialog modal-xl modal-dialog-centered">
+      <div className="modal fade show d-block enquiry-modal" tabIndex="-1" style={{ background: "rgba(0,0,0,0.9)" }}>
+        <div className="modal-dialog modal-xl modal-dialog-centered" style={{ maxWidth: "800px" }}>
           <div className="modal-content shadow-lg border-0" style={{ borderRadius: "16px" }}>
             {/* Header */}
             <div className="modal-header bg-gradient-primary text-white" style={{
@@ -333,9 +333,8 @@ export default function EnquiryModal({
                                 className="btn btn-light btn-sm p-1 d-flex align-items-center justify-content-center"
                                 href={`tel:${formData.mobile}`}
                                 title="Call"
-                                style={{ width: "28px", height: "28px", borderRadius: "6px" }}
                               >
-                                <i className="fas fa-phone text-primary" style={{ fontSize: "0.8rem" }}></i>
+                                Call
                               </a>
                               <a
                                 className="btn btn-light btn-sm p-1 d-flex align-items-center justify-content-center"
@@ -343,9 +342,8 @@ export default function EnquiryModal({
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 title="WhatsApp"
-                                style={{ width: "28px", height: "28px", borderRadius: "6px" }}
                               >
-                                <i className="fab fa-whatsapp text-success" style={{ fontSize: "0.9rem" }}></i>
+                                WAP
                               </a>
                             </div>
                           </div>
@@ -354,11 +352,11 @@ export default function EnquiryModal({
                     )}
                   </div>
                   <div className="d-flex align-items-center gap-2">
-                    {formData?.status && (
+                    {/* {formData?.status && (
                       <span className={`badge fw-normal ${badgeForStatus}`} style={{ fontSize: "0.75rem" }}>
                         {formData.status}
                       </span>
-                    )}
+                    )} */}
                     <button type="button" className="btn-close btn-close-white" onClick={handleClose}></button>
                   </div>
                 </div>
@@ -399,17 +397,17 @@ export default function EnquiryModal({
                         <input type="text" name="mobile" className="form-control" value={formData.mobile || ""} disabled />
                         {formData.mobile && (
                           <>
-                            <a className="btn btn-outline-primary border" href={`tel:${formData.mobile}`} title="Call">
-                              <i className="fas fa-phone text-primary"></i>
+                            <a className="btn btn-primary border" href={`tel:${formData.mobile}`} title="Call">
+                              Call
                             </a>
                             <a
-                              className="btn btn-outline-success border"
+                              className="btn btn-warning border"
                               href={`https://wa.me/91${String(formData.mobile).replace(/\D/g, "")}`}
                               target="_blank"
                               rel="noopener noreferrer"
                               title="WhatsApp"
                             >
-                              <i className="fab fa-whatsapp text-success"></i>
+                              WAP
                             </a>
                           </>
                         )}
@@ -643,7 +641,7 @@ export default function EnquiryModal({
                         {comments.map((c) => (
                           <div key={c.id || c.date} className="p-3 border-bottom bg-white">
                             <div className="d-flex justify-content-between align-items-start mb-2">
-                              <span className="text-primary small">
+                              <span className="text-primary small-text">
                                 <i className="fas fa-user me-1"></i>
                                 By {c.user}
                               </span>

@@ -1,6 +1,7 @@
 // src/components/Enquiries/EnquiryModal.jsx
 import React, { useState, useEffect, useMemo, useRef } from "react";
 import firebaseDB from "../../firebase";
+import { useAuth } from "../../context/AuthContext";
 
 const MAX_COMMENT_LEN = 500;
 
@@ -41,7 +42,7 @@ const normalizeComments = (raw) => {
           const text = c.text ?? c.message ?? "";
           const date = c.date ?? c.ts ?? new Date().toISOString();
           const id = c.id ?? Date.now() + i;
-          const user = c.user ?? c.userName ?? c.by ?? "System";
+          const user = c.user ?? c.userName ?? c.by ?? c.displayName ?? c.name ?? "System";
           return text ? { text, date, id, user } : null;
         }
         return null;
@@ -66,7 +67,7 @@ const normalizeComments = (raw) => {
           const text = v.text ?? v.message ?? "";
           const date = v.date ?? v.ts ?? new Date().toISOString();
           const id = v.id ?? Date.now() + i;
-          const user = v.user ?? v.userName ?? v.by ?? "System";
+          const user = v.user ?? v.userName ?? v.by ?? v.displayName ?? v.name ?? "System";
           return text ? { text, date, id, user } : null;
         }
         return null;
@@ -80,6 +81,28 @@ const normalizeComments = (raw) => {
     user: "System"
   }];
   return [];
+};
+
+/* =============================
+   "Added By" resolver (like WorkerCalleDisplay)
+   ============================= */
+const resolveAddedBy = (enquiry, usersMap = {}) => {
+  if (!enquiry) return "";
+  const direct = [enquiry?.addedBy, enquiry?.createdBy, enquiry?.userName, enquiry?.username, enquiry?.createdByName, enquiry?.addedByName];
+  for (const d of direct) { const clean = String(d || "").trim().replace(/@.*/, ""); if (clean) return clean; }
+  const ids = [enquiry?.createdById, enquiry?.addedById, enquiry?.createdByUid, enquiry?.addedByUid, enquiry?.uid, enquiry?.userId];
+  for (const id of ids) {
+    if (id && usersMap[id]) {
+      const u = usersMap[id];
+      const cands = [u.name, u.displayName, u.username, u.email];
+      for (const c of cands) { const clean = String(c || "").trim().replace(/@.*/, ""); if (clean) return clean; }
+    }
+  }
+  if (enquiry?.user && typeof enquiry.user === "object") {
+    const cands = [enquiry.user.name, enquiry.user.displayName, enquiry.user.userName, enquiry.user.email];
+    for (const c of cands) { const clean = String(c || "").trim().replace(/@.*/, ""); if (clean) return clean; }
+  }
+  return "";
 };
 
 export default function EnquiryModal({
@@ -103,16 +126,62 @@ export default function EnquiryModal({
 
   const listRef = useRef(null);
 
-  /* hydrate */
-  useEffect(() => {
-    if (enquiry) {
-      setFormData(enquiry);
-      setComments(normalizeComments(enquiry.comments));
-      setIsDirty(false);
-    }
-  }, [enquiry]);
+  // Get current user from auth context
+  const { user: authUser } = useAuth() || {};
 
-  /* auto-scroll comments list */
+  // Fix: Only use currentUser if it's a proper object, otherwise use authUser
+  const effectiveUser = (currentUser && typeof currentUser === 'object') ? currentUser : authUser || {};
+
+  // Users map for "By {user}" - like WorkerCalleDisplay
+  const [usersMap, setUsersMap] = useState({});
+  // Load users from both "Users" and "JenCeo/Users" and merge
+  useEffect(() => {
+    const refA = firebaseDB.child("Users");
+    const refB = firebaseDB.child("JenCeo/Users");
+
+    const handle = (snapA, snapB) => {
+      const a = (snapA && snapA.val && snapA.val()) || {};
+      const b = (snapB && snapB.val && snapB.val()) || {};
+      // prefer JenCeo/Users if the same key appears in both
+      setUsersMap({ ...a, ...b });
+    };
+
+    let aVal = null;
+    let bVal = null;
+
+    const cbA = refA.on("value", (s) => { aVal = s; handle(aVal, bVal); });
+    const cbB = refB.on("value", (s) => { bVal = s; handle(aVal, bVal); });
+
+    return () => {
+      refA.off("value", cbA);
+      refB.off("value", cbB);
+    };
+  }, []);
+
+  // Get user display name - simplified version
+  const effectiveUserName = useMemo(() => {
+    // If effectiveUser is a proper object with name
+    if (effectiveUser && typeof effectiveUser === 'object' && effectiveUser.name) {
+      return effectiveUser.name;
+    }
+
+    // If effectiveUser has username but no name
+    if (effectiveUser && typeof effectiveUser === 'object' && effectiveUser.username) {
+      return effectiveUser.username;
+    }
+
+    // Try to find user by ID in usersMap
+    const userId = effectiveUser?.dbId || effectiveUser?.uid;
+    if (userId && usersMap[userId]) {
+      const userData = usersMap[userId];
+      return userData.name || userData.username || "User";
+    }
+
+    return "User";
+  }, [effectiveUser, usersMap]);
+
+
+  /* auto-scroll comments list to bottom for recent comments */
   useEffect(() => {
     if (listRef.current) listRef.current.scrollTop = listRef.current.scrollHeight;
   }, [comments]);
@@ -123,29 +192,60 @@ export default function EnquiryModal({
     setIsDirty(true);
   };
 
-  /* Add comment (prepend) */
+
+  /* Add comment */
   const addComment = () => {
     const text = (newComment || "").trim();
     if (!text) return;
+
     const entry = {
       text,
       date: new Date().toISOString(),
       id: Date.now(),
-      user: currentUser?.name || currentUser?.displayName || "Unknown User"
+      user: effectiveUserName,
     };
-    setComments((prev) => [entry, ...prev]);
+
+    // Add new comment to the end (bottom) of the list
+    setComments((prev) => [...prev, entry]);
     setNewComment("");
     setIsDirty(true);
   };
+
+  // Load existing comments when enquiry changes
+  useEffect(() => {
+    if (enquiry) {
+      setFormData(enquiry);
+
+      // Normalize and set comments from enquiry data
+      const normalizedComments = normalizeComments(enquiry.comments);
+      setComments(normalizedComments);
+
+      // Reset dirty state when new enquiry loads
+      setIsDirty(false);
+    }
+  }, [enquiry]);
+
+  // Also reset when modal opens/closes
+  useEffect(() => {
+    if (show && enquiry) {
+      setFormData(enquiry);
+      const normalizedComments = normalizeComments(enquiry.comments);
+      setComments(normalizedComments);
+      setIsDirty(false);
+      setNewComment("");
+    }
+  }, [show, enquiry]);
+
 
   /* Save */
   const handleSave = async () => {
     if (!formData?.id) return;
     setIsSaving(true);
     try {
+      // Remove the reversal - save comments in the same order they're displayed
       await firebaseDB.child(`EnquiryData/${formData.id}`).update({
         ...formData,
-        comments,
+        comments: comments, // Remove .reverse()
       });
       setShowThankYou(true);
       setIsDirty(false);
@@ -162,6 +262,25 @@ export default function EnquiryModal({
       setIsSaving(false);
     }
   };
+
+  // Resolve a display name from Users map (JenCeo/Users or Users)
+  const getUserNameById = (id, usersMap) => {
+    if (!id) return "";
+    const u = usersMap?.[id];
+    if (!u) return "";
+    return (
+      u.name ||
+      u.displayName ||
+      u.username ||
+      (u.email ? String(u.email).replace(/@.*/, "") : "")
+    );
+  };
+
+  const isUnknownLabel = (s) => {
+    const v = String(s || "").trim().toLowerCase();
+    return !v || v === "system" || v === "unknown" || v === "unknown user";
+  };
+
 
   const handleClose = () => {
     if (isDirty) setShowUnsavedConfirm(true);
@@ -193,17 +312,57 @@ export default function EnquiryModal({
               borderTopRightRadius: "16px",
               background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)"
             }}>
-              <div className="d-flex align-items-center gap-3">
-                <div>
-                  <h5 className="modal-title mb-0 fw-bold">{localMode === "edit" ? "✏️ Edit Enquiry" : "👁️ View Enquiry"}</h5>
-                  {formData?.status && (
-                    <span className={`badge mt-2 fw-normal ${badgeForStatus}`} style={{ fontSize: "0.75rem" }}>
-                      {formData.status}
-                    </span>
-                  )}
+              <div className="d-flex flex-column w-100">
+                <div className="d-flex justify-content-between align-items-start w-100">
+                  <div>
+                    <h5 className="modal-title mb-1 fw-bold">{localMode === "edit" ? "✏️ Edit Enquiry" : "👁️ View Enquiry"}</h5>
+                    {formData?.name && (
+                      <div className="d-flex align-items-center gap-3 mt-2">
+                        <h6 className="mb-0 fw-semibold">
+                          <i className="fas fa-user me-2"></i>
+                          {formData.name}
+                        </h6>
+                        {formData?.mobile && (
+                          <div className="d-flex align-items-center gap-2">
+                            <h6 className="mb-0 fw-semibold">
+                              <i className="fas fa-phone me-2"></i>
+                              {formData.mobile}
+                            </h6>
+                            <div className="d-flex gap-1">
+                              <a
+                                className="btn btn-light btn-sm p-1 d-flex align-items-center justify-content-center"
+                                href={`tel:${formData.mobile}`}
+                                title="Call"
+                                style={{ width: "28px", height: "28px", borderRadius: "6px" }}
+                              >
+                                <i className="fas fa-phone text-primary" style={{ fontSize: "0.8rem" }}></i>
+                              </a>
+                              <a
+                                className="btn btn-light btn-sm p-1 d-flex align-items-center justify-content-center"
+                                href={`https://wa.me/91${String(formData.mobile).replace(/\D/g, "")}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                title="WhatsApp"
+                                style={{ width: "28px", height: "28px", borderRadius: "6px" }}
+                              >
+                                <i className="fab fa-whatsapp text-success" style={{ fontSize: "0.9rem" }}></i>
+                              </a>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                  <div className="d-flex align-items-center gap-2">
+                    {formData?.status && (
+                      <span className={`badge fw-normal ${badgeForStatus}`} style={{ fontSize: "0.75rem" }}>
+                        {formData.status}
+                      </span>
+                    )}
+                    <button type="button" className="btn-close btn-close-white" onClick={handleClose}></button>
+                  </div>
                 </div>
               </div>
-              <button type="button" className="btn-close btn-close-white" onClick={handleClose}></button>
             </div>
 
             {/* Body */}
@@ -240,17 +399,17 @@ export default function EnquiryModal({
                         <input type="text" name="mobile" className="form-control" value={formData.mobile || ""} disabled />
                         {formData.mobile && (
                           <>
-                            <a className="btn btn-outline-primary" href={`tel:${formData.mobile}`} title="Call">
-                              <i className="fas fa-phone"></i>
+                            <a className="btn btn-outline-primary border" href={`tel:${formData.mobile}`} title="Call">
+                              <i className="fas fa-phone text-primary"></i>
                             </a>
                             <a
-                              className="btn btn-outline-success"
-                              href={`https://wa.me/${String(formData.mobile).replace(/\D/g, "")}`}
+                              className="btn btn-outline-success border"
+                              href={`https://wa.me/91${String(formData.mobile).replace(/\D/g, "")}`}
                               target="_blank"
                               rel="noopener noreferrer"
                               title="WhatsApp"
                             >
-                              <i className="fab fa-whatsapp"></i>
+                              <i className="fab fa-whatsapp text-success"></i>
                             </a>
                           </>
                         )}
@@ -469,12 +628,16 @@ export default function EnquiryModal({
               {/* Comments Section */}
               <div className="card border-0 shadow-sm">
                 <div className="card-body">
+                  <h6 className="card-title text-primary mb-3 fw-semibold">
+                    <i className="fas fa-comments me-2"></i>Comments & Notes
+                  </h6>
+
                   {/* Comments History */}
                   <div>
                     {comments && comments.length > 0 ? (
                       <div
                         ref={listRef}
-                        className="mt-2"
+                        className="mt-2 mb-4"
                         style={{ maxHeight: 280, overflowY: "auto" }}
                       >
                         {comments.map((c) => (
@@ -496,20 +659,16 @@ export default function EnquiryModal({
                         ))}
                       </div>
                     ) : (
-                      <div className="text-center py-4 text-muted">
+                      <div className="text-center py-4 text-muted mb-4">
                         <i className="fas fa-comment-slash fa-2x mb-2"></i>
                         <p className="mb-0">No comments added yet</p>
                       </div>
                     )}
                   </div>
 
-                  <h6 className="card-title text-primary mb-3 fw-semibold">
-                    <i className="fas fa-comments me-2"></i>Comments & Notes
-                  </h6>
-
                   {/* Add new comment */}
                   {localMode === "edit" && (
-                    <div className="mb-4 p-3 bg-light rounded">
+                    <div className="p-3 bg-light rounded">
                       <label className="form-label fw-semibold">Add New Comment</label>
                       <textarea
                         className="form-control"
@@ -552,7 +711,7 @@ export default function EnquiryModal({
                   {isSaving ? (
                     <>
                       <span className="spinner-border spinner-border-sm" role="status" />
-                      Saving…
+                      Saving...
                     </>
                   ) : (
                     <>

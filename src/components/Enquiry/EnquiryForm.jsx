@@ -442,6 +442,7 @@ const EnquiryForm = ({ show, onClose, title = "Enquiry Form" }) => {
                                                 onChange={handleChange}
                                                 onBlur={handleBlur}
                                                 placeholder="Enter Name"
+                                                autoFocus
                                             />
                                             {errors.name && <div className="invalid-feedback">{errors.name}</div>}
                                         </div>

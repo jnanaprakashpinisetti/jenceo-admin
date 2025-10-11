@@ -7,14 +7,18 @@
 // 3) In view mode inputs are replaced with readable tables/labels (no inputs shown)
 // 4) Full file ready for download
 
-import React, { useEffect, useRef, useState } from "react";
-import firebaseDB from "../../firebase"; // adjust path if needed
+import React, { useEffect, useRef, useState, usersMap } from "react";
+import firebaseDB from "../../firebase";
+import { useAuth } from "../../context/AuthContext";
+
 
 const removalReasonOptions = [
   "Contract Closed",
   "Contract Terminated",
   "Contract Stopped",
 ];
+
+
 
 const safeNumber = (v) => {
   if (v === null || v === undefined || v === "") return 0;
@@ -46,19 +50,38 @@ const formatDateForInput = (v) => {
 
 const parseDateSafe = (v) => {
   if (!v && v !== 0) return null;
+
+  // Native Date
   if (v instanceof Date && !isNaN(v)) return v;
-  const d = new Date(v);
-  if (!isNaN(d)) return d;
-  const s = String(v);
-  const m = s.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
-  if (m) return new Date(Number(m[3]), Number(m[2]) - 1, Number(m[1]));
-  if (/^\d+$/.test(s)) {
-    const n = Number(s);
-    const d2 = new Date(n);
-    if (!isNaN(d2)) return d2;
+
+  // Firebase-style Timestamp { seconds, nanoseconds }
+  if (v && typeof v === "object" && ("seconds" in v || "nanoseconds" in v)) {
+    const ms = (Number(v.seconds || 0) * 1000) + Math.round(Number(v.nanoseconds || 0) / 1e6);
+    const d = new Date(ms);
+    return isNaN(d) ? null : d;
   }
-  return null;
+
+  // number (ms epoch) or numeric string
+  if (typeof v === "number" || (/^\d+$/.test(String(v)))) {
+    const d = new Date(Number(v));
+    return isNaN(d) ? null : d;
+  }
+
+  const s = String(v).trim();
+
+  // DD/MM/YYYY
+  const mDMY = s.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+  if (mDMY) return new Date(Number(mDMY[3]), Number(mDMY[2]) - 1, Number(mDMY[1]));
+
+  // YYYY-MM-DD — PARSE AS LOCAL (avoid UTC→05:30 shift)
+  const mYMD = s.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (mYMD) return new Date(Number(mYMD[1]), Number(mYMD[2]) - 1, Number(mYMD[3]));
+
+  // ISO strings or others — let Date parse
+  const d = new Date(s);
+  return isNaN(d) ? null : d;
 };
+
 
 const daysBetween = (start, end) => {
   const s = parseDateSafe(start);
@@ -79,6 +102,66 @@ const stripLocks = (obj) => {
   if (Array.isArray(clone.fullAuditLogs)) clone.fullAuditLogs = clone.fullAuditLogs.map((l) => ({ ...l }));
   return clone;
 };
+
+
+// Resolve a friendly user name from many possible keys
+const resolveUserName = (obj, fallback) => {
+  const tryKeys = [
+    "addedByName", "addedBy", "userName", "username", "createdByName", "createdBy",
+    "enteredBy", "enteredByName", "created_user", "updatedBy", "ownerName",
+  ];
+  for (const k of tryKeys) {
+    const v = obj && obj[k];
+    if (v && String(v).trim()) return String(v).trim().replace(/@.*/, "");
+  }
+
+  // nested user object
+  const u = obj && obj.user;
+  if (u) {
+    const tryUser = [u.name, u.displayName, u.username, u.email];
+    for (const t of tryUser) {
+      if (t && String(t).trim()) return String(t).trim().replace(/@.*/, "");
+    }
+  }
+
+  return (fallback && String(fallback).trim()) || "System";
+};
+
+
+
+// --- display helpers ---
+const formatDDMMYY = (v) => {
+  const d = parseDateSafe(v);
+  if (!d) return "";
+  const dd = String(d.getDate()).padStart(2, "0");
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const yy = String(d.getFullYear()).slice(-2);
+  return `${dd}-${mm}-${yy}`;
+};
+
+const formatTime12h = (isoLike) => {
+  const d = parseDateSafe(isoLike);
+  if (!d) return "";
+  let h = d.getHours();
+  let m = String(d.getMinutes()).padStart(2, "0");
+  const ampm = h >= 12 ? "pm" : "am";
+  h = h % 12 || 12;
+  return `${h}:${m} ${ampm}`;
+};
+
+// difference in whole days between two dates (inclusive = false)
+const diffDays = (from, to) => {
+  const a = parseDateSafe(from);
+  const b = parseDateSafe(to);
+  if (!a || !b) return "";
+  const au = Date.UTC(a.getFullYear(), a.getMonth(), a.getDate());
+  const bu = Date.UTC(b.getFullYear(), b.getMonth(), b.getDate());
+  return Math.round((bu - au) / (1000 * 60 * 60 * 24)) + 1;
+};
+
+
+
+
 
 // friendly label generator (used in audit summarization)
 const friendlyLabel = (path) => {
@@ -194,8 +277,9 @@ const emptyPayment = () => ({
   refundPaymentMethod: "",
   refundRemarks: "",
   __locked: false,
+  addedByName: "",
+  addedAt: new Date().toISOString(),
 });
-
 const getInitialFormData = () => ({
   idNo: "",
   clientName: "",
@@ -383,6 +467,26 @@ const ClientModal = ({
     return -1;
   };
 
+  // persist reminder fields for a specific payment row to Firebase
+  const syncPaymentReminderToDB = async (rowIndex, row) => {
+    try {
+      // use known key/id; prefer explicit id fields from your snapshot
+      const key = formData?.id || formData?.recordId || formData?.clientId || client?.id || client?.key;
+      if (!key) return;
+
+      // write the shallow fields under the same index in payments
+      await firebaseDB
+        .child(`ClientData/${key}/payments/${rowIndex}`)
+        .update({
+          reminderDays: row.reminderDays ?? "",
+          reminderDate: row.reminderDate ?? "",
+        });
+    } catch (e) {
+      console.warn("syncPaymentReminderToDB failed", e);
+    }
+  };
+
+
   const getLastBalance = () => {
     const arr = Array.isArray(formData.payments) ? formData.payments : [];
     for (let i = arr.length - 1; i >= 0; i--) {
@@ -397,6 +501,41 @@ const ClientModal = ({
   const [showRemovalModal, setShowRemovalModal] = useState(false);
   const [removalForm, setRemovalForm] = useState({ reason: "", comment: "" });
   const [removalErrors, setRemovalErrors] = useState({});
+
+  const { user: authUser } = useAuth?.() || {};
+  const effectiveUserName =
+    resolveUserName({ addedByName: currentUserName, email: authUser?.email, displayName: authUser?.displayName }) ||
+    "System";
+
+  console.debug("[ClientModal] userName prop:", currentUserName);
+  console.debug("[ClientModal] auth:", authUser?.displayName || authUser?.email || null);
+  console.debug("[ClientModal] effectiveUserName:", effectiveUserName);
+
+  // Look up a user's display name from JenCeo-DataBase/Users
+  // Look up a user's display name from JenCeo-DataBase/Users
+  const resolveAddedByFromUsers = (obj, users) => {
+    if (!obj || !users) return "";
+
+    // Common id fields we see across your data
+    const candidateIds = [
+      obj.user_key, obj.userKey, obj.userId, obj.uid,
+      obj.addedById, obj.createdById, obj.addedByUid, obj.createdByUid,
+      obj.key, obj.ownerId
+    ].filter(Boolean);
+
+    for (const id of candidateIds) {
+      const u = users[id];
+      if (u) {
+        const nm = u.name || u.displayName || u.username || u.email;
+        if (nm) return String(nm).trim().replace(/@.*/, "");
+      }
+    }
+    return "";
+  };
+
+
+
+
 
   const headerImage =
     "https://firebasestorage.googleapis.com/v0/b/jenceo-admin.firebasestorage.app/o/OfficeFiles%2FHeadder.svg?alt=media&token=fa65a3ab-ba03-4959-bc36-e293c6db48ae";
@@ -430,9 +569,32 @@ const ClientModal = ({
       refundDate: p.refundDate ?? "",
       refundPaymentMethod: p.refundPaymentMethod ?? "",
       refundRemarks: p.refundRemarks ?? "",
-      __locked: true, // lock existing payments to prevent editing
+
+      // NEW: who/when (show after Remarks)
+      addedByName:
+        p.addedByName ??
+        p.addedBy ??
+        p.userName ??                 // extra compatibility
+        client?.createdByName ??      // last resort from record
+        effectiveUserName,            // final fallback
+
+      addedAt:
+        p.addedAt ??
+        p.timestamp ??
+        p.createdAt ??
+        p.date ??
+        new Date().toISOString(),
+
+      __locked: true, // keep existing rows locked
       ...p,
     }));
+
+    try {
+      payments.forEach((x, i) => {
+        console.debug(`[ClientModal] payment[${i}] addedByName:`, x.addedByName, "addedAt:", x.addedAt);
+      });
+    } catch { }
+
 
     const workers = workersArr.map((w) => {
       const start = w.startingDate ?? w.start ?? "";
@@ -517,8 +679,8 @@ const ClientModal = ({
           if (name === "reminderDays") {
             const days = Number(value) || 0;
             const base = parseDateSafe(row.date) || new Date();
-            if (days > 0) row.reminderDate = formatDateForInput(addDaysToDate(base, days));
-            else row.reminderDate = "";
+            // your earlier logic used full days; keep as-is (no -1)
+            row.reminderDate = days > 0 ? formatDateForInput(addDaysToDate(base, days)) : "";
           }
           if (name === "date" && row.reminderDays) {
             const days = Number(row.reminderDays) || 0;
@@ -544,6 +706,51 @@ const ClientModal = ({
               row.refundDate = row.refundDate || row.date || formatDateForInput(new Date());
             }
           }
+          if (name === "reminderDate") {
+            // user changed date → recompute days from payment date
+            const base = parseDateSafe(row.date);
+            const target = parseDateSafe(value);
+            row.reminderDate = value;
+            row.reminderDays = base && target ? Math.max(0, diffDays(base, target)) : "";
+          }
+
+          if (name === "date") {
+            // if either days or date moved, maintain the link
+            const days = Number(row.reminderDays) || 0;
+            if (days > 0) {
+              const base = parseDateSafe(value) || new Date();
+              row.reminderDate = formatDateForInput(addDaysToDate(base, days));
+            }
+          }
+
+          if (name === "refundAmount") {
+            row.refundAmount = safeNumber(value);
+            if (Number(row.refundAmount) > 0) row.refund = true;
+          }
+
+          if (name === "reminderDate") {
+            const base = parseDateSafe(row.date);
+            const target = parseDateSafe(value);
+            row.reminderDate = value;
+            row.reminderDays = base && target ? Math.max(0, diffDays(base, target)) : "";
+          }
+
+
+          if (name === "refund") {
+            if (!value) {
+              if (!row.refundAmount || Number(row.refundAmount) === 0) {
+                row.refundDate = "";
+                row.refundPaymentMethod = "";
+                row.refundRemarks = "";
+              } else {
+                row.refund = true;
+              }
+            } else {
+              row.refund = true;
+              row.refundDate = row.refundDate || row.date || formatDateForInput(new Date());
+            }
+
+          }
         }
 
         // workers special
@@ -557,6 +764,9 @@ const ClientModal = ({
 
         list[index] = row;
         const next = { ...prev, [section]: list };
+        if (section === "payments" && ["reminderDays", "reminderDate", "date"].includes(name)) {
+          setTimeout(() => syncPaymentReminderToDB(index, row), 0);
+        }
         markDirty(next);
         return next;
       });
@@ -599,13 +809,34 @@ const ClientModal = ({
   };
 
   const addPayment = () => {
-    const np = emptyPayment(); setEditMode(true); setFormData((prev) => {
+    const now = new Date();
+    const np = {
+      id: Date.now(),
+      paymentMethod: "cash",
+      paidAmount: "",
+      balance: "",
+      receptNo: "",
+      remarks: "",
+      reminderDays: "",
+      reminderDate: "",
+      date: formatDateForInput(now),
+      refund: false,
+      refundAmount: 0,
+      refundDate: "",
+      refundPaymentMethod: "",
+      refundRemarks: "",
+      __locked: false,
+      addedByName: effectiveUserName, // Now this is defined in component scope
+      addedAt: now.toISOString(),
+    };
+
+    setEditMode(true);
+    setFormData((prev) => {
       const next = { ...prev, payments: [...(prev.payments || []), np] };
       markDirty(next);
       return next;
     });
   };
-
   const removePayment = (i) => {
     setFormData((prev) => {
       const list = Array.isArray(prev.payments) ? [...prev.payments] : [];
@@ -774,6 +1005,8 @@ const ClientModal = ({
       ["About Patient", safe(formData.aboutPatient)],
       ["Care Notes", safe(formData.aboutWork)],
     ];
+
+
 
     const renderPairs = (fields) => {
       let html = "";
@@ -1259,6 +1492,18 @@ const ClientModal = ({
                   <div>
                     {(formData.workers || []).map((w, i) => {
                       const locked = !!w.__locked;
+
+                      // 👇 add this block
+                      const addedByDisplay =
+                        w.addedByName ||
+                        resolveUserName(w) ||
+                        resolveAddedByFromUsers(w, usersMap) ||
+                        resolveAddedByFromUsers(client, usersMap) ||
+                        effectiveUserName;
+
+                      const addedAtDisplay =
+                        w.addedAt || w.timestamp || w.createdAt || w.startingDate || client?.createdAt || "";
+
                       return (
                         <div key={i} className="modal-card mb-3 p-3 border rounded">
                           <div className="d-flex justify-content-between align-items-center mb-2">
@@ -1271,35 +1516,35 @@ const ClientModal = ({
                               <div className="row">
                                 <div className="col-md-3 mb-3">
                                   <label className="form-label"><strong>ID No</strong></label>
-                                  <input data-idx={i} className="form-control" name="workerIdNo" value={w.workerIdNo || ""} onChange={(e) => handleChange(e, "workers", i)} disabled={!editMode} />
+                                  <input data-idx={i} className="form-control" name="workerIdNo" value={w.workerIdNo || ""} onChange={(e) => handleChange(e, "workers", i)} disabled={w.__locked || !editMode} />
                                 </div>
                                 <div className="col-md-3 mb-3">
                                   <label className="form-label"><strong>Name</strong></label>
-                                  <input data-idx={i} className="form-control" name="cName" value={w.cName || ""} onChange={(e) => handleChange(e, "workers", i)} disabled={!editMode} />
+                                  <input data-idx={i} className="form-control" name="cName" value={w.cName || ""} onChange={(e) => handleChange(e, "workers", i)} disabled={w.__locked || !editMode} />
                                 </div>
                                 <div className="col-md-3 mb-3">
                                   <label className="form-label"><strong>Basic Salary</strong></label>
-                                  <input data-idx={i} className="form-control" name="basicSalary" type="tel" maxLength={5} value={w.basicSalary ?? ""} onChange={(e) => handleChange(e, "workers", i)} disabled={!editMode} />
+                                  <input data-idx={i} className="form-control" name="basicSalary" type="tel" maxLength={5} value={w.basicSalary ?? ""} onChange={(e) => handleChange(e, "workers", i)} disabled={w.__locked || !editMode} />
                                 </div>
                                 <div className="col-md-3 mb-3">
                                   <label className="form-label"><strong>Mobile-1</strong></label>
-                                  <input data-idx={i} className="form-control" name="mobile1" type="text" value={w.mobile1 ?? ""} onChange={(e) => handleChange(e, "workers", i)} disabled={!editMode} />
+                                  <input data-idx={i} className="form-control" name="mobile1" type="text" value={w.mobile1 ?? ""} onChange={(e) => handleChange(e, "workers", i)} disabled={w.__locked || !editMode} />
                                 </div>
 
                               </div>
                               <div className="row">
                                 <div className="col-md-4 mb-3">
                                   <label className="form-label"><strong>Starting Date</strong></label>
-                                  <input type="date" data-idx={i} className="form-control" name="startingDate" value={w.startingDate || ""} onChange={(e) => handleChange(e, "workers", i)} disabled={!editMode} />
+                                  <input type="date" data-idx={i} className="form-control" name="startingDate" value={w.startingDate || ""} onChange={(e) => handleChange(e, "workers", i)} disabled={w.__locked || !editMode} />
                                 </div>
                                 <div className="col-md-4 mb-3">
                                   <label className="form-label"><strong>Ending Date</strong></label>
-                                  <input type="date" data-idx={i} className="form-control" name="endingDate" value={w.endingDate || ""} onChange={(e) => handleChange(e, "workers", i)} disabled={!editMode} />
+                                  <input type="date" data-idx={i} className="form-control" name="endingDate" value={w.endingDate || ""} onChange={(e) => handleChange(e, "workers", i)} disabled={w.__locked || !editMode} />
                                 </div>
 
                                 <div className="col-md-4 mb-3">
                                   <label className="form-label"><strong>Total Days</strong></label>
-                                  <input type="tel" maxLength={2} data-idx={i} className="form-control" name="totalDays" value={w.totalDays || ""} onChange={(e) => handleChange(e, "workers", i)} disabled={!editMode} />
+                                  <input type="tel" maxLength={2} data-idx={i} className="form-control" name="totalDays" value={w.totalDays || ""} onChange={(e) => handleChange(e, "workers", i)} disabled={w.__locked || !editMode} />
                                 </div>
 
                               </div>
@@ -1307,43 +1552,54 @@ const ClientModal = ({
                               <div className="row mt-2">
                                 <div className="col-12">
                                   <label className="form-label"><strong>Remarks</strong></label>
-                                  <textarea className="form-control" name="remarks" rows="2" value={w.remarks || ""} onChange={(e) => handleChange(e, "workers", i)} disabled={!editMode} />
+                                  <textarea className="form-control" name="remarks" rows="2" value={w.remarks || ""} onChange={(e) => handleChange(e, "workers", i)} disabled={w.__locked || !editMode} />
                                 </div>
                               </div>
+
+                              <small className="small-text d-block text-primary mt-2">
+                                Added by {addedByDisplay} • {formatDDMMYY(addedAtDisplay)} {formatTime12h(addedAtDisplay)}
+                              </small>
+
                             </div>
                           ) : (
-                            <table className="readonly-table mb-0">
-                              <tbody>
-                                <tr>
-                                  <th className="readonly-row-label">ID No</th>
-                                  <td>{w.workerIdNo || "—"}</td>
-                                  <th className="readonly-row-label">Name</th>
-                                  <td>{w.cName || "—"}</td>
-                                </tr>
-                                <tr>
-                                  <th className="readonly-row-label">Basic Salary</th>
-                                  <td>{formatINR(w.basicSalary)}</td>
-                                  <th className="readonly-row-label">Total Days</th>
-                                  <td>{w.totalDays || "—"}</td>
-                                </tr>
-                                <tr>
-                                  <th className="readonly-row-label">Starting Date</th>
-                                  <td>{(w.startingDate)}</td>
-                                  <th className="readonly-row-label">Ending Date</th>
-                                  <td>{w.endingDate || "—"}</td>
-                                </tr>
-                                <tr>
-                                  <th className="readonly-row-label">Mobile-1</th>
-                                  <td>{(w.mobile1)}</td>
-                                  <th className="readonly-row-label">Mobile-2</th>
-                                  <td>{w.mobile2 || "—"}</td>
-                                </tr>
-                                <tr>
-                                  <th className="readonly-row-label">Remarks</th>
-                                  <td colSpan={3}>{w.remarks || "—"}</td>
-                                </tr>
-                              </tbody>
-                            </table>
+                            <>
+                              <table className="readonly-table mb-0">
+                                <tbody>
+                                  <tr>
+                                    <th className="readonly-row-label">ID No</th>
+                                    <td>{w.workerIdNo || "—"}</td>
+                                    <th className="readonly-row-label">Name</th>
+                                    <td>{w.cName || "—"}</td>
+                                  </tr>
+                                  <tr>
+                                    <th className="readonly-row-label">Basic Salary</th>
+                                    <td>{formatINR(w.basicSalary)}</td>
+                                    <th className="readonly-row-label">Total Days</th>
+                                    <td>{w.totalDays || "—"}</td>
+                                  </tr>
+                                  <tr>
+                                    <th className="readonly-row-label">Starting Date</th>
+                                    <td>{(w.startingDate)}</td>
+                                    <th className="readonly-row-label">Ending Date</th>
+                                    <td>{w.endingDate || "—"}</td>
+                                  </tr>
+                                  <tr>
+                                    <th className="readonly-row-label">Mobile-1</th>
+                                    <td>{(w.mobile1)}</td>
+                                    <th className="readonly-row-label">Mobile-2</th>
+                                    <td>{w.mobile2 || "—"}</td>
+                                  </tr>
+                                  <tr>
+                                    <th className="readonly-row-label">Remarks</th>
+                                    <td colSpan={3}>{w.remarks || "—"}</td>
+                                  </tr>
+                                </tbody>
+                              </table>
+                              <small className="small-text d-block text-primary mt-2">
+                                Added by {addedByDisplay} • {formatDDMMYY(addedAtDisplay)} {formatTime12h(addedAtDisplay)}
+                              </small>
+
+                            </>
                           )}
 
                           <div className="mt-2 d-flex justify-content-end">
@@ -1360,127 +1616,187 @@ const ClientModal = ({
                 {/* Payments */}
                 {activeTab === "payments" && (
                   <div>
-                    {((formData.payments || []).map((p, originalIndex) => ({ p, originalIndex })).filter(({ p }) => !p?.__adjustment)).map(({ p, originalIndex }, idx) => {
-                      const locked = !!p.__locked;
-                      const refundDisabled = Number(p.refundAmount || 0) > 0;
-                      return (
-                        <div key={originalIndex} className="modal-card mb-3 p-3 border rounded">
-                          <div className="d-flex justify-content-between align-items-center mb-2">
-                            <strong>Payment #{idx + 1}</strong>
-                            {locked ? <span className="badge bg-secondary">Existing</span> : <span className="badge bg-info">New</span>}
-                          </div>
+                    {((formData.payments || [])
+                      .map((p, originalIndex) => ({ p, originalIndex }))
+                      .filter(({ p }) => !p?.__adjustment))
+                      .map(({ p, originalIndex }, idx) => {
+                        const locked = !!p.__locked;
+                        const refundDisabled = Number(p.refundAmount || 0) > 0;
 
-                          {editMode ? (
-                            // In edit mode: payment rows are disabled if locked. New rows are editable.
-                            <div>
-                              <div className="row">
-                                <div className="col-md-4">
-                                  <label className="form-label"><strong>Payment Method</strong></label>
-                                  <select data-idx={originalIndex} className="form-control" name="paymentMethod" value={p.paymentMethod || "cash"} onChange={(e) => handleChange(e, "payments", originalIndex)} disabled={!editMode}>
-                                    <option value="cash">Cash</option>
-                                    <option value="online">Online</option>
-                                    <option value="check">Check</option>
-                                    <option value="other">Other</option>
-                                  </select>
-                                </div>
+                        // 👇 add this block
+                        const addedByDisplay =
+                          p.addedByName ||
+                          resolveUserName(p) ||
+                          resolveAddedByFromUsers(p, usersMap) ||
+                          resolveAddedByFromUsers(client, usersMap) ||
+                          effectiveUserName;
 
-                                <div className="col-md-4">
-                                  <label className="form-label"><strong>Date</strong></label>
-                                  <input data-idx={originalIndex} className="form-control" name="date" type="date" value={p.date ? formatDateForInput(p.date) : ""} onChange={(e) => handleChange(e, "payments", originalIndex)} disabled={!editMode} />
-                                </div>
+                        const addedAtDisplay =
+                          p.addedAt || p.timestamp || p.createdAt || p.date || "";
 
-                                <div className="col-md-4">
-                                  <label className="form-label"><strong>Paid Amount</strong></label>
-                                  <input data-idx={originalIndex} className="form-control" name="paidAmount" type="tel" maxLength={5} value={p.paidAmount ?? ""} onChange={(e) => handleChange(e, "payments", originalIndex)} disabled={!editMode} />
-                                </div>
-                              </div>
+                        // In your payment display, add debugging:
+                        console.debug("[Payment Debug] Row:", {
+                          index: idx,
+                          addedByName: p.addedByName,
+                          effectiveUserName,
+                          authUser: authUser?.email,
+                          currentUserName,
+                          usersMap: Object.keys(usersMap || {}).length
+                        });
 
-                              <div className="row mt-2">
-                                <div className="col-md-4">
-                                  <label className="form-label"><strong>Balance</strong></label>
-                                  <input data-idx={originalIndex} className="form-control" name="balance" type="tel" maxLength={5} value={p.balance ?? ""} onChange={(e) => handleChange(e, "payments", originalIndex)} disabled={!editMode} />
-                                </div>
+                        return (
+                          <div key={originalIndex} className="modal-card mb-3 p-3 border rounded">
+                            <div className="d-flex justify-content-between align-items-center mb-2">
+                              <strong>Payment #{idx + 1}</strong>
+                              {/* {locked ? <span className="badge bg-secondary">Existing</span> : <span className="badge bg-info">New</span>} */}
+                            </div>
 
-                                <div className="col-md-4">
-                                  <label className="form-label"><strong>Receipt No</strong></label>
-                                  <input data-idx={originalIndex} className="form-control" name="receptNo" type="tel" maxLength={2} value={p.receptNo || ""} onChange={(e) => handleChange(e, "payments", originalIndex)} disabled={!editMode} />
-                                </div>
-
-                                <div className="col-md-4">
-                                  <label className="form-label"><strong>Reminder Days</strong></label>
-                                  <input data-idx={originalIndex} className="form-control" name="reminderDays" type="tel" maxLength={2} value={p.reminderDays ?? ""} onChange={(e) => handleChange(e, "payments", originalIndex)} disabled={!editMode} />
-                                </div>
-                              </div>
-
-                              <div className="row mt-2">
-                                <div className="col-12">
-                                  <label className="form-label"><strong>Remarks</strong></label>
-                                  <textarea data-idx={originalIndex} className="form-control" name="remarks" rows="2" value={p.remarks || ""} onChange={(e) => handleChange(e, "payments", originalIndex)} disabled={!editMode} />
-                                </div>
-                              </div>
-
-                              {false && (
-                                <div className="row mt-2">
+                            {editMode ? (
+                              // In edit mode: payment rows are disabled if locked. New rows are editable.
+                              <div>
+                                <div className="row">
                                   <div className="col-md-4">
-                                    <label className="form-label"><strong>Refund Date</strong></label>
-                                    <input data-idx={originalIndex} className="form-control" name="refundDate" type="date" value={p.refundDate ? formatDateForInput(p.refundDate) : ""} onChange={(e) => handleChange(e, "payments", originalIndex)} disabled={!editMode} />
-                                  </div>
-                                  <div className="col-md-4">
-                                    <label className="form-label"><strong>Refund Amount</strong></label>
-                                    <input data-idx={originalIndex} className="form-control" name="refundAmount" type="tel" value={p.refundAmount ?? ""} onChange={(e) => handleChange(e, "payments", originalIndex)} disabled={!editMode} maxLength={12} />
-                                  </div>
-                                  <div className="col-md-4">
-                                    <label className="form-label"><strong>Refund Method</strong></label>
-                                    <select data-idx={originalIndex} className="form-control" name="refundPaymentMethod" value={p.refundPaymentMethod || ""} onChange={(e) => handleChange(e, "payments", originalIndex)} disabled={!editMode}>
-                                      <option value="">Select</option>
+                                    <label className="form-label"><strong>Payment Method</strong></label>
+                                    <select data-idx={originalIndex} className="form-control" name="paymentMethod" value={p.paymentMethod || "cash"} onChange={(e) => handleChange(e, "payments", originalIndex)} disabled={p.__locked || !editMode}>
                                       <option value="cash">Cash</option>
                                       <option value="online">Online</option>
                                       <option value="check">Check</option>
+                                      <option value="other">Other</option>
                                     </select>
                                   </div>
-                                  <div className="col-12 mt-2">
-                                    <label className="form-label"><strong>Refund Remarks</strong></label>
-                                    <textarea data-idx={originalIndex} className="form-control" name="refundRemarks" rows="2" value={p.refundRemarks || ""} onChange={(e) => handleChange(e, "payments", originalIndex)} disabled={!editMode} />
+
+                                  <div className="col-md-4">
+                                    <label className="form-label"><strong>Date</strong></label>
+                                    <input data-idx={originalIndex} className="form-control" name="date" type="date" value={p.date ? formatDateForInput(p.date) : ""} onChange={(e) => handleChange(e, "payments", originalIndex)} disabled={p.__locked || !editMode} />
+                                  </div>
+
+                                  <div className="col-md-4">
+                                    <label className="form-label"><strong>Paid Amount</strong></label>
+                                    <input data-idx={originalIndex} className="form-control" name="paidAmount" type="tel" maxLength={5} value={p.paidAmount ?? ""} onChange={(e) => handleChange(e, "payments", originalIndex)} disabled={p.__locked || !editMode} />
                                   </div>
                                 </div>
-                              )}
 
-                              <div className="mt-2 d-flex justify-content-end">
-                                {!p.__locked && editMode && <button className="btn btn-danger btn-sm" onClick={() => removePayment(idx)}>Remove</button>}
+                                <div className="row mt-2">
+                                  <div className="col-md-3">
+                                    <label className="form-label"><strong>Balance</strong></label>
+                                    <input data-idx={originalIndex} className="form-control" name="balance" type="tel" maxLength={5} value={p.balance ?? ""} onChange={(e) => handleChange(e, "payments", originalIndex)} disabled={p.__locked || !editMode} />
+                                  </div>
+
+                                  <div className="col-md-3">
+                                    <label className="form-label"><strong>Receipt No</strong></label>
+                                    <input data-idx={originalIndex} className="form-control" name="receptNo" type="tel" maxLength={2} value={p.receptNo || ""} onChange={(e) => handleChange(e, "payments", originalIndex)} disabled={p.__locked || !editMode} />
+                                  </div>
+
+                                  <div className="col-md-3 mb-2">
+                                    <label className="form-label"><strong>Reminder Days</strong></label>
+                                    <input
+                                      type="date"
+                                      className="form-control"
+                                      name="reminderDate"
+                                      data-idx={originalIndex}
+                                      value={p.reminderDate || ""}
+                                      onChange={(e) => handleChange(e, "payments", originalIndex)}
+                                      disabled={p.__locked || !editMode}
+                                    />
+                                  </div>
+
+                                  {/* New: Reminder Date next to/after Days */}
+                                  <div className="col-md-3 mb-2">
+                                    <label className="form-label"><strong>Reminder Date</strong></label>
+                                    <input
+                                      type="number"
+                                      className="form-control"
+                                      name="reminderDays"
+                                      data-idx={originalIndex}
+                                      value={p.reminderDays || ""}
+                                      onChange={(e) => handleChange(e, "payments", originalIndex)}
+                                      disabled={p.__locked || !editMode}
+                                    />
+                                  </div>
+
+                                </div>
+
+                                <div className="row mt-2">
+                                  <div className="col-12">
+                                    <label className="form-label"><strong>Remarks</strong></label>
+                                    <textarea data-idx={originalIndex} className="form-control" name="remarks" rows="2" value={p.remarks || ""} onChange={(e) => handleChange(e, "payments", originalIndex)} disabled={p.__locked || !editMode} />
+                                  </div>
+                                  {/* Added by + timestamp (read only) */}
+                                  <small className="small-text d-block text-primary mt-2">
+                                    Added by {addedByDisplay} • {formatDDMMYY(addedAtDisplay)} {formatTime12h(addedAtDisplay)}
+                                  </small>
+
+                                </div>
+
+                                {false && (
+                                  <div className="row mt-2">
+                                    <div className="col-md-4">
+                                      <label className="form-label"><strong>Refund Date</strong></label>
+                                      <input data-idx={originalIndex} className="form-control" name="refundDate" type="date" value={p.refundDate ? formatDateForInput(p.refundDate) : ""} onChange={(e) => handleChange(e, "payments", originalIndex)} disabled={!editMode} />
+                                    </div>
+                                    <div className="col-md-4">
+                                      <label className="form-label"><strong>Refund Amount</strong></label>
+                                      <input data-idx={originalIndex} className="form-control" name="refundAmount" type="tel" value={p.refundAmount ?? ""} onChange={(e) => handleChange(e, "payments", originalIndex)} disabled={!editMode} maxLength={12} />
+                                    </div>
+                                    <div className="col-md-4">
+                                      <label className="form-label"><strong>Refund Method</strong></label>
+                                      <select data-idx={originalIndex} className="form-control" name="refundPaymentMethod" value={p.refundPaymentMethod || ""} onChange={(e) => handleChange(e, "payments", originalIndex)} disabled={!editMode}>
+                                        <option value="">Select</option>
+                                        <option value="cash">Cash</option>
+                                        <option value="online">Online</option>
+                                        <option value="check">Check</option>
+                                      </select>
+                                    </div>
+                                    <div className="col-12 mt-2">
+                                      <label className="form-label"><strong>Refund Remarks</strong></label>
+                                      <textarea data-idx={originalIndex} className="form-control" name="refundRemarks" rows="2" value={p.refundRemarks || ""} onChange={(e) => handleChange(e, "payments", originalIndex)} disabled={!editMode} />
+                                    </div>
+                                  </div>
+                                )}
+
+                                <div className="mt-2 d-flex justify-content-end">
+                                  {!p.__locked && editMode && <button className="btn btn-danger btn-sm" onClick={() => removePayment(idx)}>Remove</button>}
+                                </div>
                               </div>
-                            </div>
-                          ) : (
-                            // view mode: show payment as read-only table
-                            <table className="readonly-table mb-0">
-                              <tbody>
-                                <tr>
-                                  <th className="readonly-row-label">Method</th>
-                                  <td>{p.paymentMethod || "—"}</td>
-                                  <th className="readonly-row-label">Date</th>
-                                  <td>{p.date ? new Date(p.date).toLocaleDateString() : "—"}</td>
-                                </tr>
-                                <tr>
-                                  <th className="readonly-row-label">Paid Amount</th>
-                                  <td>{formatINR(p.paidAmount)}</td>
-                                  <th className="readonly-row-label">Balance</th>
-                                  <td>{formatINR(p.balance)}</td>
-                                </tr>
-                                <tr>
-                                  <th className="readonly-row-label">Receipt</th>
-                                  <td>{p.receptNo || "—"}</td>
-                                  <th className="readonly-row-label">Refund</th>
-                                  <td><span className="refund-amount">{p.refund ? formatINR(p.refundAmount) : "—"}</span></td>
-                                </tr>
-                                <tr>
-                                  <th className="readonly-row-label">Remarks</th>
-                                  <td colSpan={3}>{p.remarks || "—"}</td>
-                                </tr>
-                              </tbody>
-                            </table>
-                          )}
-                        </div>
-                      );
-                    })}
+                            ) : (
+                              // view mode: show payment as read-only table
+                              <>
+                                <table className="readonly-table mb-0">
+                                  <tbody>
+                                    <tr>
+                                      <th className="readonly-row-label">Method</th>
+                                      <td>{p.paymentMethod || "—"}</td>
+                                      <th className="readonly-row-label">Date</th>
+                                      <td>{p.date ? new Date(p.date).toLocaleDateString() : "—"}</td>
+                                    </tr>
+                                    <tr>
+                                      <th className="readonly-row-label">Paid Amount</th>
+                                      <td>{formatINR(p.paidAmount)}</td>
+                                      <th className="readonly-row-label">Balance</th>
+                                      <td>{formatINR(p.balance)}</td>
+                                    </tr>
+                                    <tr>
+                                      <th className="readonly-row-label">Receipt</th>
+                                      <td>{p.receptNo || "—"}</td>
+                                      <th className="readonly-row-label">Refund</th>
+                                      <td><span className="refund-amount">{p.refund ? formatINR(p.refundAmount) : "—"}</span></td>
+                                    </tr>
+                                    <tr>
+                                      <th className="readonly-row-label">Remarks</th>
+                                      <td colSpan={3}>{p.remarks || "—"}</td>
+                                    </tr>
+                                  </tbody>
+                                </table>
+                                <small className="small-text d-block text-primary mt-2">
+                                  Added by {addedByDisplay} • {formatDDMMYY(addedAtDisplay)} {formatTime12h(addedAtDisplay)}
+                                </small>
+
+                              </>
+
+                            )}
+                          </div>
+                        );
+                      })}
 
                     {editMode && <div className="actions-right mb-3"><button className="btn btn-primary" onClick={addPayment}>Add Payment</button></div>}
 
@@ -1664,7 +1980,7 @@ const ClientModal = ({
                       </div>
                     )}
                     {/* Change Log */}
-                    <div className="mt-3">
+                    {false && (<div className="mt-3">
                       <div className="d-flex justify-content-between align-items-center mb-2">
                         <h6><strong>Change Log</strong></h6>
                         <div>
@@ -1701,7 +2017,7 @@ const ClientModal = ({
                           </div>
                         ))}
                       </div>
-                    </div>
+                    </div>)}
                   </div>
                 )}
 

@@ -121,32 +121,31 @@ const EnquiryForm = ({ show, onClose, title = "Enquiry Form" }) => {
     // Confirm close state
     const [showConfirmClose, setShowConfirmClose] = useState(false);
 
-    // Generate ID number
+    // Generate ID number from database: find max existing E-xx and +1
     const generateIdNo = async () => {
         setIsGeneratingId(true);
         try {
-            // Get the latest enquiry to generate sequential ID
-            const snapshot = await firebaseDB.child("EnquiryData")
-                .orderByChild("timestamp")
-                .limitToLast(1)
-                .once("value");
+            const snap = await firebaseDB.child("EnquiryData").once("value");
+            let maxNum = 0;
 
-            let nextId = 1;
-            if (snapshot.exists()) {
-                const lastEnquiry = Object.values(snapshot.val())[0];
-                if (lastEnquiry.idNo) {
-                    const lastId = parseInt(lastEnquiry.idNo.replace('E-', '')) || 0;
-                    nextId = lastId + 1;
-                }
+            if (snap.exists()) {
+                snap.forEach((child) => {
+                    const v = child.val();
+                    const m = String(v?.idNo || "").match(/(\d+)$/); // grab trailing digits from E-01 / E-160 etc.
+                    if (m) {
+                        const n = parseInt(m[1], 10);
+                        if (!Number.isNaN(n) && n > maxNum) maxNum = n;
+                    }
+                });
             }
 
-            const newIdNo = `E-${String(nextId).padStart(2, '0')}`;
-            return newIdNo;
-        } catch (error) {
-            console.error("Error generating ID:", error);
-            // Fallback: use timestamp-based ID
-            const fallbackId = `E-${Date.now().toString().slice(-4)}`;
-            return fallbackId;
+            const next = maxNum + 1;
+            // keep your current 2-digit style (E-01). If you prefer 3 digits, use padStart(3, "0").
+            return `E-${String(next).padStart(2, "0")}`;
+        } catch (err) {
+            console.error("Error generating ID:", err);
+            // fallback so form still works
+            return `E-${String(new Date().getSeconds()).padStart(2, "0")}`;
         } finally {
             setIsGeneratingId(false);
         }
@@ -161,13 +160,13 @@ const EnquiryForm = ({ show, onClose, title = "Enquiry Form" }) => {
                     const today = new Date();
                     const formatted = today.toISOString().split("T")[0];
                     const generatedId = await generateIdNo();
-                    
-                    const initializedForm = { 
-                        ...emptyForm, 
-                        date: formatted, 
-                        idNo: generatedId 
+
+                    const initializedForm = {
+                        ...emptyForm,
+                        date: formatted,
+                        idNo: generatedId
                     };
-                    
+
                     setFormData(initializedForm);
                     setInitialData(initializedForm);
                     setErrors({});

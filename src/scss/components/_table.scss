@@ -709,34 +709,6 @@ table {
     }
 }
 
-.enquiry {
-
-    .form-control {
-        opacity: .8;
-    }
-
-    .form-select {
-        opacity: .8;
-    }
-
-    .btn-info {
-        &.me-2 {
-            @include mobile {
-                margin-right: 0 !important;
-                margin-bottom: 10px;
-            }
-        }
-
-    }
-
-    table {
-        @include mobile {
-            td {
-                vertical-align: middle;
-            }
-        }
-    }
-}
 
 .alert.alert-info {
     background-color: #474f52;

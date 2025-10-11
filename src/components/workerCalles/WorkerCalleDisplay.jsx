@@ -1220,7 +1220,6 @@ export default function WorkerCalleDisplay({ permissions: permissionsProp }) {
         <table className="table table-dark table-hover align-middle">
           <thead>
             <tr>
-              <th>S.No</th>
               <th>ID</th>
               <th>Date</th>
               <th>Name</th>
@@ -1229,6 +1228,7 @@ export default function WorkerCalleDisplay({ permissions: permissionsProp }) {
               <th>Experience</th>
               <th>Reminder</th>
               <th>Skills</th>
+              <th>Lang</th>
               <th style={{ display: "none" }}>Languages</th>
               <th>Mobile</th>
               <th>Talking</th>
@@ -1257,7 +1257,6 @@ export default function WorkerCalleDisplay({ permissions: permissionsProp }) {
 
               return (
                 <tr key={w.id} onClick={(e) => handleRowClick(w, e)} style={{ cursor: "pointer" }}>
-                  <td>{idxInSorted + 1}</td>
                   <td>
                     {displayId}
                     {addedBy && (
@@ -1287,17 +1286,17 @@ export default function WorkerCalleDisplay({ permissions: permissionsProp }) {
                     {hasReminder}
                     {hasReminder && duText && <small className="d-block">{duText}</small>}
                   </td>
-                  <td>
-                    <div className="d-flex flex-wrap gap-1">
-                      {getWorkerSkills(w).slice(0, 3).map((skill, idx) => (<span key={idx} className="badge bg-info text-dark">{skill}</span>))}
+                  <td style={{ maxWidth: "150px" }}>
+                    <div className="d-flex flex-wrap gap-2     justify-content-center">
+                      {getWorkerSkills(w).slice(0, 3).map((skill, idx) => (<span key={idx} className="badge bg-info text-dark text-capitalize">{skill}</span>))}
                       {getWorkerSkills(w).length > 3 && <span className="badge bg-secondary">+{getWorkerSkills(w).length - 3}</span>}
                     </div>
                   </td>
                   {/* Keep but hide Languages col */}
-                  <td style={{ display: "none" }}>
-                    <div className="d-flex flex-wrap gap-1">
-                      {getWorkerLanguages(w).slice(0, 3).map((lang, idx) => (<span key={idx} className="badge bg-secondary">{lang}</span>))}
-                      {getWorkerLanguages(w).length > 3 && <span className="badge bg-secondary">+{getWorkerLanguages(w).length - 3}</span>}
+                  <td style={{ maxWidth: "150px" }}>
+                    <div className="d-flex flex-wrap gap-2 justify-content-center">
+                      {getWorkerLanguages(w).slice(0, 3).map((lang, idx) => (<span key={idx} className="badge bg-light text-dark  text-capitalize">{lang}</span>))}
+                      {getWorkerLanguages(w).length > 3 && <span className="badge bg-primary">+{getWorkerLanguages(w).length - 3}</span>}
                     </div>
                   </td>
                   <td className="text-white">

@@ -467,14 +467,14 @@ export default function WorkerCallModal({
                       {/* Personal Information */}
                       <div className="col-12">
                         <div className="border-0 shadow-sm p-3">
-                          <div className="card-header bg-light">
-                            <h6 className="mb-0 fw-bold text-primary">
+                          <div className="card-header">
+                            <h6 className=" fw-bold text-primary">
                               Personal Information
                             </h6>
                           </div>
                           <div className="card-body">
                             <div className="row g-3">
-                              <div className="col-md-6" style={{ opacity: 0 }}>
+                              <div className="col-md-6">
                                 <label className="form-label fw-semibold text-dark">
                                   Mobile Number
                                 </label>
@@ -572,8 +572,8 @@ export default function WorkerCallModal({
                       {/* Professional Information */}
                       <div className="col-12">
                         <div className="border-0 shadow-sm p-3">
-                          <div className="card-header bg-light">
-                            <h6 className="mb-0 fw-bold text-primary">
+                          <div className="card-header">
+                            <h6 className="fw-bold text-primary">
                               Professional Information
                             </h6>
                           </div>
@@ -870,7 +870,7 @@ export default function WorkerCallModal({
                       {/* Languages */}
                       <div className="col-12">
                         <div className="border-0 shadow-sm p-3">
-                          <div className="card-header bg-light">
+                          <div className="card-header">
                             <h6 className="fw-bold text-primary">Languages</h6>
                           </div>
                           <div className="card-body">

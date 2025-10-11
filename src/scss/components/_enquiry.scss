@@ -1,0 +1,119 @@
+.enquiry {
+
+    .form-control {
+        opacity: .8;
+    }
+
+    .form-select {
+        opacity: .8;
+    }
+
+    .btn-info {
+        &.me-2 {
+            @include mobile {
+                margin-right: 0 !important;
+                margin-bottom: 10px;
+            }
+        }
+
+    }
+
+    table {
+        @include mobile {
+            td {
+                vertical-align: middle;
+            }
+        }
+    }
+
+    .form-label {
+        text-align: left !important;
+        display: block;
+    }
+
+    /* thankyou-modal.css */
+    .thankyou-modal .thankyou-header {
+        background: #468d61;
+        /* your brand color */
+        color: #fff;
+    }
+
+    // .thankyou-modal .thankyou-card {
+    //   border: 1px solid #d7f3e0;
+    // }
+    .thankyou-modal .fa-check-circle {
+        color: #28a745;
+        /* success */
+    }
+
+    @keyframes pulse {
+        0% {
+            transform: scale(1);
+            box-shadow: 0 0 0 0 rgba(250, 183, 0, 0.466);
+        }
+
+        50% {
+            transform: scale(1.02);
+            box-shadow: 0 0 0 8px rgba(233, 250, 1, 0.226);
+        }
+
+        100% {
+            transform: scale(1);
+            box-shadow: 0 0 0 0 rgba(248, 162, 2, 0.205);
+        }
+    }
+
+    .btn-reset-pulse {
+        animation: pulse 1.4s infinite;
+    }
+}
+
+
+
+
+.enquiry-modal {
+    .text-muted {
+        color: #444 !important;
+    }
+
+    .border-bottom {
+        padding-left: 7px;
+        padding-top: 7px;
+        border-radius: 10px;
+        border: 1px solid #eaedfb;
+        margin-bottom: 10px;
+
+        &:nth-child(even) {
+            background-color: #f5f5f5;
+        }
+    }
+
+    .card {
+        background-color: transparent;
+    }
+}
+
+.EnquiryDetails {
+    .col-md-6 {
+        div {
+            border: 1px solid #ccc;
+            border-radius: 10px;
+            margin-bottom: 15px;
+            align-items: center;
+            display: flex;
+            align-items: center;
+            padding: 15px 20px;
+        }
+    }
+}
+
+.enquiryForm {
+    ::placeholder {
+        color: #3c3d3f;
+    }
+
+    .idNo {
+        opacity: 1;
+        cursor: none;
+    }
+}

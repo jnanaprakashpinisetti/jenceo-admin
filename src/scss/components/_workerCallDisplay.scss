@@ -456,17 +456,18 @@
 
 /* Reset button pulse when filters active */
 @keyframes btn-pulse-kf {
-  0% {
-    box-shadow: 0 0 0 0 rgba(255, 193, 7, 0.6);
-  }
+    0% {
+            box-shadow: 0 0 0 0 rgba(255, 193, 7, 0.6);
+        }
 
-  70% {
-    box-shadow: 0 0 0 10px rgba(255, 193, 7, 0);
-  }
+        70% {
+            box-shadow: 0 0 0 10px rgba(255, 193, 7, 0);
+        }
 
-  100% {
-    box-shadow: 0 0 0 0 rgba(255, 193, 7, 0);
+        100% {
+            box-shadow: 0 0 0 0 rgba(255, 193, 7, 0);
   }
+  
 }
 
 .btn-pulse {
@@ -474,6 +475,51 @@
   border-color: #ffc107 !important;
   color: #fff !important;
 }
+
+/* Apply the animation to elements */
+.btn-pulse {
+  animation: btn-pulse-kf 1.5s infinite;
+  background-color: #ffeb00 !important;
+  border-color: #ffd000 !important;
+  color: #444 !important;
+  font-weight: bold;
+}
+
+/* For a more intense yellow glow */
+.btn-pulse-intense {
+  animation: btn-pulse-kf 1s infinite;
+  background: linear-gradient(135deg, #ffeb00, #ffd000) !important;
+  border: none !important;
+  color: #444 !important;
+  font-weight: bold;
+  text-shadow: 0 1px 2px rgba(255, 255, 255, 0.5);
+}
+
+/* Hover effects */
+.btn-pulse:hover, .btn-pulse-intense:hover {
+  animation-duration: 0.7s;
+  background-color: #ffd000 !important;
+}
+
+/* Alternative with brighter yellow */
+@keyframes btn-pulse-bright-kf {
+  0% {
+    box-shadow: 0 0 0 0 rgba(255, 255, 0, 0.9);
+    background-color: #ffff00;
+  }
+  50% {
+    box-shadow: 0 0 0 20px rgba(255, 255, 0, 0.3);
+    background-color: #ffea00;
+  }
+  100% {
+    box-shadow: 0 0 0 35px rgba(255, 255, 0, 0);
+    background-color: #ffff00;
+  }
+}
+
+ 
+
+
 
 /* Female badge color */
 .badge-female {

@@ -1260,7 +1260,7 @@ export default function WorkerCalleDisplay({ permissions: permissionsProp }) {
                   <td>
                     {displayId}
                     {addedBy && (
-                      <small className="d-block small-text text-info">
+                      <small className="d-block small-text text-info opacity-50">
                         By {addedBy}
                       </small>
                     )}
@@ -1268,14 +1268,14 @@ export default function WorkerCalleDisplay({ permissions: permissionsProp }) {
                   <td>
                     {formatPrettyDate(getBaseDate(w))}
                     {hasTimeData(w) && (
-                      <small className="d-block text-info small-text">
+                      <small className="d-block text-info small-text opacity-50">
                         {formatTime(getBaseDate(w), timeFormat === "24" ? "24hr" : "12hr")}
                       </small>
                     )}
                   </td>
                   <td>{w?.name || "—"}</td>
                   <td>
-                    <span className={w?.gender === "Male" ? "badge bg-primary" : w?.gender === "Female" ? "badge badge-female" : "badge bg-secondary"}>
+                    <span className={w?.gender === "Male" ? "badge bg-primary opacity-50" : w?.gender === "Female" ? "badge badge-female opacity-50" : "badge bg-secondary "}>
                       {w?.gender || "—"}
                     </span>
                   </td>
@@ -1288,14 +1288,14 @@ export default function WorkerCalleDisplay({ permissions: permissionsProp }) {
                   </td>
                   <td style={{ maxWidth: "150px" }}>
                     <div className="d-flex flex-wrap gap-2     justify-content-center">
-                      {getWorkerSkills(w).slice(0, 3).map((skill, idx) => (<span key={idx} className="badge bg-info text-dark text-capitalize">{skill}</span>))}
+                      {getWorkerSkills(w).slice(0, 3).map((skill, idx) => (<span key={idx} className="badge bg-info text-dark text-capitalize opacity-50">{skill}</span>))}
                       {getWorkerSkills(w).length > 3 && <span className="badge bg-secondary">+{getWorkerSkills(w).length - 3}</span>}
                     </div>
                   </td>
                   {/* Keep but hide Languages col */}
                   <td style={{ maxWidth: "150px" }}>
                     <div className="d-flex flex-wrap gap-2 justify-content-center">
-                      {getWorkerLanguages(w).slice(0, 3).map((lang, idx) => (<span key={idx} className="badge bg-light text-dark  text-capitalize">{lang}</span>))}
+                      {getWorkerLanguages(w).slice(0, 3).map((lang, idx) => (<span key={idx} className="badge bg-light text-dark  text-capitalize opacity-50">{lang}</span>))}
                       {getWorkerLanguages(w).length > 3 && <span className="badge bg-primary">+{getWorkerLanguages(w).length - 3}</span>}
                     </div>
                   </td>
@@ -1309,7 +1309,7 @@ export default function WorkerCalleDisplay({ permissions: permissionsProp }) {
                     )}
                   </td>
                   <td>
-                    <span className={`badge ${comms.toLowerCase().includes("good") ? "bg-success" : comms.toLowerCase().includes("average") ? "bg-warning text-dark" : "bg-secondary"}`}>
+                    <span className={`badge opacity-50 ${comms.toLowerCase().includes("good") ? "bg-success" : comms.toLowerCase().includes("average") ? "bg-warning text-dark" : "bg-secondary"}`}>
                       {comms || "—"}
                     </span>
                   </td>

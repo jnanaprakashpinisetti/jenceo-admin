@@ -845,12 +845,12 @@ export default function DisplayClient() {
                 <tr key={client.id} className={rClass} onClick={() => handleView(client)} style={{ cursor: 'pointer' }}>
                   <td>
                     <strong>{client.idNo || "N/A"}</strong>
-                    <small className="d-block small-text text-info">
+                    <small className="d-block small-text text-info opacity-50">
                       By {resolvedName}
                     </small>
                   </td>
                   <td>{client.clientName || 'N/A'}
-                    <small className="d-block small-text text-info">
+                    <small className="d-block small-text text-info opacity-50">
                       {formatDateTime(getCreatedDateValue(client))}
                     </small>
                   </td>
@@ -858,7 +858,7 @@ export default function DisplayClient() {
                   <td>{client.typeOfService || 'N/A'}</td>
                   <td>
                     {formatDate(rDate)}
-                    {rDate && <small className="d-block text-muted">{daysLabel}</small>}
+                    {rDate && <small className="d-block text-muted opacity-50">{daysLabel}</small>}
                   </td>
                   <td>
                     {client.mobileNo1 ? (
@@ -879,7 +879,7 @@ export default function DisplayClient() {
                     ) : 'N/A'}
                   </td>
                   <td>
-                    <span className={`badge ${getStatusBadgeClass(client.serviceStatus)}`}>
+                    <span className={`badge ${getStatusBadgeClass(client.serviceStatus)} opacity-75`}>
                       {client.serviceStatus || 'Running'}
                     </span>
                   </td>

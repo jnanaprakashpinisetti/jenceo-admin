@@ -559,7 +559,7 @@ export default function WorkerCalDeletedDisplay() {
             {pageItems.length === 0 && (
               <tr>
                 <td colSpan="10">
-                  <div className="alert alert-info mb-0 text-center">
+                  <div className="alert alert-white mb-0 text-center">
                     {deletedWorkers.length === 0 ?
                       "No workers have been deleted yet." :
                       "No deleted workers match your filters."

@@ -7,7 +7,6 @@ import deleteIcon from '../../assets/delete.svg';
 import ClientModal from './ClientModal';
 import { useAuth } from "../../context/AuthContext";
 
-
 /**
  * Matches EnquiriesDisplay features:
  * - Reminder badges with counts (overdue/today/tomorrow/upcoming) + clickable filter
@@ -67,47 +66,161 @@ export default function DisplayClient() {
     return date;
   });
 
+  const [paymentsMeta, setPaymentsMeta] = useState({});
+
   const { user, currentUserName, authUser } = useAuth();
 
-
+  // Robust parser for many shapes: Firebase Timestamp, number(ms/s), ISO, "DD-MM-YYYY", "DD/MM/YYYY"
   const parseDate = (v) => {
-    if (!v) return null;
+    if (v == null || v === "") return null;
 
-    // Firebase timestamp object
-    if (v && typeof v === 'object' && Object.prototype.hasOwnProperty.call(v, 'seconds')) {
-      return new Date(v.seconds * 1000);
-    }
-
-    // String dates
-    if (typeof v === 'string') {
-      const s = v.trim();
-      if (!s) return null;
-
-      // ISO (yyyy-mm-dd)
-      if (/^\d{4}-\d{2}-\d{2}/.test(s)) {
-        const [yyyy, mm, dd] = s.split('-').map(Number);
-        const d = new Date(yyyy, mm - 1, dd);
-        return isNaN(d.getTime()) ? null : d;
+    // Firestore/Firebase Timestamp
+    if (typeof v === "object") {
+      if ("seconds" in v || "nanoseconds" in v) {
+        const ms =
+          (Number(v.seconds || 0) * 1000) + Math.round(Number(v.nanoseconds || 0) / 1e6);
+        const d = new Date(ms);
+        return isNaN(d) ? null : d;
       }
-
-      // dd/mm/yyyy
-      if (/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(s)) {
-        const [dd, mm, yyyy] = s.split('/').map(Number);
-        const d = new Date(yyyy, mm - 1, dd);
-        return isNaN(d.getTime()) ? null : d;
+      // Some APIs wrap in { _seconds: ..., _nanoseconds: ... }
+      if ("_seconds" in v || "_nanoseconds" in v) {
+        const ms =
+          (Number(v._seconds || 0) * 1000) + Math.round(Number(v._nanoseconds || 0) / 1e6);
+        const d = new Date(ms);
+        return isNaN(d) ? null : d;
       }
-
-      // Fallback parse
-      const d = new Date(s);
-      return isNaN(d.getTime()) ? null : d;
     }
 
-    // Date object
-    if (v instanceof Date) {
-      return isNaN(v.getTime()) ? null : v;
+    // Numeric epoch (ms or s)
+    if (typeof v === "number" || (/^\d+$/.test(String(v)))) {
+      const n = Number(v);
+      // Heuristic: if it's seconds (10 digits), convert to ms
+      const ms = n < 1e12 ? n * 1000 : n;
+      const d = new Date(ms);
+      return isNaN(d) ? null : d;
     }
 
-    return null;
+    // Strings
+    const s = String(v).trim();
+    // DD-MM-YYYY or DD/MM/YYYY
+    let m = s.match(/^(\d{2})[-/](\d{2})[-/](\d{4})$/);
+    if (m) {
+      const d = new Date(Number(m[3]), Number(m[2]) - 1, Number(m[1]));
+      return isNaN(d) ? null : d;
+    }
+    // YYYY-MM-DD
+    m = s.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (m) {
+      const d = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+      return isNaN(d) ? null : d;
+    }
+
+    const d = new Date(s);
+    return isNaN(d) ? null : d;
+  };
+
+  // Prefer a value that includes TIME:
+  // 1) first payment with addedAt/timestamp/date
+  // 2) otherwise client-level fields
+  // Prefer a value that includes TIME: use latest payment first, else client-level fields
+  const getCreatedDateValue = (c) => {
+    const meta = paymentsMeta[c?.id];
+    if (meta?.addedAt) return meta.addedAt;
+
+    // fallback to client-level fields (often date-only → 12:00 AM)
+    return (
+      c?.timestamp ??
+      c?.createdAt ??
+      c?.created_on ??
+      c?.createdOn ??
+      c?.createdon ??
+      c?.addedAt ??
+      c?.added_on ??
+      c?.date ??
+      c?.meta?.createdAt ??
+      c?.meta?.timestamp ??
+      null
+    );
+  };
+
+  // Clean a display name
+  const cleanName = (s) => String(s || "").trim().replace(/@.*/, "");
+
+  // Resolve a user id against Users map
+  const nameFromUsers = (id, users = {}) => {
+    if (!id) return "";
+    const u = users[id];
+    if (!u) return "";
+    return cleanName(u.name || u.displayName || u.username || u.email);
+  };
+
+  // EXACTLY like payments/WorkerCalleDisplay, but tailored for a *client* row:
+  // 1) direct strings on the client
+  // 2) ids on the client via Users map
+  // 3) first payment's direct strings / ids via Users map
+  // (No fallback to current logged-in user)
+  const resolveAddedByStrict = (client, users = {}) => {
+    if (!client) return "";
+
+    // 1) direct client fields first
+    const direct = [
+      client.addedByName,
+      client.createdByName,
+      client.userName,
+      client.addedBy,
+      client.createdBy,
+    ];
+    for (const d of direct) {
+      const nm = cleanName(d);
+      if (nm) return nm;
+    }
+
+    // 2) try client ids → Users map
+    const idFields = [
+      client.user_key,
+      client.userKey,
+      client.userId,
+      client.uid,
+      client.addedById,
+      client.createdById,
+      client.addedByUid,
+      client.createdByUid,
+      client.ownerId,
+      client.key,
+    ];
+    for (const id of idFields) {
+      const nm = nameFromUsers(id, users);
+      if (nm) return nm;
+    }
+
+    // 3) fallback: first payment that carries a name or an id we can resolve
+    if (Array.isArray(client.payments)) {
+      const p =
+        client.payments.find(pp => cleanName(pp?.addedByName)) ||
+        client.payments.find(pp =>
+          [
+            pp?.user_key, pp?.userKey, pp?.userId, pp?.uid,
+            pp?.addedById, pp?.createdById, pp?.addedByUid, pp?.createdByUid,
+            pp?.ownerId, pp?.key
+          ].some(Boolean)
+        );
+
+      if (p) {
+        if (cleanName(p.addedByName)) return cleanName(p.addedByName);
+
+        const payIds = [
+          p.user_key, p.userKey, p.userId, p.uid,
+          p.addedById, p.createdById, p.addedByUid, p.createdByUid,
+          p.ownerId, p.key
+        ];
+        for (const id of payIds) {
+          const nm = nameFromUsers(id, users);
+          if (nm) return nm;
+        }
+      }
+    }
+
+    return ""; // let the UI show "System" only if nothing resolves
   };
 
   // Most recent reminder from payments
@@ -186,54 +299,164 @@ export default function DisplayClient() {
   };
 
   // === Users map (for "By {user}" under ID, same as EnquiriesDisplay) ===
-  // === Users map (merge both paths to avoid "System") ===
   const [usersMap, setUsersMap] = useState({});
   useEffect(() => {
-    const primary = firebaseDB.child("JenCeo-DataBase/Users");
-    const fallback = firebaseDB.child("Users");
+    const paths = [
+      "JenCeo-DataBase/Users", // current
+      "Users",                  // legacy
+      "JenCeo/Users"            // you mentioned this path in auth context
+    ];
 
-    const onPrimary = primary.on("value", (snap) => {
-      const v = snap.val() || {};
-      setUsersMap((prev) => ({ ...prev, ...v }));
-    });
-    const onFallback = fallback.on("value", (snap) => {
-      const v = snap.val() || {};
-      setUsersMap((prev) => ({ ...v, ...prev })); // don’t clobber primary
+    const offs = [];
+    paths.forEach((p) => {
+      const ref = firebaseDB.child(p);
+      const handler = ref.on("value", (snap) => {
+        const v = snap.val() || {};
+        setUsersMap((prev) => ({ ...v, ...prev }));
+      });
+      offs.push(() => ref.off("value", handler));
     });
 
-    return () => {
-      primary.off("value", onPrimary);
-      fallback.off("value", onFallback);
-    };
+    return () => offs.forEach((fn) => fn());
   }, []);
 
+  // === Live join latest payment per client from DB (handles ClientData/<id>/Payments) ===
+  useEffect(() => {
+    if (!Array.isArray(clients) || clients.length === 0) return;
 
-  // === Name + time helpers (aligned with EnquiriesDisplay) ===
-  const resolveAddedBy = (row, users = {}) => {
-    if (!row) return "";
-    // Direct text fields first
-    const direct = [row.addedByName, row.createdByName, row.userName, row.username, row.addedBy, row.createdBy];
-    for (const d of direct) {
-      const clean = String(d || "").trim().replace(/@.*/, "");
-      if (clean) return clean;
+    const offs = [];
+    clients.forEach((c) => {
+      if (!c?.id) return;
+
+      // listen to lowercase path (your DB uses "payments")
+      const payRefLower = firebaseDB.child(`ClientData/${c.id}/payments`);
+      const handlerLower = payRefLower.limitToLast(1).on("value", (snap) => {
+        let latest = null;
+        snap.forEach((child) => (latest = { id: child.key, ...child.val() }));
+        const addedAt =
+          latest?.addedAt || latest?.timestamp || latest?.date || latest?.createdAt || "";
+        const addedById =
+          latest?.addedById || latest?.user_key || latest?.userId || latest?.uid ||
+          latest?.createdById || latest?.addedByUid || latest?.createdByUid || "";
+
+        setPaymentsMeta((prev) => ({
+          ...prev,
+          [c.id]: {
+            addedByName: latest?.addedByName || "",
+            addedById,
+            addedAt,
+          },
+        }));
+      });
+
+      // OPTIONAL: also listen to legacy UPPERCASE path if you truly have some records there.
+      const payRefUpper = firebaseDB.child(`ClientData/${c.id}/Payments`);
+      const handlerUpper = payRefUpper.limitToLast(1).on("value", (snap) => {
+        let latest = null;
+        snap.forEach((child) => (latest = { id: child.key, ...child.val() }));
+        if (!latest) return;
+        const addedAt =
+          latest?.addedAt || latest?.timestamp || latest?.date || latest?.createdAt || "";
+        const addedById =
+          latest?.addedById || latest?.user_key || latest?.userId || latest?.uid ||
+          latest?.createdById || latest?.addedByUid || latest?.createdByUid || "";
+
+        setPaymentsMeta((prev) => ({
+          ...prev,
+          [c.id]: {
+            addedByName: latest?.addedByName || prev?.[c.id]?.addedByName || "",
+            addedById: addedById || prev?.[c.id]?.addedById || "",
+            addedAt: addedAt || prev?.[c.id]?.addedAt || "",
+          },
+        }));
+      });
+
+      offs.push(() => payRefLower.off("value", handlerLower));
+      offs.push(() => payRefUpper.off("value", handlerUpper));
+    });
+
+    return () => offs.forEach((fn) => fn());
+  }, [clients]);
+
+  // Join latest payment meta (name/id/time) per client from in-memory `client.payments`
+  useEffect(() => {
+    const meta = {};
+    const pickDate = (p) => parseDate(p?.addedAt || p?.timestamp || p?.date);
+
+    (clients || []).forEach((c) => {
+      const arr = Array.isArray(c?.payments) ? c.payments.slice() : [];
+      if (!arr.length) return;
+
+      // Choose most recent payment with an actual time-bearing date
+      const withDates = arr
+        .map((p) => ({ p, d: pickDate(p) }))
+        .filter((x) => !!x.d)
+        .sort((a, b) => b.d - a.d);
+
+      const chosen = (withDates[0]?.p) || arr[0];
+      if (chosen) {
+        meta[c.id] = {
+          addedByName: chosen.addedByName || "",
+          addedById:
+            chosen.addedById ||
+            chosen.user_key ||
+            chosen.userId ||
+            chosen.uid ||
+            chosen.createdById ||
+            chosen.addedByUid ||
+            chosen.createdByUid ||
+            "",
+          addedAt: chosen.addedAt || chosen.timestamp || chosen.date || "",
+        };
+      }
+    });
+
+    setPaymentsMeta(meta);
+  }, [clients]);
+
+  // Robust resolver: payment → client ids → nested sniff → in-memory payments
+  const resolveAddedBy = (client, paymentsMeta, usersIndex) => {
+    const meta = paymentsMeta?.[client?.id];
+
+    // 1) Payment meta: name wins
+    if (meta?.addedByName && String(meta.addedByName).trim()) {
+      return String(meta.addedByName).trim().replace(/@.*/, "");
     }
-    // Id → Users map
-    const ids = [row.createdById, row.addedById, row.createdByUid, row.addedByUid, row.uid, row.userId, row.user_key];
-    for (const id of ids) {
-      if (id && users[id]) {
-        const u = users[id];
-        const cand = u.name || u.displayName || u.username || u.email;
-        const clean = String(cand || "").trim().replace(/@.*/, "");
-        if (clean) return clean;
+
+    // 2) Payment meta: id → usersIndex
+    const metaId = String(meta?.addedById || "").toLowerCase();
+    if (metaId && usersIndex[metaId]) return usersIndex[metaId];
+
+    // 3) Client id fields → usersIndex
+    const candidates = [
+      client?.addedById, client?.createdById, client?.createdBy,
+      client?.uid, client?.userId, client?.user_key, client?.dbId,
+      client?.dbUsername, client?.dbName, client?.email, client?.userEmail,
+    ].filter(Boolean).map(x => String(x).toLowerCase());
+    for (const c of candidates) if (usersIndex[c]) return usersIndex[c];
+
+    // 4) Sniff top/nested fields for a name/id
+    const top = probeClientForUser(client);
+    if (top.name) return String(top.name).replace(/@.*/, "");
+    if (top.id) {
+      const k = String(top.id).toLowerCase();
+      if (usersIndex[k]) return usersIndex[k];
+    }
+
+    // 5) As a last resort, sniff the most recent in-memory payment on the client object
+    if (Array.isArray(client?.payments) && client.payments.length) {
+      const pick = (p) => parseDate(p?.addedAt || p?.timestamp || p?.date) || 0;
+      const p = client.payments.slice().sort((a, b) => pick(b) - pick(a))[0];
+
+      const ph = sniffUserField(p);
+      if (ph.name) return String(ph.name).replace(/@.*/, "");
+      if (ph.id) {
+        const k = String(ph.id).toLowerCase();
+        if (usersIndex[k]) return usersIndex[k];
       }
     }
-    // Nested user object
-    if (row.user && typeof row.user === "object") {
-      const cand = row.user.name || row.user.displayName || row.user.userName || row.user.email;
-      const clean = String(cand || "").trim().replace(/@.*/, "");
-      if (clean) return clean;
-    }
-    return "";
+
+    return "System";
   };
 
   const formatTime12 = (v) => {
@@ -242,6 +465,76 @@ export default function DisplayClient() {
     return d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit", hour12: true });
   };
 
+  // Return first non-empty string
+  const firstStr = (...vals) => {
+    for (const v of vals) {
+      if (v == null) continue;
+      const s = String(v).trim();
+      if (s) return s;
+    }
+    return "";
+  };
+
+  // Heuristic: find a user id/name anywhere in an object
+  const sniffUserField = (obj) => {
+    if (!obj || typeof obj !== "object") return { id: "", name: "" };
+
+    // 1) direct name-like fields
+    const name = firstStr(
+      obj.addedByName, obj.createdByName, obj.userName, obj.enteredByName,
+      obj.byName, obj.ownerName, obj.created_name, obj.added_name
+    );
+    if (name) return { id: "", name };
+
+    // 2) id-like fields
+    const id = firstStr(
+      obj.addedById, obj.createdById, obj.user_key, obj.userKey, obj.userId,
+      obj.uid, obj.dbId, obj.ownerId, obj.key, obj.created_uid, obj.by, obj.enteredById
+    );
+    if (id) return { id, name: "" };
+
+    return { id: "", name: "" };
+  };
+
+  // Walk the client object shallowly + a few nested spots for IDs/names
+  const probeClientForUser = (client) => {
+    if (!client) return { id: "", name: "" };
+
+    // top-level first
+    let hit = sniffUserField(client);
+    if (hit.name || hit.id) return hit;
+
+    // common nests
+    hit = sniffUserField(client.meta); if (hit.name || hit.id) return hit;
+    hit = sniffUserField(client.audit); if (hit.name || hit.id) return hit;
+    hit = sniffUserField(client.history?.createdBy); if (hit.name || hit.id) return hit;
+
+    return { id: "", name: "" };
+  };
+
+  // === Date + Time in one (DD-MM-YYYY • hh:mm am/pm) using parseDate() ===
+  const formatDateTime = (value) => {
+    const d = parseDate(value);
+    if (!d) return "";
+
+    // If original string looks date-only, suppress time part
+    const s = String(value || "").trim();
+    const isDateOnly =
+      /^\d{2}[-/]\d{2}[-/]\d{4}$/.test(s) || /^\d{4}-\d{2}-\d{2}$/.test(s);
+
+    const dd = String(d.getDate()).padStart(2, "0");
+    const mm = String(d.getMonth() + 1).padStart(2, "0");
+    const yyyy = d.getFullYear();
+
+    if (isDateOnly) return `${dd}-${mm}-${yyyy}`;
+
+    const time = d.toLocaleTimeString([], {
+      hour: "numeric",
+      minute: "2-digit",
+      hour12: true,
+    });
+    return `${dd}-${mm}-${yyyy} • ${time}`;
+  };
 
   // Fetch + live updates (kept your realtime listener)
   useEffect(() => {
@@ -359,12 +652,7 @@ export default function DisplayClient() {
     setClientToDelete(null);
   };
 
-  // Previously: handleDeleteConfirmed moved record immediately.
-  // Now we open the second modal (removal details) and perform the move only after reason/comment provided.
   const handleDeleteConfirmed = async () => {
-    // This function is no longer invoked directly from the "Yes, Move & Delete" button;
-    // that button now opens the removal details modal (see markup).
-    // A legacy path kept here for safety:
     setShowDeleteConfirm(false);
     setShowRemovalDetailsModal(true);
   };
@@ -399,6 +687,27 @@ export default function DisplayClient() {
     setSortBy('id');
     setCurrentPage(1);
   };
+
+  // Map many possible identifiers → clean display name
+  const [usersIndex, setUsersIndex] = useState({});
+
+  useEffect(() => {
+    const index = {};
+    Object.entries(usersMap || {}).forEach(([key, u]) => {
+      const name = String(
+        u?.name || u?.displayName || u?.dbName || u?.dbUsername || u?.username || u?.fullName || u?.Name || u?.email || ""
+      ).replace(/@.*/, "").trim();
+
+      const ids = [
+        key, u?.id, u?.uid, u?.key, u?.dbId, u?.dbUsername, u?.dbName,
+        u?.username, u?.email, u?.Email, u?.userEmail, u?.emailId,
+      ].filter(Boolean).map(x => String(x).toLowerCase());
+
+      ids.forEach(id => { if (name) index[id] = name; });
+    });
+
+    setUsersIndex(index);
+  }, [usersMap]);
 
   if (loading) return <div className="text-center my-5">Loading clients...</div>;
   if (error) return <div className="alert alert-danger">Error: {error}</div>;
@@ -530,23 +839,21 @@ export default function DisplayClient() {
                 return `${du} days`;
               })();
 
+              const resolvedName = resolveAddedBy(client, paymentsMeta, usersIndex);
+
               return (
                 <tr key={client.id} className={rClass} onClick={() => handleView(client)} style={{ cursor: 'pointer' }}>
                   <td>
                     <strong>{client.idNo || "N/A"}</strong>
                     <small className="d-block small-text text-info">
-                      By {
-                        resolveAddedBy(client, usersMap) ||
-                        (client?.user_key && (usersMap[client.user_key]?.name || usersMap[client.user_key]?.displayName || usersMap[client.user_key]?.username)) ||
-                        currentUserName ||
-                        user?.name ||
-                        authUser?.displayName ||
-                        "System"
-                      }
-
+                      By {resolvedName}
                     </small>
                   </td>
-                  <td>{client.clientName || 'N/A'}</td>
+                  <td>{client.clientName || 'N/A'}
+                    <small className="d-block small-text text-info">
+                      {formatDateTime(getCreatedDateValue(client))}
+                    </small>
+                  </td>
                   <td>{client.location || 'N/A'}</td>
                   <td>{client.typeOfService || 'N/A'}</td>
                   <td>
@@ -556,7 +863,6 @@ export default function DisplayClient() {
                   <td>
                     {client.mobileNo1 ? (
                       <span>
-                        {/* {client.mobileNo1} &nbsp;&nbsp; */}
                         <a href={`tel:${client.mobileNo1}`} className="btn btn-sm btn-info" onClick={(e) => e.stopPropagation()}>Call</a>
                         <a
                           className="btn btn-sm btn-warning ms-1"
@@ -607,7 +913,6 @@ export default function DisplayClient() {
       {/* Pagination */}
       {totalPages > 1 && (
         <div className='d-flex justify-content-center'>
-
           <nav aria-label="Client pagination" className="pagination-wrapper w-auto p-0 mt-3">
             <ul className="pagination justify-content-center">
               <li className={`page-item ${currentPage === 1 ? 'disabled' : ''}`}>
@@ -629,9 +934,7 @@ export default function DisplayClient() {
               </li>
             </ul>
           </nav>
-
         </div>
-
       )}
 
       {/* Client View/Edit Modal */}
@@ -667,7 +970,6 @@ export default function DisplayClient() {
               </div>
               <div className="modal-footer">
                 <button type="button" className="btn btn-secondary" onClick={closeDeleteConfirm}>Cancel</button>
-                {/* open the second modal that requests reason/comment */}
                 <button type="button" className="btn btn-danger" onClick={() => { setShowDeleteConfirm(false); setShowRemovalDetailsModal(true); }}>Yes, Move & Delete</button>
               </div>
             </div>
@@ -724,7 +1026,6 @@ export default function DisplayClient() {
                     setShowRemovalDetailsModal(false);
                     setShowMovedModal(true);
                     setClientToDelete(null);
-                    // reset removal form
                     setRemovalForm({ reason: '', comment: '' });
                     setRemovalErrors({});
                   } catch (err) {

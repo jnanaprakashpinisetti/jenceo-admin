@@ -181,12 +181,27 @@ export default function DisplayClient() {
   };
 
   // === Users map (for "By {user}" under ID, same as EnquiriesDisplay) ===
+  // === Users map (merge both paths to avoid "System") ===
   const [usersMap, setUsersMap] = useState({});
   useEffect(() => {
-    const ref = firebaseDB.child("Users"); // matches EnquiriesDisplay
-    const cb = ref.on("value", (snap) => setUsersMap(snap.val() || {}));
-    return () => ref.off("value", cb);
+    const primary = firebaseDB.child("JenCeo-DataBase/Users");
+    const fallback = firebaseDB.child("Users");
+
+    const onPrimary = primary.on("value", (snap) => {
+      const v = snap.val() || {};
+      setUsersMap((prev) => ({ ...prev, ...v }));
+    });
+    const onFallback = fallback.on("value", (snap) => {
+      const v = snap.val() || {};
+      setUsersMap((prev) => ({ ...v, ...prev })); // don’t clobber primary
+    });
+
+    return () => {
+      primary.off("value", onPrimary);
+      fallback.off("value", onFallback);
+    };
   }, []);
+
 
   // === Name + time helpers (aligned with EnquiriesDisplay) ===
   const resolveAddedBy = (row, users = {}) => {
@@ -390,18 +405,34 @@ export default function DisplayClient() {
 
       {/* Reminder badges (click to filter) */}
       <div className="alert alert-info d-flex justify-content-around flex-wrap reminder-badges">
-        <span className="reminder-badge overdue" onClick={() => { setFilterReminder('reminder-overdue'); setCurrentPage(1); }}>
+        <span
+          className={`reminder-badge overdue ${filterReminder === 'reminder-overdue' ? 'active' : ''}`}
+          onClick={() => { setFilterReminder('reminder-overdue'); setCurrentPage(1); }}
+        >
           Overdue: <strong>{reminderCounts.overdue}</strong>
         </span>
-        <span className="reminder-badge today" onClick={() => { setFilterReminder('reminder-today'); setCurrentPage(1); }}>
+
+        <span
+          className={`reminder-badge today ${filterReminder === 'reminder-today' ? 'active' : ''}`}
+          onClick={() => { setFilterReminder('reminder-today'); setCurrentPage(1); }}
+        >
           Today: <strong>{reminderCounts.today}</strong>
         </span>
-        <span className="reminder-badge tomorrow" onClick={() => { setFilterReminder('reminder-tomorrow'); setCurrentPage(1); }}>
+
+        <span
+          className={`reminder-badge tomorrow ${filterReminder === 'reminder-tomorrow' ? 'active' : ''}`}
+          onClick={() => { setFilterReminder('reminder-tomorrow'); setCurrentPage(1); }}
+        >
           Tomorrow: <strong>{reminderCounts.tomorrow}</strong>
         </span>
-        <span className="reminder-badge upcoming" onClick={() => { setFilterReminder('reminder-upcoming'); setCurrentPage(1); }}>
+
+        <span
+          className={`reminder-badge upcoming ${filterReminder === 'reminder-upcoming' ? 'active' : ''}`}
+          onClick={() => { setFilterReminder('reminder-upcoming'); setCurrentPage(1); }}
+        >
           Upcoming: <strong>{reminderCounts.upcoming}</strong>
         </span>
+
       </div>
 
       {/* Filters row (search / status / sort / reset) */}
@@ -499,10 +530,12 @@ export default function DisplayClient() {
                   <td>
                     <strong>{client.idNo || "N/A"}</strong>
                     <small className="d-block small-text text-info">
-                      By {resolveAddedBy(client, usersMap) || "System"}
-                    </small>
-                    <small className="d-block small-text text-muted">
-                      {formatTime12(client.createdAt || client.timestamp || client.created_on || client.date)}
+                      By {
+                        resolveAddedBy(client, usersMap) ||
+                        (client?.user_key && (usersMap[client.user_key]?.name || usersMap[client.user_key]?.displayName || usersMap[client.user_key]?.username)) ||
+                        window?.CURRENT_USER_NAME ||
+                        "System"
+                      }
                     </small>
                   </td>
                   <td>{client.clientName || 'N/A'}</td>

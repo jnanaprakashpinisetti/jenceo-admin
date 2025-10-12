@@ -346,29 +346,37 @@ const ClientModal = ({
   const [clearReminderBeforeAdd, setClearReminderBeforeAdd] = useState(false);
   const [showClearedModal, setShowClearedModal] = useState(false);
 
-  // === Users map (same as WorkerCalleDisplay) ===
+  // === Users map (primary path + fallback to match WorkerCalleDisplay) ===
+  // === Users map (for resolving "Added by" names) ===
   const [usersMap, setUsersMap] = useState({});
 
+  // Prefer the exact path you said you use:
+  // JenCeo-DataBase / Users / <key> / name
   useEffect(() => {
-    // Load from your real path first (as you noted): JenCeo-DataBase/Users
     const primary = firebaseDB.child("JenCeo-DataBase/Users");
-    const offPrimary = primary.on("value", (snap) => {
-      const val = snap.val() || {};
-      if (Object.keys(val).length) {
-        console.debug("[ClientModal] Users (primary) loaded:", Object.keys(val).length);
-        setUsersMap(val);
-      } else {
-        // Fallback to "Users" (used in WorkerCalleDisplay)
-        const fallback = firebaseDB.child("Users");
-        fallback.once("value").then(fbSnap => {
-          const fv = fbSnap.val() || {};
-          console.debug("[ClientModal] Users (fallback) loaded:", Object.keys(fv).length);
-          setUsersMap(fv);
-        });
+    const off = primary.on("value", (snap) => {
+      const v = snap.val() || {};
+      console.debug("[ClientModal] Users(PRIMARY JenCeo-DataBase/Users) keys:", Object.keys(v));
+      setUsersMap(v);
+    });
+
+    // Optional fallback in case some environments still write to /Users
+    const fallback = firebaseDB.child("Users");
+    const off2 = fallback.on("value", (snap) => {
+      const v = snap.val() || {};
+      // Merge fallback keys that aren’t in primary
+      if (v && Object.keys(v).length) {
+        setUsersMap((prev) => ({ ...v, ...prev }));
       }
     });
-    return () => primary.off("value", offPrimary);
+
+    return () => {
+      primary.off("value", off);
+      fallback.off("value", off2);
+    };
   }, []);
+
+
 
 
   const [expandedLogIndex, setExpandedLogIndex] = useState(null);
@@ -588,15 +596,16 @@ const ClientModal = ({
   console.debug("[ClientModal] auth:", authUser?.displayName || authUser?.email || null);
   console.debug("[ClientModal] effectiveUserName:", effectiveUserName);
 
-  // Look up a user's display name from JenCeo-DataBase/Users
+  // Resolve "Added by" exactly like WorkerCalleDisplay
+  // Resolve display name from a record + users map (same idea used in WorkerCalleDisplay)
   const resolveAddedByFromUsers = (obj, users) => {
     if (!obj || !users) return "";
 
-    // Common id fields we see across your data
+    // Try the common id fields we’ve seen in your data
     const candidateIds = [
       obj.user_key, obj.userKey, obj.userId, obj.uid,
       obj.addedById, obj.createdById, obj.addedByUid, obj.createdByUid,
-      obj.key, obj.ownerId
+      obj.ownerId, obj.key
     ].filter(Boolean);
 
     for (const id of candidateIds) {
@@ -606,8 +615,32 @@ const ClientModal = ({
         if (nm) return String(nm).trim().replace(/@.*/, "");
       }
     }
+
+    // No id match — try direct name fields on the object itself
+    const direct = [obj.addedByName, obj.userName, obj.addedBy, obj.createdBy];
+    for (const d of direct) {
+      const clean = String(d || "").trim();
+      if (clean) return clean.replace(/@.*/, "");
+    }
+
     return "";
   };
+
+  // A compact helper to choose the best current user id for saving on new payments
+  const getEffectiveUserId = (authUser, client) => {
+    // prefer your DB’s user key if available on auth (dbId/uid) or on client
+    return (
+      authUser?.dbId ||
+      authUser?.uid ||
+      client?.user_key ||
+      client?.createdById ||
+      client?.ownerId ||
+      client?.key ||
+      null
+    );
+  };
+
+
 
 
 
@@ -656,14 +689,13 @@ const ClientModal = ({
       refundRemarks: p.refundRemarks ?? "",
 
       // NEW: who/when (show after Remarks)
+      addedById: p.addedById ?? getEffectiveUserId(authUser, client) ?? p.userId ?? p.uid ?? p.user_key ?? null,
       addedByName:
         p.addedByName ||
-        resolveAddedByFromUsers(p, usersMap) ||     // ← Users/<user_key>/name FIRST
-        resolveAddedByFromUsers(client, usersMap) ||
+        resolveAddedByFromUsers(p, usersMap) ||     // First: use ids on the payment row
+        resolveAddedByFromUsers(client, usersMap) ||// Then: fall back to the parent client record ids
         (p.userName || p.addedBy || p.createdBy || client?.createdByName) ||
-        resolveUserName(p, effectiveUserName) ||
-        effectiveUserName,
-
+        (authUser?.displayName || authUser?.email || currentUserName || "System"),
 
       addedAt:
         p.addedAt ??
@@ -696,9 +728,27 @@ const ClientModal = ({
         mobile1: w.mobile1 ?? w.mobile ?? "",
         mobile2: w.mobile2 ?? "",
         remarks: w.remarks ?? "",
+
+        // ✅ who/when (EXACT same priority as payments)
+        addedById: w.addedById ?? w.createdById ?? w.userId ?? w.uid ?? w.user_key ?? null,
+        addedByName:
+          w.addedByName ||
+          resolveAddedByFromUsers(w, usersMap) ||          // join via JenCeo-DataBase/Users[<id>]
+          resolveAddedByFromUsers(client, usersMap) ||     // fallback from client ids
+          (w.userName || w.addedBy || w.createdBy || client?.createdByName) ||
+          (authUser?.displayName || authUser?.email || currentUserName || "System"),
+
+        addedAt:
+          w.addedAt ??
+          w.timestamp ??
+          w.createdAt ??
+          w.startingDate ??        // meaningful fallback
+          new Date().toISOString(),
+
         __locked: true,
         ...w,
       };
+
     });
 
     const snapshot = {
@@ -1635,10 +1685,12 @@ const ClientModal = ({
                         resolveUserName(w) ||
                         resolveAddedByFromUsers(w, usersMap) ||
                         resolveAddedByFromUsers(client, usersMap) ||
-                        effectiveUserName;
+                        currentUserName || "System";
 
                       const addedAtDisplay =
-                        w.addedAt || w.timestamp || w.createdAt || w.startingDate || client?.createdAt || "";
+                        w.addedAt || w.timestamp || w.createdAt || w.startingDate || "";
+
+
 
                       return (
                         <div key={i} className="modal-card mb-3 p-3 border rounded">
@@ -1761,24 +1813,12 @@ const ClientModal = ({
 
                         // Compute "Added by" + timestamp for display
                         const addedByDisplay =
-                          p.addedByName ||
-                          resolveUserName(p) ||
                           resolveAddedByFromUsers(p, usersMap) ||
                           resolveAddedByFromUsers(client, usersMap) ||
-                          effectiveUserName;
+                          currentUserName ||
+                          "System";
+                        const addedAtDisplay = p.addedAt || p.timestamp || p.createdAt || p.date;
 
-                        const addedAtDisplay = p.addedAt || p.timestamp || p.createdAt || p.date || "";
-
-
-                        // In your payment display, add debugging:
-                        console.debug("[Payment Debug] Row:", {
-                          index: idx,
-                          addedByName: p.addedByName,
-                          effectiveUserName,
-                          authUser: authUser?.email,
-                          currentUserName,
-                          usersMap: Object.keys(usersMap || {}).length
-                        });
 
                         return (
                           <div key={originalIndex} className="modal-card mb-3 p-3 border rounded">
@@ -2165,136 +2205,184 @@ const ClientModal = ({
                 )}
 
                 {/* Detail-Info */}
-                {activeTab === "detailinfo" && (
-                  <div>
-                    <h6><strong>Payment Details</strong></h6>
-                    <div className="table-responsive mb-3">
-                      <table className="table table-sm table-hover invest-table">
-                        <thead>
-                          <tr>
-                            <th>#</th>
-                            <th>Date</th>
-                            <th>Payment</th>
-                            <th>Balance</th>
-                            <th>Method</th>
-                            <th>Receipt</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {((formData.payments || []).filter(p => !p?.__adjustment || p?.__type === "balance")).map((p, i) => {
-                            const d = p.date ? parseDateSafe(p.date) : null;
-                            const dateStr = d ? `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()}` : (p.date || "-");
-                            const method = p.paymentMethod || "-";
-                            const paid = Number(p.paidAmount) || 0;
-                            const bal = Number(p.balance) || 0;
-                            const receipt = p.receptNo || "-";
-                            return (
-                              <tr key={i}>
-                                <td>{i + 1}</td>
-                                <td>{dateStr}</td>
-                                <td>{formatINR(paid)}</td>
-                                <td>{formatINR(bal)}</td>
-                                <td>{method}</td>
-                                <td>{receipt}</td>
-                              </tr>
-                            );
-                          })}
-                        </tbody>
-                        <tfoot>
-                          <tr>
-                            <th colSpan={2}>Totals</th>
-                            <th>{formatINR((formData.payments || []).reduce((s, p) => s + (Number(p.paidAmount) || 0), 0))}</th>
-                            <th>{formatINR((formData.payments || []).reduce((s, p) => s + (Number(p.balance) || 0), 0))}</th>
-                            <th colSpan={2}></th>
-                          </tr>
-                        </tfoot>
-                      </table>
-                    </div>
+                {/* Detail-Info */}
+                {activeTab === "detailinfo" && (() => {
+                  // ——— compute “Payed By” (uses usersMap, formData, client, currentUserName) ———
+                  // ---- Payed By (same join method as payments/workers) ----
+                  const resolveName = (obj) => {
+                    if (!obj) return "";
+                    // direct text fields first
+                    const direct = [obj.addedByName, obj.createdByName, obj.userName, obj.username, obj.addedBy, obj.createdBy];
+                    for (const d of direct) {
+                      const clean = String(d || "").trim().replace(/@.*/, "");
+                      if (clean) return clean;
+                    }
+                    // id → usersMap join
+                    const ids = [
+                      obj.addedById, obj.createdById, obj.user_key, obj.userKey, obj.userId, obj.uid, obj.ownerId, obj.key
+                    ].filter(Boolean);
+                    for (const id of ids) {
+                      const u = (usersMap || {})[id];
+                      if (u) {
+                        const nm = u.name || u.displayName || u.username || u.email;
+                        const clean = String(nm || "").trim().replace(/@.*/, "");
+                        if (clean) return clean;
+                      }
+                    }
+                    // nested user object
+                    if (obj.user && typeof obj.user === "object") {
+                      const cand = obj.user.name || obj.user.displayName || obj.user.username || obj.user.email;
+                      const clean = String(cand || "").trim().replace(/@.*/, "");
+                      if (clean) return clean;
+                    }
+                    return "";
+                  };
 
-                    <h6 className="mt-3"><strong>Refund Details</strong></h6>
-                    <div className="table-responsive mb-3">
-                      <table className="table table-sm table-hover invest-table">
-                        <thead>
-                          <tr>
-                            <th>#</th>
-                            <th>Payment #</th>
-                            <th>Refund Date</th>
-                            <th>Refund Amount</th>
-                            <th>Refund Method</th>
-                            <th>Refund Remarks</th>
-                            <th>Receipt</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {(formData.payments || []).filter(p => p.refund || Number(p.refundAmount || 0) > 0).map((p, i) => {
-                            const d = p.refundDate ? parseDateSafe(p.refundDate) : (p.date ? parseDateSafe(p.date) : null);
-                            const dateStr = d ? `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()}` : (p.refundDate || "-");
-                            return (
-                              <tr key={i}>
-                                <td>{i + 1}</td>
-                                <td>{(formData.payments || []).indexOf(p) + 1}</td>
-                                <td>{dateStr}</td>
-                                <td><span className="refund-amount">{formatINR(p.refundAmount)}</span></td>
-                                <td>{p.refundPaymentMethod || "-"}</td>
-                                <td>{p.refundRemarks || "-"}</td>
-                                <td>{p.receptNo || "-"}</td>
-                              </tr>
-                            );
-                          })}
-                        </tbody>
-                        <tfoot>
-                          <tr>
-                            <th colSpan={3}>Total Refund</th>
-                            <th>{formatINR((formData.payments || []).reduce((s, p) => s + (Number(p.refundAmount) || 0), 0))}</th>
-                            <th colSpan={3}></th>
-                          </tr>
-                        </tfoot>
-                      </table>
-                    </div>
+                  const firstPayWithName = (formData.payments || []).find(p => p?.addedByName) || null;
+                  const firstWorkerWithName = (formData.workers || []).find(w => w?.addedByName) || null;
+                  const detailAddedBy =
+                    resolveName(firstPayWithName) ||
+                    resolveName(firstWorkerWithName) ||
+                    resolveName(client) ||
+                    currentUserName ||
+                    "System";
 
-                    <h6 className="mt-3"><strong>Workers Details</strong></h6>
-                    <div className="table-responsive">
-                      <table className="table table-sm table-hover invest-table">
-                        <thead>
-                          <tr>
-                            <th>#</th>
-                            <th>ID No</th>
-                            <th>Name</th>
-                            <th>Basic Salary</th>
-                            <th>From</th>
-                            <th>To</th>
-                            <th>Total Days</th>
-                            <th>Remarks</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {(formData.workers || []).map((w, i) => (
-                            <tr key={i}>
-                              <td>{i + 1}</td>
-                              <td>{w.workerIdNo || "-"}</td>
-                              <td>{w.cName || "-"}</td>
-                              <td>{formatINR(w.basicSalary)}</td>
-                              <td>{w.startingDate || "-"}</td>
-                              <td>{w.endingDate || "-"}</td>
-                              <td>{w.totalDays || "-"}</td>
-                              <td>{w.remarks || "-"}</td>
+
+                  return (
+                    <div>
+                      <h6><strong>Payment Details</strong></h6>
+                      <div className="table-responsive mb-3">
+                        <table className="table table-sm table-hover invest-table">
+                          <thead>
+                            <tr>
+                              <th>#</th>
+                              <th>Date</th>
+                              <th>Payment</th>
+                              <th>Payed By</th>
+                              <th>Balance</th>
+                              <th>Method</th>
+                              <th>Receipt</th>
                             </tr>
-                          ))}
-                        </tbody>
-                        <tfoot>
-                          <tr>
-                            <th colSpan={3}>Totals</th>
-                            <th>{formatINR((formData.workers || []).reduce((s, w) => s + (Number(w.basicSalary) || 0), 0))}</th>
-                            <th colSpan={1}></th>
-                            <th colSpan={1}></th>
-                            <th>{(formData.workers || []).reduce((s, w) => s + (Number(w.totalDays) || 0), 0)}</th>
-                            <th></th>
-                          </tr>
-                        </tfoot>
-                      </table>
+                          </thead>
+                          <tbody>
+                            {((formData.payments || []).filter(p => !p?.__adjustment || p?.__type === "balance")).map((p, i) => {
+                              const d = p.date ? parseDateSafe(p.date) : null;
+                              const dateStr = d ? `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()}` : (p.date || "-");
+                              const method = p.paymentMethod || "-";
+                              const paid = Number(p.paidAmount) || 0;
+                              const bal = Number(p.balance) || 0;
+                              const receipt = p.receptNo || "-";
+                              return (
+                                <tr key={i}>
+                                  <td>{i + 1}</td>
+                                  <td>{dateStr}</td>
+                                  <td>{formatINR(paid)}</td>
+                                  <td >{detailAddedBy}</td>
+                                  <td>{formatINR(bal)}</td>
+                                  <td>{method}</td>
+                                  <td>{receipt}</td>
+                                </tr>
+                              );
+                            })}
+
+                          </tbody>
+                          <tfoot>
+                            <tr>
+                              <th colSpan={2}>Totals</th>
+                              <th>{formatINR((formData.payments || []).reduce((s, p) => s + (Number(p.paidAmount) || 0), 0))}</th>
+                              <th>{formatINR((formData.payments || []).reduce((s, p) => s + (Number(p.balance) || 0), 0))}</th>
+                              <th></th>
+                              <th colSpan={2}></th>
+                            </tr>
+                          </tfoot>
+                        </table>
+                      </div>
+
+                      <h6 className="mt-3"><strong>Refund Details</strong></h6>
+                      <div className="table-responsive mb-3">
+                        <table className="table table-sm table-hover invest-table">
+                          <thead>
+                            <tr>
+                              <th>#</th>
+                              <th>Payment #</th>
+                              <th>Refund Date</th>
+                              <th>Refund Amount</th>
+                              <th>Refund Method</th>
+                              <th>Refund Remarks</th>
+                              <th>Receipt</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {(formData.payments || []).filter(p => p.refund || Number(p.refundAmount || 0) > 0).map((p, i) => {
+                              const d = p.refundDate ? parseDateSafe(p.refundDate) : (p.date ? parseDateSafe(p.date) : null);
+                              const dateStr = d ? `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()}` : (p.refundDate || "-");
+                              return (
+                                <tr key={i}>
+                                  <td>{i + 1}</td>
+                                  <td>{(formData.payments || []).indexOf(p) + 1}</td>
+                                  <td>{dateStr}</td>
+                                  <td><span className="refund-amount">{formatINR(p.refundAmount)}</span></td>
+                                  <td>{p.refundPaymentMethod || "-"}</td>
+                                  <td>{p.refundRemarks || "-"}</td>
+                                  <td>{p.receptNo || "-"}</td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                          <tfoot>
+                            <tr>
+                              <th colSpan={3}>Total Refund</th>
+                              <th>{formatINR((formData.payments || []).reduce((s, p) => s + (Number(p.refundAmount) || 0), 0))}</th>
+                              <th colSpan={3}></th>
+                            </tr>
+                          </tfoot>
+                        </table>
+                      </div>
+
+                      <h6 className="mt-3"><strong>Workers Details</strong></h6>
+                      <div className="table-responsive">
+                        <table className="table table-sm table-hover invest-table">
+                          <thead>
+                            <tr>
+                              <th>#</th>
+                              <th>ID No</th>
+                              <th>Name</th>
+                              <th>Basic Salary</th>
+                              <th>From</th>
+                              <th>To</th>
+                              <th>Total Days</th>
+                              <th>Remarks</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {(formData.workers || []).map((w, i) => (
+                              <tr key={i}>
+                                <td>{i + 1}</td>
+                                <td>{w.workerIdNo || "-"}</td>
+                                <td>{w.cName || "-"}</td>
+                                <td>{formatINR(w.basicSalary)}</td>
+                                <td>{w.startingDate || "-"}</td>
+                                <td>{w.endingDate || "-"}</td>
+                                <td>{w.totalDays || "-"}</td>
+                                <td>{w.remarks || "-"}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                          <tfoot>
+                            <tr>
+                              <th colSpan={3}>Totals</th>
+                              <th>{formatINR((formData.workers || []).reduce((s, w) => s + (Number(w.basicSalary) || 0), 0))}</th>
+                              <th colSpan={1}></th>
+                              <th colSpan={1}></th>
+                              <th>{(formData.workers || []).reduce((s, w) => s + (Number(w.totalDays) || 0), 0)}</th>
+                              <th></th>
+                            </tr>
+                          </tfoot>
+                        </table>
+                      </div>
                     </div>
-                  </div>
-                )}
+                  );
+                })()}
 
                 {/* Biodata */}
                 {activeTab === "biodata" && (

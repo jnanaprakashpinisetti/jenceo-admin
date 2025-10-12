@@ -180,6 +180,49 @@ export default function DisplayClient() {
     return 0; // tie → user sort
   };
 
+  // === Users map (for "By {user}" under ID, same as EnquiriesDisplay) ===
+  const [usersMap, setUsersMap] = useState({});
+  useEffect(() => {
+    const ref = firebaseDB.child("Users"); // matches EnquiriesDisplay
+    const cb = ref.on("value", (snap) => setUsersMap(snap.val() || {}));
+    return () => ref.off("value", cb);
+  }, []);
+
+  // === Name + time helpers (aligned with EnquiriesDisplay) ===
+  const resolveAddedBy = (row, users = {}) => {
+    if (!row) return "";
+    // Direct text fields first
+    const direct = [row.addedByName, row.createdByName, row.userName, row.username, row.addedBy, row.createdBy];
+    for (const d of direct) {
+      const clean = String(d || "").trim().replace(/@.*/, "");
+      if (clean) return clean;
+    }
+    // Id → Users map
+    const ids = [row.createdById, row.addedById, row.createdByUid, row.addedByUid, row.uid, row.userId, row.user_key];
+    for (const id of ids) {
+      if (id && users[id]) {
+        const u = users[id];
+        const cand = u.name || u.displayName || u.username || u.email;
+        const clean = String(cand || "").trim().replace(/@.*/, "");
+        if (clean) return clean;
+      }
+    }
+    // Nested user object
+    if (row.user && typeof row.user === "object") {
+      const cand = row.user.name || row.user.displayName || row.user.userName || row.user.email;
+      const clean = String(cand || "").trim().replace(/@.*/, "");
+      if (clean) return clean;
+    }
+    return "";
+  };
+
+  const formatTime12 = (v) => {
+    const d = parseDate(v);
+    if (!d) return "";
+    return d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit", hour12: true });
+  };
+
+
   // Fetch + live updates (kept your realtime listener)
   useEffect(() => {
     const ref = firebaseDB.child('ClientData');
@@ -238,9 +281,6 @@ export default function DisplayClient() {
 
     // Urgency-first (like your previous) then apply user sort
     arr.sort((a, b) => {
-      const u = baseUrgencySort(a, b);
-      if (u !== 0) return u;
-
       if (sortBy === 'name') {
         return (a.clientName || '').localeCompare(b.clientName || '');
       }
@@ -456,7 +496,15 @@ export default function DisplayClient() {
 
               return (
                 <tr key={client.id} className={rClass} onClick={() => handleView(client)} style={{ cursor: 'pointer' }}>
-                  <td><strong>{client.idNo || 'N/A'}</strong></td>
+                  <td>
+                    <strong>{client.idNo || "N/A"}</strong>
+                    <small className="d-block small-text text-info">
+                      By {resolveAddedBy(client, usersMap) || "System"}
+                    </small>
+                    <small className="d-block small-text text-muted">
+                      {formatTime12(client.createdAt || client.timestamp || client.created_on || client.date)}
+                    </small>
+                  </td>
                   <td>{client.clientName || 'N/A'}</td>
                   <td>{client.location || 'N/A'}</td>
                   <td>{client.typeOfService || 'N/A'}</td>
@@ -519,28 +567,30 @@ export default function DisplayClient() {
       {totalPages > 1 && (
         <div className='d-flex justify-content-center'>
 
-            <nav aria-label="Client pagination" className="pagination-wrapper w-auto p-0 mt-3">
-          <ul className="pagination justify-content-center">
-            <li className={`page-item ${currentPage === 1 ? 'disabled' : ''}`}>
-              <button className="page-link" onClick={() => setCurrentPage(currentPage - 1)} disabled={currentPage === 1}>
-                Previous
-              </button>
-            </li>
-            {Array.from({ length: totalPages }, (_, i) => i + 1).map((num) => (
-              <li key={num} className={`page-item ${currentPage === num ? 'active' : ''}`}>
-                <button className="page-link" onClick={() => setCurrentPage(num)}>{num}</button>
+          <nav aria-label="Client pagination" className="pagination-wrapper w-auto p-0 mt-3">
+            <ul className="pagination justify-content-center">
+              <li className={`page-item ${currentPage === 1 ? 'disabled' : ''}`}>
+                <button className="page-link" onClick={() => setCurrentPage(1)} disabled={currentPage === 1} aria-label="First">«</button>
               </li>
-            ))}
-            <li className={`page-item ${currentPage === totalPages ? 'disabled' : ''}`}>
-              <button className="page-link" onClick={() => setCurrentPage(currentPage + 1)} disabled={currentPage === totalPages}>
-                Next
-              </button>
-            </li>
-          </ul>
-        </nav>
-          
-           </div>
-      
+              <li className={`page-item ${currentPage === 1 ? 'disabled' : ''}`}>
+                <button className="page-link" onClick={() => setCurrentPage(currentPage - 1)} disabled={currentPage === 1} aria-label="Previous">‹</button>
+              </li>
+              {Array.from({ length: totalPages }, (_, i) => i + 1).map((num) => (
+                <li key={num} className={`page-item ${currentPage === num ? 'active' : ''}`}>
+                  <button className="page-link" onClick={() => setCurrentPage(num)}>{num}</button>
+                </li>
+              ))}
+              <li className={`page-item ${currentPage === totalPages ? 'disabled' : ''}`}>
+                <button className="page-link" onClick={() => setCurrentPage(currentPage + 1)} disabled={currentPage === totalPages} aria-label="Next">›</button>
+              </li>
+              <li className={`page-item ${currentPage === totalPages ? 'disabled' : ''}`}>
+                <button className="page-link" onClick={() => setCurrentPage(totalPages)} disabled={currentPage === totalPages} aria-label="Last">»</button>
+              </li>
+            </ul>
+          </nav>
+
+        </div>
+
       )}
 
       {/* Client View/Edit Modal */}
@@ -550,7 +600,7 @@ export default function DisplayClient() {
           isOpen={isModalOpen}
           onClose={handleCloseModal}
           onSave={handleSave}
-          onDelete={() => {}}
+          onDelete={() => { }}
           isEditMode={isEditMode}
         />
       )}
@@ -597,7 +647,7 @@ export default function DisplayClient() {
                 <p>Please provide a reason and comment for removal. Both fields are mandatory.</p>
                 <div className="mb-2">
                   <label className="form-label">Reason</label>
-                  <select className="form-select" value={removalForm.reason} onChange={(e)=>setRemovalForm(prev=>({...prev, reason: e.target.value}))}>
+                  <select className="form-select" value={removalForm.reason} onChange={(e) => setRemovalForm(prev => ({ ...prev, reason: e.target.value }))}>
                     <option value="">-- Select reason --</option>
                     <option value="Contract Closed">Contract Closed</option>
                     <option value="Contract Terminated">Contract Terminated</option>
@@ -607,18 +657,18 @@ export default function DisplayClient() {
                 </div>
                 <div className="mb-2">
                   <label className="form-label">Comment</label>
-                  <textarea className="form-control" rows={4} value={removalForm.comment} onChange={(e)=>setRemovalForm(prev=>({...prev, comment: e.target.value}))} />
+                  <textarea className="form-control" rows={4} value={removalForm.comment} onChange={(e) => setRemovalForm(prev => ({ ...prev, comment: e.target.value }))} />
                   {removalErrors.comment && <div className="text-danger small mt-1">{removalErrors.comment}</div>}
                 </div>
               </div>
               <div className="modal-footer">
                 <button type="button" className="btn btn-secondary" onClick={() => setShowRemovalDetailsModal(false)}>Cancel</button>
-                <button type="button" className="btn btn-danger" onClick={async ()=>{
+                <button type="button" className="btn btn-danger" onClick={async () => {
                   const errs = {};
-                  if(!removalForm.reason) errs.reason = 'Select reason';
-                  if(!removalForm.comment || !removalForm.comment.trim()) errs.comment = 'Enter comment';
+                  if (!removalForm.reason) errs.reason = 'Select reason';
+                  if (!removalForm.comment || !removalForm.comment.trim()) errs.comment = 'Enter comment';
                   setRemovalErrors(errs);
-                  if(Object.keys(errs).length>0) return;
+                  if (Object.keys(errs).length > 0) return;
 
                   try {
                     const client = clientToDelete;

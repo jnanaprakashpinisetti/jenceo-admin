@@ -7,7 +7,7 @@
 // 3) In view mode inputs are replaced with readable tables/labels (no inputs shown)
 // 4) Full file ready for download
 
-import React, { useEffect, useRef, useState, usersMap } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import firebaseDB from "../../firebase";
 import { useAuth } from "../../context/AuthContext";
 
@@ -343,6 +343,33 @@ const ClientModal = ({
   const [showFullAudit, setShowFullAudit] = useState(false);
   const bioIframeRef = useRef(null);
   const initialSnapshotRef = useRef(null);
+  const [clearReminderBeforeAdd, setClearReminderBeforeAdd] = useState(false);
+  const [showClearedModal, setShowClearedModal] = useState(false);
+
+  // === Users map (same as WorkerCalleDisplay) ===
+  const [usersMap, setUsersMap] = useState({});
+
+  useEffect(() => {
+    // Load from your real path first (as you noted): JenCeo-DataBase/Users
+    const primary = firebaseDB.child("JenCeo-DataBase/Users");
+    const offPrimary = primary.on("value", (snap) => {
+      const val = snap.val() || {};
+      if (Object.keys(val).length) {
+        console.debug("[ClientModal] Users (primary) loaded:", Object.keys(val).length);
+        setUsersMap(val);
+      } else {
+        // Fallback to "Users" (used in WorkerCalleDisplay)
+        const fallback = firebaseDB.child("Users");
+        fallback.once("value").then(fbSnap => {
+          const fv = fbSnap.val() || {};
+          console.debug("[ClientModal] Users (fallback) loaded:", Object.keys(fv).length);
+          setUsersMap(fv);
+        });
+      }
+    });
+    return () => primary.off("value", offPrimary);
+  }, []);
+
 
   const [expandedLogIndex, setExpandedLogIndex] = useState(null);
 
@@ -486,6 +513,56 @@ const ClientModal = ({
     }
   };
 
+  const handleAddPaymentWithOption = async () => {
+    // call your existing function that appends a new payment row
+    if (typeof addPayment === "function") addPayment();
+
+    if (!clearReminderBeforeAdd) return;
+
+    try {
+      // after adding, remove the reminderDate on the latest index in DB
+      const key = formData?.id || formData?.recordId || formData?.clientId || client?.id || client?.key;
+      if (!key) return;
+
+      // the new row will be at the end; compute its index
+      const idx = (Array.isArray(formData?.payments) ? formData.payments.length : 0);
+
+      await firebaseDB
+        .child(`ClientData/${key}/payments/${idx}/reminderDate`)
+        .remove();
+    } catch (e) {
+      console.warn("Failed to remove reminderDate for new payment:", e);
+    }
+  };
+
+
+  const clearReminderDateInDB = async (rowIndex) => {
+    try {
+      const key =
+        client?.id ||
+        client?.key ||
+        formData?.id ||
+        formData?.recordId ||
+        formData?.clientId;
+      if (!key) return;
+
+      // Remove only the date field, keep other payment fields untouched
+      await firebaseDB
+        .child(`JenCeo-DataBase/ClientData/${key}/payments/${rowIndex}/reminderDate`)
+        .remove();
+
+      // Reflect locally so UI updates immediately
+      setFormData((prev) => {
+        const arr = Array.isArray(prev.payments) ? [...prev.payments] : [];
+        if (arr[rowIndex]) arr[rowIndex] = { ...arr[rowIndex], reminderDate: "" };
+        return { ...prev, payments: arr };
+      });
+    } catch (e) {
+      console.warn("clearReminderDateInDB failed", e);
+    }
+  };
+
+
 
   const getLastBalance = () => {
     const arr = Array.isArray(formData.payments) ? formData.payments : [];
@@ -512,7 +589,6 @@ const ClientModal = ({
   console.debug("[ClientModal] effectiveUserName:", effectiveUserName);
 
   // Look up a user's display name from JenCeo-DataBase/Users
-  // Look up a user's display name from JenCeo-DataBase/Users
   const resolveAddedByFromUsers = (obj, users) => {
     if (!obj || !users) return "";
 
@@ -537,10 +613,19 @@ const ClientModal = ({
 
 
 
+
+
+
   const headerImage =
     "https://firebasestorage.googleapis.com/v0/b/jenceo-admin.firebasestorage.app/o/OfficeFiles%2FHeadder.svg?alt=media&token=fa65a3ab-ba03-4959-bc36-e293c6db48ae";
 
   useEffect(() => setEditMode(Boolean(isEditMode)), [isEditMode]);
+
+  useEffect(() => {
+    const ref = firebaseDB.child("JenCeo-DataBase/Users"); // adjust path if needed
+    const handler = ref.on("value", (snap) => setUsersMap(snap.val() || {}));
+    return () => ref.off("value", handler);
+  }, []);
 
   useEffect(() => {
     if (!client) {
@@ -572,11 +657,13 @@ const ClientModal = ({
 
       // NEW: who/when (show after Remarks)
       addedByName:
-        p.addedByName ??
-        p.addedBy ??
-        p.userName ??                 // extra compatibility
-        client?.createdByName ??      // last resort from record
-        effectiveUserName,            // final fallback
+        p.addedByName ||
+        resolveAddedByFromUsers(p, usersMap) ||     // ← Users/<user_key>/name FIRST
+        resolveAddedByFromUsers(client, usersMap) ||
+        (p.userName || p.addedBy || p.createdBy || client?.createdByName) ||
+        resolveUserName(p, effectiveUserName) ||
+        effectiveUserName,
+
 
       addedAt:
         p.addedAt ??
@@ -626,7 +713,7 @@ const ClientModal = ({
     setErrors({});
     initialSnapshotRef.current = JSON.stringify(snapshot);
     setIsDirty(false);
-  }, [client]);
+  }, [client, usersMap]);
 
   useEffect(() => {
     if (activeTab !== "biodata") return;
@@ -657,6 +744,8 @@ const ClientModal = ({
       return next;
     });
   };
+
+
 
   const handleChange = (e, section = null, index = null) => {
     const target = e && e.target ? e.target : e;
@@ -775,6 +864,50 @@ const ClientModal = ({
 
     setField(name, value);
   };
+
+  const removeAllPaymentReminders = async () => {
+    try {
+      const key =
+        formData?.id ||
+        formData?.recordId ||
+        formData?.clientId ||
+        client?.id ||
+        client?.key;
+
+      if (!key) return;
+
+      const count = Array.isArray(formData?.payments) ? formData.payments.length : 0;
+
+      // Remove from DB for every index (both correct and legacy typo key)
+      const tasks = [];
+      for (let i = 0; i < count; i += 1) {
+        tasks.push(
+          firebaseDB
+            .child(`JenCeo-DataBase/ClientData/${key}/payments/${i}/reminderDate`)
+            .remove()
+            .catch(() => { }),
+        );
+        tasks.push(
+          firebaseDB
+            .child(`JenCeo-DataBase/ClientData/${key}/payments/${i}/remindeDate`)
+            .remove()
+            .catch(() => { }),
+        );
+      }
+      await Promise.all(tasks);
+
+      // Clear locally so UI updates immediately
+      setFormData((prev) => {
+        const arr = Array.isArray(prev.payments) ? prev.payments.map((row) => ({ ...row, reminderDate: "" })) : [];
+        return { ...prev, payments: arr };
+      });
+
+      setShowClearedModal(true);
+    } catch (e) {
+      console.warn("removeAllPaymentReminders failed", e);
+    }
+  };
+
 
   const addWorker = () => {
     const newWorker = {
@@ -964,6 +1097,9 @@ const ClientModal = ({
       setErrors((prev) => ({ ...prev, __save: "Save failed. Try again." }));
     }
   };
+
+
+
 
   const handleCloseAttempt = () => {
     if (isDirty) setShowUnsavedConfirm(true);
@@ -1623,7 +1759,7 @@ const ClientModal = ({
                         const locked = !!p.__locked;
                         const refundDisabled = Number(p.refundAmount || 0) > 0;
 
-                        // 👇 add this block
+                        // Compute "Added by" + timestamp for display
                         const addedByDisplay =
                           p.addedByName ||
                           resolveUserName(p) ||
@@ -1631,8 +1767,8 @@ const ClientModal = ({
                           resolveAddedByFromUsers(client, usersMap) ||
                           effectiveUserName;
 
-                        const addedAtDisplay =
-                          p.addedAt || p.timestamp || p.createdAt || p.date || "";
+                        const addedAtDisplay = p.addedAt || p.timestamp || p.createdAt || p.date || "";
+
 
                         // In your payment display, add debugging:
                         console.debug("[Payment Debug] Row:", {
@@ -1677,38 +1813,24 @@ const ClientModal = ({
                                 </div>
 
                                 <div className="row mt-2">
-                                  <div className="col-md-3">
+                                  <div className="col-md-4">
                                     <label className="form-label"><strong>Balance</strong></label>
                                     <input data-idx={originalIndex} className="form-control" name="balance" type="tel" maxLength={5} value={p.balance ?? ""} onChange={(e) => handleChange(e, "payments", originalIndex)} disabled={p.__locked || !editMode} />
                                   </div>
 
-                                  <div className="col-md-3">
+                                  <div className="col-md-4">
                                     <label className="form-label"><strong>Receipt No</strong></label>
                                     <input data-idx={originalIndex} className="form-control" name="receptNo" type="tel" maxLength={2} value={p.receptNo || ""} onChange={(e) => handleChange(e, "payments", originalIndex)} disabled={p.__locked || !editMode} />
                                   </div>
 
-                                  <div className="col-md-3 mb-2">
-                                    <label className="form-label"><strong>Reminder Days</strong></label>
+                                  <div className="col-md-4 mb-2">
+                                    <label className="form-label"><strong>Reminder Date</strong></label>
                                     <input
                                       type="date"
                                       className="form-control"
                                       name="reminderDate"
                                       data-idx={originalIndex}
                                       value={p.reminderDate || ""}
-                                      onChange={(e) => handleChange(e, "payments", originalIndex)}
-                                      disabled={p.__locked || !editMode}
-                                    />
-                                  </div>
-
-                                  {/* New: Reminder Date next to/after Days */}
-                                  <div className="col-md-3 mb-2">
-                                    <label className="form-label"><strong>Reminder Date</strong></label>
-                                    <input
-                                      type="number"
-                                      className="form-control"
-                                      name="reminderDays"
-                                      data-idx={originalIndex}
-                                      value={p.reminderDays || ""}
                                       onChange={(e) => handleChange(e, "payments", originalIndex)}
                                       disabled={p.__locked || !editMode}
                                     />
@@ -1798,7 +1920,28 @@ const ClientModal = ({
                         );
                       })}
 
-                    {editMode && <div className="actions-right mb-3"><button className="btn btn-primary" onClick={addPayment}>Add Payment</button></div>}
+                    {editMode && <div className="d-flex justify-content-end align-items-center gap-2 mt-3 mb-3">
+                      <button
+                        type="button"
+                        className="btn btn-outline-danger"
+                        onClick={removeAllPaymentReminders}
+                        title="Remove all payment reminder dates from DB"
+                      >
+                        Clear All Reminders
+                      </button>
+
+                      <button
+                        type="button"
+                        className="btn btn-primary"
+                        onClick={typeof handleAddPaymentWithOption === "function" ? handleAddPaymentWithOption : addPayment}
+                      >
+                        Add Payment
+                      </button>
+                    </div>
+                    }
+
+
+
 
 
                     {/* Quick Actions: Refund + Balance Paid (outside of payments list) */}
@@ -2312,6 +2455,22 @@ const ClientModal = ({
           <div className="modal-dialog modal-sm modal-dialog-centered"><div className="modal-content"><div className="modal-body text-center p-4"><h5><strong>Thank you</strong></h5><p>Your data has been saved.</p></div></div></div>
         </div>
       )}
+
+      {/* Cleared reminders confirmation */}
+      {showClearedModal && (
+        <div className="modal fade show" style={{ display: "block", backgroundColor: "rgba(0,0,0,0.2)" }}>
+          <div className="modal-dialog modal-md modal-dialog-centered">
+            <div className="modal-content">
+              <div className="modal-body text-center p-4">
+                <h5 className="text-danger"><strong>Reminders cleared</strong></h5>
+                <p>All payment reminder dates were removed.</p>
+                <button className="btn btn-primary mt-2" onClick={() => setShowClearedModal(false)}>OK</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
     </>
   );
 };

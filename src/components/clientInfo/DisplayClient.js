@@ -5,6 +5,8 @@ import editIcon from '../../assets/eidt.svg';
 import viewIcon from '../../assets/view.svg';
 import deleteIcon from '../../assets/delete.svg';
 import ClientModal from './ClientModal';
+import { useAuth } from "../../context/AuthContext";
+
 
 /**
  * Matches EnquiriesDisplay features:
@@ -64,6 +66,9 @@ export default function DisplayClient() {
     date.setHours(0, 0, 0, 0);
     return date;
   });
+
+  const { user, currentUserName, authUser } = useAuth();
+
 
   const parseDate = (v) => {
     if (!v) return null;
@@ -533,9 +538,12 @@ export default function DisplayClient() {
                       By {
                         resolveAddedBy(client, usersMap) ||
                         (client?.user_key && (usersMap[client.user_key]?.name || usersMap[client.user_key]?.displayName || usersMap[client.user_key]?.username)) ||
-                        window?.CURRENT_USER_NAME ||
+                        currentUserName ||
+                        user?.name ||
+                        authUser?.displayName ||
                         "System"
                       }
+
                     </small>
                   </td>
                   <td>{client.clientName || 'N/A'}</td>

@@ -3,6 +3,8 @@ import React, { useEffect, useRef, useState } from "react";
 import InvestModal from "./InvestModal";
 import ThankyouModal from "../ThankyouModal";
 import firebaseDB from "../../firebase";
+import { useAuth } from "../../context/AuthContext";
+
 
 export default function InvestForm({ currentUser = "Admin", show = false, onClose = () => { }, title = "Add Investment" }) {
   const emptyFormData = {
@@ -33,6 +35,29 @@ export default function InvestForm({ currentUser = "Admin", show = false, onClos
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
   }, [show, onClose]);
+
+
+    const { user: authUser } = useAuth?.() || {};
+
+  function getEffectiveUserId(u) {
+    return u?.dbId || u?.uid || u?.id || u?.key || null;
+  }
+
+  function getEffectiveUserName(u, fallback = "System") {
+    const raw =
+      u?.name ||
+      u?.displayName ||
+      u?.dbName ||
+      u?.username ||
+      u?.email ||
+      fallback ||
+      "System";
+    return String(raw).trim().replace(/@.*/, "") || "System";
+  }
+
+  const effectiveUserId = getEffectiveUserId(authUser);
+  const effectiveUserName = getEffectiveUserName(authUser);
+
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -87,15 +112,20 @@ export default function InvestForm({ currentUser = "Admin", show = false, onClos
     if (firstFieldRef.current) firstFieldRef.current.focus();
   };
 
-  const handleSave = async (e) => {
-    e.preventDefault();
+    const handleSave = async (e) => {
+        e?.preventDefault?.();
     setShowConfirmModal(false);
 
+    const nowIso = new Date().toISOString();
     const payload = {
       ...formData,
       invest_amount: Number(formData.invest_amount) || 0,
-      employeeName: currentUser || "Admin",
-      createdAt: new Date().toISOString(),
+      // creator metadata
+      createdById: effectiveUserId,
+      createdByName: effectiveUserName,
+      createdAt: nowIso,
+      // keep original fields for display
+      employeeName: effectiveUserName,
     };
 
     try {
@@ -136,7 +166,7 @@ export default function InvestForm({ currentUser = "Admin", show = false, onClos
                 {/* Investor */}
                 <div className="col-md-6">
                   <label className="form-label">
-                    <strong>Investor *</strong>
+                    <strong>Investor <span className="star">*</span></strong>
                   </label>
                   <select
                     name="investor"
@@ -157,7 +187,7 @@ export default function InvestForm({ currentUser = "Admin", show = false, onClos
 
                 {/* Date */}
                 <div className="col-md-6">
-                  <label className="form-label"><strong>Date *</strong></label>
+                  <label className="form-label"><strong>Date <span className="star">*</span></strong></label>
                   <input
                     type="date"
                     name="invest_date"
@@ -172,7 +202,7 @@ export default function InvestForm({ currentUser = "Admin", show = false, onClos
 
                 {/* Amount */}
                 <div className="col-md-6">
-                  <label className="form-label"><strong>Amount *</strong></label>
+                  <label className="form-label"><strong>Amount <span className="star">*</span></strong></label>
                   <input
                     type="tel"
                     name="invest_amount"
@@ -186,7 +216,7 @@ export default function InvestForm({ currentUser = "Admin", show = false, onClos
 
                 {/* To */}
                 <div className="col-md-6">
-                  <label className="form-label"><strong>To *</strong></label>
+                  <label className="form-label"><strong>To <span className="star">*</span></strong></label>
                   <select
                     name="invest_to"
                     className={`form-select ${errors.invest_to ? "is-invalid" : ""}`}
@@ -241,7 +271,7 @@ export default function InvestForm({ currentUser = "Admin", show = false, onClos
 
                 <div className="col-12 d-flex justify-content-end gap-2">
                   <button type="button" className="btn btn-secondary" onClick={onClose}>Cancel</button>
-                  <button type="submit" className="btn btn-primary">Submit</button>
+                  <button type="button" className="btn btn-primary" onClick={handleSave}>Submit</button>
                 </div>
               </div>
             </form>

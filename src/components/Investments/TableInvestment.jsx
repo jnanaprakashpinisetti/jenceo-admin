@@ -426,7 +426,15 @@ export default function TableInvestment({
                                     <tr>
                                         <td>{startIndex + i + 1}</td>
                                         <td>{String(r.investor || "")}</td>
-                                        <td>{fmtDate(r.invest_date)}</td>
+                                        <td>
+                                            {fmtDate(r.invest_date)}
+                                            {r._raw?.createdByName && (
+                                                <div className="small-text text-info opacity-75 mt-1">
+                                                Added by <strong>{r._raw.createdByName}</strong>
+                                                </div>
+                                            )}
+                                        </td>
+
                                         <td>₹{fmtCurrency(r.invest_amount)}</td>
                                         <td>{String(r.invest_to || "")}</td>
                                         <td>{String(r.invest_reference || "")}</td>

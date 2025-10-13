@@ -854,6 +854,26 @@ export default function DisplayWorkers() {
                                     </td>
                                     <td>
                                         <strong>{employee.employeeId || employee.idNo || 'N/A'}</strong>
+                                        <small className="small-text d-block mt-1 text-info opacity-75">
+                                            By <strong>{employee.createdByName || "System"}</strong>
+                                            {/* Date and Time */}
+                                            {/* {employee.createdAt && (
+                                                <>
+                                                    {" "}
+                                                    on{" "}
+                                                    {new Date(employee.createdAt).toLocaleDateString("en-GB", {
+                                                        day: "2-digit",
+                                                        month: "2-digit",
+                                                        year: "2-digit",
+                                                    })}{" "}
+                                                    {new Date(employee.createdAt).toLocaleTimeString("en-GB", {
+                                                        hour: "2-digit",
+                                                        minute: "2-digit",
+                                                        hour12: true,
+                                                    })}
+                                                </>
+                                            )} */}
+                                        </small>
                                     </td>
                                     <td>{employee.firstName} {employee.lastName}</td>
                                     <td>{employee.gender || 'N/A'}</td>

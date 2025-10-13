@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import firebaseDB, { storageRef, uploadFile, getDownloadURL } from "../../firebase";
+import { useAuth } from "../../context/AuthContext";
 
 const SKILL_OPTIONS = [
     "Nursing",
@@ -118,6 +119,10 @@ const WorkerModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode }
     const openConfirm = (title, message, onConfirm, error = null) => setConfirmState({ open: true, title, message, onConfirm, error });
     const closeConfirm = () => setConfirmState((s) => ({ ...s, open: false }));
 
+    const { user: authUser } = useAuth?.() || {};
+    const effectiveUserId = getEffectiveUserId(authUser);
+    const effectiveUserName = getEffectiveUserName(authUser);
+
     // date helpers
     const today = new Date();
     const toISO = (d) =>
@@ -158,6 +163,50 @@ const WorkerModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode }
         remarks: "",
         __locked: false,
     });
+
+    const stampAuthorOnRow = (row, nowISO = new Date().toISOString()) => {
+        const name =
+            row.addedByName ||
+            row.addByName ||      // legacy
+            row.createdByName ||
+            effectiveUserName;
+
+        const when =
+            row.addedAt ||
+            row.addAt ||          // legacy
+            row.createdAt ||
+            nowISO;
+
+        return {
+            ...row,
+            addedByName: name,
+            addedAt: when,
+            createdByName: name,
+            createdAt: when,
+            addByName: name,       // keep legacy mirrors
+            addAt: when,
+        };
+    };
+
+
+ function getEffectiveUserId(u) {
+   return u?.dbId || u?.uid || u?.id || u?.key || null;
+ }
+
+    function getEffectiveUserName(u, fallback = "System") {
+        const raw =
+            u?.name ||
+            u?.displayName ||
+            u?.dbName ||
+            u?.username ||
+            u?.email ||
+            fallback ||
+            "System";
+        return String(raw).trim().replace(/@.*/, "") || "System";
+    }
+
+
+
 
     const hasAnyValue = (row) =>
         Object.entries(row).some(([k, v]) => k !== "__locked" && v !== null && v !== undefined && String(v).trim() !== "");
@@ -285,6 +334,10 @@ const WorkerModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode }
             const arr = [...(prev[section] || [])];
             const row = { ...(arr[index] || {}) };
             if (row.__locked) return prev; // prevent editing locked rows
+            // If user started entering data in a fresh row, stamp author/time once
+            if (!row.__locked && !row.addedAt && hasAnyValue(row)) {
+                Object.assign(row, stampAuthorOnRow(row));
+            }
             row[field] = val;
             arr[index] = row;
             return { ...prev, [section]: arr };
@@ -843,8 +896,16 @@ const WorkerModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode }
             const payload = {
                 ...formData,
                 employeePhoto: photoURL,
-                payments: (formData.payments || []).map(({ __locked, ...rest }) => rest),
-                workDetails: (formData.workDetails || []).map(({ __locked, ...rest }) => rest),
+                payments: (formData.payments || []).map((r) => {
+                    const row = r.__locked ? r : stampAuthorOnRow(r);
+                    const { __locked, ...rest } = row;
+                    return rest;
+                }),
+                workDetails: (formData.workDetails || []).map((r) => {
+                    const row = r.__locked ? r : stampAuthorOnRow(r);
+                    const { __locked, ...rest } = row;
+                    return rest;
+                }),
                 status,
             };
             delete payload.employeePhotoFile;
@@ -955,6 +1016,42 @@ const WorkerModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode }
             openAlert("Error", <span>Failed to return worker: {err.message}</span>, "danger");
         }
     };
+
+    // date/time display helpers
+    const formatDDMMYY = (iso) => {
+        if (!iso) return "—";
+        try {
+            const d = new Date(iso);
+            const dd = String(d.getDate()).padStart(2, "0");
+            const mm = String(d.getMonth() + 1).padStart(2, "0");
+            const yy = String(d.getFullYear()).slice(-2);
+            return `${dd}-${mm}-${yy}`;
+        } catch {
+            return "—";
+        }
+    };
+    const formatTime12h = (iso) => {
+        if (!iso) return "";
+        try {
+            let h = new Date(iso).getHours();
+            const m = String(new Date(iso).getMinutes()).padStart(2, "0");
+            const ampm = h >= 12 ? "PM" : "AM";
+            h = h % 12 || 12;
+            return `${h}:${m} ${ampm}`;
+        } catch {
+            return "";
+        }
+    };
+
+    const paymentsForDB = (Array.isArray(formData.payments) ? formData.payments : [])
+        .map(r => ({ ...r, __locked: undefined }))      // strip UI flag
+        .map(r => stampAuthorOnRow(r));
+
+    const workDetailsForDB = (Array.isArray(formData.workDetails) ? formData.workDetails : [])
+        .map(r => ({ ...r, __locked: undefined }))      // strip UI flag
+        .map(r => stampAuthorOnRow(r));
+
+
 
     /* ------------------------------ render helpers ----------------------------- */
 
@@ -1343,7 +1440,7 @@ const WorkerModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode }
                                     ["payment", "Payment"],
                                     ["working", "Working"],
                                     ["pay-info", "Pay Info"],
-                                    [" ", " "],
+                                    // ["detail ", " "],
                                     ["biodata", "Biodata"],
                                 ].map(([key, label]) => (
                                     <li className="nav-item" role="presentation" key={key}>
@@ -2130,6 +2227,13 @@ const WorkerModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode }
                                                                 ) : (
                                                                     <div className="form-control form-control-sm bg-light">{p.remarks || "N/A"}</div>
                                                                 )}
+
+                                                                <div className="form-text mt-1">
+                                                                    <small className="small-text d-block text-primary mt-2">
+                                                                        Added by {(p.addedByName || p.createdByName || effectiveUserName)} • {formatDDMMYY(p.addedAt || p.createdAt)} {formatTime12h(p.addedAt || p.createdAt). toLocaleLowerCase()}
+                                                                       
+                                                                    </small>
+                                                                </div>
                                                             </div>
                                                         </div>
                                                     </div>
@@ -2322,6 +2426,12 @@ const WorkerModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode }
                                                                     <div className="form-control form-control-sm bg-light">{w.remarks || "N/A"}</div>
                                                                 )}
                                                             </div>
+                                                        </div>
+
+                                                        <div className="form-text mt-1">
+                                                            <small className="small-text d-block text-primary mt-2">
+                                                                Added by {(w.addedByName || w.createdByName || effectiveUserName)} • {formatDDMMYY(w.addedAt || w.createdAt)} {formatTime12h(w.addedAt || w.createdAt).toLocaleLowerCase()}
+                                                            </small>
                                                         </div>
                                                     </div>
                                                 );

@@ -120,6 +120,8 @@ export default function EnquiryModal({
   const [showThankYou, setShowThankYou] = useState(false);
   const [showUnsavedConfirm, setShowUnsavedConfirm] = useState(false);
   const [isDirty, setIsDirty] = useState(false);
+  const [commentError, setCommentError] = useState("");
+  const commentBoxRef = useRef(null);
 
   const [localMode, setLocalMode] = useState(mode);
   useEffect(() => setLocalMode(mode), [mode, show]);
@@ -208,6 +210,7 @@ export default function EnquiryModal({
     // Add new comment to the end (bottom) of the list
     setComments((prev) => [...prev, entry]);
     setNewComment("");
+    setCommentError("");
     setIsDirty(true);
   };
 
@@ -240,6 +243,14 @@ export default function EnquiryModal({
   /* Save */
   const handleSave = async () => {
     if (!formData?.id) return;
+   // ✅ prevent save when a comment is typed but not added
+   const pending = (newComment || "").trim();
+   if (pending) {
+     setCommentError("You typed a comment but didn’t add it. Click “Add Comment” or clear the box before saving.");
+     setLocalMode("edit");
+     setTimeout(() => commentBoxRef.current?.focus(), 0);
+     return;
+   }
     setIsSaving(true);
     try {
       // Remove the reversal - save comments in the same order they're displayed
@@ -669,12 +680,16 @@ export default function EnquiryModal({
                     <div className="p-3 bg-light rounded">
                       <label className="form-label fw-semibold">Add New Comment</label>
                       <textarea
+                      ref={commentBoxRef}
                         className="form-control"
                         placeholder="Type your comment here..."
                         rows={3}
                         value={newComment}
                         maxLength={MAX_COMMENT_LEN}
-                        onChange={(e) => setNewComment(e.target.value)}
+                        onChange={(e) => {
+                          setNewComment(e.target.value);
+                         if (commentError) setCommentError("");
+                        }}
                         onKeyDown={(e) => {
                           if (e.key === "Enter" && !e.shiftKey) {
                             e.preventDefault();
@@ -683,6 +698,9 @@ export default function EnquiryModal({
                         }}
                         style={{ resize: "none" }}
                       />
+                      {commentError && (
+                        <div className="text-danger small mt-1">{commentError}</div>
+                      )}
                       <div className="d-flex justify-content-between align-items-center mt-2">
                         <small className={commentLeft < 30 ? "text-danger fw-semibold" : "text-muted"}>
                           {commentLeft} characters left

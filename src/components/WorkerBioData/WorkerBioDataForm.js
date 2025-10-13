@@ -92,6 +92,21 @@ const initialFormData = {
   employeePhotoFile: null,
 };
 
+const getEffectiveUserId = (u) =>
+  u?.dbId || u?.uid || u?.id || u?.key || null;
+
+const getEffectiveUserName = (u, fallback = "System") => {
+  const raw =
+    u?.name ||
+    u?.displayName ||
+    u?.dbName ||
+    u?.username ||
+    u?.email ||
+    fallback ||
+    "System";
+  return String(raw).trim().replace(/@.*/, "") || "System";
+};
+
 const WorkerBioDataForm = ({ isOpen = false, onClose = () => { }, onSaved }) => {
   const [step, setStep] = useState(1);
   const [errors, setErrors] = useState({});
@@ -136,8 +151,8 @@ const WorkerBioDataForm = ({ isOpen = false, onClose = () => { }, onSaved }) => 
   };
 
   const { user: authUser } = useAuth?.() || {};
-  const effectiveUserId = authUser?.dbId || authUser?.uid || null;
-  const effectiveUserName = (authUser?.displayName && authUser.displayName.trim()) || (authUser?.email ? authUser.email.split("@")[0] : "") || "System";
+const effectiveUserId = getEffectiveUserId(authUser);
+const effectiveUserName = getEffectiveUserName(authUser);
 
   useEffect(() => {
     const upd = () => setIsMobile(window.innerWidth <= 920);
@@ -665,13 +680,12 @@ const WorkerBioDataForm = ({ isOpen = false, onClose = () => { }, onSaved }) => 
       }
 
       const nowIso = new Date().toISOString();
-      const submitData = { ...formData,
-        employeePhoto: photoURL,
-        // creator metadata
-        createdById: effectiveUserId,
-        createdByName: effectiveUserName,
-        createdAt: formData?.date || nowIso, // prefer joining date if provided; else now
-      };
+const submitData = {
+  ...formData,
+  createdById: formData.createdById ?? effectiveUserId,
+  createdByName: formData.createdByName ?? effectiveUserName,
+  createdAt: formData.createdAt ?? new Date().toISOString(),
+};
       delete submitData.employeePhotoFile;
 
       const listRef = firebaseDB.child("EmployeeBioData");
@@ -704,6 +718,8 @@ const WorkerBioDataForm = ({ isOpen = false, onClose = () => { }, onSaved }) => 
     ev?.preventDefault?.();
     if (step > 1) setStep((s) => s - 1);
   };
+
+  
 
   const renderStep = (s) => {
     const childErrors = mapErrorsForChildren(errors);

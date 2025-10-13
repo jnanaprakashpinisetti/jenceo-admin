@@ -768,7 +768,7 @@ const EnquiriesDisplay = ({ permissions: permissionsProp }) => {
                     <td>
                       {idNo}
                       {addedBy && (
-                      <small className="d-block small-text text-info">
+                      <small className="d-block small-text text-info opacity-75" >
                       By <strong>{addedBy}</strong>
                       {/* {createdWhen ? (
                       <> on {formatDDMMYYYY(createdWhen)} {formatTime(createdWhen, "12hr")}</>
@@ -781,11 +781,11 @@ const EnquiriesDisplay = ({ permissions: permissionsProp }) => {
                     <td>
                       {formatPrettyDate(enq.date)}
                       {hasTimeData(enq.timestamp || enq.date) &&
-                        <small className="d-block small-text text-info">{formatTime(enq.timestamp || enq.date, "12hr")}</small>}
+                        <small className="d-block small-text text-info opacity-75">{formatTime(enq.timestamp || enq.date, "12hr")}</small>}
                     </td>
                     <td>{enq.name || "—"}</td>
                     <td>
-                      <span className={enq.gender === "Male" ? "badge bg-primary" : enq.gender === "Female" ? "badge badge-female" : "badge bg-secondary"}>
+                      <span className={enq.gender === "Male" ? "badge opacity-75 bg-primary" : enq.gender === "Female" ? "badge badge-female" : "badge bg-secondary"}>
                         {enq.gender || "—"}
                       </span>
                     </td>

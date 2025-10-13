@@ -347,6 +347,7 @@ const ClientModal = ({
   const [clearReminderBeforeAdd, setClearReminderBeforeAdd] = useState(false);
   const [showClearedModal, setShowClearedModal] = useState(false);
 
+
   // === Users map (same as WorkerCalleDisplay) ===
   const [usersMap, setUsersMap] = useState({});
 
@@ -416,11 +417,32 @@ const ClientModal = ({
     };
   };
 
+  // Bulk reminder date (set on latest visible payment row)
+  const [bulkReminderDate, setBulkReminderDate] = useState("");
+
+  const updateLastReminderDate = async () => {
+    const idx = getLastVisiblePaymentIndex(); // already in your file
+    if (idx < 0 || !bulkReminderDate) return;
+
+    // reflect locally
+    setFormData((prev) => {
+      const arr = Array.isArray(prev.payments) ? [...prev.payments] : [];
+      if (!arr[idx]) return prev;
+      arr[idx] = { ...arr[idx], reminderDate: bulkReminderDate };
+      const next = { ...prev, payments: arr };
+      markDirty(next);
+      return next;
+    });
+
+    // persist to DB using your existing helper
+    const row = formData?.payments?.[idx] || {};
+    await syncPaymentReminderToDB(idx, { ...row, reminderDate: bulkReminderDate });
+  };
+
+
 
   const handleSubmitPaymentsOnly = async (ev) => {
     ev && ev.preventDefault && ev.preventDefault();
-
-
 
     // 1) validate payments only
     const errs = validatePaymentsOnly();
@@ -1964,16 +1986,40 @@ const ClientModal = ({
                         );
                       })}
 
-                    {editMode && <div className="d-flex justify-content-end align-items-center gap-2 mt-3 mb-3">
+                    {editMode && <div className="d-flex justify-content-between flex-wrap align-items-center gap-2 mt-3 mb-3">
 
-                      <button
-                        type="button"
-                        className="btn btn-outline-danger"
-                        onClick={removeAllPaymentReminders}
-                        title="Remove all payment reminder dates from DB"
-                      >
-                        Clear All Reminders
-                      </button>
+                      <div className="d-flex align-items-center gap-2 mb-2 justfi-content-betwen">
+                        {/* existing button — keep first */}
+                        <button
+                          type="button"
+                          className="btn btn-sm btn-outline-danger"
+                          onClick={removeAllPaymentReminders}
+                          disabled={!editMode}
+                          title="Clear reminder date from all payments"
+                        >
+                          Clear All Reminders
+                        </button>
+
+                        {/* NEW: Reminder Date AFTER 'Clear All Reminders' */}
+                        <label className="form-label mb-0 ms-2"><strong>Reminder Date</strong></label>
+                        <input
+                          type="date"
+                          className="form-control form-control-sm"
+                          style={{ maxWidth: 190 }}
+                          value={bulkReminderDate}
+                          onChange={(e) => setBulkReminderDate(e.target.value)}
+                          disabled={!editMode}
+                        />
+                        <button
+                          type="button"
+                          className="btn btn-sm btn-outline-primary"
+                          onClick={updateLastReminderDate}
+                          disabled={!editMode || !bulkReminderDate}
+                          title="Set reminder date on the latest payment row"
+                        >
+                          Update
+                        </button>
+                      </div>
 
                       <button
                         type="button"

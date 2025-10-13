@@ -113,7 +113,7 @@ const PaymentDetails = ({ formData, handleChange, addPayment, removePayment, err
             </div>
           </div>
 
-          {/* Reminder Days + Reminder Date */}
+          {/* Reminder Days + Reminder Date + Payment Date */}
           <div className="row">
             <div className="col-md-4">
               <div className="form-group">
@@ -137,7 +137,7 @@ const PaymentDetails = ({ formData, handleChange, addPayment, removePayment, err
 
             <div className="col-md-4">
               <div className="form-group">
-                <label><strong>Payment Date</strong></label>
+                <label><strong>Payment Date</strong> <span className="text-danger">*</span></label>
                 <input type="date" className={`form-control ${getErr(index, "date") ? "is-invalid" : ""}`} name="date" value={payment.date || ""} onChange={(e) => handleChange(e, "payments", index)} id={`date-${index}`} />
                 {getErr(index, "date") && <div className="invalid-feedback">{getErr(index, "date")}</div>}
               </div>

@@ -472,38 +472,79 @@ export default function ClientInfoForm({ isOpen, onClose }) {
       });
       newErrors.workers = workersErrors;
     }
-
     if (currentStep === 6) {
       const payments = Array.isArray(formData.payments) ? formData.payments : [];
+      let atLeastOneValid = false;
+
       const paymentsErrors = payments.map((p) => {
         const e = {};
+
+        // consider a row "touched" if any of these has a value
         const hasValue =
           (p.paidAmount && String(p.paidAmount).trim() !== "") ||
           (p.receptNo && String(p.receptNo).trim() !== "") ||
-          (p.date && String(p.date).trim() !== "");
+          (p.date && String(p.date).trim() !== "") ||
+          (p.paymentMethod && String(p.paymentMethod).trim() !== "");
+
         if (!hasValue) {
+          // keep row blank & error-free
           return e;
         }
 
+        // validate required fields for any "touched" row
         if (!p.paymentMethod) {
           e.paymentMethod = "Payment method is required";
           isValid = false;
         }
-        if (p.paidAmount === "" || p.paidAmount === null || typeof p.paidAmount === "undefined") {
+        if (
+          p.paidAmount === "" ||
+          p.paidAmount === null ||
+          typeof p.paidAmount === "undefined"
+        ) {
           e.paidAmount = "Paid Amount is required";
           isValid = false;
         } else if (isNaN(Number(p.paidAmount)) || Number(p.paidAmount) <= 0) {
           e.paidAmount = "Paid Amount must be a positive number";
           isValid = false;
         }
+
         if (!p.receptNo || !String(p.receptNo).trim()) {
           e.receptNo = "Receipt No is required";
           isValid = false;
         }
+
+        if (!p.date || !String(p.date).trim()) {
+          e.date = "Payment Date is required";
+          isValid = false;
+        }
+
+        // if we got here without field errors, this row qualifies as a valid payment
+        if (Object.keys(e).length === 0) {
+          atLeastOneValid = true;
+        }
+
         return e;
       });
+
+      // require at least one valid payment row overall
+      if (!atLeastOneValid) {
+        isValid = false;
+        // surface a friendly form-level hint by tagging the first row (shows red on fields when they try)
+        if (paymentsErrors.length > 0) {
+          const first = paymentsErrors[0] || {};
+          paymentsErrors[0] = {
+            ...first,
+            paidAmount: first.paidAmount || "Enter a valid payment",
+            paymentMethod: first.paymentMethod || "Payment method is required",
+            receptNo: first.receptNo || "Receipt No is required",
+            date: first.date || "Payment Date is required",
+          };
+        }
+      }
+
       newErrors.payments = paymentsErrors;
     }
+
 
     setErrors((prev) => ({ ...prev, ...newErrors }));
     return isValid;

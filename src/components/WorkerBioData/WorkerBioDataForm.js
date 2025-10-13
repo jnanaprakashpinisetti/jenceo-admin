@@ -16,6 +16,7 @@ import EmergencyContact1 from "./EmergencyContact1";
 import EmergencyContact2 from "./EmergencyContact2";
 import EmergencyContact3 from "./EmergencyContact3";
 import BankDetails from "./BankDetails";
+import { useAuth } from "../../context/AuthContext";
 
 import "../../scss/components/_WorkerBioDataForm.scss";
 
@@ -133,6 +134,10 @@ const WorkerBioDataForm = ({ isOpen = false, onClose = () => { }, onSaved }) => 
     if (m < 0 || (m === 0 && today.getDate() < bd.getDate())) yrs--;
     return String(yrs);
   };
+
+  const { user: authUser } = useAuth?.() || {};
+  const effectiveUserId = authUser?.dbId || authUser?.uid || null;
+  const effectiveUserName = (authUser?.displayName && authUser.displayName.trim()) || (authUser?.email ? authUser.email.split("@")[0] : "") || "System";
 
   useEffect(() => {
     const upd = () => setIsMobile(window.innerWidth <= 920);
@@ -659,7 +664,14 @@ const WorkerBioDataForm = ({ isOpen = false, onClose = () => { }, onSaved }) => 
         photoURL = await getDownloadURL(snap.ref);
       }
 
-      const submitData = { ...formData, employeePhoto: photoURL };
+      const nowIso = new Date().toISOString();
+      const submitData = { ...formData,
+        employeePhoto: photoURL,
+        // creator metadata
+        createdById: effectiveUserId,
+        createdByName: effectiveUserName,
+        createdAt: formData?.date || nowIso, // prefer joining date if provided; else now
+      };
       delete submitData.employeePhotoFile;
 
       const listRef = firebaseDB.child("EmployeeBioData");

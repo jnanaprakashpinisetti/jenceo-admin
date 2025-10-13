@@ -523,7 +523,7 @@ export default function DisplayWorkers() {
             {/* Unified Filters Row (added) */}
             <div className="row mb-4">
                 <div className="col-12">
-                    <div className="p-3 bg-dark border rounded-3  workerFilter">
+                    <div className="p-3 bg-dark border border-secondary rounded-3  workerFilter">
                         <div className="row g-3 align-items-center">
                             {/* Gender */}
                             <div className="col-lg-2 col-md-3 text-center">
@@ -657,7 +657,7 @@ export default function DisplayWorkers() {
             {/* Languages & Housekeeping Skills Row (two columns) */}
             <div className="row g-3 mb-4">
                 <div className="col-md-6">
-                    <div className="p-3 bg-dark border rounded-3 h-100">
+                    <div className="p-3 bg-dark border border-secondary rounded-3 h-100">
                         <h6 className="mb-2 text-info">Languages</h6>
                         <div className="d-flex flex-wrap gap-2">
                             {LANG_OPTIONS.map(l => {
@@ -677,7 +677,7 @@ export default function DisplayWorkers() {
                     </div>
                 </div>
                 <div className="col-md-6">
-                    <div className="p-3 bg-dark border rounded-3 h-100">
+                    <div className="p-3 bg-dark border border-secondary rounded-3 h-100">
                         <h6 className="mb-2 text-warning">Housekeeping Skills</h6>
                         <div className="d-flex flex-wrap gap-2">
                             {HOUSE_SKILL_OPTIONS.map(s => {

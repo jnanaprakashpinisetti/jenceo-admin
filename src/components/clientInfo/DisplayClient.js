@@ -850,9 +850,9 @@ export default function DisplayClient() {
                     </small>
                   </td>
                   <td>{client.clientName || 'N/A'}
-                    <small className="d-block small-text text-info opacity-50">
+                    {/* <small className="d-block small-text text-info opacity-50">
                       {formatDateTime(getCreatedDateValue(client))}
-                    </small>
+                    </small> */}
                   </td>
                   <td>{client.location || 'N/A'}</td>
                   <td>{client.typeOfService || 'N/A'}</td>

@@ -1908,7 +1908,7 @@ const WorkerModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode }
                                                 const locked = !!p.__locked;
                                                 const invalidClass = (field) => (paymentErrors[i]?.[field] ? " is-invalid" : "");
                                                 return (
-                                                    <div key={i} className="border rounded p-3 ">
+                                                    <div key={i} className="border rounded paymentSection p-3 ">
                                                         <div className="d-flex justify-content-between align-items-center mb-2">
                                                             <h6 className="mb-0">
                                                                 Payment #{i + 1} {locked && <span className="badge bg-secondary ms-2">Locked</span>}
@@ -2158,7 +2158,7 @@ const WorkerModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode }
                                                 const locked = !!w.__locked;
                                                 const invalidClass = (field) => (workErrors[i]?.[field] ? " is-invalid" : "");
                                                 return (
-                                                    <div key={i} className="border rounded  p-3">
+                                                    <div key={i} className="border rounded working  p-3">
                                                         <div className="d-flex justify-content-between align-items-center mb-2">
                                                             <h6 className="mb-0">
                                                                 Work #{i + 1} {locked && <span className="badge bg-secondary ms-2">Locked</span>}

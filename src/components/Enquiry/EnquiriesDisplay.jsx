@@ -750,7 +750,8 @@ const EnquiriesDisplay = ({ permissions: permissionsProp }) => {
             <tbody>
               {currentEnquiries.map((enq, idx) => {
                 const idNo = enq.idNo || buildEnqId(indexOfFirst + idx + 1);
-                const addedBy = resolveAddedBy(enq, usersMap);
+                const addedBy = resolveAddedBy(enq, usersMap); // author who actually created/added
+                const createdWhen = enq.createdAt || enq.addedAt || enq.timestamp || enq.date || null;
                 const reminder = enq.reminderDate || null;
                 const hasRem = isValidDate(parseDate(reminder));
                 const du = hasRem ? daysUntil(reminder) : Number.POSITIVE_INFINITY;
@@ -765,11 +766,16 @@ const EnquiriesDisplay = ({ permissions: permissionsProp }) => {
                     }}
                   >
                     <td>
-                      {enq.idNo || buildEnqId(indexOfFirst + idx + 1)}
+                      {idNo}
+                      {addedBy && (
                       <small className="d-block small-text text-info">
-                        By {resolveAddedBy(enq, usersMap) || currentUserName}
+                      By <strong>{addedBy}</strong>
+                      {/* {createdWhen ? (
+                      <> on {formatDDMMYYYY(createdWhen)} {formatTime(createdWhen, "12hr")}</>
+                      ) : null} */}
                       </small>
-                    </td>
+                      )}
+                      </td>
 
 
                     <td>

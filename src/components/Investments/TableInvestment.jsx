@@ -401,7 +401,7 @@ export default function TableInvestment({
                     </div>
                 ) : (
                     groups.map((g, idx) => (
-                        <div key={g.investor} className="invest-wrapper">
+                        <div key={g.investor} className="invest-wrapper col-md-4">
                             <div
                                 className="invest-card h-100 text-dark"
                                 role="button"
@@ -488,8 +488,8 @@ export default function TableInvestment({
                             <th>To</th>
                             <th>Ref No</th>
                             <th>Purpose</th>
-                            <th>Comments</th>
-                            <th>Acknowledge</th>
+                            {/* <th>Comments</th> */}
+                            <th>Status</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -521,7 +521,7 @@ export default function TableInvestment({
                                         <td>{String(r.invest_to || "")}</td>
                                         <td>{String(r.invest_reference || "")}</td>
                                         <td style={{ whiteSpace: "pre-wrap", maxWidth: 220 }}>{String(r.invest_purpose || "")}</td>
-                                        <td style={{ whiteSpace: "pre-wrap", maxWidth: 200 }}>{String(r.comments || "")}</td>
+                                        {/* <td style={{ whiteSpace: "pre-wrap", maxWidth: 200 }}>{String(r.comments || "")}</td> */}
                                         <td>
                                             <span className={badgeClass(statusFromRecord(r))}>
                                                 {statusFromRecord(r)}
@@ -744,7 +744,7 @@ function RecordModal({ item, onClose, onSaved }) {
     const approvals = item?._raw?.approvals || {};
     const statusHistory = Array.isArray(item?._raw?.statusHistory) ? item._raw.statusHistory : [];
 
-    // Optional: static labels for founders (fallback if no approval 'by' yet)
+    // Founders map (fallback labels only). Real names are fetched below.
     const FOUNDER_LABELS = {
         "user_1759689202840_mk3hv8na5": "X",
         "user_1759817693513_jw2nqfabw": "Y",
@@ -754,10 +754,55 @@ function RecordModal({ item, onClose, onSaved }) {
     // Compute the two approvers dynamically (all founders except the creator)
     const approverUids = Array.from(FOUNDERS).filter((uid) => uid !== creatorId);
 
-    // Helper: display name and meta for an approver card
+    // --- Dynamically resolve real names for Approval-1/2 (from approvals/by or Users/<uid>) ---
+    const [approverNames, setApproverNames] = useState({});
+    useEffect(() => {
+        if (!item) return;
+
+        // base: use whatever is already in approvals[uid].by (if present)
+        const base = {};
+        approverUids.forEach((uid) => {
+            base[uid] = approvals?.[uid]?.by || base[uid] || null;
+        });
+
+        setApproverNames((prev) => ({ ...prev, ...base }));
+
+        // fetch from DB if missing
+        const fetchName = async (uid) => {
+            try {
+                // try /Users/<uid>, then /users/<uid>
+                const snap1 = await firebaseDB.child(`Users/${uid}`).get();
+                const snap2 = snap1.exists() ? null : await firebaseDB.child(`users/${uid}`).get();
+                const val = snap1.exists() ? snap1.val() : snap2?.val() || {};
+                const nm =
+                    val.name ||
+                    val.displayName ||
+                    val.dbName ||
+                    val.username ||
+                    (val.email ? String(val.email).replace(/@.*/, "") : "") ||
+                    null;
+                if (nm) setApproverNames((prev) => ({ ...prev, [uid]: nm }));
+            } catch {
+                /* ignore */
+            }
+        };
+
+        approverUids.forEach((uid) => {
+            if (!base[uid]) fetchName(uid);
+        });
+
+        // also set current status/comment from record
+        setStatus(statusFromRecord(item));
+        setComment(item._raw?.statusComment || "");
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [item, creatorId]);
+
+    const fmt = (d) => (d ? new Date(d).toLocaleString("en-GB") : "");
+
+    // Helper for approver card meta
     const approverMeta = (uid) => {
         const a = approvals?.[uid] || {};
-        const name = a.by || FOUNDER_LABELS[uid] || "Founder";
+        const name = approverNames[uid] || FOUNDER_LABELS[uid] || "Founder";
         const at = a.at ? new Date(a.at).toLocaleString("en-GB") : null;
         let st = "Pending";
         if (a.rejected) st = "Reject";
@@ -765,14 +810,6 @@ function RecordModal({ item, onClose, onSaved }) {
         else if (a.approved) st = "Approve";
         return { name, at, status: st };
     };
-
-    useEffect(() => {
-        if (!item) return;
-        setStatus(statusFromRecord(item));
-        setComment(item._raw?.statusComment || "");
-    }, [item]);
-
-    const fmt = (d) => (d ? new Date(d).toLocaleString("en-GB") : "");
 
     const saveStatus = async () => {
         if (!item?.id || !myId) return;
@@ -816,7 +853,7 @@ function RecordModal({ item, onClose, onSaved }) {
                     };
                     clarificationFlag = true;
                 } else {
-                    // Pending -> clear explicit flags for me, keep others intact
+                    // Pending: clear my explicit flags
                     const prev = nextApprovals[myId] || {};
                     nextApprovals[myId] = {
                         ...prev,
@@ -844,10 +881,10 @@ function RecordModal({ item, onClose, onSaved }) {
                 nextStatus = approverCount >= 2 ? "Approve" : "Pending";
             }
 
-            // Keep legacy 'acknowledge' in sync (Approve => Acknowledge)
+            // Legacy mirror
             const acknowledge = nextStatus === "Approve" ? "Acknowledge" : nextStatus;
 
-            // Append status history entry
+            // Append status history
             const nextHistory = [
                 ...statusHistory,
                 { by: myName, byId: myId, at: now, status: nextStatus, text: comment || "" },
@@ -865,10 +902,10 @@ function RecordModal({ item, onClose, onSaved }) {
 
             await firebaseDB.child(`Investments/${item.id}`).update(update);
 
-            // ✅ reflect to parent + close
+            // reflect to parent
             onSaved && onSaved(update);
 
-            // ✅ reset the status comment after save
+            // ✅ reset the status comment after save (so it shows empty immediately)
             setComment("");
 
             onClose();
@@ -879,211 +916,151 @@ function RecordModal({ item, onClose, onSaved }) {
         }
     };
 
-    // Build meta for the two dynamic approver cards
     const [ap1, ap2] = approverUids.map(approverMeta);
 
     return (
         <div className="modal fade show d-block" tabIndex="-1" style={{ background: "rgba(0,0,0,0.5)" }}>
             <div className="modal-dialog modal-lg modal-dialog-scrollable">
                 <div className="modal-content" style={{ border: "none", borderRadius: "12px", overflow: "hidden" }}>
-                    {/* Header */}
-                    <div
-                        className="modal-header"
-                        style={{
-                            background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
-                            color: "white",
-                            borderBottom: "none",
-                            padding: "1.5rem",
-                        }}
-                    >
+                    <div className="modal-header" style={{ background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)", color: "white", borderBottom: "none", padding: "1.5rem" }}>
                         <div className="d-flex align-items-center w-100">
                             <div className="flex-grow-1">
-                                <h5 className="modal-title mb-1" style={{ fontWeight: "600" }}>
-                                    📊 Investment Details
-                                </h5>
+                                <h5 className="modal-title mb-1" style={{ fontWeight: 600 }}>📊 Investment Details</h5>
                                 <div className="small opacity-85">Investment Overview & Status Management</div>
                             </div>
-                            <button
-                                type="button"
-                                className="btn-close btn-close-white"
-                                onClick={onClose}
-                                disabled={saving}
-                                style={{ filter: "brightness(0.8)" }}
-                            ></button>
+                            <button type="button" className="btn-close btn-close-white" onClick={onClose} disabled={saving}></button>
                         </div>
                     </div>
 
-                    <div className="modal-body" style={{ background: "#f8f9fa", padding: "0" }}>
+                    <div className="modal-body" style={{ background: "#f8f9fa", padding: 0 }}>
                         {!item ? null : (
                             <div className="container-fluid p-4">
-                                {/* Main Investment Card */}
-                                <div
-                                    className="card bg-white mb-4"
-                                    style={{ border: "none", borderRadius: "10px", boxShadow: "0 2px 15px rgba(0,0,0,0.08)" }}
-                                >
+                                <div className="card bg-white mb-4" style={{ border: "none", borderRadius: 10, boxShadow: "0 2px 15px rgba(0,0,0,0.08)" }}>
                                     <div className="card-body p-4">
                                         <div className="row g-4">
-                                            {/* Amount + Status */}
+                                            <div className="col-12 d-flex justify-content-between align-items-end mb-3">
+                                                <div>
+                                                    <div className="small mb-1">Investment Amount</div>
+                                                    <div className="h3 fw-bold text-primary">₹{(Number(item.invest_amount || 0)).toLocaleString("en-IN")}</div>
+                                                </div>
+                                                <span className={badgeClass(status) + " fs-6 px-3 py-2"}>{status}</span>
+                                            </div>
+
+                                            <div className="col-md-6">
+                                                <div className="card bg-light border-0 h-100"><div className="card-body">
+                                                    <div className="small mb-2">👤 Investor</div>
+                                                    <div className="h6 mb-0 text-dark">{item.investor || "—"}</div>
+                                                </div></div>
+                                            </div>
+                                            <div className="col-md-6">
+                                                <div className="card bg-light border-0 h-100"><div className="card-body">
+                                                    <div className="small mb-2">📅 Date</div>
+                                                    <div className="fw-semibold text-dark">{item.invest_date ? new Date(item.invest_date).toLocaleDateString("en-GB") : "—"}</div>
+                                                </div></div>
+                                            </div>
+
+                                            <div className="col-md-6">
+                                                <div className="card bg-light border-0 h-100"><div className="card-body">
+                                                    <div className="small mb-2">🎯 To</div>
+                                                    <div className="text-dark">{item.invest_to || "—"}</div>
+                                                </div></div>
+                                            </div>
+                                            <div className="col-md-6">
+                                                <div className="card bg-light border-0 h-100"><div className="card-body">
+                                                    <div className="small mb-2">🔗 Ref No</div>
+                                                    <div className="text-dark">{item.invest_reference || "—"}</div>
+                                                </div></div>
+                                            </div>
+
+                                            <div className="col-md-6">
+                                                <div className="card bg-light border-0"><div className="card-body">
+                                                    <div className="small mb-2">🎯 Purpose</div>
+                                                    <div style={{ whiteSpace: "pre-wrap" }} className="text-dark mb-2">{item.invest_purpose || "—"}</div>
+                                                </div></div>
+                                            </div>
+
+                                            <div className="col-md-6">
+                                                <div className="card bg-light border-0"><div className="card-body">
+                                                    <div className="small mb-2">Status</div>
+                                                    <select
+                                                        className="form-select"
+                                                        value={status}
+                                                        onChange={(e) => setStatus(e.target.value)}
+                                                        disabled={saving || isCreator}
+                                                        title={isCreator ? "Creator cannot change status" : ""}
+                                                        style={{ borderRadius: 8, border: "none" }}
+                                                    >
+                                                        <option value="Pending">⏳ Pending</option>
+                                                        <option value="Approve">✅ Approve</option>
+                                                        <option value="Reject">❌ Reject</option>
+                                                        <option value="Clarification">❓ Clarification</option>
+                                                    </select>
+                                                    {isCreator && <div className="form-text text-warning mt-1">You created this entry. Only other founders can approve or change status.</div>}
+                                                </div></div>
+                                            </div>
+
                                             <div className="col-12">
-                                                <div className="d-flex justify-content-between align-items-end mb-3">
-                                                    <div>
-                                                        <div className="small mb-1">Investment Amount</div>
-                                                        <div className="h3 fw-bold text-primary">
-                                                            ₹{(Number(item.invest_amount || 0)).toLocaleString("en-IN")}
-                                                        </div>
-                                                    </div>
-                                                    <span className={badgeClass(status) + " fs-6 px-3 py-2"}>{status}</span>
-                                                </div>
-                                            </div>
-
-                                            {/* Investor & Date */}
-                                            <div className="col-md-6">
-                                                <div className="card bg-light border-0 h-100">
-                                                    <div className="card-body">
-                                                        <div className="small mb-2">👤 Investor</div>
-                                                        <div className="h6 mb-0 text-dark">{item.investor || "—"}</div>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                            <div className="col-md-6">
-                                                <div className="card bg-light border-0 h-100">
-                                                    <div className="card-body">
-                                                        <div className="small mb-2">📅 Date</div>
-                                                        <div className="fw-semibold text-dark">
-                                                            {item.invest_date ? new Date(item.invest_date).toLocaleDateString("en-GB") : "—"}
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            </div>
-
-                                            {/* To & Ref */}
-                                            <div className="col-md-6">
-                                                <div className="card bg-light border-0 h-100">
-                                                    <div className="card-body">
-                                                        <div className="small mb-2">🎯 To</div>
-                                                        <div className="text-dark">{item.invest_to || "—"}</div>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                            <div className="col-md-6">
-                                                <div className="card bg-light border-0 h-100">
-                                                    <div className="card-body">
-                                                        <div className="small mb-2">🔗 Ref No</div>
-                                                        <div className="text-dark">{item.invest_reference || "—"}</div>
-                                                    </div>
-                                                </div>
-                                            </div>
-
-                                            {/* Purpose */}
-                                            <div className="col-md-6">
-                                                <div className="card bg-light border-0">
-                                                    <div className="card-body">
-                                                        <div className="small mb-2">🎯 Purpose</div>
-                                                        <div style={{ whiteSpace: "pre-wrap" }} className="text-dark mb-2">
-                                                            {item.invest_purpose || "—"}
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            </div>
-
-                                            {/* Status editor */}
-                                            <div className="col-md-6">
-                                                <div className="card bg-light border-0">
-                                                    <div className="card-body">
-                                                        <div className="small mb-2">Status</div>
-                                                        <div style={{ whiteSpace: "pre-wrap" }} className="text-dark">
-                                                            <select
-                                                                className="form-select"
-                                                                value={status}
-                                                                onChange={(e) => setStatus(e.target.value)}
-                                                                disabled={saving || isCreator}
-                                                                title={isCreator ? "Creator cannot change status" : ""}
-                                                                style={{ borderRadius: "8px", border: "none" }}
-                                                            >
-                                                                <option value="Pending">⏳ Pending</option>
-                                                                <option value="Approve">✅ Approve</option>
-                                                                <option value="Reject">❌ Reject</option>
-                                                                <option value="Clarification">❓ Clarification</option>
-                                                            </select>
-                                                            {isCreator && (
-                                                                <div className="form-text text-warning">
-                                                                    You created this entry. Only other founders can approve or change status.
-                                                                </div>
-                                                            )}
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            </div>
-
-                                            {/* Main Comments */}
-                                            <div className="col-12">
-                                                <div className="card bg-light border-0">
-                                                    <div className="card-body">
-                                                        <div className="small mb-2">💬 Comments</div>
-                                                        <div style={{ whiteSpace: "pre-wrap" }} className="text-dark">
-                                                            {item.comments || "—"}
-                                                        </div>
-                                                    </div>
-                                                </div>
+                                                <div className="card bg-light border-0"><div className="card-body">
+                                                    <div className="small mb-2">💬 Comments</div>
+                                                    <div style={{ whiteSpace: "pre-wrap" }} className="text-dark">{item.comments || "—"}</div>
+                                                </div></div>
                                             </div>
 
                                             {/* Creator + Dynamic Approver Cards */}
                                             <div className="row g-3">
-                                                {/* Created By */}
                                                 <div className="col-4">
-                                                    <div className="card border-0" style={{ background: "linear-gradient(135deg,#f093fb 0%,#f5576c 100%)", color: "white" }}>
+                                                    <div className="card border-0 h-100" style={{ background: "linear-gradient(135deg,#f093fb 0%,#f5576c 100%)", color: "white" }}>
                                                         <div className="card-body">
                                                             <div className="small opacity-85 mb-2">👤 Created By</div>
                                                             <div className="d-flex justify-content-between align-items-center">
                                                                 <strong>{item._raw?.createdByName || "System"}</strong>
-                                                                <span className={badgeClass(status)}>{status}</span>
 
                                                             </div>
-                                                            {item._raw?.createdAt ? <div className="small-text text-white opacity-85 mt-1">{fmt(item._raw.createdAt)}</div> : null}
+                                                            <div>
+                                                                {item._raw?.createdAt ? <span className="small-text text-white opacity-85">{fmt(item._raw.createdAt)}</span> : null}
+                                                            </div>
                                                         </div>
                                                     </div>
                                                 </div>
 
-                                                {/* Approval-1 (dynamic: first approver uid) */}
                                                 <div className="col-4">
-                                                    {approverUids[0] ? (
-                                                        (() => {
-                                                            const m = approverMeta(approverUids[0]);
-                                                            return (
-                                                                <div className="card border-0" style={{ background: "linear-gradient(135deg,#84fab0 0%,#8fd3f4 100%)", color: "white" }}>
-                                                                    <div className="card-body">
-                                                                        <div className="small opacity-85 mb-2">👤 Approval-1</div>
-                                                                        <div className="d-flex justify-content-between align-items-center">
-                                                                            <strong>{m.name}</strong>
-                                                                            <span className={badgeClass(m.status)}>{m.status}</span>
-                                                                        </div>
+                                                    {approverUids[0] ? (() => {
+                                                        const m = approverMeta(approverUids[0]);
+                                                        return (
+                                                            <div className="card border-0 h-100" style={{ background: "linear-gradient(135deg,#84fab0 0%,#8fd3f4 100%)", color: "white" }}>
+                                                                <div className="card-body">
+                                                                    <div className="small opacity-85 mb-2">👤 Approval-1</div>
+                                                                    <div className="d-flex justify-content-between align-items-center">
+                                                                        <strong>{m.name}</strong>
+                                                                        {/* <span className={badgeClass(m.status)}>{m.status}</span> */}
+                                                                    </div>
+                                                                    <div>
                                                                         {m.at ? <div className="small-text text-white opacity-85 mt-1">{m.at}</div> : null}
                                                                     </div>
                                                                 </div>
-                                                            );
-                                                        })()
-                                                    ) : null}
+                                                            </div>
+                                                        );
+                                                    })() : null}
                                                 </div>
 
-                                                {/* Approval-2 (dynamic: second approver uid) */}
                                                 <div className="col-4">
-                                                    {approverUids[1] ? (
-                                                        (() => {
-                                                            const m = approverMeta(approverUids[1]);
-                                                            return (
-                                                                <div className="card border-0" style={{ background: "linear-gradient(135deg,#FCCF31 0%,#F55555 100%)", color: "white" }}>
-                                                                    <div className="card-body">
-                                                                        <div className="small opacity-85 mb-2">👤 Approval-2</div>
-                                                                        <div className="d-flex justify-content-between align-items-center">
-                                                                            <strong>{m.name}</strong>
-                                                                            <span className={badgeClass(m.status)}>{m.status}</span>
-                                                                        </div>
-                                                                        {m.at ? <div className="small-text text-white opacity-85 mt-1">{m.at}</div> : null}
+                                                    {approverUids[1] ? (() => {
+                                                        const m = approverMeta(approverUids[1]);
+                                                        return (
+                                                            <div className="card border-0 h-100" style={{ background: "linear-gradient(135deg,#FCCF31 0%,#F55555 100%)", color: "white" }}>
+                                                                <div className="card-body">
+                                                                    <div className="small opacity-85 mb-2">👤 Approval-2</div>
+                                                                    <div className="d-flex justify-content-between align-items-center">
+                                                                        <strong>{m.name}</strong>
+                                                                        {/* <span className={badgeClass(m.status)}>{m.status}</span> */}
+                                                                    </div>
+                                                                    <div>
+                                                                        {m.at ? <div className="small opacity-85 mt-1">{m.at}</div> : null}
                                                                     </div>
                                                                 </div>
-                                                            );
-                                                        })()
-                                                    ) : null}
+                                                            </div>
+                                                        );
+                                                    })() : null}
                                                 </div>
                                             </div>
                                         </div>
@@ -1091,12 +1068,10 @@ function RecordModal({ item, onClose, onSaved }) {
                                 </div>
 
                                 {/* Status Comment Card + history */}
-                                <div className="card" style={{ border: "none", borderRadius: "10px", boxShadow: "0 2px 15px rgba(0,0,0,0.08)", background: "linear-gradient(135deg,#4facfe 0%,#00f2fe 100%)", color: "white" }}>
+                                <div className="card" style={{ border: "none", borderRadius: 10, boxShadow: "0 2px 15px rgba(0,0,0,0.08)", background: "linear-gradient(135deg,#4facfe 0%,#00f2fe 100%)", color: "white" }}>
                                     <div className="card-body p-4">
                                         <div className="row g-3">
-                                            <h6 className="text-white mb-1" style={{ fontWeight: "600" }}>
-                                                🔄 Status Comments
-                                            </h6>
+                                            <h6 className="text-white mb-1" style={{ fontWeight: 600 }}>🔄 Status Comments</h6>
 
                                             {!!statusHistory?.length && (
                                                 <div className="col-12">
@@ -1104,21 +1079,14 @@ function RecordModal({ item, onClose, onSaved }) {
                                                     <ul className="list-unstyled mb-2">
                                                         {statusHistory.map((h, i) => (
                                                             <li key={i} className="mb-2 card bg-white">
-
-
                                                                 <div className="card-body">
-                                                                    <div> {h.text ? <>    <span className={badgeClass(h.status)} style={{ marginRight: 8 }}>
-                                                                        {h.status}
-                                                                    </span> — {h.text}</> : null}</div>
+                                                                    {/* <div>{h.text ? (<><span className={badgeClass(h.status)} style={{ marginRight: 8 }}>{h.status}</span> — {h.text}</>) : null}</div> */}
+                                                                    <div>{h.text}</div>
                                                                     <div className="small-text opacity-75 mt-2">
-
                                                                         <>{h.by || "—"}</>
                                                                         {h.at ? <> • {fmt(h.at)}</> : null}
                                                                     </div>
-
                                                                 </div>
-
-
                                                             </li>
                                                         ))}
                                                     </ul>
@@ -1133,13 +1101,9 @@ function RecordModal({ item, onClose, onSaved }) {
                                                     onChange={(e) => setComment(e.target.value)}
                                                     placeholder="Reason / note for this status..."
                                                     disabled={saving || isCreator}
-                                                    style={{ borderRadius: "8px", border: "none" }}
+                                                    style={{ borderRadius: 8, border: "none" }}
                                                 />
-                                                {isCreator && (
-                                                    <div className="form-text text-warning">
-                                                        You created this entry. Only other founders can add status comments.
-                                                    </div>
-                                                )}
+                                                {isCreator && <div className="form-text text-warning">You created this entry. Only other founders can add status comments.</div>}
                                             </div>
                                         </div>
                                     </div>
@@ -1148,7 +1112,6 @@ function RecordModal({ item, onClose, onSaved }) {
                         )}
                     </div>
 
-                    {/* Footer */}
                     <div className="modal-footer" style={{ background: "white", borderTop: "1px solid #e9ecef", padding: "1.25rem 1.5rem" }}>
                         <div className="d-flex justify-content-between w-100 align-items-center">
                             <div className="d-flex align-items-center">
@@ -1156,14 +1119,14 @@ function RecordModal({ item, onClose, onSaved }) {
                                 <span className={badgeClass(status) + " px-3 py-2"}>{status}</span>
                             </div>
                             <div>
-                                <button className="btn btn-outline-secondary me-2" onClick={onClose} disabled={saving} style={{ borderRadius: "8px", padding: "0.5rem 1.25rem" }}>
+                                <button className="btn btn-outline-secondary me-2" onClick={onClose} disabled={saving} style={{ borderRadius: 8, padding: "0.5rem 1.25rem" }}>
                                     Close
                                 </button>
                                 <button
                                     className="btn btn-primary"
                                     onClick={saveStatus}
                                     disabled={saving || isCreator}
-                                    style={{ borderRadius: "8px", padding: "0.5rem 1.25rem", background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)", border: "none" }}
+                                    style={{ borderRadius: 8, padding: "0.5rem 1.25rem", background: "linear-gradient(135deg,#667eea 0%,#764ba2 100%)", border: "none" }}
                                 >
                                     {saving ? (<><span className="spinner-border spinner-border-sm me-2"></span>Saving...</>) : ("💾 Save Changes")}
                                 </button>
@@ -1175,4 +1138,5 @@ function RecordModal({ item, onClose, onSaved }) {
         </div>
     );
 }
+
 

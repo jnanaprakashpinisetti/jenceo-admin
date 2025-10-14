@@ -223,7 +223,7 @@ const BasicInformation = ({
             value={formData.date}
             onChange={handleChange}
             onBlur={handleBlur}
-            min={new Date(Date.now() - 20 * 24 * 60 * 60 * 1000).toISOString().split("T")[0]}
+            // min={new Date(Date.now() - 20 * 24 * 60 * 60 * 1000).toISOString().split("T")[0]}
             max={new Date().toISOString().split("T")[0]}
           />
           {errors.date && <div className="invalid-feedback">{errors.date}</div>}

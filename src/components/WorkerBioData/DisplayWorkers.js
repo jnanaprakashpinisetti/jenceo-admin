@@ -577,6 +577,7 @@ export default function DisplayWorkers() {
                                         placeholder="Min-18"
                                         value={ageRange.min}
                                         onChange={(e) => setAgeRange(r => ({ ...r, min: e.target.value }))}
+                                        style={{ color: "#707070ff" }}
                                     />
                                     <input
                                         type="number"
@@ -585,6 +586,7 @@ export default function DisplayWorkers() {
                                         placeholder="Max-55"
                                         value={ageRange.max}
                                         onChange={(e) => setAgeRange(r => ({ ...r, max: e.target.value }))}
+                                        style={{ color: "#707070ff" }}
                                     />
                                 </div>
                             </div>
@@ -600,6 +602,7 @@ export default function DisplayWorkers() {
                                         placeholder="Min"
                                         value={experienceRange.min}
                                         onChange={(e) => setExperienceRange(r => ({ ...r, min: e.target.value }))}
+                                        style={{ color: "#707070ff" }}
                                     />
                                     <input
                                         type="number"
@@ -608,6 +611,7 @@ export default function DisplayWorkers() {
                                         placeholder="Max"
                                         value={experienceRange.max}
                                         onChange={(e) => setExperienceRange(r => ({ ...r, max: e.target.value }))}
+                                        style={{ color: "#707070ff" }}
                                     />
                                 </div>
                             </div>

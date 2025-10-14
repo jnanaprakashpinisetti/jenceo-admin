@@ -744,6 +744,28 @@ function RecordModal({ item, onClose, onSaved }) {
     const approvals = item?._raw?.approvals || {};
     const statusHistory = Array.isArray(item?._raw?.statusHistory) ? item._raw.statusHistory : [];
 
+    // Optional: static labels for founders (fallback if no approval 'by' yet)
+    const FOUNDER_LABELS = {
+        "user_1759689202840_mk3hv8na5": "X",
+        "user_1759817693513_jw2nqfabw": "Y",
+        "user_1759817693513_jw2nqfcoz": "Z",
+    };
+
+    // Compute the two approvers dynamically (all founders except the creator)
+    const approverUids = Array.from(FOUNDERS).filter((uid) => uid !== creatorId);
+
+    // Helper: display name and meta for an approver card
+    const approverMeta = (uid) => {
+        const a = approvals?.[uid] || {};
+        const name = a.by || FOUNDER_LABELS[uid] || "Founder";
+        const at = a.at ? new Date(a.at).toLocaleString("en-GB") : null;
+        let st = "Pending";
+        if (a.rejected) st = "Reject";
+        else if (a.clarification) st = "Clarification";
+        else if (a.approved) st = "Approve";
+        return { name, at, status: st };
+    };
+
     useEffect(() => {
         if (!item) return;
         setStatus(statusFromRecord(item));
@@ -762,11 +784,13 @@ function RecordModal({ item, onClose, onSaved }) {
             let rejectFlag = false;
             let clarificationFlag = false;
 
-            // Update approvals / flags by current actor (only founders can act)
+            // Only founders can act
             if (FOUNDERS.has(myId)) {
                 if (status === "Approve") {
                     nextApprovals[myId] = {
                         approved: true,
+                        rejected: false,
+                        clarification: false,
                         comment: comment || "",
                         by: myName,
                         at: now,
@@ -775,6 +799,7 @@ function RecordModal({ item, onClose, onSaved }) {
                     nextApprovals[myId] = {
                         approved: false,
                         rejected: true,
+                        clarification: false,
                         comment: comment || "",
                         by: myName,
                         at: now,
@@ -783,6 +808,7 @@ function RecordModal({ item, onClose, onSaved }) {
                 } else if (status === "Clarification") {
                     nextApprovals[myId] = {
                         approved: false,
+                        rejected: false,
                         clarification: true,
                         comment: comment || "",
                         by: myName,
@@ -790,7 +816,7 @@ function RecordModal({ item, onClose, onSaved }) {
                     };
                     clarificationFlag = true;
                 } else {
-                    // Pending -> clear my explicit approval flags, keep others
+                    // Pending -> clear explicit flags for me, keep others intact
                     const prev = nextApprovals[myId] || {};
                     nextApprovals[myId] = {
                         ...prev,
@@ -810,7 +836,7 @@ function RecordModal({ item, onClose, onSaved }) {
             } else if (clarificationFlag) {
                 nextStatus = "Clarification";
             } else {
-                // Count non-creator approvals
+                // Count approvals from non-creator founders
                 let approverCount = 0;
                 for (const [uid, a] of Object.entries(nextApprovals)) {
                     if (uid !== creatorId && a?.approved) approverCount++;
@@ -821,16 +847,10 @@ function RecordModal({ item, onClose, onSaved }) {
             // Keep legacy 'acknowledge' in sync (Approve => Acknowledge)
             const acknowledge = nextStatus === "Approve" ? "Acknowledge" : nextStatus;
 
-            // Append status history entry (for display under main comments)
+            // Append status history entry
             const nextHistory = [
                 ...statusHistory,
-                {
-                    by: myName,
-                    byId: myId,
-                    at: now,
-                    status: nextStatus,
-                    text: comment || "",
-                },
+                { by: myName, byId: myId, at: now, status: nextStatus, text: comment || "" },
             ];
 
             const update = {
@@ -845,7 +865,12 @@ function RecordModal({ item, onClose, onSaved }) {
 
             await firebaseDB.child(`Investments/${item.id}`).update(update);
 
+            // ✅ reflect to parent + close
             onSaved && onSaved(update);
+
+            // ✅ reset the status comment after save
+            setComment("");
+
             onClose();
         } catch (e) {
             alert("Failed to update status.");
@@ -853,6 +878,9 @@ function RecordModal({ item, onClose, onSaved }) {
             setSaving(false);
         }
     };
+
+    // Build meta for the two dynamic approver cards
+    const [ap1, ap2] = approverUids.map(approverMeta);
 
     return (
         <div className="modal fade show d-block" tabIndex="-1" style={{ background: "rgba(0,0,0,0.5)" }}>
@@ -891,11 +919,7 @@ function RecordModal({ item, onClose, onSaved }) {
                                 {/* Main Investment Card */}
                                 <div
                                     className="card bg-white mb-4"
-                                    style={{
-                                        border: "none",
-                                        borderRadius: "10px",
-                                        boxShadow: "0 2px 15px rgba(0,0,0,0.08)",
-                                    }}
+                                    style={{ border: "none", borderRadius: "10px", boxShadow: "0 2px 15px rgba(0,0,0,0.08)" }}
                                 >
                                     <div className="card-body p-4">
                                         <div className="row g-4">
@@ -1003,69 +1027,71 @@ function RecordModal({ item, onClose, onSaved }) {
                                                 </div>
                                             </div>
 
-                                            {/* Creator + Placeholders for approvals */}
+                                            {/* Creator + Dynamic Approver Cards */}
                                             <div className="row g-3">
+                                                {/* Created By */}
                                                 <div className="col-4">
-                                                    <div
-                                                        className="card border-0"
-                                                        style={{ background: "linear-gradient(135deg, #f093fb 0%, #f5576c 100%)", color: "white" }}
-                                                    >
+                                                    <div className="card border-0" style={{ background: "linear-gradient(135deg,#f093fb 0%,#f5576c 100%)", color: "white" }}>
                                                         <div className="card-body">
                                                             <div className="small opacity-85 mb-2">👤 Created By</div>
                                                             <div className="d-flex justify-content-between align-items-center">
                                                                 <strong>{item._raw?.createdByName || "System"}</strong>
-                                                                {item._raw?.createdAt ? <span className="small-text text-white opacity-85">{fmt(item._raw.createdAt)}</span> : null}
+                                                                <span className={badgeClass(status)}>{status}</span>
+
                                                             </div>
+                                                            {item._raw?.createdAt ? <div className="small-text text-white opacity-85 mt-1">{fmt(item._raw.createdAt)}</div> : null}
                                                         </div>
                                                     </div>
                                                 </div>
 
-                                                {/* Approval placeholders (optional to wire) */}
+                                                {/* Approval-1 (dynamic: first approver uid) */}
                                                 <div className="col-4">
-                                                    <div
-                                                        className="card border-0"
-                                                        style={{ background: "linear-gradient(135deg, #f093fb 0%, #f5576c 100%)", color: "white" }}
-                                                    >
-                                                        <div className="card-body">
-                                                            <div className="small opacity-85 mb-2">👤 Approval-1</div>
-                                                            <div className="d-flex justify-content-between align-items-center">
-                                                                <strong>{item._raw?.createdByName || "System"}</strong>
-                                                                {item._raw?.createdAt ? <span className="small-text text-white opacity-85">{fmt(item._raw.createdAt)}</span> : null}
-                                                            </div>
-                                                        </div>
-                                                    </div>
+                                                    {approverUids[0] ? (
+                                                        (() => {
+                                                            const m = approverMeta(approverUids[0]);
+                                                            return (
+                                                                <div className="card border-0" style={{ background: "linear-gradient(135deg,#84fab0 0%,#8fd3f4 100%)", color: "white" }}>
+                                                                    <div className="card-body">
+                                                                        <div className="small opacity-85 mb-2">👤 Approval-1</div>
+                                                                        <div className="d-flex justify-content-between align-items-center">
+                                                                            <strong>{m.name}</strong>
+                                                                            <span className={badgeClass(m.status)}>{m.status}</span>
+                                                                        </div>
+                                                                        {m.at ? <div className="small-text text-white opacity-85 mt-1">{m.at}</div> : null}
+                                                                    </div>
+                                                                </div>
+                                                            );
+                                                        })()
+                                                    ) : null}
                                                 </div>
 
+                                                {/* Approval-2 (dynamic: second approver uid) */}
                                                 <div className="col-4">
-                                                    <div
-                                                        className="card border-0"
-                                                        style={{ background: "linear-gradient(135deg, #f093fb 0%, #f5576c 100%)", color: "white" }}
-                                                    >
-                                                        <div className="card-body">
-                                                            <div className="small opacity-85 mb-2">👤 Approval-2</div>
-                                                            <div className="d-flex justify-content-between align-items-center">
-                                                                <strong>{item._raw?.createdByName || "System"}</strong>
-                                                                {item._raw?.createdAt ? <span className="small-text text-white opacity-85">{fmt(item._raw.createdAt)}</span> : null}
-                                                            </div>
-                                                        </div>
-                                                    </div>
+                                                    {approverUids[1] ? (
+                                                        (() => {
+                                                            const m = approverMeta(approverUids[1]);
+                                                            return (
+                                                                <div className="card border-0" style={{ background: "linear-gradient(135deg,#FCCF31 0%,#F55555 100%)", color: "white" }}>
+                                                                    <div className="card-body">
+                                                                        <div className="small opacity-85 mb-2">👤 Approval-2</div>
+                                                                        <div className="d-flex justify-content-between align-items-center">
+                                                                            <strong>{m.name}</strong>
+                                                                            <span className={badgeClass(m.status)}>{m.status}</span>
+                                                                        </div>
+                                                                        {m.at ? <div className="small-text text-white opacity-85 mt-1">{m.at}</div> : null}
+                                                                    </div>
+                                                                </div>
+                                                            );
+                                                        })()
+                                                    ) : null}
                                                 </div>
                                             </div>
                                         </div>
                                     </div>
                                 </div>
 
-                                {/* Status Comment Card */}
-                                <div
-                                    className="card"
-                                    style={{
-                                        border: "none",
-                                        borderRadius: "10px",
-                                        boxShadow: "0 2px 15px rgba(0,0,0,0.08)",
-                                        background: "linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)",
-                                        color: "white",
-                                    }}
-                                >
+                                {/* Status Comment Card + history */}
+                                <div className="card" style={{ border: "none", borderRadius: "10px", boxShadow: "0 2px 15px rgba(0,0,0,0.08)", background: "linear-gradient(135deg,#4facfe 0%,#00f2fe 100%)", color: "white" }}>
                                     <div className="card-body p-4">
                                         <div className="row g-3">
                                             <h6 className="text-white mb-1" style={{ fontWeight: "600" }}>
@@ -1074,21 +1100,25 @@ function RecordModal({ item, onClose, onSaved }) {
 
                                             {!!statusHistory?.length && (
                                                 <div className="col-12">
-                                                    <div className="small text-white-50">Previous updates</div>
+                                                    <div className="small text-white mb-2">Previous updates</div>
                                                     <ul className="list-unstyled mb-2">
                                                         {statusHistory.map((h, i) => (
-                                                            <li key={i} className="mb-1">
-                                                                <span className={badgeClass(h.status)} style={{ marginRight: 8 }}>
-                                                                    {h.status}
-                                                                </span>
-                                                                <strong>{h.by || "—"}</strong>
-                                                                {h.at ? <> • {fmt(h.at)}</> : null}
-                                                                {h.text ? (
-                                                                    <>
-                                                                        {" "}
-                                                                        — <em>{h.text}</em>
-                                                                    </>
-                                                                ) : null}
+                                                            <li key={i} className="mb-2 card bg-white">
+
+
+                                                                <div className="card-body">
+                                                                    <div> {h.text ? <>    <span className={badgeClass(h.status)} style={{ marginRight: 8 }}>
+                                                                        {h.status}
+                                                                    </span> — {h.text}</> : null}</div>
+                                                                    <div className="small-text opacity-75 mt-2">
+
+                                                                        <>{h.by || "—"}</>
+                                                                        {h.at ? <> • {fmt(h.at)}</> : null}
+                                                                    </div>
+
+                                                                </div>
+
+
                                                             </li>
                                                         ))}
                                                     </ul>
@@ -1119,47 +1149,23 @@ function RecordModal({ item, onClose, onSaved }) {
                     </div>
 
                     {/* Footer */}
-                    <div
-                        className="modal-footer"
-                        style={{
-                            background: "white",
-                            borderTop: "1px solid #e9ecef",
-                            padding: "1.25rem 1.5rem",
-                        }}
-                    >
+                    <div className="modal-footer" style={{ background: "white", borderTop: "1px solid #e9ecef", padding: "1.25rem 1.5rem" }}>
                         <div className="d-flex justify-content-between w-100 align-items-center">
                             <div className="d-flex align-items-center">
                                 <span className="small me-2">Current Status:</span>
                                 <span className={badgeClass(status) + " px-3 py-2"}>{status}</span>
                             </div>
                             <div>
-                                <button
-                                    className="btn btn-outline-secondary me-2"
-                                    onClick={onClose}
-                                    disabled={saving}
-                                    style={{ borderRadius: "8px", padding: "0.5rem 1.25rem" }}
-                                >
+                                <button className="btn btn-outline-secondary me-2" onClick={onClose} disabled={saving} style={{ borderRadius: "8px", padding: "0.5rem 1.25rem" }}>
                                     Close
                                 </button>
                                 <button
                                     className="btn btn-primary"
                                     onClick={saveStatus}
                                     disabled={saving || isCreator}
-                                    style={{
-                                        borderRadius: "8px",
-                                        padding: "0.5rem 1.25rem",
-                                        background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
-                                        border: "none",
-                                    }}
+                                    style={{ borderRadius: "8px", padding: "0.5rem 1.25rem", background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)", border: "none" }}
                                 >
-                                    {saving ? (
-                                        <>
-                                            <span className="spinner-border spinner-border-sm me-2"></span>
-                                            Saving...
-                                        </>
-                                    ) : (
-                                        "💾 Save Changes"
-                                    )}
+                                    {saving ? (<><span className="spinner-border spinner-border-sm me-2"></span>Saving...</>) : ("💾 Save Changes")}
                                 </button>
                             </div>
                         </div>
@@ -1169,5 +1175,4 @@ function RecordModal({ item, onClose, onSaved }) {
         </div>
     );
 }
-
 

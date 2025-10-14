@@ -17,6 +17,22 @@ import firebaseDB from "../../firebase";
  *  - pageSizeOptions (array) optional
  */
 
+// ---- status helpers (module scope) ----
+const statusFromRecord = (r) => {
+    if (r?.status) return String(r.status);
+    const ack = String(r?.acknowledge || "Pending");
+    return ack === "Acknowledge" ? "Approve" : ack;
+};
+
+const badgeClass = (status) => {
+    switch (String(status)) {
+        case "Approve": return "badge bg-success";
+        case "Reject": return "badge bg-danger";
+        case "Clarification": return "badge bg-warning text-dark";
+        default: return "badge bg-secondary"; // Pending
+    }
+};
+
 export default function TableInvestment({
     currentUser = "Admin",
     pageSizeOptions = [10, 20, 50, 100],
@@ -40,6 +56,22 @@ export default function TableInvestment({
 
     const [rowsPerPage, setRowsPerPage] = useState(pageSizeOptions[0]);
     const [currentPage, setCurrentPage] = useState(1);
+
+    // status helpers
+    const statusFromRecord = (r) => {
+        // prefer new status; map legacy acknowledge for back-compat
+        if (r.status) return String(r.status);
+        const ack = String(r.acknowledge || "Pending");
+        return ack === "Acknowledge" ? "Approve" : ack;
+    };
+
+
+    // single-record modal state
+    const [showRecord, setShowRecord] = useState(false);
+    const [record, setRecord] = useState(null);
+    const [editStatus, setEditStatus] = useState("Pending");
+    const [editComment, setEditComment] = useState("");
+
 
     // subscribe to firebase Investments
     useEffect(() => {
@@ -347,7 +379,7 @@ export default function TableInvestment({
                                     </div>
                                 </div>
                                 <div className="card-footer bg-transparent border-0">
-                                    <small className="text-muted">Click to open details</small>
+                                    <small className="">Click to open details</small>
                                 </div>
                             </div>
                         </div>
@@ -423,14 +455,19 @@ export default function TableInvestment({
                         ) : (
                             paged.map((r, i) => (
                                 <React.Fragment key={r.id}>
-                                    <tr>
+                                    <tr role="button" onClick={() => {
+                                        setRecord(r);
+                                        setEditStatus(statusFromRecord(r));
+                                        setEditComment(String(r._raw?.statusComment || r._raw?.ackClarification?.text || ""));
+                                        setShowRecord(true);
+                                    }} style={{ cursor: "pointer" }}>
                                         <td>{startIndex + i + 1}</td>
                                         <td>{String(r.investor || "")}</td>
                                         <td>
                                             {fmtDate(r.invest_date)}
                                             {r._raw?.createdByName && (
                                                 <div className="small-text text-info opacity-75 mt-1">
-                                                Added by <strong>{r._raw.createdByName}</strong>
+                                                    Added by <strong>{r._raw.createdByName}</strong>
                                                 </div>
                                             )}
                                         </td>
@@ -440,33 +477,10 @@ export default function TableInvestment({
                                         <td>{String(r.invest_reference || "")}</td>
                                         <td style={{ whiteSpace: "pre-wrap", maxWidth: 220 }}>{String(r.invest_purpose || "")}</td>
                                         <td style={{ whiteSpace: "pre-wrap", maxWidth: 200 }}>{String(r.comments || "")}</td>
-                                        <td style={{ minWidth: 200 }}>
-                                            <select
-                                                className="form-select form-select-sm mb-1"
-                                                value={String(r.acknowledge || "Pending")}
-                                                onChange={(e) => setAcknowledgeForRecord(r.id, e.target.value)}
-                                            >
-                                                <option value="Acknowledge">Acknowledge</option>
-                                                <option value="Clarification">Clarification</option>
-                                                <option value="Pending">Pending</option>
-                                                <option value="Reject">Reject</option>
-                                            </select>
-
-                                            {/* Clarification box: only visible to the investor who created the record */}
-                                            {(String(r.acknowledge) === "Clarification" || String(r.acknowledge) === "Reject")
-                                                && String(r.investor || "").toLowerCase() === String(currentUser || "").toLowerCase() && (
-                                                    <ClarificationBox
-                                                        existing={r.ackClarification}
-                                                        onSubmit={(text) => submitClarification(r.id, text)}
-                                                    />
-                                                )}
-
-                                            {/* show meta */}
-                                            {r.ackAt && (
-                                                <div className="small text-muted mt-1">
-                                                    {r.ackBy ? `${r.ackBy} • ` : ""}{r.ackAt ? new Date(r.ackAt).toLocaleString() : ""}
-                                                </div>
-                                            )}
+                                        <td>
+                                            <span className={badgeClass(statusFromRecord(r))}>
+                                                {statusFromRecord(r)}
+                                            </span>
                                         </td>
                                     </tr>
                                 </React.Fragment>
@@ -517,6 +531,23 @@ export default function TableInvestment({
                     fmtCurrency={fmtCurrency}
                 />
             )}
+
+            {showRecord && record && (
+                <RecordModal
+                    item={record}
+                    onClose={() => { setShowRecord(false); setRecord(null); }}
+                    onSaved={(update) => {
+                        // reflect saved status in current table without waiting for Firebase callback
+                        setRecords((prev) => prev.map(it => it.id === record.id ? {
+                            ...it,
+                            status: update.status,
+                            acknowledge: update.acknowledge,
+                            _raw: { ...(it._raw || {}), ...update },
+                        } : it));
+                    }}
+                />
+            )}
+
         </>
     );
 }
@@ -578,7 +609,7 @@ function InvestorModal({ investor, items = [], total = 0, onClose, fmtDate, fmtC
                         <div className="d-flex justify-content-between align-items-center mb-3">
                             <div>
                                 <strong>{investor}</strong>
-                                <div className="small text-muted">Acknowledged total: ₹{fmtCurrency(total)} • {items.length} investment{items.length > 1 ? "s" : ""}</div>
+                                <div className="small ">Acknowledged total: ₹{fmtCurrency(total)} • {items.length} investment{items.length > 1 ? "s" : ""}</div>
                             </div>
                             <div>
                                 <button className="btn btn-sm btn-secondary me-2" onClick={() => {
@@ -653,3 +684,324 @@ function InvestorModal({ investor, items = [], total = 0, onClose, fmtDate, fmtC
         </div>
     );
 }
+
+function RecordModal({ item, onClose, onSaved }) {
+    const [saving, setSaving] = useState(false);
+    const [status, setStatus] = useState("Pending");
+    const [comment, setComment] = useState("");
+
+    useEffect(() => {
+        if (!item) return;
+        setStatus(item.status || (item.acknowledge === "Acknowledge" ? "Approve" : (item.acknowledge || "Pending")));
+        setComment(item._raw?.statusComment || item._raw?.ackClarification?.text || "");
+    }, [item]);
+
+    const saveStatus = async () => {
+        if (!item?.id) return;
+        setSaving(true);
+        try {
+            // keep both 'status' and legacy 'acknowledge' in sync
+            const ack = status === "Approve" ? "Acknowledge" : status;
+            const now = new Date().toISOString();
+            const update = {
+                status,
+                acknowledge: ack,
+                statusComment: comment || null,
+                statusBy: item._raw?.createdByName || "System",
+                statusAt: now,
+                // also map legacy ack meta for old views
+                ackBy: item._raw?.createdByName || "System",
+                ackAt: now,
+            };
+            await firebaseDB.child(`Investments/${item.id}`).update(update);
+            onSaved && onSaved(update);
+            onClose();
+        } catch (e) {
+            alert("Failed to update status.");
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    const fmt = (d) => (d ? new Date(d).toLocaleString("en-GB") : "");
+
+    return (
+        <div className="modal fade show d-block" tabIndex="-1" style={{ background: "rgba(0,0,0,0.5)" }}>
+            <div className="modal-dialog modal-lg modal-dialog-scrollable">
+                <div className="modal-content" style={{ border: "none", borderRadius: "12px", overflow: "hidden" }}>
+                    {/* Header with gradient */}
+                    <div className="modal-header" style={{
+                        background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
+                        color: "white",
+                        borderBottom: "none",
+                        padding: "1.5rem"
+                    }}>
+                        <div className="d-flex align-items-center w-100">
+                            <div className="flex-grow-1">
+                                <h5 className="modal-title mb-1" style={{ fontWeight: "600" }}>
+                                    📊 Investment Details
+                                </h5>
+                                <div className="small opacity-85">Investment Overview & Status Management</div>
+                            </div>
+                            <button
+                                type="button"
+                                className="btn-close btn-close-white"
+                                onClick={onClose}
+                                disabled={saving}
+                                style={{ filter: "brightness(0.8)" }}
+                            ></button>
+                        </div>
+                    </div>
+
+                    <div className="modal-body" style={{ background: "#f8f9fa", padding: "0" }}>
+                        {!item ? null : (
+                            <div className="container-fluid p-4">
+                                {/* Main Investment Card */}
+                                <div className="card bg-white mb-4" style={{
+                                    border: "none",
+                                    borderRadius: "10px",
+                                    boxShadow: "0 2px 15px rgba(0,0,0,0.08)"
+                                }}>
+                                    <div className="card-body p-4">
+                                        <div className="row g-4">
+                                            {/* Investment Amount - Highlighted */}
+                                            <div className="col-12">
+                                                <div className="d-flex justify-content-between align-items-end mb-3">
+                                                    <div>
+                                                        <div className="small  mb-1">Investment Amount</div>
+                                                        <div className="h3 fw-bold text-primary">
+                                                            ₹{(Number(item.invest_amount || 0)).toLocaleString("en-IN")}
+                                                        </div>
+                                                    </div>
+                                                    <span className={badgeClass(status) + " fs-6 px-3 py-2"}>{status}</span>
+                                                </div>
+                                            </div>
+
+                                            {/* Investor & Date Card */}
+                                            <div className="col-md-6">
+                                                <div className="card bg-light border-0 h-100">
+                                                    <div className="card-body">
+                                                        <div className="small  mb-2">👤 Investor</div>
+                                                        <div className="h6 mb-0 text-dark">{item.investor || "—"}</div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div className="col-md-6">
+                                                <div className="card bg-light border-0 h-100">
+                                                    <div className="card-body">
+                                                        <div className="small  mb-2">📅 Date</div>
+                                                        <div className="fw-semibold text-dark">
+                                                            {item.invest_date ? new Date(item.invest_date).toLocaleDateString("en-GB") : "—"}
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            {/* Recipient & Reference Card */}
+                                            <div className="col-md-6">
+                                                <div className="card bg-light border-0 h-100">
+                                                    <div className="card-body">
+                                                        <div className="small  mb-2">🎯 To</div>
+                                                        <div className="text-dark">{item.invest_to || "—"}</div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div className="col-md-6">
+                                                <div className="card bg-light border-0 h-100">
+                                                    <div className="card-body">
+                                                        <div className="small  mb-2">🔗 Ref No</div>
+                                                        <div className="text-dark">{item.invest_reference || "—"}</div>
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            {/* Purpose Card - Full Width */}
+                                            <div className="col-md-6">
+                                                <div className="card bg-light border-0">
+                                                    <div className="card-body">
+                                                        <div className="small  mb-2">🎯 Purpose</div>
+                                                        <div style={{ whiteSpace: "pre-wrap" }} className="text-dark mb-2">
+                                                            {item.invest_purpose || "—"}
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            <div className="col-md-6">
+
+                                                <div className="card bg-light border-0">
+                                                    <div className="card-body">
+                                                        <div className="small  mb-2">Status</div>
+                                                        <div style={{ whiteSpace: "pre-wrap" }} className="text-dark">
+                                                            <select
+                                                                className="form-select"
+                                                                value={status}
+                                                                onChange={(e) => setStatus(e.target.value)}
+                                                                disabled={saving}
+                                                                style={{ borderRadius: "8px", border: "none" }}
+                                                            >
+                                                                <option value="Pending">⏳ Pending</option>
+                                                                <option value="Approve">✅ Approve</option>
+                                                                <option value="Reject">❌ Reject</option>
+                                                                <option value="Clarification">❓ Clarification</option>
+                                                            </select>
+
+                                                        </div>
+                                                    </div>
+                                                </div>
+
+
+
+
+
+
+                                            </div>
+
+                                            {/* Comments Card */}
+                                            <div className="col-12">
+                                                <div className="card bg-light border-0">
+                                                    <div className="card-body">
+                                                        <div className="small  mb-2">💬 Comments</div>
+                                                        <div style={{ whiteSpace: "pre-wrap" }} className="text-dark">
+                                                            {item.comments || "—"}
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            <div className="row g-3">
+                                                {/* Created By Card */}
+                                                <div className="col-4">
+                                                    <div className="card border-0" style={{ background: "linear-gradient(135deg, #f093fb 0%, #f5576c 100%)", color: "white" }}>
+                                                        <div className="card-body">
+                                                            <div className="small opacity-85 mb-2">👤 Created By</div>
+                                                            <div className="d-flex justify-content-between align-items-center">
+                                                                <strong>{item._raw?.createdByName || "System"}</strong>
+                                                                {item._raw?.createdAt ? (
+                                                                    <span className="small-text text-white opacity-85">
+                                                                        {fmt(item._raw.createdAt)}
+                                                                    </span>
+                                                                ) : null}
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                {/* Approval-1 */}
+                                                <div className="col-4">
+                                                    <div className="card border-0" style={{ background: "linear-gradient(135deg, #f093fb 0%, #f5576c 100%)", color: "white" }}>
+                                                        <div className="card-body">
+                                                            <div className="small opacity-85 mb-2">👤 Approval-1</div>
+                                                            <div className="d-flex justify-content-between align-items-center">
+                                                                <strong>{item._raw?.createdByName || "System"}</strong>
+                                                                {item._raw?.createdAt ? (
+                                                                    <span className="small-text text-white opacity-85">
+                                                                        {fmt(item._raw.createdAt)}
+                                                                    </span>
+                                                                ) : null}
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+
+                                                {/* Approval-2 */}
+                                                <div className="col-4">
+                                                    <div className="card border-0" style={{ background: "linear-gradient(135deg, #f093fb 0%, #f5576c 100%)", color: "white" }}>
+                                                        <div className="card-body">
+                                                            <div className="small opacity-85 mb-2">👤 Approval-2</div>
+                                                            <div className="d-flex justify-content-between align-items-center">
+                                                                <strong>{item._raw?.createdByName || "System"}</strong>
+                                                                {item._raw?.createdAt ? (
+                                                                    <span className="small-text text-white opacity-85">
+                                                                        {fmt(item._raw.createdAt)}
+                                                                    </span>
+                                                                ) : null}
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Status Update Card */}
+                                <div className="card" style={{
+                                    border: "none",
+                                    borderRadius: "10px",
+                                    boxShadow: "0 2px 15px rgba(0,0,0,0.08)",
+                                    background: "linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)",
+                                    color: "white"
+                                }}>
+                                    <div className="card-body p-4">
+
+                                        <div className="row g-3">
+                                            <h6 className="  text-white mb-1" style={{ fontWeight: "600" }}>🔄 Status Comments</h6>
+
+                                            <div className="col-md-12">
+                                                <textarea
+                                                    className="form-control"
+                                                    rows={2}
+                                                    value={comment}
+                                                    onChange={(e) => setComment(e.target.value)}
+                                                    placeholder="Reason / note for this status..."
+                                                    disabled={saving}
+                                                    style={{ borderRadius: "8px", border: "none" }}
+                                                />
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+
+                    {/* Footer */}
+                    <div className="modal-footer" style={{
+                        background: "white",
+                        borderTop: "1px solid #e9ecef",
+                        padding: "1.25rem 1.5rem"
+                    }}>
+                        <div className="d-flex justify-content-between w-100 align-items-center">
+                            <div className="d-flex align-items-center">
+                                <span className=" small me-2">Current Status:</span>
+                                <span className={badgeClass(status) + " px-3 py-2"}>{status}</span>
+                            </div>
+                            <div>
+                                <button
+                                    className="btn btn-outline-secondary me-2"
+                                    onClick={onClose}
+                                    disabled={saving}
+                                    style={{ borderRadius: "8px", padding: "0.5rem 1.25rem" }}
+                                >
+                                    Close
+                                </button>
+                                <button
+                                    className="btn btn-primary"
+                                    onClick={saveStatus}
+                                    disabled={saving}
+                                    style={{
+                                        borderRadius: "8px",
+                                        padding: "0.5rem 1.25rem",
+                                        background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
+                                        border: "none"
+                                    }}
+                                >
+                                    {saving ? (
+                                        <>
+                                            <span className="spinner-border spinner-border-sm me-2"></span>
+                                            Saving...
+                                        </>
+                                    ) : (
+                                        "💾 Save Changes"
+                                    )}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+}
+

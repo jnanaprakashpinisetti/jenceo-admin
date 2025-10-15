@@ -229,6 +229,24 @@ export default function PettyCashReport({ effectiveName: propUser, effectiveRole
     myRecord?.role || authUser?.role || authUser?.userRole || propRole || "employee"
   );
 
+  const isAdminLike = React.useMemo(
+    () => ["Admin", "Manager", "Super Admin"].includes(effectiveRole),
+    [effectiveRole]
+  );
+
+  // helps check ownership for a given record
+  const isCreatorOf = React.useCallback(
+    (rec) => (rec?.employeeName || rec?.createdByName) === effectiveName,
+    [effectiveName]
+  );
+
+  // whether the current user can assign the *currently opened* details item
+  const canAssignThis = React.useMemo(
+    () => isAdminLike || (detailsItem ? isCreatorOf(detailsItem) : false),
+    [isAdminLike, detailsItem, isCreatorOf]
+  );
+
+
   // Build approverDirectory dynamically (fallback to prop)
   const approverDirectory = (propApproverDir && Array.isArray(propApproverDir) && propApproverDir.length)
     ? propApproverDir
@@ -259,7 +277,19 @@ export default function PettyCashReport({ effectiveName: propUser, effectiveRole
     { cat: "Others", items: [] },
   ];
 
-  // Fetch
+  // Collapse all category groups by default (including 'Others')
+  useEffect(() => {
+    setCollapsedCats(prev => {
+      // do this only on first mount or when there's nothing yet
+      if (Object.keys(prev || {}).length) return prev;
+      const init = {};
+      subCategories.forEach(b => { init[b.cat] = true; });
+      init["Others"] = true;
+      return init;
+    });
+  }, [subCategories]);
+
+
   // Fetch
   useEffect(() => {
     const candidateRoots = ["PettyCash", "FB/PettyCash", "PettyCash/admin", "FB/PettyCash/admin"];
@@ -486,6 +516,10 @@ export default function PettyCashReport({ effectiveName: propUser, effectiveRole
         const end = new Date(dt.getFullYear(), dt.getMonth(), dt.getDate(), 23, 59, 59, 999);
         out = out.filter(r => r._parsedDate && r._parsedDate <= end);
       }
+    }
+
+    if (!isAdminLike) {
+      out = out.filter(r => (r.employeeName || r.createdByName) === effectiveName);
     }
 
     // Assignment filter
@@ -758,7 +792,21 @@ export default function PettyCashReport({ effectiveName: propUser, effectiveRole
   const pageTotal = useMemo(() => pageItems.filter(r => !r.isDeleted && String(r.approval || "Pending").toLowerCase() === "approved").reduce((s, r) => s + (Number(r.total || 0) || 0), 0), [pageItems]);
   const filteredTotal = useMemo(() => filteredRecords.filter(r => !r.isDeleted && String(r.approval || "Pending").toLowerCase() === "approved").reduce((s, r) => s + (Number(r.total || 0) || 0), 0), [filteredRecords]);
 
-  const resetFilters = () => { setSearch(""); setMainCategory(""); setSubCategory(""); setDateFrom(""); setDateTo(""); setCurrentPage(1); };
+  const resetFilters = () => {
+    setSearch("");
+    setMainCategory("");
+    setSubCategory("");
+    setDateFrom("");
+    setDateTo("");
+    setAssignmentFilter("all");
+    setUserFilter("All");
+    setStatusTab("All");        // 🔄 reset current tab
+    setActiveMonth("");         // 🔄 clear month
+    setSelectedIds(new Set());  // 🔄 clear selected checkboxes
+    setCurrentPage(1);
+    // (Optional) jump back to current year:
+    // setActiveYear(String(new Date().getFullYear()));
+  };
   const visibleComments = React.useMemo(() => {
     const list = detailsItem?.statusComments;
     const all = Array.isArray(list) ? list : [];
@@ -998,7 +1046,7 @@ export default function PettyCashReport({ effectiveName: propUser, effectiveRole
                             {item.assignedTo ? (
                               <>
                                 <small className="d-block">{item.assignedTo === effectiveName ? "You" : item.assignedTo}</small>
-                                <span className="badge bg-info me-1" style={{maxWidth:"max-content;", margin:"auto", textAlign:"center"}}>Assigned</span>
+                                <span className="badge bg-info me-1" style={{ maxWidth: "max-content;", margin: "auto", textAlign: "center" }}>Assigned</span>
                               </>
                             ) : (
                               <small className="text-muted">Unassigned</small>
@@ -1362,34 +1410,31 @@ export default function PettyCashReport({ effectiveName: propUser, effectiveRole
                                 value={detailsItem._pendingAssignedTo || detailsItem.assignedTo || ""}
                                 onChange={(e) => setDetailsItem(prev => ({ ...prev, _pendingAssignedTo: e.target.value }))}
                                 style={{ backgroundColor: "transparent", color: "#444" }}
+                                disabled={!canAssignThis}
                               >
                                 <option value="">Unassigned</option>
-                                {(approverNames.length ? approverNames : userOptions.filter(user => user !== "All")).map(user => (
-                                  <option key={user} value={user}>{user}</option>
-                                ))}
-
+                                {(isAdminLike ? (approverNames.length ? approverNames : userOptions.filter(u => u !== "All"))
+                                  : (approverNames))
+                                  .map(user => <option key={user} value={user}>{user}</option>)}
                               </select>
 
                               <button
                                 className="btn btn-outline-primary btn-sm"
-                                disabled={!detailsItem._pendingAssignedTo && !detailsItem.assignedTo}
+                                disabled={!canAssignThis || (!detailsItem._pendingAssignedTo && !detailsItem.assignedTo)}
                                 onClick={async () => {
                                   const target = detailsItem._fullPath || `${detailsItem._sourcePath}/${detailsItem._relPath}`;
                                   const assignedTo = detailsItem._pendingAssignedTo || "";
-
                                   try {
                                     await firebaseDB.child(target).update({
                                       assignedTo: assignedTo || null,
                                       assignedAt: assignedTo ? new Date().toISOString() : null,
                                       assignedBy: assignedTo ? effectiveName : null
                                     });
-
                                     setDetailsItem(prev => ({
                                       ...prev,
-                                      assignedTo: assignedTo,
+                                      assignedTo,
                                       _pendingAssignedTo: undefined
                                     }));
-
                                     alert(assignedTo ? `Assigned to ${assignedTo}` : "Assignment removed");
                                   } catch (error) {
                                     console.error("Error updating assignment:", error);

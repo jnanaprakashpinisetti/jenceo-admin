@@ -5,17 +5,17 @@ import { useAuth } from "../../context/AuthContext";
 
 // Build a path that never duplicates "JenCeo-DataBase"
 const pathUnderJenCeo = (relative) => {
-  const refStr = typeof firebaseDB?.toString === "function" ? firebaseDB.toString() : "";
-  const isScoped =
-    (firebaseDB && firebaseDB.key === "JenCeo-DataBase") ||
-    (refStr && /\/JenCeo-DataBase\/?$/.test(refStr));
+    const refStr = typeof firebaseDB?.toString === "function" ? firebaseDB.toString() : "";
+    const isScoped =
+        (firebaseDB && firebaseDB.key === "JenCeo-DataBase") ||
+        (refStr && /\/JenCeo-DataBase\/?$/.test(refStr));
 
-  // always pass a relative path to the scoped ref
-  if (isScoped) {
-    return relative.replace(/^\/?JenCeo-DataBase\//, "");   // strip if caller added it
-  }
-  // db is root → add the prefix
-  return `JenCeo-DataBase/${relative.replace(/^\/?JenCeo-DataBase\//, "")}`;
+    // always pass a relative path to the scoped ref
+    if (isScoped) {
+        return relative.replace(/^\/?JenCeo-DataBase\//, "");   // strip if caller added it
+    }
+    // db is root → add the prefix
+    return `JenCeo-DataBase/${relative.replace(/^\/?JenCeo-DataBase\//, "")}`;
 };
 
 
@@ -197,38 +197,38 @@ export default function ShopForm({ onClose }) {
             };
 
             // Use proper Firebase path structure
-           const finalPath = pathUnderJenCeo(`Shop/${branchKey}`);
-console.log("[ShopForm] Writing to:", finalPath);
-const listRef = firebaseDB.child(finalPath);
-const newRef  = listRef.push();
+            const finalPath = pathUnderJenCeo(`Shop/${branchKey}`);
+            console.log("[ShopForm] Writing to:", finalPath);
+            const listRef = firebaseDB.child(finalPath);
+            const newRef = listRef.push();
 
             console.log("Saving to path:", finalPath);
 
             // Create reference and push data
-          const istDate = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" });
+            const istDate = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" });
 
-const payload = {
-  id: newRef.key,
-  mainCategory: formData.mainCategory,
-  subCategory: formData.subCategory,
-  date: formData.date || istDate,               // yyyy-mm-dd (IST default)
-  quantity: Number(formData.quantity) || 0,
-  price: Number(formData.price) || 0,
-  total: (Number(formData.quantity) || 0) * (Number(formData.price) || 0),
-  comments: formData.comments || "",
-  approval: "Pending",
-  // user meta
-  createdAt: new Date().toISOString(),
-  createdById: signedInUid || "unknown",
-  createdByName: signedInName || "System",
-  createdByRole: signedInRole || "employee",
-  timestamp: Date.now(),
-};
+            const payload = {
+                id: newRef.key,
+                mainCategory: formData.mainCategory,
+                subCategory: formData.subCategory,
+                date: formData.date || istDate,               // yyyy-mm-dd (IST default)
+                quantity: Number(formData.quantity) || 0,
+                price: Number(formData.price) || 0,
+                total: (Number(formData.quantity) || 0) * (Number(formData.price) || 0),
+                comments: formData.comments || "",
+                approval: "Pending",
+                // user meta
+                createdAt: new Date().toISOString(),
+                createdById: signedInUid || "unknown",
+                createdByName: signedInName || "System",
+                createdByRole: signedInRole || "employee",
+                timestamp: Date.now(),
+            };
 
-await newRef.set(payload);
-console.log("Shop data saved:", payload);
-setSavedPurchase(payload);
-setShowSuccessModal(true);
+            await newRef.set(payload);
+            console.log("Shop data saved:", payload);
+            setSavedPurchase(payload);
+            setShowSuccessModal(true);
 
             const record = { id: newRef.key, ...payload };
 

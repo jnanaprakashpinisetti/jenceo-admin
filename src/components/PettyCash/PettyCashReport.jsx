@@ -123,6 +123,53 @@ export default function PettyCashReport({ effectiveName: propUser, effectiveRole
   const { user: authUser } = useAuth?.() || {};
   const [usersDir, setUsersDir] = useState([]);
 
+  const [selectedIds, setSelectedIds] = useState(new Set());
+  // small lookup helpers for avatars
+  const userIndexByName = useMemo(() => {
+    const m = new Map();
+    usersDir.forEach(u => m.set(String(u.name || "").trim(), u));
+    return m;
+  }, [usersDir]);
+
+  const avatarFor = (name) => {
+    const u = userIndexByName.get(String(name || "").trim());
+    // Try many common photo fields
+    return u?.photoURL || u?.photoUrl || u?.avatar || u?.image || u?.photo || u?.picture || null;
+  };
+
+
+  const Avatar = ({ name, size = 22, className = "" }) => {
+    const url = avatarFor(name);
+    const initials = String(name || "")
+      .split(" ").map(s => s[0]).join("").slice(0, 2).toUpperCase() || "U";
+    return url ? (
+      <img
+        src={url}
+        alt={name}
+        width={size}
+        height={size}
+        className={`rounded-circle me-1 ${className}`}
+        style={{ objectFit: "cover", border: "1px solid rgba(255,255,255,.2)" }}
+      />
+    ) : (
+      <span
+        className={`rounded-circle d-inline-flex align-items-center justify-content-center me-1 ${className}`}
+        style={{
+          width: size, height: size, background: "#334155", color: "#e2e8f0",
+          fontSize: size > 20 ? 12 : 10, border: "1px solid rgba(255,255,255,.15)"
+        }}
+      >{initials}</span>
+    );
+  };
+
+  const isApprovedLike = (s) => {
+    const v = String(s || "").toLowerCase();
+    return v === "approved" || v === "approve" || v === "acknowledge" || v === "acknowledged" || v === "ack";
+  };
+
+  const isRejectedLike = (s) => /reject/.test(String(s || "").toLowerCase());
+
+
   useEffect(() => {
     const paths = ["Users", "FB/Users"];
     const detach = [];
@@ -161,6 +208,7 @@ export default function PettyCashReport({ effectiveName: propUser, effectiveRole
 
     return () => detach.forEach((fn) => fn());
   }, []);
+
 
   const normalizeRole = (r) => {
     const s = String(r || "").toLowerCase().replace(/\s+/g, "");
@@ -231,7 +279,7 @@ export default function PettyCashReport({ effectiveName: propUser, effectiveRole
           const rawDate = val.date || null;
           const pd = rawCreated ? new Date(rawCreated) : parseDateString(rawDate);
           const displayDate = rawCreated
-            ? new Date(rawCreated).toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" }) // 2025-10-15 style
+            ? new Date(rawCreated).toLocaleDateString("en-in", { timeZone: "Asia/Kolkata" }) // 2025-10-15 style
             : (rawDate || "");
 
           // show date from explicit "date" if provided, else from createdAt’s date part
@@ -333,16 +381,18 @@ export default function PettyCashReport({ effectiveName: propUser, effectiveRole
 
   const recordMatchesStatus = (r) => {
     const isDel = !!r.isDeleted || String(r.approval || "").toLowerCase() === "delete";
-    const s = String(r.approval || "Pending").toLowerCase();
+    const s = String(r.approval || "Pending");
     const tab = statusTab.toLowerCase();
-    if (tab === "delete") return isDel === true;
-    if (tab === "clarification") return !isDel && s === "clarification";
-    if (tab === "approved") return !isDel && s === "approved";
-    if (tab === "rejected") return !isDel && s === "rejected";
-    if (tab === "pending") return !isDel && (s === "pending" || !r.approval);
+    if (tab === "delete") return isDel;
+    if (tab === "clarification") return !isDel && String(s).toLowerCase() === "clarification";
+    if (tab === "approved") return !isDel && isApprovedLike(s);
+    if (tab === "rejected") return !isDel && isRejectedLike(s);
+    if (tab === "pending") return !isDel && !isApprovedLike(s) && !isRejectedLike(s) && String(s).toLowerCase() !== "clarification";
     if (tab === "all") return !isDel;
     return true;
   };
+
+
 
   const years = useMemo(() => {
     const setY = new Set();
@@ -762,15 +812,15 @@ export default function PettyCashReport({ effectiveName: propUser, effectiveRole
                   className="btn btn-primary btn-sm w-100"
                   disabled={!adminAction}
                   onClick={() => {
-                    const selectedRows = pageItems.filter(item =>
-                      document.querySelector(`input[data-id="${item.id}"]`)?.checked
-                    );
+                    const selectedRows = pageItems.filter(item => selectedIds.has(item.id));
                     if (selectedRows.length === 0) {
                       alert("Please select at least one row to perform action");
                       return;
                     }
                     selectedRows.forEach(item => handleAdminAction(item));
+                    setSelectedIds(new Set());   // clear after applying
                   }}
+
                 >
                   Apply to Selected
                 </button>
@@ -896,7 +946,7 @@ export default function PettyCashReport({ effectiveName: propUser, effectiveRole
                       <th>Total</th>
                       <th>Assign To</th>
                       <th>Approval</th>
-                      <th>User</th>
+                      <th>Purchased By</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -918,16 +968,24 @@ export default function PettyCashReport({ effectiveName: propUser, effectiveRole
                           }}
                         >
                           {canUseAdminDropdown && (
-                            <td>
+                            <td onClick={(e) => e.stopPropagation()}>
                               <input
                                 type="checkbox"
                                 className="form-check-input"
                                 data-id={item.id}
                                 disabled={isCreator}
                                 title={isCreator ? "Cannot act on your own entries" : "Select for action"}
+                                checked={selectedIds.has(item.id)}
+                                onChange={(e) => {
+                                  const next = new Set(selectedIds);
+                                  if (e.target.checked) next.add(item.id); else next.delete(item.id);
+                                  setSelectedIds(next);
+                                }}
+                                onClick={(e) => e.stopPropagation()}
                               />
                             </td>
                           )}
+
                           <td>{indexOfFirst + idx + 1}</td>
                           <td>
                             <div>{item._safeDate || item.date}</div>
@@ -940,8 +998,8 @@ export default function PettyCashReport({ effectiveName: propUser, effectiveRole
                           <td>
                             {item.assignedTo ? (
                               <>
-                                <span className="badge bg-info me-1">Assigned</span>
-                                <small>{item.assignedTo === effectiveName ? "You" : item.assignedTo}</small>
+                                <small className="d-block">{item.assignedTo === effectiveName ? "You" : item.assignedTo}</small>
+                                <span className="badge bg-info me-1" style={{maxWidth:"max-content;", margin:"auto", textAlign:"center"}}>Assigned</span>
                               </>
                             ) : (
                               <small className="text-muted">Unassigned</small>
@@ -953,7 +1011,19 @@ export default function PettyCashReport({ effectiveName: propUser, effectiveRole
                               {item.approval || "Pending"}
                             </span>
                           </td>
-                          <td>{item.employeeName || "—"}</td>
+                          <td>
+                            {(() => {
+                              const name = item.employeeName || item.createdByName || "—";
+                              return (
+                                <span className="d-inline-flex align-items-center">
+                                  <Avatar name={name} size={20} className="me-1" />
+                                  <span>{name}</span>
+                                </span>
+                              );
+                            })()}
+                          </td>
+
+
                         </tr>
                       );
                     })}
@@ -1099,7 +1169,7 @@ export default function PettyCashReport({ effectiveName: propUser, effectiveRole
 
       {/* Unified Action Modal */}
       {actionModalOpen && actionItem && (
-        <div className="modal fade show" style={{ display: "block", backgroundColor: "rgba(0,0,0,0.5)" }}>
+        <div className="modal fade show" style={{ display: "block", backgroundColor: "rgba(0,0,0,0.9)" }}>
           <div className="modal-dialog modal-dialog-centered">
             <div className="modal-content">
               <div className="modal-header bg-primary text-white">
@@ -1147,7 +1217,7 @@ export default function PettyCashReport({ effectiveName: propUser, effectiveRole
 
       {/* Enhanced Row Details Modal */}
       {detailsOpen && detailsItem && (
-        <div className="modal fade show" style={{ display: "block", backgroundColor: "rgba(0,0,0,0.5)" }} onClick={() => { setDetailsOpen(false); setDetailsItem(null); }}>
+        <div className="modal fade show" style={{ display: "block", backgroundColor: "rgba(0,0,0,0.9)" }} onClick={() => { setDetailsOpen(false); setDetailsItem(null); }}>
           <div className="modal-dialog modal-lg modal-dialog-centered" onClick={(e) => e.stopPropagation()}>
             <div className="modal-content" style={{ border: "none", borderRadius: "12px", overflow: "hidden" }}>
               <div className="modal-header" style={{
@@ -1168,8 +1238,8 @@ export default function PettyCashReport({ effectiveName: propUser, effectiveRole
               </div>
               <div className="modal-body p-4" style={{ background: "#f8f9fa" }}>
                 {detailsItem.assignedTo === effectiveName && (
-                  <div className="alert alert-info py-2">
-                    This entry is <strong>assigned to you</strong>.
+                  <div className="alert alert-warning py-2">
+                    This Entry is <strong>Assigned to you</strong>.
                   </div>
                 )}
 
@@ -1216,7 +1286,7 @@ export default function PettyCashReport({ effectiveName: propUser, effectiveRole
                             <h6 className="mb-0">📝 Description</h6>
                           </div>
                           <div className="card-body">
-                            <div style={{ whiteSpace: "pre-wrap", minHeight: "80px" }}>
+                            <div style={{ whiteSpace: "pre-wrap" }}>
                               {detailsItem.description || "-"}
                             </div>
                           </div>
@@ -1228,7 +1298,7 @@ export default function PettyCashReport({ effectiveName: propUser, effectiveRole
                             <h6 className="mb-0">💬 Comments</h6>
                           </div>
                           <div className="card-body">
-                            <div style={{ whiteSpace: "pre-wrap", minHeight: "80px" }}>
+                            <div style={{ whiteSpace: "pre-wrap" }}>
                               {detailsItem.comments || "-"}
                             </div>
                           </div>
@@ -1292,6 +1362,7 @@ export default function PettyCashReport({ effectiveName: propUser, effectiveRole
                                 className="form-select form-select-sm"
                                 value={detailsItem._pendingAssignedTo || detailsItem.assignedTo || ""}
                                 onChange={(e) => setDetailsItem(prev => ({ ...prev, _pendingAssignedTo: e.target.value }))}
+                                style={{ backgroundColor: "transparent", color: "#444" }}
                               >
                                 <option value="">Unassigned</option>
                                 {(approverNames.length ? approverNames : userOptions.filter(user => user !== "All")).map(user => (
@@ -1375,6 +1446,7 @@ export default function PettyCashReport({ effectiveName: propUser, effectiveRole
                                     value={detailsItem._pendingApproval || detailsItem.approval || "Pending"}
                                     onChange={(e) => setDetailsItem(prev => ({ ...prev, _pendingApproval: e.target.value }))}
                                     title="Change status"
+                                    style={{ backgroundColor: "transparent", color: "#444" }}
                                   >
                                     <option value="Pending">Pending</option>
                                     <option value="Approved">Approved</option>

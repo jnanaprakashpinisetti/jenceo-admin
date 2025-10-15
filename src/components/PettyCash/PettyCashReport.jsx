@@ -817,47 +817,94 @@ export default function PettyCashReport({ effectiveName: propUser, effectiveRole
       <div className="actionBar">
         <h3>Petty Cash Report</h3>
         <div className="btn-group" role="group" aria-label="Status tabs">
-          {["All", "Approved", "Pending", "Rejected", "Clarification", "Delete"].map(s => (
+          {/* {["All", "Approved", "Pending", "Rejected", "Clarification", "Delete"].map(s => (
             <button key={s} className={`btn btn-sm ${statusTab.toLowerCase() === s.toLowerCase() ? "btn-primary" : "btn-outline-secondary"}`} onClick={() => { setStatusTab(s); setCurrentPage(1); }}>
               {s}
             </button>
-          ))}
+          ))} */}
+        </div>
+
+        {/* Notification counters for year/month */}
+        <div className="badgeWrapper">
+          <span className="badge rounded-pill bg-secondary" role="button" onClick={() => setStatusTab("All")}>
+            All <span className="ms-1 badge bg-light text-dark">{statusCountsForSelection.all}</span>
+          </span>
+          <span className="badge rounded-pill bg-success" role="button" onClick={() => setStatusTab("Approved")}>
+            Approved <span className="ms-1 badge bg-light text-dark">{statusCountsForSelection.approved}</span>
+          </span>
+          <span className="badge rounded-pill bg-warning text-dark" role="button" onClick={() => setStatusTab("Pending")}>
+            Pending <span className="ms-1 badge bg-light text-dark">{statusCountsForSelection.pending}</span>
+          </span>
+          <span className="badge rounded-pill bg-danger" role="button" onClick={() => setStatusTab("Rejected")}>
+            Rejected <span className="ms-1 badge bg-light text-dark">{statusCountsForSelection.rejected}</span>
+          </span>
+          <span className="badge rounded-pill bg-info text-dark" role="button" onClick={() => setStatusTab("Clarification")}>
+            Clarification <span className="ms-1 badge bg-light text-dark">{statusCountsForSelection.clarification}</span>
+          </span>
+          <span className="badge rounded-pill bg-secondary" role="button" onClick={() => setStatusTab("Delete")}>
+            Delete <span className="ms-1 badge bg-light text-dark">{statusCountsForSelection.delete}</span>
+          </span>
         </div>
       </div>
 
-      {/* Admin Action Dropdown */}
+      {/* Admin Quick Actions - Enhanced Dark Design */}
       {canUseAdminDropdown && (
-        <div className="card bg-white mb-3">
-          <div className="card-header bg-primary text-white">
-            <h6 className="mb-0">📋 Quick Actions</h6>
+        <div className="card bg-dark border-secondary  mb-4 shadow-lg filter">
+          <div className="card-header bg-gradient-primary border-bottom border-secondary ">
+            <div className="d-flex align-items-center">
+              <i className="bi bi-lightning-fill text-warning me-2 fs-5"></i>
+              <h6 className="mb-0 text-white fw-bold">Quick Actions</h6>
+              <span className="badge bg-warning text-dark ms-2">
+                {selectedIds.size} selected
+              </span>
+            </div>
           </div>
-          <div className="card-body">
-            <div className="row g-2 align-items-center">
-              <div className="col-md-3">
+          <div className="card-body bg-dark-2">
+            <div className="row g-3 align-items-end">
+              <div className="col-xl-3 col-lg-4">
+                <label className="form-label text-light mb-1 small fw-semibold">
+                  <i className="bi bi-gear me-1"></i>Action Type
+                </label>
                 <select
-                  className="form-select form-select-sm"
+                  className="form-select form-select-sm bg-dark border-secondary text-light"
                   value={adminAction}
                   onChange={(e) => setAdminAction(e.target.value)}
+                  style={{
+                    backgroundImage: `url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3e%3cpath fill='none' stroke='%236ea8fe' stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='m2 5 6 6 6-6'/%3e%3c/svg%3e")`,
+                    backgroundPosition: 'right 0.75rem center',
+                    backgroundSize: '16px 12px'
+                  }}
                 >
-                  <option value="">Select Action</option>
-                  <option value="Approved">✅ Approve</option>
-                  <option value="Rejected">❌ Reject</option>
-                  <option value="Clarification">❓ Clarification</option>
+                  <option value="" className="text-dark">Select Action</option>
+                  <option value="Approved" className="text-dark">
+                    ✅ Approve Selected
+                  </option>
+                  <option value="Rejected" className="text-dark">
+                    ❌ Reject Selected
+                  </option>
+                  <option value="Clarification" className="text-dark">
+                    ❓ Request Clarification
+                  </option>
                 </select>
               </div>
-              <div className="col-md-6">
+
+              <div className="col-xl-5 col-lg-6">
+                <label className="form-label text-light mb-1 small fw-semibold">
+                  <i className="bi bi-chat-text me-1"></i>Comment
+                </label>
                 <input
                   type="text"
-                  className="form-control form-control-sm"
-                  placeholder="Add comment (optional for approval)"
+                  className="form-control form-control-sm bg-dark border-secondary text-light"
+                  placeholder="Add comment (optional for approval)..."
                   value={adminComment}
                   onChange={(e) => setAdminComment(e.target.value)}
                 />
               </div>
-              <div className="col-md-3">
+
+              <div className="col-xl-2 col-lg-4 col-md-6">
                 <button
-                  className="btn btn-primary btn-sm w-100"
-                  disabled={!adminAction}
+                  className="btn btn-primary btn-sm w-100 fw-semibold gradient-btn"
+                  disabled={!adminAction || selectedIds.size === 0}
                   onClick={() => {
                     const selectedRows = pageItems.filter(item => selectedIds.has(item.id));
                     if (selectedRows.length === 0) {
@@ -865,11 +912,35 @@ export default function PettyCashReport({ effectiveName: propUser, effectiveRole
                       return;
                     }
                     selectedRows.forEach(item => handleAdminAction(item));
-                    setSelectedIds(new Set());   // clear after applying
+                    setSelectedIds(new Set());
                   }}
-
+                  style={{
+                    background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                    border: 'none',
+                    transition: 'all 0.3s ease'
+                  }}
+                  onMouseEnter={(e) => {
+                    e.target.style.transform = 'translateY(-1px)';
+                    e.target.style.boxShadow = '0 4px 12px rgba(102, 126, 234, 0.4)';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.target.style.transform = 'translateY(0)';
+                    e.target.style.boxShadow = 'none';
+                  }}
                 >
-                  Apply to Selected
+                  <i className="bi bi-send-check me-1"></i>
+                  Apply to {selectedIds.size} Selected
+                </button>
+              </div>
+
+              <div className="col-xl-2 col-lg-4 col-md-6">
+                <button
+                  className="btn btn-outline-secondary btn-sm w-100"
+                  onClick={() => setSelectedIds(new Set())}
+                  disabled={selectedIds.size === 0}
+                >
+                  <i className="bi bi-x-circle me-1"></i>
+                  Clear Selection
                 </button>
               </div>
             </div>
@@ -877,27 +948,166 @@ export default function PettyCashReport({ effectiveName: propUser, effectiveRole
         </div>
       )}
 
-      {/* Notification counters for year/month */}
-      <div className="badgeWrapper">
-        <span className="badge rounded-pill bg-secondary" role="button" onClick={() => setStatusTab("All")}>
-          All <span className="ms-1 badge bg-light text-dark">{statusCountsForSelection.all}</span>
-        </span>
-        <span className="badge rounded-pill bg-success" role="button" onClick={() => setStatusTab("Approved")}>
-          Approved <span className="ms-1 badge bg-light text-dark">{statusCountsForSelection.approved}</span>
-        </span>
-        <span className="badge rounded-pill bg-warning text-dark" role="button" onClick={() => setStatusTab("Pending")}>
-          Pending <span className="ms-1 badge bg-light text-dark">{statusCountsForSelection.pending}</span>
-        </span>
-        <span className="badge rounded-pill bg-danger" role="button" onClick={() => setStatusTab("Rejected")}>
-          Rejected <span className="ms-1 badge bg-light text-dark">{statusCountsForSelection.rejected}</span>
-        </span>
-        <span className="badge rounded-pill bg-info text-dark" role="button" onClick={() => setStatusTab("Clarification")}>
-          Clarification <span className="ms-1 badge bg-light text-dark">{statusCountsForSelection.clarification}</span>
-        </span>
-        <span className="badge rounded-pill bg-secondary" role="button" onClick={() => setStatusTab("Delete")}>
-          Delete <span className="ms-1 badge bg-light text-dark">{statusCountsForSelection.delete}</span>
-        </span>
+      {/* Filters Section - Enhanced Dark Design */}
+      <div className="card bg-dark border-secondary  mb-4 shadow-lg filter">
+        <div className="card-header bg-gradient-dark border-bottom border-secondary ">
+          <div className="d-flex align-items-center justify-content-between">
+            <div className="d-flex align-items-center">
+              <i className="bi bi-funnel-fill text-info me-2 fs-5"></i>
+              <h6 className="mb-0 text-white fw-bold">Filters & Controls</h6>
+            </div>
+            <div className="text-muted small">
+              Showing {filteredRecords.length} records
+            </div>
+          </div>
+        </div>
+
+        <div className="card-body bg-dark-2 p-3">
+          <div className="row g-3 align-items-end">
+            {/* Search */}
+            <div className="col-xl-2 col-lg-3 col-md-3">
+              <label className="form-label text-light mb-1 small fw-semibold">
+                <i className="bi bi-search me-1"></i>Search
+              </label>
+              <div className="input-group input-group-sm">
+                <span className="input-group-text bg-dark border-secondary text-light">
+                  <i className="bi bi-search"></i>
+                </span>
+                <input
+                  type="text"
+                  className="form-control bg-dark border-secondary text-light"
+                  placeholder="Search records..."
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                />
+              </div>
+            </div>
+
+            {/* Main Category */}
+            <div className="col-xl-2 col-lg-3 col-md-3">
+              <label className="form-label text-light mb-1 small fw-semibold">
+                <i className="bi bi-tags me-1"></i>Main Category
+              </label>
+              <select
+                className="form-select form-select-sm bg-dark border-secondary text-light"
+                value={mainCategory}
+                onChange={(e) => { setMainCategory(e.target.value); setSubCategory(""); }}
+              >
+                <option value="">All Categories</option>
+                {mainOptions.map((cat) => (
+                  <option key={cat} value={cat} className="text-dark">{cat}</option>
+                ))}
+              </select>
+            </div>
+
+            {/* Sub Category */}
+            <div className="col-xl-2 col-lg-3 col-md-3">
+              <label className="form-label text-light mb-1 small fw-semibold">
+                <i className="bi bi-tag me-1"></i>Sub Category
+              </label>
+              <select
+                className="form-select form-select-sm bg-dark border-secondary text-light"
+                value={subCategory}
+                onChange={(e) => setSubCategory(e.target.value)}
+                disabled={!mainCategory}
+              >
+                <option value="">All Sub Categories</option>
+                {subOptions.map((sub) => (
+                  <option key={sub} value={sub} className="text-dark">{sub}</option>
+                ))}
+              </select>
+            </div>
+
+            {/* User Filter */}
+            {isAdminLike && (
+              <div className="col-xl-2 col-lg-3 col-md-3">
+                <label className="form-label text-light mb-1 small fw-semibold">
+                  <i className="bi bi-person me-1"></i>User
+                </label>
+                <select
+                  className="form-select form-select-sm bg-dark border-secondary text-light"
+                  value={userFilter}
+                  onChange={(e) => setUserFilter(e.target.value)}
+                >
+                  {userOptions.map(u => (
+                    <option key={u} value={u} className="text-dark">{u}</option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            {/* Assignment Filter */}
+            <div className="col-xl-2 col-lg-3 col-md-3">
+              <label className="form-label text-light mb-1 small fw-semibold">
+                <i className="bi bi-person-check me-1"></i>Assignment
+              </label>
+              <select
+                className="form-select form-select-sm bg-dark border-secondary text-light"
+                value={assignmentFilter}
+                onChange={(e) => setAssignmentFilter(e.target.value)}
+              >
+                <option value="all" className="text-dark">All Assignments</option>
+                <option value="assigned" className="text-dark">Assigned</option>
+                <option value="unassigned" className="text-dark">Unassigned</option>
+                <option value="assignedToMe" className="text-dark">Assigned to Me</option>
+              </select>
+            </div>
+
+            {/* Date Range */}
+            <div className="col-xl-4 col-lg-6">
+              <label className="form-label text-light mb-1 small fw-semibold">
+                <i className="bi bi-calendar-range me-1"></i>Date Range
+              </label>
+              <div className="row g-2">
+                <div className="col-6">
+                  <input
+                    type="date"
+                    className="form-control form-control-sm bg-dark border-secondary text-light"
+                    value={dateFrom}
+                    onChange={(e) => setDateFrom(e.target.value)}
+                  />
+                </div>
+                <div className="col-6">
+                  <input
+                    type="date"
+                    className="form-control form-control-sm bg-dark border-secondary text-light"
+                    value={dateTo}
+                    onChange={(e) => setDateTo(e.target.value)}
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Action Buttons */}
+            <div className="col-xl-2 col-lg-3 col-md-6">
+              <div className="d-grid gap-2">
+                <button
+                  className="btn btn-outline-warning btn-sm fw-semibold"
+                  onClick={() => resetFilters()}
+                  title="Reset all filters"
+                >
+                  <i className="bi bi-arrow-clockwise me-1"></i>
+                  Reset All
+                </button>
+                <button
+                  className="btn btn-success btn-sm fw-semibold gradient-btn"
+                  onClick={() => exportExcel(filteredRecords, `${activeYear}-${activeMonth || "all"}-${statusTab}`)}
+                  title="Export visible records"
+                  style={{
+                    background: 'linear-gradient(135deg, #00b09b 0%, #96c93d 100%)',
+                    border: 'none'
+                  }}
+                >
+                  <i className="bi bi-download me-1"></i>
+                  Export Excel
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
+
+
 
       {/* Year tabs */}
       <Tabs activeKey={activeYear} onSelect={(k) => { setActiveYear(String(k)); setActiveMonth(""); setCurrentPage(1); }} mountOnEnter unmountOnExit className="petty-tabs">
@@ -914,61 +1124,6 @@ export default function PettyCashReport({ effectiveName: propUser, effectiveRole
                 <button className={`btn btn-sm ${activeMonth === "" ? "btn-primary" : "btn-outline-info"}`} onClick={() => { setActiveMonth(""); setCurrentPage(1); }}>
                   All months <small className="opacity-75">({recordsForYearMonth.length})</small>
                 </button>
-              </div>
-            </div>
-
-            {/* Filters + export */}
-            <div className="row mb-3 g-2 align-items-center">
-              <div className="col-md-3">
-                <input type="text" className="form-control" placeholder="Search" value={search} onChange={(e) => setSearch(e.target.value)} />
-              </div>
-              <div className="col-md-2">
-                <select className="form-select" value={mainCategory} onChange={(e) => { setMainCategory(e.target.value); setSubCategory(""); }}>
-                  <option value="">All Main Categories</option>
-                  {mainOptions.map((cat) => <option key={cat} value={cat}>{cat}</option>)}
-                </select>
-              </div>
-              <div className="col-md-2">
-                <select className="form-select" value={subCategory} onChange={(e) => setSubCategory(e.target.value)} disabled={!mainCategory}>
-                  <option value="">All Sub Categories</option>
-                  {subOptions.map((sub) => <option key={sub} value={sub}>{sub}</option>)}
-                </select>
-              </div>
-              <div className="col-md-2">
-                <select
-                  className="form-select"
-                  value={userFilter}
-                  onChange={(e) => setUserFilter(e.target.value)}
-                >
-                  {userOptions.map(u => (
-                    <option key={u} value={u}>{u}</option>
-                  ))}
-                </select>
-                <small className="">Filter by user</small>
-              </div>
-
-              <div className="col-md-2">
-                <select
-                  className="form-select"
-                  value={assignmentFilter}
-                  onChange={(e) => setAssignmentFilter(e.target.value)}
-                >
-                  <option value="all">All Assignments</option>
-                  <option value="assigned">Assigned</option>
-                  <option value="unassigned">Unassigned</option>
-                  <option value="assignedToMe">Assigned to Me</option>
-                </select>
-              </div>
-
-              <div className="col-md-1">
-                <input type="date" className="form-control" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} />
-              </div>
-              <div className="col-md-1">
-                <input type="date" className="form-control" value={dateTo} onChange={(e) => setDateTo(e.target.value)} />
-              </div>
-              <div className="col-md-3 d-flex flex-row gap-2">
-                <button className="btn btn-outline-secondary btn-sm" onClick={() => resetFilters()} title="Reset filters">Reset</button>
-                <button className="btn btn-primary btn-sm" onClick={() => exportExcel(filteredRecords, `${activeYear}-${activeMonth || "all"}-${statusTab}`)} title="Export visible records">Export</button>
               </div>
             </div>
 

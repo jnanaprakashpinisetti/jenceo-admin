@@ -153,4 +153,57 @@
 
         }
     }
+
+    /* Enhanced Dark Theme Styles */
+    .bg-dark-2 {
+        background-color: #1a1d23 !important;
+    }
+
+    .bg-gradient-primary {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
+    }
+
+    .bg-gradient-dark {
+        background: linear-gradient(135deg, #2d3748 0%, #4a5568 100%) !important;
+    }
+
+    .gradient-btn:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+        transition: all 0.3s ease;
+    }
+
+    /* Form controls dark theme enhancement */
+    .form-control.bg-dark:focus,
+    .form-select.bg-dark:focus {
+        background-color: #1a1d23 !important;
+        border-color: #6ea8fe !important;
+        box-shadow: 0 0 0 0.2rem rgba(110, 168, 254, 0.25);
+        color: #e9ecef !important;
+    }
+
+    /* Custom scrollbar for dark theme */
+    .table-responsive::-webkit-scrollbar {
+        width: 8px;
+        height: 8px;
+    }
+
+    .table-responsive::-webkit-scrollbar-track {
+        background: #2d3748;
+    }
+
+    .table-responsive::-webkit-scrollbar-thumb {
+        background: #4a5568;
+        border-radius: 4px;
+    }
+
+    .table-responsive::-webkit-scrollbar-thumb:hover {
+        background: #718096;
+    }
+
+    .filter {
+        option {
+            color: $sec-white !important;
+        }
+    }
 }

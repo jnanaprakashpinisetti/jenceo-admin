@@ -683,7 +683,7 @@ export default function LeftNav() {
                 <li className="nav-item mt-2 mb-1 text-uppercase small text-muted px-2">Finance</li>
                 <li className="nav-item">
                   <NavLink to="Accounts" className="nav-link" title="Accounts" onClick={onNavClick}>
-                    <img src={accounts} alt="" /> <span className="ms-1">Accounts</span>
+                    <img src={accounts} alt="" /> <span className="ms-1">Shop Accounts</span>
                   </NavLink>
                 </li>
               </>

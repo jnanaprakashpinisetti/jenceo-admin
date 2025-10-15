@@ -754,7 +754,7 @@ export default function DisplayClient() {
         <div className="col-md-6 mb-2">
           <input
             type="text"
-            className="form-control opacity-75"
+            className="form-control border-secondary bg-dark text-light"
             placeholder="Search id, name, location, service, mobile..."
             value={search}
             onChange={(e) => { setSearch(e.target.value); setCurrentPage(1); }}
@@ -762,7 +762,7 @@ export default function DisplayClient() {
         </div>
         <div className="col-md-2 mb-2">
           <select
-            className="form-select opacity-75"
+            className="form-select border-secondary bg-dark text-light"
             value={filterStatus}
             onChange={(e) => { setFilterStatus(e.target.value); setCurrentPage(1); }}
           >
@@ -777,7 +777,7 @@ export default function DisplayClient() {
         </div>
         <div className="col-md-2 mb-2">
           <select
-            className="form-select opacity-75"
+            className="form-select border-secondary bg-dark text-light"
             value={sortBy}
             onChange={(e) => setSortBy(e.target.value)}
           >

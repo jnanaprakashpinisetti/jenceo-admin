@@ -635,14 +635,14 @@ const EnquiriesDisplay = ({ permissions: permissionsProp }) => {
         <div className="col-md-3 mb-2">
           <input
             type="text"
-            className="form-control"
+            className="form-control border-secondary bg-dark text-light"
             placeholder="Search by name, mobile, service..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
         </div>
         <div className="col-md-2 mb-2">
-          <select className="form-select" value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)}>
+          <select className="form-select border-secondary bg-dark text-light" value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)}>
             <option value="">All Status</option>
             <option>Enquiry</option>
             <option>Pending</option>
@@ -651,13 +651,13 @@ const EnquiriesDisplay = ({ permissions: permissionsProp }) => {
           </select>
         </div>
         <div className="col-md-2 mb-2">
-          <select className="form-select" value={filterThrough} onChange={(e) => setFilterThrough(e.target.value)}>
+          <select className="form-select border-secondary bg-dark text-light" value={filterThrough} onChange={(e) => setFilterThrough(e.target.value)}>
             <option value="">All Through</option>
             {throughOptions.map((t) => (<option key={t}>{t}</option>))}
           </select>
         </div>
         <div className="col-md-2 mb-2">
-          <select className="form-select" value={sortBy} onChange={(e) => setSortBy(e.target.value)}>
+          <select className="form-select border-secondary bg-dark text-light" value={sortBy} onChange={(e) => setSortBy(e.target.value)}>
             <option value="date">Sort by Date</option>
             <option value="name">Sort by Name</option>
             <option value="amount">Sort by Amount</option>
@@ -665,7 +665,7 @@ const EnquiriesDisplay = ({ permissions: permissionsProp }) => {
           </select>
         </div>
         <div className="col-md-2 mb-2">
-          <select className="form-select" value={sortBy} onChange={(e) => setSortBy(e.target.value)}>
+          <select className="form-select border-secondary bg-dark text-light" value={sortBy} onChange={(e) => setSortBy(e.target.value)}>
             <option value="date">Sort by Date</option>
             <option value="id">Sort by ID</option>
             <option value="name">Sort by Name</option>
@@ -674,7 +674,7 @@ const EnquiriesDisplay = ({ permissions: permissionsProp }) => {
           </select>
         </div>
         <div className="col-md-1 mb-2">
-          <select className="form-select" value={sortDir} onChange={(e) => setSortDir(e.target.value)}>
+          <select className="form-select border-secondary bg-dark text-light" value={sortDir} onChange={(e) => setSortDir(e.target.value)}>
             <option value="asc">▲ Ass</option>
             <option value="desc">▼ Dess</option>
           </select>

@@ -35,11 +35,11 @@ export default function PettyCashForm() {
     user?.role ||
     currentUser?.role ||
     "User";
-
+  const todayISODateIST = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" });
   const [formData, setFormData] = useState({
     mainCategory: "",
     subCategory: "",
-    date: "",
+    date: todayISODateIST,
     description: "",
     quantity: "",
     price: "",

@@ -435,18 +435,18 @@ export default function TableInvestment({
             {/* Filters / Export */}
             <div className="row align-items-center mb-3 g-2">
                 <div className="col-md-3">
-                    <input className="form-control" placeholder="Search name / purpose / comments..." value={search} onChange={(e) => { setSearch(e.target.value); setCurrentPage(1); }} />
+                    <input className="form-control bg-dark text-light border-secondary " placeholder="Search name / purpose / comments..." value={search} onChange={(e) => { setSearch(e.target.value); setCurrentPage(1); }} />
                 </div>
 
                 <div className="col-md-2">
-                    <select className="form-select" value={filterInvestor} onChange={(e) => { setFilterInvestor(e.target.value); setCurrentPage(1); }}>
+                    <select className="form-select bg-dark text-light border-secondary " value={filterInvestor} onChange={(e) => { setFilterInvestor(e.target.value); setCurrentPage(1); }}>
                         <option value="">All Investors</option>
                         {investorOptions.map((inv) => <option key={inv} value={inv}>{inv}</option>)}
                     </select>
                 </div>
 
                 <div className="col-md-2">
-                    <select className="form-select" value={filterAck} onChange={(e) => { setFilterAck(e.target.value); setCurrentPage(1); }}>
+                    <select className="form-select bg-dark text-light border-secondary " value={filterAck} onChange={(e) => { setFilterAck(e.target.value); setCurrentPage(1); }}>
                         <option value="">All Status</option>
                         <option value="Acknowledge">Acknowledge</option>
                         <option value="Clarification">Clarification</option>
@@ -456,11 +456,11 @@ export default function TableInvestment({
                 </div>
 
                 <div className="col-md-2">
-                    <input type="date" className="form-control" value={dateFrom} onChange={(e) => { setDateFrom(e.target.value); setCurrentPage(1); }} />
+                    <input type="date" className="form-control bg-dark border-secondary text-light" value={dateFrom} onChange={(e) => { setDateFrom(e.target.value); setCurrentPage(1); }} />
                 </div>
 
                 <div className="col-md-2">
-                    <input type="date" className="form-control" value={dateTo} onChange={(e) => { setDateTo(e.target.value); setCurrentPage(1); }} />
+                    <input type="date" className="form-control bg-dark border-secondary  text-light" value={dateTo} onChange={(e) => { setDateTo(e.target.value); setCurrentPage(1); }} />
                 </div>
 
                 <div className="col-md-1 text-end">

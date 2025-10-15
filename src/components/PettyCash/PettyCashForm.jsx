@@ -10,6 +10,7 @@ export default function PettyCashForm() {
   const today = new Date();
   const minDate = new Date(today);
   minDate.setDate(today.getDate() - 1000);
+  
   // Robust name resolver across common shapes your AuthContext may expose
   const signedInName =
     dbUser?.name ||
@@ -24,6 +25,9 @@ export default function PettyCashForm() {
     (currentUser?.email ? currentUser.email.split("@")[0] : "") ||
     "User";
 
+  // Local YYYY-MM-DD in IST (so max/min and defaults match your UI)
+  const todayISODateIST = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" });
+
   // Also a robust UID (covers different shapes)
   const signedInUid =
     currentUser?.uid || currentUser?.dbId || user?.uid || user?.dbId || null;
@@ -35,7 +39,7 @@ export default function PettyCashForm() {
     user?.role ||
     currentUser?.role ||
     "User";
-  const todayISODateIST = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" });
+
   const [formData, setFormData] = useState({
     mainCategory: "",
     subCategory: "",
@@ -45,7 +49,7 @@ export default function PettyCashForm() {
     price: "",
     total: "",
     comments: "",
-    approval: "pending",
+    approval: "Pending", // Changed to "Pending" to match report expectations
     // support up to 4 extra fields for flexible asset types
     extraField1: "",
     extraField2: "",
@@ -56,6 +60,17 @@ export default function PettyCashForm() {
   const [errors, setErrors] = useState({});
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [savedExpense, setSavedExpense] = useState(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const resolvePettyBranch = (authUser, fallback = "users") => {
+    const roleRaw = String(authUser?.role || authUser?.userRole || "").toLowerCase();
+    if (roleRaw.includes("super")) return "admin";
+    if (roleRaw.includes("admin")) return "admin";
+    if (roleRaw.includes("manager")) return "admin";
+    // put non-admins under their uiId or name; never "undefined"
+    const id = authUser?.uiId || authUser?.uid || authUser?.id || authUser?.email || authUser?.displayName;
+    return id ? String(id).replace(/[^\w-]/g, "_") : fallback;
+  };
 
   /* -------------------------
      Category lists (existing + new Assets)
@@ -258,7 +273,7 @@ export default function PettyCashForm() {
       config.forEach((label, idx) => {
         const fieldName = `extraField${idx + 1}`;
         if (!formData[fieldName]) {
-          newErrors[fieldName] = `${label} is required"`;
+          newErrors[fieldName] = `${label} is required`;
         }
       });
     }
@@ -268,76 +283,103 @@ export default function PettyCashForm() {
   };
 
   /* -------------------------
-     Submit
+     Submit - FIXED VERSION
      ------------------------- */
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!validateForm()) return;
-
-    // --- GLOBAL AUTH KEYS (fix userKey usage before refs) ---
-    const userKey = currentUser?.uid
-    const superiorId =
-      currentUser?.superiorId ||
-      dbUser?.superiorId ||
-      user?.superiorId ||
-      profile?.superiorId ||
-      null;
-
-
-    const nowIso = new Date().toISOString();
-    const dataToSave = {
-      ...formData,
-      // creator metadata
-      createdAt: nowIso,
-      createdById: signedInUid || userKey,
-      createdByName: signedInName || "Unknown",
-      createdByRole: signedInRole,          // <-- ✅ role captured
-      // keep existing display field you were using
-      employeeName: signedInName || "Unknown",
-      // workflow fields (keep your "approval" field as-is for UI)
-      status: "pending",
-      approvedById: null,
-      approvedAt: null,
-      superiorId,
-    };
+    
+    setIsSubmitting(true);
 
     try {
-      // push under user's list
-      const listRef = firebaseDB.child(`PettyCash/${userKey}`);
+      // Get current user info
+      const authObj = currentUser || user || dbUser || profile || {};
+      const branchKey = resolvePettyBranch(authObj, "users");
+      
+      console.log("Saving data for branch:", branchKey);
+      console.log("User info:", { signedInName, signedInUid, signedInRole });
+
+      // Prepare data for Firebase
+      const nowIso = new Date().toISOString();
+      const dataToSave = {
+        // Form data
+        mainCategory: formData.mainCategory,
+        subCategory: formData.subCategory,
+        date: formData.date,
+        description: formData.description,
+        quantity: parseFloat(formData.quantity) || 0,
+        price: parseFloat(formData.price) || 0,
+        total: parseFloat(formData.total) || 0,
+        comments: formData.comments,
+        
+        // Approval status - use "Pending" to match PettyCashReport expectations
+        approval: "Pending",
+        
+        // Extra fields
+        extraField1: formData.extraField1 || "",
+        extraField2: formData.extraField2 || "",
+        extraField3: formData.extraField3 || "",
+        extraField4: formData.extraField4 || "",
+        
+        // Metadata
+        employeeName: signedInName,
+        createdAt: nowIso,
+        createdById: signedInUid,
+        createdByName: signedInName,
+        createdByRole: signedInRole,
+        
+        // Timestamp for sorting
+        timestamp: Date.now()
+      };
+
+      // FIXED: Use proper Firebase path structure
+      const basePath = "PettyCash";
+      const finalPath = `${basePath}/${branchKey}`;
+      
+      console.log("Saving to path:", finalPath);
+      
+      // Create reference and push data
+      const listRef = firebaseDB.child(finalPath);
       const newRef = listRef.push();
-      const expenseObj = { id: newRef.key, ...dataToSave };
+      
+      // Create the expense object with ID
+      const expenseObj = { 
+        id: newRef.key, 
+        ...dataToSave 
+      };
 
-      // fan-out to superior inbox if exists, single multipath update
-      const updates = {};
-      updates[`/PettyCash/${userKey}/${expenseObj.id}`] = expenseObj;
-      if (superiorId) {
-        updates[`/PettyCashInbox/${superiorId}/${expenseObj.id}`] = expenseObj;
-      }
-      await firebaseDB.update(updates);
+      // Save to Firebase
+      await newRef.set(expenseObj);
+      
+      console.log("Data saved successfully:", expenseObj);
 
+      // Set success state
       setSavedExpense(expenseObj);
       setShowSuccessModal(true);
 
-      // reset
+      // Reset form
       setFormData({
         mainCategory: "",
         subCategory: "",
-        date: "",
+        date: todayISODateIST,
         description: "",
         quantity: "",
         price: "",
         total: "",
         comments: "",
-        approval: "pending",
+        approval: "Pending",
         extraField1: "",
         extraField2: "",
         extraField3: "",
         extraField4: "",
       });
       setErrors({});
+
     } catch (err) {
       console.error("Error saving expense:", err);
-      alert("Error saving expense. See console for details.");
+      alert(`Error saving expense: ${err?.message || "Check console for details"}`);
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -566,8 +608,12 @@ export default function PettyCashForm() {
           {errors.comments && <div className="invalid-feedback">{errors.comments}</div>}
         </div>
 
-        <button type="submit" className="btn btn-success">
-          Submit
+        <button 
+          type="submit" 
+          className="btn btn-success"
+          disabled={isSubmitting}
+        >
+          {isSubmitting ? "Submitting..." : "Submit"}
         </button>
       </form>
 
@@ -597,5 +643,3 @@ export default function PettyCashForm() {
     </div>
   );
 }
-
-// We got conflits so i am pushting this code again

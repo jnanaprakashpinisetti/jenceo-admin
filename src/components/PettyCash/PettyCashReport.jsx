@@ -87,7 +87,7 @@ function normPath(p) {
   return String(p || "").replace(/\/+/g, "/").replace(/\/$/, "").replace(/^\//, "");
 }
 
-export default function PettyCashReport({ currentUser = "Admin", currentUserRole = "employee" }) {
+export default function PettyCashReport({ effectiveName: propUser, effectiveRole: propRole, approverDirectory: propApproverDir } = {}) {
   const [data, setData] = useState([]);
   const [activeYear, setActiveYear] = useState(String(new Date().getFullYear()));
   const [activeMonth, setActiveMonth] = useState("");
@@ -98,7 +98,7 @@ export default function PettyCashReport({ currentUser = "Admin", currentUserRole
   const [dateTo, setDateTo] = useState("");
   const [rowsPerPage, setRowsPerPage] = useState(10);
   const [currentPage, setCurrentPage] = useState(1);
-  const [statusTab, setStatusTab] = useState("Approved");
+  const [statusTab, setStatusTab] = useState("All");
 
   // Action modal
   const [actionModalOpen, setActionModalOpen] = useState(false);
@@ -119,6 +119,63 @@ export default function PettyCashReport({ currentUser = "Admin", currentUserRole
   const [assignmentFilter, setAssignmentFilter] = useState("all");
 
   const tableRef = useRef(null);
+  // === Resolve current user & roles dynamically ===
+  const { user: authUser } = useAuth?.() || {};
+  const [usersDir, setUsersDir] = useState([]);
+
+  useEffect(() => {
+    const paths = ["Users", "FB/Users"];
+    const detach = [];
+    const cache = {};
+
+    const handler = (path) => (snap) => {
+      const val = snap && snap.exists && snap.exists() ? snap.val() : null;
+      const arr = [];
+      if (val && typeof val === "object") {
+        Object.entries(val).forEach(([k, v]) => {
+          if (v && typeof v === "object") {
+            arr.push({
+              key: k,
+              uiId: v.uiId || v.uiID || v.userId || v.uid || v.id || "",
+              name: v.name || v.fullName || v.displayName || v.email || "User",
+              role: String(v.role || v.userRole || "employee").toLowerCase(),
+              email: v.email || "",
+            });
+          }
+        });
+      }
+      cache[path] = arr;
+      const byMap = new Map();
+      Object.values(cache).flat().forEach((u) => {
+        const idKey = u.uiId || ("key:" + u.key);
+        if (!byMap.has(idKey)) byMap.set(idKey, u);
+      });
+      setUsersDir(Array.from(byMap.values()));
+    };
+
+    paths.forEach((path) => {
+      const ref = firebaseDB.child(path);
+      ref.on("value", handler(path), (err) => console.error("Users path error", err));
+      detach.push(() => ref.off("value", handler(path)));
+    });
+
+    return () => detach.forEach((fn) => fn());
+  }, []);
+
+  const myUiId = authUser?.uiId || authUser?.uid || authUser?.id || authUser?.userId || "";
+  const myRecord =
+    usersDir.find((u) => u.uiId && u.uiId === myUiId) ||
+    (authUser?.email ? usersDir.find((u) => u.email === authUser.email) : null) ||
+    null;
+
+  const effectiveName = (myRecord?.name || authUser?.displayName || authUser?.name || propUser || "Admin");
+  const effectiveRole = String(myRecord?.role || propRole || "employee").toLowerCase();
+
+  // Build approverDirectory dynamically (fallback to prop)
+  const approverDirectory = (propApproverDir && Array.isArray(propApproverDir) && propApproverDir.length)
+    ? propApproverDir
+    : usersDir;
+
 
   // Category definitions
   const categoryColors = {
@@ -158,16 +215,30 @@ export default function PettyCashReport({ currentUser = "Admin", currentUserRole
         const rootVal = snapshot.val();
         const flattened = flattenRecords(rootVal, []);
         flattened.forEach((val) => {
-          const pd = parseDateString(val.date || val.createdAt);
-          const safeDate = pd ? pd.toISOString().slice(0, 10) : (val.date || "");
-          const time = pd
-            ? pd.toLocaleTimeString("en-IN", {
+          // Prefer precise timestamp fields for time; fall back to parsed date
+          const rawCreated = val.createdAt || val.timestamp || val.updatedAt || null;
+          const pd = parseDateString(val.date || rawCreated);
+
+          // show date from explicit "date" if provided, else from createdAt’s date part
+          const displayDate = val.date || (rawCreated ? new Date(rawCreated).toISOString().slice(0, 10) : "");
+
+          // show time from createdAt (or similar precise field). If missing, fall back to parsed date time
+          const time = rawCreated
+            ? new Date(rawCreated).toLocaleTimeString("en-IN", {
               hour: "2-digit",
               minute: "2-digit",
               hour12: true,
               timeZone: "Asia/Kolkata",
             })
-            : "";
+            : (pd
+              ? pd.toLocaleTimeString("en-IN", {
+                hour: "2-digit",
+                minute: "2-digit",
+                hour12: true,
+                timeZone: "Asia/Kolkata",
+              })
+              : "");
+
           const rel = normPath(val._relPath || val.id || "");
           const fullPath = normPath(`${path}/${rel}`);
           const id = `${fullPath}`;
@@ -175,7 +246,7 @@ export default function PettyCashReport({ currentUser = "Admin", currentUserRole
             id,
             ...val,
             _parsedDate: pd,
-            _safeDate: safeDate,
+            _safeDate: displayDate,
             _time: time,
             _sourcePath: path,
             _relPath: rel,
@@ -219,6 +290,22 @@ export default function PettyCashReport({ currentUser = "Admin", currentUserRole
     });
     return ["All", ...Array.from(s).sort((a, b) => a.localeCompare(b))];
   }, [data]);
+
+  const approverNames = React.useMemo(() => {
+    try {
+      const list = (approverDirectory || [])
+        .filter(u =>
+          ["admin", "manager", "superadmin", "super admin"].includes(String(u?.role || "").toLowerCase())
+        )
+        .map(u => u?.name)
+        .filter(Boolean);
+      const uniq = Array.from(new Set(list));
+      return uniq.sort((a, b) => a.localeCompare(b));
+    } catch {
+      return [];
+    }
+  }, [approverDirectory]);
+
 
 
   // helpers
@@ -345,7 +432,7 @@ export default function PettyCashReport({ currentUser = "Admin", currentUserRole
     } else if (assignmentFilter === "unassigned") {
       out = out.filter(r => !r.assignedTo);
     } else if (assignmentFilter === "assignedToMe") {
-      out = out.filter(r => r.assignedTo === currentUser);
+      out = out.filter(r => r.assignedTo === effectiveName);
     }
 
     if (userFilter && userFilter !== "All") {
@@ -355,7 +442,18 @@ export default function PettyCashReport({ currentUser = "Admin", currentUserRole
     return out;
   };
 
-  const filteredRecords = useMemo(() => applyFilters(recordsForYearMonth), [recordsForYearMonth, search, mainCategory, subCategory, dateFrom, dateTo]);
+  // include assignmentFilter, userFilter in deps
+  const filteredRecords = useMemo(
+    () => applyFilters(recordsForYearMonth),
+    [recordsForYearMonth, search, mainCategory, subCategory, dateFrom, dateTo, assignmentFilter, userFilter]
+  );
+
+  // reset to page 1 when filters change
+  useEffect(() => { setCurrentPage(1); }, [
+    search, mainCategory, subCategory, dateFrom, dateTo, activeYear, activeMonth, rowsPerPage, statusTab,
+    assignmentFilter, userFilter
+  ]);
+
 
   const totalPages = Math.max(1, Math.ceil(filteredRecords.length / rowsPerPage));
   const safePage = Math.min(Math.max(1, currentPage), totalPages);
@@ -478,8 +576,8 @@ export default function PettyCashReport({ currentUser = "Admin", currentUserRole
     return totals;
   }, [othersKeys, summaryData]);
 
-  const canDeleteOrRejectLock = ["manager", "admin", "superadmin"].includes(String(currentUserRole || "").toLowerCase());
-  const canUseAdminDropdown = ["manager", "admin", "superadmin"].includes(String(currentUserRole || "").toLowerCase());
+  const canDeleteOrRejectLock = ["manager", "admin", "superadmin"].includes(String(effectiveRole || "").toLowerCase());
+  const canUseAdminDropdown = ["manager", "admin", "superadmin"].includes(String(effectiveRole || "").toLowerCase());
 
   const handleAdminAction = (item) => {
     if (!adminAction) return;
@@ -492,8 +590,8 @@ export default function PettyCashReport({ currentUser = "Admin", currentUserRole
         statusComments: [...(item.statusComments || []), {
           action: "Approved",
           comment: adminComment || "Approved",
-          user: currentUser,
-          role: currentUserRole,
+          user: effectiveName,
+          role: effectiveRole,
           timestamp: new Date().toISOString()
         }]
       }).catch(err => console.error("Error updating approval", err));
@@ -517,8 +615,8 @@ export default function PettyCashReport({ currentUser = "Admin", currentUserRole
       const lock = canDeleteOrRejectLock ? {
         approvalLock: {
           locked: true,
-          lockedBy: currentUser || "System",
-          lockedByRole: currentUserRole || "",
+          lockedBy: effectiveName || "System",
+          lockedByRole: effectiveRole || "",
           lockedAt: new Date().toISOString(),
           reason: actionText
         }
@@ -528,8 +626,8 @@ export default function PettyCashReport({ currentUser = "Admin", currentUserRole
       const newComment = {
         action: actionType,
         comment: actionText,
-        user: currentUser,
-        role: currentUserRole,
+        user: effectiveName,
+        role: effectiveRole,
         timestamp: new Date().toISOString()
       };
 
@@ -540,7 +638,7 @@ export default function PettyCashReport({ currentUser = "Admin", currentUserRole
           ...base,
           clarificationRequest: {
             text: actionText,
-            requestedBy: currentUser || "System",
+            requestedBy: effectiveName || "System",
             requestedAt: new Date().toISOString(),
           },
           statusComments,
@@ -551,7 +649,7 @@ export default function PettyCashReport({ currentUser = "Admin", currentUserRole
           ...base,
           rejectionInfo: {
             reason: actionText,
-            rejectedBy: currentUser || "System",
+            rejectedBy: effectiveName || "System",
             rejectedAt: new Date().toISOString(),
           },
           statusComments,
@@ -563,7 +661,7 @@ export default function PettyCashReport({ currentUser = "Admin", currentUserRole
           isDeleted: true,
           deleteInfo: {
             reason: actionText,
-            deletedBy: currentUser || "System",
+            deletedBy: effectiveName || "System",
             deletedAt: new Date().toISOString(),
           },
           statusComments,
@@ -599,8 +697,8 @@ export default function PettyCashReport({ currentUser = "Admin", currentUserRole
   const visibleComments = React.useMemo(() => {
     const list = detailsItem?.statusComments;
     const all = Array.isArray(list) ? list : [];
-    return canUseAdminDropdown ? all : all.filter(c => c?.user === currentUser);
-  }, [detailsItem, canUseAdminDropdown, currentUser]);
+    return canUseAdminDropdown ? all : all.filter(c => c?.user === effectiveName);
+  }, [detailsItem, canUseAdminDropdown, effectiveName]);
   return (
     <div className="pettyCashReport">
       <div className="actionBar">
@@ -787,10 +885,10 @@ export default function PettyCashReport({ currentUser = "Admin", currentUserRole
                   </thead>
                   <tbody>
                     {pageItems.map((item, idx) => {
-                      const lockedByAdmin = !!(item.approvalLock?.locked && (String(currentUserRole || "").toLowerCase() === "employee"));
+                      const lockedByAdmin = !!(item.approvalLock?.locked && (String(effectiveRole || "").toLowerCase() === "employee"));
                       const approvalLower = String(item.approval || "Pending").toLowerCase();
                       const rowClass = item.isDeleted ? "table-secondary" : (approvalLower === "rejected" ? "table-danger" : approvalLower === "clarification" ? "table-warning" : "");
-                      const isCreator = item.employeeName === currentUser;
+                      const isCreator = item.employeeName === effectiveName;
 
                       return (
                         <tr
@@ -1163,9 +1261,10 @@ export default function PettyCashReport({ currentUser = "Admin", currentUserRole
                                 onChange={(e) => setDetailsItem(prev => ({ ...prev, _pendingAssignedTo: e.target.value }))}
                               >
                                 <option value="">Unassigned</option>
-                                {userOptions.filter(user => user !== "All").map(user => (
+                                {(approverNames.length ? approverNames : userOptions.filter(user => user !== "All")).map(user => (
                                   <option key={user} value={user}>{user}</option>
                                 ))}
+
                               </select>
 
                               <button
@@ -1179,7 +1278,7 @@ export default function PettyCashReport({ currentUser = "Admin", currentUserRole
                                     await firebaseDB.child(target).update({
                                       assignedTo: assignedTo || null,
                                       assignedAt: assignedTo ? new Date().toISOString() : null,
-                                      assignedBy: assignedTo ? currentUser : null
+                                      assignedBy: assignedTo ? effectiveName : null
                                     });
 
                                     setDetailsItem(prev => ({
@@ -1236,7 +1335,7 @@ export default function PettyCashReport({ currentUser = "Admin", currentUserRole
                               </div>
 
                               {/* Status Change Controls - Only for admins/managers and not for own entries */}
-                              {canUseAdminDropdown && (detailsItem.employeeName !== currentUser) && (
+                              {canUseAdminDropdown && (detailsItem.employeeName !== effectiveName) && (
                                 <>
                                   <select
                                     className="form-select form-select-sm"
@@ -1269,8 +1368,8 @@ export default function PettyCashReport({ currentUser = "Admin", currentUserRole
                                       const newComment = {
                                         action: nextStatus,
                                         comment: detailsItem._pendingStatusComment || `Status changed to ${nextStatus}`,
-                                        user: currentUser,
-                                        role: currentUserRole,
+                                        user: effectiveName,
+                                        role: effectiveRole,
                                         timestamp: nowIso,
                                       };
 
@@ -1282,13 +1381,13 @@ export default function PettyCashReport({ currentUser = "Admin", currentUserRole
                                       if (nextStatus === "Clarification") {
                                         updateData.clarificationRequest = {
                                           text: detailsItem._pendingStatusComment || "",
-                                          requestedBy: currentUser,
+                                          requestedBy: effectiveName,
                                           requestedAt: nowIso,
                                         };
                                       } else if (nextStatus === "Rejected") {
                                         updateData.rejectionInfo = {
                                           reason: detailsItem._pendingStatusComment || "",
-                                          rejectedBy: currentUser,
+                                          rejectedBy: effectiveName,
                                           rejectedAt: nowIso,
                                         };
                                       } else if (nextStatus === "Approved") {
@@ -1317,16 +1416,17 @@ export default function PettyCashReport({ currentUser = "Admin", currentUserRole
                               )}
 
                               {/* Permission Messages */}
-                              {!canUseAdminDropdown && (
+                              {(String(effectiveRole || "").toLowerCase() === "employee") && !canUseAdminDropdown && (
                                 <div className="alert alert-warning small mb-0 p-2">
                                   You don't have permission to change status.
                                 </div>
                               )}
-                              {canUseAdminDropdown && detailsItem.employeeName === currentUser && (
-                                <div className="alert alert-info small mb-0 p-2">
+                              {detailsItem.employeeName === effectiveName && (
+                                <div className="alert alert-warning small mb-0 p-2">
                                   You cannot change the status of your own entries.
                                 </div>
                               )}
+
                             </div>
                           </div>
                         </div>
@@ -1347,10 +1447,10 @@ export default function PettyCashReport({ currentUser = "Admin", currentUserRole
                           placeholder="Add a status comment..."
                           value={detailsItem._pendingComment || ""}
                           onChange={(e) => setDetailsItem(prev => ({ ...prev, _pendingComment: e.target.value }))}
-                          disabled={detailsItem.employeeName === currentUser && !canUseAdminDropdown}
+                          disabled={detailsItem.employeeName === effectiveName && !canUseAdminDropdown}
                         />
                         <div className="form-text small-text opacity-75">
-                          {detailsItem.employeeName === currentUser && !canUseAdminDropdown
+                          {detailsItem.employeeName === effectiveName && !canUseAdminDropdown
                             ? "You can't change status comments on your own entry."
                             : "This note will be appended to status history with your name and timestamp."}
                         </div>
@@ -1364,8 +1464,8 @@ export default function PettyCashReport({ currentUser = "Admin", currentUserRole
                               const commentObj = {
                                 action: "Comment",
                                 comment: detailsItem._pendingComment || "",
-                                user: currentUser, // Use currentUser instead of effectiveName
-                                role: currentUserRole, // Use currentUserRole instead of effectiveRole
+                                user: effectiveName, // Use effectiveName instead of effectiveName
+                                role: effectiveRole, // Use effectiveRole instead of effectiveRole
                                 timestamp: nowIso,
                               };
                               const nextThread = [...(detailsItem.statusComments || []), commentObj];

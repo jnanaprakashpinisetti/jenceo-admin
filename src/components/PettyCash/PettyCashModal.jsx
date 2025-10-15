@@ -7,7 +7,7 @@ export default function PettyCashModal({ isOpen, onClose }) {
   return (
     <div
       className="modal fade show"
-      style={{ display: "block", background: "rgba(2, 1, 1, 0.8)" }}
+      style={{ display: "block", background: "rgba(2, 1, 1, 0.9)" }}
     >
       <div className="modal-dialog modal-lg modal-dialog-centered client-form">
         <div className="modal-content">

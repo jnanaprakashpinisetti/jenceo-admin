@@ -38,14 +38,23 @@ function parseDateRobust(v) {
   if (m1) { const dd = +m1[1], mm = +m1[2], yy = +m1[3] < 100 ? 2000 + +m1[3] : +m1[3]; return new Date(yy, mm - 1, dd); }
   return null;
 }
+
+// FIXED: Consistent approval detection
 function isApproved(raw) {
-  const t = String(raw?.approval || raw?.approvalStatus || raw?.status || "").toLowerCase().trim();
-  return raw?.approved === true || raw?.isApproved === true || t === "approved" || t === "acknowledged" || t === "true" || !!raw?.approvedBy;
+  const approvalStatus = String(raw?.approval || raw?.approvalStatus || raw?.status || "").toLowerCase().trim();
+  return approvalStatus === "approved" || 
+         approvalStatus === "acknowledge" || 
+         approvalStatus === "acknowledged" ||
+         raw?.approved === true || 
+         raw?.isApproved === true || 
+         !!raw?.approvedBy;
 }
+
 function isRejected(raw) {
-  const t = String(raw?.approval || raw?.approvalStatus || raw?.status || "").toLowerCase().trim();
-  return /reject/.test(t);
+  const approvalStatus = String(raw?.approval || raw?.approvalStatus || raw?.status || "").toLowerCase().trim();
+  return approvalStatus === "rejected" || /reject/.test(approvalStatus);
 }
+
 function detectCategory(raw) {
   const s = String(raw?.mainCategory || raw?.category || raw?.head || raw?.type || raw?.purpose || "").toLowerCase().trim();
   if (s.includes("food")) return "Food";
@@ -135,7 +144,7 @@ export default function PettyCashCard({ pettyRoot = "PettyCash" }) {
   const [detailOpen, setDetailOpen] = useState(false);
   const [detailRow, setDetailRow] = useState(null);
 
-  /* ------------------------------- Fetch (merge common paths) ------------------------------- */
+  /* ------------------------------- Fetch (merge common paths) - FIXED ------------------------------- */
   useEffect(() => {
     let mounted = true;
     const listeners = [];
@@ -144,63 +153,105 @@ export default function PettyCashCard({ pettyRoot = "PettyCash" }) {
       const fdb = await importFirebaseDB();
       if (!fdb) return;
 
+      // FIXED: Correct Firebase paths that match where data is actually saved
       const paths = [
-        `${pettyRoot}`,
-        `${pettyRoot}/admin`,
-        `${pettyRoot}/Admin`,
-        "Expenses/PettyCash",
+        "PettyCash", // Main path where data is saved
+        "PettyCash/admin", // Admin entries
+        "JenCeo-DataBase/PettyCash", // Alternative path
+        "FB/PettyCash", // Fallback path
       ];
+      
       const pathData = {};
-      const toArr = (v) => Array.isArray(v) ? v : (v && typeof v === "object" ? Object.values(v) : []);
-
-      const rebuild = () => {
-        const merged = Object.values(pathData).flat();
-        const flat = [];
-        merged.forEach((r0) => {
-          const r = r0 || {};
-          if (r.rows || r.items || r.payments || r.list) {
-            toArr(r.rows).forEach(p => flat.push({ ...p }));
-            toArr(r.items).forEach(p => flat.push({ ...p }));
-            toArr(r.payments).forEach(p => flat.push({ ...p }));
-            toArr(r.list).forEach(p => flat.push({ ...p }));
-          } else {
-            flat.push(r);
+      
+      // Improved data extraction to handle nested structures
+      const extractRecords = (data, path = '') => {
+        const records = [];
+        
+        if (!data || typeof data !== 'object') return records;
+        
+        // If it's an array of records
+        if (Array.isArray(data)) {
+          return data.filter(item => item && typeof item === 'object');
+        }
+        
+        // If it's an object with nested records
+        Object.entries(data).forEach(([key, value]) => {
+          if (value && typeof value === 'object') {
+            // Check if this looks like a record (has common petty cash fields)
+            if (value.mainCategory || value.date || value.total || value.amount) {
+              records.push({ ...value, _key: key, _path: path });
+            } else {
+              // Otherwise, traverse deeper
+              records.push(...extractRecords(value, `${path}/${key}`));
+            }
           }
         });
+        
+        return records;
+      };
 
-        const normalized = flat.map(o => {
+      const rebuild = () => {
+        const allRecords = [];
+        
+        // Extract records from all paths
+        Object.values(pathData).forEach(records => {
+          allRecords.push(...records);
+        });
+
+        const normalized = allRecords.map(o => {
           const date = parseDateRobust(o.date || o.pettyDate || o.paymentDate || o.createdAt || o.forDate);
           const amount = safeNumber(o.total ?? o.amount ?? o.pettyAmount ?? o.value ?? o.price) || (safeNumber(o.quantity) * safeNumber(o.unitPrice));
-          const status = isRejected(o) ? "reject" : (isApproved(o) ? "acknowledge" : "pending");
+          
+          // FIXED: Consistent status detection
+          const isApprovedRecord = isApproved(o);
+          const isRejectedRecord = isRejected(o);
+          const status = isRejectedRecord ? "rejected" : (isApprovedRecord ? "approved" : "pending");
+          
           return {
             raw: o,
             date,
             amount,
             status,
             category: detectCategory(o),
-            desc: o.description || o.remark || o.purpose || o.note || ""
+            desc: o.description || o.remark || o.purpose || o.note || "",
+            employeeName: o.employeeName || o.createdByName || "Unknown"
           };
         }).filter(x => x.amount > 0);
 
-        // de-dupe by (date|amount|category|desc)
+        // de-dupe by (date|amount|category|desc|employee)
         const seen = new Set();
         const uniq = [];
         normalized.forEach(r => {
-          const sig = [r.date?.toISOString()?.slice(0, 10) || "x", r.amount, r.category, String(r.desc).toLowerCase()].join("|");
-          if (seen.has(sig)) return; seen.add(sig); uniq.push(r);
+          const sig = [
+            r.date?.toISOString()?.slice(0, 10) || "x", 
+            r.amount, 
+            r.category, 
+            String(r.desc).toLowerCase(),
+            r.employeeName
+          ].join("|");
+          if (seen.has(sig)) return; 
+          seen.add(sig); 
+          uniq.push(r);
         });
 
         if (!mounted) return;
+        console.log(`PettyCashCard: Loaded ${uniq.length} records, ${uniq.filter(r => r.status === 'approved').length} approved`);
         setRows(uniq);
       };
 
       const attach = (path) => {
         try {
           const ref = fdb.child ? fdb.child(path) : fdb.ref(path);
-          const cb = s => { pathData[path] = toArr(s.val()); rebuild(); };
+          const cb = snapshot => { 
+            const data = snapshot.val();
+            pathData[path] = extractRecords(data, path);
+            rebuild(); 
+          };
           ref.on("value", cb);
           listeners.push({ ref, cb });
-        } catch { }
+        } catch (error) { 
+          console.warn(`Failed to attach to path ${path}:`, error);
+        }
       };
 
       paths.forEach(attach);
@@ -213,7 +264,8 @@ export default function PettyCashCard({ pettyRoot = "PettyCash" }) {
   }, [pettyRoot]);
 
   /* ------------------------------- Datasets & summaries ------------------------------- */
-  const approvedRows = useMemo(() => rows.filter(r => r.status === "acknowledge"), [rows]);
+  // FIXED: Use consistent status "approved" instead of "acknowledge"
+  const approvedRows = useMemo(() => rows.filter(r => r.status === "approved"), [rows]);
 
   const yearOptions = useMemo(() => {
     const y = new Set();
@@ -277,7 +329,9 @@ export default function PettyCashCard({ pettyRoot = "PettyCash" }) {
     }
     if (search) {
       const q = search.toLowerCase();
-      list = list.filter(r => `${r.category} ${r.desc}`.toLowerCase().includes(q));
+      list = list.filter(r => 
+        `${r.category} ${r.desc} ${r.employeeName}`.toLowerCase().includes(q)
+      );
     }
     return list.sort((a, b) => (b.date?.getTime() || 0) - (a.date?.getTime() || 0));
   }, [rows, approvedRows, view, year, month, search, onlyApproved]);
@@ -498,7 +552,6 @@ export default function PettyCashCard({ pettyRoot = "PettyCash" }) {
                   )}
                 </div>
 
-
                 {/* === CHARTS AT TOP (as in ResultsCard layout) === */}
                 <div className="row g-3 mb-3">
                   <div className="col-lg-8">
@@ -562,14 +615,17 @@ export default function PettyCashCard({ pettyRoot = "PettyCash" }) {
                     <tbody>
                       {pageRows.map((r, idx) => {
                         const d = r.date ? r.date.toLocaleDateString("en-GB") : "—";
-                        const statusClass = r.status === "acknowledge" ? "badge bg-success" : r.status === "reject" ? "badge bg-danger" : "badge bg-secondary";
+                        // FIXED: Status classes to match new status values
+                        const statusClass = r.status === "approved" ? "badge bg-success" : r.status === "rejected" ? "badge bg-danger" : "badge bg-secondary";
+                        const statusText = r.status === "approved" ? "Approved" : r.status === "rejected" ? "Rejected" : "Pending";
+                        
                         return (
                           <tr key={`${start}-${idx}`} style={{ cursor: "pointer" }} onClick={() => { setDetailRow(r); setDetailOpen(true); }}>
                             <td>{start + idx + 1}</td>
                             <td>{d}</td>
                             <td>{r.category}</td>
                             <td>{r.desc || "-"}</td>
-                            <td><span className={statusClass}>{r.status}</span></td>
+                            <td><span className={statusClass}>{statusText}</span></td>
                             <td className="text-end">{INR(r.amount)}</td>
                           </tr>
                         );
@@ -676,14 +732,15 @@ export default function PettyCashCard({ pettyRoot = "PettyCash" }) {
                         <div className="">Status</div>
                         <span
                           className={
-                            detailRow.status === "acknowledge"
+                            detailRow.status === "approved"
                               ? "badge bg-success"
-                              : detailRow.status === "reject"
+                              : detailRow.status === "rejected"
                                 ? "badge bg-danger"
                                 : "badge bg-secondary"
                           }
                         >
-                          {detailRow.status}
+                          {detailRow.status === "approved" ? "Approved" : 
+                           detailRow.status === "rejected" ? "Rejected" : "Pending"}
                         </span>
                       </div>
 
@@ -697,27 +754,24 @@ export default function PettyCashCard({ pettyRoot = "PettyCash" }) {
                         </div>
                         <ul className="list-unstyled mb-0 small">
                           <li>
-                            <strong>Purpose/Remark:</strong>{" "}
-                            {detailRow.raw?.purpose || detailRow.raw?.remark || "-"}
+                            <strong>Employee:</strong>{" "}
+                            {detailRow.employeeName || "-"}
                           </li>
                           <li>
-                            <strong>Head/Type:</strong>{" "}
-                            {detailRow.raw?.head || detailRow.raw?.type || "-"}
+                            <strong>Main Category:</strong>{" "}
+                            {detailRow.raw?.mainCategory || "-"}
+                          </li>
+                          <li>
+                            <strong>Sub Category:</strong>{" "}
+                            {detailRow.raw?.subCategory || "-"}
+                          </li>
+                          <li>
+                            <strong>Approval Status:</strong>{" "}
+                            {detailRow.raw?.approval || "Pending"}
                           </li>
                           <li>
                             <strong>Created By:</strong>{" "}
-                            {detailRow.raw?.createdBy || detailRow.raw?.user || "-"}
-                          </li>
-                          <li>
-                            <strong>Approved By:</strong>{" "}
-                            {detailRow.raw?.approvedBy || "-"}
-                          </li>
-                          <li>
-                            <strong>Ref No:</strong>{" "}
-                            {detailRow.raw?.refNo ||
-                              detailRow.raw?.receiptNo ||
-                              detailRow.raw?.docNo ||
-                              "-"}
+                            {detailRow.raw?.createdByName || detailRow.raw?.employeeName || "-"}
                           </li>
                         </ul>
                       </div>
@@ -741,7 +795,6 @@ export default function PettyCashCard({ pettyRoot = "PettyCash" }) {
           </div>
         </div>
       )}
-
     </>
   );
 }

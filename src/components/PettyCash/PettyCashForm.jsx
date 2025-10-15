@@ -28,7 +28,13 @@ export default function PettyCashForm() {
   const signedInUid =
     currentUser?.uid || currentUser?.dbId || user?.uid || user?.dbId || null;
 
-
+  // Resolve role from any of the common places in your auth/profile
+  const signedInRole =
+    dbUser?.role ||
+    profile?.role ||
+    user?.role ||
+    currentUser?.role ||
+    "User";
 
   const [formData, setFormData] = useState({
     mainCategory: "",
@@ -278,10 +284,15 @@ export default function PettyCashForm() {
       null;
 
 
+    const nowIso = new Date().toISOString();
     const dataToSave = {
       ...formData,
-      createdAt: new Date().toISOString(),
-      createdById: userKey,
+      // creator metadata
+      createdAt: nowIso,
+      createdById: signedInUid || userKey,
+      createdByName: signedInName || "Unknown",
+      createdByRole: signedInRole,          // <-- ✅ role captured
+      // keep existing display field you were using
       employeeName: signedInName || "Unknown",
       // workflow fields (keep your "approval" field as-is for UI)
       status: "pending",

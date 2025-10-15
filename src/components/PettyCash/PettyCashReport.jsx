@@ -3,16 +3,17 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import firebaseDB from "../../firebase";
 import { Tabs, Tab } from "react-bootstrap";
 import * as XLSX from "xlsx";
+import { useAuth } from "../../context/AuthContext";
 
 /**
- * PettyCashReport.jsx (clean build)
- * - Multi-root read, flatten, dedupe by _fullPath
- * - Stable updates write to _fullPath
- * - Tabs (Status/Year/Month), filters, export preserved
- * - Slim table columns + row click opens details modal
- * - Unified action modal for Rejected / Clarification / Delete
- * - Admin/Manager lock prevents employee edits after Reject/Delete
- * - Category summary table with collapsible sections
+ * PettyCashReport.jsx (Updated)
+ * - Added Main Category column after Date
+ * - Added Time below Date
+ * - Removed Action TH and TD
+ * - Added username in Source
+ * - Enhanced modal with cards and styling
+ * - Added admin dropdown for status management
+ * - Added comment system with user tracking
  */
 
 function parseDateString(input) {
@@ -31,14 +32,32 @@ function parseDateString(input) {
   }
   const m2 = String(input).match(/^(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})$/);
   if (m2) {
-    const yyyy = parseInt(m2[1], 10);
-    const mm = parseInt(m2[2], 10);
-    const dd = parseInt(m2[3], 10);
+    const yyyy = parseInt(m[1], 10);
+    const mm = parseInt(m[2], 10);
+    const dd = parseInt(m[3], 10);
     const d = new Date(yyyy, mm - 1, dd);
     if (!isNaN(d)) return d;
   }
   return null;
 }
+
+// ✅ Ensure India timezone date handling & remove undefined refs
+function formatIST(dateString) {
+  try {
+    const d = new Date(dateString);
+    return isNaN(d)
+      ? ""
+      : d.toLocaleString("en-IN", {
+        timeZone: "Asia/Kolkata",
+        hour: "2-digit",
+        minute: "2-digit",
+        hour12: true,
+      });
+  } catch {
+    return "";
+  }
+}
+
 
 const monthsList = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
@@ -94,6 +113,11 @@ export default function PettyCashReport({ currentUser = "Admin", currentUserRole
   // Category accordion state
   const [collapsedCats, setCollapsedCats] = useState({});
 
+  // Admin dropdown state
+  const [adminAction, setAdminAction] = useState("");
+  const [adminComment, setAdminComment] = useState("");
+  const [assignmentFilter, setAssignmentFilter] = useState("all");
+
   const tableRef = useRef(null);
 
   // Category definitions
@@ -122,10 +146,12 @@ export default function PettyCashReport({ currentUser = "Admin", currentUserRole
   ];
 
   // Fetch
+  // Fetch
   useEffect(() => {
     const candidateRoots = ["PettyCash", "FB/PettyCash", "PettyCash/admin", "FB/PettyCash/admin"];
     const detach = [];
     const pathData = {};
+
     const handleSnapshot = (path) => (snapshot) => {
       const next = [];
       if (snapshot && snapshot.exists && snapshot.exists()) {
@@ -134,32 +160,66 @@ export default function PettyCashReport({ currentUser = "Admin", currentUserRole
         flattened.forEach((val) => {
           const pd = parseDateString(val.date || val.createdAt);
           const safeDate = pd ? pd.toISOString().slice(0, 10) : (val.date || "");
+          const time = pd
+            ? pd.toLocaleTimeString("en-IN", {
+              hour: "2-digit",
+              minute: "2-digit",
+              hour12: true,
+              timeZone: "Asia/Kolkata",
+            })
+            : "";
           const rel = normPath(val._relPath || val.id || "");
           const fullPath = normPath(`${path}/${rel}`);
           const id = `${fullPath}`;
-          next.push({ id, ...val, _parsedDate: pd, _safeDate: safeDate, _sourcePath: path, _relPath: rel, _fullPath: fullPath });
+          next.push({
+            id,
+            ...val,
+            _parsedDate: pd,
+            _safeDate: safeDate,
+            _time: time,
+            _sourcePath: path,
+            _relPath: rel,
+            _fullPath: fullPath,
+          });
         });
       }
       pathData[path] = next;
+
+      // Merge all paths and sort by date
       const mergedMap = new Map();
       Object.values(pathData).flat().forEach((rec) => {
         if (!mergedMap.has(rec._fullPath)) mergedMap.set(rec._fullPath, rec);
       });
+
       const merged = Array.from(mergedMap.values()).sort((a, b) => {
         const da = a._parsedDate ? a._parsedDate.getTime() : 0;
         const db = b._parsedDate ? b._parsedDate.getTime() : 0;
-        return db - da;
+        return db - da; // newest first
       });
+
       setData(merged);
     };
+
     const handleError = (err) => console.error("Firebase error:", err);
+
     candidateRoots.forEach((root) => {
       const ref = firebaseDB.child(root);
       ref.on("value", handleSnapshot(root), handleError);
       detach.push(() => ref.off("value", handleSnapshot(root)));
     });
+
     return () => detach.forEach((fn) => fn());
   }, []);
+  const [userFilter, setUserFilter] = useState("All");
+  const userOptions = useMemo(() => {
+    const s = new Set();
+    data.forEach(d => {
+      const n = (d.employeeName || d.createdByName || "").trim();
+      if (n) s.add(n);
+    });
+    return ["All", ...Array.from(s).sort((a, b) => a.localeCompare(b))];
+  }, [data]);
+
 
   // helpers
   const statusColorClass = (status) => {
@@ -227,9 +287,29 @@ export default function PettyCashReport({ currentUser = "Admin", currentUserRole
   }, [data, activeYear, statusTab]);
 
   const recordsForYearMonth = useMemo(() => {
-    const filteredByYear = data.filter(d => d._parsedDate && String(d._parsedDate.getFullYear()) === activeYear);
+    console.log("Calculating records for year/month:", activeYear, activeMonth);
+
+    const filteredByYear = data.filter(d => {
+      if (!d._parsedDate) return false;
+      const yearMatch = String(d._parsedDate.getFullYear()) === activeYear;
+      return yearMatch;
+    });
+
+    console.log("Records for year", activeYear, ":", filteredByYear.length);
+
     const filteredByStatus = filteredByYear.filter(recordMatchesStatus);
-    if (activeMonth) return filteredByStatus.filter(d => d._parsedDate && monthsList[d._parsedDate.getMonth()] === activeMonth);
+    console.log("After status filter:", filteredByStatus.length);
+
+    if (activeMonth) {
+      const monthFiltered = filteredByStatus.filter(d => {
+        if (!d._parsedDate) return false;
+        const monthMatch = monthsList[d._parsedDate.getMonth()] === activeMonth;
+        return monthMatch;
+      });
+      console.log("After month filter:", monthFiltered.length);
+      return monthFiltered;
+    }
+
     return filteredByStatus;
   }, [data, activeYear, activeMonth, statusTab]);
 
@@ -258,6 +338,20 @@ export default function PettyCashReport({ currentUser = "Admin", currentUserRole
         out = out.filter(r => r._parsedDate && r._parsedDate <= end);
       }
     }
+
+    // Assignment filter
+    if (assignmentFilter === "assigned") {
+      out = out.filter(r => r.assignedTo);
+    } else if (assignmentFilter === "unassigned") {
+      out = out.filter(r => !r.assignedTo);
+    } else if (assignmentFilter === "assignedToMe") {
+      out = out.filter(r => r.assignedTo === currentUser);
+    }
+
+    if (userFilter && userFilter !== "All") {
+      out = out.filter(r => (r.employeeName || r.createdByName) === userFilter);
+    }
+
     return out;
   };
 
@@ -274,6 +368,7 @@ export default function PettyCashReport({ currentUser = "Admin", currentUserRole
   const exportExcel = (records, label) => {
     const exportData = records.map((r) => ({
       Date: r._safeDate || r.date || "",
+      Time: r._time || "",
       "Main Category": r.mainCategory,
       "Sub Category": r.subCategory,
       Description: r.description,
@@ -383,18 +478,35 @@ export default function PettyCashReport({ currentUser = "Admin", currentUserRole
     return totals;
   }, [othersKeys, summaryData]);
 
-  const canDeleteOrRejectLock = ["manager", "admin"].includes(String(currentUserRole || "").toLowerCase());
+  const canDeleteOrRejectLock = ["manager", "admin", "superadmin"].includes(String(currentUserRole || "").toLowerCase());
+  const canUseAdminDropdown = ["manager", "admin", "superadmin"].includes(String(currentUserRole || "").toLowerCase());
 
-  const handleActionChange = (item, next) => {
-    if (next === "Rejected" || next === "Clarification" || next === "Delete") {
-      setActionItem(item);
-      setActionType(next);
-      setActionText("");
-      setActionModalOpen(true);
-    } else {
+  const handleAdminAction = (item) => {
+    if (!adminAction) return;
+
+    if (adminAction === "Approved") {
+      // Direct approval without comment
       const target = item._fullPath || `${item._sourcePath}/${item._relPath}`;
-      firebaseDB.child(target).update({ approval: next }).catch(err => console.error("Error updating approval", err));
+      firebaseDB.child(target).update({
+        approval: "Approved",
+        statusComments: [...(item.statusComments || []), {
+          action: "Approved",
+          comment: adminComment || "Approved",
+          user: currentUser,
+          role: currentUserRole,
+          timestamp: new Date().toISOString()
+        }]
+      }).catch(err => console.error("Error updating approval", err));
+    } else {
+      // For other actions, open modal for comment
+      setActionItem(item);
+      setActionType(adminAction);
+      setActionText(adminComment || "");
+      setActionModalOpen(true);
     }
+
+    setAdminAction("");
+    setAdminComment("");
   };
 
   const saveAction = async () => {
@@ -411,6 +523,18 @@ export default function PettyCashReport({ currentUser = "Admin", currentUserRole
           reason: actionText
         }
       } : {};
+
+      // Add status comment
+      const newComment = {
+        action: actionType,
+        comment: actionText,
+        user: currentUser,
+        role: currentUserRole,
+        timestamp: new Date().toISOString()
+      };
+
+      const statusComments = [...(actionItem.statusComments || []), newComment];
+
       if (actionType === "Clarification") {
         await firebaseDB.child(target).update({
           ...base,
@@ -419,6 +543,7 @@ export default function PettyCashReport({ currentUser = "Admin", currentUserRole
             requestedBy: currentUser || "System",
             requestedAt: new Date().toISOString(),
           },
+          statusComments,
           ...lock
         });
       } else if (actionType === "Rejected") {
@@ -429,6 +554,7 @@ export default function PettyCashReport({ currentUser = "Admin", currentUserRole
             rejectedBy: currentUser || "System",
             rejectedAt: new Date().toISOString(),
           },
+          statusComments,
           ...lock
         });
       } else if (actionType === "Delete") {
@@ -440,6 +566,7 @@ export default function PettyCashReport({ currentUser = "Admin", currentUserRole
             deletedBy: currentUser || "System",
             deletedAt: new Date().toISOString(),
           },
+          statusComments,
           ...lock
         });
       }
@@ -469,7 +596,11 @@ export default function PettyCashReport({ currentUser = "Admin", currentUserRole
   const filteredTotal = useMemo(() => filteredRecords.filter(r => !r.isDeleted && String(r.approval || "Pending").toLowerCase() === "approved").reduce((s, r) => s + (Number(r.total || 0) || 0), 0), [filteredRecords]);
 
   const resetFilters = () => { setSearch(""); setMainCategory(""); setSubCategory(""); setDateFrom(""); setDateTo(""); setCurrentPage(1); };
-
+  const visibleComments = React.useMemo(() => {
+    const list = detailsItem?.statusComments;
+    const all = Array.isArray(list) ? list : [];
+    return canUseAdminDropdown ? all : all.filter(c => c?.user === currentUser);
+  }, [detailsItem, canUseAdminDropdown, currentUser]);
   return (
     <div className="pettyCashReport">
       <div className="actionBar">
@@ -482,6 +613,58 @@ export default function PettyCashReport({ currentUser = "Admin", currentUserRole
           ))}
         </div>
       </div>
+
+      {/* Admin Action Dropdown */}
+      {canUseAdminDropdown && (
+        <div className="card bg-white mb-3">
+          <div className="card-header bg-primary text-white">
+            <h6 className="mb-0">📋 Quick Actions</h6>
+          </div>
+          <div className="card-body">
+            <div className="row g-2 align-items-center">
+              <div className="col-md-3">
+                <select
+                  className="form-select form-select-sm"
+                  value={adminAction}
+                  onChange={(e) => setAdminAction(e.target.value)}
+                >
+                  <option value="">Select Action</option>
+                  <option value="Approved">✅ Approve</option>
+                  <option value="Rejected">❌ Reject</option>
+                  <option value="Clarification">❓ Clarification</option>
+                </select>
+              </div>
+              <div className="col-md-6">
+                <input
+                  type="text"
+                  className="form-control form-control-sm"
+                  placeholder="Add comment (optional for approval)"
+                  value={adminComment}
+                  onChange={(e) => setAdminComment(e.target.value)}
+                />
+              </div>
+              <div className="col-md-3">
+                <button
+                  className="btn btn-primary btn-sm w-100"
+                  disabled={!adminAction}
+                  onClick={() => {
+                    const selectedRows = pageItems.filter(item =>
+                      document.querySelector(`input[data-id="${item.id}"]`)?.checked
+                    );
+                    if (selectedRows.length === 0) {
+                      alert("Please select at least one row to perform action");
+                      return;
+                    }
+                    selectedRows.forEach(item => handleAdminAction(item));
+                  }}
+                >
+                  Apply to Selected
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Notification counters for year/month */}
       <div className="badgeWrapper">
@@ -525,7 +708,7 @@ export default function PettyCashReport({ currentUser = "Admin", currentUserRole
 
             {/* Filters + export */}
             <div className="row mb-3 g-2 align-items-center">
-              <div className="col-md-4">
+              <div className="col-md-3">
                 <input type="text" className="form-control" placeholder="Search" value={search} onChange={(e) => setSearch(e.target.value)} />
               </div>
               <div className="col-md-2">
@@ -540,13 +723,39 @@ export default function PettyCashReport({ currentUser = "Admin", currentUserRole
                   {subOptions.map((sub) => <option key={sub} value={sub}>{sub}</option>)}
                 </select>
               </div>
+              <div className="col-md-2">
+                <select
+                  className="form-select"
+                  value={userFilter}
+                  onChange={(e) => setUserFilter(e.target.value)}
+                >
+                  {userOptions.map(u => (
+                    <option key={u} value={u}>{u}</option>
+                  ))}
+                </select>
+                <small className="">Filter by user</small>
+              </div>
+
+              <div className="col-md-2">
+                <select
+                  className="form-select"
+                  value={assignmentFilter}
+                  onChange={(e) => setAssignmentFilter(e.target.value)}
+                >
+                  <option value="all">All Assignments</option>
+                  <option value="assigned">Assigned</option>
+                  <option value="unassigned">Unassigned</option>
+                  <option value="assignedToMe">Assigned to Me</option>
+                </select>
+              </div>
+
               <div className="col-md-1">
                 <input type="date" className="form-control" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} />
               </div>
               <div className="col-md-1">
                 <input type="date" className="form-control" value={dateTo} onChange={(e) => setDateTo(e.target.value)} />
               </div>
-              <div className="col-md-2 d-flex flex-row gap-2">
+              <div className="col-md-3 d-flex flex-row gap-2">
                 <button className="btn btn-outline-secondary btn-sm" onClick={() => resetFilters()} title="Reset filters">Reset</button>
                 <button className="btn btn-primary btn-sm" onClick={() => exportExcel(filteredRecords, `${activeYear}-${activeMonth || "all"}-${statusTab}`)} title="Export visible records">Export</button>
               </div>
@@ -564,21 +773,25 @@ export default function PettyCashReport({ currentUser = "Admin", currentUserRole
                 <table className="table table-dark table-hover table-sm align-middle">
                   <thead>
                     <tr>
+                      {canUseAdminDropdown && <th style={{ width: '30px' }}>✓</th>}
                       <th>S.No</th>
-                      <th>Date</th>
+                      <th>Date & Time</th>
+                      <th>Main Category</th>
                       <th>Sub Cat</th>
                       <th>Qty</th>
                       <th>Total</th>
-                      <th>Action</th>
+                      <th>Assign To</th>
                       <th>Approval</th>
-                      <th>Source</th>
+                      <th>User</th>
                     </tr>
                   </thead>
                   <tbody>
                     {pageItems.map((item, idx) => {
                       const lockedByAdmin = !!(item.approvalLock?.locked && (String(currentUserRole || "").toLowerCase() === "employee"));
                       const approvalLower = String(item.approval || "Pending").toLowerCase();
-                      const rowClass = item.isDeleted ? "table-secondary" : (approvalLower === "rejected" ? "table-danger" : "");
+                      const rowClass = item.isDeleted ? "table-secondary" : (approvalLower === "rejected" ? "table-danger" : approvalLower === "clarification" ? "table-warning" : "");
+                      const isCreator = item.employeeName === currentUser;
+
                       return (
                         <tr
                           key={item.id}
@@ -586,31 +799,40 @@ export default function PettyCashReport({ currentUser = "Admin", currentUserRole
                           style={{ cursor: "pointer" }}
                           onClick={(e) => {
                             const tag = (e.target.tagName || "").toLowerCase();
-                            if (tag === "select" || tag === "option") return;
+                            if (tag === "input" || tag === "select" || tag === "option") return;
                             setDetailsItem(item); setDetailsOpen(true);
                           }}
                         >
+                          {canUseAdminDropdown && (
+                            <td>
+                              <input
+                                type="checkbox"
+                                className="form-check-input"
+                                data-id={item.id}
+                                disabled={isCreator}
+                                title={isCreator ? "Cannot act on your own entries" : "Select for action"}
+                              />
+                            </td>
+                          )}
                           <td>{indexOfFirst + idx + 1}</td>
-                          <td>{item._safeDate || item.date}</td>
+                          <td>
+                            <div>{item._safeDate || item.date}</div>
+                            <small className="small-text text-info opacity-75">{item._time}</small>
+                          </td>
+                          <td>{item.mainCategory}</td>
                           <td>{item.subCategory}</td>
                           <td>{item.quantity}</td>
                           <td><strong>{Number(item.total ?? 0).toLocaleString()}</strong></td>
                           <td>
-                            <select
-                              className="form-select form-select-sm"
-                              value={item.approval || "Pending"}
-                              disabled={lockedByAdmin}
-                              onChange={(e) => handleActionChange(item, e.target.value)}
-                            >
-                              <option value="Pending">Pending</option>
-                              <option value="Approved">Approved</option>
-                              <option value="Clarification">Clarification</option>
-                              <option value="Rejected">Rejected</option>
-                              <option value="Delete">Delete</option>
-                            </select>
+                            {item.employeeName || "—"}
+                            {item.assignedTo && (
+                              <small className="badge bg-info ms-1" title={`Assigned to: ${item.assignedTo}`}>
+                                👥
+                              </small>
+                            )}
                           </td>
                           <td>
-                            <span className={statusColorClass(item.approval)} style={{ minWidth: 96, textAlign: "center" }}>
+                            <span className={statusColorClass(item.approval)} style={{ minWidth: 96, textAlign: "center", textTransform: "capitalize" }}>
                               {item.approval || "Pending"}
                             </span>
                           </td>
@@ -621,12 +843,12 @@ export default function PettyCashReport({ currentUser = "Admin", currentUserRole
                   </tbody>
                   <tfoot>
                     <tr className="table-secondary">
-                      <td colSpan={5} className="text-end"><strong>Page Total (Approved)</strong></td>
+                      <td colSpan={canUseAdminDropdown ? 6 : 5} className="text-end"><strong>Page Total (Approved)</strong></td>
                       <td><strong>{pageTotal.toLocaleString()}</strong></td>
                       <td colSpan={2}></td>
                     </tr>
                     <tr className="table-secondary">
-                      <td colSpan={5} className="text-end"><strong>Filtered Total (Approved)</strong></td>
+                      <td colSpan={canUseAdminDropdown ? 6 : 5} className="text-end"><strong>Filtered Total (Approved)</strong></td>
                       <td><strong>{filteredTotal.toLocaleString()}</strong></td>
                       <td colSpan={2}></td>
                     </tr>
@@ -763,57 +985,477 @@ export default function PettyCashReport({ currentUser = "Admin", currentUserRole
         <div className="modal fade show" style={{ display: "block", backgroundColor: "rgba(0,0,0,0.5)" }}>
           <div className="modal-dialog modal-dialog-centered">
             <div className="modal-content">
-              <div className="modal-header">
-                <h5 className="modal-title">{actionType} — Provide details</h5>
-                <button type="button" className="btn-close" onClick={() => { setActionModalOpen(false); setActionItem(null); setActionText(""); setActionType(""); }}></button>
+              <div className="modal-header bg-primary text-white">
+                <h5 className="modal-title">🚨 {actionType} — Provide details</h5>
+                <button type="button" className="btn-close btn-close-white" onClick={() => { setActionModalOpen(false); setActionItem(null); setActionText(""); setActionType(""); }}></button>
               </div>
               <div className="modal-body">
-                <div className="mb-2 small text-muted">You are changing status to <strong>{actionType}</strong> for <code>{actionItem._fullPath}</code></div>
-                <textarea className="form-control" rows={4} placeholder={actionType === "Clarification" ? "Enter clarification request..." : (actionType === "Rejected" ? "Enter reject reason..." : "Enter delete reason...")} value={actionText} onChange={(e) => setActionText(e.target.value)} />
+                <div className="card bg-white mb-3">
+                  <div className="card-body">
+                    <h6 className="card-title">Entry Details</h6>
+                    <p className="mb-1"><strong>Amount:</strong> ₹{Number(actionItem.total ?? 0).toLocaleString()}</p>
+                    <p className="mb-1"><strong>Category:</strong> {actionItem.mainCategory} / {actionItem.subCategory}</p>
+                    <p className="mb-0"><strong>Description:</strong> {actionItem.description}</p>
+                  </div>
+                </div>
+                <div className="mb-3">
+                  <label className="form-label">
+                    {actionType === "Clarification" ? "📝 Clarification Request" :
+                      actionType === "Rejected" ? "❌ Rejection Reason" :
+                        "🗑️ Delete Reason"}
+                  </label>
+                  <textarea
+                    className="form-control"
+                    rows={4}
+                    placeholder={
+                      actionType === "Clarification" ? "What information do you need from the user?" :
+                        actionType === "Rejected" ? "Why is this expense being rejected?" :
+                          "Why is this expense being deleted?"
+                    }
+                    value={actionText}
+                    onChange={(e) => setActionText(e.target.value)}
+                  />
+                </div>
               </div>
               <div className="modal-footer">
                 <button type="button" className="btn btn-secondary" onClick={() => { setActionModalOpen(false); setActionItem(null); setActionText(""); setActionType(""); }}>Cancel</button>
-                <button type="button" className={`btn ${actionType === "Delete" ? "btn-danger" : actionType === "Rejected" ? "btn-warning" : "btn-primary"}`} disabled={!actionText.trim()} onClick={saveAction}>Save</button>
+                <button type="button" className={`btn ${actionType === "Delete" ? "btn-danger" : actionType === "Rejected" ? "btn-warning" : "btn-primary"}`} disabled={!actionText.trim()} onClick={saveAction}>
+                  {actionType === "Delete" ? "🗑️ Delete" : actionType === "Rejected" ? "❌ Reject" : "❓ Request Clarification"}
+                </button>
               </div>
             </div>
           </div>
         </div>
       )}
 
-      {/* Row Details Modal */}
+      {/* Enhanced Row Details Modal */}
       {detailsOpen && detailsItem && (
         <div className="modal fade show" style={{ display: "block", backgroundColor: "rgba(0,0,0,0.5)" }} onClick={() => { setDetailsOpen(false); setDetailsItem(null); }}>
           <div className="modal-dialog modal-lg modal-dialog-centered" onClick={(e) => e.stopPropagation()}>
-            <div className="modal-content">
-              <div className="modal-header" style={{ background: "#0d6efd", color: "#fff" }}>
-                <h5 className="modal-title">Entry Details</h5>
-                <button type="button" className="btn-close" onClick={() => { setDetailsOpen(false); setDetailsItem(null); }}></button>
+            <div className="modal-content" style={{ border: "none", borderRadius: "12px", overflow: "hidden" }}>
+              <div className="modal-header" style={{
+                background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
+                color: "white",
+                borderBottom: "none"
+              }}>
+                <h5 className="modal-title">📋 Entry Details</h5>
+                <button type="button" className="btn-close btn-close-white" onClick={() => { setDetailsOpen(false); setDetailsItem(null); }}></button>
               </div>
-              <div className="modal-body p-4">
+              <div className="modal-body p-4" style={{ background: "#f8f9fa" }}>
                 <div className="row g-3">
-                  <div className="col-md-6" style={{ borderBottom: "1px solid #ccc", paddingBottom: '10px' }}><strong>Date:</strong><div>{detailsItem._safeDate || detailsItem.date || "-"}</div></div>
-                  <div className="col-md-6" style={{ borderBottom: "1px solid #ccc", paddingBottom: '10px' }}><strong>Main Category:</strong><div>{detailsItem.mainCategory || "-"}</div></div>
-                  <div className="col-md-6" style={{ borderBottom: "1px solid #ccc", paddingBottom: '10px' }}><strong>Sub Category:</strong><div>{detailsItem.subCategory || "-"}</div></div>
-                  <div className="col-md-6" style={{ borderBottom: "1px solid #ccc", paddingBottom: '10px' }}><strong>Description:</strong><div style={{ whiteSpace: "pre-wrap" }}>{detailsItem.description || "-"}</div></div>
-                  <div className="col-md-6" style={{ borderBottom: "1px solid #ccc", paddingBottom: '10px' }}><strong>Comments:</strong><div style={{ whiteSpace: "pre-wrap" }}>{detailsItem.comments || "-"}</div></div>
-                  <div className="col-md-6" style={{ borderBottom: "1px solid #ccc", paddingBottom: '10px' }}><strong>Qty:</strong><div>{detailsItem.quantity ?? "-"}</div></div>
-                  <div className="col-md-6" style={{ borderBottom: "1px solid #ccc", paddingBottom: '10px' }}><strong>Price:</strong><div>{detailsItem.price ?? "-"}</div></div>
-                  <div className="col-md-6" style={{ borderBottom: "1px solid #ccc", paddingBottom: '10px' }}><strong>Total:</strong><div><strong>{Number(detailsItem.total ?? 0).toLocaleString()}</strong></div></div>
-                  <div className="col-md-6" style={{ borderBottom: "1px solid #ccc", paddingBottom: '10px' }}><strong>Purchased By:</strong><div>{detailsItem.employeeName || "-"}</div></div>
-                  <div className="col-md-6" style={{ borderBottom: "1px solid #ccc", paddingBottom: '10px' }}><strong>Approval:</strong><div><span className={statusColorClass(detailsItem.approval)}>{detailsItem.approval || "Pending"}</span></div></div>
-                  <div className="col-md-12"> <strong>Source Path:</strong><div><code>{detailsItem._fullPath}</code></div></div>
+                  {/* Basic Information Card */}
+                  <div className="col-12">
+                    <div className="card bg-white">
+                      <div className="card-header bg-light">
+                        <h6 className="mb-0">📊 Basic Information</h6>
+                      </div>
+                      <div className="card-body">
+                        <div className="row g-3">
+                          <div className="col-md-6">
+                            <div className="small ">Date & Time</div>
+                            <div className="fw-semibold">
+                              {detailsItem._safeDate || detailsItem.date || "-"}
+                              <br />
+                              <small className="">{detailsItem._time}</small>
+                            </div>
+                          </div>
+                          <div className="col-md-6">
+                            <div className="small ">Amount</div>
+                            <div className="h5 text-primary fw-bold">₹{Number(detailsItem.total ?? 0).toLocaleString()}</div>
+                          </div>
+                          <div className="col-md-6">
+                            <div className="small ">Main Category</div>
+                            <div className="fw-semibold">{detailsItem.mainCategory || "-"}</div>
+                          </div>
+                          <div className="col-md-6">
+                            <div className="small ">Sub Category</div>
+                            <div className="fw-semibold">{detailsItem.subCategory || "-"}</div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Description & Comments Row */}
+                  <div className="col-12">
+                    <div className="row g-3">
+                      <div className="col-md-6">
+                        <div className="card bg-white h-100">
+                          <div className="card-header bg-light">
+                            <h6 className="mb-0">📝 Description</h6>
+                          </div>
+                          <div className="card-body">
+                            <div style={{ whiteSpace: "pre-wrap", minHeight: "80px" }}>
+                              {detailsItem.description || "-"}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="col-md-6">
+                        <div className="card bg-white h-100">
+                          <div className="card-header bg-light">
+                            <h6 className="mb-0">💬 Comments</h6>
+                          </div>
+                          <div className="card-body">
+                            <div style={{ whiteSpace: "pre-wrap", minHeight: "80px" }}>
+                              {detailsItem.comments || "-"}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Financial Details Card */}
+                  <div className="col-12">
+                    <div className="card bg-white">
+                      <div className="card-header bg-light">
+                        <h6 className="mb-0">💰 Financial Details</h6>
+                      </div>
+                      <div className="card-body">
+                        <div className="row g-3">
+                          <div className="col-md-4">
+                            <div className="small ">Quantity</div>
+                            <div className="fw-semibold">{detailsItem.quantity ?? "-"}</div>
+                          </div>
+                          <div className="col-md-4">
+                            <div className="small ">Price</div>
+                            <div className="fw-semibold">
+                              {detailsItem.price ? `₹${Number(detailsItem.price).toLocaleString()}` : "-"}
+                            </div>
+                          </div>
+                          <div className="col-md-4">
+                            <div className="small ">Total</div>
+                            <div className="h6 fw-bold text-success">
+                              ₹{Number(detailsItem.total ?? 0).toLocaleString()}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* User Information & Assignment Row */}
+                  <div className="col-12">
+                    <div className="row g-3">
+                      <div className="col-md-4">
+                        <div className="card bg-white h-100">
+                          <div className="card-header bg-light">
+                            <h6 className="mb-0">👤 User Information</h6>
+                          </div>
+                          <div className="card-body">
+                            <div className="small ">Purchased By</div>
+                            <div className="fw-semibold">{detailsItem.employeeName || "-"}</div>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="col-md-4">
+                        <div className="card bg-white h-100">
+                          <div className="card-header bg-light">
+                            <h6 className="mb-0">👥 Assignment</h6>
+                          </div>
+                          <div className="card-body">
+                            <div className="d-flex flex-column gap-2">
+                              <select
+                                className="form-select form-select-sm"
+                                value={detailsItem._pendingAssignedTo || detailsItem.assignedTo || ""}
+                                onChange={(e) => setDetailsItem(prev => ({ ...prev, _pendingAssignedTo: e.target.value }))}
+                              >
+                                <option value="">Unassigned</option>
+                                {userOptions.filter(user => user !== "All").map(user => (
+                                  <option key={user} value={user}>{user}</option>
+                                ))}
+                              </select>
+
+                              <button
+                                className="btn btn-outline-primary btn-sm"
+                                disabled={!detailsItem._pendingAssignedTo && !detailsItem.assignedTo}
+                                onClick={async () => {
+                                  const target = detailsItem._fullPath || `${detailsItem._sourcePath}/${detailsItem._relPath}`;
+                                  const assignedTo = detailsItem._pendingAssignedTo || "";
+
+                                  try {
+                                    await firebaseDB.child(target).update({
+                                      assignedTo: assignedTo || null,
+                                      assignedAt: assignedTo ? new Date().toISOString() : null,
+                                      assignedBy: assignedTo ? currentUser : null
+                                    });
+
+                                    setDetailsItem(prev => ({
+                                      ...prev,
+                                      assignedTo: assignedTo,
+                                      _pendingAssignedTo: undefined
+                                    }));
+
+                                    alert(assignedTo ? `Assigned to ${assignedTo}` : "Assignment removed");
+                                  } catch (error) {
+                                    console.error("Error updating assignment:", error);
+                                    alert("Error updating assignment.");
+                                  }
+                                }}
+                              >
+                                {detailsItem._pendingAssignedTo ? "💾 Save" : "🗑️ Remove"}
+                              </button>
+
+                              {detailsItem.assignedTo && (
+                                <div className="mt-1">
+                                  <small className="">
+                                    Currently assigned to: <strong>{detailsItem.assignedTo}</strong>
+                                    {detailsItem.assignedBy && (
+                                      <> by {detailsItem.assignedBy}</>
+                                    )}
+                                  </small>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Approval Status Card */}
+                      <div className="col-md-4">
+                        <div className="card bg-white h-100">
+                          <div className="card-header bg-light">
+                            <h6 className="mb-0">✅ Approval Status</h6>
+                          </div>
+                          <div className="card-body">
+                            <div className="d-flex flex-column gap-2">
+                              {/* Current Status Display */}
+                              <div className="d-flex align-items-center gap-2 mb-2">
+                                <span
+                                  className={statusColorClass(detailsItem.approval)}
+                                  style={{
+                                    fontSize: "0.8rem",
+                                    textTransform: "capitalize",
+                                    padding: "4px 8px"
+                                  }}
+                                >
+                                  {detailsItem.approval || "Pending"}
+                                </span>
+                              </div>
+
+                              {/* Status Change Controls - Only for admins/managers and not for own entries */}
+                              {canUseAdminDropdown && (detailsItem.employeeName !== currentUser) && (
+                                <>
+                                  <select
+                                    className="form-select form-select-sm"
+                                    value={detailsItem._pendingApproval || detailsItem.approval || "Pending"}
+                                    onChange={(e) => setDetailsItem(prev => ({ ...prev, _pendingApproval: e.target.value }))}
+                                    title="Change status"
+                                  >
+                                    <option value="Pending">Pending</option>
+                                    <option value="Approved">Approved</option>
+                                    <option value="Clarification">Clarification</option>
+                                    <option value="Rejected">Rejected</option>
+                                  </select>
+
+                                  <textarea
+                                    className="form-control form-control-sm"
+                                    rows={2}
+                                    placeholder="Add comment for status change..."
+                                    value={detailsItem._pendingStatusComment || ""}
+                                    onChange={(e) => setDetailsItem(prev => ({ ...prev, _pendingStatusComment: e.target.value }))}
+                                  />
+
+                                  <button
+                                    className="btn btn-primary btn-sm"
+                                    disabled={!detailsItem._pendingApproval}
+                                    onClick={async () => {
+                                      const target = detailsItem._fullPath || `${detailsItem._sourcePath}/${detailsItem._relPath}`;
+                                      const nextStatus = detailsItem._pendingApproval;
+                                      const nowIso = new Date().toISOString();
+
+                                      const newComment = {
+                                        action: nextStatus,
+                                        comment: detailsItem._pendingStatusComment || `Status changed to ${nextStatus}`,
+                                        user: currentUser,
+                                        role: currentUserRole,
+                                        timestamp: nowIso,
+                                      };
+
+                                      const updateData = {
+                                        approval: nextStatus,
+                                        statusComments: [...(detailsItem.statusComments || []), newComment],
+                                      };
+
+                                      if (nextStatus === "Clarification") {
+                                        updateData.clarificationRequest = {
+                                          text: detailsItem._pendingStatusComment || "",
+                                          requestedBy: currentUser,
+                                          requestedAt: nowIso,
+                                        };
+                                      } else if (nextStatus === "Rejected") {
+                                        updateData.rejectionInfo = {
+                                          reason: detailsItem._pendingStatusComment || "",
+                                          rejectedBy: currentUser,
+                                          rejectedAt: nowIso,
+                                        };
+                                      } else if (nextStatus === "Approved") {
+                                        updateData.clarificationRequest = null;
+                                        updateData.rejectionInfo = null;
+                                      }
+
+                                      try {
+                                        await firebaseDB.child(target).update(updateData);
+                                        setDetailsItem(prev => ({
+                                          ...prev,
+                                          ...updateData,
+                                          _pendingApproval: undefined,
+                                          _pendingStatusComment: "",
+                                        }));
+                                        alert("Status updated successfully!");
+                                      } catch (error) {
+                                        console.error("Error updating status:", error);
+                                        alert("Error updating status. Please try again.");
+                                      }
+                                    }}
+                                  >
+                                    💾 Save Status
+                                  </button>
+                                </>
+                              )}
+
+                              {/* Permission Messages */}
+                              {!canUseAdminDropdown && (
+                                <div className="alert alert-warning small mb-0 p-2">
+                                  You don't have permission to change status.
+                                </div>
+                              )}
+                              {canUseAdminDropdown && detailsItem.employeeName === currentUser && (
+                                <div className="alert alert-info small mb-0 p-2">
+                                  You cannot change the status of your own entries.
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Add Status Comment Card */}
+                  <div className="col-12">
+                    <div className="card bg-white">
+                      <div className="card-header bg-light">
+                        <h6 className="mb-0">💬 Add Status Comment</h6>
+                      </div>
+                      <div className="card-body">
+                        <textarea
+                          className="form-control"
+                          rows={2}
+                          placeholder="Add a status comment..."
+                          value={detailsItem._pendingComment || ""}
+                          onChange={(e) => setDetailsItem(prev => ({ ...prev, _pendingComment: e.target.value }))}
+                          disabled={detailsItem.employeeName === currentUser && !canUseAdminDropdown}
+                        />
+                        <div className="form-text small-text opacity-75">
+                          {detailsItem.employeeName === currentUser && !canUseAdminDropdown
+                            ? "You can't change status comments on your own entry."
+                            : "This note will be appended to status history with your name and timestamp."}
+                        </div>
+                        <div className="mt-2 d-flex justify-content-end">
+                          <button
+                            className="btn btn-outline-primary btn-sm"
+                            disabled={!detailsItem?._pendingComment?.trim()}
+                            onClick={async () => {
+                              const target = detailsItem._fullPath || `${detailsItem._sourcePath}/${detailsItem._relPath}`;
+                              const nowIso = new Date().toISOString();
+                              const commentObj = {
+                                action: "Comment",
+                                comment: detailsItem._pendingComment || "",
+                                user: currentUser, // Use currentUser instead of effectiveName
+                                role: currentUserRole, // Use currentUserRole instead of effectiveRole
+                                timestamp: nowIso,
+                              };
+                              const nextThread = [...(detailsItem.statusComments || []), commentObj];
+                              await firebaseDB.child(target).update({ statusComments: nextThread });
+                              setDetailsItem(prev => ({ ...prev, statusComments: nextThread, _pendingComment: "" }));
+                            }}
+                          >
+                            Save Comment
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Status Comments History */}
+                  {visibleComments.length > 0 && (
+                    <div className="col-12">
+                      <div className="card bg-white">
+                        <div className="card-header bg-light">
+                          <h6 className="mb-0">📋 Status History</h6>
+                        </div>
+                        <div className="card-body">
+                          <div style={{ maxHeight: "300px", overflowY: "auto" }}>
+                            {visibleComments.map((comment, index) => (
+                              <div
+                                key={index}
+                                className={`border-start border-${comment.action === 'Rejected' ? 'danger' : comment.action === 'Clarification' ? 'warning' : 'success'} border-3 ps-3 mb-3`}
+                              >
+                                <p className="mb-0 mt-1">{comment.comment}</p>
+                                <div className="d-flex justify-content-between align-items-start">
+                                  <div>
+                                    {/* <span className={`badge bg-${comment.action === 'Rejected' ? 'danger' : comment.action === 'Clarification' ? 'warning' : 'success'} me-2`}>
+                                      {comment.action}
+                                    </span> */}
+                                    <small className="small-text opacity-75">{comment.user}</small>
+                                    <small className="small-text opacity-75"> ({comment.role})</small>
+                                  </div>
+                                  <small className="small-text opacity-75">
+                                    {new Date(comment.timestamp).toLocaleString("en-IN", { timeZone: "Asia/Kolkata" })}
+                                  </small>
+                                </div>
+
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Special Notifications */}
                   {detailsItem.clarificationRequest?.text && (
-                    <div className="col-12"><div className="alert alert-info mb-0 text-white"><strong>Clarification:</strong> {detailsItem.clarificationRequest.text} <em className="text-muted">({detailsItem.clarificationRequest.requestedBy || ""} @ {detailsItem.clarificationRequest.requestedAt ? new Date(detailsItem.clarificationRequest.requestedAt).toLocaleString() : ""})</em></div></div>
+                    <div className="col-12">
+                      <div className="alert alert-warning mb-0">
+                        <strong>❓ Clarification Requested:</strong> {detailsItem.clarificationRequest.text}
+                        <br />
+                        <small className="">
+                          By {detailsItem.clarificationRequest.requestedBy || ""} • {detailsItem.clarificationRequest.requestedAt ?
+                            new Date(detailsItem.clarificationRequest.requestedAt).toLocaleString("en-IN", { timeZone: "Asia/Kolkata" }) : ""}
+                        </small>
+                      </div>
+                    </div>
                   )}
                   {detailsItem.rejectionInfo?.reason && (
-                    <div className="col-12"><div className="alert alert-warning mb-0 text-black"><strong>Rejected:</strong> {detailsItem.rejectionInfo.reason} <em className="text-muted">({detailsItem.rejectionInfo.rejectedBy || ""} @ {detailsItem.rejectionInfo.rejectedAt ? new Date(detailsItem.rejectionInfo.rejectedAt).toLocaleString() : ""})</em></div></div>
+                    <div className="col-12">
+                      <div className="alert alert-danger mb-0">
+                        <strong>❌ Rejected:</strong> {detailsItem.rejectionInfo.reason}
+                        <br />
+                        <small className="">
+                          By {detailsItem.rejectionInfo.rejectedBy || ""} • {detailsItem.rejectionInfo.rejectedAt ?
+                            new Date(detailsItem.rejectionInfo.rejectedAt).toLocaleString("en-IN", { timeZone: "Asia/Kolkata" }) : ""}
+                        </small>
+                      </div>
+                    </div>
                   )}
                   {detailsItem.isDeleted && detailsItem.deleteInfo?.reason && (
-                    <div className="col-12"><div className="alert alert-danger mb-0 text-black"><strong>Deleted:</strong> {detailsItem.deleteInfo.reason} <em className="text-muted">({detailsItem.deleteInfo.deletedBy || ""} @ {detailsItem.deleteInfo.deletedAt ? new Date(detailsItem.deleteInfo.deletedAt).toLocaleString() : ""})</em></div></div>
+                    <div className="col-12">
+                      <div className="alert alert-secondary mb-0">
+                        <strong>🗑️ Deleted:</strong> {detailsItem.deleteInfo.reason}
+                        <br />
+                        <small className="">
+                          By {detailsItem.deleteInfo.deletedBy || ""} • {detailsItem.deleteInfo.deletedAt ?
+                            new Date(detailsItem.deleteInfo.deletedAt).toLocaleString() : ""}
+                        </small>
+                      </div>
+                    </div>
                   )}
                 </div>
               </div>
-              <div className="modal-footer">
+              <div className="modal-footer" style={{ borderTop: "1px solid #dee2e6" }}>
                 <button className="btn btn-secondary" onClick={() => { setDetailsOpen(false); setDetailsItem(null); }}>Close</button>
               </div>
             </div>

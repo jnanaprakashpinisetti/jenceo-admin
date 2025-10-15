@@ -162,6 +162,14 @@ export default function PettyCashReport({ effectiveName: propUser, effectiveRole
     return () => detach.forEach((fn) => fn());
   }, []);
 
+  const normalizeRole = (r) => {
+    const s = String(r || "").toLowerCase().replace(/\s+/g, "");
+    if (s.includes("superadmin")) return "Super Admin";
+    if (s === "admin") return "Admin";
+    if (s === "manager") return "Manager";
+    return "Employee";
+  };
+
   const myUiId = authUser?.uiId || authUser?.uid || authUser?.id || authUser?.userId || "";
   const myRecord =
     usersDir.find((u) => u.uiId && u.uiId === myUiId) ||
@@ -169,7 +177,9 @@ export default function PettyCashReport({ effectiveName: propUser, effectiveRole
     null;
 
   const effectiveName = (myRecord?.name || authUser?.displayName || authUser?.name || propUser || "Admin");
-  const effectiveRole = String(myRecord?.role || propRole || "employee").toLowerCase();
+  const effectiveRole = normalizeRole(
+    myRecord?.role || authUser?.role || authUser?.userRole || propRole || "employee"
+  );
 
   // Build approverDirectory dynamically (fallback to prop)
   const approverDirectory = (propApproverDir && Array.isArray(propApproverDir) && propApproverDir.length)
@@ -216,13 +226,15 @@ export default function PettyCashReport({ effectiveName: propUser, effectiveRole
         const flattened = flattenRecords(rootVal, []);
         flattened.forEach((val) => {
           // Prefer precise timestamp fields for time; fall back to parsed date
-          const rawCreated = val.createdAt || val.timestamp || val.updatedAt || null;
-          const pd = parseDateString(val.date || rawCreated);
+          const rawCreated =
+            val.createdAt || val.created_at || val.timestamp || val.updatedAt || null;
+          const rawDate = val.date || null;
+          const pd = rawCreated ? new Date(rawCreated) : parseDateString(rawDate);
+          const displayDate = rawCreated
+            ? new Date(rawCreated).toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" }) // 2025-10-15 style
+            : (rawDate || "");
 
           // show date from explicit "date" if provided, else from createdAt’s date part
-          const displayDate = val.date || (rawCreated ? new Date(rawCreated).toISOString().slice(0, 10) : "");
-
-          // show time from createdAt (or similar precise field). If missing, fall back to parsed date time
           const time = rawCreated
             ? new Date(rawCreated).toLocaleTimeString("en-IN", {
               hour: "2-digit",
@@ -241,6 +253,7 @@ export default function PettyCashReport({ effectiveName: propUser, effectiveRole
 
           const rel = normPath(val._relPath || val.id || "");
           const fullPath = normPath(`${path}/${rel}`);
+
           const id = `${fullPath}`;
           next.push({
             id,
@@ -576,8 +589,8 @@ export default function PettyCashReport({ effectiveName: propUser, effectiveRole
     return totals;
   }, [othersKeys, summaryData]);
 
-  const canDeleteOrRejectLock = ["manager", "admin", "superadmin"].includes(String(effectiveRole || "").toLowerCase());
-  const canUseAdminDropdown = ["manager", "admin", "superadmin"].includes(String(effectiveRole || "").toLowerCase());
+  const canUseAdminDropdown = ["Admin", "Manager", "Super Admin"].includes(effectiveRole);
+  const canDeleteOrRejectLock = canUseAdminDropdown;
 
   const handleAdminAction = (item) => {
     if (!adminAction) return;
@@ -606,6 +619,9 @@ export default function PettyCashReport({ effectiveName: propUser, effectiveRole
     setAdminAction("");
     setAdminComment("");
   };
+
+
+
 
   const saveAction = async () => {
     if (!actionItem) return;
@@ -922,13 +938,16 @@ export default function PettyCashReport({ effectiveName: propUser, effectiveRole
                           <td>{item.quantity}</td>
                           <td><strong>{Number(item.total ?? 0).toLocaleString()}</strong></td>
                           <td>
-                            {item.employeeName || "—"}
-                            {item.assignedTo && (
-                              <small className="badge bg-info ms-1" title={`Assigned to: ${item.assignedTo}`}>
-                                👥
-                              </small>
+                            {item.assignedTo ? (
+                              <>
+                                <span className="badge bg-info me-1">Assigned</span>
+                                <small>{item.assignedTo === effectiveName ? "You" : item.assignedTo}</small>
+                              </>
+                            ) : (
+                              <small className="text-muted">Unassigned</small>
                             )}
                           </td>
+
                           <td>
                             <span className={statusColorClass(item.approval)} style={{ minWidth: 96, textAlign: "center", textTransform: "capitalize" }}>
                               {item.approval || "Pending"}
@@ -1136,10 +1155,24 @@ export default function PettyCashReport({ effectiveName: propUser, effectiveRole
                 color: "white",
                 borderBottom: "none"
               }}>
-                <h5 className="modal-title">📋 Entry Details</h5>
+                <h5 className="modal-title">
+                  📋 Entry Details
+                  {detailsItem.assignedTo && (
+                    <span className="badge bg-info ms-2" title={`Assigned to ${detailsItem.assignedTo}`}>
+                      Assigned: {detailsItem.assignedTo === effectiveName ? "You" : detailsItem.assignedTo}
+                    </span>
+                  )}
+                </h5>
+
                 <button type="button" className="btn-close btn-close-white" onClick={() => { setDetailsOpen(false); setDetailsItem(null); }}></button>
               </div>
               <div className="modal-body p-4" style={{ background: "#f8f9fa" }}>
+                {detailsItem.assignedTo === effectiveName && (
+                  <div className="alert alert-info py-2">
+                    This entry is <strong>assigned to you</strong>.
+                  </div>
+                )}
+
                 <div className="row g-3">
                   {/* Basic Information Card */}
                   <div className="col-12">

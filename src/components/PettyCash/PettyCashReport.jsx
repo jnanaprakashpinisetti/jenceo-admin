@@ -234,7 +234,6 @@ export default function PettyCashReport({ effectiveName: propUser, effectiveRole
     ? propApproverDir
     : usersDir;
 
-
   // Category definitions
   const categoryColors = {
     Food: "table-success",
@@ -1032,12 +1031,12 @@ export default function PettyCashReport({ effectiveName: propUser, effectiveRole
                     <tr className="table-secondary">
                       <td colSpan={canUseAdminDropdown ? 6 : 5} className="text-end"><strong>Page Total (Approved)</strong></td>
                       <td><strong>{pageTotal.toLocaleString()}</strong></td>
-                      <td colSpan={2}></td>
+                      <td colSpan={3}></td>
                     </tr>
                     <tr className="table-secondary">
                       <td colSpan={canUseAdminDropdown ? 6 : 5} className="text-end"><strong>Filtered Total (Approved)</strong></td>
                       <td><strong>{filteredTotal.toLocaleString()}</strong></td>
-                      <td colSpan={2}></td>
+                      <td colSpan={3}></td>
                     </tr>
                   </tfoot>
                 </table>

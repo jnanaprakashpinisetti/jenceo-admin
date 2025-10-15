@@ -466,7 +466,6 @@ export default function PettyCashReport({ effectiveName: propUser, effectiveRole
   }, [data, activeYear, statusTab]);
 
   const recordsForYearMonth = useMemo(() => {
-    console.log("Calculating records for year/month:", activeYear, activeMonth);
 
     const filteredByYear = data.filter(d => {
       if (!d._parsedDate) return false;
@@ -474,10 +473,8 @@ export default function PettyCashReport({ effectiveName: propUser, effectiveRole
       return yearMatch;
     });
 
-    console.log("Records for year", activeYear, ":", filteredByYear.length);
 
     const filteredByStatus = filteredByYear.filter(recordMatchesStatus);
-    console.log("After status filter:", filteredByStatus.length);
 
     if (activeMonth) {
       const monthFiltered = filteredByStatus.filter(d => {
@@ -1592,7 +1589,6 @@ export default function PettyCashReport({ effectiveName: propUser, effectiveRole
                                     }));
                                     alert(assignedTo ? `Assigned to ${assignedTo}` : "Assignment removed");
                                   } catch (error) {
-                                    console.error("Error updating assignment:", error);
                                     alert("Error updating assignment.");
                                   }
                                 }}
@@ -1709,7 +1705,6 @@ export default function PettyCashReport({ effectiveName: propUser, effectiveRole
                                         }));
                                         alert("Status updated successfully!");
                                       } catch (error) {
-                                        console.error("Error updating status:", error);
                                         alert("Error updating status. Please try again.");
                                       }
                                     }}

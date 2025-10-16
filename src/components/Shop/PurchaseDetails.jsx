@@ -516,50 +516,51 @@ export default function PurchaseDetails() {
                 </div>
             ) : (
                 <div className="mb-4">
-                    {/* Desktop Header - Hidden on mobile */}
+                    {/* Desktop Header - Enhanced with beautiful gradient */}
                     <div
                         className="row g-0 mb-2 rounded-top d-none d-md-flex"
                         style={{
-                            background: "linear-gradient(135deg, #1f2937 0%, #374151 100%)",
-                            borderBottom: "2px solid #4b5563",
+                            background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
+                            borderBottom: "2px solid #5a6fd8",
+                            boxShadow: "0 4px 15px rgba(102, 126, 234, 0.3)",
                         }}
                     >
-                        <div className="col-md-1 p-3 border-end border-dark text-center">
-                            <small className="text-light fw-bold">S.No</small>
+                        <div className="col-md-1 p-3 border-end border-light border-opacity-25 text-center">
+                            <small className="text-white fw-bold" style={{ textShadow: '0 1px 2px rgba(0,0,0,0.3)' }}>S.No</small>
                         </div>
-                        <div className="col-md-2 p-3 border-end border-dark">
-                            <small className="text-light fw-bold">
+                        <div className="col-md-2 p-3 border-end border-light border-opacity-25">
+                            <small className="text-white fw-bold" style={{ textShadow: '0 1px 2px rgba(0,0,0,0.3)' }}>
                                 <i className="fas fa-carrot text-warning me-2"></i>VEGETABLE
                             </small>
                         </div>
-                        <div className="col-md-1 p-3 border-end border-dark text-center">
-                            <small className="text-light fw-bold">
+                        <div className="col-md-1 p-3 border-end border-light border-opacity-25 text-center">
+                            <small className="text-white fw-bold" style={{ textShadow: '0 1px 2px rgba(0,0,0,0.3)' }}>
                                 <i className="fas fa-weight-hanging text-info me-2"></i>QTY
                             </small>
                         </div>
-                        <div className="col-md-1 p-3 border-end border-dark text-center">
-                            <small className="text-light fw-bold">
-                                <i className="fas fa-tag text-primary me-2"></i>PRICE
+                        <div className="col-md-1 p-3 border-end border-light border-opacity-25 text-center">
+                            <small className="text-white fw-bold" style={{ textShadow: '0 1px 2px rgba(0,0,0,0.3)' }}>
+                                <i className="fas fa-tag text-light me-2"></i>PRICE
                             </small>
                         </div>
-                        <div className="col-md-2 p-3 border-end border-dark text-center">
-                            <small className="text-light fw-bold">
+                        <div className="col-md-2 p-3 border-end border-light border-opacity-25 text-center">
+                            <small className="text-white fw-bold" style={{ textShadow: '0 1px 2px rgba(0,0,0,0.3)' }}>
                                 <i className="fas fa-calculator text-success me-2"></i>TOTAL
                             </small>
                         </div>
-                        <div className="col-md-2 p-3 border-end border-dark text-center">
-                            <small className="text-light fw-bold">
-                                <i className="fas fa-user text-info me-2"></i>PURCHASED BY
+                        <div className="col-md-2 p-3 border-end border-light border-opacity-25 text-center">
+                            <small className="text-white fw-bold" style={{ textShadow: '0 1px 2px rgba(0,0,0,0.3)' }}>
+                                <i className="fas fa-user text-light me-2"></i>PURCHASED BY
                             </small>
                         </div>
-                        <div className="col-md-2 p-3 border-end border-dark text-center">
-                            <small className="text-light fw-bold">
+                        <div className="col-md-2 p-3 border-end border-light border-opacity-25 text-center">
+                            <small className="text-white fw-bold" style={{ textShadow: '0 1px 2px rgba(0,0,0,0.3)' }}>
                                 <i className="fas fa-chart-line text-warning me-2"></i>SELLING RATE
                             </small>
                         </div>
                         {isAdminUser && (
                             <div className="col-md-1 p-3 text-center">
-                                <small className="text-light fw-bold">
+                                <small className="text-white fw-bold" style={{ textShadow: '0 1px 2px rgba(0,0,0,0.3)' }}>
                                     <i className="fas fa-ellipsis-h text-light me-2"></i>ACTIONS
                                 </small>
                             </div>
@@ -568,7 +569,6 @@ export default function PurchaseDetails() {
 
                     {/* Rows */}
                     {dailyGroups.map((grp) => {
-                        // per-category total (for the selected date)
                         const catTotal = grp.items.reduce((sum, item) => {
                             const t = item?.total != null ? safeNum(item.total) : safeNum(item.quantity) * safeNum(item.price);
                             return sum + t;
@@ -576,20 +576,30 @@ export default function PurchaseDetails() {
 
                         return (
                             <div key={grp.title}>
-                                {/* Category header */}
-                                <div className="p-1 bg-secondary rounded d-md-none"></div>
-                                <div className="row g-0 mb-1 mt-3">
+                                {/* Category header - Enhanced */}
+                                <div className="row g-0 mb-1 mt-4">
                                     <div className="col-12">
                                         <div
                                             className="d-flex align-items-center justify-content-between ps-3 py-2 rounded"
-                                            style={{ background: "rgba(59, 130, 246, 0.1)", borderLeft: "4px solid #3b82f6" }}
+                                            style={{
+                                                background: "linear-gradient(135deg, rgba(102, 126, 234, 0.15) 0%, rgba(118, 75, 162, 0.15) 100%)",
+                                                borderLeft: "4px solid #667eea",
+                                                borderBottom: "1px solid rgba(102, 126, 234, 0.3)"
+                                            }}
                                         >
                                             <div className="d-flex align-items-center">
-                                                <i className="fas fa-tag text-info me-2"></i>
-                                                <h5 className="text-warning mb-0 small fw-bold">{grp.title}</h5>
+                                                <i className="fas fa-tag text-primary me-2"></i>
+                                                <h5 className="text-white mb-0 fw-bold" style={{ fontSize: '0.95rem' }}>{grp.title}</h5>
                                             </div>
                                             <div className="d-none d-md-block pe-3">
-                                                <span className="badge bg-success fw-bold px-3 py-2">
+                                                <span
+                                                    className="badge fw-bold px-3 py-2"
+                                                    style={{
+                                                        background: "linear-gradient(135deg, #10b981 0%, #059669 100%)",
+                                                        border: "1px solid rgba(16, 185, 129, 0.5)",
+                                                        fontSize: "0.8rem"
+                                                    }}
+                                                >
                                                     Category Total: {fmtINR(catTotal)}
                                                 </span>
                                             </div>
@@ -598,33 +608,54 @@ export default function PurchaseDetails() {
                                 </div>
 
                                 {grp.items.map((item, index) => {
-                                    const totalNow =
-                                        item.total != null ? safeNum(item.total) : safeNum(item.quantity) * safeNum(item.price);
+                                    const totalNow = item.total != null ? safeNum(item.total) : safeNum(item.quantity) * safeNum(item.price);
                                     const isEditing = editingKey === item.id;
                                     const isEven = index % 2 === 0;
 
                                     return (
                                         <React.Fragment key={item.id}>
-                                            {/* Desktop View */}
+                                            {/* Desktop View - Enhanced colors */}
                                             <div
-                                                className={`row g-0 align-items-center py-2 d-none d-md-flex ${isEven ? "" : "bg-gray-800"}`}
+                                                className={`row g-0 align-items-center py-2 d-none d-md-flex ${isEven ? "" : ""}`}
                                                 style={{
-                                                    borderBottom: "1px solid #374151",
-                                                    background: isEven ? "rgba(17, 24, 39, 0.7)" : "rgba(31, 41, 55, 0.7)",
-                                                    transition: "all 0.2s ease",
+                                                    borderBottom: "1px solid rgba(255,255,255,0.1)",
+                                                    background: isEven
+                                                        ? "linear-gradient(135deg, rgba(30, 41, 59, 0.7) 0%, rgba(15, 23, 42, 0.7) 100%)"
+                                                        : "linear-gradient(135deg, rgba(51, 65, 85, 0.7) 0%, rgba(30, 41, 59, 0.7) 100%)",
+                                                    transition: "all 0.3s ease",
                                                     margin: "1px 0",
+                                                    borderRadius: "4px",
                                                 }}
                                             >
                                                 {/* S.No */}
                                                 <div className="col-md-1 text-center">
-                                                    <span className="text-info small fw-bold">{index + 1}</span>
+                                                    <span
+                                                        className="fw-bold"
+                                                        style={{
+                                                            color: '#cbd5e1',
+                                                            fontSize: "0.85rem",
+                                                            background: "rgba(99, 102, 241, 0.1)",
+                                                            padding: '4px 8px',
+                                                            borderRadius: '12px',
+                                                            border: '1px solid rgba(99, 102, 241, 0.3)'
+                                                        }}
+                                                    >
+                                                        {index + 1}
+                                                    </span>
                                                 </div>
 
                                                 {/* Vegetable */}
                                                 <div className="col-md-2 ps-3">
                                                     <div className="d-flex align-items-center">
                                                         <i className="fas fa-carrot text-warning me-2"></i>
-                                                        <strong className="text-info d-block" style={{ fontSize: "0.85rem" }}>
+                                                        <strong
+                                                            className="d-block fw-bold"
+                                                            style={{
+                                                                fontSize: "0.85rem",
+                                                                color: '#f8fafc',
+                                                                textShadow: '0 1px 2px rgba(0,0,0,0.2)'
+                                                            }}
+                                                        >
                                                             {item.subCategory}
                                                         </strong>
                                                     </div>
@@ -633,11 +664,12 @@ export default function PurchaseDetails() {
                                                 {/* Quantity */}
                                                 <div className="col-md-1 text-center">
                                                     <span
-                                                        className="text-info fw-semibold px-2 py-1 rounded"
+                                                        className="fw-semibold px-2 py-1 rounded"
                                                         style={{
                                                             fontSize: "0.85rem",
-                                                            background: "rgba(6, 182, 212, 0.15)",
-                                                            border: "1px solid rgba(6, 182, 212, 0.3)",
+                                                            background: "linear-gradient(135deg, rgba(6, 182, 212, 0.2) 0%, rgba(8, 145, 178, 0.2) 100%)",
+                                                            border: "1px solid rgba(6, 182, 212, 0.4)",
+                                                            color: '#7dd3fc'
                                                         }}
                                                     >
                                                         {item.quantity || 0}
@@ -647,11 +679,12 @@ export default function PurchaseDetails() {
                                                 {/* Price */}
                                                 <div className="col-md-1 text-center">
                                                     <span
-                                                        className="text-light fw-semibold px-2 py-1 rounded"
+                                                        className="fw-semibold px-2 py-1 rounded"
                                                         style={{
                                                             fontSize: "0.85rem",
-                                                            background: "rgba(59, 130, 246, 0.15)",
-                                                            border: "1px solid rgba(59, 130, 246, 0.3)",
+                                                            background: "linear-gradient(135deg, rgba(139, 92, 246, 0.2) 0%, rgba(124, 58, 237, 0.2) 100%)",
+                                                            border: "1px solid rgba(139, 92, 246, 0.4)",
+                                                            color: '#c4b5fd'
                                                         }}
                                                     >
                                                         {fmtINR(item.price)}
@@ -661,9 +694,13 @@ export default function PurchaseDetails() {
                                                 {/* Total */}
                                                 <div className="col-md-2 text-center">
                                                     <span
-                                                        className="badge fw-bold px-3 py-2 text-warning"
+                                                        className="badge fw-bold px-3 py-2"
                                                         style={{
                                                             fontSize: "0.85rem",
+                                                            background: "linear-gradient(135deg, #f59e0b 0%, #d97706 100%)",
+                                                            border: "1px solid rgba(245, 158, 11, 0.5)",
+                                                            color: '#ffffff',
+                                                            textShadow: '0 1px 2px rgba(0,0,0,0.2)'
                                                         }}
                                                     >
                                                         {fmtINR(totalNow)}
@@ -673,11 +710,12 @@ export default function PurchaseDetails() {
                                                 {/* Purchased By */}
                                                 <div className="col-md-2 text-center">
                                                     <span
-                                                        className="text-light fw-semibold px-2 py-1 rounded"
+                                                        className="fw-semibold px-2 py-1 rounded"
                                                         style={{
                                                             fontSize: "0.8rem",
-                                                            background: "rgba(139, 92, 246, 0.15)",
-                                                            border: "1px solid rgba(139, 92, 246, 0.3)",
+                                                            background: "linear-gradient(135deg, rgba(16, 185, 129, 0.2) 0%, rgba(5, 150, 105, 0.2) 100%)",
+                                                            border: "1px solid rgba(16, 185, 129, 0.4)",
+                                                            color: '#86efac',
                                                             maxWidth: "140px",
                                                             overflow: "hidden",
                                                             textOverflow: "ellipsis",
@@ -685,7 +723,7 @@ export default function PurchaseDetails() {
                                                         }}
                                                         title={item.createdByName || item.updatedByName || "Unknown"}
                                                     >
-                                                        <i className="fas fa-user me-1 text-info"></i>
+                                                        <i className="fas fa-user me-1"></i>
                                                         {item.createdByName || item.updatedByName || "Unknown"}
                                                     </span>
                                                 </div>
@@ -696,29 +734,52 @@ export default function PurchaseDetails() {
                                                         {isEditing ? (
                                                             <div className="d-flex gap-2 align-items-center">
                                                                 <div className="input-group input-group-sm" style={{ maxWidth: "150px" }}>
-                                                                    <span className="input-group-text bg-dark border-secondary text-light">₹</span>
+                                                                    <span
+                                                                        className="input-group-text border-0"
+                                                                        style={{
+                                                                            background: "linear-gradient(135deg, #f59e0b 0%, #d97706 100%)",
+                                                                            color: 'white',
+                                                                            border: 'none'
+                                                                        }}
+                                                                    >
+                                                                        ₹
+                                                                    </span>
                                                                     <input
                                                                         type="number"
-                                                                        className="form-control form-control-sm text-center border-secondary bg-dark text-light"
+                                                                        className="form-control form-control-sm text-center border-0"
+                                                                        style={{
+                                                                            background: 'rgba(255,255,255,0.9)',
+                                                                            color: '#1f2937',
+                                                                            minWidth: "80px"
+                                                                        }}
                                                                         value={sellDraft}
                                                                         onChange={(e) => setSellDraft(e.target.value)}
                                                                         autoFocus
-                                                                        style={{ minWidth: "80px" }}
                                                                     />
                                                                 </div>
                                                                 <button
-                                                                    className="btn btn-sm btn-success px-2 d-flex align-items-center gap-1"
+                                                                    className="btn btn-sm px-2 d-flex align-items-center gap-1"
                                                                     onClick={() => saveEditSelling(item)}
                                                                     title="Save"
-                                                                    style={{ minWidth: "60px" }}
+                                                                    style={{
+                                                                        minWidth: "60px",
+                                                                        background: "linear-gradient(135deg, #10b981 0%, #059669 100%)",
+                                                                        border: 'none',
+                                                                        color: 'white'
+                                                                    }}
                                                                 >
                                                                     <i className="fas fa-check small"></i> Save
                                                                 </button>
                                                                 <button
-                                                                    className="btn btn-sm btn-danger px-2 d-flex align-items-center gap-1"
+                                                                    className="btn btn-sm px-2 d-flex align-items-center gap-1"
                                                                     onClick={cancelEditSelling}
                                                                     title="Cancel"
-                                                                    style={{ minWidth: "60px" }}
+                                                                    style={{
+                                                                        minWidth: "60px",
+                                                                        background: "linear-gradient(135deg, #ef4444 0%, #dc2626 100%)",
+                                                                        border: 'none',
+                                                                        color: 'white'
+                                                                    }}
                                                                 >
                                                                     <i className="fas fa-times small"></i> Cancel
                                                                 </button>
@@ -731,18 +792,31 @@ export default function PurchaseDetails() {
                                                                     onClick={isAdminUser ? () => beginEditSelling(item) : undefined}
                                                                     title={isAdminUser ? "Click to edit selling rate" : "Admin access required"}
                                                                     style={{
-                                                                        background: "linear-gradient(135deg, #d97706 0%, #f59e0b 100%)",
-                                                                        border: "1px solid rgba(245, 158, 11, 0.5)",
+                                                                        background: isAdminUser
+                                                                            ? "linear-gradient(135deg, #ec4899 0%, #db2777 100%)"
+                                                                            : "linear-gradient(135deg, #6b7280 0%, #4b5563 100%)",
+                                                                        border: isAdminUser
+                                                                            ? "1px solid rgba(236, 72, 153, 0.5)"
+                                                                            : "1px solid rgba(107, 114, 128, 0.5)",
                                                                         fontSize: "0.85rem",
-                                                                        transition: "all 0.2s ease",
+                                                                        transition: "all 0.3s ease",
                                                                         cursor: isAdminUser ? "pointer" : "default",
                                                                         opacity: isAdminUser ? 1 : 0.7,
+                                                                        color: '#ffffff',
+                                                                        textShadow: '0 1px 2px rgba(0,0,0,0.2)'
                                                                     }}
                                                                 >
                                                                     <i className="fas fa-rupee-sign me-1"></i>
                                                                     {item?.sellingRate || "0"}
                                                                 </span>
-                                                                {isAdminUser && <small className="text-muted d-none d-md-block">Click to edit</small>}
+                                                                {isAdminUser && (
+                                                                    <small
+                                                                        className="text-muted d-none d-md-block"
+                                                                        style={{ color: '#9ca3af' }}
+                                                                    >
+                                                                        Click to edit
+                                                                    </small>
+                                                                )}
                                                             </div>
                                                         )}
                                                     </div>
@@ -752,32 +826,65 @@ export default function PurchaseDetails() {
                                                 {isAdminUser && (
                                                     <div className="col-md-1 text-center">
                                                         <button
-                                                            className="btn btn-sm btn-outline-danger"
+                                                            className="btn btn-sm px-3"
                                                             title="Delete this entry"
                                                             onClick={() => openDelete(item)}
+                                                            style={{
+                                                                background: "linear-gradient(135deg, #ef4444 0%, #dc2626 100%)",
+                                                                border: 'none',
+                                                                color: 'white',
+                                                                transition: 'all 0.3s ease'
+                                                            }}
+                                                            onMouseOver={(e) => {
+                                                                e.target.style.transform = 'scale(1.05)';
+                                                                e.target.style.background = "linear-gradient(135deg, #dc2626 0%, #b91c1c 100%)";
+                                                            }}
+                                                            onMouseOut={(e) => {
+                                                                e.target.style.transform = 'scale(1)';
+                                                                e.target.style.background = "linear-gradient(135deg, #ef4444 0%, #dc2626 100%)";
+                                                            }}
                                                         >
                                                             <i className="fas fa-trash"></i>
-                                                            <span className="d-none d-lg-inline"> Delete</span>
+                                                            <span className="d-none d-lg-inline ms-1">Delete</span>
                                                         </button>
                                                     </div>
                                                 )}
                                             </div>
 
-                                            {/* Mobile View */}
-                                            <div className="card bg-dark border-secondary mb-2 d-md-none">
+                                            {/* Mobile View - Enhanced */}
+                                            <div
+                                                className="card mb-3 d-md-none border-0"
+                                                style={{
+                                                    background: "linear-gradient(135deg, rgba(30, 41, 59, 0.8) 0%, rgba(15, 23, 42, 0.8) 100%)",
+                                                    boxShadow: "0 4px 15px rgba(0,0,0,0.2)"
+                                                }}
+                                            >
                                                 <div className="card-body">
                                                     {/* Header Row */}
-                                                    <div className="d-flex justify-content-between align-items-center mb-2 pb-2 border-bottom border-secondary">
+                                                    <div className="d-flex justify-content-between align-items-center mb-3 pb-2 border-bottom border-opacity-25" style={{ borderColor: '#475569' }}>
                                                         <div className="d-flex align-items-center">
-                                                            <span className="badge bg-primary me-2">{index + 1}</span>
+                                                            <span
+                                                                className="badge me-2"
+                                                                style={{
+                                                                    background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
+                                                                    color: 'white'
+                                                                }}
+                                                            >
+                                                                {index + 1}
+                                                            </span>
                                                             <i className="fas fa-carrot text-warning me-2"></i>
-                                                            <strong className="text-light">{item.subCategory}</strong>
+                                                            <strong className="text-white">{item.subCategory}</strong>
                                                         </div>
                                                         {isAdminUser && (
                                                             <button
-                                                                className="btn btn-sm btn-outline-danger"
+                                                                className="btn btn-sm"
                                                                 title="Delete this entry"
                                                                 onClick={() => openDelete(item)}
+                                                                style={{
+                                                                    background: "linear-gradient(135deg, #ef4444 0%, #dc2626 100%)",
+                                                                    border: 'none',
+                                                                    color: 'white'
+                                                                }}
                                                             >
                                                                 <i className="fas fa-trash"></i>
                                                                 Delete
@@ -785,37 +892,53 @@ export default function PurchaseDetails() {
                                                         )}
                                                     </div>
 
-                                                    {/* Data Rows with Telugu Labels */}
+                                                    {/* Data Rows with Telugu Labels - Enhanced */}
                                                     <div className="row g-2">
                                                         {/* Quantity */}
                                                         <div className="col-6">
-                                                            <div className="d-flex justify-content-center text-center align-items-center p-2 rounded flex-wrap h-100" style={{ background: "rgba(6, 182, 212, 0.1)" }}>
-                                                                <div className="text-info fw-bold w-100">పరిమాణం:</div>
-                                                                <span className="text-light fw-bold w-100">{item.quantity || 0} kg</span>
+                                                            <div className="d-flex flex-column justify-content-center text-center align-items-center p-2 rounded h-100"
+                                                                style={{
+                                                                    background: "linear-gradient(135deg, rgba(6, 182, 212, 0.15) 0%, rgba(8, 145, 178, 0.15) 100%)",
+                                                                    border: "1px solid rgba(6, 182, 212, 0.3)"
+                                                                }}>
+                                                                <div className="text-cyan-300 fw-bold w-100" style={{ color: '#67e8f9', fontSize: '0.8rem' }}>పరిమాణం:</div>
+                                                                <span className="text-white fw-bold w-100" style={{ fontSize: '0.9rem' }}>{item.quantity || 0} kg</span>
                                                             </div>
                                                         </div>
 
                                                         {/* Price */}
                                                         <div className="col-6">
-                                                            <div className="d-flex justify-content-center text-center align-items-center p-2 rounded flex-wrap h-100" style={{ background: "rgba(59, 130, 246, 0.1)" }}>
-                                                                <div className="text-primary fw-bold w-100">ధర:</div>
-                                                                <span className="text-light fw-bold w-100">{fmtINR(item.price)}</span>
+                                                            <div className="d-flex flex-column justify-content-center text-center align-items-center p-2 rounded h-100"
+                                                                style={{
+                                                                    background: "linear-gradient(135deg, rgba(139, 92, 246, 0.15) 0%, rgba(124, 58, 237, 0.15) 100%)",
+                                                                    border: "1px solid rgba(139, 92, 246, 0.3)"
+                                                                }}>
+                                                                <div className="text-purple-300 fw-bold w-100" style={{ color: '#d8b4fe', fontSize: '0.8rem' }}>ధర:</div>
+                                                                <span className="text-white fw-bold w-100" style={{ fontSize: '0.9rem' }}>{fmtINR(item.price)}</span>
                                                             </div>
                                                         </div>
 
                                                         {/* Total */}
                                                         <div className="col-6">
-                                                            <div className="d-flex justify-content-center text-center align-items-center flex-wrap p-2 rounded lex-wrap h-100" style={{ background: "rgba(16, 185, 129, 0.1)" }}>
-                                                                <div className="text-success fw-bold w-100">మొత్తం:</div>
-                                                                <span className="text-warning fw-bold w-100">{fmtINR(totalNow)}</span>
+                                                            <div className="d-flex flex-column justify-content-center text-center align-items-center p-2 rounded h-100"
+                                                                style={{
+                                                                    background: "linear-gradient(135deg, rgba(245, 158, 11, 0.15) 0%, rgba(217, 119, 6, 0.15) 100%)",
+                                                                    border: "1px solid rgba(245, 158, 11, 0.3)"
+                                                                }}>
+                                                                <div className="text-amber-300 fw-bold w-100" style={{ color: '#fcd34d', fontSize: '0.8rem' }}>మొత్తం:</div>
+                                                                <span className="text-white fw-bold w-100" style={{ fontSize: '0.9rem' }}>{fmtINR(totalNow)}</span>
                                                             </div>
                                                         </div>
 
                                                         {/* Purchased By */}
                                                         <div className="col-6">
-                                                            <div className="d-flex justify-content-center text-center align-items-center p-2 rounded flex-wrap h-100" style={{ background: "rgba(139, 92, 246, 0.1)" }}>
-                                                                <div className="text-info fw-bold w-100">కొన్నవారు:</div>
-                                                                <span className="text-light fw-bold w-100" style={{ fontSize: "0.8rem" }}>
+                                                            <div className="d-flex flex-column justify-content-center text-center align-items-center p-2 rounded h-100"
+                                                                style={{
+                                                                    background: "linear-gradient(135deg, rgba(16, 185, 129, 0.15) 0%, rgba(5, 150, 105, 0.15) 100%)",
+                                                                    border: "1px solid rgba(16, 185, 129, 0.3)"
+                                                                }}>
+                                                                <div className="text-emerald-300 fw-bold w-100" style={{ color: '#6ee7b7', fontSize: '0.8rem' }}>కొన్నవారు:</div>
+                                                                <span className="text-white fw-bold w-100" style={{ fontSize: '0.8rem' }}>
                                                                     {item.createdByName || item.updatedByName || "Unknown"}
                                                                 </span>
                                                             </div>
@@ -823,37 +946,65 @@ export default function PurchaseDetails() {
 
                                                         {/* Selling Rate */}
                                                         <div className="col-12">
-                                                            <div className="d-flex justify-content-between align-items-center p-2 rounded" style={{ background: "rgba(245, 158, 11, 0.1)" }}>
-                                                                <small className="text-warning fw-bold">అమ్మకం ధర:</small>
+                                                            <div className="d-flex justify-content-between flex-wrap gap-2 align-items-center p-2 rounded"
+                                                                style={{
+                                                                    background: "linear-gradient(135deg, rgba(236, 72, 153, 0.15) 0%, rgba(219, 39, 119, 0.15) 100%)",
+                                                                    border: "1px solid rgba(236, 72, 153, 0.3)"
+                                                                }}>
+                                                                <small className="text-pink-300 fw-bold" style={{ color: '#f9a8d4' }}>అమ్మకం ధర:</small>
                                                                 <div className="d-flex align-items-center gap-2">
                                                                     {isEditing ? (
+                                                                        // Same beautiful edit controls as desktop
                                                                         <div className="d-flex gap-2 align-items-center">
                                                                             <div className="input-group input-group-sm" style={{ maxWidth: "150px" }}>
-                                                                                <span className="input-group-text bg-dark border-secondary text-light">₹</span>
+                                                                                <span
+                                                                                    className="input-group-text border-0"
+                                                                                    style={{
+                                                                                        background: "linear-gradient(135deg, #f59e0b 0%, #d97706 100%)",
+                                                                                        color: 'white',
+                                                                                        border: 'none'
+                                                                                    }}
+                                                                                >
+                                                                                    ₹
+                                                                                </span>
                                                                                 <input
                                                                                     type="number"
-                                                                                    className="form-control form-control-sm text-center border-secondary bg-dark text-light"
+                                                                                    className="form-control form-control-sm text-center border-0"
+                                                                                    style={{
+                                                                                        background: 'rgba(255,255,255,0.9)',
+                                                                                        color: '#1f2937',
+                                                                                        minWidth: "80px"
+                                                                                    }}
                                                                                     value={sellDraft}
                                                                                     onChange={(e) => setSellDraft(e.target.value)}
                                                                                     autoFocus
-                                                                                    style={{ minWidth: "80px" }}
                                                                                 />
                                                                             </div>
                                                                             <button
-                                                                                className="btn btn-sm btn-success px-2 d-flex align-items-center gap-1"
+                                                                                className="btn btn-sm px-2"
                                                                                 onClick={() => saveEditSelling(item)}
                                                                                 title="Save"
-                                                                                style={{ minWidth: "60px" }}
+                                                                                style={{
+                                                                                    background: "linear-gradient(135deg, #10b981 0%, #059669 100%)",
+                                                                                    border: 'none',
+                                                                                    color: 'white'
+                                                                                }}
                                                                             >
-                                                                                <i className="fas fa-check small"></i> Save
+                                                                                Save
+                                                                                <i className="fas fa-check"></i>
                                                                             </button>
                                                                             <button
-                                                                                className="btn btn-sm btn-danger px-2 d-flex align-items-center gap-1"
+                                                                                className="btn btn-sm px-2"
                                                                                 onClick={cancelEditSelling}
                                                                                 title="Cancel"
-                                                                                style={{ minWidth: "60px" }}
+                                                                                style={{
+                                                                                    background: "linear-gradient(135deg, #ef4444 0%, #dc2626 100%)",
+                                                                                    border: 'none',
+                                                                                    color: 'white'
+                                                                                }}
                                                                             >
-                                                                                <i className="fas fa-times small"></i> Cancel
+                                                                                Canecl
+                                                                                <i className="fas fa-times"></i>
                                                                             </button>
                                                                         </div>
                                                                     ) : (
@@ -864,18 +1015,19 @@ export default function PurchaseDetails() {
                                                                                 onClick={isAdminUser ? () => beginEditSelling(item) : undefined}
                                                                                 title={isAdminUser ? "Click to edit selling rate" : "Admin access required"}
                                                                                 style={{
-                                                                                    background: "linear-gradient(135deg, #d97706 0%, #f59e0b 100%)",
-                                                                                    border: "1px solid rgba(245, 158, 11, 0.5)",
+                                                                                    background: isAdminUser
+                                                                                        ? "linear-gradient(135deg, #ec4899 0%, #db2777 100%)"
+                                                                                        : "linear-gradient(135deg, #6b7280 0%, #4b5563 100%)",
+                                                                                    border: isAdminUser
+                                                                                        ? "1px solid rgba(236, 72, 153, 0.5)"
+                                                                                        : "1px solid rgba(107, 114, 128, 0.5)",
                                                                                     fontSize: "0.85rem",
-                                                                                    transition: "all 0.2s ease",
-                                                                                    cursor: isAdminUser ? "pointer" : "default",
-                                                                                    opacity: isAdminUser ? 1 : 0.7,
+                                                                                    color: '#ffffff'
                                                                                 }}
                                                                             >
                                                                                 <i className="fas fa-rupee-sign me-1"></i>
                                                                                 {item?.sellingRate || "0"}
                                                                             </span>
-                                                                            {isAdminUser && <small className="text-muted">Click to edit</small>}
                                                                         </div>
                                                                     )}
                                                                 </div>
@@ -890,8 +1042,6 @@ export default function PurchaseDetails() {
                             </div>
                         );
                     })}
-
-       
                 </div>
             )}
 

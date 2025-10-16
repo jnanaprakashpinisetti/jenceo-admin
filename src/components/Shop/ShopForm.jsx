@@ -3,34 +3,29 @@ import firebaseDB from "../../firebase";
 import SuccessModal from "../common/SuccessModal";
 import { useAuth } from "../../context/AuthContext";
 
-// Build a path that never duplicates "JenCeo-DataBase"
+/* ---------------- Helpers ---------------- */
+const norm = (s) => String(s || "").trim().toLowerCase();
+
 const pathUnderJenCeo = (relative) => {
     const refStr = typeof firebaseDB?.toString === "function" ? firebaseDB.toString() : "";
     const isScoped =
         (firebaseDB && firebaseDB.key === "JenCeo-DataBase") ||
         (refStr && /\/JenCeo-DataBase\/?$/.test(refStr));
 
-    // always pass a relative path to the scoped ref
-    if (isScoped) {
-        return relative.replace(/^\/?JenCeo-DataBase\//, "");   // strip if caller added it
-    }
-    // db is root → add the prefix
+    if (isScoped) return relative.replace(/^\/?JenCeo-DataBase\//, "");
     return `JenCeo-DataBase/${relative.replace(/^\/?JenCeo-DataBase\//, "")}`;
 };
 
-
 const categoryMap = {
     "1 కూరగాయలు": [
-        "టమాట", "వంకాయ", "బెండకాయ", "దోసకాయ", "కాకరకాయ", "బీరకాయ", "పొట్లకాయ", "సొరకాయ", "దొండకాయ", "గుమ్మడికాయ", "బూడిద గుమ్మడికాయ", "మునగకాయ", "పచ్చిమిరపకాయ", "గోరుచిక్కుడు", "బీన్స్", "చిక్కుడు", "అరటికాయ", "మామిడికాయ", "క్యాబేజీ", "కాలిఫ్లవర్",
+        "టమాట", "వంకాయ", "బెండకాయ", "దోసకాయ", "కాకరకాయ", "బీరకాయ", "పొట్లకాయ", "సొరకాయ", "దొండకాయ",
+        "గుమ్మడికాయ", "బూడిద గుమ్మడికాయ", "మునగకాయ", "పచ్చిమిరపకాయ", "గోరుచిక్కుడు", "బీన్స్", "చిక్కుడు",
+        "అరటికాయ", "మామిడికాయ", "క్యాబేజీ", "కాలిఫ్లవర్",
     ],
-    "2 వేరు కూరగాయలు": [
-        "ఉల్లిపాయ", "వెల్లుల్లి", "కేరట్", "బీట్ రూట్", "ముల్లంగి", "బంగాళాదుంప", "చిలకడదుంప", "చెమదుంప", "అల్లం",
-    ],
-    "3 ఆకుకూరలు": [
-        "పాలకూర", "తోటకూర", "మెంతికూర", "కొత్తిమీర", "పుదీనా", "కరివేపాకు", "గోంగూర",
-    ],
+    "2 వేరు కూరగాయలు": ["ఉల్లిపాయ", "వెల్లుల్లి", "కేరట్", "బీట్ రూట్", "ముల్లంగి", "బంగాళాదుంప", "చిలకడదుంప", "చెమదుంప", "అల్లం"],
+    "3 ఆకుకూరలు": ["పాలకూర", "తోటకూర", "మెంతికూర", "కొత్తిమీర", "పుదీనా", "కరివేపాకు", "గోంగూర"],
     "4 అరటి పళ్ళు": ["కర్పూరం", "పచ్చ చేక్కరకేళి", "ఎర్ర చేక్కరకేళి", "అమృతపాణి", "త్రయ అరిటి పళ్ళు"],
-    "5 పువ్వులు": ["బంతి పువ్వులు", "పసుపు చామంతి", "తెల్ల చామంతి", "గులాబీ", "మలబార్", "మల్లె పువ్వులు", "మల్లె పూలదండ", "సన్నజాజులు", "సన్నజాజుల దండ"],
+    "5 పువ్వులు": ["బంతి పువ్వులు", "పసుపు చామంతి", "తెల్ల చామంతి", "గులాబీ", "మల్లె పువ్వులు"],
     "6 కొబ్బరిబొండాలు": ["కేరళ బొండాలు", "ఆంధ్ర బొండాలు"],
     "7 ఇతర వస్తువులు": ["కొబ్బరికాయలు", "బెల్లం", "తేనే పాకం"],
 };
@@ -38,38 +33,26 @@ const categoryMap = {
 export default function ShopForm({ onClose }) {
     const authCtx = useAuth() || {};
     const { currentUser, user, dbUser, profile } = authCtx;
-    const today = new Date();
-    const minDate = new Date(today);
-    minDate.setDate(today.getDate() - 1000);
 
-    // Robust name resolver across common shapes your AuthContext may expose
+    const today = new Date();
     const signedInName =
         dbUser?.name ||
-        dbUser?.username ||
-        profile?.name ||
-        profile?.username ||
         user?.name ||
-        user?.username ||
+        profile?.name ||
         currentUser?.displayName ||
-        currentUser?.name ||
-        currentUser?.username ||
         (currentUser?.email ? currentUser.email.split("@")[0] : "") ||
         "User";
 
-    // Local YYYY-MM-DD in IST (so max/min and defaults match your UI)
     const todayISODateIST = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" });
+    const signedInUid = currentUser?.uid || user?.uid || dbUser?.uid || null;
+    const signedInRole = dbUser?.role || user?.role || profile?.role || "User";
 
-    // Also a robust UID (covers different shapes)
-    const signedInUid =
-        currentUser?.uid || currentUser?.dbId || user?.uid || user?.dbId || null;
-
-    // Resolve role from any of the common places in your auth/profile
-    const signedInRole =
-        dbUser?.role ||
-        profile?.role ||
-        user?.role ||
-        currentUser?.role ||
-        "User";
+    const resolveShopBranch = (authUser, fallback = "users") => {
+        const roleRaw = String(authUser?.role || "").toLowerCase();
+        if (roleRaw.includes("admin")) return "admin";
+        const id = authUser?.uiId || authUser?.uid || authUser?.id || authUser?.email;
+        return id ? String(id).replace(/[^\w-]/g, "_") : fallback;
+    };
 
     const [formData, setFormData] = useState({
         mainCategory: "",
@@ -79,364 +62,215 @@ export default function ShopForm({ onClose }) {
         price: "",
         total: "",
         comments: "",
-        approval: "Pending",
     });
 
     const [errors, setErrors] = useState({});
-    const [showSuccessModal, setShowSuccessModal] = useState(false);
-    const [savedPurchase, setSavedPurchase] = useState(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
 
-    const resolveShopBranch = (authUser, fallback = "users") => {
-        const roleRaw = String(authUser?.role || authUser?.userRole || "").toLowerCase();
-        if (roleRaw.includes("super")) return "admin";
-        if (roleRaw.includes("admin")) return "admin";
-        if (roleRaw.includes("manager")) return "admin";
-        // put non-admins under their uiId or name; never "undefined"
-        const id = authUser?.uiId || authUser?.uid || authUser?.id || authUser?.email || authUser?.displayName;
-        return id ? String(id).replace(/[^\w-]/g, "_") : fallback;
-    };
+    // Success modal
+    const [showSuccessModal, setShowSuccessModal] = useState(false);
+    const [savedPurchase, setSavedPurchase] = useState(null);
+
+    // Duplicate modal
+    const [showDuplicateModal, setShowDuplicateModal] = useState(false);
+    const [existingRow, setExistingRow] = useState(null);
+    const [pendingPayload, setPendingPayload] = useState(null);
 
     useEffect(() => {
         const qty = parseFloat(formData.quantity) || 0;
         const price = parseFloat(formData.price) || 0;
-        setFormData(prev => ({
-            ...prev,
-            total: (qty * price).toString()
-        }));
+        setFormData((prev) => ({ ...prev, total: (qty * price).toString() }));
     }, [formData.quantity, formData.price]);
 
-    /* -------------------------
-       Handlers
-       ------------------------- */
     const handleChange = (e) => {
         const { name, value } = e.target;
         const updated = { ...formData, [name]: value };
-
-        // If mainCategory changed, reset subCategory
-        if (name === "mainCategory") {
-            updated.subCategory = "";
-        }
-
+        if (name === "mainCategory") updated.subCategory = "";
         setFormData(updated);
     };
 
-    const handleBlur = (e) => {
-        const { name } = e.target;
-        if (errors[name]) {
-            setErrors((prev) => ({ ...prev, [name]: "" }));
-        }
-    };
-
-    /* -------------------------
-       Validation
-       ------------------------- */
     const validateForm = () => {
         const newErrors = {};
-
         if (!formData.mainCategory) newErrors.mainCategory = "ప్రధాన కేటగిరీ తప్పనిసరి";
         if (!formData.subCategory) newErrors.subCategory = "ఉప కేటగిరీ తప్పనిసరి";
-
-        if (!formData.date) newErrors.date = "తేదీ తప్పనిసరి";
-        else {
-            const selectedDate = new Date(formData.date);
-            if (selectedDate < minDate || selectedDate > today) {
-                newErrors.date = "తేదీ గత 5 రోజుల్లో ఉండాలి";
-            }
-        }
-
-        if (!formData.quantity && formData.quantity !== 0) newErrors.quantity = "మొత్తం తప్పనిసరి";
-        if (!formData.price && formData.price !== 0) newErrors.price = "ధర తప్పనిసరి";
-        // if (!formData.comments) newErrors.comments = "వ్యాఖ్యలు తప్పనిసరి";
-
+        if (!formData.quantity) newErrors.quantity = "మొత్తం తప్పనిసరి";
+        if (!formData.price) newErrors.price = "ధర తప్పనిసరి";
         setErrors(newErrors);
         return Object.keys(newErrors).length === 0;
     };
 
-    /* -------------------------
-       Submit
-       ------------------------- */
+    const buildPayload = (key, branchKey) => {
+        const qty = Number(formData.quantity) || 0;
+        const price = Number(formData.price) || 0;
+        const total = qty * price;
+        const nowIso = new Date().toISOString();
+
+        return {
+            id: key,
+            mainCategory: formData.mainCategory,
+            subCategory: formData.subCategory,
+            date: formData.date,
+            quantity: qty,
+            price,
+            total,
+            comments: formData.comments || "",
+            createdAt: nowIso,
+            createdById: signedInUid,
+            createdByName: signedInName,
+            createdByRole: signedInRole,
+            _branch: branchKey,
+        };
+    };
+
+    const performSave = async (branchKey, duplicateOfId = null) => {
+        const listRef = firebaseDB.child(pathUnderJenCeo(`Shop/${branchKey}`));
+        const newRef = listRef.push();
+        const payload = buildPayload(newRef.key, branchKey);
+        if (duplicateOfId) payload.duplicateOf = duplicateOfId;
+
+        await newRef.set(payload);
+        setSavedPurchase(payload);
+        setShowSuccessModal(true);
+
+        setFormData({
+            mainCategory: formData.mainCategory,
+            subCategory: "",
+            date: todayISODateIST,
+            quantity: "",
+            price: "",
+            total: "",
+            comments: "",
+        });
+    };
+
+    const checkDuplicateThenSave = async () => {
+        const authObj = currentUser || user || dbUser || profile || {};
+        const branchKey = resolveShopBranch(authObj);
+        const listRef = firebaseDB.child(pathUnderJenCeo(`Shop/${branchKey}`));
+        const snap = await listRef.once("value");
+        const raw = snap.val() || {};
+
+        const exists = Object.values(raw).find(
+            (r) => norm(r?.date) === norm(formData.date) && norm(r?.subCategory) === norm(formData.subCategory)
+        );
+
+        const dummyRefKey = "_pending_";
+        const nextPayload = buildPayload(dummyRefKey, branchKey);
+
+        if (exists) {
+            setExistingRow(exists);
+            setPendingPayload(nextPayload);
+            setShowDuplicateModal(true);
+            return;
+        }
+
+        await performSave(branchKey);
+    };
+
     const handleSubmit = async (e) => {
         e.preventDefault();
         if (!validateForm()) return;
-
         setIsSubmitting(true);
-
         try {
-            // Get current user info
-            const authObj = currentUser || user || dbUser || profile || {};
-            const branchKey = resolveShopBranch(authObj, "users");
-
-            console.log("Saving shop data for branch:", branchKey);
-            console.log("User info:", { signedInName, signedInUid, signedInRole });
-
-            // Prepare data for Firebase
-            const nowIso = new Date().toISOString();
-            const dataToSave = {
-                // Form data
-                mainCategory: formData.mainCategory,
-                subCategory: formData.subCategory,
-                date: formData.date,
-                quantity: parseFloat(formData.quantity) || 0,
-                price: parseFloat(formData.price) || 0,
-                total: parseFloat(formData.total) || 0,
-                comments: formData.comments,
-
-                // Approval status
-                approval: "Pending",
-
-                // Metadata
-                employeeName: signedInName,
-                createdAt: nowIso,
-                createdById: signedInUid,
-                createdByName: signedInName,
-                createdByRole: signedInRole,
-
-                // Timestamp for sorting
-                timestamp: Date.now()
-            };
-
-            // Use proper Firebase path structure
-            const finalPath = pathUnderJenCeo(`Shop/${branchKey}`);
-            console.log("[ShopForm] Writing to:", finalPath);
-            const listRef = firebaseDB.child(finalPath);
-            const newRef = listRef.push();
-
-            console.log("Saving to path:", finalPath);
-
-            // Create reference and push data
-            const istDate = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" });
-
-            const payload = {
-                id: newRef.key,
-                mainCategory: formData.mainCategory,
-                subCategory: formData.subCategory,
-                date: formData.date || istDate,               // yyyy-mm-dd (IST default)
-                quantity: Number(formData.quantity) || 0,
-                price: Number(formData.price) || 0,
-                total: (Number(formData.quantity) || 0) * (Number(formData.price) || 0),
-                comments: formData.comments || "",
-                approval: "Pending",
-                // user meta
-                createdAt: new Date().toISOString(),
-                createdById: signedInUid || "unknown",
-                createdByName: signedInName || "System",
-                createdByRole: signedInRole || "employee",
-                timestamp: Date.now(),
-            };
-
-            await newRef.set(payload);
-            console.log("Shop data saved:", payload);
-            setSavedPurchase(payload);
-            setShowSuccessModal(true);
-
-            const record = { id: newRef.key, ...payload };
-
-            // Create the purchase object with ID
-            const purchaseObj = {
-                id: newRef.key,
-                ...dataToSave
-            };
-
-
-
-            await newRef.set(payload);
-            console.log("Shop data saved successfully:", payload);
-
-            console.log("Shop data saved successfully:", purchaseObj);
-
-            // Set success state
-            setSavedPurchase(purchaseObj);
-            setShowSuccessModal(true);
-
-            // Reset form
-            setFormData({
-                mainCategory: "",
-                subCategory: "",
-                date: todayISODateIST,
-                quantity: "",
-                price: "",
-                total: "",
-                comments: "",
-                approval: "Pending",
-            });
-            setErrors({});
-
+            await checkDuplicateThenSave();
         } catch (err) {
-            console.error("Error saving shop purchase:", err);
-            alert(`Error saving shop purchase: ${err?.message || "Check console for details"}`);
+            alert("Error saving: " + err.message);
         } finally {
             setIsSubmitting(false);
         }
     };
 
-    const formatMonth = (date) => date.toLocaleString("en-US", { month: "long", year: "numeric" });
-
     return (
-        <div className="modal fade show d-block" tabIndex="-1" style={{ background: "rgba(0,0,0,1)" }}>
-            <div className="modal-dialog modal-md modal-dialog-centered ">
-                <div className="modal-content shadow-lg rounded-4 border-0">
-                    <div className="modal-header bg-dark text-white border-secondary">
+        <div className="modal fade show d-block" tabIndex="-1" style={{ background: "rgba(0,0,0,0.9)" }}>
+            <div className="modal-dialog modal-md modal-dialog-centered">
+                <div className="modal-content border-0 shadow-lg rounded-4">
+                    <div className="modal-header bg-dark text-white">
                         <h5 className="modal-title">Shop Purchase Form</h5>
                         <button type="button" className="btn-close btn-close-white" onClick={onClose}></button>
                     </div>
 
-                    <div className="modal-body bg-dark p-4 rounded">
-                        {/* Header similar to PettyCashForm */}
-                        <div className="d-flex justify-content-between align-items-center p-3 opacity-75 bg-secondary rounded mb-4">
-                            <p className="mb-0 fw-bold text-light">{signedInName}</p>
-                            <p className="mb-0 fw-bold text-light">{formatMonth(today)}</p>
-                        </div>
-
-                        <form onSubmit={handleSubmit} noValidate className="pb-3">
-                            {/* Main & Sub Category */}
-                            <div className="row mb-0">
-                                <div className="col-md-6 mb-3">
-                                    <label className="form-label">
-                                        <strong>
-                                            ప్రధాన కేటగిరీ <span className="star">*</span>
-                                        </strong>
-                                    </label>
+                    <div className="modal-body bg-dark text-light p-4">
+                        <form onSubmit={handleSubmit}>
+                            {/* Category */}
+                            <div className="row">
+                                <div className="col-md-6  mb-3">
+                                    <label className="form-label">ప్రధాన కేటగిరీ</label>
                                     <select
                                         name="mainCategory"
-                                        className={`form-select ${errors.mainCategory ? "is-invalid" : ""}`}
+                                        className="form-select"
                                         value={formData.mainCategory}
                                         onChange={handleChange}
-                                        onBlur={handleBlur}
                                     >
-                                        <option value="">కేటగిరీ ఎంచుకోండి</option>
-                                        {Object.keys(categoryMap).map((cat, idx) => (
-                                            <option key={idx} value={cat}>
-                                                {cat}
-                                            </option>
+                                        <option value="">ఎంచుకోండి</option>
+                                        {Object.keys(categoryMap).map((cat) => (
+                                            <option key={cat}>{cat}</option>
                                         ))}
                                     </select>
-                                    {errors.mainCategory && <div className="invalid-feedback">{errors.mainCategory}</div>}
                                 </div>
-
-                                <div className="col-md-6 mb-3">
-                                    <label className="form-label">
-                                        <strong>
-                                            ఉప కేటగిరీ <span className="star">*</span>
-                                        </strong>
-                                    </label>
+                                <div className="col-md-6  mb-3">
+                                    <label className="form-label">ఉప కేటగిరీ</label>
                                     <select
                                         name="subCategory"
-                                        className={`form-select bg-dark ${errors.subCategory ? "is-invalid" : ""}`}
+                                        className="form-select"
                                         value={formData.subCategory}
                                         onChange={handleChange}
-                                        onBlur={handleBlur}
-                                        disabled={!formData.mainCategory}
                                     >
-                                        <option value="">ఉప కేటగిరీ ఎంచుకోండి</option>
+                                        <option value="">ఎంచుకోండి</option>
                                         {formData.mainCategory &&
-                                            (categoryMap[formData.mainCategory] || []).map((sub, idx) => (
-                                                <option key={idx} value={sub}>
-                                                    {sub}
-                                                </option>
+                                            categoryMap[formData.mainCategory]?.map((v) => (
+                                                <option key={v}>{v}</option>
                                             ))}
                                     </select>
-                                    {errors.subCategory && <div className="invalid-feedback">{errors.subCategory}</div>}
                                 </div>
                             </div>
 
-                            {/* Date */}
-                            {/* <div className="row mb-0">
-                                <div className="col-md-6 mb-3">
-                                    <label className="form-label">
-                                        <strong>
-                                            తేదీ <span className="star">*</span>
-                                        </strong>
-                                    </label>
+                            {/* Inputs */}
+                            <div className="row  ">
+                                <div className="col-md-4  mb-3">
+                                    <label className="form-label">మొత్తం (K.G)</label>
                                     <input
-                                        type="date"
-                                        name="date"
-                                        value={formData.date}
-                                        onChange={handleChange}
-                                        onBlur={handleBlur}
-                                        className={`form-control ${errors.date ? "is-invalid" : ""}`}
-                                        min={minDate.toISOString().split("T")[0]}
-                                        max={today.toISOString().split("T")[0]}
-                                    />
-                                    {errors.date && <div className="invalid-feedback">{errors.date}</div>}
-                                </div>
-                            </div> */}
-
-                            {/* Quantity, Price, Total */}
-                            <div className="row mb-0">
-                                <div className="col-md-4 mb-3">
-                                    <label className="form-label">
-                                        <strong>
-                                            కొన్నవి (K.G) <span className="star">*</span>
-                                        </strong>
-                                    </label>
-                                    <input
-                                        type="number"
                                         name="quantity"
+                                        type="number"
+                                        className="form-control"
                                         value={formData.quantity}
                                         onChange={handleChange}
-                                        onBlur={handleBlur}
-                                        className={`form-control ${errors.quantity ? "is-invalid" : ""}`}
                                     />
-                                    {errors.quantity && <div className="invalid-feedback">{errors.quantity}</div>}
                                 </div>
-                                <div className="col-md-4 mb-3">
-                                    <label className="form-label">
-                                        <strong>
-                                            ధర  <span className="star">*</span>
-                                        </strong>
-                                    </label>
+                                <div className="col-md-4  mb-3">
+                                    <label className="form-label">ధర</label>
                                     <input
-                                        type="number"
                                         name="price"
+                                        type="number"
+                                        className="form-control"
                                         value={formData.price}
                                         onChange={handleChange}
-                                        onBlur={handleBlur}
-                                        className={`form-control ${errors.price ? "is-invalid" : ""}`}
                                     />
-                                    {errors.price && <div className="invalid-feedback">{errors.price}</div>}
                                 </div>
-                                <div className="col-md-4 mb-3">
-                                    <label className="form-label">
-                                        <strong>మొత్తం (Total)</strong>
-                                    </label>
+                                <div className="col-md-4  mb-3">
+                                    <label className="form-label">మొత్తం</label>
                                     <input
-                                        type="number"
                                         name="total"
+                                        type="number"
+                                        className="form-control bg-secondary text-white"
                                         value={formData.total}
-                                        className="form-control bg-light"
                                         disabled
                                     />
                                 </div>
                             </div>
 
-                            {/* Comments */}
                             <div className="mb-3">
-                                <label className="form-label">
-                                    <strong>
-                                        కామెంట్స్
-                                    </strong>
-                                </label>
+                                <label className="form-label">కామెంట్స్</label>
                                 <textarea
                                     name="comments"
+                                    rows="2"
+                                    className="form-control"
                                     value={formData.comments}
                                     onChange={handleChange}
-                                    onBlur={handleBlur}
-                                    className={`form-control ${errors.comments ? "is-invalid" : ""}`}
-                                    rows="3"
                                 ></textarea>
-                                {errors.comments && <div className="invalid-feedback">{errors.comments}</div>}
                             </div>
 
-                            <div className="d-flex justify-content-end">
-                                {/* <button type="button" className="btn btn-secondary" onClick={onClose}>
-                                    Close
-                                </button> */}
-                                <button
-                                    type="submit"
-                                    className="btn btn-success"
-                                    disabled={isSubmitting}
-                                >
+                            <div className="text-end mb-5">
+                                <button className="btn btn-success" disabled={isSubmitting}>
                                     {isSubmitting ? "Submitting..." : "Submit"}
                                 </button>
                             </div>
@@ -445,32 +279,88 @@ export default function ShopForm({ onClose }) {
                 </div>
             </div>
 
-            {/* Success Modal */}
+            {/* ✅ Success Modal (main form stays open) */}
             <SuccessModal
                 show={showSuccessModal}
-                title="Purchase Saved"
+                title="Saved Successfully"
                 message={
                     savedPurchase ? (
                         <>
-                            <p>
-                                Thank you! <strong>{savedPurchase.subCategory}</strong> has been added.
-                            </p>
-                            <p>
-                                <strong>Price:</strong> ₹{savedPurchase.price}
-                            </p>
-                            <p>
-                                <strong>Total:</strong> ₹{savedPurchase.total}
-                            </p>
+                            <p><strong>{savedPurchase.subCategory}</strong> జోడించబడింది!</p>
+                            <p>ధర ₹{savedPurchase.price}</p>
+                            <p>మొత్తం ₹{savedPurchase.total}</p>
                         </>
                     ) : (
-                        <p>Purchase saved successfully</p>
+                        <p>సేవ్ విజయవంతమైంది</p>
                     )
                 }
-                onClose={() => {
-                    setShowSuccessModal(false);
-                    onClose();
-                }}
+                onClose={() => setShowSuccessModal(false)}
             />
+
+            {/* ✅ Duplicate Confirmation Modal */}
+            {showDuplicateModal && (
+                <div className="modal fade show d-block" style={{ background: "rgba(0,0,0,0.8)" }}>
+                    <div className="modal-dialog modal-lg modal-dialog-centered">
+                        <div className="modal-content bg-dark text-light border-0 rounded-4 shadow-lg">
+                            <div className="modal-header bg-warning text-dark">
+                                <h5 className="modal-title">ఇప్పటికే జోడించబడింది</h5>
+                                <button type="button" className="btn-close" onClick={() => setShowDuplicateModal(false)}></button>
+                            </div>
+                            <div className="modal-body">
+                                <p>
+                                    <strong className="text-warning">{pendingPayload?.subCategory}</strong> కు{" "}
+                                    <strong>{pendingPayload?.date}</strong> తేదీకి ఇప్పటికే ఒక ఎంట్రీ ఉంది.
+                                </p>
+
+                                <table className="table table-bordered table-dark text-center">
+                                    <thead>
+                                        <tr>
+                                            <th>ఫీల్డ్</th>
+                                            <th>ఇప్పటికే ఉన్నది</th>
+                                            <th>కొత్తది</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr>
+                                            <td>కొన్నవి</td>
+                                            <td className="text-info">{existingRow?.quantity}</td>
+                                            <td className="text-warning">{pendingPayload?.quantity}</td>
+                                        </tr>
+                                        <tr>
+                                            <td>ధర</td>
+                                            <td className="text-info">₹{existingRow?.price}</td>
+                                            <td className="text-warning">₹{pendingPayload?.price}</td>
+                                        </tr>
+                                        <tr>
+                                            <td>మొత్తం</td>
+                                            <td className="text-info">₹{existingRow?.total}</td>
+                                            <td className="text-warning">₹{pendingPayload?.total}</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+
+                                <div className="alert alert-secondary text-dark text-center">
+                                    ఈ అంశాన్ని మళ్లీ ఎంటర్ చెయ్యలా ?
+                                </div>
+                            </div>
+                            <div className="modal-footer border-0 d-flex justify-content-between">
+                                <button className="btn btn-outline-light" onClick={() => setShowDuplicateModal(false)}>
+                                    వద్దు
+                                </button>
+                                <button
+                                    className="btn btn-warning text-dark fw-bold"
+                                    onClick={async () => {
+                                        setShowDuplicateModal(false);
+                                        await performSave(pendingPayload._branch, existingRow?.id || null);
+                                    }}
+                                >
+                                    మళ్లీ ఎంటర్ చెయ్యి
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

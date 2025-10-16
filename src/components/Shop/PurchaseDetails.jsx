@@ -507,9 +507,9 @@ export default function PurchaseDetails() {
                                             <span className="text-light fw-semibold px-2 py-1 rounded" style={{ fontSize: "0.85rem", background: "rgba(59, 130, 246, 0.15)", border: "1px solid rgba(59, 130, 246, 0.3)" }}>₹{item.price || 0}</span>
                                         </div>
 
-                                        <div className="col-md-2 text-center">
+                                        {/* <div className="col-md-2 text-center">
                                             <span className="badge fw-bold px-3 py-2" style={{ fontSize: "0.85rem", background: "linear-gradient(135deg, #059669 0%, #10b981 100%)", border: "1px solid rgba(16, 185, 129, 0.5)" }}>₹{totalNow || 0}</span>
-                                        </div>
+                                        </div> */}
 
                                         <div className="col-md-2 text-center">
                                             <span className="text-light fw-semibold px-2 py-1 rounded" style={{ fontSize: "0.8rem", background: "rgba(139, 92, 246, 0.15)", border: "1px solid rgba(139, 92, 246, 0.3)", maxWidth: "120px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={item.createdByName || item.updatedByName || "Unknown"}>
@@ -630,43 +630,11 @@ export default function PurchaseDetails() {
                                     </tr>
                                 ))}
 
-                                {/* Category Total row (₹ per day) */}
-                                <tr>
-                                    <th className="text-end pe-2"><span className="badge bg-info">Total</span></th>
-                                    {dayList.map((fullDate, idx) => {
-                                        const isToday = fullDate === ymd(new Date());
-                                        const tot = categoryTotalsByDate[catLabel]?.[idx] || 0;
-                                        return (
-                                            <td
-                                                key={`cat-total-${catLabel}-${idx}`}
-                                                className={`text-end ${isToday ? "fw-bold text-warning" : ""}`}
-                                                style={{ background: isToday ? "rgba(13, 202, 240, 0.12)" : "rgba(17, 24, 39, 0.6)" }}
-                                            >
-                                                <span className="badge ">₹{tot.toLocaleString("en-IN")}</span>
-                                            </td>
-                                        );
-                                    })}
-                                </tr>
+
                             </React.Fragment>
                         ))}
 
                         {/* Grand Total row (₹ per day across all categories) */}
-                        <tr>
-                            <th className="text-end pe-2"><span className="badge bg-primary">Grand&nbsp;Total</span></th>
-                            {dayList.map((fullDate, idx) => {
-                                const isToday = fullDate === ymd(new Date());
-                                const g = grandTotalsByDate[idx] || 0;
-                                return (
-                                    <td
-                                        key={`grand-total-${idx}`}
-                                        className={`text-end ${isToday ? "fw-bold text-warning" : ""}`}
-                                        style={{ background: isToday ? "rgba(13, 202, 240, 0.2)" : "rgba(17, 24, 39, 0.75)" }}
-                                    >
-                                        <span className="badge bg-warning text-dark">₹{g.toLocaleString("en-IN")}</span>
-                                    </td>
-                                );
-                            })}
-                        </tr>
                     </tbody>
                 </table>
             </div>

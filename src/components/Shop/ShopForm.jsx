@@ -273,10 +273,10 @@ export default function ShopForm({ onClose }) {
     const formatMonth = (date) => date.toLocaleString("en-US", { month: "long", year: "numeric" });
 
     return (
-        <div className="modal fade show d-block" tabIndex="-1" style={{ background: "rgba(0,0,0,0.6)" }}>
-            <div className="modal-dialog modal-md modal-dialog-centered bg-dark">
+        <div className="modal fade show d-block" tabIndex="-1" style={{ background: "rgba(0,0,0,1)" }}>
+            <div className="modal-dialog modal-md modal-dialog-centered ">
                 <div className="modal-content shadow-lg rounded-4 border-0">
-                    <div className="modal-header bg-dark text-white">
+                    <div className="modal-header bg-dark text-white border-secondary">
                         <h5 className="modal-title">Shop Purchase Form</h5>
                         <button type="button" className="btn-close btn-close-white" onClick={onClose}></button>
                     </div>
@@ -322,7 +322,7 @@ export default function ShopForm({ onClose }) {
                                     </label>
                                     <select
                                         name="subCategory"
-                                        className={`form-select ${errors.subCategory ? "is-invalid" : ""}`}
+                                        className={`form-select bg-dark ${errors.subCategory ? "is-invalid" : ""}`}
                                         value={formData.subCategory}
                                         onChange={handleChange}
                                         onBlur={handleBlur}
@@ -428,10 +428,10 @@ export default function ShopForm({ onClose }) {
                                 {errors.comments && <div className="invalid-feedback">{errors.comments}</div>}
                             </div>
 
-                            <div className="d-flex justify-content-between">
-                                <button type="button" className="btn btn-secondary" onClick={onClose}>
+                            <div className="d-flex justify-content-end">
+                                {/* <button type="button" className="btn btn-secondary" onClick={onClose}>
                                     Close
-                                </button>
+                                </button> */}
                                 <button
                                     type="submit"
                                     className="btn btn-success"

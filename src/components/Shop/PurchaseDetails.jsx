@@ -389,7 +389,7 @@ export default function PurchaseDetails() {
             {/* Controls + Info */}
             <div className="alert alert-info mb-3 text-warning">
                 <div className="d-flex flex-wrap align-items-center justify-content-between">
-                    <div className="d-flex gap-2 align-items-center">
+                    <div className="d-flex gap-2 align-items-center flex-wrap">
                         <select
                             className="form-select form-select-sm bg-secondary text-light border-secondary"
                             value={month}

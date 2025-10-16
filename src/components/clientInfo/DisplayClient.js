@@ -879,7 +879,7 @@ export default function DisplayClient() {
                     ) : 'N/A'}
                   </td>
                   <td>
-                    <span className={`badge ${getStatusBadgeClass(client.serviceStatus)} opacity-75`}>
+                    <span className={`badge ${getStatusBadgeClass(client.serviceStatus)} opacity-75 text-capitalize`}>
                       {client.serviceStatus || 'Running'}
                     </span>
                   </td>

@@ -1599,6 +1599,21 @@ const ClientModal = ({
                           <label className="form-label"><strong>Gap if Any</strong></label>
                           <input className="form-control" name="gapIfAny" value={formData.gapIfAny || ""} onChange={handleChange} disabled={!editMode} />
                         </div>
+
+                        <div className="col-md-4 mb-3">
+                          <label className="form-label text-primary"><strong>Service Status</strong></label>
+
+                          <select className="form-control" name="serviceStatus" value={formData.serviceStatus || ""} onChange={handleChange} disabled={!editMode} >
+                            <option value="running">Running</option>
+                            <option value="closed">Closed</option>
+                            <option value="stop">Stop</option>
+                            <option value="re-open">Re-open</option>
+                            <option value="re-start">Re-start</option>
+                            <option value="re-place">Re-place</option>
+                          </select>
+
+                        </div>
+
                       </div>
                     ) : (
                       <table className="readonly-table">

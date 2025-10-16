@@ -1,4 +1,5 @@
 // src/components/Shop/PurchaseDetails.jsx
+// src/components/Shop/PurchaseDetails.jsx
 import React, { useEffect, useMemo, useState } from "react";
 import firebaseDB from "../../firebase";
 import { useAuth } from "../../context/AuthContext";
@@ -6,13 +7,13 @@ import { useAuth } from "../../context/AuthContext";
 
 // Inline catalog (you can switch to import later)
 const categoryMap = {
-    "1 కూరగాయలు": ["టమాట", "వంకాయ", "బెండకాయ", "దోసకాయ", "కాకరకాయ", "బీరకాయ", "పొట్లకాయ", "సొరకాయ", "దొండకాయ", "గుమ్మడికాయ", "బూడిద గుమ్మడికాయ", "మునగకాయ", "పచ్చిమిరపకాయ", "గోరుచిక్కుడు", "బీన్స్", "చిక్కుడు", "అరటికాయ", "మామిడికాయ", "క్యాబేజీ", "కాలిఫ్లవర్"],
-    "2 వేరు కూరగాయలు": ["ఉల్లిపాయ", "వెల్లుల్లి", "కేరట్", "బీట్ రూట్", "ముల్లంగి", "బంగాళాదుంప", "చిలకడదుంప", "చెమదుంప", "అల్లం"],
+    "1 కూరగాయలు": ["టమాటలు", "వంకాయలు", "బెండకాయలు", "దోసకాయలు", "కాకరకాయలు", "బీరకాయలు", "పొట్లకాయలు", "సొరకాయలు", "దొండకాయలు", "గుమ్మడికాయ", "బూడిద గుమ్మడికాయ", "మునగకాయలు", "పచ్చిమిరపకాయలు", "గోరుచిక్కుడు", "బీన్స్", "చిక్కుడు", "అరటికాయలు", "మామిడికాయలు", "క్యాబేజీ", "కాలిఫ్లవర్"],
+    "2 వేరు కూరగాయలు": ["ఉల్లిపాయలు", "వెల్లుల్లి", "కేరట్", "బీట్ రూట్", "ముల్లంగి", "బంగాళాదుంపలు", "చిలకడదుంపలు", "చెమదుంపలు", "అల్లం"],
     "3 ఆకుకూరలు": ["పాలకూర", "తోటకూర", "మెంతికూర", "కొత్తిమీర", "పుదీనా", "కరివేపాకు", "గోంగూర"],
-    "4 అరటి పళ్ళు": ["కర్పూరం", "పచ్చ చేక్కరకేళి", "ఎర్ర చేక్కరకేళి", "అమృతపాణి", "త్రయ అరిటి పళ్ళు"],
+    "4 అరటి పళ్ళు": ["కర్పూరం", "పచ్చ చేక్కరకేళి", "ఎర్ర చేక్కరకేళి", "అమృతపాణి", "ట్రే అరిటి పళ్ళు"],
     "5 పువ్వులు": ["బంతి పువ్వులు", "పసుపు చామంతి", "తెల్ల చామంతి", "గులాబీ", "మలబార్", "మల్లె పువ్వులు", "మల్లె పూలదండ", "సన్నజాజులు", "సన్నజాజుల దండ"],
-    "6 కొబ్బరిబొండాలు": ["కేరళ బొండాలు", "ఆంధ్ర బొండాలు"],
-    "7 ఇతర వస్తువులు": ["కొబ్బరికాయలు", "బెల్లం", "తేనే పాకం"],
+    "6 కొబ్బరిబొండాలు": ["కేరళ బొండాలు", "కేరళ నెంబర్ కాయ", "కేరళ గ్రేడ్ కాయ", "ఆంధ్ర బొండాలు", "ఆంధ్ర నెంబర్ కాయ", "ఆంధ్ర గ్రేడ్ కాయ"],
+    "7 ఇతర వస్తువులు": ["కొబ్బరికాయలు", "బెల్లం", "తేనే పాకం"]
 };
 
 /* ------------ Helpers ------------ */
@@ -79,6 +80,12 @@ const getWritePath = (user) => {
     return key ? `Shop/${key}` : "Shop";
 };
 
+// Check if user has admin privileges
+const hasAdminAccess = (user) => {
+    const role = (user?.role || "").toLowerCase();
+    return role === "admin" || role === "superadmin";
+};
+
 export default function PurchaseDetails() {
     const { user: authUser } = useAuth?.() || {};
 
@@ -100,16 +107,21 @@ export default function PurchaseDetails() {
     // For backward compatibility with older references:
     const DB_PATH = DB_READ_PATH;
 
+    // Check admin access
+    const isAdminUser = useMemo(() => hasAdminAccess(authUser), [authUser]);
+
     // ── Delete modal state
     const [showDeleteModal, setShowDeleteModal] = useState(false);
     const [deleteRow, setDeleteRow] = useState(null);
 
     const openDelete = (row) => {
+        if (!isAdminUser) return; // Only admins can delete
         setDeleteRow(row);
         setShowDeleteModal(true);
     };
 
     const confirmDelete = async () => {
+        if (!isAdminUser) return; // Additional security check
         try {
             const row = deleteRow;
             if (!row) return;
@@ -141,7 +153,6 @@ export default function PurchaseDetails() {
                 }, 0),
         [allRows, dateStr]
     );
-
 
     /* ------------ Date options ------------ */
     const daysInMonth = useMemo(
@@ -394,6 +405,7 @@ export default function PurchaseDetails() {
 
     /* ------------ Selling-Rate editor helpers (ID-based) ------------ */
     const beginEditSelling = (row) => {
+        if (!isAdminUser) return; // Only admins can edit selling rate
         setEditingKey(row.id);
         setSellDraft(row?.sellingRate ?? "");
     };
@@ -402,6 +414,7 @@ export default function PurchaseDetails() {
         setSellDraft("");
     };
     const saveEditSelling = async () => {
+        if (!isAdminUser) return; // Additional security check
         const row = byId[editingKey];
         if (!row) return cancelEditSelling();
 
@@ -465,8 +478,10 @@ export default function PurchaseDetails() {
                         </select>
                     </div>
 
-                    <div className="small text-warning">
-                        కొన్న వస్తువులు: {itemsLoadedForDate} • Date: <strong>{dateStr}</strong>
+                    <div className="small text-warning justify-content-center d-flex flex-wrap gap-2">
+                        <h6 >మొత్తం కొన్న వస్తువులు: </h6>
+                        <span className="badge bg-warning fw-bold fs-6 px-3 py-1 w-50">{itemsLoadedForDate}</span>
+                        {isAdminUser && <span className="badge bg-warning text-dark ms-2">Admin Mode</span>}
                     </div>
                 </div>
             </div>
@@ -535,11 +550,13 @@ export default function PurchaseDetails() {
                                 <i className="fas fa-chart-line text-warning me-2"></i>SELLING RATE
                             </small>
                         </div>
-                        <div className="col-md-1 p-3 text-center">
-                            <small className="text-light fw-bold">
-                                <i className="fas fa-ellipsis-h text-light me-2"></i>ACTIONS
-                            </small>
-                        </div>
+                        {isAdminUser && (
+                            <div className="col-md-1 p-3 text-center">
+                                <small className="text-light fw-bold">
+                                    <i className="fas fa-ellipsis-h text-light me-2"></i>ACTIONS
+                                </small>
+                            </div>
+                        )}
                     </div>
 
                     {/* Rows */}
@@ -553,7 +570,7 @@ export default function PurchaseDetails() {
                         return (
                             <div key={grp.title}>
                                 {/* Category header */}
-                                <div className="p-1 bg-secondary rounded"></div>
+                                <div className="p-1 bg-secondary rounded d-md-none"></div>
                                 <div className="row g-0 mb-1 mt-3">
                                     <div className="col-12">
                                         <div
@@ -703,37 +720,40 @@ export default function PurchaseDetails() {
                                                             <div className="d-flex align-items-center gap-2">
                                                                 <span
                                                                     role="button"
-                                                                    className="badge fw-bold px-3 py-2"
-                                                                    onClick={() => beginEditSelling(item)}
-                                                                    title="Click to edit selling rate"
+                                                                    className={`badge fw-bold px-3 py-2 ${isAdminUser ? "cursor-pointer" : "cursor-default"}`}
+                                                                    onClick={isAdminUser ? () => beginEditSelling(item) : undefined}
+                                                                    title={isAdminUser ? "Click to edit selling rate" : "Admin access required"}
                                                                     style={{
                                                                         background: "linear-gradient(135deg, #d97706 0%, #f59e0b 100%)",
                                                                         border: "1px solid rgba(245, 158, 11, 0.5)",
                                                                         fontSize: "0.85rem",
                                                                         transition: "all 0.2s ease",
-                                                                        cursor: "pointer",
+                                                                        cursor: isAdminUser ? "pointer" : "default",
+                                                                        opacity: isAdminUser ? 1 : 0.7,
                                                                     }}
                                                                 >
                                                                     <i className="fas fa-rupee-sign me-1"></i>
                                                                     {item?.sellingRate || "0"}
                                                                 </span>
-                                                                <small className="text-muted d-none d-md-block">Click to edit</small>
+                                                                {isAdminUser && <small className="text-muted d-none d-md-block">Click to edit</small>}
                                                             </div>
                                                         )}
                                                     </div>
                                                 </div>
 
-                                                {/* Actions */}
-                                                <div className="col-md-1 text-center">
-                                                    <button
-                                                        className="btn btn-sm btn-outline-danger"
-                                                        title="Delete this entry"
-                                                        onClick={() => openDelete(item)}
-                                                    >
-                                                        <i className="fas fa-trash"></i>
-                                                        <span className="d-none d-lg-inline"> Delete</span>
-                                                    </button>
-                                                </div>
+                                                {/* Actions - Only show for admin users */}
+                                                {isAdminUser && (
+                                                    <div className="col-md-1 text-center">
+                                                        <button
+                                                            className="btn btn-sm btn-outline-danger"
+                                                            title="Delete this entry"
+                                                            onClick={() => openDelete(item)}
+                                                        >
+                                                            <i className="fas fa-trash"></i>
+                                                            <span className="d-none d-lg-inline"> Delete</span>
+                                                        </button>
+                                                    </div>
+                                                )}
                                             </div>
 
                                             {/* Mobile View */}
@@ -746,47 +766,49 @@ export default function PurchaseDetails() {
                                                             <i className="fas fa-carrot text-warning me-2"></i>
                                                             <strong className="text-light">{item.subCategory}</strong>
                                                         </div>
-                                                        <button
-                                                            className="btn btn-sm btn-outline-danger"
-                                                            title="Delete this entry"
-                                                            onClick={() => openDelete(item)}
-                                                        >
-                                                            <i className="fas fa-trash"></i>
-                                                            Delete
-                                                        </button>
+                                                        {isAdminUser && (
+                                                            <button
+                                                                className="btn btn-sm btn-outline-danger"
+                                                                title="Delete this entry"
+                                                                onClick={() => openDelete(item)}
+                                                            >
+                                                                <i className="fas fa-trash"></i>
+                                                                Delete
+                                                            </button>
+                                                        )}
                                                     </div>
 
                                                     {/* Data Rows with Telugu Labels */}
                                                     <div className="row g-2">
                                                         {/* Quantity */}
                                                         <div className="col-6">
-                                                            <div className="d-flex justify-content-between align-items-center p-2 rounded flex-wrap h-100" style={{ background: "rgba(6, 182, 212, 0.1)" }}>
-                                                                <div className="text-info fw-bold">పరిమాణం:</div>
-                                                                <span className="text-light fw-bold">{item.quantity || 0} kg</span>
+                                                            <div className="d-flex justify-content-center text-center align-items-center p-2 rounded flex-wrap h-100" style={{ background: "rgba(6, 182, 212, 0.1)" }}>
+                                                                <div className="text-info fw-bold w-100">పరిమాణం:</div>
+                                                                <span className="text-light fw-bold w-100">{item.quantity || 0} kg</span>
                                                             </div>
                                                         </div>
 
                                                         {/* Price */}
                                                         <div className="col-6">
-                                                            <div className="d-flex justify-content-between align-items-center p-2 rounded flex-wrap h-100" style={{ background: "rgba(59, 130, 246, 0.1)" }}>
-                                                                <div className="text-primary fw-bold">ధర:</div>
-                                                                <span className="text-light fw-bold">{fmtINR(item.price)}</span>
+                                                            <div className="d-flex justify-content-center text-center align-items-center p-2 rounded flex-wrap h-100" style={{ background: "rgba(59, 130, 246, 0.1)" }}>
+                                                                <div className="text-primary fw-bold w-100">ధర:</div>
+                                                                <span className="text-light fw-bold w-100">{fmtINR(item.price)}</span>
                                                             </div>
                                                         </div>
 
                                                         {/* Total */}
                                                         <div className="col-6">
-                                                            <div className="d-flex justify-content-between align-items-center p-2 rounded lex-wrap h-100" style={{ background: "rgba(16, 185, 129, 0.1)" }}>
-                                                                <div className="text-success fw-bold">మొత్తం:</div>
-                                                                <span className="text-warning fw-bold">{fmtINR(totalNow)}</span>
+                                                            <div className="d-flex justify-content-center text-center align-items-center flex-wrap p-2 rounded lex-wrap h-100" style={{ background: "rgba(16, 185, 129, 0.1)" }}>
+                                                                <div className="text-success fw-bold w-100">మొత్తం:</div>
+                                                                <span className="text-warning fw-bold w-100">{fmtINR(totalNow)}</span>
                                                             </div>
                                                         </div>
 
                                                         {/* Purchased By */}
                                                         <div className="col-6">
-                                                            <div className="d-flex justify-content-between align-items-center p-2 rounded flex-wrap h-100" style={{ background: "rgba(139, 92, 246, 0.1)" }}>
-                                                                <div className="text-info fw-bold">కొన్నవారు:</div>
-                                                                <span className="text-light fw-bold" style={{ fontSize: "0.8rem" }}>
+                                                            <div className="d-flex justify-content-center text-center align-items-center p-2 rounded flex-wrap h-100" style={{ background: "rgba(139, 92, 246, 0.1)" }}>
+                                                                <div className="text-info fw-bold w-100">కొన్నవారు:</div>
+                                                                <span className="text-light fw-bold w-100" style={{ fontSize: "0.8rem" }}>
                                                                     {item.createdByName || item.updatedByName || "Unknown"}
                                                                 </span>
                                                             </div>
@@ -799,7 +821,7 @@ export default function PurchaseDetails() {
                                                                 <div className="d-flex align-items-center gap-2">
                                                                     {isEditing ? (
                                                                         <div className="d-flex gap-2 align-items-center">
-                                                                            <div className="input-group input-group-sm" style={{ maxWidth: "120px" }}>
+                                                                            <div className="input-group input-group-sm" style={{ maxWidth: "150px" }}>
                                                                                 <span className="input-group-text bg-dark border-secondary text-light">₹</span>
                                                                                 <input
                                                                                     type="number"
@@ -807,38 +829,47 @@ export default function PurchaseDetails() {
                                                                                     value={sellDraft}
                                                                                     onChange={(e) => setSellDraft(e.target.value)}
                                                                                     autoFocus
+                                                                                    style={{ minWidth: "80px" }}
                                                                                 />
                                                                             </div>
                                                                             <button
-                                                                                className="btn btn-sm btn-success px-2"
+                                                                                className="btn btn-sm btn-success px-2 d-flex align-items-center gap-1"
                                                                                 onClick={() => saveEditSelling(item)}
                                                                                 title="Save"
+                                                                                style={{ minWidth: "60px" }}
                                                                             >
-                                                                                <i className="fas fa-check"></i>
+                                                                                <i className="fas fa-check small"></i> Save
                                                                             </button>
                                                                             <button
-                                                                                className="btn btn-sm btn-danger px-2"
+                                                                                className="btn btn-sm btn-danger px-2 d-flex align-items-center gap-1"
                                                                                 onClick={cancelEditSelling}
                                                                                 title="Cancel"
+                                                                                style={{ minWidth: "60px" }}
                                                                             >
-                                                                                <i className="fas fa-times"></i>
+                                                                                <i className="fas fa-times small"></i> Cancel
                                                                             </button>
                                                                         </div>
                                                                     ) : (
-                                                                        <span
-                                                                            role="button"
-                                                                            className="badge fw-bold px-3 py-2"
-                                                                            onClick={() => beginEditSelling(item)}
-                                                                            title="Click to edit selling rate"
-                                                                            style={{
-                                                                                background: "linear-gradient(135deg, #d97706 0%, #f59e0b 100%)",
-                                                                                border: "1px solid rgba(245, 158, 11, 0.5)",
-                                                                                fontSize: "0.85rem",
-                                                                            }}
-                                                                        >
-                                                                            <i className="fas fa-rupee-sign me-1"></i>
-                                                                            {item?.sellingRate || "0"}
-                                                                        </span>
+                                                                        <div className="d-flex align-items-center gap-2">
+                                                                            <span
+                                                                                role="button"
+                                                                                className={`badge fw-bold px-3 py-2 ${isAdminUser ? "cursor-pointer" : "cursor-default"}`}
+                                                                                onClick={isAdminUser ? () => beginEditSelling(item) : undefined}
+                                                                                title={isAdminUser ? "Click to edit selling rate" : "Admin access required"}
+                                                                                style={{
+                                                                                    background: "linear-gradient(135deg, #d97706 0%, #f59e0b 100%)",
+                                                                                    border: "1px solid rgba(245, 158, 11, 0.5)",
+                                                                                    fontSize: "0.85rem",
+                                                                                    transition: "all 0.2s ease",
+                                                                                    cursor: isAdminUser ? "pointer" : "default",
+                                                                                    opacity: isAdminUser ? 1 : 0.7,
+                                                                                }}
+                                                                            >
+                                                                                <i className="fas fa-rupee-sign me-1"></i>
+                                                                                {item?.sellingRate || "0"}
+                                                                            </span>
+                                                                            {isAdminUser && <small className="text-muted">Click to edit</small>}
+                                                                        </div>
                                                                     )}
                                                                 </div>
                                                             </div>
@@ -849,67 +880,82 @@ export default function PurchaseDetails() {
                                         </React.Fragment>
                                     );
                                 })}
-
-                                {/* Category total row */}
-                                <div className="row g-0 align-items-center py-2 d-none d-md-flex" style={{ borderTop: "1px dashed #374151" }}>
-                                    <div className="col-md-1 text-center"></div>
-                                    <div className="col-md-2 ps-3">
-                                        <strong className="text-info">Category Total</strong>
-                                    </div>
-                                    <div className="col-md-1 text-center"></div>
-                                    <div className="col-md-1 text-center"></div>
-                                    <div className="col-md-2 text-center">
-                                        <span className="badge bg-success">{fmtINR(catTotal)}</span>
-                                    </div>
-                                    <div className="col-md-2 text-center"></div>
-                                    <div className="col-md-2 text-center"></div>
-                                    <div className="col-md-1 text-center"></div>
-                                </div>
-
-                                {/* Mobile Category Total */}
-                                <div className="d-md-none mt-2 mb-3">
-                                    <div className="card bg-success border-0">
-                                        <div className="card-body py-2 text-center">
-                                            <strong className="text-white">
-                                                <i className="fas fa-tag me-2"></i>
-                                                {grp.title} మొత్తం: {fmtINR(catTotal)}
-                                            </strong>
-                                        </div>
-                                    </div>
-                                </div>
                             </div>
                         );
                     })}
 
-                    {/* Grand total row */}
-                    <div className="row g-0 align-items-center py-3 mt-2 d-none d-md-flex" style={{ borderTop: "2px solid #4b5563" }}>
-                        <div className="col-md-1 text-center"></div>
-                        <div className="col-md-2 ps-3">
-                            <strong className="text-warning">Grand Total</strong>
-                        </div>
-                        <div className="col-md-1 text-center"></div>
-                        <div className="col-md-1 text-center"></div>
-                        <div className="col-md-2 text-center">
-                            <span className="badge bg-warning text-dark">{fmtINR(grandTotalForDate)}</span>
-                        </div>
-                        <div className="col-md-2 text-center"></div>
-                        <div className="col-md-2 text-center"></div>
-                        <div className="col-md-1 text-center"></div>
-                    </div>
-
-                    {/* Mobile Grand Total */}
-                    <div className="d-md-none mt-3">
-                        <div className="card bg-warning border-0">
-                            <div className="card-body py-3 text-center">
-                                <h5 className="text-dark mb-0 fw-bold">
-                                    <i className="fas fa-receipt me-2"></i>
-                                    మొత్తం మొత్తం: {fmtINR(grandTotalForDate)}
-                                </h5>
+                    {/* Grand Total */}
+                    <div className="row g-0 mt-4">
+                        <div className="col-12">
+                            <div
+                                className="d-flex align-items-center justify-content-between flex-wrap p-3 rounded gap-2"
+                                style={{
+                                    background: "linear-gradient(135deg, #059669 0%, #10b981 100%)",
+                                    border: "2px solid rgba(16, 185, 129, 0.3)",
+                                }}
+                            >
+                                <div className="d-flex align-items-center">
+                                    <i className="fas fa-calculator text-light me-2 fa-lg"></i>
+                                    <h6 className="text-light mb-0 fw-bold">{dateStr} కి మొత్తం ఖర్చు</h6>
+                                </div>
+                                <div>
+                                    <span className="badge bg-warning text-dark fw-bold px-4 py-2 fs-4">
+                                        {fmtINR(grandTotalForDate)}
+                                    </span>
+                                </div>
                             </div>
                         </div>
                     </div>
                 </div>
             )}
+
+            {/* Delete Confirmation Modal */}
+            {showDeleteModal && (
+                <div className="modal show d-block" style={{ backgroundColor: "rgba(0,0,0,0.7)" }}>
+                    <div className="modal-dialog modal-dialog-centered">
+                        <div className="modal-content bg-dark border border-danger">
+                            <div className="modal-header border-danger">
+                                <h5 className="modal-title text-danger">
+                                    <i className="fas fa-exclamation-triangle me-2"></i>
+                                    Confirm Delete
+                                </h5>
+                                <button type="button" className="btn-close btn-close-white" onClick={cancelDelete}></button>
+                            </div>
+                            <div className="modal-body">
+                                <div className="alert alert-danger">
+                                    <i className="fas fa-exclamation-circle me-2"></i>
+                                    Are you sure you want to delete this purchase entry?
+                                </div>
+                                {deleteRow && (
+                                    <div className="bg-gray-800 p-3 rounded">
+                                        <div className="text-light">
+                                            <strong>Vegetable:</strong> {deleteRow.subCategory}
+                                        </div>
+                                        <div className="text-light">
+                                            <strong>Date:</strong> {deleteRow.date}
+                                        </div>
+                                        <div className="text-light">
+                                            <strong>Quantity:</strong> {deleteRow.quantity}
+                                        </div>
+                                        <div className="text-light">
+                                            <strong>Price:</strong> {fmtINR(deleteRow.price)}
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                            <div className="modal-footer border-danger">
+                                <button type="button" className="btn btn-secondary" onClick={cancelDelete}>
+                                    <i className="fas fa-times me-2"></i>Cancel
+                                </button>
+                                <button type="button" className="btn btn-danger" onClick={confirmDelete}>
+                                    <i className="fas fa-trash me-2"></i>Delete Entry
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
 
             {/* ===================== MONTHLY PRICE TRACKER ===================== */}
             <h5 className="mt-5 mb-3 text-warning">

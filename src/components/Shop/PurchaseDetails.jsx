@@ -431,7 +431,7 @@ export default function PurchaseDetails() {
         <div className="p-3 bg-dark border border-secondary rounded-3">
             {/* Controls + Info */}
             <div className="alert alert-info mb-3 text-warning">
-                <div className="d-flex flex-wrap align-items-center justify-content-between">
+                <div className="d-flex flex-wrap align-items-center justify-content-between gap-3">
                     <div className="d-flex gap-2 align-items-center flex-wrap">
                         <select
                             className="form-select form-select-sm bg-secondary text-light border-secondary"
@@ -553,6 +553,7 @@ export default function PurchaseDetails() {
                         return (
                             <div key={grp.title}>
                                 {/* Category header */}
+                                <div className="p-1 bg-secondary rounded"></div>
                                 <div className="row g-0 mb-1 mt-3">
                                     <div className="col-12">
                                         <div
@@ -1035,7 +1036,6 @@ export default function PurchaseDetails() {
             <style>{`
         .bg-gray-800 { background-color: #2d3748 !important; }
         .form-label-sm { font-size: 0.75rem; margin-bottom: 0.25rem; }
-       
         .small { font-size: 0.875rem; }
       `}</style>
         </div>

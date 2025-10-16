@@ -2,6 +2,18 @@
 import React, { useEffect, useMemo, useState } from "react";
 import firebaseDB from "../../firebase";
 import { useAuth } from "../../context/AuthContext";
+// import categoryMap from "./VegCatalog";
+
+// Inline catalog (you can switch to import later)
+const categoryMap = {
+    "1 కూరగాయలు": ["టమాట", "వంకాయ", "బెండకాయ", "దోసకాయ", "కాకరకాయ", "బీరకాయ", "పొట్లకాయ", "సొరకాయ", "దొండకాయ", "గుమ్మడికాయ", "బూడిద గుమ్మడికాయ", "మునగకాయ", "పచ్చిమిరపకాయ", "గోరుచిక్కుడు", "బీన్స్", "చిక్కుడు", "అరటికాయ", "మామిడికాయ", "క్యాబేజీ", "కాలిఫ్లవర్"],
+    "2 వేరు కూరగాయలు": ["ఉల్లిపాయ", "వెల్లుల్లి", "కేరట్", "బీట్ రూట్", "ముల్లంగి", "బంగాళాదుంప", "చిలకడదుంప", "చెమదుంప", "అల్లం"],
+    "3 ఆకుకూరలు": ["పాలకూర", "తోటకూర", "మెంతికూర", "కొత్తిమీర", "పుదీనా", "కరివేపాకు", "గోంగూర"],
+    "4 అరటి పళ్ళు": ["కర్పూరం", "పచ్చ చేక్కరకేళి", "ఎర్ర చేక్కరకేళి", "అమృతపాణి", "త్రయ అరిటి పళ్ళు"],
+    "5 పువ్వులు": ["బంతి పువ్వులు", "పసుపు చామంతి", "తెల్ల చామంతి", "గులాబీ", "మలబార్", "మల్లె పువ్వులు", "మల్లె పూలదండ", "సన్నజాజులు", "సన్నజాజుల దండ"],
+    "6 కొబ్బరిబొండాలు": ["కేరళ బొండాలు", "ఆంధ్ర బొండాలు"],
+    "7 ఇతర వస్తువులు": ["కొబ్బరికాయలు", "బెల్లం", "తేనే పాకం"],
+};
 
 /* ------------ Helpers ------------ */
 const ymd = (d) => {
@@ -13,6 +25,7 @@ const ymd = (d) => {
 };
 
 const safeNum = (v) => (isNaN(Number(v)) ? 0 : Number(v));
+const norm = (s) => String(s || "").trim().toLowerCase();
 
 const getUserName = (user) =>
     user?.name ||
@@ -55,9 +68,8 @@ const deriveBranchKey = (user) =>
 
 const getReadPath = (user) => {
     const role = (user?.role || "").toLowerCase();
-    // admins see all branches
+    // Admins see all branches (Shop). Others see own branch.
     if (role === "guest" || role === "user" || role === "admin" || role === "superadmin") return "Shop";
-    // others see only their branch
     const key = deriveBranchKey(user);
     return key ? `Shop/${key}` : "Shop";
 };
@@ -106,12 +118,8 @@ export default function PurchaseDetails() {
     useEffect(() => {
         setLoading(true);
         const ref = firebaseDB.child(DB_PATH);
-        console.log("PurchaseDetails: Fetching from:", DB_PATH);
-
         const handler = (snap) => {
             const raw = snap.val() || {};
-            console.log("PurchaseDetails: Raw data received:", raw);
-
             let flat = [];
 
             // If reading from Shop (admin), merge all branches
@@ -156,13 +164,11 @@ export default function PurchaseDetails() {
                 });
             }
 
-            console.log("PurchaseDetails: Processed rows:", flat.length, flat);
             setAllRows(flat);
             setLoading(false);
         };
 
-        const errHandler = (err) => {
-            console.error("PurchaseDetails: Firebase read error:", err);
+        const errHandler = () => {
             setAllRows([]);
             setLoading(false);
         };
@@ -171,13 +177,13 @@ export default function PurchaseDetails() {
         return () => ref.off("value", cb);
     }, [DB_PATH]);
 
-    /* ------------ Lookups ------------ */
+    /* ------------ Lookups (inside component) ------------ */
     const byDateVeg = useMemo(() => {
         const map = {};
         for (const r of allRows) {
             if (!r.date || !r.subCategory) continue;
-            // last write wins; acceptable for lookup usage
-            map[`${r.date}::${r.subCategory}`] = r;
+            // normalized key
+            map[`${r.date}::${norm(r.subCategory)}`] = r;
         }
         return map;
     }, [allRows]);
@@ -188,7 +194,7 @@ export default function PurchaseDetails() {
         return map;
     }, [allRows]);
 
-    const getRow = (veg, d = dateStr) => byDateVeg[`${d}::${veg}`] || null;
+    const getRow = (veg, d = dateStr) => byDateVeg[`${d}::${norm(veg)}`] || null;
 
     // Daily (selected date) → group by mainCategory, items as table-like rows
     const dailyGroups = useMemo(() => {
@@ -213,36 +219,77 @@ export default function PurchaseDetails() {
         }));
     }, [allRows, dateStr]);
 
-    // Monthly price tracker columns = all veg names in dataset
+    // Monthly price tracker: vegetables discovered from data (fallback)
     const vegAll = useMemo(() => {
         const s = new Set();
         for (const r of allRows) if (r.subCategory) s.add(r.subCategory);
         return Array.from(s).sort((a, b) => a.localeCompare(b, "te-IN"));
     }, [allRows]);
 
-    // ✅ count only rows for the selected date
+    // Count only rows for selected date
     const itemsLoadedForDate = useMemo(
         () => allRows.filter((r) => r.date === dateStr).length,
         [allRows, dateStr]
     );
 
+    // ===== Totals (must be inside component; use hooks correctly) =====
+    const dayList = useMemo(
+        () =>
+            Array.from({ length: daysInMonth }, (_, i) =>
+                ymd(new Date(year, month, i + 1))
+            ),
+        [year, month, daysInMonth]
+    );
+
+    const rowAt = (veg, date) => {
+        const keyNorm = `${date}::${norm(veg)}`;
+        return byDateVeg[keyNorm] || null;
+    };
+
+    const categoryTotalsByDate = useMemo(() => {
+        const out = {};
+        for (const [catLabel, vegList] of Object.entries(categoryMap)) {
+            out[catLabel] = dayList.map((d) =>
+                vegList.reduce((sum, veg) => {
+                    const r = rowAt(veg, d);
+                    if (!r) return sum;
+                    const qty = safeNum(r.quantity);
+                    const price = safeNum(r.price);
+                    const tot = r?.total != null ? safeNum(r.total) : qty * price;
+                    return sum + tot;
+                }, 0)
+            );
+        }
+        return out;
+    }, [dayList, byDateVeg]);
+
+    const grandTotalsByDate = useMemo(
+        () =>
+            dayList.map((d) =>
+                allRows
+                    .filter((r) => r.date === d)
+                    .reduce((sum, r) => {
+                        const qty = safeNum(r.quantity);
+                        const price = safeNum(r.price);
+                        const tot = r?.total != null ? safeNum(r.total) : qty * price;
+                        return sum + tot;
+                    }, 0)
+            ),
+        [dayList, allRows]
+    );
+
     /* ------------ Write (upsert) with correct branch ------------ */
     const upsert = async (veg, patch, date = dateStr, mainCategoryGuess = "") => {
-        // If we already have a row for this veg/date, update same branch/id
+        // update existing
         const existing = getRow(veg, date);
         if (existing?.id && existing?._branch) {
             const ref = firebaseDB.child(`Shop/${existing._branch}/${existing.id}`);
-
             const quantity =
-                "quantity" in patch
-                    ? safeNum(patch.quantity)
-                    : safeNum(existing?.quantity);
+                "quantity" in patch ? safeNum(patch.quantity) : safeNum(existing?.quantity);
             const price =
                 "price" in patch ? safeNum(patch.price) : safeNum(existing?.price);
             const sellingRate =
-                "sellingRate" in patch
-                    ? safeNum(patch.sellingRate)
-                    : safeNum(existing?.sellingRate);
+                "sellingRate" in patch ? safeNum(patch.sellingRate) : safeNum(existing?.sellingRate);
 
             const payload = {
                 ...existing,
@@ -255,34 +302,26 @@ export default function PurchaseDetails() {
                 updatedByName: getUserName(authUser),
             };
 
-            console.log(
-                "PurchaseDetails: Updating:",
-                `Shop/${existing._branch}/${existing.id}`,
-                payload
-            );
             await ref.set(payload);
-
             setAllRows((prev) => prev.map((r) => (r.id === existing.id ? payload : r)));
             return;
         }
 
-        // Otherwise create a new record under current user's branch
+        // create new
         const listRef = firebaseDB.child(DB_WRITE_PATH);
         const id = listRef.push().key;
 
-        // keep/guess mainCategory
         let mainCategory = mainCategoryGuess || "";
         if (!mainCategory) {
             const anyDate = allRows.find(
-                (r) => r.subCategory === veg && r.mainCategory
+                (r) => norm(r.subCategory) === norm(veg) && r.mainCategory
             );
             mainCategory = anyDate?.mainCategory || "";
         }
 
         const quantity = "quantity" in patch ? safeNum(patch.quantity) : 0;
         const price = "price" in patch ? safeNum(patch.price) : 0;
-        const sellingRate =
-            "sellingRate" in patch ? safeNum(patch.sellingRate) : 0;
+        const sellingRate = "sellingRate" in patch ? safeNum(patch.sellingRate) : 0;
 
         const payload = {
             id,
@@ -301,10 +340,8 @@ export default function PurchaseDetails() {
             updatedByName: getUserName(authUser),
         };
 
-        console.log("PurchaseDetails: Creating:", `${DB_WRITE_PATH}/${id}`, payload);
         await listRef.child(id).set(payload);
 
-        // optimistic
         setAllRows((prev) => {
             const next = prev.slice();
             next.push({ ...payload, _branch: deriveBranchKey(authUser) });
@@ -325,8 +362,7 @@ export default function PurchaseDetails() {
         const row = byId[editingKey];
         if (!row) return cancelEditSelling();
 
-        const branch =
-            row._branch || (DB_PATH.startsWith("Shop/") ? DB_PATH.split("/")[1] : "");
+        const branch = row._branch || (DB_PATH.startsWith("Shop/") ? DB_PATH.split("/")[1] : "");
         const ref = firebaseDB.child(`Shop/${branch}/${row.id}`);
 
         const patch = {
@@ -338,7 +374,6 @@ export default function PurchaseDetails() {
 
         await ref.update(patch);
 
-        // optimistic local update
         setAllRows((prev) => prev.map((r) => (r.id === row.id ? { ...r, ...patch } : r)));
         cancelEditSelling();
     };
@@ -351,11 +386,9 @@ export default function PurchaseDetails() {
 
     return (
         <div className="p-3 bg-dark border border-secondary rounded-3">
-            {/* Debug Info */}
+            {/* Controls + Info */}
             <div className="alert alert-info mb-3 text-warning">
-                {/* Controls */}
                 <div className="d-flex flex-wrap align-items-center justify-content-between">
-
                     <div className="d-flex gap-2 align-items-center">
                         <select
                             className="form-select form-select-sm bg-secondary text-light border-secondary"
@@ -364,9 +397,7 @@ export default function PurchaseDetails() {
                             style={{ width: 140 }}
                         >
                             {["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"].map((m, i) => (
-                                <option key={m} value={i}>
-                                    {m}
-                                </option>
+                                <option key={m} value={i}>{m}</option>
                             ))}
                         </select>
                         <select
@@ -376,9 +407,7 @@ export default function PurchaseDetails() {
                             style={{ width: 110 }}
                         >
                             {yearsAround.map((y) => (
-                                <option key={y} value={y}>
-                                    {y}
-                                </option>
+                                <option key={y} value={y}>{y}</option>
                             ))}
                         </select>
                         <select
@@ -388,24 +417,18 @@ export default function PurchaseDetails() {
                             style={{ width: 150 }}
                         >
                             {Array.from({ length: daysInMonth }, (_, i) => ymd(new Date(year, month, i + 1))).map((d) => (
-                                <option key={d} value={d}>
-                                    {d}
-                                </option>
+                                <option key={d} value={d}>{d}</option>
                             ))}
                         </select>
                     </div>
 
                     <div className="small text-warning">
-                        కొన్న వస్తువులు:  {itemsLoadedForDate} | <strong>Date:</strong>{" "}
-                        {dateStr}
+                        కొన్న వస్తువులు: {itemsLoadedForDate} • Date: <strong>{dateStr}</strong>
                     </div>
                 </div>
-
             </div>
 
-
-
-            {/* ===================== DAILY PURCHASE (TABLE-LIKE ROWS) ===================== */}
+            {/* ===================== DAILY PURCHASE ===================== */}
             <h5 className="mb-3 text-warning">
                 <i className="fas fa-shopping-basket me-2"></i>
                 Daily Purchases — {dateStr}
@@ -428,391 +451,231 @@ export default function PurchaseDetails() {
                 </div>
             ) : (
                 <div className="mb-4">
-                    {/* Data Rows */}
-                    <div className="mb-4">
-                        {/* Table Header */}
-                        <div
-                            className="row g-0 mb-2 rounded-top"
-                            style={{
-                                background: "linear-gradient(135deg, #1f2937 0%, #374151 100%)",
-                                borderBottom: "2px solid #4b5563",
-                            }}
-                        >
-                            <div className="col-md-2 p-3 border-end border-dark">
-                                <small className="text-light fw-bold">
-                                    <i className="fas fa-carrot text-warning me-2"></i>
-                                    VEGETABLE
-                                </small>
-                            </div>
-                            <div className="col-md-1 p-3 border-end border-dark text-center">
-                                <small className="text-light fw-bold">
-                                    <i className="fas fa-weight-hanging text-info me-2"></i>
-                                    QTY
-                                </small>
-                            </div>
-                            <div className="col-md-1 p-3 border-end border-dark text-center">
-                                <small className="text-light fw-bold">
-                                    <i className="fas fa-tag text-primary me-2"></i>
-                                    PRICE
-                                </small>
-                            </div>
-                            <div className="col-md-2 p-3 border-end border-dark text-center">
-                                <small className="text-light fw-bold">
-                                    <i className="fas fa-calculator text-success me-2"></i>
-                                    TOTAL
-                                </small>
-                            </div>
-                            <div className="col-md-2 p-3 border-end border-dark text-center">
-                                <small className="text-light fw-bold">
-                                    <i className="fas fa-user text-info me-2"></i>
-                                    PURCHASED BY
-                                </small>
-                            </div>
-                            <div className="col-md-4 p-3 text-center">
-                                <small className="text-light fw-bold">
-                                    <i className="fas fa-chart-line text-warning me-2"></i>
-                                    SELLING RATE
-                                </small>
-                            </div>
-                        </div>
+                    {/* Header */}
+                    <div
+                        className="row g-0 mb-2 rounded-top"
+                        style={{ background: "linear-gradient(135deg, #1f2937 0%, #374151 100%)", borderBottom: "2px solid #4b5563" }}
+                    >
+                        <div className="col-md-2 p-3 border-end border-dark"><small className="text-light fw-bold"><i className="fas fa-carrot text-warning me-2"></i>VEGETABLE</small></div>
+                        <div className="col-md-1 p-3 border-end border-dark text-center"><small className="text-light fw-bold"><i className="fas fa-weight-hanging text-info me-2"></i>QTY</small></div>
+                        <div className="col-md-1 p-3 border-end border-dark text-center"><small className="text-light fw-bold"><i className="fas fa-tag text-primary me-2"></i>PRICE</small></div>
+                        <div className="col-md-2 p-3 border-end border-dark text-center"><small className="text-light fw-bold"><i className="fas fa-calculator text-success me-2"></i>TOTAL</small></div>
+                        <div className="col-md-2 p-3 border-end border-dark text-center"><small className="text-light fw-bold"><i className="fas fa-user text-info me-2"></i>PURCHASED BY</small></div>
+                        <div className="col-md-4 p-3 text-center"><small className="text-light fw-bold"><i className="fas fa-chart-line text-warning me-2"></i>SELLING RATE</small></div>
+                    </div>
 
-                        {/* Data Rows */}
-                        {dailyGroups.map((grp) => (
-                            <div key={grp.title}>
-                                {/* Category Header */}
-                                <div className="row g-0 mb-1 mt-3">
-                                    <div className="col-12">
-                                        <div
-                                            className="d-flex align-items-center ps-3 py-2 rounded"
-                                            style={{
-                                                background: "rgba(59, 130, 246, 0.1)",
-                                                borderLeft: "4px solid #3b82f6",
-                                            }}
-                                        >
-                                            <i className="fas fa-tag text-info me-2"></i>
-                                            <h5 className="text-warning mb-0 small fw-bold">
-                                                {grp.title}
-                                            </h5>
-                                        </div>
+                    {/* Rows */}
+                    {dailyGroups.map((grp) => (
+                        <div key={grp.title}>
+                            <div className="row g-0 mb-1 mt-3">
+                                <div className="col-12">
+                                    <div className="d-flex align-items-center ps-3 py-2 rounded" style={{ background: "rgba(59, 130, 246, 0.1)", borderLeft: "4px solid #3b82f6" }}>
+                                        <i className="fas fa-tag text-info me-2"></i>
+                                        <h5 className="text-warning mb-0 small fw-bold">{grp.title}</h5>
                                     </div>
                                 </div>
+                            </div>
 
-                                {/* Items */}
-                                {grp.items.map((item, index) => {
-                                    const totalNow =
-                                        item.total ?? safeNum(item.quantity) * safeNum(item.price);
-                                    const isEditing = editingKey === item.id;
-                                    const isEven = index % 2 === 0;
+                            {grp.items.map((item, index) => {
+                                const totalNow = item.total ?? safeNum(item.quantity) * safeNum(item.price);
+                                const isEditing = editingKey === item.id;
+                                const isEven = index % 2 === 0;
 
-                                    return (
-                                        <div
-                                            className={`row g-0 align-items-center py-2 ${isEven ? "" : "bg-gray-800"}`}
-                                            key={item.id}
-                                            style={{
-                                                borderBottom: "1px solid #374151",
-                                                borderLeft: "2px solid transparent",
-                                                borderRight: "2px solid transparent",
-                                                background: isEven
-                                                    ? "rgba(17, 24, 39, 0.7)"
-                                                    : "rgba(31, 41, 55, 0.7)",
-                                                transition: "all 0.2s ease",
-                                                margin: "1px 0",
-                                            }}
-                                        >
-                                            {/* Vegetable Name */}
-                                            <div className="col-md-2 ps-3">
-                                                <div className="d-flex align-items-center">
-                                                    <i className="fas fa-carrot text-warning me-2"></i>
-                                                    <div>
-                                                        <strong
-                                                            className="text-light d-block"
-                                                            style={{ fontSize: "0.8rem" }}
-                                                        >
-                                                            {item.subCategory}
-                                                        </strong>
-                                                    </div>
-                                                </div>
-                                            </div>
-
-                                            {/* Quantity - Non-editable */}
-                                            <div className="col-md-1 text-center">
-                                                <div className="d-flex align-items-center justify-content-center">
-                                                    <span
-                                                        className="text-light fw-semibold px-2 py-1 rounded"
-                                                        style={{
-                                                            fontSize: "0.85rem",
-                                                            background: "rgba(6, 182, 212, 0.15)",
-                                                            border: "1px solid rgba(6, 182, 212, 0.3)",
-                                                            minWidth: "50px",
-                                                        }}
-                                                    >
-                                                        {item.quantity || 0}
-                                                    </span>
-                                                </div>
-                                            </div>
-
-                                            {/* Price - Non-editable */}
-                                            <div className="col-md-1 text-center">
-                                                <div className="d-flex align-items-center justify-content-center">
-                                                    <span
-                                                        className="text-light fw-semibold px- py-1 rounded"
-                                                        style={{
-                                                            fontSize: "0.85rem",
-                                                            background: "rgba(59, 130, 246, 0.15)",
-                                                            border: "1px solid rgba(59, 130, 246, 0.3)",
-                                                            minWidth: "70px",
-                                                        }}
-                                                    >
-                                                        ₹{item.price || 0}
-                                                    </span>
-                                                </div>
-                                            </div>
-
-                                            {/* Total */}
-                                            <div className="col-md-2 text-center">
-                                                <div className="d-flex align-items-center justify-content-center">
-                                                    <span
-                                                        className="badge fw-bold px-3 py-2"
-                                                        style={{
-                                                            fontSize: "0.85rem",
-                                                            background:
-                                                                "linear-gradient(135deg, #059669 0%, #10b981 100%)",
-                                                            border: "1px solid rgba(16, 185, 129, 0.5)",
-                                                        }}
-                                                    >
-                                                        ₹{totalNow || 0}
-                                                    </span>
-                                                </div>
-                                            </div>
-
-                                            {/* Purchased By */}
-                                            <div className="col-md-2 text-center">
-                                                <div className="d-flex align-items-center justify-content-center">
-                                                    <span
-                                                        className="text-light fw-semibold px-2 py-1 rounded"
-                                                        style={{
-                                                            fontSize: "0.8rem",
-                                                            background: "rgba(139, 92, 246, 0.15)",
-                                                            border: "1px solid rgba(139, 92, 246, 0.3)",
-                                                            maxWidth: "120px",
-                                                            overflow: "hidden",
-                                                            textOverflow: "ellipsis",
-                                                            whiteSpace: "nowrap",
-                                                        }}
-                                                        title={item.createdByName || item.updatedByName || "Unknown"}
-                                                    >
-                                                        <i className="fas fa-user me-1 text-info"></i>
-                                                        {item.createdByName || item.updatedByName || "Unknown"}
-                                                    </span>
-                                                </div>
-                                            </div>
-
-                                            {/* Selling Rate - Editable (ID-based) */}
-                                            <div className="col-md-4 text-center">
-                                                <div className="d-flex align-items-center justify-content-center">
-                                                    {isEditing ? (
-                                                        <div className="d-flex gap-2 align-items-center">
-                                                            <div className="input-group input-group-sm" style={{ maxWidth: "150px" }}>
-                                                                <span className="input-group-text bg-dark border-secondary text-light">₹</span>
-                                                                <input
-                                                                    type="number"
-                                                                    className="form-control form-control-sm text-center border-secondary bg-dark text-light"
-                                                                    value={sellDraft}
-                                                                    onChange={(e) => setSellDraft(e.target.value)}
-                                                                    autoFocus
-                                                                    style={{ minWidth: "80px" }}
-                                                                />
-                                                            </div>
-                                                            <button
-                                                                className="btn btn-sm btn-success px-2 d-flex align-items-center gap-1"
-                                                                onClick={saveEditSelling}
-                                                                title="Save"
-                                                                style={{ minWidth: "60px" }}
-                                                            >
-                                                                <i className="fas fa-check small"></i>
-                                                                Save
-                                                            </button>
-                                                            <button
-                                                                className="btn btn-sm btn-danger px-2 d-flex align-items-center gap-1"
-                                                                onClick={cancelEditSelling}
-                                                                title="Cancel"
-                                                                style={{ minWidth: "60px" }}
-                                                            >
-                                                                <i className="fas fa-times small"></i>
-                                                                Cancel
-                                                            </button>
-                                                        </div>
-                                                    ) : (
-                                                        <div className="d-flex align-items-center gap-2">
-                                                            <span
-                                                                role="button"
-                                                                className="badge fw-bold px-3 py-2"
-                                                                onClick={() => beginEditSelling(item)}
-                                                                title="Click to edit selling rate"
-                                                                style={{
-                                                                    background:
-                                                                        "linear-gradient(135deg, #d97706 0%, #f59e0b 100%)",
-                                                                    border: "1px solid rgba(245, 158, 11, 0.5)",
-                                                                    fontSize: "0.85rem",
-                                                                    transition: "all 0.2s ease",
-                                                                    cursor: "pointer",
-                                                                }}
-                                                                onMouseEnter={(e) => {
-                                                                    e.target.style.transform = "scale(1.05)";
-                                                                    e.target.style.boxShadow =
-                                                                        "0 4px 12px rgba(245, 158, 11, 0.3)";
-                                                                }}
-                                                                onMouseLeave={(e) => {
-                                                                    e.target.style.transform = "scale(1)";
-                                                                    e.target.style.boxShadow = "none";
-                                                                }}
-                                                            >
-                                                                <i className="fas fa-rupee-sign me-1"></i>
-                                                                {item?.sellingRate || "0"}
-                                                            </span>
-                                                            <small className="text-muted d-none d-md-block">
-                                                                Click to edit
-                                                            </small>
-                                                        </div>
-                                                    )}
-                                                </div>
+                                return (
+                                    <div
+                                        className={`row g-0 align-items-center py-2 ${isEven ? "" : "bg-gray-800"}`}
+                                        key={item.id}
+                                        style={{
+                                            borderBottom: "1px solid #374151",
+                                            background: isEven ? "rgba(17, 24, 39, 0.7)" : "rgba(31, 41, 55, 0.7)",
+                                            transition: "all 0.2s ease",
+                                            margin: "1px 0",
+                                        }}
+                                    >
+                                        <div className="col-md-2 ps-3">
+                                            <div className="d-flex align-items-center">
+                                                <i className="fas fa-carrot text-warning me-2"></i>
+                                                <strong className="text-light d-block" style={{ fontSize: "0.8rem" }}>{item.subCategory}</strong>
                                             </div>
                                         </div>
-                                    );
-                                })}
-                            </div>
-                        ))}
-                    </div>
+
+                                        <div className="col-md-1 text-center">
+                                            <span className="text-light fw-semibold px-2 py-1 rounded" style={{ fontSize: "0.85rem", background: "rgba(6, 182, 212, 0.15)", border: "1px solid rgba(6, 182, 212, 0.3)" }}>{item.quantity || 0}</span>
+                                        </div>
+
+                                        <div className="col-md-1 text-center">
+                                            <span className="text-light fw-semibold px-2 py-1 rounded" style={{ fontSize: "0.85rem", background: "rgba(59, 130, 246, 0.15)", border: "1px solid rgba(59, 130, 246, 0.3)" }}>₹{item.price || 0}</span>
+                                        </div>
+
+                                        <div className="col-md-2 text-center">
+                                            <span className="badge fw-bold px-3 py-2" style={{ fontSize: "0.85rem", background: "linear-gradient(135deg, #059669 0%, #10b981 100%)", border: "1px solid rgba(16, 185, 129, 0.5)" }}>₹{totalNow || 0}</span>
+                                        </div>
+
+                                        <div className="col-md-2 text-center">
+                                            <span className="text-light fw-semibold px-2 py-1 rounded" style={{ fontSize: "0.8rem", background: "rgba(139, 92, 246, 0.15)", border: "1px solid rgba(139, 92, 246, 0.3)", maxWidth: "120px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={item.createdByName || item.updatedByName || "Unknown"}>
+                                                <i className="fas fa-user me-1 text-info"></i>
+                                                {item.createdByName || item.updatedByName || "Unknown"}
+                                            </span>
+                                        </div>
+
+                                        <div className="col-md-4 text-center">
+                                            <div className="d-flex align-items-center justify-content-center">
+                                                {isEditing ? (
+                                                    <div className="d-flex gap-2 align-items-center">
+                                                        <div className="input-group input-group-sm" style={{ maxWidth: "150px" }}>
+                                                            <span className="input-group-text bg-dark border-secondary text-light">₹</span>
+                                                            <input type="number" className="form-control form-control-sm text-center border-secondary bg-dark text-light" value={sellDraft} onChange={(e) => setSellDraft(e.target.value)} autoFocus style={{ minWidth: "80px" }} />
+                                                        </div>
+                                                        <button className="btn btn-sm btn-success px-2 d-flex align-items-center gap-1" onClick={saveEditSelling} title="Save" style={{ minWidth: "60px" }}>
+                                                            <i className="fas fa-check small"></i> Save
+                                                        </button>
+                                                        <button className="btn btn-sm btn-danger px-2 d-flex align-items-center gap-1" onClick={cancelEditSelling} title="Cancel" style={{ minWidth: "60px" }}>
+                                                            <i className="fas fa-times small"></i> Cancel
+                                                        </button>
+                                                    </div>
+                                                ) : (
+                                                    <div className="d-flex align-items-center gap-2">
+                                                        <span role="button" className="badge fw-bold px-3 py-2" onClick={() => beginEditSelling(item)} title="Click to edit selling rate" style={{ background: "linear-gradient(135deg, #d97706 0%, #f59e0b 100%)", border: "1px solid rgba(245, 158, 11, 0.5)", fontSize: "0.85rem", transition: "all 0.2s ease", cursor: "pointer" }}>
+                                                            <i className="fas fa-rupee-sign me-1"></i>
+                                                            {item?.sellingRate || "0"}
+                                                        </span>
+                                                        <small className="text-muted d-none d-md-block">Click to edit</small>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    ))}
                 </div>
             )}
 
-            {/* ===================== MONTHLY PRICE TRACKER (VEGETABLES IN COLUMNS, DATES IN ROWS) ===================== */}
+            {/* ===================== MONTHLY PRICE TRACKER ===================== */}
             <h5 className="mt-5 mb-3 text-warning">
                 <i className="fas fa-calendar-alt me-2"></i>
                 Monthly Price Tracker —{" "}
-                {new Date(year, month).toLocaleString("default", {
-                    month: "long",
-                    year: "numeric",
-                })}
+                {new Date(year, month).toLocaleString("default", { month: "long", year: "numeric" })}
             </h5>
 
-            {vegAll.length === 0 ? (
-                <div className="text-center py-4">
-                    <div className="text-muted">
-                        <i className="fas fa-chart-line fa-2x mb-2"></i>
-                        <p>No vegetable data available for tracking</p>
-                    </div>
-                </div>
-            ) : (
-                <div className="table-responsive">
-                    <table className="table table-dark table-bordered align-middle">
-                        <thead>
-                            <tr>
-                                <th style={{ minWidth: 120, textAlign: "center" }}>Vegetable</th>
-                                {Array.from({ length: daysInMonth }, (_, i) => i + 1).map((dayNum) => {
-                                    const fullDate = ymd(new Date(year, month, dayNum));
-                                    const isToday = fullDate === ymd(new Date());
-                                    return (
-                                        <th
-                                            key={dayNum}
-                                            className="text-center"
-                                            style={{
-                                                // minWidth: 70,
-                                                background: isToday ? "rgba(149, 150, 150, 0.15)" : "",
-                                            }}
-                                        >
-                                            <div>
-                                                <div>{dayNum}</div>
-                                                <small
-                                                    className="text-muted"
-                                                    style={{ fontSize: "0.7rem" }}
-                                                >
-                                                    {new Date(year, month, dayNum).toLocaleDateString("en", {
-                                                        weekday: "short",
-                                                    })}
-                                                </small>
-                                            </div>
-                                        </th>
-                                    );
-                                })}
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {vegAll.map((veg) => (
-                                <tr key={veg}>
-                                    <th className="fw-semibold text-warning text-center">
-                                        <div className="d-flex align-items-center justify-content-center gap-2">
-                                            <i className="fas fa-carrot text-warning small"></i>
-                                            {veg}
+            <div className="table-responsive">
+                <table className="table table-dark table-bordered align-middle">
+                    <thead>
+                        <tr>
+                            <th style={{ minWidth: 140, textAlign: "center" }}>Vegetable</th>
+                            {dayList.map((fullDate, i) => {
+                                const isToday = fullDate === ymd(new Date());
+                                const d = new Date(fullDate);
+                                return (
+                                    <th key={i} className="text-center" style={{ background: isToday ? "rgba(149,150,150,0.15)" : "" }}>
+                                        <div>
+                                            <div>{d.getDate()}</div>
+                                            <small className="text-muted" style={{ fontSize: "0.7rem" }}>
+                                                {d.toLocaleDateString("en", { weekday: "short" })}
+                                            </small>
                                         </div>
                                     </th>
+                                );
+                            })}
+                        </tr>
+                    </thead>
 
-                                    {Array.from({ length: daysInMonth }, (_, i) => {
-                                        const fullDate = ymd(new Date(year, month, i + 1));
+                    <tbody>
+                        {Object.entries(categoryMap).map(([catLabel, vegList]) => (
+                            <React.Fragment key={catLabel}>
+                                {/* Category header row */}
+                                <tr>
+                                    <td colSpan={1 + daysInMonth} className="bg-secondary bg-opacity-25">
+                                        <strong className="text-info">
+                                            <i className="fas fa-tag me-2"></i>
+                                            {catLabel}
+                                        </strong>
+                                    </td>
+                                </tr>
+
+                                {/* Vegetables under this category */}
+                                {vegList.map((veg) => (
+                                    <tr key={veg}>
+                                        <th className="fw-semibold text-warning text-center">
+                                            <div className="d-flex align-items-center justify-content-center gap-2">
+                                                <i className="fas fa-carrot text-warning small"></i>
+                                                {veg}
+                                            </div>
+                                        </th>
+
+                                        {dayList.map((fullDate, i) => {
+                                            const isToday = fullDate === ymd(new Date());
+                                            const r = getRow(veg, fullDate);
+                                            const price = safeNum(r?.price);
+
+                                            return (
+                                                <td
+                                                    key={`${veg}-${i}`}
+                                                    className={`text-center ${isToday ? "fw-bold text-warning" : ""}`}
+                                                    style={{ background: isToday ? "rgba(13, 202, 240, 0.1)" : "rgba(27, 33, 46, 0.6)" }}
+                                                    title={price ? `₹${price}` : ""}
+                                                >
+                                                    {price ? (
+                                                        <span className={`${isToday ? "text-warning fw-bold" : "text-light"} small`}>
+                                                            <i className="fas fa-rupee-sign me-1"></i>
+                                                            {price}
+                                                        </span>
+                                                    ) : (
+                                                        <span className="small-text opacity-75">*</span>
+                                                    )}
+                                                </td>
+                                            );
+                                        })}
+                                    </tr>
+                                ))}
+
+                                {/* Category Total row (₹ per day) */}
+                                <tr>
+                                    <th className="text-end pe-2"><span className="badge bg-info">Total</span></th>
+                                    {dayList.map((fullDate, idx) => {
                                         const isToday = fullDate === ymd(new Date());
-                                        const row = byDateVeg[`${fullDate}::${veg}`];
-                                        const price = safeNum(row?.price);
-
+                                        const tot = categoryTotalsByDate[catLabel]?.[idx] || 0;
                                         return (
                                             <td
-                                                key={`${veg}-${i}`}
-                                                className={`text-center ${isToday ? "fw-bold text-warning" : ""}`}
-                                              
+                                                key={`cat-total-${catLabel}-${idx}`}
+                                                className={`text-end ${isToday ? "fw-bold text-warning" : ""}`}
+                                                style={{ background: isToday ? "rgba(13, 202, 240, 0.12)" : "rgba(17, 24, 39, 0.6)" }}
                                             >
-                                                {price ? (
-                                                    <span className={`${isToday ? "text-warning fw-bold" : "text-light"} small`}>
-                                                        <i className="fas fa-rupee-sign me-1"></i>
-                                                        {price}
-                                                    </span>
-                                                ) : (
-                                                    <span className="small-text opacity-75">*</span>
-                                                )}
+                                                <span className="badge ">₹{tot.toLocaleString("en-IN")}</span>
                                             </td>
                                         );
                                     })}
                                 </tr>
-                            ))}
-                        </tbody>
+                            </React.Fragment>
+                        ))}
 
-                    </table>
-                </div>
-            )}
-
+                        {/* Grand Total row (₹ per day across all categories) */}
+                        <tr>
+                            <th className="text-end pe-2"><span className="badge bg-primary">Grand&nbsp;Total</span></th>
+                            {dayList.map((fullDate, idx) => {
+                                const isToday = fullDate === ymd(new Date());
+                                const g = grandTotalsByDate[idx] || 0;
+                                return (
+                                    <td
+                                        key={`grand-total-${idx}`}
+                                        className={`text-end ${isToday ? "fw-bold text-warning" : ""}`}
+                                        style={{ background: isToday ? "rgba(13, 202, 240, 0.2)" : "rgba(17, 24, 39, 0.75)" }}
+                                    >
+                                        <span className="badge bg-warning text-dark">₹{g.toLocaleString("en-IN")}</span>
+                                    </td>
+                                );
+                            })}
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
 
             <style>{`
-        .bg-gray-800 {
-          background-color: #2d3748 !important;
-        }
-        .form-label-sm { 
-          font-size: 0.75rem; 
-          margin-bottom: 0.25rem;
-        }
-        .card input.form-control {
-          background: rgba(255,255,255,0.06);
-          border: 1px solid rgba(255,255,255,0.15);
-          color: #fff;
-        }
-        .card input.form-control:focus {
-          background: rgba(255,255,255,0.12);
-          border-color: #0dcaf0;
-          color: #fff;
-          box-shadow: 0 0 0 0.2rem rgba(13, 202, 240, 0.25);
-        }
-        .badge[role="button"] { 
-          cursor: pointer; 
-          transition: all 0.2s ease;
-        }
-        .badge[role="button"]:hover {
-          transform: scale(1.05);
-        }
-        .table th {
-          background-color: #1f2937 !important;
-          border-color: #374151 !important;
-        }
-      
-        .small {
-          font-size: 0.875rem;
-        }
+        .bg-gray-800 { background-color: #2d3748 !important; }
+        .form-label-sm { font-size: 0.75rem; margin-bottom: 0.25rem; }
+       
+        .small { font-size: 0.875rem; }
       `}</style>
         </div>
     );

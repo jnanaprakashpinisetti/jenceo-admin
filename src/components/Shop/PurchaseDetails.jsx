@@ -100,6 +100,49 @@ export default function PurchaseDetails() {
     // For backward compatibility with older references:
     const DB_PATH = DB_READ_PATH;
 
+    // ── Delete modal state
+    const [showDeleteModal, setShowDeleteModal] = useState(false);
+    const [deleteRow, setDeleteRow] = useState(null);
+
+    const openDelete = (row) => {
+        setDeleteRow(row);
+        setShowDeleteModal(true);
+    };
+
+    const confirmDelete = async () => {
+        try {
+            const row = deleteRow;
+            if (!row) return;
+            const branch = row._branch || (DB_PATH.startsWith("Shop/") ? DB_PATH.split("/")[1] : "");
+            await firebaseDB.child(`Shop/${branch}/${row.id}`).remove();
+            setAllRows((prev) => prev.filter((r) => r.id !== row.id));
+        } finally {
+            setShowDeleteModal(false);
+            setDeleteRow(null);
+        }
+    };
+
+    const cancelDelete = () => {
+        setShowDeleteModal(false);
+        setDeleteRow(null);
+    };
+
+    const fmtINR = (n) => `₹${(Number(n) || 0).toLocaleString("en-IN")}`;
+
+    // Grand total for the selected date
+    const grandTotalForDate = useMemo(
+        () =>
+            allRows
+                .filter((r) => r.date === dateStr)
+                .reduce((sum, r) => {
+                    const qty = safeNum(r.quantity);
+                    const price = safeNum(r.price);
+                    return sum + (r?.total != null ? safeNum(r.total) : qty * price);
+                }, 0),
+        [allRows, dateStr]
+    );
+
+
     /* ------------ Date options ------------ */
     const daysInMonth = useMemo(
         () => new Date(year, month + 1, 0).getDate(),
@@ -454,102 +497,276 @@ export default function PurchaseDetails() {
                     {/* Header */}
                     <div
                         className="row g-0 mb-2 rounded-top"
-                        style={{ background: "linear-gradient(135deg, #1f2937 0%, #374151 100%)", borderBottom: "2px solid #4b5563" }}
+                        style={{
+                            background: "linear-gradient(135deg, #1f2937 0%, #374151 100%)",
+                            borderBottom: "2px solid #4b5563",
+                        }}
                     >
-                        <div className="col-md-2 p-3 border-end border-dark"><small className="text-light fw-bold"><i className="fas fa-carrot text-warning me-2"></i>VEGETABLE</small></div>
-                        <div className="col-md-1 p-3 border-end border-dark text-center"><small className="text-light fw-bold"><i className="fas fa-weight-hanging text-info me-2"></i>QTY</small></div>
-                        <div className="col-md-1 p-3 border-end border-dark text-center"><small className="text-light fw-bold"><i className="fas fa-tag text-primary me-2"></i>PRICE</small></div>
-                        <div className="col-md-2 p-3 border-end border-dark text-center"><small className="text-light fw-bold"><i className="fas fa-calculator text-success me-2"></i>TOTAL</small></div>
-                        <div className="col-md-2 p-3 border-end border-dark text-center"><small className="text-light fw-bold"><i className="fas fa-user text-info me-2"></i>PURCHASED BY</small></div>
-                        <div className="col-md-4 p-3 text-center"><small className="text-light fw-bold"><i className="fas fa-chart-line text-warning me-2"></i>SELLING RATE</small></div>
+                        <div className="col-md-1 p-3 border-end border-dark text-center">
+                            <small className="text-light fw-bold">S.No</small>
+                        </div>
+                        <div className="col-md-2 p-3 border-end border-dark">
+                            <small className="text-light fw-bold">
+                                <i className="fas fa-carrot text-warning me-2"></i>VEGETABLE
+                            </small>
+                        </div>
+                        <div className="col-md-1 p-3 border-end border-dark text-center">
+                            <small className="text-light fw-bold">
+                                <i className="fas fa-weight-hanging text-info me-2"></i>QTY
+                            </small>
+                        </div>
+                        <div className="col-md-1 p-3 border-end border-dark text-center">
+                            <small className="text-light fw-bold">
+                                <i className="fas fa-tag text-primary me-2"></i>PRICE
+                            </small>
+                        </div>
+                        <div className="col-md-2 p-3 border-end border-dark text-center">
+                            <small className="text-light fw-bold">
+                                <i className="fas fa-calculator text-success me-2"></i>TOTAL
+                            </small>
+                        </div>
+                        <div className="col-md-2 p-3 border-end border-dark text-center">
+                            <small className="text-light fw-bold">
+                                <i className="fas fa-user text-info me-2"></i>PURCHASED BY
+                            </small>
+                        </div>
+                        <div className="col-md-2 p-3 border-end border-dark text-center">
+                            <small className="text-light fw-bold">
+                                <i className="fas fa-chart-line text-warning me-2"></i>SELLING RATE
+                            </small>
+                        </div>
+                        <div className="col-md-1 p-3 text-center">
+                            <small className="text-light fw-bold">
+                                <i className="fas fa-ellipsis-h text-light me-2"></i>ACTIONS
+                            </small>
+                        </div>
                     </div>
 
                     {/* Rows */}
-                    {dailyGroups.map((grp) => (
-                        <div key={grp.title}>
-                            <div className="row g-0 mb-1 mt-3">
-                                <div className="col-12">
-                                    <div className="d-flex align-items-center ps-3 py-2 rounded" style={{ background: "rgba(59, 130, 246, 0.1)", borderLeft: "4px solid #3b82f6" }}>
-                                        <i className="fas fa-tag text-info me-2"></i>
-                                        <h5 className="text-warning mb-0 small fw-bold">{grp.title}</h5>
+                    {dailyGroups.map((grp) => {
+                        // per-category total (for the selected date)
+                        const catTotal = grp.items.reduce((sum, item) => {
+                            const t = item?.total != null ? safeNum(item.total) : safeNum(item.quantity) * safeNum(item.price);
+                            return sum + t;
+                        }, 0);
+
+                        return (
+                            <div key={grp.title}>
+                                {/* Category header */}
+                                <div className="row g-0 mb-1 mt-3">
+                                    <div className="col-12">
+                                        <div
+                                            className="d-flex align-items-center ps-3 py-2 rounded"
+                                            style={{ background: "rgba(59, 130, 246, 0.1)", borderLeft: "4px solid #3b82f6" }}
+                                        >
+                                            <i className="fas fa-tag text-info me-2"></i>
+                                            <h5 className="text-warning mb-0 small fw-bold">{grp.title}</h5>
+                                        </div>
                                     </div>
                                 </div>
-                            </div>
 
-                            {grp.items.map((item, index) => {
-                                const totalNow = item.total ?? safeNum(item.quantity) * safeNum(item.price);
-                                const isEditing = editingKey === item.id;
-                                const isEven = index % 2 === 0;
+                                {grp.items.map((item, index) => {
+                                    const totalNow =
+                                        item.total != null ? safeNum(item.total) : safeNum(item.quantity) * safeNum(item.price);
+                                    const isEditing = editingKey === item.id;
+                                    const isEven = index % 2 === 0;
 
-                                return (
-                                    <div
-                                        className={`row g-0 align-items-center py-2 ${isEven ? "" : "bg-gray-800"}`}
-                                        key={item.id}
-                                        style={{
-                                            borderBottom: "1px solid #374151",
-                                            background: isEven ? "rgba(17, 24, 39, 0.7)" : "rgba(31, 41, 55, 0.7)",
-                                            transition: "all 0.2s ease",
-                                            margin: "1px 0",
-                                        }}
-                                    >
-                                        <div className="col-md-2 ps-3">
-                                            <div className="d-flex align-items-center">
-                                                <i className="fas fa-carrot text-warning me-2"></i>
-                                                <strong className="text-light d-block" style={{ fontSize: "0.8rem" }}>{item.subCategory}</strong>
+                                    return (
+                                        <div
+                                            className={`row g-0 align-items-center py-2 ${isEven ? "" : "bg-gray-800"}`}
+                                            key={item.id}
+                                            style={{
+                                                borderBottom: "1px solid #374151",
+                                                background: isEven ? "rgba(17, 24, 39, 0.7)" : "rgba(31, 41, 55, 0.7)",
+                                                transition: "all 0.2s ease",
+                                                margin: "1px 0",
+                                            }}
+                                        >
+                                            {/* S.No */}
+                                            <div className="col-md-1 text-center">
+                                                <span className="text-light small fw-bold">{index + 1}</span>
                                             </div>
-                                        </div>
 
-                                        <div className="col-md-1 text-center">
-                                            <span className="text-light fw-semibold px-2 py-1 rounded" style={{ fontSize: "0.85rem", background: "rgba(6, 182, 212, 0.15)", border: "1px solid rgba(6, 182, 212, 0.3)" }}>{item.quantity || 0}</span>
-                                        </div>
+                                            {/* Vegetable */}
+                                            <div className="col-md-2 ps-3">
+                                                <div className="d-flex align-items-center">
+                                                    <i className="fas fa-carrot text-warning me-2"></i>
+                                                    <strong className="text-light d-block" style={{ fontSize: "0.85rem" }}>
+                                                        {item.subCategory}
+                                                    </strong>
+                                                </div>
+                                            </div>
 
-                                        <div className="col-md-1 text-center">
-                                            <span className="text-light fw-semibold px-2 py-1 rounded" style={{ fontSize: "0.85rem", background: "rgba(59, 130, 246, 0.15)", border: "1px solid rgba(59, 130, 246, 0.3)" }}>₹{item.price || 0}</span>
-                                        </div>
+                                            {/* Quantity */}
+                                            <div className="col-md-1 text-center">
+                                                <span
+                                                    className="text-light fw-semibold px-2 py-1 rounded"
+                                                    style={{
+                                                        fontSize: "0.85rem",
+                                                        background: "rgba(6, 182, 212, 0.15)",
+                                                        border: "1px solid rgba(6, 182, 212, 0.3)",
+                                                    }}
+                                                >
+                                                    {item.quantity || 0}
+                                                </span>
+                                            </div>
 
-                                        {/* <div className="col-md-2 text-center">
-                                            <span className="badge fw-bold px-3 py-2" style={{ fontSize: "0.85rem", background: "linear-gradient(135deg, #059669 0%, #10b981 100%)", border: "1px solid rgba(16, 185, 129, 0.5)" }}>₹{totalNow || 0}</span>
-                                        </div> */}
+                                            {/* Price */}
+                                            <div className="col-md-1 text-center">
+                                                <span
+                                                    className="text-light fw-semibold px-2 py-1 rounded"
+                                                    style={{
+                                                        fontSize: "0.85rem",
+                                                        background: "rgba(59, 130, 246, 0.15)",
+                                                        border: "1px solid rgba(59, 130, 246, 0.3)",
+                                                    }}
+                                                >
+                                                    {fmtINR(item.price)}
+                                                </span>
+                                            </div>
 
-                                        <div className="col-md-2 text-center">
-                                            <span className="text-light fw-semibold px-2 py-1 rounded" style={{ fontSize: "0.8rem", background: "rgba(139, 92, 246, 0.15)", border: "1px solid rgba(139, 92, 246, 0.3)", maxWidth: "120px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={item.createdByName || item.updatedByName || "Unknown"}>
-                                                <i className="fas fa-user me-1 text-info"></i>
-                                                {item.createdByName || item.updatedByName || "Unknown"}
-                                            </span>
-                                        </div>
+                                            {/* Total */}
+                                            <div className="col-md-2 text-center ">
+                                                <span
+                                                    className="badge fw-bold px-3 py-2 text-warning"
+                                                    style={{
+                                                        fontSize: "0.85rem",
+                                                        // background: "linear-gradient(135deg, #059669 0%, #10b981 100%)",
+                                                        // border: "1px solid rgba(16, 185, 129, 0.5)",
+                                                    }}
+                                                >
+                                                    {fmtINR(totalNow)}
+                                                </span>
+                                            </div>
 
-                                        <div className="col-md-4 text-center">
-                                            <div className="d-flex align-items-center justify-content-center">
-                                                {isEditing ? (
-                                                    <div className="d-flex gap-2 align-items-center">
-                                                        <div className="input-group input-group-sm" style={{ maxWidth: "150px" }}>
-                                                            <span className="input-group-text bg-dark border-secondary text-light">₹</span>
-                                                            <input type="number" className="form-control form-control-sm text-center border-secondary bg-dark text-light" value={sellDraft} onChange={(e) => setSellDraft(e.target.value)} autoFocus style={{ minWidth: "80px" }} />
+                                            {/* Purchased By */}
+                                            <div className="col-md-2 text-center">
+                                                <span
+                                                    className="text-light fw-semibold px-2 py-1 rounded"
+                                                    style={{
+                                                        fontSize: "0.8rem",
+                                                        background: "rgba(139, 92, 246, 0.15)",
+                                                        border: "1px solid rgba(139, 92, 246, 0.3)",
+                                                        maxWidth: "140px",
+                                                        overflow: "hidden",
+                                                        textOverflow: "ellipsis",
+                                                        whiteSpace: "nowrap",
+                                                    }}
+                                                    title={item.createdByName || item.updatedByName || "Unknown"}
+                                                >
+                                                    <i className="fas fa-user me-1 text-info"></i>
+                                                    {item.createdByName || item.updatedByName || "Unknown"}
+                                                </span>
+                                            </div>
+
+                                            {/* Selling rate */}
+                                            <div className="col-md-2 text-center">
+                                                <div className="d-flex align-items-center justify-content-center">
+                                                    {isEditing ? (
+                                                        <div className="d-flex gap-2 align-items-center">
+                                                            <div className="input-group input-group-sm" style={{ maxWidth: "150px" }}>
+                                                                <span className="input-group-text bg-dark border-secondary text-light">₹</span>
+                                                                <input
+                                                                    type="number"
+                                                                    className="form-control form-control-sm text-center border-secondary bg-dark text-light"
+                                                                    value={sellDraft}
+                                                                    onChange={(e) => setSellDraft(e.target.value)}
+                                                                    autoFocus
+                                                                    style={{ minWidth: "80px" }}
+                                                                />
+                                                            </div>
+                                                            <button
+                                                                className="btn btn-sm btn-success px-2 d-flex align-items-center gap-1"
+                                                                onClick={saveEditSelling}
+                                                                title="Save"
+                                                                style={{ minWidth: "60px" }}
+                                                            >
+                                                                <i className="fas fa-check small"></i> Save
+                                                            </button>
+                                                            <button
+                                                                className="btn btn-sm btn-danger px-2 d-flex align-items-center gap-1"
+                                                                onClick={cancelEditSelling}
+                                                                title="Cancel"
+                                                                style={{ minWidth: "60px" }}
+                                                            >
+                                                                <i className="fas fa-times small"></i> Cancel
+                                                            </button>
                                                         </div>
-                                                        <button className="btn btn-sm btn-success px-2 d-flex align-items-center gap-1" onClick={saveEditSelling} title="Save" style={{ minWidth: "60px" }}>
-                                                            <i className="fas fa-check small"></i> Save
-                                                        </button>
-                                                        <button className="btn btn-sm btn-danger px-2 d-flex align-items-center gap-1" onClick={cancelEditSelling} title="Cancel" style={{ minWidth: "60px" }}>
-                                                            <i className="fas fa-times small"></i> Cancel
-                                                        </button>
-                                                    </div>
-                                                ) : (
-                                                    <div className="d-flex align-items-center gap-2">
-                                                        <span role="button" className="badge fw-bold px-3 py-2" onClick={() => beginEditSelling(item)} title="Click to edit selling rate" style={{ background: "linear-gradient(135deg, #d97706 0%, #f59e0b 100%)", border: "1px solid rgba(245, 158, 11, 0.5)", fontSize: "0.85rem", transition: "all 0.2s ease", cursor: "pointer" }}>
-                                                            <i className="fas fa-rupee-sign me-1"></i>
-                                                            {item?.sellingRate || "0"}
-                                                        </span>
-                                                        <small className="text-muted d-none d-md-block">Click to edit</small>
-                                                    </div>
-                                                )}
+                                                    ) : (
+                                                        <div className="d-flex align-items-center gap-2">
+                                                            <span
+                                                                role="button"
+                                                                className="badge fw-bold px-3 py-2"
+                                                                onClick={() => beginEditSelling(item)}
+                                                                title="Click to edit selling rate"
+                                                                style={{
+                                                                    background: "linear-gradient(135deg, #d97706 0%, #f59e0b 100%)",
+                                                                    border: "1px solid rgba(245, 158, 11, 0.5)",
+                                                                    fontSize: "0.85rem",
+                                                                    transition: "all 0.2s ease",
+                                                                    cursor: "pointer",
+                                                                }}
+                                                            >
+                                                                <i className="fas fa-rupee-sign me-1"></i>
+                                                                {item?.sellingRate || "0"}
+                                                            </span>
+                                                            <small className="text-muted d-none d-md-block">Click to edit</small>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </div>
+
+                                            {/* Actions */}
+                                            <div className="col-md-1 text-center">
+                                                <button
+                                                    className="btn btn-sm btn-outline-danger"
+                                                    title="Delete this entry"
+                                                    onClick={() => openDelete(item)}
+                                                >
+                                                    <i className="fas fa-trash"></i>
+                                                    Delete
+                                                </button>
                                             </div>
                                         </div>
+                                    );
+                                })}
+
+                                {/* Category total row (aligned to header) */}
+                                <div className="row g-0 align-items-center py-2" style={{ borderTop: "1px dashed #374151" }}>
+                                    <div className="col-md-1 text-center"></div>
+                                    <div className="col-md-2 ps-3">
+                                        <strong className="text-info">Category Total</strong>
                                     </div>
-                                );
-                            })}
+                                    <div className="col-md-1 text-center"></div>
+                                    <div className="col-md-1 text-center"></div>
+                                    <div className="col-md-2 text-center">
+                                        <span className="badge bg-success">{fmtINR(catTotal)}</span>
+                                    </div>
+                                    <div className="col-md-2 text-center"></div>
+                                    <div className="col-md-2 text-center"></div>
+                                    <div className="col-md-1 text-center"></div>
+                                </div>
+                            </div>
+                        );
+                    })}
+
+                    {/* Grand total row (for the selected date) */}
+                    <div className="row g-0 align-items-center py-3 mt-2" style={{ borderTop: "2px solid #4b5563" }}>
+                        <div className="col-md-1 text-center"></div>
+                        <div className="col-md-2 ps-3">
+                            <strong className="text-warning">Grand Total</strong>
                         </div>
-                    ))}
+                        <div className="col-md-1 text-center"></div>
+                        <div className="col-md-1 text-center"></div>
+                        <div className="col-md-2 text-center">
+                            <span className="badge bg-warning text-dark">{fmtINR(grandTotalForDate)}</span>
+                        </div>
+                        <div className="col-md-2 text-center"></div>
+                        <div className="col-md-2 text-center"></div>
+                        <div className="col-md-1 text-center"></div>
+                    </div>
                 </div>
+
             )}
 
             {/* ===================== MONTHLY PRICE TRACKER ===================== */}
@@ -637,6 +854,41 @@ export default function PurchaseDetails() {
                         {/* Grand Total row (₹ per day across all categories) */}
                     </tbody>
                 </table>
+
+                {/* ===================== DELETE CONFIRM MODAL ===================== */}
+                {showDeleteModal && (
+                    <div className="modal fade show d-block" tabIndex="-1" style={{ background: "rgba(0,0,0,0.9)" }}>
+                        <div className="modal-dialog modal-sm modal-dialog-centered">
+                            <div className="modal-content border-0 rounded-4 shadow">
+                                <div className="modal-header bg-danger text-white">
+                                    <h6 className="modal-title d-flex align-items-center gap-2">
+                                        <i className="fas fa-trash"></i> Confirm Delete
+                                    </h6>
+                                    <button type="button" className="btn-close btn-close-white" onClick={cancelDelete}></button>
+                                </div>
+
+                                <div className="modal-body bg-dark text-light">
+                                    <p className="mb-0">
+                                        <strong>{deleteRow?.subCategory}</strong> – {deleteRow?.date}
+                                    </p>
+                                    <small className="text-warning">
+                                        Qty: {deleteRow?.quantity} • Price: {fmtINR(deleteRow?.price)} • Total:{" "}
+                                        {fmtINR(deleteRow?.total ?? (safeNum(deleteRow?.quantity) * safeNum(deleteRow?.price)))}
+                                    </small>
+                                    <div className="alert alert-secondary text-dark mt-3 mb-0">
+                                        ఇది డిలీట్ చెయ్యాలి అనుకుటున్నరా ?
+                                    </div>
+                                </div>
+
+                                <div className="modal-footer bg-dark border-0">
+                                    <button className="btn btn-outline-light" onClick={cancelDelete}>కాదు</button>
+                                    <button className="btn btn-danger fw-bold" onClick={confirmDelete}>అవును</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
             </div>
 
             <style>{`

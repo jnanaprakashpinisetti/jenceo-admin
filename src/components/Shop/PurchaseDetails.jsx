@@ -443,55 +443,214 @@ export default function PurchaseDetails() {
     return (
         <div className="p-3 bg-dark border border-secondary rounded-3 mt-3">
             {/* Controls + Info */}
-            <div className="alert alert-info mb-3 text-warning">
-                <div className="d-flex flex-wrap align-items-center justify-content-between gap-3">
-                    <div className="d-flex gap-2 align-items-center flex-wrap">
-                        <select
-                            className="form-select form-select-sm bg-secondary text-light border-secondary"
-                            value={month}
-                            onChange={(e) => setMonth(parseInt(e.target.value, 10))}
-                            style={{ width: 140 }}
-                        >
-                            {["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"].map((m, i) => (
-                                <option key={m} value={i}>{m}</option>
-                            ))}
-                        </select>
-                        <select
-                            className="form-select form-select-sm bg-secondary text-light border-secondary"
-                            value={year}
-                            onChange={(e) => setYear(parseInt(e.target.value, 10))}
-                            style={{ width: 110 }}
-                        >
-                            {yearsAround.map((y) => (
-                                <option key={y} value={y}>{y}</option>
-                            ))}
-                        </select>
-                        <select
-                            className="form-select form-select-sm bg-secondary text-light border-secondary"
-                            value={dateStr}
-                            onChange={(e) => setDateStr(e.target.value)}
-                            style={{ width: 150 }}
-                        >
-                            {Array.from({ length: daysInMonth }, (_, i) => ymd(new Date(year, month, i + 1))).map((d) => (
-                                <option key={d} value={d}>{d}</option>
-                            ))}
-                        </select>
+            <div
+                className="vegitableHeader"
+                style={{
+                    background: "linear-gradient(135deg, #1e1b4b 0%, #3730a3 50%, #1e1b4b 100%)",
+                    backgroundSize: "200% 200%",
+                    animation: "gradientShift 3s ease infinite",
+                    boxShadow: "0 8px 32px rgba(30, 27, 75, 0.5)",
+                    border: "1px solid rgba(99, 102, 241, 0.3)",
+                    backdropFilter: "blur(10px)"
+                }}
+            >
+                <div className="d-flex flex-column flex-md-row align-items-stretch align-items-md-center justify-content-between gap-3">
+                    {/* Date Controls */}
+                    <div className="d-flex flex-column flex-sm-row gap-3 align-items-stretch w-100">
+                        {/* Month & Year Row for Mobile */}
+                        <div className="d-flex flex-row gap-2 w-100">
+                            {/* Month Select */}
+                            <div className="position-relative flex-fill">
+                                <i className="fas fa-calendar-alt position-absolute top-50 start-0 translate-middle-y ms-3 text-white opacity-75"></i>
+                                <select
+                                    className="form-select form-select-lg border-0 ps-5 py-2 w-100"
+                                    value={month}
+                                    onChange={(e) => setMonth(parseInt(e.target.value, 10))}
+                                    style={{
+                                        background: "linear-gradient(135deg, rgba(30, 41, 59, 0.8) 0%, rgba(15, 23, 42, 0.8) 100%)",
+                                        color: "white",
+                                        borderRadius: "10px",
+                                        backdropFilter: "blur(10px)",
+                                        border: "1px solid rgba(99, 102, 241, 0.4)",
+                                        fontSize: "0.9rem",
+                                        fontWeight: "500",
+                                        minHeight: "48px"
+                                    }}
+                                >
+                                    {["జనవరి", "ఫిబ్రవరి", "మార్చి", "ఏప్రిల్", "మే", "జూన్", "జూలై", "ఆగస్టు", "సెప్టెంబర్", "అక్టోబర్", "నవంబర్", "డిసెంబర్"].map((m, i) => (
+                                        <option key={m} value={i} style={{ background: "#0f172a", color: "white" }}>{m}</option>
+                                    ))}
+                                </select>
+                            </div>
+
+                            {/* Year Select */}
+                            <div className="position-relative flex-fill">
+                                <i className="fas fa-calendar position-absolute top-50 start-0 translate-middle-y ms-3 text-white opacity-75"></i>
+                                <select
+                                    className="form-select form-select-lg border-0 ps-5 py-2 w-100"
+                                    value={year}
+                                    onChange={(e) => setYear(parseInt(e.target.value, 10))}
+                                    style={{
+                                        background: "linear-gradient(135deg, rgba(30, 41, 59, 0.8) 0%, rgba(15, 23, 42, 0.8) 100%)",
+                                        color: "white",
+                                        borderRadius: "10px",
+                                        backdropFilter: "blur(10px)",
+                                        border: "1px solid rgba(99, 102, 241, 0.4)",
+                                        fontSize: "0.9rem",
+                                        fontWeight: "500",
+                                        minHeight: "48px"
+                                    }}
+                                >
+                                    {yearsAround.map((y) => (
+                                        <option key={y} value={y} style={{ background: "#0f172a", color: "white" }}>{y}</option>
+                                    ))}
+                                </select>
+                            </div>
+                        </div>
+
+                        {/* Date Select - Full Width on Mobile */}
+                        <div className="position-relative w-100">
+                            <i className="fas fa-clock position-absolute top-50 start-0 translate-middle-y ms-3 text-white opacity-75"></i>
+                            <select
+                                className="form-select form-select-lg border-0 ps-5 py-2 w-100"
+                                value={dateStr}
+                                onChange={(e) => setDateStr(e.target.value)}
+                                style={{
+                                    background: "linear-gradient(135deg, rgba(30, 41, 59, 0.8) 0%, rgba(15, 23, 42, 0.8) 100%)",
+                                    color: "white",
+                                    borderRadius: "10px",
+                                    backdropFilter: "blur(10px)",
+                                    border: "1px solid rgba(99, 102, 241, 0.4)",
+                                    fontSize: "0.9rem",
+                                    fontWeight: "500",
+                                    minHeight: "48px"
+                                }}
+                            >
+                                {Array.from({ length: daysInMonth }, (_, i) => ymd(new Date(year, month, i + 1))).map((d) => (
+                                    <option key={d} value={d} style={{ background: "#0f172a", color: "white" }}>{d}</option>
+                                ))}
+                            </select>
+                        </div>
                     </div>
 
-                    <div className="small text-warning justify-content-center d-flex flex-wrap gap-2">
-                        <h6 >మొత్తం కొన్న వస్తువులు: </h6>
-                        <span className="badge bg-warning fw-bold fs-6 px-3 py-1 w-50">{itemsLoadedForDate}</span>
-                        {/* {isAdminUser && <span className="badge bg-warning text-dark ms-2">Admin Mode</span>} */}
-                    </div>
+                    {/* Stats Cards */}
+                    <div className="d-flex flex-column flex-sm-row gap-3 align-items-stretch w-100 w-md-auto">
+                        {/* Total Items Card */}
+                        <div
+                            className="text-center p-3 rounded-3 position-relative overflow-hidden flex-fill"
+                            style={{
+                                background: "linear-gradient(135deg, rgba(6, 182, 212, 0.25) 0%, rgba(8, 145, 178, 0.25) 100%)",
+                                border: "1px solid rgba(6, 182, 212, 0.4)",
+                                backdropFilter: "blur(10px)",
+                                minHeight: "90px"
+                            }}
+                        >
+                            <div className="position-absolute top-0 start-0 w-100 h-100 opacity-10"
+                                style={{
+                                    background: "radial-gradient(circle at 30% 20%, rgba(6, 182, 212, 0.5) 0%, transparent 50%)"
+                                }}>
+                            </div>
+                            <div className="position-relative z-1 h-100 d-flex flex-column justify-content-center">
+                                <div className="text-cyan-300 fw-bold mb-1" style={{ fontSize: "0.75rem", color: '#67e8f9' }}>
+                                    <i className="fas fa-shopping-basket me-2"></i>
+                                    మొత్తం కొన్న వస్తువులు
+                                </div>
+                                <div
+                                    className="fw-bold text-white rounded-pill px-3 py-2 mx-auto"
+                                    style={{
+                                        background: "linear-gradient(135deg, #06b6d4 0%, #0891b2 100%)",
+                                        fontSize: "1rem",
+                                        boxShadow: "0 4px 15px rgba(6, 182, 212, 0.4)",
+                                        border: "1px solid rgba(255,255,255,0.3)",
+                                        width: "fit-content",
+                                        minWidth: "60px"
+                                    }}
+                                >
+                                    {itemsLoadedForDate}
+                                </div>
+                            </div>
+                        </div>
 
-                    <div className="small text-warning justify-content-center d-flex flex-wrap gap-2">
-                        <h6 >మొత్తం కొన్న వెల: </h6>
-                        <span className="badge bg-warning fw-bold fs-6 px-3 py-1 w-50">
-                            {fmtINR(grandTotalForDate)}
-                        </span>
+                        {/* Total Amount Card */}
+                        <div
+                            className="text-center p-3 rounded-3 position-relative overflow-hidden flex-fill"
+                            style={{
+                                background: "linear-gradient(135deg, rgba(245, 158, 11, 0.25) 0%, rgba(217, 119, 6, 0.25) 100%)",
+                                border: "1px solid rgba(245, 158, 11, 0.4)",
+                                backdropFilter: "blur(10px)",
+                                minHeight: "90px"
+                            }}
+                        >
+                            <div className="position-absolute top-0 start-0 w-100 h-100 opacity-10"
+                                style={{
+                                    background: "radial-gradient(circle at 70% 20%, rgba(245, 158, 11, 0.5) 0%, transparent 50%)"
+                                }}>
+                            </div>
+                            <div className="position-relative z-1 h-100 d-flex flex-column justify-content-center">
+                                <div className="text-amber-300 fw-bold mb-1" style={{ fontSize: "0.75rem", color: '#fcd34d' }}>
+                                    <i className="fas fa-indian-rupee-sign me-2"></i>
+                                    మొత్తం కొన్న వెల
+                                </div>
+                                <div
+                                    className="fw-bold text-white rounded-pill px-3 py-2 mx-auto"
+                                    style={{
+                                        background: "linear-gradient(135deg, #f59e0b 0%, #d97706 100%)",
+                                        fontSize: "1rem",
+                                        boxShadow: "0 4px 15px rgba(245, 158, 11, 0.4)",
+                                        border: "1px solid rgba(255,255,255,0.3)",
+                                        width: "fit-content",
+                                        minWidth: "80px"
+                                    }}
+                                >
+                                    {fmtINR(grandTotalForDate)}
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Admin Badge */}
+                        {isAdminUser && (
+                            <div
+                                className="text-center p-3 rounded-3 position-relative overflow-hidden flex-fill"
+                                style={{
+                                    background: "linear-gradient(135deg, rgba(236, 72, 153, 0.25) 0%, rgba(219, 39, 119, 0.25) 100%)",
+                                    border: "1px solid rgba(236, 72, 153, 0.4)",
+                                    backdropFilter: "blur(10px)",
+                                    minHeight: "90px"
+                                }}
+                            >
+                                <div className="position-absolute top-0 start-0 w-100 h-100 opacity-10"
+                                    style={{
+                                        background: "radial-gradient(circle at 50% 20%, rgba(236, 72, 153, 0.5) 0%, transparent 50%)"
+                                    }}>
+                                </div>
+                                <div className="position-relative z-1 h-100 d-flex flex-column justify-content-center">
+                                    <div className="text-pink-300 fw-bold mb-1" style={{ fontSize: "0.75rem", color: '#f9a8d4' }}>
+                                        <i className="fas fa-user-shield me-2"></i>
+                                        అడ్మిన్ బోర్డు
+                                    </div>
+                                    <div
+                                        className="fw-bold text-white rounded-pill px-3 py-1 mx-auto"
+                                        style={{
+                                            background: "linear-gradient(135deg, #ec4899 0%, #db2777 100%)",
+                                            fontSize: "0.85rem",
+                                            boxShadow: "0 4px 15px rgba(236, 72, 153, 0.4)",
+                                            border: "1px solid rgba(255,255,255,0.3)",
+                                            width: "fit-content",
+                                            minWidth: "70px"
+                                        }}
+                                    >
+                                        Active
+                                    </div>
+                                </div>
+                            </div>
+                        )}
                     </div>
                 </div>
             </div>
+
+
+
+
 
             {/* ===================== DAILY PURCHASE ===================== */}
             <h5 className="mb-3 text-warning">

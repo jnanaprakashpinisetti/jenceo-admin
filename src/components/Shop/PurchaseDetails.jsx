@@ -494,9 +494,9 @@ export default function PurchaseDetails() {
                 </div>
             ) : (
                 <div className="mb-4">
-                    {/* Header */}
+                    {/* Desktop Header - Hidden on mobile */}
                     <div
-                        className="row g-0 mb-2 rounded-top"
+                        className="row g-0 mb-2 rounded-top d-none d-md-flex"
                         style={{
                             background: "linear-gradient(135deg, #1f2937 0%, #374151 100%)",
                             borderBottom: "2px solid #4b5563",
@@ -556,11 +556,18 @@ export default function PurchaseDetails() {
                                 <div className="row g-0 mb-1 mt-3">
                                     <div className="col-12">
                                         <div
-                                            className="d-flex align-items-center ps-3 py-2 rounded"
+                                            className="d-flex align-items-center justify-content-between ps-3 py-2 rounded"
                                             style={{ background: "rgba(59, 130, 246, 0.1)", borderLeft: "4px solid #3b82f6" }}
                                         >
-                                            <i className="fas fa-tag text-info me-2"></i>
-                                            <h5 className="text-warning mb-0 small fw-bold">{grp.title}</h5>
+                                            <div className="d-flex align-items-center">
+                                                <i className="fas fa-tag text-info me-2"></i>
+                                                <h5 className="text-warning mb-0 small fw-bold">{grp.title}</h5>
+                                            </div>
+                                            <div className="d-none d-md-block pe-3">
+                                                <span className="badge bg-success fw-bold px-3 py-2">
+                                                    Category Total: {fmtINR(catTotal)}
+                                                </span>
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
@@ -572,167 +579,278 @@ export default function PurchaseDetails() {
                                     const isEven = index % 2 === 0;
 
                                     return (
-                                        <div
-                                            className={`row g-0 align-items-center py-2 ${isEven ? "" : "bg-gray-800"}`}
-                                            key={item.id}
-                                            style={{
-                                                borderBottom: "1px solid #374151",
-                                                background: isEven ? "rgba(17, 24, 39, 0.7)" : "rgba(31, 41, 55, 0.7)",
-                                                transition: "all 0.2s ease",
-                                                margin: "1px 0",
-                                            }}
-                                        >
-                                            {/* S.No */}
-                                            <div className="col-md-1 text-center">
-                                                <span className="text-light small fw-bold">{index + 1}</span>
-                                            </div>
-
-                                            {/* Vegetable */}
-                                            <div className="col-md-2 ps-3">
-                                                <div className="d-flex align-items-center">
-                                                    <i className="fas fa-carrot text-warning me-2"></i>
-                                                    <strong className="text-light d-block" style={{ fontSize: "0.85rem" }}>
-                                                        {item.subCategory}
-                                                    </strong>
+                                        <React.Fragment key={item.id}>
+                                            {/* Desktop View */}
+                                            <div
+                                                className={`row g-0 align-items-center py-2 d-none d-md-flex ${isEven ? "" : "bg-gray-800"}`}
+                                                style={{
+                                                    borderBottom: "1px solid #374151",
+                                                    background: isEven ? "rgba(17, 24, 39, 0.7)" : "rgba(31, 41, 55, 0.7)",
+                                                    transition: "all 0.2s ease",
+                                                    margin: "1px 0",
+                                                }}
+                                            >
+                                                {/* S.No */}
+                                                <div className="col-md-1 text-center">
+                                                    <span className="text-light small fw-bold">{index + 1}</span>
                                                 </div>
-                                            </div>
 
-                                            {/* Quantity */}
-                                            <div className="col-md-1 text-center">
-                                                <span
-                                                    className="text-light fw-semibold px-2 py-1 rounded"
-                                                    style={{
-                                                        fontSize: "0.85rem",
-                                                        background: "rgba(6, 182, 212, 0.15)",
-                                                        border: "1px solid rgba(6, 182, 212, 0.3)",
-                                                    }}
-                                                >
-                                                    {item.quantity || 0}
-                                                </span>
-                                            </div>
+                                                {/* Vegetable */}
+                                                <div className="col-md-2 ps-3">
+                                                    <div className="d-flex align-items-center">
+                                                        <i className="fas fa-carrot text-warning me-2"></i>
+                                                        <strong className="text-light d-block" style={{ fontSize: "0.85rem" }}>
+                                                            {item.subCategory}
+                                                        </strong>
+                                                    </div>
+                                                </div>
 
-                                            {/* Price */}
-                                            <div className="col-md-1 text-center">
-                                                <span
-                                                    className="text-light fw-semibold px-2 py-1 rounded"
-                                                    style={{
-                                                        fontSize: "0.85rem",
-                                                        background: "rgba(59, 130, 246, 0.15)",
-                                                        border: "1px solid rgba(59, 130, 246, 0.3)",
-                                                    }}
-                                                >
-                                                    {fmtINR(item.price)}
-                                                </span>
-                                            </div>
+                                                {/* Quantity */}
+                                                <div className="col-md-1 text-center">
+                                                    <span
+                                                        className="text-light fw-semibold px-2 py-1 rounded"
+                                                        style={{
+                                                            fontSize: "0.85rem",
+                                                            background: "rgba(6, 182, 212, 0.15)",
+                                                            border: "1px solid rgba(6, 182, 212, 0.3)",
+                                                        }}
+                                                    >
+                                                        {item.quantity || 0}
+                                                    </span>
+                                                </div>
 
-                                            {/* Total */}
-                                            <div className="col-md-2 text-center ">
-                                                <span
-                                                    className="badge fw-bold px-3 py-2 text-warning"
-                                                    style={{
-                                                        fontSize: "0.85rem",
-                                                        // background: "linear-gradient(135deg, #059669 0%, #10b981 100%)",
-                                                        // border: "1px solid rgba(16, 185, 129, 0.5)",
-                                                    }}
-                                                >
-                                                    {fmtINR(totalNow)}
-                                                </span>
-                                            </div>
+                                                {/* Price */}
+                                                <div className="col-md-1 text-center">
+                                                    <span
+                                                        className="text-light fw-semibold px-2 py-1 rounded"
+                                                        style={{
+                                                            fontSize: "0.85rem",
+                                                            background: "rgba(59, 130, 246, 0.15)",
+                                                            border: "1px solid rgba(59, 130, 246, 0.3)",
+                                                        }}
+                                                    >
+                                                        {fmtINR(item.price)}
+                                                    </span>
+                                                </div>
 
-                                            {/* Purchased By */}
-                                            <div className="col-md-2 text-center">
-                                                <span
-                                                    className="text-light fw-semibold px-2 py-1 rounded"
-                                                    style={{
-                                                        fontSize: "0.8rem",
-                                                        background: "rgba(139, 92, 246, 0.15)",
-                                                        border: "1px solid rgba(139, 92, 246, 0.3)",
-                                                        maxWidth: "140px",
-                                                        overflow: "hidden",
-                                                        textOverflow: "ellipsis",
-                                                        whiteSpace: "nowrap",
-                                                    }}
-                                                    title={item.createdByName || item.updatedByName || "Unknown"}
-                                                >
-                                                    <i className="fas fa-user me-1 text-info"></i>
-                                                    {item.createdByName || item.updatedByName || "Unknown"}
-                                                </span>
-                                            </div>
+                                                {/* Total */}
+                                                <div className="col-md-2 text-center">
+                                                    <span
+                                                        className="badge fw-bold px-3 py-2 text-warning"
+                                                        style={{
+                                                            fontSize: "0.85rem",
+                                                        }}
+                                                    >
+                                                        {fmtINR(totalNow)}
+                                                    </span>
+                                                </div>
 
-                                            {/* Selling rate */}
-                                            <div className="col-md-2 text-center">
-                                                <div className="d-flex align-items-center justify-content-center">
-                                                    {isEditing ? (
-                                                        <div className="d-flex gap-2 align-items-center">
-                                                            <div className="input-group input-group-sm" style={{ maxWidth: "150px" }}>
-                                                                <span className="input-group-text bg-dark border-secondary text-light">₹</span>
-                                                                <input
-                                                                    type="number"
-                                                                    className="form-control form-control-sm text-center border-secondary bg-dark text-light"
-                                                                    value={sellDraft}
-                                                                    onChange={(e) => setSellDraft(e.target.value)}
-                                                                    autoFocus
-                                                                    style={{ minWidth: "80px" }}
-                                                                />
+                                                {/* Purchased By */}
+                                                <div className="col-md-2 text-center">
+                                                    <span
+                                                        className="text-light fw-semibold px-2 py-1 rounded"
+                                                        style={{
+                                                            fontSize: "0.8rem",
+                                                            background: "rgba(139, 92, 246, 0.15)",
+                                                            border: "1px solid rgba(139, 92, 246, 0.3)",
+                                                            maxWidth: "140px",
+                                                            overflow: "hidden",
+                                                            textOverflow: "ellipsis",
+                                                            whiteSpace: "nowrap",
+                                                        }}
+                                                        title={item.createdByName || item.updatedByName || "Unknown"}
+                                                    >
+                                                        <i className="fas fa-user me-1 text-info"></i>
+                                                        {item.createdByName || item.updatedByName || "Unknown"}
+                                                    </span>
+                                                </div>
+
+                                                {/* Selling rate */}
+                                                <div className="col-md-2 text-center">
+                                                    <div className="d-flex align-items-center justify-content-center">
+                                                        {isEditing ? (
+                                                            <div className="d-flex gap-2 align-items-center">
+                                                                <div className="input-group input-group-sm" style={{ maxWidth: "150px" }}>
+                                                                    <span className="input-group-text bg-dark border-secondary text-light">₹</span>
+                                                                    <input
+                                                                        type="number"
+                                                                        className="form-control form-control-sm text-center border-secondary bg-dark text-light"
+                                                                        value={sellDraft}
+                                                                        onChange={(e) => setSellDraft(e.target.value)}
+                                                                        autoFocus
+                                                                        style={{ minWidth: "80px" }}
+                                                                    />
+                                                                </div>
+                                                                <button
+                                                                    className="btn btn-sm btn-success px-2 d-flex align-items-center gap-1"
+                                                                    onClick={() => saveEditSelling(item)}
+                                                                    title="Save"
+                                                                    style={{ minWidth: "60px" }}
+                                                                >
+                                                                    <i className="fas fa-check small"></i> Save
+                                                                </button>
+                                                                <button
+                                                                    className="btn btn-sm btn-danger px-2 d-flex align-items-center gap-1"
+                                                                    onClick={cancelEditSelling}
+                                                                    title="Cancel"
+                                                                    style={{ minWidth: "60px" }}
+                                                                >
+                                                                    <i className="fas fa-times small"></i> Cancel
+                                                                </button>
                                                             </div>
-                                                            <button
-                                                                className="btn btn-sm btn-success px-2 d-flex align-items-center gap-1"
-                                                                onClick={saveEditSelling}
-                                                                title="Save"
-                                                                style={{ minWidth: "60px" }}
-                                                            >
-                                                                <i className="fas fa-check small"></i> Save
-                                                            </button>
-                                                            <button
-                                                                className="btn btn-sm btn-danger px-2 d-flex align-items-center gap-1"
-                                                                onClick={cancelEditSelling}
-                                                                title="Cancel"
-                                                                style={{ minWidth: "60px" }}
-                                                            >
-                                                                <i className="fas fa-times small"></i> Cancel
-                                                            </button>
-                                                        </div>
-                                                    ) : (
-                                                        <div className="d-flex align-items-center gap-2">
-                                                            <span
-                                                                role="button"
-                                                                className="badge fw-bold px-3 py-2"
-                                                                onClick={() => beginEditSelling(item)}
-                                                                title="Click to edit selling rate"
-                                                                style={{
-                                                                    background: "linear-gradient(135deg, #d97706 0%, #f59e0b 100%)",
-                                                                    border: "1px solid rgba(245, 158, 11, 0.5)",
-                                                                    fontSize: "0.85rem",
-                                                                    transition: "all 0.2s ease",
-                                                                    cursor: "pointer",
-                                                                }}
-                                                            >
-                                                                <i className="fas fa-rupee-sign me-1"></i>
-                                                                {item?.sellingRate || "0"}
-                                                            </span>
-                                                            <small className="text-muted d-none d-md-block">Click to edit</small>
-                                                        </div>
-                                                    )}
+                                                        ) : (
+                                                            <div className="d-flex align-items-center gap-2">
+                                                                <span
+                                                                    role="button"
+                                                                    className="badge fw-bold px-3 py-2"
+                                                                    onClick={() => beginEditSelling(item)}
+                                                                    title="Click to edit selling rate"
+                                                                    style={{
+                                                                        background: "linear-gradient(135deg, #d97706 0%, #f59e0b 100%)",
+                                                                        border: "1px solid rgba(245, 158, 11, 0.5)",
+                                                                        fontSize: "0.85rem",
+                                                                        transition: "all 0.2s ease",
+                                                                        cursor: "pointer",
+                                                                    }}
+                                                                >
+                                                                    <i className="fas fa-rupee-sign me-1"></i>
+                                                                    {item?.sellingRate || "0"}
+                                                                </span>
+                                                                <small className="text-muted d-none d-md-block">Click to edit</small>
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                </div>
+
+                                                {/* Actions */}
+                                                <div className="col-md-1 text-center">
+                                                    <button
+                                                        className="btn btn-sm btn-outline-danger"
+                                                        title="Delete this entry"
+                                                        onClick={() => openDelete(item)}
+                                                    >
+                                                        <i className="fas fa-trash"></i>
+                                                        <span className="d-none d-lg-inline"> Delete</span>
+                                                    </button>
                                                 </div>
                                             </div>
 
-                                            {/* Actions */}
-                                            <div className="col-md-1 text-center">
-                                                <button
-                                                    className="btn btn-sm btn-outline-danger"
-                                                    title="Delete this entry"
-                                                    onClick={() => openDelete(item)}
-                                                >
-                                                    <i className="fas fa-trash"></i>
-                                                    Delete
-                                                </button>
+                                            {/* Mobile View */}
+                                            <div className="card bg-dark border-secondary mb-2 d-md-none">
+                                                <div className="card-body">
+                                                    {/* Header Row */}
+                                                    <div className="d-flex justify-content-between align-items-center mb-2 pb-2 border-bottom border-secondary">
+                                                        <div className="d-flex align-items-center">
+                                                            <span className="badge bg-primary me-2">{index + 1}</span>
+                                                            <i className="fas fa-carrot text-warning me-2"></i>
+                                                            <strong className="text-light">{item.subCategory}</strong>
+                                                        </div>
+                                                        <button
+                                                            className="btn btn-sm btn-outline-danger"
+                                                            title="Delete this entry"
+                                                            onClick={() => openDelete(item)}
+                                                        >
+                                                            <i className="fas fa-trash"></i>
+                                                            Delete
+                                                        </button>
+                                                    </div>
+
+                                                    {/* Data Rows with Telugu Labels */}
+                                                    <div className="row g-2">
+                                                        {/* Quantity */}
+                                                        <div className="col-6">
+                                                            <div className="d-flex justify-content-between align-items-center p-2 rounded flex-wrap h-100" style={{ background: "rgba(6, 182, 212, 0.1)" }}>
+                                                                <div className="text-info fw-bold">పరిమాణం:</div>
+                                                                <span className="text-light fw-bold">{item.quantity || 0} kg</span>
+                                                            </div>
+                                                        </div>
+
+                                                        {/* Price */}
+                                                        <div className="col-6">
+                                                            <div className="d-flex justify-content-between align-items-center p-2 rounded flex-wrap h-100" style={{ background: "rgba(59, 130, 246, 0.1)" }}>
+                                                                <div className="text-primary fw-bold">ధర:</div>
+                                                                <span className="text-light fw-bold">{fmtINR(item.price)}</span>
+                                                            </div>
+                                                        </div>
+
+                                                        {/* Total */}
+                                                        <div className="col-6">
+                                                            <div className="d-flex justify-content-between align-items-center p-2 rounded lex-wrap h-100" style={{ background: "rgba(16, 185, 129, 0.1)" }}>
+                                                                <div className="text-success fw-bold">మొత్తం:</div>
+                                                                <span className="text-warning fw-bold">{fmtINR(totalNow)}</span>
+                                                            </div>
+                                                        </div>
+
+                                                        {/* Purchased By */}
+                                                        <div className="col-6">
+                                                            <div className="d-flex justify-content-between align-items-center p-2 rounded flex-wrap h-100" style={{ background: "rgba(139, 92, 246, 0.1)" }}>
+                                                                <div className="text-info fw-bold">కొన్నవారు:</div>
+                                                                <span className="text-light fw-bold" style={{ fontSize: "0.8rem" }}>
+                                                                    {item.createdByName || item.updatedByName || "Unknown"}
+                                                                </span>
+                                                            </div>
+                                                        </div>
+
+                                                        {/* Selling Rate */}
+                                                        <div className="col-12">
+                                                            <div className="d-flex justify-content-between align-items-center p-2 rounded" style={{ background: "rgba(245, 158, 11, 0.1)" }}>
+                                                                <small className="text-warning fw-bold">అమ్మకం ధర:</small>
+                                                                <div className="d-flex align-items-center gap-2">
+                                                                    {isEditing ? (
+                                                                        <div className="d-flex gap-2 align-items-center">
+                                                                            <div className="input-group input-group-sm" style={{ maxWidth: "120px" }}>
+                                                                                <span className="input-group-text bg-dark border-secondary text-light">₹</span>
+                                                                                <input
+                                                                                    type="number"
+                                                                                    className="form-control form-control-sm text-center border-secondary bg-dark text-light"
+                                                                                    value={sellDraft}
+                                                                                    onChange={(e) => setSellDraft(e.target.value)}
+                                                                                    autoFocus
+                                                                                />
+                                                                            </div>
+                                                                            <button
+                                                                                className="btn btn-sm btn-success px-2"
+                                                                                onClick={() => saveEditSelling(item)}
+                                                                                title="Save"
+                                                                            >
+                                                                                <i className="fas fa-check"></i>
+                                                                            </button>
+                                                                            <button
+                                                                                className="btn btn-sm btn-danger px-2"
+                                                                                onClick={cancelEditSelling}
+                                                                                title="Cancel"
+                                                                            >
+                                                                                <i className="fas fa-times"></i>
+                                                                            </button>
+                                                                        </div>
+                                                                    ) : (
+                                                                        <span
+                                                                            role="button"
+                                                                            className="badge fw-bold px-3 py-2"
+                                                                            onClick={() => beginEditSelling(item)}
+                                                                            title="Click to edit selling rate"
+                                                                            style={{
+                                                                                background: "linear-gradient(135deg, #d97706 0%, #f59e0b 100%)",
+                                                                                border: "1px solid rgba(245, 158, 11, 0.5)",
+                                                                                fontSize: "0.85rem",
+                                                                            }}
+                                                                        >
+                                                                            <i className="fas fa-rupee-sign me-1"></i>
+                                                                            {item?.sellingRate || "0"}
+                                                                        </span>
+                                                                    )}
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
                                             </div>
-                                        </div>
+                                        </React.Fragment>
                                     );
                                 })}
 
-                                {/* Category total row (aligned to header) */}
-                                <div className="row g-0 align-items-center py-2" style={{ borderTop: "1px dashed #374151" }}>
+                                {/* Category total row */}
+                                <div className="row g-0 align-items-center py-2 d-none d-md-flex" style={{ borderTop: "1px dashed #374151" }}>
                                     <div className="col-md-1 text-center"></div>
                                     <div className="col-md-2 ps-3">
                                         <strong className="text-info">Category Total</strong>
@@ -746,12 +864,24 @@ export default function PurchaseDetails() {
                                     <div className="col-md-2 text-center"></div>
                                     <div className="col-md-1 text-center"></div>
                                 </div>
+
+                                {/* Mobile Category Total */}
+                                <div className="d-md-none mt-2 mb-3">
+                                    <div className="card bg-success border-0">
+                                        <div className="card-body py-2 text-center">
+                                            <strong className="text-white">
+                                                <i className="fas fa-tag me-2"></i>
+                                                {grp.title} మొత్తం: {fmtINR(catTotal)}
+                                            </strong>
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
                         );
                     })}
 
-                    {/* Grand total row (for the selected date) */}
-                    <div className="row g-0 align-items-center py-3 mt-2" style={{ borderTop: "2px solid #4b5563" }}>
+                    {/* Grand total row */}
+                    <div className="row g-0 align-items-center py-3 mt-2 d-none d-md-flex" style={{ borderTop: "2px solid #4b5563" }}>
                         <div className="col-md-1 text-center"></div>
                         <div className="col-md-2 ps-3">
                             <strong className="text-warning">Grand Total</strong>
@@ -765,8 +895,19 @@ export default function PurchaseDetails() {
                         <div className="col-md-2 text-center"></div>
                         <div className="col-md-1 text-center"></div>
                     </div>
-                </div>
 
+                    {/* Mobile Grand Total */}
+                    <div className="d-md-none mt-3">
+                        <div className="card bg-warning border-0">
+                            <div className="card-body py-3 text-center">
+                                <h5 className="text-dark mb-0 fw-bold">
+                                    <i className="fas fa-receipt me-2"></i>
+                                    మొత్తం మొత్తం: {fmtINR(grandTotalForDate)}
+                                </h5>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             )}
 
             {/* ===================== MONTHLY PRICE TRACKER ===================== */}

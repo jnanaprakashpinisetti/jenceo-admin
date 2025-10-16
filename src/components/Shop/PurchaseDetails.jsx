@@ -2,6 +2,18 @@
 import React, { useEffect, useMemo, useState } from "react";
 import firebaseDB from "../../firebase";
 import { useAuth } from "../../context/AuthContext";
+// import categoryMap from "./VegCatalog";
+
+
+const categoryMap = {
+    "1 కూరగాయలు": ["టమాట", "వంకాయ", "బెండకాయ", "దోసకాయ", "కాకరకాయ", "బీరకాయ", "పొట్లకాయ", "సొరకాయ", "దొండకాయ", "గుమ్మడికాయ", "బూడిద గుమ్మడికాయ", "మునగకాయ", "పచ్చిమిరపకాయ", "గోరుచిక్కుడు", "బీన్స్", "చిక్కుడు", "అరటికాయ", "మామిడికాయ", "క్యాబేజీ", "కాలిఫ్లవర్"],
+    "2 వేరు కూరగాయలు": ["ఉల్లిపాయ", "వెల్లుల్లి", "కేరట్", "బీట్ రూట్", "ముల్లంగి", "బంగాళాదుంప", "చిలకడదుంప", "చెమదుంప", "అల్లం"],
+    "3 ఆకుకూరలు": ["పాలకూర", "తోటకూర", "మెంతికూర", "కొత్తిమీర", "పుదీనా", "కరివేపాకు", "గోంగూర"],
+    "4 అరటి పళ్ళు": ["కర్పూరం", "పచ్చ చేక్కరకేళి", "ఎర్ర చేక్కరకేళి", "అమృతపాణి", "త్రయ అరిటి పళ్ళు"],
+    "5 పువ్వులు": ["బంతి పువ్వులు", "పసుపు చామంతి", "తెల్ల చామంతి", "గులాబీ", "మలబార్", "మల్లె పువ్వులు", "మల్లె పూలదండ", "సన్నజాజులు", "సన్నజాజుల దండ"],
+    "6 కొబ్బరిబొండాలు": ["కేరళ బొండాలు", "ఆంధ్ర బొండాలు"],
+    "7 ఇతర వస్తువులు": ["కొబ్బరికాయలు", "బెల్లం", "తేనే పాకం"],
+};
 
 /* ------------ Helpers ------------ */
 const ymd = (d) => {
@@ -708,7 +720,7 @@ export default function PurchaseDetails() {
                     <table className="table table-dark table-bordered align-middle">
                         <thead>
                             <tr>
-                                <th style={{ minWidth: 120, textAlign: "center" }}>Vegetable</th>
+                                <th style={{ minWidth: 140, textAlign: "center" }}>Vegetable</th>
                                 {Array.from({ length: daysInMonth }, (_, i) => i + 1).map((dayNum) => {
                                     const fullDate = ymd(new Date(year, month, dayNum));
                                     const isToday = fullDate === ymd(new Date());
@@ -716,20 +728,12 @@ export default function PurchaseDetails() {
                                         <th
                                             key={dayNum}
                                             className="text-center"
-                                            style={{
-                                                // minWidth: 70,
-                                                background: isToday ? "rgba(149, 150, 150, 0.15)" : "",
-                                            }}
+                                            style={{ background: isToday ? "rgba(149,150,150,0.15)" : "" }}
                                         >
                                             <div>
                                                 <div>{dayNum}</div>
-                                                <small
-                                                    className="text-muted"
-                                                    style={{ fontSize: "0.7rem" }}
-                                                >
-                                                    {new Date(year, month, dayNum).toLocaleDateString("en", {
-                                                        weekday: "short",
-                                                    })}
+                                                <small className="text-muted" style={{ fontSize: "0.7rem" }}>
+                                                    {new Date(year, month, dayNum).toLocaleDateString("en", { weekday: "short" })}
                                                 </small>
                                             </div>
                                         </th>
@@ -737,44 +741,62 @@ export default function PurchaseDetails() {
                                 })}
                             </tr>
                         </thead>
+
                         <tbody>
-                            {vegAll.map((veg) => (
-                                <tr key={veg}>
-                                    <th className="fw-semibold text-warning text-center">
-                                        <div className="d-flex align-items-center justify-content-center gap-2">
-                                            <i className="fas fa-carrot text-warning small"></i>
-                                            {veg}
-                                        </div>
-                                    </th>
+                            {Object.entries(categoryMap).map(([catLabel, vegList]) => (
+                                <React.Fragment key={catLabel}>
+                                    {/* Category header row */}
+                                    <tr>
+                                        <td colSpan={1 + daysInMonth} className="bg-secondary bg-opacity-25">
+                                            <strong className="text-info">
+                                                <i className="fas fa-tag me-2"></i>{catLabel}
+                                            </strong>
+                                        </td>
+                                    </tr>
 
-                                    {Array.from({ length: daysInMonth }, (_, i) => {
-                                        const fullDate = ymd(new Date(year, month, i + 1));
-                                        const isToday = fullDate === ymd(new Date());
-                                        const row = byDateVeg[`${fullDate}::${veg}`];
-                                        const price = safeNum(row?.price);
+                                    {/* Vegetables under this category */}
+                                    {vegList.map((veg) => (
+                                        <tr key={veg}>
+                                            <th className="fw-semibold text-warning text-center">
+                                                <div className="d-flex align-items-center justify-content-center gap-2">
+                                                    <i className="fas fa-carrot text-warning small"></i>
+                                                    {veg}
+                                                </div>
+                                            </th>
 
-                                        return (
-                                            <td
-                                                key={`${veg}-${i}`}
-                                                className={`text-center ${isToday ? "fw-bold text-warning" : ""}`}
-                                              
-                                            >
-                                                {price ? (
-                                                    <span className={`${isToday ? "text-warning fw-bold" : "text-light"} small`}>
-                                                        <i className="fas fa-rupee-sign me-1"></i>
-                                                        {price}
-                                                    </span>
-                                                ) : (
-                                                    <span className="small-text opacity-75">*</span>
-                                                )}
-                                            </td>
-                                        );
-                                    })}
-                                </tr>
+                                            {Array.from({ length: daysInMonth }, (_, i) => {
+                                                const fullDate = ymd(new Date(year, month, i + 1));
+                                                const isToday = fullDate === ymd(new Date());
+                                                const row = byDateVeg[`${fullDate}::${veg}`];
+                                                const price = safeNum(row?.price);
+
+                                                return (
+                                                    <td
+                                                        key={`${veg}-${i}`}
+                                                        className={`text-center ${isToday ? "fw-bold text-warning" : ""}`}
+                                                        style={{
+                                                            background: isToday ? "rgba(13, 202, 240, 0.1)" : "rgba(27, 33, 46, 0.6)",
+                                                        }}
+                                                        title={price ? `₹${price}` : ""}
+                                                    >
+                                                        {price ? (
+                                                            <span className={`${isToday ? "text-warning fw-bold" : "text-light"} small`}>
+                                                                <i className="fas fa-rupee-sign me-1"></i>
+                                                                {price}
+                                                            </span>
+                                                        ) : (
+                                                            <span className="small-text opacity-75">*</span>
+                                                        )}
+                                                    </td>
+                                                );
+                                            })}
+                                        </tr>
+                                    ))}
+                                </React.Fragment>
                             ))}
                         </tbody>
-
                     </table>
+
                 </div>
             )}
 

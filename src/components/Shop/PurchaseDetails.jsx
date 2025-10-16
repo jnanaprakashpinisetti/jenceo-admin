@@ -441,7 +441,7 @@ export default function PurchaseDetails() {
     }, []);
 
     return (
-        <div className="p-3 bg-dark border border-secondary rounded-3">
+        <div className="p-3 bg-dark border border-secondary rounded-3 mt-3">
             {/* Controls + Info */}
             <div className="alert alert-info mb-3 text-warning">
                 <div className="d-flex flex-wrap align-items-center justify-content-between gap-3">
@@ -481,7 +481,14 @@ export default function PurchaseDetails() {
                     <div className="small text-warning justify-content-center d-flex flex-wrap gap-2">
                         <h6 >మొత్తం కొన్న వస్తువులు: </h6>
                         <span className="badge bg-warning fw-bold fs-6 px-3 py-1 w-50">{itemsLoadedForDate}</span>
-                        {isAdminUser && <span className="badge bg-warning text-dark ms-2">Admin Mode</span>}
+                        {/* {isAdminUser && <span className="badge bg-warning text-dark ms-2">Admin Mode</span>} */}
+                    </div>
+
+                    <div className="small text-warning justify-content-center d-flex flex-wrap gap-2">
+                        <h6 >మొత్తం కొన్న వెల: </h6>
+                        <span className="badge bg-warning fw-bold fs-6 px-3 py-1 w-50">
+                            {fmtINR(grandTotalForDate)}
+                        </span>
                     </div>
                 </div>
             </div>
@@ -610,14 +617,14 @@ export default function PurchaseDetails() {
                                             >
                                                 {/* S.No */}
                                                 <div className="col-md-1 text-center">
-                                                    <span className="text-light small fw-bold">{index + 1}</span>
+                                                    <span className="text-info small fw-bold">{index + 1}</span>
                                                 </div>
 
                                                 {/* Vegetable */}
                                                 <div className="col-md-2 ps-3">
                                                     <div className="d-flex align-items-center">
                                                         <i className="fas fa-carrot text-warning me-2"></i>
-                                                        <strong className="text-light d-block" style={{ fontSize: "0.85rem" }}>
+                                                        <strong className="text-info d-block" style={{ fontSize: "0.85rem" }}>
                                                             {item.subCategory}
                                                         </strong>
                                                     </div>
@@ -626,7 +633,7 @@ export default function PurchaseDetails() {
                                                 {/* Quantity */}
                                                 <div className="col-md-1 text-center">
                                                     <span
-                                                        className="text-light fw-semibold px-2 py-1 rounded"
+                                                        className="text-info fw-semibold px-2 py-1 rounded"
                                                         style={{
                                                             fontSize: "0.85rem",
                                                             background: "rgba(6, 182, 212, 0.15)",
@@ -884,28 +891,7 @@ export default function PurchaseDetails() {
                         );
                     })}
 
-                    {/* Grand Total */}
-                    <div className="row g-0 mt-4">
-                        <div className="col-12">
-                            <div
-                                className="d-flex align-items-center justify-content-between flex-wrap p-3 rounded gap-2"
-                                style={{
-                                    background: "linear-gradient(135deg, #059669 0%, #10b981 100%)",
-                                    border: "2px solid rgba(16, 185, 129, 0.3)",
-                                }}
-                            >
-                                <div className="d-flex align-items-center">
-                                    <i className="fas fa-calculator text-light me-2 fa-lg"></i>
-                                    <h6 className="text-light mb-0 fw-bold">{dateStr} కి మొత్తం ఖర్చు</h6>
-                                </div>
-                                <div>
-                                    <span className="badge bg-warning text-dark fw-bold px-4 py-2 fs-4">
-                                        {fmtINR(grandTotalForDate)}
-                                    </span>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
+       
                 </div>
             )}
 
@@ -958,7 +944,7 @@ export default function PurchaseDetails() {
 
 
             {/* ===================== MONTHLY PRICE TRACKER ===================== */}
-            <h5 className="mt-5 mb-3 text-warning">
+            <h5 className="mt-5 mb-3 text-info">
                 <i className="fas fa-calendar-alt me-2"></i>
                 Monthly Price Tracker —{" "}
                 {new Date(year, month).toLocaleString("default", { month: "long", year: "numeric" })}

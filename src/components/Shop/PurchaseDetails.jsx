@@ -3,11 +3,6 @@ import React, { useEffect, useMemo, useState } from "react";
 import firebaseDB from "../../firebase";
 import { useAuth } from "../../context/AuthContext";
 
-/* ------------ Constants ------------ */
-// Reads/writes only inside this branch key. Change if you need a different branch.
-const BRANCH_KEY = "FqFoRqVwq7Pu2BFmOFA98tU2m5X2";
-// FIXED: Remove the duplicate "JenCeo-DataBase" from the path
-const DB_PATH = `Shop/${BRANCH_KEY}`;
 
 /* ------------ Helpers ------------ */
 const ymd = (d) => {
@@ -57,6 +52,16 @@ const flattenRows = (obj, out = []) => {
 
 export default function PurchaseDetails() {
     const { user: authUser } = useAuth?.() || {};
+
+    // Reads/writes only inside this branch key. Change if you need a different branch.
+    const getBranchPath = (user) => {
+        if (!user) return "Shop"; // fallback
+        return "Shop";
+        const key = user.dbId || user.branchKey || user.uid;
+        return key ? `Shop/${key}` : "Shop";
+    };
+    // FIXED: Remove the duplicate "JenCeo-DataBase" from the path
+    const DB_PATH = useMemo(() => getBranchPath(authUser), [authUser]);
 
     const now = new Date();
     const [year, setYear] = useState(now.getFullYear());
@@ -320,7 +325,7 @@ export default function PurchaseDetails() {
                 </div>
 
                 <div className="small text-info">
-                    Branch: <span className="text-warning">{BRANCH_KEY}</span> • Date:{" "}
+                    {/* Branch: <span className="text-warning">{BRANCH_KEY}</span> • Date:{" "} */}
                     <span className="text-warning">{dateStr}</span>
                 </div>
             </div>
@@ -349,7 +354,7 @@ export default function PurchaseDetails() {
             ) : (
                 <div className="mb-4">
                     {/* Table Header */}
-                  
+
 
                     {/* Data Rows */}
                     <div className="mb-4">

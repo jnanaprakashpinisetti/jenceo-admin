@@ -555,7 +555,7 @@ export default function PurchaseDetails() {
                                             <div className="col-md-1 text-center">
                                                 <div className="d-flex align-items-center justify-content-center">
                                                     <span
-                                                        className="text-light fw-semibold px-2 py-1 rounded"
+                                                        className="text-light fw-semibold px- py-1 rounded"
                                                         style={{
                                                             fontSize: "0.85rem",
                                                             background: "rgba(59, 130, 246, 0.15)",
@@ -708,67 +708,76 @@ export default function PurchaseDetails() {
                     <table className="table table-dark table-bordered align-middle">
                         <thead>
                             <tr>
-                                <th style={{ minWidth: 100, textAlign: "center" }}>Date</th>
-                                {vegAll.map((veg) => (
-                                    <th key={veg} className="text-center" style={{ minWidth: 120 }}>
-                                        <div className="d-flex align-items-center justify-content-center">
-                                            <i className="fas fa-carrot text-warning me-1 small"></i>
-                                            {veg}
-                                        </div>
-                                    </th>
-                                ))}
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {Array.from({ length: daysInMonth }, (_, i) => i + 1).map((dayNum) => {
-                                const fullDate = ymd(new Date(year, month, dayNum));
-                                const isToday = fullDate === ymd(new Date());
-                                return (
-                                    <tr key={dayNum} className={isToday ? "table-active" : ""}>
+                                <th style={{ minWidth: 120, textAlign: "center" }}>Vegetable</th>
+                                {Array.from({ length: daysInMonth }, (_, i) => i + 1).map((dayNum) => {
+                                    const fullDate = ymd(new Date(year, month, dayNum));
+                                    const isToday = fullDate === ymd(new Date());
+                                    return (
                                         <th
-                                            className="fw-semibold text-center"
+                                            key={dayNum}
+                                            className="text-center"
                                             style={{
-                                                background: isToday ? "rgba(13, 202, 240, 0.2)" : "",
+                                                // minWidth: 70,
+                                                background: isToday ? "rgba(149, 150, 150, 0.15)" : "",
                                             }}
                                         >
                                             <div>
                                                 <div>{dayNum}</div>
-                                                <small className="text-muted" style={{ fontSize: "0.7rem" }}>
+                                                <small
+                                                    className="text-muted"
+                                                    style={{ fontSize: "0.7rem" }}
+                                                >
                                                     {new Date(year, month, dayNum).toLocaleDateString("en", {
                                                         weekday: "short",
                                                     })}
                                                 </small>
                                             </div>
                                         </th>
-                                        {vegAll.map((veg) => {
-                                            const row = byDateVeg[`${fullDate}::${veg}`];
-                                            const price = safeNum(row?.price);
-                                            return (
-                                                <td
-                                                    key={`${dayNum}-${veg}`}
-                                                    className="text-center"
-                                                    style={{
-                                                        background: isToday ? "rgba(13, 202, 240, 0.1)" : "",
-                                                    }}
-                                                >
-                                                    {price ? (
-                                                        <span className="badge bg-info small">
-                                                            <i className="fas fa-rupee-sign me-1"></i>
-                                                            {price}
-                                                        </span>
-                                                    ) : (
-                                                        <span className="text-muted">—</span>
-                                                    )}
-                                                </td>
-                                            );
-                                        })}
-                                    </tr>
-                                );
-                            })}
+                                    );
+                                })}
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {vegAll.map((veg) => (
+                                <tr key={veg}>
+                                    <th className="fw-semibold text-warning text-center">
+                                        <div className="d-flex align-items-center justify-content-center gap-2">
+                                            <i className="fas fa-carrot text-warning small"></i>
+                                            {veg}
+                                        </div>
+                                    </th>
+
+                                    {Array.from({ length: daysInMonth }, (_, i) => {
+                                        const fullDate = ymd(new Date(year, month, i + 1));
+                                        const isToday = fullDate === ymd(new Date());
+                                        const row = byDateVeg[`${fullDate}::${veg}`];
+                                        const price = safeNum(row?.price);
+
+                                        return (
+                                            <td
+                                                key={`${veg}-${i}`}
+                                                className={`text-center ${isToday ? "fw-bold text-warning" : ""}`}
+                                              
+                                            >
+                                                {price ? (
+                                                    <span className={`${isToday ? "text-warning fw-bold" : "text-light"} small`}>
+                                                        <i className="fas fa-rupee-sign me-1"></i>
+                                                        {price}
+                                                    </span>
+                                                ) : (
+                                                    <span className="small-text opacity-75">*</span>
+                                                )}
+                                            </td>
+                                        );
+                                    })}
+                                </tr>
+                            ))}
                         </tbody>
+
                     </table>
                 </div>
             )}
+
 
             <style>{`
         .bg-gray-800 {
@@ -800,10 +809,7 @@ export default function PurchaseDetails() {
           background-color: #1f2937 !important;
           border-color: #374151 !important;
         }
-        .table td {
-          border-color: #374151 !important;
-          background-color: #111827 !important;
-        }
+      
         .small {
           font-size: 0.875rem;
         }

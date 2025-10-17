@@ -311,7 +311,7 @@ export default function DisplayHospital() {
 
     return (
         <>
-     
+
 
             {/* Reminder badges (same class scheme as ClientDisplay) */}
             <div className="alert alert-info d-flex justify-content-around flex-wrap reminder-badges">
@@ -329,44 +329,44 @@ export default function DisplayHospital() {
                 ))}
             </div>
 
-                   {/* Top row: search, filters, reset */}
+            {/* Top row: search, filters, reset */}
             <div className="mb-3">
                 <div className="row gap-2">
-                <div className="col-md-6">
-                    <input
-                        type="text"
-                        className="form-control"
-                        placeholder="Search by name, id, location, type..."
-                        style={{ minWidth: 240 }}
-                        value={search}
-                        onChange={(e) => { setSearch(e.target.value); setCurrentPage(1); }}
-                    />
-                </div>
-                <div className="col-md-2">
-                    <select
-                        className="form-select"
-                        value={filterType}
-                        onChange={(e) => { setFilterType(e.target.value); setCurrentPage(1); }}
-                    >
-                        <option value="">All Types</option>
-                        {types.map((t) => <option key={t} value={t}>{t}</option>)}
-                    </select>
-                </div>
-                <div className="col-md-2">
-                    <select
-                        className="form-select"
-                        value={filterLocation}
-                        onChange={(e) => { setFilterLocation(e.target.value); setCurrentPage(1); }}
-                    >
-                        <option value="">All Locations</option>
-                        {locations.map((l) => <option key={l} value={l}>{l}</option>)}
-                    </select>
-                </div>
-                <div className="col-md-1">
-                    <button className="btn btn-secondary" onClick={handleReset}>Reset</button>
-                </div>
+                    <div className="col-md-6">
+                        <input
+                            type="text"
+                            className="form-control bg-dark text-light border-secondary"
+                            placeholder="Search by name, id, location, type..."
+                            style={{ minWidth: 240 }}
+                            value={search}
+                            onChange={(e) => { setSearch(e.target.value); setCurrentPage(1); }}
+                        />
+                    </div>
+                    <div className="col-md-2">
+                        <select
+                            className="form-select bg-dark text-light border-secondary"
+                            value={filterType}
+                            onChange={(e) => { setFilterType(e.target.value); setCurrentPage(1); }}
+                        >
+                            <option value="">All Types</option>
+                            {types.map((t) => <option key={t} value={t}>{t}</option>)}
+                        </select>
+                    </div>
+                    <div className="col-md-2">
+                        <select
+                            className="form-select bg-dark text-light border-secondary"
+                            value={filterLocation}
+                            onChange={(e) => { setFilterLocation(e.target.value); setCurrentPage(1); }}
+                        >
+                            <option value="">All Locations</option>
+                            {locations.map((l) => <option key={l} value={l}>{l}</option>)}
+                        </select>
+                    </div>
+                    <div className="col-md-1">
+                        <button className="btn btn-secondary" onClick={handleReset}>Reset</button>
+                    </div>
 
-            </div>
+                </div>
             </div>
 
             {/* Table */}
@@ -401,7 +401,7 @@ export default function DisplayHospital() {
                             const nearestReminder = getNearestReminderDate(hospital);
                             const reminderClass = getReminderClass(nearestReminder);
                             return (
-                                <tr key={hospital.id} style={{cursor:'pointer'}} onClick={(e) => { if (e.target.closest('button, a, .btn, .page-link')) return; handleView(hospital); }}>
+                                <tr key={hospital.id} style={{ cursor: 'pointer' }} onClick={(e) => { if (e.target.closest('button, a, .btn, .page-link')) return; handleView(hospital); }}>
                                     <td>{hospital.idNo || hospital.id || "N/A"}</td>
                                     <td>{hospital.hospitalName || "N/A"}</td>
                                     <td>{hospital.location || "N/A"}</td>
@@ -440,42 +440,63 @@ export default function DisplayHospital() {
             </div>
 
             {/* Pagination */}
-            
-            {totalPages > 1 && (
-                <nav aria-label="Hospital pagination" className="pagination-wrapper">
-                    <ul className="pagination justify-content-center">
-                        <li className={`page-item ${safePage === 1 ? "disabled" : ""}`}>
-                            <button className="page-link" onClick={() => paginate(Math.max(1, safePage - 1))} disabled={safePage === 1}>
-                                Previous
-                            </button>
-                        </li>
-                        {/* Numbered pages: show at most 10 */}
-                        {(() => {
-                            const pages = [];
-                            const maxToShow = 10;
-                            let start = Math.max(1, safePage - Math.floor(maxToShow / 2));
-                            let end = start + maxToShow - 1;
-                            if (end > totalPages) { end = totalPages; start = Math.max(1, end - maxToShow + 1); }
-                            for (let n = start; n <= end; n++) {
-                                pages.push(
-                                    <li key={n} className={`page-item ${n === safePage ? "active" : ""}`}>
-                                        <button className="page-link" onClick={() => paginate(n)}>{n}</button>
-                                    </li>
-                                );
-                            }
-                            return pages;
-                        })()}
-                        <li className={`page-item ${safePage === totalPages ? "disabled" : ""}`}>
-                            <button className="page-link" onClick={() => paginate(Math.min(totalPages, safePage + 1))} disabled={safePage === totalPages}>
-                                Next
-                            </button>
-                        </li>
-                    </ul>
-                </nav>
-            )}
 
-            
-          
+            <div className="d-flex justify-content-center">
+                {totalPages > 1 && (
+                    <nav aria-label="Hospital pagination" className="pagination-wrapper p-0 mt-2">
+                        <ul className="pagination justify-content-center">
+                            {/* First Page */}
+                            <li className={`page-item ${safePage === 1 ? "disabled" : ""}`}>
+                                <button className="page-link" onClick={() => paginate(1)} disabled={safePage === 1}>
+                                    <i className="bi bi-chevron-double-left"></i>
+                                </button>
+                            </li>
+
+                            {/* Previous Page */}
+                            <li className={`page-item ${safePage === 1 ? "disabled" : ""}`}>
+                                <button className="page-link" onClick={() => paginate(Math.max(1, safePage - 1))} disabled={safePage === 1}>
+                                    <i className="bi bi-chevron-left"></i>
+                                </button>
+                            </li>
+
+                            {/* Numbered pages: show at most 5 */}
+                            {(() => {
+                                const pages = [];
+                                const maxToShow = 5;
+                                let start = Math.max(1, safePage - Math.floor(maxToShow / 2));
+                                let end = start + maxToShow - 1;
+                                if (end > totalPages) { end = totalPages; start = Math.max(1, end - maxToShow + 1); }
+                                for (let n = start; n <= end; n++) {
+                                    pages.push(
+                                        <li key={n} className={`page-item ${n === safePage ? "active" : ""}`}>
+                                            <button className="page-link" onClick={() => paginate(n)}>{n}</button>
+                                        </li>
+                                    );
+                                }
+                                return pages;
+                            })()}
+
+                            {/* Next Page */}
+                            <li className={`page-item ${safePage === totalPages ? "disabled" : ""}`}>
+                                <button className="page-link" onClick={() => paginate(Math.min(totalPages, safePage + 1))} disabled={safePage === totalPages}>
+                                    <i className="bi bi-chevron-right"></i>
+                                </button>
+                            </li>
+
+                            {/* Last Page */}
+                            <li className={`page-item ${safePage === totalPages ? "disabled" : ""}`}>
+                                <button className="page-link" onClick={() => paginate(totalPages)} disabled={safePage === totalPages}>
+                                    <i className="bi bi-chevron-double-right"></i>
+                                </button>
+                            </li>
+                        </ul>
+                    </nav>
+                )}
+
+
+            </div>
+
+
             {/* Modal */}
             {selectedHospital && (
                 <HospitalModal
@@ -486,7 +507,7 @@ export default function DisplayHospital() {
                 />
             )}
 
-            
+
             {/* Delete Reason Modal */}
             {showDeleteReason && hospitalToDelete && (
                 <div className="modal fade show" style={{ display: "block", backgroundColor: "rgba(0,0,0,0.5)" }}>
@@ -518,19 +539,19 @@ export default function DisplayHospital() {
             )}
 
 
-            
+
             {/* Delete Reason Modal */}
             {showDeleteReason && hospitalToDelete && (
-                <div className="modal fade show" style={{ display: "block", backgroundColor: "rgba(0,0,0,0.5)" }} onClick={(e)=>e.stopPropagation()}>
+                <div className="modal fade show" style={{ display: "block", backgroundColor: "rgba(0,0,0,0.5)" }} onClick={(e) => e.stopPropagation()}>
                     <div className="modal-dialog modal-dialog-centered">
-                        <div className="modal-content" onClick={(e)=>e.stopPropagation()}>
+                        <div className="modal-content" onClick={(e) => e.stopPropagation()}>
                             <div className="modal-header">
                                 <h5 className="modal-title">Please Confirm Delete</h5>
                                 <button type="button" className="btn-close" onClick={() => { setShowDeleteReason(false); setHospitalToDelete(null); }}></button>
                             </div>
                             <div className="modal-body">
                                 <p className="mb-2">Provide a reason for deleting this hospital. This will be stored in DeletedHospitalData.</p>
-                                <textarea className="form-control" rows="4" value={deleteReason} onChange={(e)=>setDeleteReason(e.target.value)} placeholder="Reason (required)" />
+                                <textarea className="form-control" rows="4" value={deleteReason} onChange={(e) => setDeleteReason(e.target.value)} placeholder="Reason (required)" />
                             </div>
                             <div className="modal-footer">
                                 <button type="button" className="btn btn-secondary" onClick={() => { setShowDeleteReason(false); setHospitalToDelete(null); }}>Cancel</button>
@@ -540,7 +561,7 @@ export default function DisplayHospital() {
                     </div>
                 </div>
             )}
-    
+
             {/* Delete Confirmation */}
             {showDeleteConfirm && hospitalToDelete && (
                 <div className="modal fade show" style={{ display: "block", backgroundColor: "rgba(0,0,0,0.5)" }}>

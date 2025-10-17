@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import firebaseDB from "../../firebase";
+import { useAuth } from "../../context/AuthContext";
 
 const HospitalModal = ({ hospital, isOpen, onClose, onSave, isEditMode }) => {
   const [activeTab, setActiveTab] = useState('hospitalDetails');
@@ -23,6 +24,12 @@ const HospitalModal = ({ hospital, isOpen, onClose, onSave, isEditMode }) => {
   // Local edit toggle (pencil icon in modal body)
   const [isLocalEdit, setIsLocalEdit] = useState(false);
   const canEdit = isEditMode || isLocalEdit;
+
+  const { user } = useAuth();
+  const userName = user?.name || "System";
+  const userRole = user?.role || "Employee";
+  const userId = user?.uid || user?.dbId || user?.id || null;
+  const [paymentCommentInputs, setPaymentCommentInputs] = useState({});
 
 
 
@@ -118,12 +125,44 @@ const HospitalModal = ({ hospital, isOpen, onClose, onSave, isEditMode }) => {
 
   // Auto-update autoVisit (always) and visitType (only if not manually touched)
   useEffect(() => {
-    const nextVisit = autoVisitFromCount(agents.length);
-    setAutoVisit(nextVisit);
-    if (!visitTouched) {
-      setHospitalData(prev => ({ ...prev, visitType: nextVisit }));
+    if (hospital) {
+      const initialAuto = autoVisitFromCount((hospital.agents || []).length);
+
+      setHospitalData({
+        ...hospital,
+        visitType: hospital.visitType || initialAuto,
+        comments: Array.isArray(hospital.comments) ? hospital.comments : [],
+      });
+
+      // Ensure arrays exist and dates are normalized so .map never crashes
+      const safeAgents = (hospital.agents || []).map(a => ({
+        ...a,
+        comments: Array.isArray(a.comments) ? a.comments : [],
+      }));
+      setAgents(safeAgents);
+
+      const safePayments = (hospital.payments || []).map(p => ({
+        ...p,
+        commentsList: Array.isArray(p.commentsList) ? p.commentsList : [],
+        date: p.date || (p.createdAt ? new Date(p.createdAt).toISOString().slice(0, 10) : new Date().toISOString().slice(0, 10)),
+      }));
+      setPayments(safePayments);
+
+      setAgentErrors(safeAgents.map(() => ({})));
+      setPaymentErrors(safePayments.map(() => ({})));
+
+      setAgentSuccess(safeAgents.reduce((acc, _, i) => ({ ...acc, [i]: false }), {}));
+      setPaymentSuccess(safePayments.reduce((acc, _, i) => ({ ...acc, [i]: false }), {}));
+
+      setAutoVisit(initialAuto);
+      setAgentCommentInputs({});
+      setHospitalCommentInput('');
+      editedRef.current = false;
+      setHasUnsavedChanges(false);
+      setVisitTouched(false);
     }
-  }, [agents.length, visitTouched, autoVisitFromCount]);
+  }, [hospital, autoVisitFromCount]);
+
 
   const isPaymentLocked = (payment) => payment.isLocked || payment.submittedAt;
   const isAgentLocked = (agent) => agent.isLocked || agent.submittedAt;
@@ -154,6 +193,7 @@ const HospitalModal = ({ hospital, isOpen, onClose, onSave, isEditMode }) => {
   /* --------------------- Agent Details Functions --------------------- */
   const addNewAgent = () => {
     const newAgentId = generateAgentId();
+    const now = new Date().toISOString();
     const newAgent = {
       id: newAgentId,
       name: '',
@@ -164,12 +204,16 @@ const HospitalModal = ({ hospital, isOpen, onClose, onSave, isEditMode }) => {
       status: '',
       comments: [],
       isLocked: false,
-      createdAt: new Date().toISOString()
+      createdAt: now,
+      createdByName: userName,
+      createdById: userId,
+      createdByRole: userRole,
     };
     setAgents([newAgent, ...agents]);
     setAgentErrors([{}, ...agentErrors]);
     markEdited();
   };
+
 
   const removeAgent = (index) => {
     const updatedAgents = [...agents];
@@ -209,17 +253,20 @@ const HospitalModal = ({ hospital, isOpen, onClose, onSave, isEditMode }) => {
     if (!updatedAgents[agentIndex].comments) {
       updatedAgents[agentIndex].comments = [];
     }
+
     updatedAgents[agentIndex].comments.unshift({
       text: commentText,
       date: new Date().toISOString(),
-      id: Date.now() // Add unique ID for key prop
+      by: userName,
+      role: userRole,
+      id: Date.now(),
     });
-    setAgents(updatedAgents);
 
-    // Clear the input for this agent
+    setAgents(updatedAgents);
     setAgentCommentInputs(prev => ({ ...prev, [agentIndex]: '' }));
     markEdited();
   };
+
 
   const validateAgent = (index) => {
     const agent = agents[index];
@@ -227,8 +274,9 @@ const HospitalModal = ({ hospital, isOpen, onClose, onSave, isEditMode }) => {
 
     if (!agent.name.trim()) errors.name = "Name is required";
     if (!agent.designation) errors.designation = "Designation is required";
-    if (!agent.mobileNoNo.trim()) errors.mobileNo = "Mobile No is required";
-    else if (!/^\d{10}$/.test(agent.mobileNoNo)) errors.mobileNo = "Enter valid 10-digit mobile number";
+    if (!agent.mobileNo?.trim()) errors.mobileNo = "Mobile No is required";
+    else if (!/^\d{10}$/.test(agent.mobileNo)) errors.mobileNo = "Enter valid 10-digit mobile number";
+
 
     return errors;
   };
@@ -242,26 +290,35 @@ const HospitalModal = ({ hospital, isOpen, onClose, onSave, isEditMode }) => {
       return;
     }
 
+    const now = new Date().toISOString();
     const updatedAgents = [...agents];
     updatedAgents[index] = {
       ...updatedAgents[index],
+      // Preserve original create info if present; otherwise set it now
+      createdAt: updatedAgents[index].createdAt || now,
+      createdByName: updatedAgents[index].createdByName || userName,
+      createdById: updatedAgents[index].createdById || userId,
+      createdByRole: updatedAgents[index].createdByRole || userRole,
+
+      // Submission lock + who submitted
       isLocked: true,
-      submittedAt: new Date().toISOString()
+      submittedAt: now,
+      submittedByName: userName,
+      submittedById: userId,
+      submittedByRole: userRole,
     };
+
     setAgents(updatedAgents);
-
     setAgentSuccess({ ...agentSuccess, [index]: true });
-    const timer = setTimeout(() => {
-      setAgentSuccess(prev => ({ ...prev, [index]: false }));
-    }, 3000);
-
-    // Cleanup timer on component unmount
-    return () => clearTimeout(timer);
+    const t = setTimeout(() => setAgentSuccess(prev => ({ ...prev, [index]: false })), 3000);
+    return () => clearTimeout(t);
   };
+
 
   /* --------------------- Payment Details Functions --------------------- */
   const addNewPayment = () => {
     const today = new Date().toISOString().slice(0, 10);
+    const now = new Date().toISOString();
     const newPayment = {
       id: Date.now().toString(),
       date: today,
@@ -275,13 +332,19 @@ const HospitalModal = ({ hospital, isOpen, onClose, onSave, isEditMode }) => {
       commition: '',
       paymentMode: '',
       comments: '',
+      commentsList: [],
       isLocked: false,
-      createdAt: new Date().toISOString()
+
+      createdAt: now,
+      createdByName: userName,
+      createdById: userId,
+      createdByRole: userRole,
     };
     setPayments([newPayment, ...payments]);
     setPaymentErrors([{}, ...paymentErrors]);
     markEdited();
   };
+
 
   const removePayment = (index) => {
     const updatedPayments = [...payments];
@@ -319,6 +382,26 @@ const HospitalModal = ({ hospital, isOpen, onClose, onSave, isEditMode }) => {
     markEdited();
   };
 
+  const handlePaymentComment = (index, text) => {
+    if (!text.trim()) return;
+    const updatedPayments = [...payments];
+    if (!updatedPayments[index].commentsList) {
+      updatedPayments[index].commentsList = [];
+    }
+
+    updatedPayments[index].commentsList.unshift({
+      text,
+      date: new Date().toISOString(),
+      by: userName,
+      role: userRole,
+      id: Date.now(),
+    });
+
+    setPayments(updatedPayments);
+    markEdited();
+  };
+
+
   const validatePayment = (index) => {
     const payment = payments[index];
     const errors = {};
@@ -337,22 +420,28 @@ const HospitalModal = ({ hospital, isOpen, onClose, onSave, isEditMode }) => {
       return;
     }
 
-    const updatedPayments = [...payments];
-    updatedPayments[index] = {
-      ...updatedPayments[index],
+    const now = new Date().toISOString();
+    const updated = [...payments];
+    updated[index] = {
+      ...updated[index],
+      createdAt: updated[index].createdAt || now,
+      createdByName: updated[index].createdByName || userName,
+      createdById: updated[index].createdById || userId,
+      createdByRole: updated[index].createdByRole || userRole,
+
       isLocked: true,
-      submittedAt: new Date().toISOString()
+      submittedAt: now,
+      submittedByName: userName,
+      submittedById: userId,
+      submittedByRole: userRole,
     };
-    setPayments(updatedPayments);
 
+    setPayments(updated);
     setPaymentSuccess({ ...paymentSuccess, [index]: true });
-    const timer = setTimeout(() => {
-      setPaymentSuccess(prev => ({ ...prev, [index]: false }));
-    }, 3000);
-
-    // Cleanup timer on component unmount
-    return () => clearTimeout(timer);
+    const t = setTimeout(() => setPaymentSuccess(prev => ({ ...prev, [index]: false })), 3000);
+    return () => clearTimeout(t);
   };
+
 
   const handlePaymentIdSearch = () => {
     if (!paymentIdInput) return;
@@ -804,8 +893,8 @@ const HospitalModal = ({ hospital, isOpen, onClose, onSave, isEditMode }) => {
                       ) : (
                         <p>No comments added</p>
                       )}
-                      </div>
                     </div>
+                  </div>
                 )}
 
                 {/* Agent Details Tab */}
@@ -1037,20 +1126,16 @@ const HospitalModal = ({ hospital, isOpen, onClose, onSave, isEditMode }) => {
                                     )}
                                   </div>
 
-                                  {agent.comments && agent.comments.length > 0 ? (
-                                    <div className="comment-wrapper">
-                                      {agent.comments.map((comment) => (
-                                        <div key={comment.id || comment.date} className="comment">
-                                          <p className="mb-0">{comment.text}</p>
-                                          <small className="text-muted">
-                                            {new Date(comment.date).toLocaleString()}
-                                          </small>
-                                        </div>
-                                      ))}
+                                  {(agent.comments || []).map(c => (
+                                    <div key={c.id || c.date} className="comment">
+                                      <p className="mb-0">{c.text}</p>
+                                      <small className="small-text">
+                                        {c.by} ({c.role}) — {new Date(c.date).toLocaleString()}
+                                      </small>
                                     </div>
-                                  ) : (
-                                    <p>No comments added</p>
-                                  )}
+                                  ))}
+
+
                                 </div>
                               </div>
 
@@ -1167,15 +1252,11 @@ const HospitalModal = ({ hospital, isOpen, onClose, onSave, isEditMode }) => {
                                   {/* Payment ID: {payment.id} */}
                                   {locked && <span className="badge bg-secondary mt-1">Saved</span>}
                                 </h5>
-                                {canEdit && !locked && (
-                                  <button
-                                    type="button"
-                                    className="btn btn-danger btn-sm"
-                                    onClick={() => removePayment(originalIndex)}
-                                  >
-                                    Remove
-                                  </button>
-                                )}
+                                <small className="text-muted">
+                                  Added by {payment.createdByName || "—"} {payment.createdByRole ? `(${payment.createdByRole})` : ""}
+                                  {payment.createdAt ? ` • ${new Date(payment.createdAt).toLocaleString()}` : ""}
+                                </small>
+
                               </div>
 
                               <div className="row">
@@ -1351,6 +1432,8 @@ const HospitalModal = ({ hospital, isOpen, onClose, onSave, isEditMode }) => {
                                   )}
                                 </div>
 
+
+
                                 {/* Reminder Date for Payments */}
                                 {/* <div className="col-md-4 mb-2">
                                   <label className="form-label">Reminder Date</label>
@@ -1372,17 +1455,69 @@ const HospitalModal = ({ hospital, isOpen, onClose, onSave, isEditMode }) => {
 
                                 <div className="col-12 mb-2">
                                   <label className="form-label">Comments</label>
+
                                   {canEdit && !locked ? (
-                                    <textarea
-                                      className="form-control"
-                                      rows={3}
-                                      value={payment.comments}
-                                      onChange={(e) => handlePaymentChange(originalIndex, 'comments', e.target.value)}
-                                    />
+                                    <>
+                                      <textarea
+                                        className="form-control mb-2"
+                                        rows={3}
+                                        placeholder="Add a comment"
+                                        value={paymentCommentInputs[originalIndex] || ""}
+                                        onChange={(e) =>
+                                          setPaymentCommentInputs(prev => ({ ...prev, [originalIndex]: e.target.value }))
+                                        }
+                                        onKeyDown={(e) => {
+                                          if (e.key === "Enter" && !e.shiftKey) {
+                                            e.preventDefault();
+                                            const text = (paymentCommentInputs[originalIndex] || "").trim();
+                                            if (text) {
+                                              handlePaymentComment(originalIndex, text);
+                                              setPaymentCommentInputs(prev => ({ ...prev, [originalIndex]: "" }));
+                                            }
+                                          }
+                                        }}
+                                      />
+
+
+                                      <div className='d-flex justify-content-between'>
+                                        <button
+                                          type="button"
+                                          className="btn btn-sm btn-warning"
+                                          onClick={() => {
+                                            const text = (paymentCommentInputs[originalIndex] || "").trim();
+                                            if (text) {
+                                              handlePaymentComment(originalIndex, text);
+                                              setPaymentCommentInputs(prev => ({ ...prev, [originalIndex]: "" }));
+                                            }
+                                          }}
+                                        >
+                                          Add Comment
+                                        </button>
+                                        {canEdit && !locked && (
+                                          <button
+                                            type="button"
+                                            className="btn btn-danger btn-sm"
+                                            onClick={() => removePayment(originalIndex)}
+                                          >
+                                            Remove
+                                          </button>
+                                        )}
+                                      </div>
+                                    </>
                                   ) : (
-                                    <p>{payment.comments || 'N/A'}</p>
+                                    <p>{payment.comments || "—"}</p>
                                   )}
+
+                                  {(payment.commentsList || []).map((c) => (
+                                    <div key={c.id || c.date} className="comment">
+                                      <p className="mb-0">{c.text}</p>
+                                      <small className="text-muted">
+                                        {c.by} ({c.role}) — {new Date(c.date).toLocaleString()}
+                                      </small>
+                                    </div>
+                                  ))}
                                 </div>
+
                               </div>
 
                               {canEdit && !locked && (
@@ -1519,6 +1654,7 @@ const HospitalModal = ({ hospital, isOpen, onClose, onSave, isEditMode }) => {
                               <th>Service Charges</th>
                               <th>Commition</th>
                               <th>Payment Mode</th>
+                              <th>Paid By</th>
                               <th>Reminder Date</th>
                             </tr>
                           </thead>
@@ -1533,6 +1669,7 @@ const HospitalModal = ({ hospital, isOpen, onClose, onSave, isEditMode }) => {
                                 <td>{payment.serviceCharges}</td>
                                 <td>{payment.commition}</td>
                                 <td>{payment.paymentMode}</td>
+                                <td>{payment.createdByName}</td>
                                 <td className={getReminderClass(payment.reminderDate)}>
                                   {payment.reminderDate
                                     ? new Date(payment.reminderDate).toLocaleDateString("en-GB")

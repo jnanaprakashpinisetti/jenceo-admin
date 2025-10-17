@@ -1360,7 +1360,7 @@ export default function PurchaseDetails() {
                                     value={month}
                                     onChange={(e) => setMonth(parseInt(e.target.value, 10))}
                                     style={{
-                                        background: "linear-gradient(135deg, rgba(30, 41, 59, 0.8) 0%, rgba(15, 23, 42, 0.8) 100%)",
+                                        background: "linear-gradient(135deg, rgb(143 47 126 / 80%) 0%, rgb(189 53 95 / 80%) 100%)",
                                         color: "white",
                                         borderRadius: "10px",
                                         backdropFilter: "blur(10px)",
@@ -1384,7 +1384,7 @@ export default function PurchaseDetails() {
                                     value={year}
                                     onChange={(e) => setYear(parseInt(e.target.value, 10))}
                                     style={{
-                                        background: "linear-gradient(135deg, rgba(30, 41, 59, 0.8) 0%, rgba(15, 23, 42, 0.8) 100%)",
+                                        background: "linear-gradient(135deg, rgb(143 47 126 / 80%) 0%, rgb(189 53 95 / 80%) 100%)",
                                         color: "white",
                                         borderRadius: "10px",
                                         backdropFilter: "blur(10px)",
@@ -1409,7 +1409,7 @@ export default function PurchaseDetails() {
                                 value={dateStr}
                                 onChange={(e) => setDateStr(e.target.value)}
                                 style={{
-                                    background: "linear-gradient(135deg, rgba(30, 41, 59, 0.8) 0%, rgba(15, 23, 42, 0.8) 100%)",
+                                    background: "linear-gradient(135deg, rgb(143 47 126 / 80%) 0%, rgb(189 53 95 / 80%) 100%)",
                                     color: "white",
                                     borderRadius: "10px",
                                     backdropFilter: "blur(10px)",
@@ -1433,7 +1433,7 @@ export default function PurchaseDetails() {
                                 value={selectedUser}
                                 onChange={(e) => setSelectedUser(e.target.value)}
                                 style={{
-                                    background: "linear-gradient(135deg, rgba(30, 41, 59, 0.8) 0%, rgba(15, 23, 42, 0.8) 100%)",
+                                    background: "linear-gradient(135deg, rgb(143 47 126 / 80%) 0%, rgb(189 53 95 / 80%) 100%)",
                                     color: "white",
                                     borderRadius: "10px",
                                     backdropFilter: "blur(10px)",
@@ -1569,7 +1569,7 @@ export default function PurchaseDetails() {
 
             {/* Tabs Navigation */}
             <div className="mb-4">
-                <ul className="nav nav-pills nav-justified" style={{
+                <ul className="nav nav-pills nav-justified gap-2" style={{
                     background: "linear-gradient(135deg, rgba(30, 41, 59, 0.8) 0%, rgba(15, 23, 42, 0.8) 100%)",
                     borderRadius: "15px",
                     padding: "10px",

@@ -257,15 +257,27 @@ export default function DisplayClient() {
   };
 
   // Status badge (kept your mapping)
-  const getStatusBadgeClass = (status) => {
-    switch (status) {
-      case 'Running': return 'bg-success';
-      case 'Closed': return 'bg-secondary';
-      case 'Stop': return 'bg-warning';
-      case 'Re-open': return 'bg-info';
-      case 'Re-start': return 'bg-primary';
-      case 'Re-place': return 'bg-dark';
-      default: return 'bg-info';
+  const getStatusBadgeClass = (status = '') => {
+    const cleanStatus = status.trim().toLowerCase(); // normalize input
+
+    switch (cleanStatus) {
+      case 'running':
+        return 'bg-success';
+      case 'closed':
+        return 'bg-secondary';
+      case 'stop':
+        return 'bg-warning';
+      case 're-open':
+      case 'reopen':
+        return 'bg-info';
+      case 're-start':
+      case 'restart':
+        return 'bg-primary';
+      case 're-place':
+      case 'replace':
+        return 'bg-dark';
+      default:
+        return 'bg-info'; // fallback
     }
   };
 
@@ -879,8 +891,10 @@ export default function DisplayClient() {
                     ) : 'N/A'}
                   </td>
                   <td>
-                    <span className={`badge ${getStatusBadgeClass(client.serviceStatus)} opacity-75 text-capitalize`}>
-                      {client.serviceStatus || 'Running'}
+                    <span
+                      className={`badge ${getStatusBadgeClass(client.serviceStatus)} text-light text-capitalize px-3 py-2 shadow-sm`}
+                    >
+                      {client.serviceStatus?.trim() || 'Running'}
                     </span>
                   </td>
                   <td>

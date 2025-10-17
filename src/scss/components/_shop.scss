@@ -1,0 +1,45 @@
+ .vegitableHeader {
+     border: 0;
+     margin-bottom: 30px;
+     border-radius: 10px;
+     padding: 15px;
+
+     .form-select {
+         @include mobile {
+             text-align: center;
+         }
+     }
+
+ }
+
+ /* Mobile Responsive */
+ @media (max-width: 768px) {
+     .flex-sm-row {
+         flex-direction: row !important;
+         display: grid !important;
+     }
+
+     .w-100 {
+         width: 100% !important;
+     }
+
+     .flex-fill {
+         flex: 1 1 0% !important;
+     }
+ }
+
+ /* Custom select styling */
+ .form-select:focus {
+     box-shadow: 0 0 0 0.2rem rgba(99, 102, 241, 0.25) !important;
+     border-color: rgba(99, 102, 241, 0.5) !important;
+ }
+
+ .form-select option {
+     background: #0f172a !important;
+     color: white !important;
+     padding: 10px !important;
+ }
+
+ .form-select option:hover {
+     background: #1e293b !important;
+ }

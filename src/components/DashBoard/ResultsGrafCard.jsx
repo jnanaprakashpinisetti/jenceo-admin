@@ -134,6 +134,30 @@ function extractPetty(node = {}) {
 }
 
 /** Assets (leaf-only + robust) */
+
+// Create a stable signature for an asset row to avoid duplicates across multiple paths
+function assetSignature(row) {
+  const raw = row?.raw || {};
+  const name =
+    (raw.name || raw.title || raw.assetName || row.category || "asset")
+      .toString()
+      .trim()
+      .toLowerCase();
+
+  const amt = Number(row?.amount || 0);
+
+  const bill =
+    (raw.billNo || raw.billNumber || raw.invoiceNo || raw.invoiceNumber || raw.invoice || "")
+      .toString()
+      .trim()
+      .toLowerCase();
+
+  const d = row?.parsedDate || parseDateRobust(row?.date);
+  const day = d && !isNaN(d) ? d.toISOString().slice(0, 10) : "nodate";
+
+  return [name, amt, bill, day].join("|");
+}
+
 function extractAssets(node = {}) {
   const out = [];
   const monetaryKeys = ["total", "amount", "value", "totalNum", "cost", "totalAmount", "amountPaid", "price", "unitPrice", "unit_price", "rate"];
@@ -522,16 +546,33 @@ export default function ResultsGrafCard({
         });
 
         // Assets (flat + nested, plus derived from petty)
+        // Assets (flat + nested, plus derived from petty)
         let assetRows = [];
-        ["assetsRoot", "assetsAdmin", "assetsAltRoot", "assetsAltAdmin", "assetsJenAdmin"].forEach((k) => assetRows.push(...extractAssets(snapshots[k] || {})));
-        ["pettyRoot", "pettyAdmin", "pettyAdminCaps"].forEach((k) => assetRows.push(...extractAssetsFromPetty(snapshots[k] || {})));
-        // De-dup assets by strong or fuzzy signature
-        const aSeen = new Set();
-        // ONLY APPROVED assets
+        ["assetsRoot", "assetsAdmin", "assetsAltRoot", "assetsAltAdmin", "assetsJenAdmin"].forEach((k) => {
+          assetRows.push(...extractAssets(snapshots[k] || {}));
+        });
+        ["pettyRoot", "pettyAdmin", "pettyAdminCaps"].forEach((k) => {
+          assetRows.push(...extractAssetsFromPetty(snapshots[k] || {}));
+        });
+
+        // Keep ONLY approved assets
         assetRows = assetRows.filter(r => {
           const s = String((r.raw && (r.raw.approval || r.raw.status || r.raw.approvalStatus)) || "").toLowerCase();
           return s.includes("approve") || s === "approved" || s === "acknowledged" || s === "acknowledge";
         });
+
+        // ✅ De-duplicate assets coming from multiple paths
+        const seenAssets = new Set();
+        const dedupAssets = [];
+        for (const r of assetRows) {
+          const sig = assetSignature(r);
+          if (!seenAssets.has(sig)) {
+            seenAssets.add(sig);
+            dedupAssets.push(r);
+          }
+        }
+        assetRows = dedupAssets;
+
 
 
         // Investments

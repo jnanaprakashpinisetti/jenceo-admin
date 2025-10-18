@@ -94,6 +94,11 @@ const StaffModal = ({ staff, isOpen, onClose, onSave, onDelete, isEditMode }) =>
     const [returnReasonOpen, setReturnReasonOpen] = useState(false);
     const [reasonForm, setReasonForm] = useState({ reasonType: "", comment: "", for: "" });
 
+    const { user } = useAuth() || {};
+    const currentUserName = user?.name || "System";
+    const currentUserId = user?.uid || user?.dbId || user?.id || "";
+    const currentUserRole = user?.role || "Employee";
+
 
     // validation errors (array per row)
     const [paymentErrors, setPaymentErrors] = useState([{}]);
@@ -313,7 +318,28 @@ const StaffModal = ({ staff, isOpen, onClose, onSave, onDelete, isEditMode }) =>
     };
 
     const addPaymentSection = () => {
-        setFormData((prev) => ({ ...prev, payments: [...(prev.payments || []), blankPayment()] }));
+        const newPayment = {
+            date: new Date().toISOString().slice(0, 10),
+            clientName: "",
+            days: "",
+            amount: "",
+            balanceAmount: "",
+            typeOfPayment: "",
+            bookNo: "",
+            status: "",
+            receiptNo: "",
+            remarks: "",
+            createdAt: new Date().toISOString(),
+            createdByName: currentUserName,
+            createdById: currentUserId,
+            createdByRole: currentUserRole,
+            __locked: false,
+        };
+
+        setFormData((prev) => ({
+            ...prev,
+            payments: [...(prev.payments || []), newPayment],
+        }));
         setPaymentErrors((prev) => [...(prev || []), {}]);
     };
 
@@ -392,6 +418,8 @@ const StaffModal = ({ staff, isOpen, onClose, onSave, onDelete, isEditMode }) =>
     const validatePayments = () => {
         let ok = true;
         const pErrs = (formData.payments || []).map((p) => {
+
+
             if (!hasAnyValue(p)) return {};
             const e = {};
             if (!p.date) {
@@ -1200,7 +1228,13 @@ const StaffModal = ({ staff, isOpen, onClose, onSave, onDelete, isEditMode }) =>
             const payload = {
                 ...formData,
                 employeePhoto: photoURL,
-                payments: (formData.payments || []).map(({ __locked, ...rest }) => rest),
+                payments: (formData.payments || []).map((p) => ({
+                    ...p,
+                    createdByName: p.createdByName || currentUserName,
+                    createdById: p.createdById || currentUserId,
+                    createdByRole: p.createdByRole || currentUserRole,
+                    createdAt: p.createdAt || new Date().toISOString(),
+                })),
                 workDetails: (formData.workDetails || []).map(({ __locked, ...rest }) => rest),
                 status,
             };
@@ -2560,6 +2594,14 @@ const StaffModal = ({ staff, isOpen, onClose, onSave, onDelete, isEditMode }) =>
                                                                 )}
                                                             </div>
                                                         </div>
+
+                                                        <span className="small-text">Added By  <strong> {p.createdByName || "*"}{" "}</strong> </span>
+                                                        {p.createdAt ? (
+                                                            <small className="small-text">
+                                                                - {new Date(p.createdAt).toLocaleString()}
+                                                            </small>
+                                                        ) : null}
+
                                                     </div>
                                                 );
                                             })}
@@ -2777,7 +2819,7 @@ const StaffModal = ({ staff, isOpen, onClose, onSave, onDelete, isEditMode }) =>
                                             {hasPayments() ? (
                                                 <div className="table-responsive mb-3">
                                                     <table className="table table-sm table-bordered table-dark table-hover">
-                                                        <thead><tr><th>Date</th><th>Client</th><th>Days</th><th>Amount</th><th>Balance</th><th>Type</th><th>Receipt</th><th>Remarks</th></tr></thead>
+                                                        <thead><tr><th>Date</th><th>Client</th><th>Days</th><th>Amount</th><th>Balance</th><th>Type</th><th>Receipt</th><th>Remarks</th>  <th>Added By</th></tr></thead>
                                                         <tbody>
                                                             {(formData.payments || []).map((p, i) => (
                                                                 <tr key={i}>
@@ -2789,6 +2831,14 @@ const StaffModal = ({ staff, isOpen, onClose, onSave, onDelete, isEditMode }) =>
                                                                     <td>{p.typeOfPayment || "N/A"}</td>
                                                                     <td>{p.receiptNo || "N/A"}</td>
                                                                     <td>{p.remarks || "N/A"}</td>
+                                                                    <td>
+                                                                        {p.createdByName || "—"}{" "}
+                                                                        {p.createdAt ? (
+                                                                            <small className="text-muted">
+                                                                                ({new Date(p.createdAt).toLocaleString()})
+                                                                            </small>
+                                                                        ) : null}
+                                                                    </td>
                                                                 </tr>
                                                             ))}
 
@@ -2809,7 +2859,7 @@ const StaffModal = ({ staff, isOpen, onClose, onSave, onDelete, isEditMode }) =>
                                                                         <td colSpan="3" className="text-end">Totals:</td>
                                                                         <td>{totalAmount}</td>
                                                                         <td>{totalBalance}</td>
-                                                                        <td colSpan="3">Payments Count: {count}</td>
+                                                                        <td colSpan="4">Payments Count: {count}</td>
                                                                     </tr>
                                                                 );
                                                             })()}

@@ -2281,7 +2281,7 @@ const ClientModal = ({
                             <th>#</th>
                             <th>Date</th>
                             <th>Payment</th>
-                            <th>Paid By</th>
+                            <th>Added By</th>
                             <th>Balance</th>
                             <th>Method</th>
                             <th>Receipt</th>

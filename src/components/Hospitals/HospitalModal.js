@@ -1014,7 +1014,7 @@ const HospitalModal = ({ hospital, isOpen, onClose, onSave, isEditMode }) => {
                                       <input
                                         type="tel"
                                         className={`form-control ${agentErrors[originalIndex]?.mobileNo ? 'is-invalid' : ''}`}
-                                        value={agent.mobileNoNo}
+                                        value={agent.mobileNo || ''}
                                         onChange={(e) => handleAgentChange(originalIndex, 'mobileNo', e.target.value)}
                                         maxLength="10"
                                       />
@@ -1024,29 +1024,31 @@ const HospitalModal = ({ hospital, isOpen, onClose, onSave, isEditMode }) => {
                                     </>
                                   ) : (
                                     <div className="d-flex align-items-center">
-                                      <span>{agent.mobileNoNo || 'N/A'}</span>
-                                      {agent.mobileNoNo && (
+                                      <span>{agent.mobileNo || 'N/A'}</span>
+                                      {agent.mobileNo && (
                                         <a
-                                          href={`tel:${agent.mobileNoNo}`}
+                                          href={`tel:${agent.mobileNo}`}
                                           className="btn btn-sm btn-info ms-2"
                                         >
                                           Call
                                         </a>
-
                                       )}
-                                      <a
-                                        className="btn btn-sm btn-warning ms-1"
-                                        href={`https://wa.me/${agent.mobileNoNo.replace(/\D/g, '')}?text=${encodeURIComponent(
-                                          "Hello This is Sudheer From JenCeo Home Care Services"
-                                        )}`}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                      >
-                                        WAP
-                                      </a>
+                                      {agent.mobileNo && (
+                                        <a
+                                          className="btn btn-sm btn-warning ms-1"
+                                          href={`https://wa.me/${(agent.mobileNo || '').replace(/\D/g, '')}?text=${encodeURIComponent(
+                                            "Hello This is Sudheer From JenCeo Home Care Services"
+                                          )}`}
+                                          target="_blank"
+                                          rel="noopener noreferrer"
+                                        >
+                                          WAP
+                                        </a>
+                                      )}
                                     </div>
                                   )}
                                 </div>
+
 
                                 <div className="col-md-4 mb-2">
                                   <label className="form-label">UPI No</label>
@@ -1602,16 +1604,23 @@ const HospitalModal = ({ hospital, isOpen, onClose, onSave, isEditMode }) => {
                                 <td>{agent.id}</td>
                                 <td>{agent.name}</td>
                                 <td>{agent.designation}</td>
-                                <td>{agent.mobileNoNo}
-                                  <a href={`tel:${agent.mobileNoNo}`} className="btn btn-sm btn-info ms-1"> Call</a>
-                                  <a
-                                    className="btn btn-sm btn-warning ms-1"
-                                    href={`https://wa.me/${agent.mobileNo}?text=${encodeURIComponent(
-                                      "Hello This is Sudheer From JenCeo Home Care Services"
-                                    )}`}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                  >WAP</a>
+                                <td>
+                                  {agent.mobileNo || ''}
+                                  {agent.mobileNo && (
+                                    <a href={`tel:${agent.mobileNo}`} className="btn btn-sm btn-info ms-1"> Call</a>
+                                  )}
+                                  {agent.mobileNo && (
+                                    <a
+                                      className="btn btn-sm btn-warning ms-1"
+                                      href={`https://wa.me/${(agent.mobileNo || '').replace(/\D/g, '')}?text=${encodeURIComponent(
+                                        "Hello This is Sudheer From JenCeo Home Care Services"
+                                      )}`}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                    >
+                                      WAP
+                                    </a>
+                                  )}
                                 </td>
                                 <td>{agent.upiNo}</td>
                                 <td>

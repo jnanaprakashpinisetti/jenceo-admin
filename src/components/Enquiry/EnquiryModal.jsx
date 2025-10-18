@@ -24,62 +24,47 @@ const toDateStr = (iso) => {
 };
 
 /** Normalize raw comments to [{text, date, id, user}] */
+// ✅ Replace normalizeComments with this (no live-time defaults)
 const normalizeComments = (raw) => {
   if (!raw) return [];
+  const toObj = (c, i) => {
+    if (!c) return null;
+
+    // String comment -> don't invent a timestamp
+    if (typeof c === "string") {
+      return {
+        text: c,
+        date: null,              // ← keep empty, don't set live time
+        enteredAt: null,
+        id: Date.now() + i,
+        user: "System",
+      };
+    }
+
+    // Object comment
+    if (typeof c === "object") {
+      const text = c.text ?? c.message ?? "";
+      const enteredAt = c.enteredAt ?? null;
+      const date = c.date ?? c.ts ?? enteredAt ?? null; // ← prefer original
+      const id = c.id ?? Date.now() + i;
+      const user = c.user ?? c.userName ?? c.by ?? c.displayName ?? c.name ?? "System";
+      return text ? { text, date, enteredAt, id, user } : null;
+    }
+
+    return null;
+  };
+
   if (Array.isArray(raw)) {
-    return raw
-      .map((c, i) => {
-        if (!c) return null;
-        if (typeof c === "string") {
-          return {
-            text: c,
-            date: new Date().toISOString(),
-            id: Date.now() + i,
-            user: "System"
-          };
-        }
-        if (typeof c === "object") {
-          const text = c.text ?? c.message ?? "";
-          const date = c.date ?? c.ts ?? new Date().toISOString();
-          const id = c.id ?? Date.now() + i;
-          const user = c.user ?? c.userName ?? c.by ?? c.displayName ?? c.name ?? "System";
-          return text ? { text, date, id, user } : null;
-        }
-        return null;
-      })
-      .filter(Boolean);
+    return raw.map(toObj).filter(Boolean);
   }
+
   if (typeof raw === "object") {
     return Object.keys(raw)
       .sort()
-      .map((k, i) => raw[k])
-      .map((v, i) => {
-        if (!v) return null;
-        if (typeof v === "string") {
-          return {
-            text: v,
-            date: new Date().toISOString(),
-            id: Date.now() + i,
-            user: "System"
-          };
-        }
-        if (typeof v === "object") {
-          const text = v.text ?? v.message ?? "";
-          const date = v.date ?? v.ts ?? new Date().toISOString();
-          const id = v.id ?? Date.now() + i;
-          const user = v.user ?? v.userName ?? v.by ?? v.displayName ?? v.name ?? "System";
-          return text ? { text, date, id, user } : null;
-        }
-        return null;
-      })
+      .map((k, i) => toObj(raw[k], i))
       .filter(Boolean);
   }
-  if (typeof raw === "string") return [{
-    text: raw,
-    date: new Date().toISOString(),
-    id: Date.now(),
-    user: "System"
-  }];
+
   return [];
 };
 
@@ -200,14 +185,16 @@ export default function EnquiryModal({
     const text = (newComment || "").trim();
     if (!text) return;
 
+    const nowIso = new Date().toISOString();
     const entry = {
       text,
-      date: new Date().toISOString(),
+      // Store once at creation; do not overwrite later
+      enteredAt: nowIso,    // ← canonical creation time
+      date: nowIso,         // ← for old code that reads `date`
       id: Date.now(),
       user: effectiveUserName,
     };
 
-    // Add new comment to the end (bottom) of the list
     setComments((prev) => [...prev, entry]);
     setNewComment("");
     setCommentError("");
@@ -243,14 +230,14 @@ export default function EnquiryModal({
   /* Save */
   const handleSave = async () => {
     if (!formData?.id) return;
-   // ✅ prevent save when a comment is typed but not added
-   const pending = (newComment || "").trim();
-   if (pending) {
-     setCommentError("You typed a comment but didn’t add it. Click “Add Comment” or clear the box before saving.");
-     setLocalMode("edit");
-     setTimeout(() => commentBoxRef.current?.focus(), 0);
-     return;
-   }
+    // ✅ prevent save when a comment is typed but not added
+    const pending = (newComment || "").trim();
+    if (pending) {
+      setCommentError("You typed a comment but didn’t add it. Click “Add Comment” or clear the box before saving.");
+      setLocalMode("edit");
+      setTimeout(() => commentBoxRef.current?.focus(), 0);
+      return;
+    }
     setIsSaving(true);
     try {
       // Remove the reversal - save comments in the same order they're displayed
@@ -650,6 +637,7 @@ export default function EnquiryModal({
                         style={{ maxHeight: 280, overflowY: "auto" }}
                       >
                         {comments.map((c) => (
+
                           <div key={c.id || c.date} className="p-3 border-bottom bg-white">
                             <div className="d-flex justify-content-between align-items-start mb-2">
                               <span className="text-primary small-text">
@@ -658,7 +646,7 @@ export default function EnquiryModal({
                               </span>
                               <small className="text-muted">
                                 <i className="fas fa-clock me-1"></i>
-                                {toDateStr(c.date)}
+                                {toDateStr(c.enteredAt || c.date)}
                               </small>
                             </div>
                             <p className="mb-0 text-dark" style={{ lineHeight: "1.5" }}>
@@ -680,7 +668,7 @@ export default function EnquiryModal({
                     <div className="p-3 bg-light rounded">
                       <label className="form-label fw-semibold">Add New Comment</label>
                       <textarea
-                      ref={commentBoxRef}
+                        ref={commentBoxRef}
                         className="form-control"
                         placeholder="Type your comment here..."
                         rows={3}
@@ -688,7 +676,7 @@ export default function EnquiryModal({
                         maxLength={MAX_COMMENT_LEN}
                         onChange={(e) => {
                           setNewComment(e.target.value);
-                         if (commentError) setCommentError("");
+                          if (commentError) setCommentError("");
                         }}
                         onKeyDown={(e) => {
                           if (e.key === "Enter" && !e.shiftKey) {

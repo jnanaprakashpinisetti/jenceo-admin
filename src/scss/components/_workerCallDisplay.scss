@@ -394,6 +394,192 @@
     color: #f59e0b !important;
 
   }
+
+  /* Beautiful Tabs Styling */
+.tabs-container {
+  background: linear-gradient(135deg, #2d3748 0%, #4a5568 100%);
+  border-radius: 12px;
+  padding: 8px;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+  border: 1px solid #4a5568;
+}
+
+.dark-tabs {
+  border: none;
+  display: flex;
+  justify-content: center;
+  gap: 4px;
+  margin: 0;
+}
+
+.dark-tabs .nav-item {
+  margin: 0;
+}
+
+.dark-tabs .nav-link {
+  color: #cbd5e0 !important;
+  background: transparent;
+  border: 2px solid transparent;
+  border-radius: 8px;
+  padding: 12px 24px;
+  font-weight: 600;
+  font-size: 14px;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  margin: 0 2px;
+}
+
+.dark-tabs .nav-link::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.1), transparent);
+  transition: left 0.5s;
+}
+
+.dark-tabs .nav-link:hover::before {
+  left: 100%;
+}
+
+.dark-tabs .nav-link:hover {
+  color: #ffffff !important;
+  background: rgba(66, 153, 225, 0.1);
+  border-color: #4299e1;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(66, 153, 225, 0.3);
+}
+
+.dark-tabs .nav-link.active {
+  color: #ffffff !important;
+  background: linear-gradient(135deg, #4299e1 0%, #667eea 100%);
+  border-color: #4299e1;
+  box-shadow: 0 4px 15px rgba(66, 153, 225, 0.4);
+  transform: translateY(-2px);
+}
+
+.dark-tabs .nav-link.active::after {
+  content: '';
+  position: absolute;
+  bottom: -8px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 0;
+  height: 0;
+  border-left: 6px solid transparent;
+  border-right: 6px solid transparent;
+  border-top: 6px solid #4299e1;
+}
+
+.dark-tabs .nav-link i {
+  font-size: 16px;
+  margin-right: 8px;
+  transition: transform 0.3s ease;
+}
+
+.dark-tabs .nav-link:hover i {
+  transform: scale(1.1);
+}
+
+.dark-tabs .nav-link.active i {
+  transform: scale(1.2);
+  color: #ffffff;
+}
+
+/* Pulse animation for active tab */
+@keyframes tabPulse {
+  0% {
+    box-shadow: 0 4px 15px rgba(66, 153, 225, 0.4);
+  }
+  50% {
+    box-shadow: 0 4px 20px rgba(66, 153, 225, 0.6);
+  }
+  100% {
+    box-shadow: 0 4px 15px rgba(66, 153, 225, 0.4);
+  }
+}
+
+.dark-tabs .nav-link.active {
+  animation: tabPulse 2s infinite;
+}
+
+/* Responsive design */
+@media (max-width: 768px) {
+  .tabs-container {
+    padding: 6px;
+  }
+  
+  .dark-tabs .nav-link {
+    padding: 10px 16px;
+    font-size: 13px;
+  }
+  
+  .dark-tabs .nav-link i {
+    font-size: 14px;
+    margin-right: 6px;
+  }
+}
+
+@media (max-width: 576px) {
+  .dark-tabs {
+    flex-direction: column;
+    gap: 8px;
+  }
+  
+  .dark-tabs .nav-link {
+    justify-content: center;
+    text-align: center;
+  }
+  
+  .dark-tabs .nav-link.active::after {
+    display: none;
+  }
+
+  /* Glassmorphism Tabs */
+.tabs-container {
+  background: rgba(45, 55, 72, 0.8);
+  backdrop-filter: blur(10px);
+  border-radius: 16px;
+  padding: 8px;
+  box-shadow: 
+    0 8px 32px rgba(0, 0, 0, 0.3),
+    inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.dark-tabs .nav-link {
+  color: #e2e8f0 !important;
+  background: rgba(74, 85, 104, 0.3);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  padding: 12px 24px;
+  font-weight: 600;
+  backdrop-filter: blur(5px);
+  transition: all 0.3s ease;
+}
+
+.dark-tabs .nav-link:hover {
+  background: rgba(66, 153, 225, 0.2);
+  border-color: rgba(66, 153, 225, 0.5);
+  color: #ffffff !important;
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px rgba(66, 153, 225, 0.3);
+}
+
+.dark-tabs .nav-link.active {
+  background: linear-gradient(135deg, rgba(66, 153, 225, 0.9) 0%, rgba(102, 126, 234, 0.9) 100%);
+  border-color: rgba(255, 255, 255, 0.3);
+  color: #ffffff !important;
+  box-shadow: 
+    0 8px 25px rgba(66, 153, 225, 0.4),
+    inset 0 1px 0 rgba(255, 255, 255, 0.2);
+}
+}
 }
 
 /* Reminder filter badges */
@@ -1151,6 +1337,8 @@
       margin-bottom: 0.5rem;
     }
   }
+
+  
 
 
 }

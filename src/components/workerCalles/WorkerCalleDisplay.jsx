@@ -302,6 +302,11 @@ export default function WorkerCalleDisplay({ permissions: permissionsProp }) {
   const [activeYear, setActiveYear] = useState(new Date().getFullYear());
   const [activeMonth, setActiveMonth] = useState(new Date().getMonth());
 
+  // New state for tabs and user selection
+  const [activeTab, setActiveTab] = useState("callData");
+  const [selectedUser, setSelectedUser] = useState("");
+  const [selectedRows, setSelectedRows] = useState(new Set());
+
   /* --- FETCH --- */
   useEffect(() => {
     const ref = firebaseDB.child("WorkerCallData");
@@ -591,6 +596,57 @@ export default function WorkerCalleDisplay({ permissions: permissionsProp }) {
 
     return grid;
   }, [workers, activeYear, currentUserId, selectedSource]);
+
+  // User-specific day grid for admin view
+  const userDayGrid = useMemo(() => {
+    const grid = {};
+    if (!selectedUser) return grid;
+
+    const bump = (m, d, kind) => {
+      if (!grid[m]) grid[m] = {};
+      if (!grid[m][d]) grid[m][d] = { new: 0, modified: 0, total: 0 };
+      grid[m][d][kind] += 1;
+      grid[m][d].total += 1;
+    };
+
+    const processedRecords = new Set();
+
+    workers.forEach((w) => {
+      // Apply source filter
+      if (selectedSource && selectedSource !== "All") {
+        const workerSource = normalizeSource(w?.callThrough || w?.through || w?.source || "");
+        if (workerSource !== selectedSource) return;
+      }
+
+      const createdBy = w?.createdById || w?.addedById || w?.createdByUid || w?.addedByUid || w?.uid || w?.userId;
+      const updatedBy = w?.updatedById || w?.updatedByUid;
+
+      // Check creation
+      const createdAt = parseDate(w?.createdAt || w?.created_date || w?.createdOn || w?.date);
+      const isNewRecord = isValidDate(createdAt) &&
+        createdAt.getFullYear() === activeYear &&
+        createdBy === selectedUser;
+
+      // Check modifications
+      const updatedAt = parseDate(w?.updatedAt || w?.updated_on || w?.editedAt);
+      const isModifiedRecord = isValidDate(updatedAt) &&
+        updatedAt.getFullYear() === activeYear &&
+        updatedBy === selectedUser;
+
+      const recordKey = `${w.id}-${activeYear}`;
+
+      if (isNewRecord && !processedRecords.has(recordKey)) {
+        processedRecords.add(recordKey);
+        bump(createdAt.getMonth(), createdAt.getDate(), "new");
+      } else if (isModifiedRecord && !processedRecords.has(recordKey)) {
+        processedRecords.add(recordKey);
+        bump(updatedAt.getMonth(), updatedAt.getDate(), "modified");
+      }
+    });
+
+    return grid;
+  }, [workers, activeYear, selectedUser, selectedSource]);
+
   const classifyCount = (n) => {
     if (!n || n === 0) return { label: "No Calls", cls: "perf-none" };
     if (n <= 20) return { label: "Poor Performance", cls: "perf-poor" };
@@ -635,6 +691,19 @@ export default function WorkerCalleDisplay({ permissions: permissionsProp }) {
     return arr;
   }, [dayGrid, activeMonth, activeYear]);
 
+  // User-specific graph days for admin view
+  const userGraphDays = useMemo(() => {
+    if (activeMonth == null) return [];
+    const dim = new Date(activeYear, activeMonth + 1, 0).getDate();
+    const arr = [];
+    for (let d = 1; d <= dim; d++) {
+      const cell = (userDayGrid[activeMonth] && userDayGrid[activeMonth][d]) || { total: 0 };
+      const total = Math.min(100, cell.total || 0);
+      arr.push({ day: d, total, ...classifyCount(total) });
+    }
+    return arr;
+  }, [userDayGrid, activeMonth, activeYear]);
+
   const pieAgg = useMemo(() => {
     if (activeMonth == null) return { none: 0, poor: 0, avg: 0, good: 0, vgood: 0, exc: 0, marv: 0 };
     const dim = new Date(activeYear, activeMonth + 1, 0).getDate();
@@ -648,6 +717,21 @@ export default function WorkerCalleDisplay({ permissions: permissionsProp }) {
     }
     return agg;
   }, [dayGrid, activeMonth, activeYear]);
+
+  // User-specific pie aggregation for admin view
+  const userPieAgg = useMemo(() => {
+    if (activeMonth == null) return { none: 0, poor: 0, avg: 0, good: 0, vgood: 0, exc: 0, marv: 0 };
+    const dim = new Date(activeYear, activeMonth + 1, 0).getDate();
+    const agg = { none: 0, poor: 0, avg: 0, good: 0, vgood: 0, exc: 0, marv: 0 };
+    for (let d = 1; d <= dim; d++) {
+      const total = (userDayGrid[activeMonth] && userDayGrid[activeMonth][d]?.total) || 0;
+      const { cls } = classifyCount(total);
+      if (cls === "perf-none") agg.none++; else if (cls === "perf-poor") agg.poor++;
+      else if (cls === "perf-avg") agg.avg++; else if (cls === "perf-good") agg.good++;
+      else if (cls === "perf-vgood") agg.vgood++; else if (cls === "perf-exc") agg.exc++; else if (cls === "perf-marv") agg.marv++;
+    }
+    return agg;
+  }, [userDayGrid, activeMonth, activeYear]);
 
   /* Pagination */
   const totalPages = Math.max(1, Math.ceil(sorted.length / rowsPerPage));
@@ -685,10 +769,36 @@ export default function WorkerCalleDisplay({ permissions: permissionsProp }) {
     finally { setIsDeleting(false); }
   };
 
+  /* Row Selection */
+  const handleSelectAll = (e) => {
+    if (e.target.checked) {
+      const allIds = new Set(pageItems.map(item => item.id));
+      setSelectedRows(allIds);
+    } else {
+      setSelectedRows(new Set());
+    }
+  };
+
+  const handleSelectRow = (id, checked) => {
+    const newSelected = new Set(selectedRows);
+    if (checked) {
+      newSelected.add(id);
+    } else {
+      newSelected.delete(id);
+    }
+    setSelectedRows(newSelected);
+  };
+
   /* Export */
   const handleExport = () => {
     if (!permissions.canExport) return;
-    const exportData = sorted.map((w) => {
+    
+    // If rows are selected, export only those, otherwise export all filtered
+    const dataToExport = selectedRows.size > 0 
+      ? sorted.filter(w => selectedRows.has(w.id))
+      : sorted;
+
+    const exportData = dataToExport.map((w) => {
       const baseDate = getBaseDate(w); const reminder = w?.callReminderDate || w?.reminderDate;
       const du = daysUntil(reminder);
       const duText = isFinite(du) ? (du === 0 ? "Today" : du === 1 ? "Tomorrow" : du < 0 ? `${Math.abs(du)} days ago` : `${du} days`) : "";
@@ -702,7 +812,10 @@ export default function WorkerCalleDisplay({ permissions: permissionsProp }) {
         "Reminder (when)": isFinite(du) ? duText : "", Mobile: w?.mobileNo ?? "",
       };
     });
-    const wb = XLSX.utils.book_new(); const ws = XLSX.utils.json_to_sheet(exportData); XLSX.utils.book_append_sheet(wb, ws, "Workers"); XLSX.writeFile(wb, "WorkerCallData.xlsx");
+    const wb = XLSX.utils.book_new(); const ws = XLSX.utils.json_to_sheet(exportData); XLSX.utils.book_append_sheet(wb, ws, "Workers"); 
+    
+    const fileName = selectedRows.size > 0 ? "SelectedWorkerCallData.xlsx" : "WorkerCallData.xlsx";
+    XLSX.writeFile(wb, fileName);
   };
 
   /* Export All Data (Admin Only) */
@@ -826,7 +939,9 @@ export default function WorkerCalleDisplay({ permissions: permissionsProp }) {
     setRowsPerPage(10);
     setCurrentPage(1);
     setShowJobRoles(false);
+    setSelectedRows(new Set());
   };
+
   /* UI */
   if (loading) return <div className="text-center my-5">Loading…</div>;
   if (error) return <div className="alert alert-danger">Error: {error}</div>;
@@ -863,6 +978,18 @@ export default function WorkerCalleDisplay({ permissions: permissionsProp }) {
           {callThroughOptions.map((opt) => (<option key={opt} value={opt}>{opt}</option>))}
         </select>
 
+        {/* User dropdown for admin/super admin */}
+        {(permissions.canManageUsers || permissions.canExport) && (
+          <select className="form-select d-filter" value={selectedUser} onChange={(e) => setSelectedUser(e.target.value)}>
+            <option value="">All Users</option>
+            {Object.entries(usersMap).map(([userId, user]) => (
+              <option key={userId} value={userId}>
+                {user.name || user.displayName || user.email || userId}
+              </option>
+            ))}
+          </select>
+        )}
+
         <div className="d-flex gap-2 d-filterWrapper">
           <select className="form-select" value={sortBy} onChange={(e) => setSortBy(e.target.value)}>
             <option value="id">Sort by ID</option>
@@ -889,739 +1016,819 @@ export default function WorkerCalleDisplay({ permissions: permissionsProp }) {
             title={permissions.canExport ? "Export to Excel" : "Export disabled — ask admin for permission"}
             disabled={!permissions.canExport}
           >
-            Export
+            Export {selectedRows.size > 0 ? `(${selectedRows.size})` : ''}
           </button>
+          {permissions.canManageUsers && (
+            <button
+              className="btn btn-info"
+              onClick={handleExportAll}
+              title="Export All Data (Admin Only)"
+            >
+              Export All
+            </button>
+          )}
           <button className={`btn btn-outline-warning text-warning ${hasActiveFilters ? "btn-pulse" : ""}`} onClick={resetFilters}>Reset</button>
         </div>
       </div>
 
-      {/* Filter row (unchanged markup) */}
-      <div className="p-3 mb-3 bg-dark border rounded-3">
-        <div className="row g-3 align-items-center justify-content-between sillFilterWrapper">
-          <div className="col-lg-2 col-md-3 text-center">
-            <label className="form-label small mb-2 text-warning">Gender</label>
-            <div className="d-flex gap-2 justify-content-center">
-              {["Male", "Female"].map((g) => {
-                const on = selectedGender.includes(g);
-                return (
-                  <button key={g} type="button" className={`btn ${on ? "btn-warning" : "btn-outline-warning"} btn-sm`} onClick={() => setSelectedGender((prev) => on ? prev.filter(x => x !== g) : [...prev, g])}>{g}</button>
-                );
-              })}
-            </div>
-          </div>
+      {/* Tabs */}
+      <div className="tabs-container mb-4">
+  <ul className="nav nav-tabs dark-tabs">
+    <li className="nav-item">
+      <button 
+        className={`nav-link ${activeTab === "callData" ? "active" : ""}`}
+        onClick={() => setActiveTab("callData")}
+      >
+        <i className="bi bi-table me-2"></i>
+        Call Data
+      </button>
+    </li>
+    <li className="nav-item">
+      <button 
+        className={`nav-link ${activeTab === "callSummary" ? "active" : ""}`}
+        onClick={() => setActiveTab("callSummary")}
+      >
+        <i className="bi bi-bar-chart me-2"></i>
+        Call Summary
+      </button>
+    </li>
+    <li className="nav-item">
+      <button 
+        className={`nav-link ${activeTab === "callThrough" ? "active" : ""}`}
+        onClick={() => setActiveTab("callThrough")}
+      >
+        <i className="bi bi-diagram-3 me-2"></i>
+        Call Through
+      </button>
+    </li>
+  </ul>
+</div>
 
-          <div className="col-lg-2 col-md-3 text-center">
-            <label className="form-label small mb-2 text-info">Select Options</label>
-            <div className="d-flex gap-2 justify-content-center">
-              <button type="button" className={`btn ${skillMode === "single" ? "btn-info" : "btn-outline-info"} btn-sm`} onClick={() => setSkillMode("single")}>Single Sel</button>
-              <button type="button" className={`btn ${skillMode === "multi" ? "btn-info" : "btn-outline-info"} btn-sm`} onClick={() => setSkillMode("multi")}>Multi Sel</button>
-            </div>
-          </div>
+      {/* Tab Content */}
+      <div className="tab-content">
+        {/* Call Data Tab */}
+        {activeTab === "callData" && (
+          <div className="tab-pane fade show active">
+            {/* Filter row (unchanged markup) */}
+            <div className="p-3 mb-3 bg-dark border rounded-3">
+              <div className="row g-3 align-items-center justify-content-between sillFilterWrapper">
+                <div className="col-lg-2 col-md-3 text-center">
+                  <label className="form-label small mb-2 text-warning">Gender</label>
+                  <div className="d-flex gap-2 justify-content-center">
+                    {["Male", "Female"].map((g) => {
+                      const on = selectedGender.includes(g);
+                      return (
+                        <button key={g} type="button" className={`btn ${on ? "btn-warning" : "btn-outline-warning"} btn-sm`} onClick={() => setSelectedGender((prev) => on ? prev.filter(x => x !== g) : [...prev, g])}>{g}</button>
+                      );
+                    })}
+                  </div>
+                </div>
 
-          <div className="col-lg-2 col-md-6 text-center">
-            <label className="form-label text-info small mb-1">Age (18 - 55)</label>
-            <div className="d-flex gap-2">
-              <input type="number" min={18} max={55} className="form-control form-control-sm" placeholder="Min (18)" value={ageRange.min} onChange={(e) => setAgeRange(r => ({ ...r, min: e.target.value }))} />
-              <input type="number" min={18} max={55} className="form-control form-control-sm" placeholder="Max (55)" value={ageRange.max} onChange={(e) => setAgeRange(r => ({ ...r, max: e.target.value }))} />
-            </div>
-          </div>
+                <div className="col-lg-2 col-md-3 text-center">
+                  <label className="form-label small mb-2 text-info">Select Options</label>
+                  <div className="d-flex gap-2 justify-content-center">
+                    <button type="button" className={`btn ${skillMode === "single" ? "btn-info" : "btn-outline-info"} btn-sm`} onClick={() => setSkillMode("single")}>Single Sel</button>
+                    <button type="button" className={`btn ${skillMode === "multi" ? "btn-info" : "btn-outline-info"} btn-sm`} onClick={() => setSkillMode("multi")}>Multi Sel</button>
+                  </div>
+                </div>
 
-          <div className="col-lg-2 col-md-6 text-center">
-            <label className="form-label text-info small mb-1">Experience (Yrs)</label>
-            <div className="d-flex gap-2">
-              <input type="number" min={0} step="0.5" className="form-control form-control-sm" placeholder="Min" value={experienceRange.min} onChange={(e) => setExperienceRange(r => ({ ...r, min: e.target.value }))} />
-              <input type="number" min={0} step="0.5" className="form-control form-control-sm" placeholder="Max" value={experienceRange.max} onChange={(e) => setExperienceRange(r => ({ ...r, max: e.target.value }))} />
-            </div>
-          </div>
+                <div className="col-lg-2 col-md-6 text-center">
+                  <label className="form-label text-info small mb-1">Age (18 - 55)</label>
+                  <div className="d-flex gap-2">
+                    <input type="number" min={18} max={55} className="form-control form-control-sm" placeholder="Min (18)" value={ageRange.min} onChange={(e) => setAgeRange(r => ({ ...r, min: e.target.value }))} />
+                    <input type="number" min={18} max={55} className="form-control form-control-sm" placeholder="Max (55)" value={ageRange.max} onChange={(e) => setAgeRange(r => ({ ...r, max: e.target.value }))} />
+                  </div>
+                </div>
 
-          {/* Time Format Filter */}
-          <div className="col-lg-2 col-md-3 text-center">
-            <label className="form-label small mb-2 text-info">Working Hours</label>
-            <div className="d-flex gap-2 justify-content-center">
-              <button
-                type="button"
-                className={`btn ${timeFormat === "all" ? "btn-info" : "btn-outline-info"} btn-sm`}
-                onClick={() => setTimeFormat("all")}
-              >
-                All
-              </button>
-              <button
-                type="button"
-                className={`btn ${timeFormat === "12" ? "btn-info" : "btn-outline-info"} btn-sm`}
-                onClick={() => setTimeFormat("12")}
-              >
-                12HRS
-              </button>
-              <button
-                type="button"
-                className={`btn ${timeFormat === "24" ? "btn-info" : "btn-outline-info"} btn-sm`}
-                onClick={() => setTimeFormat("24")}
-              >
-                24HRS
-              </button>
-            </div>
-          </div>
+                <div className="col-lg-2 col-md-6 text-center">
+                  <label className="form-label text-info small mb-1">Experience (Yrs)</label>
+                  <div className="d-flex gap-2">
+                    <input type="number" min={0} step="0.5" className="form-control form-control-sm" placeholder="Min" value={experienceRange.min} onChange={(e) => setExperienceRange(r => ({ ...r, min: e.target.value }))} />
+                    <input type="number" min={0} step="0.5" className="form-control form-control-sm" placeholder="Max" value={experienceRange.max} onChange={(e) => setExperienceRange(r => ({ ...r, max: e.target.value }))} />
+                  </div>
+                </div>
 
-          <div className="col-lg-1 col-md-2 text-center">
-            <label className="form-label text-warning small mb-2">Other Skills</label>
-            <div className="d-flex justify-content-center align-items-center gap-2 toggle-pill">
-              <input type="checkbox" className="form-check-input" id="showJobRoles" checked={showJobRoles} onChange={(e) => setShowJobRoles(e.target.checked)} />
-              <label className="form-check-label text-white small fw-bold" htmlFor="showJobRoles">{showJobRoles ? "ON" : "OFF"}</label>
-            </div>
-          </div>
-        </div>
-      </div>
+                {/* Time Format Filter */}
+                <div className="col-lg-2 col-md-3 text-center">
+                  <label className="form-label small mb-2 text-info">Working Hours</label>
+                  <div className="d-flex gap-2 justify-content-center">
+                    <button
+                      type="button"
+                      className={`btn ${timeFormat === "all" ? "btn-info" : "btn-outline-info"} btn-sm`}
+                      onClick={() => setTimeFormat("all")}
+                    >
+                      All
+                    </button>
+                    <button
+                      type="button"
+                      className={`btn ${timeFormat === "12" ? "btn-info" : "btn-outline-info"} btn-sm`}
+                      onClick={() => setTimeFormat("12")}
+                    >
+                      12HRS
+                    </button>
+                    <button
+                      type="button"
+                      className={`btn ${timeFormat === "24" ? "btn-info" : "btn-outline-info"} btn-sm`}
+                      onClick={() => setTimeFormat("24")}
+                    >
+                      24HRS
+                    </button>
+                  </div>
+                </div>
 
-      {/* Languages & Skills */}
-      <div className="row g-3 mb-3">
-        <div className="col-md-6">
-          <div className="p-3 bg-dark border rounded-3 h-100">
-            <h6 className="mb-2 text-info">Languages</h6>
-            <div className="d-flex flex-wrap gap-2">
-              {languageOptions.map((l) => {
-                const active = selectedLanguages.includes(l);
-                return <button key={l} className={`btn btn-sm ${active ? "btn-info text-dark" : "btn-outline-info"} rounded-pill`} onClick={() => setSelectedLanguages(prev => active ? prev.filter(x => x !== l) : [...prev, l])}>{l}</button>;
-              })}
-            </div>
-          </div>
-        </div>
-        <div className="col-md-6">
-          <div className="p-3 bg-dark border rounded-3 h-100">
-            <h6 className="mb-2 text-warning">Housekeeping Skills</h6>
-            <div className="d-flex flex-wrap gap-2">
-              {skillOptions.map((s) => {
-                const active = selectedSkills.includes(s);
-                return <button key={s} className={`btn btn-sm ${active ? "btn-outline-warning btn-warning text-black" : "btn-outline-warning"} rounded-pill`} onClick={() => setSelectedSkills(prev => active ? prev.filter(x => x !== s) : [...prev, s])}>{s}</button>;
-              })}
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {showJobRoles && (
-        <div className="p-3 bg-dark border rounded-3 mb-3">
-          <h6 className="mb-2 text-warning">Other Skills</h6>
-          <div className="row g-3">
-            {/* Office & Administrative */}
-            <div className="col-md-3 col-lg-3">
-              <div className="category-section">
-                <h6 className="category-heading text-primary mb-2">Office & Administrative</h6>
-                <div className="d-flex flex-wrap gap-2">
-                  {[
-                    "Computer Operating", "Data Entry", "Office Assistant", "Receptionist",
-                    "Front Desk Executive", "Admin Assistant", "Office Boy", "Peon", "Office Attendant"
-                  ].map((r) => {
-                    const active = selectedRoles.includes(r);
-                    return (
-                      <button
-                        key={r}
-                        className={`btn btn-sm ${active ? "btn-primary" : "btn-outline-primary"} rounded-pill`}
-                        onClick={() => setSelectedRoles(prev => active ? prev.filter(x => x !== r) : [...prev, r])}
-                      >
-                        {r}
-                      </button>
-                    );
-                  })}
+                <div className="col-lg-1 col-md-2 text-center">
+                  <label className="form-label text-warning small mb-2">Other Skills</label>
+                  <div className="d-flex justify-content-center align-items-center gap-2 toggle-pill">
+                    <input type="checkbox" className="form-check-input" id="showJobRoles" checked={showJobRoles} onChange={(e) => setShowJobRoles(e.target.checked)} />
+                    <label className="form-check-label text-white small fw-bold" htmlFor="showJobRoles">{showJobRoles ? "ON" : "OFF"}</label>
+                  </div>
                 </div>
               </div>
             </div>
 
-            {/* Customer Service & Telecommunication */}
-            <div className="col-md-3 col-lg-3">
-              <div className="category-section">
-                <h6 className="category-heading text-success mb-2">Customer Service</h6>
-                <div className="d-flex flex-wrap gap-2">
-                  {[
-                    "Tele Calling", "Customer Support", "Telemarketing", "BPO Executive",
-                    "Call Center Agent", "Customer Care Executive"
-                  ].map((r) => {
-                    const active = selectedRoles.includes(r);
-                    return (
-                      <button
-                        key={r}
-                        className={`btn btn-sm ${active ? "btn-success" : "btn-outline-success"} rounded-pill`}
-                        onClick={() => setSelectedRoles(prev => active ? prev.filter(x => x !== r) : [...prev, r])}
-                      >
-                        {r}
-                      </button>
-                    );
-                  })}
+            {/* Languages & Skills */}
+            <div className="row g-3 mb-3">
+              <div className="col-md-6">
+                <div className="p-3 bg-dark border rounded-3 h-100">
+                  <h6 className="mb-2 text-info">Languages</h6>
+                  <div className="d-flex flex-wrap gap-2">
+                    {languageOptions.map((l) => {
+                      const active = selectedLanguages.includes(l);
+                      return <button key={l} className={`btn btn-sm ${active ? "btn-info text-dark" : "btn-outline-info"} rounded-pill`} onClick={() => setSelectedLanguages(prev => active ? prev.filter(x => x !== l) : [...prev, l])}>{l}</button>;
+                    })}
+                  </div>
+                </div>
+              </div>
+              <div className="col-md-6">
+                <div className="p-3 bg-dark border rounded-3 h-100">
+                  <h6 className="mb-2 text-warning">Housekeeping Skills</h6>
+                  <div className="d-flex flex-wrap gap-2">
+                    {skillOptions.map((s) => {
+                      const active = selectedSkills.includes(s);
+                      return <button key={s} className={`btn btn-sm ${active ? "btn-outline-warning btn-warning text-black" : "btn-outline-warning"} rounded-pill`} onClick={() => setSelectedSkills(prev => active ? prev.filter(x => x !== s) : [...prev, s])}>{s}</button>;
+                    })}
+                  </div>
                 </div>
               </div>
             </div>
 
-            {/* Management & Supervision */}
-            <div className="col-md-3 col-lg-3">
-              <div className="category-section">
-                <h6 className="category-heading text-warning mb-2">Management & Supervision</h6>
-                <div className="d-flex flex-wrap gap-2">
-                  {[
-                    "Supervisor", "Manager", "Team Leader", "Site Supervisor", "Project Coordinator"
-                  ].map((r) => {
-                    const active = selectedRoles.includes(r);
-                    return (
-                      <button
-                        key={r}
-                        className={`btn btn-sm ${active ? "btn-warning" : "btn-outline-warning"} rounded-pill`}
-                        onClick={() => setSelectedRoles(prev => active ? prev.filter(x => x !== r) : [...prev, r])}
-                      >
-                        {r}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            </div>
-
-            {/* Security */}
-            <div className="col-md-3 col-lg-3">
-              <div className="category-section">
-                <h6 className="category-heading text-danger mb-2">Security</h6>
-                <div className="d-flex flex-wrap gap-2">
-                  {[
-                    "Security Guard", "Security Supervisor", "Gatekeeper", "Watchman"
-                  ].map((r) => {
-                    const active = selectedRoles.includes(r);
-                    return (
-                      <button
-                        key={r}
-                        className={`btn btn-sm ${active ? "btn-danger" : "btn-outline-danger"} rounded-pill`}
-                        onClick={() => setSelectedRoles(prev => active ? prev.filter(x => x !== r) : [...prev, r])}
-                      >
-                        {r}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            </div>
-
-            {/* Driving & Logistics */}
-            <div className="col-md-3 col-lg-3">
-              <div className="category-section">
-                <h6 className="category-heading text-info mb-2">Driving & Logistics</h6>
-                <div className="d-flex flex-wrap gap-2">
-                  {[
-                    "Driving", "Delivery Boy", "Delivery Executive", "Rider", "Driver",
-                    "Car Driver", "Bike Rider", "Logistics Helper"
-                  ].map((r) => {
-                    const active = selectedRoles.includes(r);
-                    return (
-                      <button
-                        key={r}
-                        className={`btn btn-sm ${active ? "btn-info" : "btn-outline-info"} rounded-pill`}
-                        onClick={() => setSelectedRoles(prev => active ? prev.filter(x => x !== r) : [...prev, r])}
-                      >
-                        {r}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            </div>
-
-            {/* Technical & Maintenance - Updated Color */}
-            <div className="col-md-3 col-lg-3">
-              <div className="category-section">
-                <h6 className="category-heading text-warning mb-2">Technical & Maintenance</h6>
-                <div className="d-flex flex-wrap gap-2">
-                  {[
-                    "Electrician", "Plumber", "Carpenter", "Painter", "Mason", "AC Technician",
-                    "Mechanic", "Maintenance Staff", "House Keeping", "Housekeeping Supervisor"
-                  ].map((r) => {
-                    const active = selectedRoles.includes(r);
-                    return (
-                      <button
-                        key={r}
-                        className={`btn btn-sm ${active ? "btn-warning" : "btn-outline-warning"} rounded-pill`}
-                        onClick={() => setSelectedRoles(prev => active ? prev.filter(x => x !== r) : [...prev, r])}
-                      >
-                        {r}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            </div>
-
-            {/* Retail & Sales */}
-            <div className="col-md-3 col-lg-3">
-              <div className="category-section">
-                <h6 className="category-heading text-primary mb-2">Retail & Sales</h6>
-                <div className="d-flex flex-wrap gap-2">
-                  {[
-                    "Sales Boy", "Sales Girl", "Store Helper", "Retail Assistant", "Shop Attendant"
-                  ].map((r) => {
-                    const active = selectedRoles.includes(r);
-                    return (
-                      <button
-                        key={r}
-                        className={`btn btn-sm ${active ? "btn-primary" : "btn-outline-primary"} rounded-pill`}
-                        onClick={() => setSelectedRoles(prev => active ? prev.filter(x => x !== r) : [...prev, r])}
-                      >
-                        {r}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            </div>
-
-            {/* Industrial & Labor */}
-            <div className="col-md-3 col-lg-3">
-              <div className="category-section">
-                <h6 className="category-heading text-danger mb-2">Industrial & Labor</h6>
-                <div className="d-flex flex-wrap gap-2">
-                  {[
-                    "Labour", "Helper", "Loading Unloading", "Warehouse Helper",
-                    "Factory Worker", "Production Helper", "Packaging Staff"
-                  ].map((r) => {
-                    const active = selectedRoles.includes(r);
-                    return (
-                      <button
-                        key={r}
-                        className={`btn btn-sm ${active ? "btn-danger" : "btn-outline-danger"} rounded-pill`}
-                        onClick={() => setSelectedRoles(prev => active ? prev.filter(x => x !== r) : [...prev, r])}
-                      >
-                        {r}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
- 
-  {/* Top pagination */}
-
-      <div className="d-flex align-items-center flex-wrap gap-2 mt-2 mb-3 bg-dark p-3 rounded-3">
-        <div style={{ color: "yellow" }}>
-          Showing <strong>{pageItems.length}</strong> of <strong>{sorted.length}</strong> (from <strong>{workers.length}</strong> total){reminderFilter ? ` — ${reminderFilter}` : ""}
-        </div>
-
-        {Math.ceil(sorted.length / rowsPerPage) > 1 && (
-          <nav aria-label="Workers" className="pagination-top py-2 m-auto pagination-wrapper">
-            <ul className="pagination justify-content-center mb-0">
-              <li className={`page-item ${safePage === 1 ? "disabled" : ""}`}><button className="page-link" onClick={() => setCurrentPage(1)} disabled={safePage === 1}>«</button></li>
-              <li className={`page-item ${safePage === 1 ? "disabled" : ""}`}><button className="page-link" onClick={() => setCurrentPage(safePage - 1)} disabled={safePage === 1}>‹</button></li>
-              {getDisplayedPageNumbers().map((num) => (<li key={num} className={`page-item ${safePage === num ? "active" : ""}`}><button className="page-link" onClick={() => setCurrentPage(num)}>{num}</button></li>))}
-              <li className={`page-item ${safePage === totalPages ? "disabled" : ""}`}><button className="page-link" onClick={() => setCurrentPage(safePage + 1)} disabled={safePage === totalPages}>›</button></li>
-              <li className={`page-item ${safePage === totalPages ? "disabled" : ""}`}><button className="page-link" onClick={() => setCurrentPage(totalPages)} disabled={safePage === totalPages}>»</button></li>
-            </ul>
-          </nav>
-        )}
-
-        <div className=" d-flex">
-          <span className="me-2 text-white">Show</span>
-          <select className="form-select me-2 form-select-sm" style={{ width: 80 }} value={rowsPerPage} onChange={(e) => { setRowsPerPage(parseInt(e.target.value, 10) || 10); setCurrentPage(1); }}>
-            {[10, 20, 30, 40, 50].map((n) => (<option key={n} value={n}>{n}</option>))}
-          </select>
-          <span className="text-white ">Entries</span>
-        </div>
-
-      </div>
-
-
-      {/* Table -1 */}
-      <div className="table-responsive">
-        <table className="table table-dark table-hover align-middle">
-          <thead>
-            <tr>
-              <th>ID</th>
-              <th>Date</th>
-              <th>Name</th>
-              <th>Gender</th>
-              <th>Age</th>
-              <th>Experience</th>
-              <th>Reminder</th>
-              <th>Skills</th>
-              <th>Lang</th>
-              <th style={{ display: "none" }}>Languages</th>
-              <th>Mobile</th>
-              <th>Talking</th>
-              <th style={{ display: "none" }}>Call Through</th>
-              <th>Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {pageItems.map((w) => {
-              const idxInSorted = sorted.findIndex((x) => x.id === w.id);
-              const displayId = getDisplayCallId(w, stableIndexMap);
-              const addedBy = resolveAddedBy(w, usersMap);
-
-              const reminder = w?.callReminderDate || w?.reminderDate || null;
-              const hasReminder = isValidDate(parseDate(reminder));
-              const du = hasReminder ? daysUntil(reminder) : Number.POSITIVE_INFINITY;
-              const duText = hasReminder ? (du === 0 ? "Today" : du > 0 ? `in ${du} day${du > 1 ? "s" : ""}` : `${Math.abs(du)} day${Math.abs(du) > 1 ? "s" : ""} ago`) : "";
-              const timeStr = hasReminder ? (timeFormat === "24hr" ? formatTime(reminder, "24hr") : formatTime(reminder, "12hr")) : "";
-
-              const comms = (w?.communications ?? w?.communication ?? w?.conversation ?? w?.conversationLevel ?? "").toString();
-              const callThrough = normalizeSource(w?.callThrough || w?.through || w?.source || "");
-              const age = calculateAge(w?.dateOfBirth || w?.dob || w?.birthDate, w?.age);
-              const experience = calculateExperience(w);
-              // Text color for reminder severity (no row background)
-              const reminderTextClass = !hasReminder ? "text-secondary" : du < 0 ? "text-danger" : du === 0 ? "text-warning" : du === 1 ? "text-info" : "text-success";
-
-              return (
-                <tr key={w.id} onClick={(e) => handleRowClick(w, e)} style={{ cursor: "pointer" }}>
-                  <td>
-                    {displayId}
-                    {addedBy && (
-                      <small className="d-block small-text text-info opacity-50">
-                        By {addedBy}
-                      </small>
-                    )}
-                  </td>
-                  <td>
-                    {formatPrettyDate(getBaseDate(w))}
-                    {hasTimeData(w) && (
-                      <small className="d-block text-info small-text opacity-50">
-                        {formatTime(getBaseDate(w), timeFormat === "24" ? "24hr" : "12hr")}
-                      </small>
-                    )}
-                  </td>
-                  <td>{w?.name || "—"}</td>
-                  <td>
-                    <span className={w?.gender === "Male" ? "badge bg-primary opacity-50" : w?.gender === "Female" ? "badge badge-female opacity-50" : "badge bg-secondary "}>
-                      {w?.gender || "—"}
-                    </span>
-                  </td>
-                  <td>{age ?? "—"}</td>
-                  <td>{typeof experience === "number" ? `${experience} yrs` : "—"}</td>
-                  <td className={reminderTextClass}>
-                    <span className="d-block">{hasReminder ? formatDDMMYYYY(reminder) : "N/A"}</span>
-                    {hasReminder}
-                    {hasReminder && duText && <small className="d-block">{duText}</small>}
-                  </td>
-                  <td style={{ maxWidth: "150px" }}>
-                    <div className="d-flex flex-wrap gap-2     justify-content-center">
-                      {getWorkerSkills(w).slice(0, 3).map((skill, idx) => (<span key={idx} className="badge bg-info text-dark text-capitalize opacity-50">{skill}</span>))}
-                      {getWorkerSkills(w).length > 3 && <span className="badge bg-secondary">+{getWorkerSkills(w).length - 3}</span>}
-                    </div>
-                  </td>
-                  {/* Keep but hide Languages col */}
-                  <td style={{ maxWidth: "150px" }}>
-                    <div className="d-flex flex-wrap gap-2 justify-content-center">
-                      {getWorkerLanguages(w).slice(0, 3).map((lang, idx) => (<span key={idx} className="badge bg-light text-dark  text-capitalize opacity-50">{lang}</span>))}
-                      {getWorkerLanguages(w).length > 3 && <span className="badge bg-primary">+{getWorkerLanguages(w).length - 3}</span>}
-                    </div>
-                  </td>
-                  <td className="text-white">
-                    {/* <div className="fw-normal">{w?.mobileNo || "N/A"}</div> */}
-                    {w?.mobileNo && (
-                      <div className="mt-1" onClick={(e) => e.stopPropagation()}>
-                        <a href={`tel:${w.mobileNo}`} className="btn btn-sm btn-outline-info me-1 rounded-pill">Call</a>
-                        <a className="btn btn-sm btn-outline-warning rounded-pill" href={`https://wa.me/${String(w.mobileNo).replace(/\D/g, "")}?text=${encodeURIComponent("Hello, This is Sudheer From JenCeo Home Care Services")}`} target="_blank" rel="noopener noreferrer">WAP</a>
+            {showJobRoles && (
+              <div className="p-3 bg-dark border rounded-3 mb-3">
+                <h6 className="mb-2 text-warning">Other Skills</h6>
+                <div className="row g-3">
+                  {/* Office & Administrative */}
+                  <div className="col-md-3 col-lg-3">
+                    <div className="category-section">
+                      <h6 className="category-heading text-primary mb-2">Office & Administrative</h6>
+                      <div className="d-flex flex-wrap gap-2">
+                        {[
+                          "Computer Operating", "Data Entry", "Office Assistant", "Receptionist",
+                          "Front Desk Executive", "Admin Assistant", "Office Boy", "Peon", "Office Attendant"
+                        ].map((r) => {
+                          const active = selectedRoles.includes(r);
+                          return (
+                            <button
+                              key={r}
+                              className={`btn btn-sm ${active ? "btn-primary" : "btn-outline-primary"} rounded-pill`}
+                              onClick={() => setSelectedRoles(prev => active ? prev.filter(x => x !== r) : [...prev, r])}
+                            >
+                              {r}
+                            </button>
+                          );
+                        })}
                       </div>
-                    )}
-                  </td>
-                  <td>
-                    <span className={`badge opacity-50 ${comms.toLowerCase().includes("good") ? "bg-success" : comms.toLowerCase().includes("average") ? "bg-warning text-dark" : "bg-secondary"}`}>
-                      {comms || "—"}
-                    </span>
-                  </td>
-                  {/* Keep but hide Call Through */}
-                  <td style={{ display: "none" }}><span className="badge bg-secondary">{callThrough}</span></td>
-                  <td className="text-nowrap" onClick={(e) => e.stopPropagation()}>
-                    <div className="btn-group" role="group">
-                      {permissions.canView && (
-                        <button className="btn btn-sm btn-outline-info" title="View" onClick={() => handleView(w)}>
-                          <img src={viewIcon} alt="view" width="16" height="16" />
-                        </button>
-                      )}
-                      {permissions.canEdit && (
-                        <button className="btn btn-sm btn-outline-light border-warning" title="Edit" onClick={(e) => handleEdit(w, e)}>
-                          <img src={editIcon} alt="edit" width="16" height="16" />
-                        </button>
-                      )}
-                      {permissions.canDelete && (
-                        <button className="btn btn-sm btn-outline-danger" title="Delete" onClick={(e) => handleDelete(w, e)}>
-                          <img src={deleteIcon} alt="delete" width="16" height="16" />
-                        </button>
-                      )}
                     </div>
-                  </td>
-                </tr>
-              );
-            })}
-            {pageItems.length === 0 && (
-              <tr><td colSpan="14"><div className="alert alert-warning mb-0">No records match your filters.</div></td></tr>
+                  </div>
+
+                  {/* Customer Service & Telecommunication */}
+                  <div className="col-md-3 col-lg-3">
+                    <div className="category-section">
+                      <h6 className="category-heading text-success mb-2">Customer Service</h6>
+                      <div className="d-flex flex-wrap gap-2">
+                        {[
+                          "Tele Calling", "Customer Support", "Telemarketing", "BPO Executive",
+                          "Call Center Agent", "Customer Care Executive"
+                        ].map((r) => {
+                          const active = selectedRoles.includes(r);
+                          return (
+                            <button
+                              key={r}
+                              className={`btn btn-sm ${active ? "btn-success" : "btn-outline-success"} rounded-pill`}
+                              onClick={() => setSelectedRoles(prev => active ? prev.filter(x => x !== r) : [...prev, r])}
+                            >
+                              {r}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Management & Supervision */}
+                  <div className="col-md-3 col-lg-3">
+                    <div className="category-section">
+                      <h6 className="category-heading text-warning mb-2">Management & Supervision</h6>
+                      <div className="d-flex flex-wrap gap-2">
+                        {[
+                          "Supervisor", "Manager", "Team Leader", "Site Supervisor", "Project Coordinator"
+                        ].map((r) => {
+                          const active = selectedRoles.includes(r);
+                          return (
+                            <button
+                              key={r}
+                              className={`btn btn-sm ${active ? "btn-warning" : "btn-outline-warning"} rounded-pill`}
+                              onClick={() => setSelectedRoles(prev => active ? prev.filter(x => x !== r) : [...prev, r])}
+                            >
+                              {r}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Security */}
+                  <div className="col-md-3 col-lg-3">
+                    <div className="category-section">
+                      <h6 className="category-heading text-danger mb-2">Security</h6>
+                      <div className="d-flex flex-wrap gap-2">
+                        {[
+                          "Security Guard", "Security Supervisor", "Gatekeeper", "Watchman"
+                        ].map((r) => {
+                          const active = selectedRoles.includes(r);
+                          return (
+                            <button
+                              key={r}
+                              className={`btn btn-sm ${active ? "btn-danger" : "btn-outline-danger"} rounded-pill`}
+                              onClick={() => setSelectedRoles(prev => active ? prev.filter(x => x !== r) : [...prev, r])}
+                            >
+                              {r}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Driving & Logistics */}
+                  <div className="col-md-3 col-lg-3">
+                    <div className="category-section">
+                      <h6 className="category-heading text-info mb-2">Driving & Logistics</h6>
+                      <div className="d-flex flex-wrap gap-2">
+                        {[
+                          "Driving", "Delivery Boy", "Delivery Executive", "Rider", "Driver",
+                          "Car Driver", "Bike Rider", "Logistics Helper"
+                        ].map((r) => {
+                          const active = selectedRoles.includes(r);
+                          return (
+                            <button
+                              key={r}
+                              className={`btn btn-sm ${active ? "btn-info" : "btn-outline-info"} rounded-pill`}
+                              onClick={() => setSelectedRoles(prev => active ? prev.filter(x => x !== r) : [...prev, r])}
+                            >
+                              {r}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Technical & Maintenance - Updated Color */}
+                  <div className="col-md-3 col-lg-3">
+                    <div className="category-section">
+                      <h6 className="category-heading text-warning mb-2">Technical & Maintenance</h6>
+                      <div className="d-flex flex-wrap gap-2">
+                        {[
+                          "Electrician", "Plumber", "Carpenter", "Painter", "Mason", "AC Technician",
+                          "Mechanic", "Maintenance Staff", "House Keeping", "Housekeeping Supervisor"
+                        ].map((r) => {
+                          const active = selectedRoles.includes(r);
+                          return (
+                            <button
+                              key={r}
+                              className={`btn btn-sm ${active ? "btn-warning" : "btn-outline-warning"} rounded-pill`}
+                              onClick={() => setSelectedRoles(prev => active ? prev.filter(x => x !== r) : [...prev, r])}
+                            >
+                              {r}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Retail & Sales */}
+                  <div className="col-md-3 col-lg-3">
+                    <div className="category-section">
+                      <h6 className="category-heading text-primary mb-2">Retail & Sales</h6>
+                      <div className="d-flex flex-wrap gap-2">
+                        {[
+                          "Sales Boy", "Sales Girl", "Store Helper", "Retail Assistant", "Shop Attendant"
+                        ].map((r) => {
+                          const active = selectedRoles.includes(r);
+                          return (
+                            <button
+                              key={r}
+                              className={`btn btn-sm ${active ? "btn-primary" : "btn-outline-primary"} rounded-pill`}
+                              onClick={() => setSelectedRoles(prev => active ? prev.filter(x => x !== r) : [...prev, r])}
+                            >
+                              {r}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Industrial & Labor */}
+                  <div className="col-md-3 col-lg-3">
+                    <div className="category-section">
+                      <h6 className="category-heading text-danger mb-2">Industrial & Labor</h6>
+                      <div className="d-flex flex-wrap gap-2">
+                        {[
+                          "Labour", "Helper", "Loading Unloading", "Warehouse Helper",
+                          "Factory Worker", "Production Helper", "Packaging Staff"
+                        ].map((r) => {
+                          const active = selectedRoles.includes(r);
+                          return (
+                            <button
+                              key={r}
+                              className={`btn btn-sm ${active ? "btn-danger" : "btn-outline-danger"} rounded-pill`}
+                              onClick={() => setSelectedRoles(prev => active ? prev.filter(x => x !== r) : [...prev, r])}
+                            >
+                              {r}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
             )}
-          </tbody>
-        </table>
-      </div>
+       
+            {/* Top pagination */}
 
-      {/* Bottom pagination */}
+            <div className="d-flex align-items-center flex-wrap gap-2 mt-2 mb-3 bg-dark p-3 rounded-3">
+              <div style={{ color: "yellow" }}>
+                Showing <strong>{pageItems.length}</strong> of <strong>{sorted.length}</strong> (from <strong>{workers.length}</strong> total){reminderFilter ? ` — ${reminderFilter}` : ""}
+              </div>
 
-      <div className="d-flex align-items-center flex-wrap gap-2 mt-2">
-        <div style={{ color: "yellow" }}>
-          Showing <strong>{pageItems.length}</strong> of <strong>{sorted.length}</strong> (from <strong>{workers.length}</strong> total){reminderFilter ? ` — ${reminderFilter}` : ""}
-        </div>
+              {Math.ceil(sorted.length / rowsPerPage) > 1 && (
+                <nav aria-label="Workers" className="pagination-top py-2 m-auto pagination-wrapper">
+                  <ul className="pagination justify-content-center mb-0">
+                    <li className={`page-item ${safePage === 1 ? "disabled" : ""}`}><button className="page-link" onClick={() => setCurrentPage(1)} disabled={safePage === 1}>«</button></li>
+                    <li className={`page-item ${safePage === 1 ? "disabled" : ""}`}><button className="page-link" onClick={() => setCurrentPage(safePage - 1)} disabled={safePage === 1}>‹</button></li>
+                    {getDisplayedPageNumbers().map((num) => (<li key={num} className={`page-item ${safePage === num ? "active" : ""}`}><button className="page-link" onClick={() => setCurrentPage(num)}>{num}</button></li>))}
+                    <li className={`page-item ${safePage === totalPages ? "disabled" : ""}`}><button className="page-link" onClick={() => setCurrentPage(safePage + 1)} disabled={safePage === totalPages}>›</button></li>
+                    <li className={`page-item ${safePage === totalPages ? "disabled" : ""}`}><button className="page-link" onClick={() => setCurrentPage(totalPages)} disabled={safePage === totalPages}>»</button></li>
+                  </ul>
+                </nav>
+              )}
 
-        {Math.ceil(sorted.length / rowsPerPage) > 1 && (
-          <nav aria-label="Workers" className="pagination-top py-2 m-auto pagination-wrapper">
-            <ul className="pagination justify-content-center mb-0">
-              <li className={`page-item ${safePage === 1 ? "disabled" : ""}`}><button className="page-link" onClick={() => setCurrentPage(1)} disabled={safePage === 1}>«</button></li>
-              <li className={`page-item ${safePage === 1 ? "disabled" : ""}`}><button className="page-link" onClick={() => setCurrentPage(safePage - 1)} disabled={safePage === 1}>‹</button></li>
-              {getDisplayedPageNumbers().map((num) => (<li key={num} className={`page-item ${safePage === num ? "active" : ""}`}><button className="page-link" onClick={() => setCurrentPage(num)}>{num}</button></li>))}
-              <li className={`page-item ${safePage === totalPages ? "disabled" : ""}`}><button className="page-link" onClick={() => setCurrentPage(safePage + 1)} disabled={safePage === totalPages}>›</button></li>
-              <li className={`page-item ${safePage === totalPages ? "disabled" : ""}`}><button className="page-link" onClick={() => setCurrentPage(totalPages)} disabled={safePage === totalPages}>»</button></li>
-            </ul>
-          </nav>
+              <div className=" d-flex">
+                <span className="me-2 text-white">Show</span>
+                <select className="form-select me-2 form-select-sm" style={{ width: 80 }} value={rowsPerPage} onChange={(e) => { setRowsPerPage(parseInt(e.target.value, 10) || 10); setCurrentPage(1); }}>
+                  {[10, 20, 30, 40, 50].map((n) => (<option key={n} value={n}>{n}</option>))}
+                </select>
+                <span className="text-white ">Entries</span>
+              </div>
+
+            </div>
+
+
+            {/* Table -1 */}
+            <div className="table-responsive">
+              <table className="table table-dark table-hover align-middle">
+                <thead>
+                  <tr>
+                    <th>
+                      <input
+                        type="checkbox"
+                        onChange={handleSelectAll}
+                        checked={selectedRows.size > 0 && selectedRows.size === pageItems.length}
+                      />
+                    </th>
+                    <th>ID</th>
+                    <th>Date</th>
+                    <th>Name</th>
+                    <th>Gender</th>
+                    <th>Age</th>
+                    <th>Experience</th>
+                    <th>Reminder</th>
+                    <th>Skills</th>
+                    <th>Lang</th>
+                    <th style={{ display: "none" }}>Languages</th>
+                    <th>Mobile</th>
+                    <th>Talking</th>
+                    <th style={{ display: "none" }}>Call Through</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {pageItems.map((w) => {
+                    const idxInSorted = sorted.findIndex((x) => x.id === w.id);
+                    const displayId = getDisplayCallId(w, stableIndexMap);
+                    const addedBy = resolveAddedBy(w, usersMap);
+
+                    const reminder = w?.callReminderDate || w?.reminderDate || null;
+                    const hasReminder = isValidDate(parseDate(reminder));
+                    const du = hasReminder ? daysUntil(reminder) : Number.POSITIVE_INFINITY;
+                    const duText = hasReminder ? (du === 0 ? "Today" : du > 0 ? `in ${du} day${du > 1 ? "s" : ""}` : `${Math.abs(du)} day${Math.abs(du) > 1 ? "s" : ""} ago`) : "";
+                    const timeStr = hasReminder ? (timeFormat === "24hr" ? formatTime(reminder, "24hr") : formatTime(reminder, "12hr")) : "";
+
+                    const comms = (w?.communications ?? w?.communication ?? w?.conversation ?? w?.conversationLevel ?? "").toString();
+                    const callThrough = normalizeSource(w?.callThrough || w?.through || w?.source || "");
+                    const age = calculateAge(w?.dateOfBirth || w?.dob || w?.birthDate, w?.age);
+                    const experience = calculateExperience(w);
+                    // Text color for reminder severity (no row background)
+                    const reminderTextClass = !hasReminder ? "text-secondary" : du < 0 ? "text-danger" : du === 0 ? "text-warning" : du === 1 ? "text-info" : "text-success";
+
+                    return (
+                      <tr key={w.id} onClick={(e) => handleRowClick(w, e)} style={{ cursor: "pointer" }}>
+                        <td onClick={(e) => e.stopPropagation()}>
+                          <input
+                            type="checkbox"
+                            checked={selectedRows.has(w.id)}
+                            onChange={(e) => handleSelectRow(w.id, e.target.checked)}
+                          />
+                        </td>
+                        <td>
+                          {displayId}
+                          {addedBy && (
+                            <small className="d-block small-text text-info opacity-50">
+                              By {addedBy}
+                            </small>
+                          )}
+                        </td>
+                        <td>
+                          {formatPrettyDate(getBaseDate(w))}
+                          {hasTimeData(w) && (
+                            <small className="d-block text-info small-text opacity-50">
+                              {formatTime(getBaseDate(w), timeFormat === "24" ? "24hr" : "12hr")}
+                            </small>
+                          )}
+                        </td>
+                        <td>{w?.name || "—"}</td>
+                        <td>
+                          <span className={w?.gender === "Male" ? "badge bg-primary opacity-50" : w?.gender === "Female" ? "badge badge-female opacity-50" : "badge bg-secondary "}>
+                            {w?.gender || "—"}
+                          </span>
+                        </td>
+                        <td>{age ?? "—"}</td>
+                        <td>{typeof experience === "number" ? `${experience} yrs` : "—"}</td>
+                        <td className={reminderTextClass}>
+                          <span className="d-block">{hasReminder ? formatDDMMYYYY(reminder) : "N/A"}</span>
+                          {hasReminder}
+                          {hasReminder && duText && <small className="d-block">{duText}</small>}
+                        </td>
+                        <td style={{ maxWidth: "150px" }}>
+                          <div className="d-flex flex-wrap gap-2     justify-content-center">
+                            {getWorkerSkills(w).slice(0, 3).map((skill, idx) => (<span key={idx} className="badge bg-info text-dark text-capitalize opacity-50">{skill}</span>))}
+                            {getWorkerSkills(w).length > 3 && <span className="badge bg-secondary">+{getWorkerSkills(w).length - 3}</span>}
+                          </div>
+                        </td>
+                        {/* Keep but hide Languages col */}
+                        <td style={{ maxWidth: "150px" }}>
+                          <div className="d-flex flex-wrap gap-2 justify-content-center">
+                            {getWorkerLanguages(w).slice(0, 3).map((lang, idx) => (<span key={idx} className="badge bg-light text-dark  text-capitalize opacity-50">{lang}</span>))}
+                            {getWorkerLanguages(w).length > 3 && <span className="badge bg-primary">+{getWorkerLanguages(w).length - 3}</span>}
+                          </div>
+                        </td>
+                        <td className="text-white">
+                          {/* <div className="fw-normal">{w?.mobileNo || "N/A"}</div> */}
+                          {w?.mobileNo && (
+                            <div className="mt-1" onClick={(e) => e.stopPropagation()}>
+                              <a href={`tel:${w.mobileNo}`} className="btn btn-sm btn-outline-info me-1 rounded-pill">Call</a>
+                              <a className="btn btn-sm btn-outline-warning rounded-pill" href={`https://wa.me/${String(w.mobileNo).replace(/\D/g, "")}?text=${encodeURIComponent("Hello, This is Sudheer From JenCeo Home Care Services")}`} target="_blank" rel="noopener noreferrer">WAP</a>
+                            </div>
+                          )}
+                        </td>
+                        <td>
+                          <span className={`badge opacity-50 ${comms.toLowerCase().includes("good") ? "bg-success" : comms.toLowerCase().includes("average") ? "bg-warning text-dark" : "bg-secondary"}`}>
+                            {comms || "—"}
+                          </span>
+                        </td>
+                        {/* Keep but hide Call Through */}
+                        <td style={{ display: "none" }}><span className="badge bg-secondary">{callThrough}</span></td>
+                        <td className="text-nowrap" onClick={(e) => e.stopPropagation()}>
+                          <div className="btn-group" role="group">
+                            {permissions.canView && (
+                              <button className="btn btn-sm btn-outline-info" title="View" onClick={() => handleView(w)}>
+                                <img src={viewIcon} alt="view" width="16" height="16" />
+                              </button>
+                            )}
+                            {permissions.canEdit && (
+                              <button className="btn btn-sm btn-outline-light border-warning" title="Edit" onClick={(e) => handleEdit(w, e)}>
+                                <img src={editIcon} alt="edit" width="16" height="16" />
+                              </button>
+                            )}
+                            {permissions.canDelete && (
+                              <button className="btn btn-sm btn-outline-danger" title="Delete" onClick={(e) => handleDelete(w, e)}>
+                                <img src={deleteIcon} alt="delete" width="16" height="16" />
+                              </button>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                  {pageItems.length === 0 && (
+                    <tr><td colSpan="15"><div className="alert alert-warning mb-0">No records match your filters.</div></td></tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Bottom pagination */}
+
+            <div className="d-flex align-items-center flex-wrap gap-2 mt-2">
+              <div style={{ color: "yellow" }}>
+                Showing <strong>{pageItems.length}</strong> of <strong>{sorted.length}</strong> (from <strong>{workers.length}</strong> total){reminderFilter ? ` — ${reminderFilter}` : ""}
+              </div>
+
+              {Math.ceil(sorted.length / rowsPerPage) > 1 && (
+                <nav aria-label="Workers" className="pagination-top py-2 m-auto pagination-wrapper">
+                  <ul className="pagination justify-content-center mb-0">
+                    <li className={`page-item ${safePage === 1 ? "disabled" : ""}`}><button className="page-link" onClick={() => setCurrentPage(1)} disabled={safePage === 1}>«</button></li>
+                    <li className={`page-item ${safePage === 1 ? "disabled" : ""}`}><button className="page-link" onClick={() => setCurrentPage(safePage - 1)} disabled={safePage === 1}>‹</button></li>
+                    {getDisplayedPageNumbers().map((num) => (<li key={num} className={`page-item ${safePage === num ? "active" : ""}`}><button className="page-link" onClick={() => setCurrentPage(num)}>{num}</button></li>))}
+                    <li className={`page-item ${safePage === totalPages ? "disabled" : ""}`}><button className="page-link" onClick={() => setCurrentPage(safePage + 1)} disabled={safePage === totalPages}>›</button></li>
+                    <li className={`page-item ${safePage === totalPages ? "disabled" : ""}`}><button className="page-link" onClick={() => setCurrentPage(totalPages)} disabled={safePage === totalPages}>»</button></li>
+                  </ul>
+                </nav>
+              )}
+
+              <div className=" d-flex">
+                <span className="me-2 text-white">Show</span>
+                <select className="form-select me-2 form-select-sm" style={{ width: 80 }} value={rowsPerPage} onChange={(e) => { setRowsPerPage(parseInt(e.target.value, 10) || 10); setCurrentPage(1); }}>
+                  {[10, 20, 30, 40, 50].map((n) => (<option key={n} value={n}>{n}</option>))}
+                </select>
+                <span className="text-white ">Entries</span>
+              </div>
+
+            </div>
+          </div>
         )}
 
-        <div className=" d-flex">
-          <span className="me-2 text-white">Show</span>
-          <select className="form-select me-2 form-select-sm" style={{ width: 80 }} value={rowsPerPage} onChange={(e) => { setRowsPerPage(parseInt(e.target.value, 10) || 10); setCurrentPage(1); }}>
-            {[10, 20, 30, 40, 50].map((n) => (<option key={n} value={n}>{n}</option>))}
-          </select>
-          <span className="text-white ">Entries</span>
-        </div>
-
-      </div>
-
-
-      {/* ---------- Daily Activity — {UserName} ---------- */}
-      <hr />
-      <h4 className="mt-2 mb-3 text-info">Daily Activity — <span className="text-warning">{currentUserName}</span></h4>
-      <div className="d-flex align-items-center justify-content-between flex-wrap">
-        <div className="d-flex flex-wrap gap-2 mb-3">
-          {months.map((m, mi) => (
-            <button key={m} type="button" className={`btn btn-sm w-auto ${mi === activeMonth ? "btn-warning text-dark" : "btn-outline-warning"}`} onClick={() => setActiveMonth(mi)}>{m}</button>
-          ))}
-        </div>
-        <div className="d-flex gap-2 mb-3">
-          <select className="form-select form-select-sm" value={activeYear} onChange={(e) => setActiveYear(parseInt(e.target.value, 10))}>
-            {years.map((y) => (<option key={y} value={y}>{y}</option>))}
-          </select>
-        </div>
-      </div>
-
-      {/* Table -1 */}
-      {/* Month x Day grid */}
-      {/* Desktop Table - hidden on mobile */}
-      <div className="table-responsive mb-3 d-none d-lg-block">
-        <div className="bg-dark border rounded p-3">
-          <table className="table table-dark table-hover" style={{ fontSize: "12px" }}>
-            <thead>
-              <tr>
-                <th style={{ whiteSpace: "nowrap" }}>Month \\ Day</th>
-                {Array.from({ length: 31 }, (_, i) => i + 1).map((d) => (<th key={d} style={{ textAlign: "center" }}>{d}</th>))}
-                <th>Total</th>
-              </tr>
-            </thead>
-            <tbody>
-              {months.map((m, mi) => {
-                const dim = new Date(activeYear, mi + 1, 0).getDate();
-                let rowTotal = 0;
-                return (
-                  <tr key={m}>
-                    <td className="text-info fw-bold">{m}</td>
-                    {Array.from({ length: 31 }, (_, i) => i + 1).map((d) => {
-                      const cell = (dayGrid[mi] && dayGrid[mi][d]) || { new: 0, modified: 0, total: 0 };
-                      const within = d <= dim; const total = within ? cell.total : 0; rowTotal += total;
-                      const { cls, label } = classifyCount(total);
-                      return (
-                        <td key={d} className={within ? `text-center perf-text ${cls}` : "bg-secondary-subtle"}>
-                          {within ? (total > 0 ? `${cell.new}/${cell.modified} (${total})` : "•") : ""}
-                          {within && total === 0 && <span className="visually-hidden">{label}</span>}
-                        </td>
-                      );
-                    })}
-                    <td className="fw-bold">{rowTotal}</td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      {/* Mobile Table - hidden on desktop */}
-      <div className="d-lg-none mb-3">
-        <div className="bg-dark border rounded p-3">
-          <h6 className="text-info mb-3">Monthly Performance - {activeYear}</h6>
-          <div className="table-responsive">
-            <table className="table table-dark table-sm" style={{ fontSize: "11px" }}>
-              <thead>
-                <tr>
-                  <th>Day</th>
-                  {months.map((month, index) => (
-                    <th key={month} className="text-center">{month.substring(0, 3)}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {Array.from({ length: 31 }, (_, dayIndex) => dayIndex + 1).map((day) => (
-                  <tr key={day}>
-                    <td className="fw-bold text-info">{day}</td>
-                    {months.map((month, monthIndex) => {
-                      const dim = new Date(activeYear, monthIndex + 1, 0).getDate();
-                      const within = day <= dim;
-                      const cell = (dayGrid[monthIndex] && dayGrid[monthIndex][day]) || { new: 0, modified: 0, total: 0 };
-                      const { cls } = classifyCount(cell.total);
-
-                      return (
-                        <td key={`${month}-${day}`} className={`text-center ${within ? `perf-text ${cls}` : "bg-secondary"}`}>
-                          {within ? (cell.total > 0 ? cell.total : "•") : ""}
-                        </td>
-                      );
-                    })}
-                  </tr>
+        {/* Call Summary Tab */}
+        {activeTab === "callSummary" && (
+          <div className="tab-pane fade show active">
+            {/* ---------- Daily Activity — {UserName} ---------- */}
+            <h4 className="mt-2 mb-3 text-info">
+              Daily Activity — <span className="text-warning">
+                {selectedUser ? (usersMap[selectedUser]?.name || usersMap[selectedUser]?.displayName || selectedUser) : currentUserName}
+              </span>
+            </h4>
+            <div className="d-flex align-items-center justify-content-between flex-wrap">
+              <div className="d-flex flex-wrap gap-2 mb-3">
+                {months.map((m, mi) => (
+                  <button key={m} type="button" className={`btn btn-sm w-auto ${mi === activeMonth ? "btn-warning text-dark" : "btn-outline-warning"}`} onClick={() => setActiveMonth(mi)}>{m}</button>
                 ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </div>
-
-      {/* Charts */}
-      {activeMonth != null && (
-        <div className="row g-4 mb-4">
-          {/* Desktop Bar Chart */}
-          <div className="col-md-8 d-none d-lg-block">
-            <div className="bg-dark border rounded p-3">
-              <div className="d-flex justify-content-between align-items-center">
-                <div className="text-info"><strong>Daily Calls</strong> — {months[activeMonth]} {activeYear} (0–100)</div>
-                <span className="small text-muted">New + Modified</span>
               </div>
-              <div className="mt-3">
-                <div className="bar-graph">
-                  {graphDays.map((g) => (
-                    <div key={g.day} className={`bar ${g.cls}`} title={`${months[activeMonth]} ${g.day}: ${g.total}`} style={{ height: `${g.total}%` }}>
-                      <span className="bar-label">{g.day}</span>
-                    </div>
-                  ))}
-                </div>
-                <div className="mt-3 small d-flex flex-wrap gap-3 align-items-center pt-3 justify-content-between">
-                  <span className="legend perf-none">No Call Days (0)</span>
-                  <span className="legend perf-poor">Poor (1–20)</span>
-                  <span className="legend perf-avg">Average (21–40)</span>
-                  <span className="legend perf-good">Good (41–60)</span>
-                  <span className="legend perf-vgood">Very Good (61–80)</span>
-                  <span className="legend perf-exc">Excellent (81–90)</span>
-                  <span className="legend perf-marv">Marvelous (91+)</span>
+              <div className="d-flex gap-2 mb-3">
+                <select className="form-select form-select-sm" value={activeYear} onChange={(e) => setActiveYear(parseInt(e.target.value, 10))}>
+                  {years.map((y) => (<option key={y} value={y}>{y}</option>))}
+                </select>
+              </div>
+            </div>
+
+            {/* Table -1 */}
+            {/* Month x Day grid */}
+            {/* Desktop Table - hidden on mobile */}
+            <div className="table-responsive mb-3 d-none d-lg-block">
+              <div className="bg-dark border rounded p-3">
+                <table className="table table-dark table-hover" style={{ fontSize: "12px" }}>
+                  <thead>
+                    <tr>
+                      <th style={{ whiteSpace: "nowrap" }}>Month \\ Day</th>
+                      {Array.from({ length: 31 }, (_, i) => i + 1).map((d) => (<th key={d} style={{ textAlign: "center" }}>{d}</th>))}
+                      <th>Total</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {months.map((m, mi) => {
+                      const dim = new Date(activeYear, mi + 1, 0).getDate();
+                      let rowTotal = 0;
+                      return (
+                        <tr key={m}>
+                          <td className="text-info fw-bold">{m}</td>
+                          {Array.from({ length: 31 }, (_, i) => i + 1).map((d) => {
+                            const currentGrid = selectedUser ? userDayGrid : dayGrid;
+                            const cell = (currentGrid[mi] && currentGrid[mi][d]) || { new: 0, modified: 0, total: 0 };
+                            const within = d <= dim; const total = within ? cell.total : 0; rowTotal += total;
+                            const { cls, label } = classifyCount(total);
+                            return (
+                              <td key={d} className={within ? `text-center perf-text ${cls}` : "bg-secondary-subtle"}>
+                                {within ? (total > 0 ? `${cell.new}/${cell.modified} (${total})` : "•") : ""}
+                                {within && total === 0 && <span className="visually-hidden">{label}</span>}
+                              </td>
+                            );
+                          })}
+                          <td className="fw-bold">{rowTotal}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            {/* Mobile Table - hidden on desktop */}
+            <div className="d-lg-none mb-3">
+              <div className="bg-dark border rounded p-3">
+                <h6 className="text-info mb-3">Monthly Performance - {activeYear}</h6>
+                <div className="table-responsive">
+                  <table className="table table-dark table-sm" style={{ fontSize: "11px" }}>
+                    <thead>
+                      <tr>
+                        <th>Day</th>
+                        {months.map((month, index) => (
+                          <th key={month} className="text-center">{month.substring(0, 3)}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {Array.from({ length: 31 }, (_, dayIndex) => dayIndex + 1).map((day) => (
+                        <tr key={day}>
+                          <td className="fw-bold text-info">{day}</td>
+                          {months.map((month, monthIndex) => {
+                            const dim = new Date(activeYear, monthIndex + 1, 0).getDate();
+                            const within = day <= dim;
+                            const currentGrid = selectedUser ? userDayGrid : dayGrid;
+                            const cell = (currentGrid[monthIndex] && currentGrid[monthIndex][day]) || { new: 0, modified: 0, total: 0 };
+                            const { cls } = classifyCount(cell.total);
+
+                            return (
+                              <td key={`${month}-${day}`} className={`text-center ${within ? `perf-text ${cls}` : "bg-secondary"}`}>
+                                {within ? (cell.total > 0 ? cell.total : "•") : ""}
+                              </td>
+                            );
+                          })}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
                 </div>
               </div>
             </div>
-          </div>
 
-          {/* Mobile Bar Chart */}
-          <div className="col-12 d-lg-none">
-            <div className="bg-dark p-3">
-              <div className="d-flex justify-content-between align-items-center">
-                <div className="text-info"><strong>Daily Calls</strong> — {months[activeMonth]} {activeYear}</div>
-                <span className="small text-muted">New + Modified</span>
-              </div>
-              <div className="mt-3">
-                <div className="horizontal-bar-graph">
-                  {graphDays.map((g) => (
-                    <div key={g.day} className="bar-row border rounded p-2 mb-2">
-                      <div className="d-flex justify-content-between align-items-center mb-0">
-                        <span className="bar-label small text-info">Day {g.day}</span>
-
-                        <div className="d-flex" style={{ width: "80%" }}>
-                          {g.total > 0 ? (
-                            <div
-                              className={`bar-horizontal mChart ${g.cls}`}
-                              style={{
-                                width: `${g.total}%`,
-                                height: "15px",
-                                minWidth: "8px", // Ensure small values are still visible
-                                borderRadius: "0px 4px 4px 0"
-                              }}
-                              title={`${months[activeMonth]} ${g.day}: ${g.total}`}
-                            ></div>
-                          ) : (
-                            <div
-                              className="bar-horizontal perf-none"
-                              style={{
-                                width: "8px",
-                                height: "15px"
-                              }}
-                              title={`${months[activeMonth]} ${g.day}: No calls`}
-                            ></div>
-                          )}
-
-                        </div>
-
-                        <span className="bar-value small text-warning">{g.total}</span>
+            {/* Charts */}
+            {activeMonth != null && (
+              <div className="row g-4 mb-4">
+                {/* Desktop Bar Chart */}
+                <div className="col-md-8 d-none d-lg-block">
+                  <div className="bg-dark border rounded p-3">
+                    <div className="d-flex justify-content-between align-items-center">
+                      <div className="text-info"><strong>Daily Calls</strong> — {months[activeMonth]} {activeYear} (0–100)</div>
+                      <span className="small text-muted">New + Modified</span>
+                    </div>
+                    <div className="mt-3">
+                      <div className="bar-graph">
+                        {(selectedUser ? userGraphDays : graphDays).map((g) => (
+                          <div key={g.day} className={`bar ${g.cls}`} title={`${months[activeMonth]} ${g.day}: ${g.total}`} style={{ height: `${g.total}%` }}>
+                            <span className="bar-label">{g.day}</span>
+                          </div>
+                        ))}
                       </div>
+                      <div className="mt-3 small d-flex flex-wrap gap-3 align-items-center pt-3 justify-content-between">
+                        <span className="legend perf-none">No Call Days (0)</span>
+                        <span className="legend perf-poor">Poor (1–20)</span>
+                        <span className="legend perf-avg">Average (21–40)</span>
+                        <span className="legend perf-good">Good (41–60)</span>
+                        <span className="legend perf-vgood">Very Good (61–80)</span>
+                        <span className="legend perf-exc">Excellent (81–90)</span>
+                        <span className="legend perf-marv">Marvelous (91+)</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
 
+                {/* Mobile Bar Chart */}
+                <div className="col-12 d-lg-none">
+                  <div className="bg-dark p-3">
+                    <div className="d-flex justify-content-between align-items-center">
+                      <div className="text-info"><strong>Daily Calls</strong> — {months[activeMonth]} {activeYear}</div>
+                      <span className="small text-muted">New + Modified</span>
                     </div>
-                  ))}
+                    <div className="mt-3">
+                      <div className="horizontal-bar-graph">
+                        {(selectedUser ? userGraphDays : graphDays).map((g) => (
+                          <div key={g.day} className="bar-row border rounded p-2 mb-2">
+                            <div className="d-flex justify-content-between align-items-center mb-0">
+                              <span className="bar-label small text-info">Day {g.day}</span>
+
+                              <div className="d-flex" style={{ width: "80%" }}>
+                                {g.total > 0 ? (
+                                  <div
+                                    className={`bar-horizontal mChart ${g.cls}`}
+                                    style={{
+                                      width: `${g.total}%`,
+                                      height: "15px",
+                                      minWidth: "8px", // Ensure small values are still visible
+                                      borderRadius: "0px 4px 4px 0"
+                                    }}
+                                    title={`${months[activeMonth]} ${g.day}: ${g.total}`}
+                                  ></div>
+                                ) : (
+                                  <div
+                                    className="bar-horizontal perf-none"
+                                    style={{
+                                      width: "8px",
+                                      height: "15px"
+                                    }}
+                                    title={`${months[activeMonth]} ${g.day}: No calls`}
+                                  ></div>
+                                )}
+
+                              </div>
+
+                              <span className="bar-value small text-warning">{g.total}</span>
+                            </div>
+
+                          </div>
+                        ))}
+                      </div>
+                      <div className="mt-3 small d-flex flex-wrap gap-2 align-items-center pt-3 justify-content-center">
+                        <span className="legend perf-none">0</span>
+                        <span className="legend perf-poor">1-15</span>
+                        <span className="legend perf-avg">16-35</span>
+                        <span className="legend perf-good">36-50</span>
+                        <span className="legend perf-vgood">51-65</span>
+                        <span className="legend perf-exc">66-80</span>
+                        <span className="legend perf-marv">81-100</span>
+                      </div>
+                    </div>
+                  </div>
                 </div>
-                <div className="mt-3 small d-flex flex-wrap gap-2 align-items-center pt-3 justify-content-center">
-                  <span className="legend perf-none">0</span>
-                  <span className="legend perf-poor">1-15</span>
-                  <span className="legend perf-avg">16-35</span>
-                  <span className="legend perf-good">36-50</span>
-                  <span className="legend perf-vgood">51-65</span>
-                  <span className="legend perf-exc">66-80</span>
-                  <span className="legend perf-marv">81-100</span>
+                {/* Pie Chart - Same for both but with responsive sizing */}
+                <div className="col-md-4 col-12">
+                  <div className="bg-dark border rounded p-3 h-100">
+                    <div className="text-info"><strong>Performance Mix</strong> — {months[activeMonth]} {activeYear}</div>
+                    <div className="d-flex flex-column align-items-center justify-content-center mt-3 gap-3">
+                      {(() => {
+                        const currentPieAgg = selectedUser ? userPieAgg : pieAgg;
+                        const total = Object.values(currentPieAgg).reduce((a, b) => a + b, 0) || 1;
+                        const seg = (k) => (currentPieAgg[k] / total) * 360;
+                        const grads = [
+                          `var(--perf-none) 0 ${seg("none")}deg`,
+                          `var(--perf-poor) ${seg("none")}deg ${seg("none") + seg("poor")}deg`,
+                          `var(--perf-avg) ${seg("none") + seg("poor")}deg ${seg("none") + seg("poor") + seg("avg")}deg`,
+                          `var(--perf-good) ${seg("none") + seg("poor") + seg("avg")}deg ${seg("none") + seg("poor") + seg("avg") + seg("good")}deg`,
+                          `var(--perf-vgood) ${seg("none") + seg("poor") + seg("avg") + seg("good")}deg ${seg("none") + seg("poor") + seg("avg") + seg("good") + seg("vgood")}deg`,
+                          `var(--perf-exc) ${seg("none") + seg("poor") + seg("avg") + seg("good") + seg("vgood")}deg ${seg("none") + seg("poor") + seg("avg") + seg("good") + seg("vgood") + seg("exc")}deg`,
+                          `var(--perf-marv) ${seg("none") + seg("poor") + seg("avg") + seg("good") + seg("vgood") + seg("exc")}deg 360deg`
+                        ].join(", ");
+                        return (
+                          <div className="pie-wrap">
+                            <div
+                              className="pie"
+                              style={{
+                                background: `conic-gradient(${grads})`,
+                                width: window.innerWidth < 768 ? "150px" : "200px",
+                                height: window.innerWidth < 768 ? "150px" : "200px"
+                              }}
+                            />
+                          </div>
+                        );
+                      })()}
+                      <div className="mt-3 small w-100 d-flex flex-wrap justify-content-center gap-2">
+                        <span className="legend perf-none">No Call Days: {selectedUser ? userPieAgg.none : pieAgg.none}</span>
+                        <span className="legend perf-poor">Poor: {selectedUser ? userPieAgg.poor : pieAgg.poor}</span>
+                        <span className="legend perf-avg">Average: {selectedUser ? userPieAgg.avg : pieAgg.avg}</span>
+                        <span className="legend perf-good">Good: {selectedUser ? userPieAgg.good : pieAgg.good}</span>
+                        <span className="legend perf-vgood">Very Good: {selectedUser ? userPieAgg.vgood : pieAgg.vgood}</span>
+                        <span className="legend perf-exc">Excellent: {selectedUser ? userPieAgg.exc : pieAgg.exc}</span>
+                        <span className="legend perf-marv">Marvelous: {selectedUser ? userPieAgg.marv : pieAgg.marv}</span>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </div>
-            </div>
+            )}
           </div>
-          {/* Pie Chart - Same for both but with responsive sizing */}
-          <div className="col-md-4 col-12">
-            <div className="bg-dark border rounded p-3 h-100">
-              <div className="text-info"><strong>Performance Mix</strong> — {months[activeMonth]} {activeYear}</div>
-              <div className="d-flex flex-column align-items-center justify-content-center mt-3 gap-3">
-                {(() => {
-                  const total = Object.values(pieAgg).reduce((a, b) => a + b, 0) || 1;
-                  const seg = (k) => (pieAgg[k] / total) * 360;
-                  const grads = [
-                    `var(--perf-none) 0 ${seg("none")}deg`,
-                    `var(--perf-poor) ${seg("none")}deg ${seg("none") + seg("poor")}deg`,
-                    `var(--perf-avg) ${seg("none") + seg("poor")}deg ${seg("none") + seg("poor") + seg("avg")}deg`,
-                    `var(--perf-good) ${seg("none") + seg("poor") + seg("avg")}deg ${seg("none") + seg("poor") + seg("avg") + seg("good")}deg`,
-                    `var(--perf-vgood) ${seg("none") + seg("poor") + seg("avg") + seg("good")}deg ${seg("none") + seg("poor") + seg("avg") + seg("good") + seg("vgood")}deg`,
-                    `var(--perf-exc) ${seg("none") + seg("poor") + seg("avg") + seg("good") + seg("vgood")}deg ${seg("none") + seg("poor") + seg("avg") + seg("good") + seg("vgood") + seg("exc")}deg`,
-                    `var(--perf-marv) ${seg("none") + seg("poor") + seg("avg") + seg("good") + seg("vgood") + seg("exc")}deg 360deg`
-                  ].join(", ");
-                  return (
-                    <div className="pie-wrap">
-                      <div
-                        className="pie"
-                        style={{
-                          background: `conic-gradient(${grads})`,
-                          width: window.innerWidth < 768 ? "150px" : "200px",
-                          height: window.innerWidth < 768 ? "150px" : "200px"
-                        }}
-                      />
-                    </div>
-                  );
-                })()}
-                <div className="mt-3 small w-100 d-flex flex-wrap justify-content-center gap-2">
-                  <span className="legend perf-none">No Call Days: {pieAgg.none}</span>
-                  <span className="legend perf-poor">Poor: {pieAgg.poor}</span>
-                  <span className="legend perf-avg">Average: {pieAgg.avg}</span>
-                  <span className="legend perf-good">Good: {pieAgg.good}</span>
-                  <span className="legend perf-vgood">Very Good: {pieAgg.vgood}</span>
-                  <span className="legend perf-exc">Excellent: {pieAgg.exc}</span>
-                  <span className="legend perf-marv">Marvelous: {pieAgg.marv}</span>
-                </div>
-              </div>
+        )}
+
+        {/* Call Through Tab */}
+        {activeTab === "callThrough" && (
+          <div className="tab-pane fade show active">
+            {/* ---------- Call Through Summary (kept markup, fixed counts) ---------- */}
+            <div className="d-flex align-items-center justify-content-between">
+              <h4 className="mt-2 text-info">Call Through Summary</h4>
             </div>
+            <CallThroughSummary
+              months={months}
+              workers={workers}
+              activeYear={activeYear}
+              normalizeSource={normalizeSource}
+              getBaseDate={getBaseDate}
+              callThroughOptions={callThroughOptions}
+              selectedSource={selectedSource}
+            />
           </div>
-        </div>
-      )}
-      {/* ---------- Call Through Summary (kept markup, fixed counts) ---------- */}
-      <div className="d-flex align-items-center justify-content-between">
-        <h4 className="mt-2 text-info">Call Through Summary</h4>
+        )}
       </div>
-      <CallThroughSummary
-        months={months}
-        workers={workers}
-        activeYear={activeYear}
-        normalizeSource={normalizeSource}
-        getBaseDate={getBaseDate}
-        callThroughOptions={callThroughOptions}
-        selectedSource={selectedSource}
-      />
 
       {/* MODAL */}
       {isModalOpen && selectedWorker && (
@@ -1729,6 +1936,27 @@ export default function WorkerCalleDisplay({ permissions: permissionsProp }) {
           --perf-vgood:#20c997;
           --perf-exc:#198754;
           --perf-marv:#6f42c1;
+        }
+
+        /* Tabs Styles */
+        .dark-tabs {
+          border-bottom: 2px solid #444;
+        }
+        .dark-tabs .nav-link {
+          color: #ccc;
+          background: transparent;
+          border: 1px solid transparent;
+          border-bottom: none;
+          margin-bottom: -2px;
+        }
+        .dark-tabs .nav-link:hover {
+          color: #fff;
+          border-color: #666;
+        }
+        .dark-tabs .nav-link.active {
+          color: #fff;
+          background: #007bff;
+          border-color: #007bff;
         }
       `}</style>
     </div>

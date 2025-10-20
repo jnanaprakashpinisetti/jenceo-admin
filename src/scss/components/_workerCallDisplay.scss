@@ -489,6 +489,7 @@
 
     .perf-text.perf-#{$type} {
       color: var(--perf-#{$type}) !important;
+      max-width: 45px;
     }
   }
 

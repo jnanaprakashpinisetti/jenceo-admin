@@ -38,13 +38,15 @@ export default function WorkerCallForm({ isOpen, onClose }) {
     commentDateTime: "",
 
     // 🔗 GLOBAL AUTH FIELDS (no local auth)
-    createdById: "",     // <-- global Users/<dbId>
-    createdByName: "",   // convenience label
-    createdAt: "",       // ISO
+    createdById: "", // <-- global Users/<dbId>
+    createdByName: "", // convenience label
+    createdAt: "", // ISO
 
     // keep legacy aliases (optional; helps old views/exports)
     addedBy: "",
     userName: "",
+    joiningType: "",
+    expectedSalary: "",
   });
 
   function today() {
@@ -75,6 +77,8 @@ export default function WorkerCallForm({ isOpen, onClose }) {
       conversationLevel: "",
       callReminderDate: "",
       comment: "",
+      oiningType: "",
+      expectedSalary: "",
     };
     for (const k in base) if (formData[k] !== base[k]) return true;
     return false;
@@ -105,7 +109,7 @@ export default function WorkerCallForm({ isOpen, onClose }) {
       const nextId = await fetchNextCallId();
       if (!alive) return;
 
-      const createdById = currentUser?.dbId || "";            // <- global Users/<dbId>
+      const createdById = currentUser?.dbId || ""; // <- global Users/<dbId>
       const createdByName =
         currentUser?.name ||
         currentUser?.username ||
@@ -125,14 +129,19 @@ export default function WorkerCallForm({ isOpen, onClose }) {
       }));
     };
     init();
-    return () => { alive = false; };
+    return () => {
+      alive = false;
+    };
   }, [isOpen, currentUser]);
 
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
     if (type === "checkbox") {
       const arr = Array.isArray(formData[name]) ? formData[name] : [];
-      setFormData({ ...formData, [name]: checked ? [...arr, value] : arr.filter((x) => x !== value) });
+      setFormData({
+        ...formData,
+        [name]: checked ? [...arr, value] : arr.filter((x) => x !== value),
+      });
     } else {
       setFormData({ ...formData, [name]: value });
     }
@@ -149,7 +158,8 @@ export default function WorkerCallForm({ isOpen, onClose }) {
       if (!formData.callId) err.callId = "Call ID is required";
       if (!formData.callDate) err.callDate = "Call Date is required";
       if (!formData.mobileNo) err.mobileNo = "Mobile No is required";
-      else if (!/^\d{10}$/.test(formData.mobileNo)) err.mobileNo = "Mobile No must be 10 digits";
+      else if (!/^\d{10}$/.test(formData.mobileNo))
+        err.mobileNo = "Mobile No must be 10 digits";
       if (!formData.name) err.name = "Name is required";
       if (!formData.location) err.location = "Location is required";
       if (!formData.source) err.source = "Source is required";
@@ -161,10 +171,12 @@ export default function WorkerCallForm({ isOpen, onClose }) {
       }
     } else if (step === 2) {
       if (!formData.education) err.education = "Education is required";
-      if (!formData.conversationLevel) err.conversationLevel = "Conversation level is required";
+      if (!formData.conversationLevel)
+        err.conversationLevel = "Conversation level is required";
       if (formData.callReminderDate) {
         const d = new Date(formData.callReminderDate);
-        if (d < new Date().setHours(0, 0, 0, 0)) err.callReminderDate = "Reminder date cannot be in the past";
+        if (d < new Date().setHours(0, 0, 0, 0))
+          err.callReminderDate = "Reminder date cannot be in the past";
       }
     }
     setErrors(err);
@@ -227,14 +239,21 @@ export default function WorkerCallForm({ isOpen, onClose }) {
       createdAt: "",
       addedBy: "",
       userName: "",
-      formComment: ""
+      formComment: "",
+      joiningType: "",
+      expectedSalary: "",
     });
     setStep(1);
     setErrors({});
   };
 
-  const handleCloseClick = () => (hasUnsavedChanges() ? setShowCloseConfirmModal(true) : onClose());
-  const confirmClose = () => { setShowCloseConfirmModal(false); resetForm(); onClose(); };
+  const handleCloseClick = () =>
+    hasUnsavedChanges() ? setShowCloseConfirmModal(true) : onClose();
+  const confirmClose = () => {
+    setShowCloseConfirmModal(false);
+    resetForm();
+    onClose();
+  };
   const cancelClose = () => setShowCloseConfirmModal(false);
 
   const handleSubmit = async (e) => {
@@ -336,13 +355,17 @@ export default function WorkerCallForm({ isOpen, onClose }) {
                           type="text"
                           name="callId"
                           value={formData.callId}
-                          className={`form-control ${errors.callId ? "is-invalid" : ""}`}
+                          className={`form-control ${
+                            errors.callId ? "is-invalid" : ""
+                          }`}
                           disabled
                           readOnly
                           style={{ backgroundColor: "transparent" }}
                         />
                         {errors.callId && (
-                          <div className="invalid-feedback">{errors.callId}</div>
+                          <div className="invalid-feedback">
+                            {errors.callId}
+                          </div>
                         )}
                       </div>
                       <div className="col-md-6">
@@ -355,12 +378,16 @@ export default function WorkerCallForm({ isOpen, onClose }) {
                           value={formData.callDate}
                           onChange={handleChange}
                           onBlur={handleBlur}
-                          className={`form-control ${errors.callDate ? "is-invalid" : ""}`}
+                          className={`form-control ${
+                            errors.callDate ? "is-invalid" : ""
+                          }`}
                           max={getToday()}
                           disabled
                         />
                         {errors.callDate && (
-                          <div className="invalid-feedback">{errors.callDate}</div>
+                          <div className="invalid-feedback">
+                            {errors.callDate}
+                          </div>
                         )}
                       </div>
                     </div>
@@ -376,12 +403,16 @@ export default function WorkerCallForm({ isOpen, onClose }) {
                           value={formData.mobileNo}
                           onChange={handleChange}
                           onBlur={handleBlur}
-                          className={`form-control ${errors.mobileNo ? "is-invalid" : ""}`}
+                          className={`form-control ${
+                            errors.mobileNo ? "is-invalid" : ""
+                          }`}
                           maxLength={10}
                           autoFocus
                         />
                         {errors.mobileNo && (
-                          <div className="invalid-feedback">{errors.mobileNo}</div>
+                          <div className="invalid-feedback">
+                            {errors.mobileNo}
+                          </div>
                         )}
                       </div>
                       <div className="col-md-6">
@@ -394,7 +425,9 @@ export default function WorkerCallForm({ isOpen, onClose }) {
                           value={formData.name}
                           onChange={handleChange}
                           onBlur={handleBlur}
-                          className={`form-control ${errors.name ? "is-invalid" : ""}`}
+                          className={`form-control ${
+                            errors.name ? "is-invalid" : ""
+                          }`}
                         />
                         {errors.name && (
                           <div className="invalid-feedback">{errors.name}</div>
@@ -414,10 +447,14 @@ export default function WorkerCallForm({ isOpen, onClose }) {
                           value={formData.location}
                           onChange={handleChange}
                           onBlur={handleBlur}
-                          className={`form-control ${errors.location ? "is-invalid" : ""}`}
+                          className={`form-control ${
+                            errors.location ? "is-invalid" : ""
+                          }`}
                         />
                         {errors.location && (
-                          <div className="invalid-feedback">{errors.location}</div>
+                          <div className="invalid-feedback">
+                            {errors.location}
+                          </div>
                         )}
                       </div>
                       <div className="col-md-6">
@@ -429,7 +466,9 @@ export default function WorkerCallForm({ isOpen, onClose }) {
                           value={formData.source}
                           onChange={handleChange}
                           onBlur={handleBlur}
-                          className={`form-select ${errors.source ? "is-invalid" : ""}`}
+                          className={`form-select ${
+                            errors.source ? "is-invalid" : ""
+                          }`}
                         >
                           <option value="">Select</option>
                           {[
@@ -452,7 +491,9 @@ export default function WorkerCallForm({ isOpen, onClose }) {
                           ))}
                         </select>
                         {errors.source && (
-                          <div className="invalid-feedback">{errors.source}</div>
+                          <div className="invalid-feedback">
+                            {errors.source}
+                          </div>
                         )}
                       </div>
                     </div>
@@ -468,7 +509,9 @@ export default function WorkerCallForm({ isOpen, onClose }) {
                           value={formData.gender}
                           onChange={handleChange}
                           onBlur={handleBlur}
-                          className={`form-select ${errors.gender ? "is-invalid" : ""}`}
+                          className={`form-select ${
+                            errors.gender ? "is-invalid" : ""
+                          }`}
                         >
                           <option value="">Select</option>
                           <option value="Male">Male</option>
@@ -476,7 +519,9 @@ export default function WorkerCallForm({ isOpen, onClose }) {
                           <option value="Others">Others</option>
                         </select>
                         {errors.gender && (
-                          <div className="invalid-feedback">{errors.gender}</div>
+                          <div className="invalid-feedback">
+                            {errors.gender}
+                          </div>
                         )}
                       </div>
                       <div className="col-md-6">
@@ -507,7 +552,9 @@ export default function WorkerCallForm({ isOpen, onClose }) {
                           value={formData.age}
                           onChange={handleChange}
                           onBlur={handleBlur}
-                          className={`form-control ${errors.age ? "is-invalid" : ""}`}
+                          className={`form-control ${
+                            errors.age ? "is-invalid" : ""
+                          }`}
                         />
                         {errors.age && (
                           <div className="invalid-feedback">{errors.age}</div>
@@ -552,10 +599,14 @@ export default function WorkerCallForm({ isOpen, onClose }) {
                             value={formData.years}
                             onChange={handleChange}
                             onBlur={handleBlur}
-                            className={`form-control ${errors.years ? "is-invalid" : ""}`}
+                            className={`form-control ${
+                              errors.years ? "is-invalid" : ""
+                            }`}
                           />
                           {errors.years && (
-                            <div className="invalid-feedback">{errors.years}</div>
+                            <div className="invalid-feedback">
+                              {errors.years}
+                            </div>
                           )}
                         </div>
                         <div className="col-md-6">
@@ -565,7 +616,9 @@ export default function WorkerCallForm({ isOpen, onClose }) {
                             value={formData.skills}
                             onChange={handleChange}
                             onBlur={handleBlur}
-                            className={`form-select ${errors.skills ? "is-invalid" : ""}`}
+                            className={`form-select ${
+                              errors.skills ? "is-invalid" : ""
+                            }`}
                           >
                             <option value="">-- Select Skill --</option>
                             {[
@@ -585,7 +638,7 @@ export default function WorkerCallForm({ isOpen, onClose }) {
                               "Wound Dressing",
                               "Nebulization",
                               "Post-Operative Care",
-                              "Any Duty"
+                              "Any Duty",
                             ].map((skill) => (
                               <option key={skill} value={skill}>
                                 {skill}
@@ -593,7 +646,9 @@ export default function WorkerCallForm({ isOpen, onClose }) {
                             ))}
                           </select>
                           {errors.skills && (
-                            <div className="invalid-feedback">{errors.skills}</div>
+                            <div className="invalid-feedback">
+                              {errors.skills}
+                            </div>
                           )}
                         </div>
                       </div>
@@ -608,227 +663,362 @@ export default function WorkerCallForm({ isOpen, onClose }) {
                     <hr />
 
                     <div className="row g-3  ">
-                     {/* Home Care Skills */}
-<div className="col-md-12">
-  <div className="p-3 bg-dark rounded-3 h-100">
-    <h6 className="mb-2 text-warning">HOME CARES SKILLS</h6>
-    <div className="d-flex flex-wrap gap-2 justify-content-center">
-      {[
-        "Nursing", "Patient Care", "Care Taker", "Bedside Attender", "Old Age Care", 
-        "Baby Care", "Supporting", "Cook", "Housekeeping", "Diaper", "Injection", 
-        "BP Check", "Sugar Check", "Wound Dressing", "Nebulization", 
-        "Post-Operative Care", "Any Duty"
-      ].map((skill) => {
-        const active = formData.homeCareSkills.includes(skill);
-        return (
-          <button
-            type="button"
-            key={skill}
-            className={`btn btn-sm ${active ? "btn-warning" : "btn-outline-warning"} rounded-pill skill-pill`}
-            onClick={() => toggleArrayField("homeCareSkills", skill)}
-          >
-            {skill}
-          </button>
-        );
-      })}
-    </div>
-  </div>
-</div>
-<hr />
+                      {/* Home Care Skills */}
+                      <div className="col-md-12">
+                        <div className="p-3 bg-dark rounded-3 h-100">
+                          <h6 className="mb-2 text-warning">
+                            HOME CARES SKILLS
+                          </h6>
+                          <div className="d-flex flex-wrap gap-2 justify-content-center">
+                            {[
+                              "Nursing",
+                              "Patient Care",
+                              "Care Taker",
+                              "Bedside Attender",
+                              "Old Age Care",
+                              "Baby Care",
+                              "Supporting",
+                              "Cook",
+                              "Housekeeping",
+                              "Diaper",
+                              "Injection",
+                              "BP Check",
+                              "Sugar Check",
+                              "Wound Dressing",
+                              "Nebulization",
+                              "Post-Operative Care",
+                              "Any Duty",
+                            ].map((skill) => {
+                              const active =
+                                formData.homeCareSkills.includes(skill);
+                              return (
+                                <button
+                                  type="button"
+                                  key={skill}
+                                  className={`btn btn-sm ${
+                                    active
+                                      ? "btn-warning"
+                                      : "btn-outline-warning"
+                                  } rounded-pill skill-pill`}
+                                  onClick={() =>
+                                    toggleArrayField("homeCareSkills", skill)
+                                  }
+                                >
+                                  {skill}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      </div>
+                      <hr />
 
-{/* Other Skills */}
-<div className="col-md-12 mt-0">
-  <div className="d-flex flex-column">
-    {/* Office & Administrative */}
-    <div className="category-section bg-dark rounded-3">
-      <h6 className="category-heading text-primary mb-2">Office & Administrative</h6>
-      <div className="d-flex flex-wrap gap-2">
-        {[
-          "Computer Operating", "Data Entry", "Office Assistant", "Receptionist",
-          "Front Desk Executive", "Admin Assistant", "Office Boy", "Peon", "Office Attendant"
-        ].map((skill) => {
-          const active = formData.otherSkills.includes(skill);
-          return (
-            <button
-              type="button"
-              key={skill}
-              className={`btn btn-sm ${active ? "btn-primary" : "btn-outline-primary"} rounded-pill skill-pill`}
-              onClick={() => toggleArrayField("otherSkills", skill)}
-            >
-              {skill}
-            </button>
-          );
-        })}
-      </div>
-    </div>
+                      {/* Other Skills */}
+                      <div className="col-md-12 mt-0">
+                        <div className="d-flex flex-column">
+                          {/* Office & Administrative */}
+                          <div className="category-section bg-dark rounded-3">
+                            <h6 className="category-heading text-primary mb-2">
+                              Office & Administrative
+                            </h6>
+                            <div className="d-flex flex-wrap gap-2">
+                              {[
+                                "Computer Operating",
+                                "Data Entry",
+                                "Office Assistant",
+                                "Receptionist",
+                                "Front Desk Executive",
+                                "Admin Assistant",
+                                "Office Boy",
+                                "Peon",
+                                "Office Attendant",
+                              ].map((skill) => {
+                                const active =
+                                  formData.otherSkills.includes(skill);
+                                return (
+                                  <button
+                                    type="button"
+                                    key={skill}
+                                    className={`btn btn-sm ${
+                                      active
+                                        ? "btn-primary"
+                                        : "btn-outline-primary"
+                                    } rounded-pill skill-pill`}
+                                    onClick={() =>
+                                      toggleArrayField("otherSkills", skill)
+                                    }
+                                  >
+                                    {skill}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </div>
 
-    <hr />
+                          <hr />
 
-    {/* Customer Service & Telecommunication */}
-    <div className="category-section bg-dark rounded-3">
-      <h6 className="category-heading text-success mb-2">Customer Service & Telecommunication</h6>
-      <div className="d-flex flex-wrap gap-2">
-        {[
-          "Tele Calling", "Customer Support", "Telemarketing", "BPO Executive",
-          "Call Center Agent", "Customer Care Executive"
-        ].map((skill) => {
-          const active = formData.otherSkills.includes(skill);
-          return (
-            <button
-              type="button"
-              key={skill}
-              className={`btn btn-sm ${active ? "btn-success" : "btn-outline-success"} rounded-pill skill-pill`}
-              onClick={() => toggleArrayField("otherSkills", skill)}
-            >
-              {skill}
-            </button>
-          );
-        })}
-      </div>
-    </div>
-    <hr />
+                          {/* Customer Service & Telecommunication */}
+                          <div className="category-section bg-dark rounded-3">
+                            <h6 className="category-heading text-success mb-2">
+                              Customer Service & Telecommunication
+                            </h6>
+                            <div className="d-flex flex-wrap gap-2">
+                              {[
+                                "Tele Calling",
+                                "Customer Support",
+                                "Telemarketing",
+                                "BPO Executive",
+                                "Call Center Agent",
+                                "Customer Care Executive",
+                              ].map((skill) => {
+                                const active =
+                                  formData.otherSkills.includes(skill);
+                                return (
+                                  <button
+                                    type="button"
+                                    key={skill}
+                                    className={`btn btn-sm ${
+                                      active
+                                        ? "btn-success"
+                                        : "btn-outline-success"
+                                    } rounded-pill skill-pill`}
+                                    onClick={() =>
+                                      toggleArrayField("otherSkills", skill)
+                                    }
+                                  >
+                                    {skill}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </div>
+                          <hr />
 
-    {/* Management & Supervision */}
-    <div className="category-section bg-dark rounded-3">
-      <h6 className="category-heading text-warning mb-2">Management & Supervision</h6>
-      <div className="d-flex flex-wrap gap-2">
-        {[
-          "Supervisor", "Manager", "Team Leader", "Site Supervisor", "Project Coordinator"
-        ].map((skill) => {
-          const active = formData.otherSkills.includes(skill);
-          return (
-            <button
-              type="button"
-              key={skill}
-              className={`btn btn-sm ${active ? "btn-warning text-dark" : "btn-outline-warning"} rounded-pill skill-pill`}
-              onClick={() => toggleArrayField("otherSkills", skill)}
-            >
-              {skill}
-            </button>
-          );
-        })}
-      </div>
-    </div>
-    <hr />
+                          {/* Management & Supervision */}
+                          <div className="category-section bg-dark rounded-3">
+                            <h6 className="category-heading text-warning mb-2">
+                              Management & Supervision
+                            </h6>
+                            <div className="d-flex flex-wrap gap-2">
+                              {[
+                                "Supervisor",
+                                "Manager",
+                                "Team Leader",
+                                "Site Supervisor",
+                                "Project Coordinator",
+                              ].map((skill) => {
+                                const active =
+                                  formData.otherSkills.includes(skill);
+                                return (
+                                  <button
+                                    type="button"
+                                    key={skill}
+                                    className={`btn btn-sm ${
+                                      active
+                                        ? "btn-warning text-dark"
+                                        : "btn-outline-warning"
+                                    } rounded-pill skill-pill`}
+                                    onClick={() =>
+                                      toggleArrayField("otherSkills", skill)
+                                    }
+                                  >
+                                    {skill}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </div>
+                          <hr />
 
-    {/* Security */}
-    <div className="category-section bg-dark rounded-3">
-      <h6 className="category-heading text-danger mb-2">Security</h6>
-      <div className="d-flex flex-wrap gap-2">
-        {[
-          "Security Guard", "Security Supervisor", "Gatekeeper", "Watchman"
-        ].map((skill) => {
-          const active = formData.otherSkills.includes(skill);
-          return (
-            <button
-              type="button"
-              key={skill}
-              className={`btn btn-sm ${active ? "btn-danger" : "btn-outline-danger"} rounded-pill skill-pill`}
-              onClick={() => toggleArrayField("otherSkills", skill)}
-            >
-              {skill}
-            </button>
-          );
-        })}
-      </div>
-    </div>
-    <hr />
+                          {/* Security */}
+                          <div className="category-section bg-dark rounded-3">
+                            <h6 className="category-heading text-danger mb-2">
+                              Security
+                            </h6>
+                            <div className="d-flex flex-wrap gap-2">
+                              {[
+                                "Security Guard",
+                                "Security Supervisor",
+                                "Gatekeeper",
+                                "Watchman",
+                              ].map((skill) => {
+                                const active =
+                                  formData.otherSkills.includes(skill);
+                                return (
+                                  <button
+                                    type="button"
+                                    key={skill}
+                                    className={`btn btn-sm ${
+                                      active
+                                        ? "btn-danger"
+                                        : "btn-outline-danger"
+                                    } rounded-pill skill-pill`}
+                                    onClick={() =>
+                                      toggleArrayField("otherSkills", skill)
+                                    }
+                                  >
+                                    {skill}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </div>
+                          <hr />
 
-    {/* Driving & Logistics */}
-    <div className="category-section bg-dark rounded-3">
-      <h6 className="category-heading text-info mb-2">Driving & Logistics</h6>
-      <div className="d-flex flex-wrap gap-2">
-        {[
-          "Driving", "Delivery Boy", "Delivery Executive", "Rider", "Driver",
-          "Car Driver", "Bike Rider", "Logistics Helper"
-        ].map((skill) => {
-          const active = formData.otherSkills.includes(skill);
-          return (
-            <button
-              type="button"
-              key={skill}
-              className={`btn btn-sm ${active ? "btn-info text-dark" : "btn-outline-info"} rounded-pill skill-pill`}
-              onClick={() => toggleArrayField("otherSkills", skill)}
-            >
-              {skill}
-            </button>
-          );
-        })}
-      </div>
-    </div>
-    <hr />
+                          {/* Driving & Logistics */}
+                          <div className="category-section bg-dark rounded-3">
+                            <h6 className="category-heading text-info mb-2">
+                              Driving & Logistics
+                            </h6>
+                            <div className="d-flex flex-wrap gap-2">
+                              {[
+                                "Driving",
+                                "Delivery Boy",
+                                "Delivery Executive",
+                                "Rider",
+                                "Driver",
+                                "Car Driver",
+                                "Bike Rider",
+                                "Logistics Helper",
+                              ].map((skill) => {
+                                const active =
+                                  formData.otherSkills.includes(skill);
+                                return (
+                                  <button
+                                    type="button"
+                                    key={skill}
+                                    className={`btn btn-sm ${
+                                      active
+                                        ? "btn-info text-dark"
+                                        : "btn-outline-info"
+                                    } rounded-pill skill-pill`}
+                                    onClick={() =>
+                                      toggleArrayField("otherSkills", skill)
+                                    }
+                                  >
+                                    {skill}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </div>
+                          <hr />
 
-    {/* Technical & Maintenance */}
-    <div className="category-section bg-dark rounded-3">
-      <h6 className="category-heading text-secondary mb-2">Technical & Maintenance</h6>
-      <div className="d-flex flex-wrap gap-2">
-        {[
-          "Electrician", "Plumber", "Carpenter", "Painter", "Mason", "AC Technician",
-          "Mechanic", "Maintenance Staff", "House Keeping", "Housekeeping Supervisor"
-        ].map((skill) => {
-          const active = formData.otherSkills.includes(skill);
-          return (
-            <button
-              type="button"
-              key={skill}
-              className={`btn btn-sm ${active ? "btn-secondary" : "btn-outline-secondary"} rounded-pill skill-pill`}
-              onClick={() => toggleArrayField("otherSkills", skill)}
-            >
-              {skill}
-            </button>
-          );
-        })}
-      </div>
-    </div>
-    <hr />
+                          {/* Technical & Maintenance */}
+                          <div className="category-section bg-dark rounded-3">
+                            <h6 className="category-heading text-secondary mb-2">
+                              Technical & Maintenance
+                            </h6>
+                            <div className="d-flex flex-wrap gap-2">
+                              {[
+                                "Electrician",
+                                "Plumber",
+                                "Carpenter",
+                                "Painter",
+                                "Mason",
+                                "AC Technician",
+                                "Mechanic",
+                                "Maintenance Staff",
+                                "House Keeping",
+                                "Housekeeping Supervisor",
+                              ].map((skill) => {
+                                const active =
+                                  formData.otherSkills.includes(skill);
+                                return (
+                                  <button
+                                    type="button"
+                                    key={skill}
+                                    className={`btn btn-sm ${
+                                      active
+                                        ? "btn-secondary"
+                                        : "btn-outline-secondary"
+                                    } rounded-pill skill-pill`}
+                                    onClick={() =>
+                                      toggleArrayField("otherSkills", skill)
+                                    }
+                                  >
+                                    {skill}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </div>
+                          <hr />
+                          {/* Industrial & Labor */}
+                          <div className="category-section bg-dark rounded-3">
+                            <h6 className="category-heading text-danger mb-2">
+                              Industrial & Labor
+                            </h6>
+                            <div className="d-flex flex-wrap gap-2">
+                              {[
+                                "Labour",
+                                "Helper",
+                                "Loading Unloading",
+                                "Warehouse Helper",
+                                "Factory Worker",
+                                "Production Helper",
+                                "Packaging Staff",
+                              ].map((skill) => {
+                                const active =
+                                  formData.otherSkills.includes(skill);
+                                return (
+                                  <button
+                                    type="button"
+                                    key={skill}
+                                    className={`btn btn-sm ${
+                                      active
+                                        ? "btn-danger"
+                                        : "btn-outline-danger"
+                                    } rounded-pill skill-pill`}
+                                    onClick={() =>
+                                      toggleArrayField("otherSkills", skill)
+                                    }
+                                  >
+                                    {skill}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </div>
 
-    {/* Retail & Sales */}
-    <div className="category-section bg-dark rounded-3">
-      <h6 className="category-heading text-primary mb-2">Retail & Sales</h6>
-      <div className="d-flex flex-wrap gap-2">
-        {[
-          "Sales Boy", "Sales Girl", "Store Helper", "Retail Assistant", "Shop Attendant"
-        ].map((skill) => {
-          const active = formData.otherSkills.includes(skill);
-          return (
-            <button
-              type="button"
-              key={skill}
-              className={`btn btn-sm ${active ? "btn-primary" : "btn-outline-primary"} rounded-pill skill-pill`}
-              onClick={() => toggleArrayField("otherSkills", skill)}
-            >
-              {skill}
-            </button>
-          );
-        })}
-      </div>
-    </div>
-    <hr />
+                          <hr></hr>
 
-    {/* Industrial & Labor */}
-    <div className="category-section bg-dark rounded-3">
-      <h6 className="category-heading text-danger mb-2">Industrial & Labor</h6>
-      <div className="d-flex flex-wrap gap-2">
-        {[
-          "Labour", "Helper", "Loading Unloading", "Warehouse Helper",
-          "Factory Worker", "Production Helper", "Packaging Staff"
-        ].map((skill) => {
-          const active = formData.otherSkills.includes(skill);
-          return (
-            <button
-              type="button"
-              key={skill}
-              className={`btn btn-sm ${active ? "btn-danger" : "btn-outline-danger"} rounded-pill skill-pill`}
-              onClick={() => toggleArrayField("otherSkills", skill)}
-            >
-              {skill}
-            </button>
-          );
-        })}
-      </div>
-    </div>
-  </div>
-</div>
+                          {/* Retail & Sales */}
+                          <div className="category-section bg-dark rounded-3">
+                            <h6 className="category-heading text-primary mb-2">
+                              Retail & Sales
+                            </h6>
+                            <div className="d-flex flex-wrap gap-2">
+                              {[
+                                "Sales Boy",
+                                "Sales Girl",
+                                "Store Helper",
+                                "Retail Assistant",
+                                "Shop Attendant",
+                              ].map((skill) => {
+                                const active =
+                                  formData.otherSkills.includes(skill);
+                                return (
+                                  <button
+                                    type="button"
+                                    key={skill}
+                                    className={`btn btn-sm ${
+                                      active
+                                        ? "btn-primary"
+                                        : "btn-outline-primary"
+                                    } rounded-pill skill-pill`}
+                                    onClick={() =>
+                                      toggleArrayField("otherSkills", skill)
+                                    }
+                                  >
+                                    {skill}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
                     </div>
 
                     <hr />
@@ -844,10 +1034,14 @@ export default function WorkerCallForm({ isOpen, onClose }) {
                           value={formData.education}
                           onChange={handleChange}
                           onBlur={handleBlur}
-                          className={`form-control ${errors.education ? "is-invalid" : ""}`}
+                          className={`form-control ${
+                            errors.education ? "is-invalid" : ""
+                          }`}
                         />
                         {errors.education && (
-                          <div className="invalid-feedback">{errors.education}</div>
+                          <div className="invalid-feedback">
+                            {errors.education}
+                          </div>
                         )}
                       </div>
                       <div className="col-md-6">
@@ -861,7 +1055,9 @@ export default function WorkerCallForm({ isOpen, onClose }) {
                               checked={formData.workingHours === "12"}
                               onChange={handleChange}
                             />
-                            <label className="form-check-label">&nbsp;&nbsp;12 Hours</label>
+                            <label className="form-check-label">
+                              &nbsp;&nbsp;12 Hours
+                            </label>
                           </div>
                           <div className="form-check form-check-inline">
                             <input
@@ -871,15 +1067,19 @@ export default function WorkerCallForm({ isOpen, onClose }) {
                               checked={formData.workingHours === "24"}
                               onChange={handleChange}
                             />
-                            <label className="form-check-label">&nbsp;&nbsp;24 Hours</label>
+                            <label className="form-check-label">
+                              &nbsp;&nbsp;24 Hours
+                            </label>
                           </div>
                         </div>
                       </div>
                     </div>
 
                     {/* Languages */}
-                    <div className="mb-3">
-                      <p className="form-label"><strong>Languages Known</strong></p>
+                    <div className="mb-3 category-section bg-dark rounded-3">
+                      <p className="form-label text-warning">
+                        <strong>Languages Known</strong>
+                      </p>
                       {[
                         "Telugu",
                         "Hindi",
@@ -890,9 +1090,12 @@ export default function WorkerCallForm({ isOpen, onClose }) {
                         "Tamil",
                         "Oriya",
                         "Bengali",
-                        "Marathi"
+                        "Marathi",
                       ].map((lang) => (
-                        <div className="form-check form-check-inline" key={lang}>
+                        <div
+                          className="form-check form-check-inline"
+                          key={lang}
+                        >
                           <input
                             type="checkbox"
                             className="form-check-input"
@@ -908,6 +1111,39 @@ export default function WorkerCallForm({ isOpen, onClose }) {
 
                     <div className="row mb-3">
                       <div className="col-md-6">
+                        <label className="form-label">Joining Type</label>
+                        <select
+                          name="joiningType"
+                          value={formData.joiningType}
+                          onChange={handleChange}
+                          className="form-select"
+                        >
+                          <option value="">Select Joining Type</option>
+                          <option value="Immediate">Immediate</option>
+                          <option value="1 Week">1 Week</option>
+                          <option value="15 Days">15 Days</option>
+                          <option value="Flexible">Flexible</option>
+                          <option value="Negotiable">Negotiable</option>
+                        </select>
+                      </div>
+
+                      <div className="col-md-6">
+                        <label className="form-label">Expected Salary</label>
+
+                        <input
+                          type="tel"
+                          name="expectedSalary"
+                          value={formData.expectedSalary}
+                          onChange={handleChange}
+                          onBlur={handleBlur}
+                          className={`form-control`}
+                          maxLength={5}
+                        />
+                      </div>
+                    </div>
+
+                    <div className="row mb-3">
+                      <div className="col-md-6">
                         <label className="form-label">
                           Conversation Level<span className="star">*</span>
                         </label>
@@ -916,7 +1152,9 @@ export default function WorkerCallForm({ isOpen, onClose }) {
                           value={formData.conversationLevel}
                           onChange={handleChange}
                           onBlur={handleBlur}
-                          className={`form-select ${errors.conversationLevel ? "is-invalid" : ""}`}
+                          className={`form-select ${
+                            errors.conversationLevel ? "is-invalid" : ""
+                          }`}
                         >
                           <option value="">Select</option>
                           <option value="Very Good">Very Good</option>
@@ -927,7 +1165,9 @@ export default function WorkerCallForm({ isOpen, onClose }) {
                           <option value="Very Bad">Very Bad</option>
                         </select>
                         {errors.conversationLevel && (
-                          <div className="invalid-feedback">{errors.conversationLevel}</div>
+                          <div className="invalid-feedback">
+                            {errors.conversationLevel}
+                          </div>
                         )}
                       </div>
                       <div className="col-md-6">
@@ -938,33 +1178,43 @@ export default function WorkerCallForm({ isOpen, onClose }) {
                             name="callReminderDate"
                             value={formData.callReminderDate}
                             onChange={handleChange}
-                            className={`form-control ${errors.callReminderDate ? "is-invalid" : ""}`}
+                            className={`form-control ${
+                              errors.callReminderDate ? "is-invalid" : ""
+                            }`}
                             min={getToday()}
                           />
                           {formData.callReminderDate && (
                             <button
                               type="button"
                               className="btn btn-outline-secondary"
-                              onClick={() => setFormData(prev => ({ ...prev, callReminderDate: "" }))}
+                              onClick={() =>
+                                setFormData((prev) => ({
+                                  ...prev,
+                                  callReminderDate: "",
+                                }))
+                              }
                             >
                               Clear
                             </button>
                           )}
                           {errors.callReminderDate && (
-                            <div className="invalid-feedback d-block">{errors.callReminderDate}</div>
+                            <div className="invalid-feedback d-block">
+                              {errors.callReminderDate}
+                            </div>
                           )}
                         </div>
                       </div>
 
                       <div className="col-md-12">
-                        <label className="form-label mt-2">Add Comment <span className="star">*</span></label>
+                        <label className="form-label mt-2">
+                          Add Comment <span className="star">*</span>
+                        </label>
                         <textarea
                           className="form-control border-secondary "
                           name="formComment"
                           value={formData.formComment}
                           onChange={handleChange}
-                        >
-                        </textarea>
+                        ></textarea>
                       </div>
                     </div>
                   </div>
@@ -997,11 +1247,31 @@ export default function WorkerCallForm({ isOpen, onClose }) {
                 </div>
                 {/* Hidden Fields */}
                 <input type="hidden" name="addedBy" value={formData.addedBy} />
-                <input type="hidden" name="addedByUid" value={formData.addedByUid} />
-                <input type="hidden" name="createdBy" value={formData.createdBy} />
-                <input type="hidden" name="createdByName" value={formData.createdByName} />
-                <input type="hidden" name="userName" value={formData.userName} />
-                <input type="hidden" name="timestamp" value={formData.timestamp} />
+                <input
+                  type="hidden"
+                  name="addedByUid"
+                  value={formData.addedByUid}
+                />
+                <input
+                  type="hidden"
+                  name="createdBy"
+                  value={formData.createdBy}
+                />
+                <input
+                  type="hidden"
+                  name="createdByName"
+                  value={formData.createdByName}
+                />
+                <input
+                  type="hidden"
+                  name="userName"
+                  value={formData.userName}
+                />
+                <input
+                  type="hidden"
+                  name="timestamp"
+                  value={formData.timestamp}
+                />
                 <div></div>
               </form>
             </div>
@@ -1080,7 +1350,10 @@ export default function WorkerCallForm({ isOpen, onClose }) {
                 ></button>
               </div>
               <div className="modal-body">
-                <p>You have unsaved changes. Are you sure you want to close the form? All changes will be lost.</p>
+                <p>
+                  You have unsaved changes. Are you sure you want to close the
+                  form? All changes will be lost.
+                </p>
               </div>
               <div className="modal-footer">
                 <button

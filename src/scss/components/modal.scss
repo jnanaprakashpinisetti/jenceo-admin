@@ -285,13 +285,22 @@
 
 /* Comment text gets a subtle background & padding */
 .comment-text {
-    background: #f8fafc;
+    // background: #f8fafc;
     padding: 0.45rem 0.6rem;
     border-radius: 6px;
     border: 1px solid rgba(15, 23, 42, 0.03);
     max-width: 100%;
     white-space: pre-wrap;
     word-break: break-word;
+    color: #aaa;
+}
+
+.comment-item-compact,
+.comment-initial {
+    padding: 10px;
+    background: #444;
+    margin-bottom: 10px;
+    border-radius: 5px;
 }
 
 /* Fallback "no comments" style */

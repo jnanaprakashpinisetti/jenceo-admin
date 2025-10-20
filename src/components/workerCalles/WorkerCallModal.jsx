@@ -775,9 +775,9 @@ export default function WorkerCallModal({
                             {localWorker.formComment && (
                               <div className="comment-initial mb-3">
                                 <div className="comment-header d-flex justify-content-between align-items-center mb-2">
-                                  <small className="text-light fw-bold">Initial Comment</small>
+                                  <small className="text-primary fw-bold">Initial Comment</small>
                                 </div>
-                                <p className="mb-0 text-light">{localWorker.formComment}</p>
+                                <p className="mb-0 text-info">{localWorker.formComment}</p>
                               </div>
                             )}
 
@@ -787,8 +787,8 @@ export default function WorkerCallModal({
                                 comments.map((c, idx) => (
                                   <div key={idx} className="comment-item-compact">
                                     <p className="comment-text mb-2">{c.text}</p>
-                                    <div className="comment-footer d-flex justify-content-between align-items-center">
-                                      <small className="comment-author text-primary">
+                                    <div className="comment-footer d-flex justify-content-between align-items-center opacity-50">
+                                      <small className="comment-author text-muted">
                                         <i className="bi bi-person-circle me-1"></i>
                                         {c.user || pickUserName(usersMap[c.userId]) || "user"}
                                       </small>
@@ -897,7 +897,7 @@ export default function WorkerCallModal({
                                   {normalizeArray(localWorker.languages).map((lang, idx) => (
                                     <span
                                       key={idx}
-                                      className="language-tag-compact"
+                                      className="language-tag-compact text-info"
                                     >
                                       {lang}
                                       {isEditMode && (
@@ -1174,7 +1174,7 @@ export default function WorkerCallModal({
                 <div className="d-flex justify-content-between align-items-center w-100">
                   <div className="meta-info-compact">
                     {createdByName && (
-                      <small className="text-muted">
+                      <small className="text-muted opacity-50">
                         Created by: <strong>{createdByName}</strong>
                         {localWorker.createdAt && ` on ${formatDateTime(localWorker.createdAt)}`}
                       </small>

@@ -1,5 +1,5 @@
 // src/components/workerCalles/WorkerCallModal.jsx
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState, useRef, useCallback } from "react";
 import firebaseDB from "../../firebase";
 import { useAuth } from "../../context/AuthContext";
 
@@ -118,6 +118,9 @@ export default function WorkerCallModal({
   const [languageSearch, setLanguageSearch] = useState("");
   const [showLanguageDropdown, setShowLanguageDropdown] = useState(false);
 
+  const languageInputRef = useRef(null);
+  const dropdownRef = useRef(null);
+
   // Save remains disabled until a comment is added this session
   const [canSave, setCanSave] = useState(false);
 
@@ -135,6 +138,62 @@ export default function WorkerCallModal({
     setDirty(false);
     setCanSave(false); // locked until a comment is added
   }, [worker?.id]);
+
+  // Click outside dropdown handler
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (
+        dropdownRef.current &&
+        !dropdownRef.current.contains(event.target) &&
+        languageInputRef.current &&
+        !languageInputRef.current.contains(event.target)
+      ) {
+        setShowLanguageDropdown(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, []);
+
+  // Close dropdown on escape key
+  useEffect(() => {
+    const handleEscapeKey = (event) => {
+      if (event.key === 'Escape' && showLanguageDropdown) {
+        setShowLanguageDropdown(false);
+        // Optional: Focus back on the input
+        if (languageInputRef.current) {
+          languageInputRef.current.focus();
+        }
+      }
+    };
+
+    document.addEventListener('keydown', handleEscapeKey);
+    return () => {
+      document.removeEventListener('keydown', handleEscapeKey);
+    };
+  }, [showLanguageDropdown]);
+
+  // Update handleLanguageSelect to close dropdown
+  const handleLanguageSelect = useCallback((language) => {
+    if (!isEditMode) return;
+    setLocalWorker((prev) => {
+      const arr = normalizeArray(prev.languages);
+      if (arr.some((v) => String(v).toLowerCase() === language.toLowerCase()))
+        return prev;
+      return { ...prev, languages: [...arr, language] };
+    });
+    setLanguageSearch("");
+    setShowLanguageDropdown(false);
+    setDirty(true);
+
+    // Focus back on input after selection
+    if (languageInputRef.current) {
+      languageInputRef.current.focus();
+    }
+  }, [isEditMode]);
 
   // Hooks above any early returns
   const filteredLanguages = useMemo(
@@ -260,19 +319,6 @@ export default function WorkerCallModal({
       arr.splice(idx, 1);
       return { ...prev, [field]: [...arr] };
     });
-    setDirty(true);
-  };
-
-  const handleLanguageSelect = (language) => {
-    if (!isEditMode) return;
-    setLocalWorker((prev) => {
-      const arr = normalizeArray(prev.languages);
-      if (arr.some((v) => String(v).toLowerCase() === language.toLowerCase()))
-        return prev;
-      return { ...prev, languages: [...arr, language] };
-    });
-    setLanguageSearch("");
-    setShowLanguageDropdown(false);
     setDirty(true);
   };
 
@@ -814,9 +860,18 @@ export default function WorkerCallModal({
                                     setShowLanguageDropdown(true);
                                   }}
                                   onFocus={() => setShowLanguageDropdown(true)}
+                                  onKeyDown={(e) => {
+                                    if (e.key === 'Escape') {
+                                      setShowLanguageDropdown(false);
+                                    }
+                                  }}
+                                  ref={languageInputRef}
                                 />
                                 {showLanguageDropdown && (
-                                  <div className="language-dropdown dark-dropdown">
+                                  <div
+                                    className="language-dropdown dark-dropdown"
+                                    ref={dropdownRef}
+                                  >
                                     {filteredLanguages.map((lang) => (
                                       <div
                                         key={lang}
@@ -1218,460 +1273,6 @@ export default function WorkerCallModal({
         </div>
       )}
 
-      {/* Dark Theme Styles - Jenceo Pattern */}
-      <style jsx>{`
-        .dark-modal {
-          font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-        }
-
-        /* Header with dark theme */
-        .dark-header {
-          background: #37384a;
-          border-bottom: 2px solid #333;
-          border-radius: 8px 8px 0 0;
-          padding: 1rem 1.5rem;
-        }
-
-        .dark-body {
-          background: #2d2d2d;
-        }
-
-        /* Tabs with dark theme */
-        .dark-tabs-container {
-          background: #333;
-          border-bottom: 1px solid #444;
-        }
-
-        .dark-tab {
-          background: transparent;
-          border: 1px solid #555;
-          color: #ccc;
-          border-radius: 6px;
-          padding: 0.5rem 1rem;
-          font-weight: 500;
-          transition: all 0.3s ease;
-        }
-
-        .dark-tab:hover {
-          background: #444;
-          border-color: #666;
-          color: #fff;
-        }
-
-        .dark-tab.active {
-          background: #007bff;
-          border-color: #007bff;
-          color: white;
-        }
-
-        /* Cards with dark theme */
-        .dark-card {
-          background: #3a3a3a;
-          border: 1px solid #444;
-          border-radius: 6px;
-          box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
-        }
-
-        .dark-card-header {
-          background: #333;
-          border-bottom: 1px solid #444;
-          border-radius: 6px 6px 0 0 !important;
-          padding: 0.75rem 1rem;
-          color: #fff;
-        }
-
-        /* Inputs with dark theme */
-        .dark-input {
-          background: #2d2d2d !important;
-          border: 1px solid #555;
-          border-radius: 4px;
-          padding: 0.5rem 0.75rem;
-          transition: all 0.3s ease;
-          color: #fff;
-        }
-
-        .dark-input:focus {
-          background: #333;
-          border-color: #007bff;
-          box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.25);
-          outline: none;
-          color: #fff;
-        }
-
-        .dark-input::placeholder {
-          color: #888;
-        }
-
-        .dark-footer {
-          background: #333;
-          border-top: 1px solid #444;
-          border-radius: 0 0 8px 8px;
-        }
-
-        /* Buttons with Jenceo colors */
-        .btn-primary {
-          background: #007bff;
-          border-color: #007bff;
-        }
-
-        .btn-primary:hover {
-          background: #0056b3;
-          border-color: #0056b3;
-        }
-
-        .btn-success {
-          background: #28a745;
-          border-color: #28a745;
-        }
-
-        .btn-success:hover {
-          background: #1e7e34;
-          border-color: #1e7e34;
-        }
-
-        .btn-warning {
-          background: #ffc107;
-          border-color: #ffc107;
-          color: #212529;
-        }
-
-        .btn-warning:hover {
-          background: #e0a800;
-          border-color: #e0a800;
-          color: #212529;
-        }
-
-        .btn-secondary {
-          background: #6c757d;
-          border-color: #6c757d;
-          color: #fff;
-        }
-
-        .btn-secondary:hover {
-          background: #545b62;
-          border-color: #545b62;
-          color: #fff;
-        }
-
-        .btn-outline-light {
-          background: transparent;
-          border-color: #6c757d;
-          color: #6c757d;
-        }
-
-        .btn-outline-light:hover {
-          background: #6c757d;
-          border-color: #6c757d;
-          color: #fff;
-        }
-
-        /* Info cards */
-        .info-grid-compact {
-          display: grid;
-          grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-          gap: 1rem;
-        }
-
-        .info-card-item {
-          background: #333;
-          border: 1px solid #444;
-          border-radius: 6px;
-          padding: 0.75rem;
-          transition: all 0.3s ease;
-        }
-
-        .info-card-item:hover {
-          background: #3a3a3a;
-          border-color: #555;
-        }
-
-        .info-card-label {
-          font-size: 0.75rem;
-          color: #aaa;
-          font-weight: 600;
-          margin-bottom: 0.25rem;
-          text-transform: uppercase;
-        }
-
-        .info-card-value {
-          font-size: 0.875rem;
-          color: #6f8aa8ff;
-          font-weight: 600;
-        }
-
-        .info-badge {
-          padding: 0.25rem 0.5rem;
-          border-radius: 12px;
-          font-size: 0.75rem;
-          font-weight: 600;
-        }
-
-        /* Badge styles */
-        .badge-gender-male {
-          background: rgba(0, 123, 255, 0.2);
-          color: #4dabf7;
-          border: 1px solid #339af0;
-        }
-
-        .badge-gender-female {
-          background: rgba(232, 62, 140, 0.2);
-          color: #e64980;
-          border: 1px solid #e0316e;
-        }
-
-        .badge-gender-other {
-          background: rgba(253, 126, 20, 0.2);
-          color: #fd7e14;
-          border: 1px solid #f76707;
-        }
-
-        .badge-conv-vgood {
-          background: rgba(40, 167, 69, 0.2);
-          color: #51cf66;
-          border: 1px solid #40c057;
-        }
-
-        .badge-conv-good {
-          background: rgba(0, 123, 255, 0.2);
-          color: #4dabf7;
-          border: 1px solid #339af0;
-        }
-
-        .badge-conv-average {
-          background: rgba(255, 193, 7, 0.2);
-          color: #ffd43b;
-          border: 1px solid #ffc107;
-        }
-
-        .badge-conv-poor {
-          background: rgba(220, 53, 69, 0.2);
-          color: #fa5252;
-          border: 1px solid #e03131;
-        }
-
-        /* Skills and language tags */
-        .skills-pills-compact {
-          display: flex;
-          flex-wrap: wrap;
-          gap: 0.5rem;
-          max-height: 150px;
-          overflow-y: auto;
-          padding: 0.5rem;
-        }
-
-        .skill-pill-compact {
-          font-size: 0.75rem;
-          padding: 0.25rem 0.75rem;
-          margin: 0.1rem;
-        }
-
-        .skill-tag-compact {
-          padding: 0.375rem 0.75rem;
-          border-radius: 15px;
-          font-size: 0.75rem;
-          font-weight: 500;
-        }
-
-        .skill-tag-compact.primary {
-          background: rgba(0, 123, 255, 0.2);
-          color: #4dabf7;
-          border: 1px solid #339af0;
-        }
-
-        .skill-tag-compact.success {
-          background: rgba(40, 167, 69, 0.2);
-          color: #51cf66;
-          border: 1px solid #40c057;
-        }
-
-        .skill-tag-compact.warning {
-          background: rgba(255, 193, 7, 0.2);
-          color: #ffd43b;
-          border: 1px solid #ffc107;
-        }
-
-        .language-tag-compact {
-          display: inline-flex;
-          align-items: center;
-          background: rgba(108, 117, 125, 0.2);
-          color: #adb5bd;
-          border: 1px solid #6c757d;
-          padding: 0.375rem 0.75rem;
-          border-radius: 15px;
-          font-size: 0.75rem;
-          font-weight: 500;
-          margin: 0.1rem;
-        }
-
-        .tag-remove {
-          background: none;
-          border: none;
-          color: inherit;
-          margin-left: 0.5rem;
-          cursor: pointer;
-          opacity: 0.7;
-          font-size: 1rem;
-          line-height: 1;
-        }
-
-        .tag-remove:hover {
-          opacity: 1;
-        }
-
-        /* Dropdown */
-        .dark-dropdown {
-          background: #3a3a3a;
-          border: 1px solid #555;
-          border-radius: 6px;
-          box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
-        }
-
-        .dropdown-item {
-          padding: 0.5rem 1rem;
-          cursor: pointer;
-          border-bottom: 1px solid #444;
-          transition: background 0.3s ease;
-          color: #fff;
-          font-size: 0.875rem;
-        }
-
-        .dropdown-item:hover {
-          background: #007bff;
-          color: white;
-        }
-
-        /* Comments */
-        .comment-item-compact {
-          background: #333;
-          border: 1px solid #444;
-          border-radius: 6px;
-          padding: 0.75rem;
-          margin-bottom: 0.5rem;
-        }
-
-        .comment-text {
-          color: #fff;
-          font-size: 0.875rem;
-          margin-bottom: 0.5rem;
-          background-color:transparent;
-          border:none;
-
-        }
-
-        .comment-initial {
-          background: rgba(0, 123, 255, 0.1);
-          border: 1px solid #339af0;
-          border-radius: 6px;
-          padding: 0.75rem;
-        }
-
-        .empty-state-compact i {
-          font-size: 2rem;
-          opacity: 0.5;
-        }
-
-        /* Other skills categories */
-        .other-skills-categories {
-          max-height: 300px;
-          overflow-y: auto;
-        }
-
-        .skill-category-compact {
-          margin-bottom: 1rem;
-          padding: 0.75rem;
-          border-radius: 6px;
-          background: #333;
-        }
-    
-
-        .office-category { border-left: 4px solid #007bff; }
-        .customer-category { border-left: 4px solid #28a745; }
-        .management-category { border-left: 4px solid #ffc107; }
-        .security-category { border-left: 4px solid #dc3545; }
-        .driving-category { border-left: 4px solid #6f42c1; }
-        .technical-category { border-left: 4px solid #fd7e14; }
-        .retail-category { border-left: 4px solid #20c997; }
-        .industrial-category { border-left: 4px solid #e83e8c; }
-
-        .category-title-compact {
-          font-size: 0.875rem;
-          font-weight: 600;
-          color: #a173f7ff;
-          margin-bottom: 0.5rem;
-        }
-
-        .action-btn {
-          font-size: 0.75rem;
-          padding: 0.25rem 0.75rem;
-        }
-
-        .meta-info-compact {
-          font-size: 0.75rem;
-        }
-
-        /* Form labels */
-        .form-label {
-          color: #aaa !important;
-        }
-
-        /* Keep same look even when disabled */
-        .btn.disabled-keep:disabled { 
-          opacity: .5 !important; 
-        }
-        
-        .btn-outline-light.btn-primary:disabled,
-        .btn-outline-light.btn-success:disabled,
-        .btn-outline-light.btn-warning:disabled,
-        .btn-success:disabled,
-        .btn-primary:disabled,
-        .btn-warning:disabled {
-          opacity: .5 !important;
-        }
-
-        /* Scrollbar styling */
-        .tab-content::-webkit-scrollbar {
-          width: 6px;
-        }
-
-        .tab-content::-webkit-scrollbar-track {
-          background: #333;
-          border-radius: 3px;
-        }
-
-        .tab-content::-webkit-scrollbar-thumb {
-          background: #555;
-          border-radius: 3px;
-        }
-
-        .tab-content::-webkit-scrollbar-thumb:hover {
-          background: #666;
-        }
-
-        /* Responsive design */
-        @media (max-width: 768px) {
-          .modal-dialog {
-            margin: 0.5rem;
-          }
-          
-          .info-grid-compact {
-            grid-template-columns: 1fr;
-          }
-          
-          .skills-pills-compact {
-            max-height: 200px;
-          }
-          
-          .modal-footer .d-flex {
-            flex-direction: column;
-            gap: 0.5rem;
-          }
-          
-          .meta-info-compact {
-            text-align: center;
-            margin-bottom: 0.5rem;
-          }
-        }
-      `}</style>
     </>
   );
 }

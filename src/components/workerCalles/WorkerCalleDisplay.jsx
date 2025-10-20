@@ -733,6 +733,168 @@ export default function WorkerCalleDisplay({ permissions: permissionsProp }) {
     return agg;
   }, [userDayGrid, activeMonth, activeYear]);
 
+  // Helper functions for User Call Summary
+  const getUserDayGrid = (userId) => {
+    const grid = {};
+    workers.forEach((w) => {
+      const createdBy = w?.createdById || w?.addedById || w?.createdByUid || w?.addedByUid || w?.uid || w?.userId;
+      const updatedBy = w?.updatedById || w?.updatedByUid;
+
+      const createdAt = parseDate(w?.createdAt || w?.created_date || w?.createdOn || w?.date);
+      const isNewRecord = isValidDate(createdAt) &&
+        createdAt.getFullYear() === activeYear &&
+        createdBy === userId;
+
+      const updatedAt = parseDate(w?.updatedAt || w?.updated_on || w?.editedAt);
+      const isModifiedRecord = isValidDate(updatedAt) &&
+        updatedAt.getFullYear() === activeYear &&
+        updatedBy === userId;
+
+      const bump = (m, d, kind) => {
+        if (!grid[m]) grid[m] = {};
+        if (!grid[m][d]) grid[m][d] = { new: 0, modified: 0, total: 0 };
+        grid[m][d][kind] += 1;
+        grid[m][d].total += 1;
+      };
+
+      if (isNewRecord) {
+        bump(createdAt.getMonth(), createdAt.getDate(), "new");
+      } else if (isModifiedRecord) {
+        bump(updatedAt.getMonth(), updatedAt.getDate(), "modified");
+      }
+    });
+    return grid;
+  };
+
+
+
+  const getTotalMonthlyCalls = () => {
+    return Object.keys(usersMap).reduce((total, userId) => total + getMonthlyUserTotal(userId), 0);
+  };
+
+  const getCallCountClass = (count) => {
+    if (count === 0) return "perf-none";
+    if (count <= 10) return "perf-poor";
+    if (count <= 25) return "perf-avg";
+    if (count <= 50) return "perf-good";
+    return "perf-vgood";
+  };
+
+  // Additional helper functions for User Call Summary
+  const getMonthlyUserTotalAllUsers = (monthIndex) => {
+    return Object.keys(usersMap).reduce((total, userId) => {
+      const userGrid = getUserDayGrid(userId);
+      const monthData = userGrid[monthIndex] || {};
+      return total + Object.values(monthData).reduce((sum, day) => sum + day.total, 0);
+    }, 0);
+  };
+
+  const getYearlyUserTotal = (userId) => {
+    let total = 0;
+    for (let month = 0; month < 12; month++) {
+      const userGrid = getUserDayGrid(userId);
+      const monthData = userGrid[month] || {};
+      total += Object.values(monthData).reduce((sum, day) => sum + day.total, 0);
+    }
+    return total;
+  };
+
+  const getTotalYearlyCalls = () => {
+    return Object.keys(usersMap).reduce((total, userId) => total + getYearlyUserTotal(userId), 0);
+  };
+
+  // Update getMonthlyUserTotal to accept month parameter
+  const getMonthlyUserTotal = (userId, specificMonth = null) => {
+    const month = specificMonth !== null ? specificMonth : activeMonth;
+    if (month === null) return getYearlyUserTotal(userId);
+
+    const userGrid = getUserDayGrid(userId);
+    const monthData = userGrid[month] || {};
+    return Object.values(monthData).reduce((total, day) => total + day.total, 0);
+  };
+
+  // Weekly calculation helper functions
+  const getWeeklyUserTotal = (userId, week) => {
+    if (activeMonth === null) return 0;
+
+    const startDay = (week - 1) * 7 + 1;
+    const endDay = Math.min(week * 7, new Date(activeYear, activeMonth + 1, 0).getDate());
+
+    let weeklyTotal = 0;
+    const userGrid = getUserDayGrid(userId);
+
+    for (let day = startDay; day <= endDay; day++) {
+      const dayData = userGrid[activeMonth] && userGrid[activeMonth][day];
+      weeklyTotal += dayData ? dayData.total : 0;
+    }
+
+    return weeklyTotal;
+  };
+
+  const getWeeklyTotal = (week) => {
+    if (activeMonth === null) return 0;
+
+    const startDay = (week - 1) * 7 + 1;
+    const endDay = Math.min(week * 7, new Date(activeYear, activeMonth + 1, 0).getDate());
+
+    let weeklyTotal = 0;
+
+    for (let day = startDay; day <= endDay; day++) {
+      let dayTotal = 0;
+      Object.keys(usersMap).forEach(userId => {
+        const userGrid = getUserDayGrid(userId);
+        const dayData = userGrid[activeMonth] && userGrid[activeMonth][day];
+        dayTotal += dayData ? dayData.total : 0;
+      });
+      weeklyTotal += dayTotal;
+    }
+
+    return weeklyTotal;
+  };
+
+  // Add these helper functions to your component
+
+  const getBestPerformingDay = () => {
+    // Implement logic to find the day with most calls
+    // This could come from your daily calls data
+    return {
+      day: "Monday",
+      calls: 45
+    };
+  };
+
+  const getPerformanceTrend = () => {
+    // Compare current period with previous period
+    // Return percentage change
+    return 12; // +12%
+  };
+
+  const calculateTargetCompletion = (totalCalls) => {
+    const monthlyTarget = 1000; // Set your target
+    return Math.min(Math.round((totalCalls / monthlyTarget) * 100), 100);
+  };
+
+  const calculateEfficiencyScore = (userStats) => {
+    // Calculate efficiency based on calls distribution
+    const average = userStats.reduce((sum, stat) => sum + stat.total, 0) / userStats.length;
+    const stdDev = Math.sqrt(
+      userStats.reduce((sum, stat) => sum + Math.pow(stat.total - average, 2), 0) / userStats.length
+    );
+    // Higher score for more balanced distribution
+    const score = 10 - (stdDev / average) * 5;
+    return Math.max(1, Math.min(10, Math.round(score)));
+  };
+
+  const calculateTop3Percentage = (userStats, totalCalls) => {
+    const top3Total = userStats.slice(0, 3).reduce((sum, stat) => sum + stat.total, 0);
+    return Math.round((top3Total / totalCalls) * 100);
+  };
+
+  const calculateOthersPercentage = (userStats, totalCalls) => {
+    const top3Total = userStats.slice(0, 3).reduce((sum, stat) => sum + stat.total, 0);
+    return Math.round(((totalCalls - top3Total) / totalCalls) * 100);
+  };
+
   /* Pagination */
   const totalPages = Math.max(1, Math.ceil(sorted.length / rowsPerPage));
   const safePage = Math.min(Math.max(1, currentPage), totalPages);
@@ -792,9 +954,9 @@ export default function WorkerCalleDisplay({ permissions: permissionsProp }) {
   /* Export */
   const handleExport = () => {
     if (!permissions.canExport) return;
-    
+
     // If rows are selected, export only those, otherwise export all filtered
-    const dataToExport = selectedRows.size > 0 
+    const dataToExport = selectedRows.size > 0
       ? sorted.filter(w => selectedRows.has(w.id))
       : sorted;
 
@@ -812,8 +974,8 @@ export default function WorkerCalleDisplay({ permissions: permissionsProp }) {
         "Reminder (when)": isFinite(du) ? duText : "", Mobile: w?.mobileNo ?? "",
       };
     });
-    const wb = XLSX.utils.book_new(); const ws = XLSX.utils.json_to_sheet(exportData); XLSX.utils.book_append_sheet(wb, ws, "Workers"); 
-    
+    const wb = XLSX.utils.book_new(); const ws = XLSX.utils.json_to_sheet(exportData); XLSX.utils.book_append_sheet(wb, ws, "Workers");
+
     const fileName = selectedRows.size > 0 ? "SelectedWorkerCallData.xlsx" : "WorkerCallData.xlsx";
     XLSX.writeFile(wb, fileName);
   };
@@ -1033,36 +1195,36 @@ export default function WorkerCalleDisplay({ permissions: permissionsProp }) {
 
       {/* Tabs */}
       <div className="tabs-container mb-4">
-  <ul className="nav nav-tabs dark-tabs">
-    <li className="nav-item">
-      <button 
-        className={`nav-link ${activeTab === "callData" ? "active" : ""}`}
-        onClick={() => setActiveTab("callData")}
-      >
-        <i className="bi bi-table me-2"></i>
-        Call Data
-      </button>
-    </li>
-    <li className="nav-item">
-      <button 
-        className={`nav-link ${activeTab === "callSummary" ? "active" : ""}`}
-        onClick={() => setActiveTab("callSummary")}
-      >
-        <i className="bi bi-bar-chart me-2"></i>
-        Call Summary
-      </button>
-    </li>
-    <li className="nav-item">
-      <button 
-        className={`nav-link ${activeTab === "callThrough" ? "active" : ""}`}
-        onClick={() => setActiveTab("callThrough")}
-      >
-        <i className="bi bi-diagram-3 me-2"></i>
-        Call Through
-      </button>
-    </li>
-  </ul>
-</div>
+        <ul className="nav nav-tabs dark-tabs">
+          <li className="nav-item">
+            <button
+              className={`nav-link ${activeTab === "callData" ? "active" : ""}`}
+              onClick={() => setActiveTab("callData")}
+            >
+              <i className="bi bi-table me-2"></i>
+              Call Data
+            </button>
+          </li>
+          <li className="nav-item">
+            <button
+              className={`nav-link ${activeTab === "callSummary" ? "active" : ""}`}
+              onClick={() => setActiveTab("callSummary")}
+            >
+              <i className="bi bi-bar-chart me-2"></i>
+              Call Summary
+            </button>
+          </li>
+          <li className="nav-item">
+            <button
+              className={`nav-link ${activeTab === "callThrough" ? "active" : ""}`}
+              onClick={() => setActiveTab("callThrough")}
+            >
+              <i className="bi bi-diagram-3 me-2"></i>
+              Call Through
+            </button>
+          </li>
+        </ul>
+      </div>
 
       {/* Tab Content */}
       <div className="tab-content">
@@ -1367,7 +1529,7 @@ export default function WorkerCalleDisplay({ permissions: permissionsProp }) {
                 </div>
               </div>
             )}
-       
+
             {/* Top pagination */}
 
             <div className="d-flex align-items-center flex-wrap gap-2 mt-2 mb-3 bg-dark p-3 rounded-3">
@@ -1807,6 +1969,549 @@ export default function WorkerCalleDisplay({ permissions: permissionsProp }) {
                 </div>
               </div>
             )}
+
+            {/* User Call Summary Table & Graph */}
+            <div className="row mt-4">
+              <div className="col-12">
+                <div className="bg-dark border rounded p-3 mb-4">
+                  <h4 className="text-info mb-3">
+                    <i className="bi bi-people-fill me-2"></i>
+                    User Call Summary — {activeYear}
+                  </h4>
+
+                  {/* Month Selector */}
+                  <div className="d-flex align-items-center justify-content-between flex-wrap mb-4">
+                    <div className="d-flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        className={`btn btn-sm ${activeMonth === null ? "btn-warning text-dark" : "btn-outline-warning"}`}
+                        onClick={() => setActiveMonth(null)}
+                      >
+                        All Months
+                      </button>
+                      {months.map((m, mi) => (
+                        <button
+                          key={m}
+                          type="button"
+                          className={`btn btn-sm w-auto ${mi === activeMonth ? "btn-warning text-dark" : "btn-outline-warning"}`}
+                          onClick={() => setActiveMonth(mi)}
+                        >
+                          {m}
+                        </button>
+                      ))}
+                    </div>
+                    <div className="d-flex gap-2">
+                      <select className="form-select form-select-sm" value={activeYear} onChange={(e) => setActiveYear(parseInt(e.target.value, 10))}>
+                        {years.map((y) => (<option key={y} value={y}>{y}</option>))}
+                      </select>
+                    </div>
+                  </div>
+
+                  {/* User Call Summary Table */}
+                  <div className="table-responsive mb-4">
+                    <div className="table-responsive mb-4">
+                      <table className="table table-dark table-hover user-summary-table" style={{ fontSize: "12px" }}>
+                        <thead className="summary-table-header">
+                          <tr>
+                            <th className="text-info">User</th>
+                            {Array.from({ length: 31 }, (_, dayIndex) => (
+                              <th key={dayIndex} className="text-center text-warning">
+                                {dayIndex + 1}
+                              </th>
+                            ))}
+                            <th className="text-warning text-center">Total</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {Object.entries(usersMap).map(([userId, user]) => {
+                            let userTotal = 0;
+                            const dayCalls = Array.from({ length: 31 }, (_, dayIndex) => {
+                              const day = dayIndex + 1;
+                              let calls = 0;
+
+                              if (activeMonth === null) {
+                                // Yearly view - sum calls for this day across all months
+                                for (let month = 0; month < 12; month++) {
+                                  const userGrid = getUserDayGrid(userId);
+                                  const dayData = userGrid[month] && userGrid[month][day];
+                                  calls += dayData ? dayData.total : 0;
+                                }
+                              } else {
+                                // Monthly view - get calls for specific month
+                                const daysInMonth = new Date(activeYear, activeMonth + 1, 0).getDate();
+                                const isDayInMonth = day <= daysInMonth;
+                                if (isDayInMonth) {
+                                  const userGrid = getUserDayGrid(userId);
+                                  const dayData = userGrid[activeMonth] && userGrid[activeMonth][day];
+                                  calls = dayData ? dayData.total : 0;
+                                }
+                              }
+
+                              userTotal += calls;
+                              return { day, calls, isInMonth: activeMonth === null ? true : day <= new Date(activeYear, activeMonth + 1, 0).getDate() };
+                            });
+
+                            return (
+                              <tr key={userId}>
+                                <td className="text-info fw-bold" title={userId}>
+                                  {user.name || user.displayName || user.email || userId}
+                                </td>
+                                {dayCalls.map(({ day, calls, isInMonth }) => (
+                                  <td
+                                    key={day}
+                                    className={`text-center ${isInMonth ? getCallCountClass(calls) : 'text-muted'}`}
+                                    title={`${user.name || 'User'}: ${calls} calls on day ${day}${activeMonth !== null ? ` ${months[activeMonth]}` : ''}`}
+                                  >
+                                    {isInMonth ? (calls > 0 ? calls : "•") : "-"}
+                                  </td>
+                                ))}
+                                <td className="text-success text-warning fw-bold bg-dark">
+                                  {userTotal > 0 ? userTotal : "•"}
+                                </td>
+                              </tr>
+                            );
+                          })}
+
+                          {/* Daily Totals Row */}
+                          <tr className="daily-totals-row fw-bold">
+                            <td className="text-warning">Daily Total</td>
+                            {Array.from({ length: 31 }, (_, dayIndex) => {
+                              const day = dayIndex + 1;
+                              let dailyTotal = 0;
+
+                              if (activeMonth === null) {
+                                // Yearly view - sum all users' calls for this day across all months
+                                Object.keys(usersMap).forEach(userId => {
+                                  for (let month = 0; month < 12; month++) {
+                                    const userGrid = getUserDayGrid(userId);
+                                    const dayData = userGrid[month] && userGrid[month][day];
+                                    dailyTotal += dayData ? dayData.total : 0;
+                                  }
+                                });
+                              } else {
+                                // Monthly view - sum all users' calls for this day in specific month
+                                const daysInMonth = new Date(activeYear, activeMonth + 1, 0).getDate();
+                                const isDayInMonth = day <= daysInMonth;
+                                if (isDayInMonth) {
+                                  Object.keys(usersMap).forEach(userId => {
+                                    const userGrid = getUserDayGrid(userId);
+                                    const dayData = userGrid[activeMonth] && userGrid[activeMonth][day];
+                                    dailyTotal += dayData ? dayData.total : 0;
+                                  });
+                                }
+                              }
+
+                              const isInMonth = activeMonth === null ? true : day <= new Date(activeYear, activeMonth + 1, 0).getDate();
+
+                              return (
+                                <td key={day} className={`text-center ${isInMonth ? 'text-warning' : 'text-muted'}`}>
+                                  {isInMonth ? (dailyTotal > 0 ? dailyTotal : "•") : "-"}
+                                </td>
+                              );
+                            })}
+                            <td className="text-warning text-center bg-success">
+                              {activeMonth === null ? getTotalYearlyCalls() : getTotalMonthlyCalls()}
+                            </td>
+                          </tr>
+
+                          {/* Weekly/Monthly Summary Rows */}
+                          {activeMonth === null ? (
+                            // Yearly view - show monthly totals per user
+                            <>
+                              {months.map((month, monthIndex) => (
+                                <tr key={`month-${month}`} className="month-summary-row">
+                                  <td className="text-info fw-bold">{month} Total</td>
+                                  {Array.from({ length: 31 }, (_, dayIndex) => {
+                                    const day = dayIndex + 1;
+                                    let monthlyDailyTotal = 0;
+
+                                    Object.keys(usersMap).forEach(userId => {
+                                      const userGrid = getUserDayGrid(userId);
+                                      const dayData = userGrid[monthIndex] && userGrid[monthIndex][day];
+                                      monthlyDailyTotal += dayData ? dayData.total : 0;
+                                    });
+
+                                    return (
+                                      <td key={day} className="text-center text-info">
+                                        {monthlyDailyTotal > 0 ? monthlyDailyTotal : "•"}
+                                      </td>
+                                    );
+                                  })}
+                                  <td className="text-warning text-center fw-bold bg-info">
+                                    {getMonthlyUserTotalAllUsers(monthIndex) > 0 ? getMonthlyUserTotalAllUsers(monthIndex) : "•"}
+                                  </td>
+                                </tr>
+                              ))}
+                            </>
+                          ) : (
+                            // Monthly view - show weekly totals
+                            <>
+                              {[1, 2, 3, 4, 5].map(week => (
+                                <tr key={`week-${week}`} className="week-summary-row">
+                                  <td className="text-info fw-bold">Week {week}</td>
+                                  {Array.from({ length: 31 }, (_, dayIndex) => {
+                                    const day = dayIndex + 1;
+                                    const startDay = (week - 1) * 7 + 1;
+                                    const endDay = Math.min(week * 7, new Date(activeYear, activeMonth + 1, 0).getDate());
+                                    const isDayInWeek = day >= startDay && day <= endDay;
+
+                                    let weeklyDailyTotal = 0;
+                                    if (isDayInWeek) {
+                                      Object.keys(usersMap).forEach(userId => {
+                                        const userGrid = getUserDayGrid(userId);
+                                        const dayData = userGrid[activeMonth] && userGrid[activeMonth][day];
+                                        weeklyDailyTotal += dayData ? dayData.total : 0;
+                                      });
+                                    }
+
+                                    return (
+                                      <td key={day} className={`text-center ${isDayInWeek ? 'text-info' : 'text-muted'}`}>
+                                        {isDayInWeek ? (weeklyDailyTotal > 0 ? weeklyDailyTotal : "•") : "-"}
+                                      </td>
+                                    );
+                                  })}
+                                  <td className="text-warning text-center fw-bold bg-info">
+                                    {getWeeklyTotal(week) > 0 ? getWeeklyTotal(week) : "•"}
+                                  </td>
+                                </tr>
+                              ))}
+                            </>
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+
+                </div>
+
+                <div className="bg-dark border rounded p-3">
+                  <h5 className="text-info mb-3">
+                    <i className="bi bi-bar-chart-fill me-2"></i>
+                    User Performance Comparison - {activeMonth === null ? 'Yearly' : months[activeMonth]} {activeYear}
+                  </h5>
+
+                  <div className="row">
+                    {/* Vertical Bar Chart */}
+                    <div className="col-md-9">
+                      <div className="vertical-bar-chart">
+                        <div className="chart-container" style={{ height: '450px' }}>
+                          <div className="d-flex justify-content-around align-items-end h-100 px-3">
+                            {(() => {
+                              // Calculate maxCalls first
+                              const maxCalls = Math.max(...Object.keys(usersMap).map(id =>
+                                activeMonth === null ? getYearlyUserTotal(id) : getMonthlyUserTotal(id)
+                              )) || 1;
+
+                              return Object.entries(usersMap).map(([userId, user], index) => {
+                                const total = activeMonth === null
+                                  ? getYearlyUserTotal(userId)
+                                  : getMonthlyUserTotal(userId);
+                                const percentage = (total / maxCalls) * 85;
+
+                                // Simple, visible color themes
+                                const colorThemes = [
+                                  {
+                                    main: '#3B82F6', // Blue
+                                    light: '#60A5FA'
+                                  },
+                                  {
+                                    main: '#10B981', // Green
+                                    light: '#34D399'
+                                  },
+                                  {
+                                    main: '#8B5CF6', // Purple
+                                    light: '#A78BFA'
+                                  },
+                                  {
+                                    main: '#F59E0B', // Amber
+                                    light: '#FBBF24'
+                                  },
+                                  {
+                                    main: '#EF4444', // Red
+                                    light: '#F87171'
+                                  },
+                                  {
+                                    main: '#06B6D4', // Cyan
+                                    light: '#22D3EE'
+                                  },
+                                  {
+                                    main: '#84CC16', // Lime
+                                    light: '#A3E635'
+                                  },
+                                  {
+                                    main: '#F97316', // Orange
+                                    light: '#FB923C'
+                                  }
+                                ];
+
+                                const theme = colorThemes[index % colorThemes.length];
+
+                                return (
+                                  <div key={userId} className="vertical-bar-group text-center mx-2">
+                                    <div
+                                      className="vertical-bar"
+                                      style={{
+                                        height: `${percentage}%`,
+                                        background: `linear-gradient(180deg, ${theme.main} 0%, ${theme.light} 100%)`,
+                                        boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
+                                        border: `2px solid ${theme.main}`,
+                                        borderRadius: '8px 8px 0 0'
+                                      }}
+                                      title={`${user.name || 'User'}: ${total} calls`}
+                                    >
+                                      <span
+                                        className="vertical-bar-value"
+                                        style={{
+                                          color: 'white',
+                                          textShadow: '0 1px 3px rgba(0,0,0,0.8)',
+                                          fontWeight: '800',
+                                          fontSize: total > 99 ? '12px' : '14px',
+                                          position: 'relative',
+                                          zIndex: 2
+                                        }}
+                                      >
+                                        {total}
+                                      </span>
+                                    </div>
+
+                                    {/* User label */}
+                                    <div className="user-label mt-3">
+                                      <div
+                                        className="user-name-badge"
+                                        style={{
+                                          background: theme.main,
+                                          color: 'white',
+                                          padding: '6px 12px',
+                                          borderRadius: '20px',
+                                          fontSize: '12px',
+                                          fontWeight: '700',
+                                          maxWidth: '110px',
+                                          overflow: 'hidden',
+                                          textOverflow: 'ellipsis',
+                                          whiteSpace: 'nowrap',
+                                          boxShadow: '0 2px 8px rgba(0,0,0,0.2)',
+                                          border: `2px solid ${theme.light}`
+                                        }}
+                                      >
+                                        {user.name || user.displayName || 'User'}
+                                      </div>
+
+                                      {/* Performance indicator */}
+                                      <div
+                                        className="performance-indicator mt-2"
+                                        style={{
+                                          fontSize: '11px',
+                                          fontWeight: '600',
+                                          color: theme.main,
+                                          background: 'rgba(255,255,255,0.9)',
+                                          padding: '3px 8px',
+                                          borderRadius: '12px',
+                                          border: `1px solid ${theme.main}`
+                                        }}
+                                      >
+                                        {total} calls
+                                      </div>
+                                    </div>
+                                  </div>
+                                );
+                              });
+                            })()}
+                          </div>
+
+                          {/* Y-axis labels */}
+                          {/* <div className="y-axis-labels">
+        {[0, 25, 50, 75, 100].map(percent => {
+          const maxCallsValue = Math.max(...Object.keys(usersMap).map(id =>
+            activeMonth === null ? getYearlyUserTotal(id) : getMonthlyUserTotal(id)
+          )) || 1;
+          
+          return (
+            <div 
+              key={percent} 
+              className="y-axis-label"
+              style={{
+                bottom: `${percent}%`,
+                color: '#374151',
+                fontWeight: '700',
+                fontSize: '12px',
+                background: 'rgba(255,255,255,0.8)',
+                padding: '2px 6px',
+                borderRadius: '4px'
+              }}
+            >
+              {Math.round((percent / 100) * maxCallsValue)}
+            </div>
+          );
+        })}
+      </div> */}
+                        </div>
+
+                        {/* Chart title */}
+                        <div className="chart-title text-center mt-4">
+                          <h5 className="fw-bold text-warning mb-0">
+                            <i className="bi bi-bar-chart-fill me-2 text-primary"></i>
+                            User Performance Overview
+                            <i className="bi bi-activity ms-2 text-primary"></i>
+                          </h5>
+                          <p className="text-muted small mt-1">
+                            Total calls per user {activeMonth === null ? 'this year' : `in ${months[activeMonth]}`}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Performance Stats */}
+                    {/* Performance Stats */}
+                    <div className="col-md-3">
+                      <div className="performance-stats">
+                        <h6 className="text-warning mb-3">Performance Overview</h6>
+                        {(() => {
+                          const userStats = Object.entries(usersMap).map(([userId, user]) => {
+                            const total = activeMonth === null
+                              ? getYearlyUserTotal(userId)
+                              : getMonthlyUserTotal(userId);
+                            return { userId, user, total };
+                          }).sort((a, b) => b.total - a.total);
+
+                          const topPerformer = userStats[0];
+                          const averageCalls = userStats.reduce((sum, stat) => sum + stat.total, 0) / userStats.length;
+                          const totalCalls = activeMonth === null ? getTotalYearlyCalls() : getTotalMonthlyCalls();
+
+                          // Additional calculations
+                          const activeUsers = userStats.filter(stat => stat.total > 0).length;
+                          const bestDay = getBestPerformingDay(); // You'll need to implement this
+                          const performanceTrend = getPerformanceTrend(); // You'll need to implement this
+                          const targetCompletion = calculateTargetCompletion(totalCalls); // You'll need to implement this
+
+                          return (
+                            <div className="stats-list">
+                              {/* Existing stats */}
+                              <div className="stat-item mb-3 p-2 border rounded">
+                                <div className="text-success fw-bold">🏆 Top Performer</div>
+                                <div className="text-light small">
+                                  {topPerformer?.user?.name || 'User'}: <span className="text-warning">{topPerformer?.total || 0}</span> calls
+                                </div>
+                              </div>
+
+                              <div className="stat-item mb-3 p-2 border rounded">
+                                <div className="text-info fw-bold">📊 Average</div>
+                                <div className="text-light small">
+                                  <span className="text-warning">{averageCalls.toFixed(1)}</span> calls per user
+                                </div>
+                              </div>
+
+                              <div className="stat-item mb-3 p-2 border rounded">
+                                <div className="text-primary fw-bold">👥 Active Users</div>
+                                <div className="text-light small">
+                                  <span className="text-warning">{activeUsers}</span> / {userStats.length} users active
+                                </div>
+                                <div className="progress mt-1" style={{ height: '4px' }}>
+                                  <div
+                                    className="progress-bar bg-success"
+                                    style={{ width: `${(activeUsers / userStats.length) * 100}%` }}
+                                  ></div>
+                                </div>
+                              </div>
+
+                              <div className="stat-item mb-3 p-2 border rounded">
+                                <div className="text-warning fw-bold">📈 Total Calls</div>
+                                <div className="text-light small">
+                                  <span className="text-success">{totalCalls}</span> calls
+                                </div>
+                              </div>
+
+                              {/* NEW ADDITIONS BELOW */}
+
+                              {/* Target Completion */}
+                              <div className="stat-item mb-3 p-2 border rounded">
+                                <div className="text-info fw-bold">🎯 Target Progress</div>
+                                <div className="text-light small">
+                                  <span className="text-warning">{targetCompletion}%</span> completed
+                                </div>
+                                <div className="progress mt-1" style={{ height: '4px' }}>
+                                  <div
+                                    className="progress-bar bg-info"
+                                    style={{ width: `${targetCompletion}%` }}
+                                  ></div>
+                                </div>
+                              </div>
+
+                              {/* Performance Trend */}
+                              {/* <div className="stat-item mb-3 p-2 border rounded">
+                                <div className="fw-bold">
+                                  {performanceTrend > 0 ? '📈 Trend' : performanceTrend < 0 ? '📉 Trend' : '➡️ Trend'}
+                                </div>
+                                <div className="text-light small">
+                                  <span className={performanceTrend > 0 ? 'text-success' : performanceTrend < 0 ? 'text-danger' : 'text-warning'}>
+                                    {performanceTrend > 0 ? '+' : ''}{performanceTrend}%
+                                  </span> vs previous period
+                                </div>
+                              </div> */}
+
+                              {/* Best Performing Day */}
+                              <div className="stat-item mb-3 p-2 border rounded">
+                                <div className="text-success fw-bold">⭐ Best Day</div>
+                                <div className="text-light small">
+                                  {bestDay.day}: <span className="text-warning">{bestDay.calls}</span> calls
+                                </div>
+                              </div>
+
+                              {/* Efficiency Score */}
+                              {/* <div className="stat-item mb-3 p-2 border rounded">
+                                <div className="text-primary fw-bold">⚡ Efficiency</div>
+                                <div className="text-light small">
+                                  <span className="text-warning">{calculateEfficiencyScore(userStats)}</span>/10 score
+                                </div>
+                                <div className="progress mt-1" style={{ height: '4px' }}>
+                                  <div
+                                    className="progress-bar bg-primary"
+                                    style={{ width: `${calculateEfficiencyScore(userStats) * 10}%` }}
+                                  ></div>
+                                </div>
+                              </div> */}
+
+                              {/* Calls Distribution */}
+                              {/* <div className="stat-item p-2 border rounded">
+                                <div className="text-warning fw-bold">📊 Distribution</div>
+                                <div className="text-light small">
+                                  Top 3: <span className="text-success">{calculateTop3Percentage(userStats, totalCalls)}%</span> of calls
+                                </div>
+                                <div className="text-light small">
+                                  Others: <span className="text-info">{calculateOthersPercentage(userStats, totalCalls)}%</span> of calls
+                                </div>
+                              </div> */}
+                            </div>
+                          );
+                        })()}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Legend */}
+                  <div className="mt-4 pt-3 border-top opacity-50 border-secondary">
+                    <div className="row text-center">
+                      <div className="col">
+                        <span className="legend perf-none">No Calls (0)</span>
+                      </div>
+                      <div className="col">
+                        <span className="legend perf-poor">Poor (1-20)</span>
+                      </div>
+                      <div className="col">
+                        <span className="legend perf-avg">Avarage (21-40)</span>
+                      </div>
+                      <div className="col">
+                        <span className="legend perf-good">Good (41-60)</span>
+                      </div>
+                      <div className="col">
+                        <span className="legend perf-vgood">Very Good (61-80)</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+
           </div>
         )}
 

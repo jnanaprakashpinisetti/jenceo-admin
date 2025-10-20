@@ -914,6 +914,7 @@
       // Button variants
       &.btn-warning {
         background-color: #f59e0b;
+        color: $white;
       }
 
       &.btn-outline-warning {
@@ -932,13 +933,28 @@
       }
 
       &.btn-secondary {
-        background-color: #02519b;
-        color: #02acf2;
+        background-color: #444;
+        color: $white;
       }
 
       &.btn-success {
         background-color: gold;
         color: #444;
+      }
+
+      &.btn-primary {
+        background-color: #02519b;
+        color: $white;
+      }
+
+      &.btn-danger{
+        background-color: #dc3545;
+        color: $white;
+      }
+
+      &.btn-success {
+        background-color: #198754;
+        color: $white;
       }
     }
   }

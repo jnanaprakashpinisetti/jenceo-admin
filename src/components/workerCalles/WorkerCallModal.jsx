@@ -392,7 +392,7 @@ export default function WorkerCallModal({
     <>
       <div
         className="modal fade show"
-        style={{ display: "block", background: "rgba(0,0,0,0.8)" }}
+        style={{ display: "block", background: "rgba(0,0,0,0.9)" }}
       >
         <div className="modal-dialog modal-xl modal-dialog-centered">
           <div

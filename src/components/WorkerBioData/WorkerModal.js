@@ -1926,9 +1926,9 @@ const WorkerModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode }
                                             <div className="row">
                                                 <div className="col-md-6">{renderArrayField("Health Issues", "healthIssues", "Add health issue")}</div>
                                                 <div className="col-md-6">{renderInputField("Other Issues", "otherIssues", formData.otherIssues)}</div>
-                                                <div className="col-md-6">{renderInputField("Height", "otherIssues", formData.height)}</div>
-                                                <div className="col-md-6">{renderInputField("Weight", "otherIssues", formData.weight)}</div>
-                                                <div className="col-md-6">{renderInputField("Blood Group", "otherIssues", formData.bloodGroup)}</div>
+                                                <div className="col-md-6">{renderInputField("Height", "height", formData.height)}</div>
+                                                <div className="col-md-6">{renderInputField("Weight", "weight", formData.weight)}</div>
+                                                <div className="col-md-6">{renderInputField("Blood Group", "bloodGroup", formData.bloodGroup)}</div>
                                                 <div className="col-md-6">
                                                     <label className="form-label">Dietary Preference</label>
                                                     <select

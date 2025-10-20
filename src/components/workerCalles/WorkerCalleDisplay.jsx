@@ -1193,27 +1193,35 @@ export default function WorkerCalleDisplay({ permissions: permissionsProp }) {
           </div>
         </div>
       )}
-      <div className="d-flex align-items-center">
-        <span className="me-2 text-white">Show</span>
-        <select className="form-select me-2 form-select-sm" style={{ width: 80 }} value={rowsPerPage} onChange={(e) => { setRowsPerPage(parseInt(e.target.value, 10) || 10); setCurrentPage(1); }}>
-          {[10, 20, 30, 40, 50].map((n) => (<option key={n} value={n}>{n}</option>))}
-        </select>
-        <span className="text-white ">Entries</span>
+ 
+  {/* Top pagination */}
+
+      <div className="d-flex align-items-center flex-wrap gap-2 mt-2 mb-3 bg-dark p-3 rounded-3">
+        <div style={{ color: "yellow" }}>
+          Showing <strong>{pageItems.length}</strong> of <strong>{sorted.length}</strong> (from <strong>{workers.length}</strong> total){reminderFilter ? ` — ${reminderFilter}` : ""}
+        </div>
+
+        {Math.ceil(sorted.length / rowsPerPage) > 1 && (
+          <nav aria-label="Workers" className="pagination-top py-2 m-auto pagination-wrapper">
+            <ul className="pagination justify-content-center mb-0">
+              <li className={`page-item ${safePage === 1 ? "disabled" : ""}`}><button className="page-link" onClick={() => setCurrentPage(1)} disabled={safePage === 1}>«</button></li>
+              <li className={`page-item ${safePage === 1 ? "disabled" : ""}`}><button className="page-link" onClick={() => setCurrentPage(safePage - 1)} disabled={safePage === 1}>‹</button></li>
+              {getDisplayedPageNumbers().map((num) => (<li key={num} className={`page-item ${safePage === num ? "active" : ""}`}><button className="page-link" onClick={() => setCurrentPage(num)}>{num}</button></li>))}
+              <li className={`page-item ${safePage === totalPages ? "disabled" : ""}`}><button className="page-link" onClick={() => setCurrentPage(safePage + 1)} disabled={safePage === totalPages}>›</button></li>
+              <li className={`page-item ${safePage === totalPages ? "disabled" : ""}`}><button className="page-link" onClick={() => setCurrentPage(totalPages)} disabled={safePage === totalPages}>»</button></li>
+            </ul>
+          </nav>
+        )}
+
+        <div className=" d-flex">
+          <span className="me-2 text-white">Show</span>
+          <select className="form-select me-2 form-select-sm" style={{ width: 80 }} value={rowsPerPage} onChange={(e) => { setRowsPerPage(parseInt(e.target.value, 10) || 10); setCurrentPage(1); }}>
+            {[10, 20, 30, 40, 50].map((n) => (<option key={n} value={n}>{n}</option>))}
+          </select>
+          <span className="text-white ">Entries</span>
+        </div>
+
       </div>
-
-      {/* TOP pagination */}
-      {Math.ceil(sorted.length / rowsPerPage) > 1 && (
-        <nav aria-label="Workers" className="pagination-top py-2 mb-3 m-auto pagination-wrapper">
-          <ul className="pagination justify-content-center mb-0">
-            <li className={`page-item ${safePage === 1 ? "disabled" : ""}`}><button className="page-link" onClick={() => setCurrentPage(1)} disabled={safePage === 1}>«</button></li>
-            <li className={`page-item ${safePage === 1 ? "disabled" : ""}`}><button className="page-link" onClick={() => setCurrentPage(safePage - 1)} disabled={safePage === 1}>‹</button></li>
-            {getDisplayedPageNumbers().map((num) => (<li key={num} className={`page-item ${safePage === num ? "active" : ""}`}><button className="page-link" onClick={() => setCurrentPage(num)}>{num}</button></li>))}
-            <li className={`page-item ${safePage === totalPages ? "disabled" : ""}`}><button className="page-link" onClick={() => setCurrentPage(safePage + 1)} disabled={safePage === totalPages}>›</button></li>
-            <li className={`page-item ${safePage === totalPages ? "disabled" : ""}`}><button className="page-link" onClick={() => setCurrentPage(totalPages)} disabled={safePage === totalPages}>»</button></li>
-          </ul>
-        </nav>
-      )}
-
 
 
       {/* Table -1 */}

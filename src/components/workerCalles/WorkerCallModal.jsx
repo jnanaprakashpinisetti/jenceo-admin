@@ -51,7 +51,7 @@ export default function WorkerCallModal({
   worker,
   isOpen,
   onClose,
-  isEditMode, // keep existing prop / behavior
+  isEditMode,
 }) {
   const { user: authUser } = useAuth();
 
@@ -72,114 +72,28 @@ export default function WorkerCallModal({
 
   // Distinct option catalogs
   const primarySkillOptions = [
-    "Nursing",
-    "Patient Care",
-    "Care Taker",
-    "Bedside Attender",
-    "Old Age Care",
-    "Baby Care",
-    "Supporting",
-    "Cook",
-    "Housekeeping",
-    "Diaper",
-    "Injection",
-    "BP Check",
-    "Sugar Check",
-    "Wound Dressing",
-    "Nebulization",
-    "Post-Operative Care",
-    "Any Duty"
+    "Nursing", "Patient Care", "Care Taker", "Bedside Attender", "Old Age Care",
+    "Baby Care", "Supporting", "Cook", "Housekeeping", "Diaper", "Injection",
+    "BP Check", "Sugar Check", "Wound Dressing", "Nebulization", "Post-Operative Care", "Any Duty"
   ];
 
   const homeCareSkillOptions = [
-    "Nursing",
-    "Patient Care",
-    "Care Taker",
-    "Bedside Attender",
-    "Old Age Care",
-    "Baby Care",
-    "Supporting",
-    "Cook",
-    "Housekeeping",
-    "Diaper",
-    "Injection",
-    "BP Check",
-    "Sugar Check",
-    "Wound Dressing",
-    "Nebulization",
-    "Post-Operative Care",
-    "Any Duty"
+    "Nursing", "Patient Care", "Care Taker", "Bedside Attender", "Old Age Care",
+    "Baby Care", "Supporting", "Cook", "Housekeeping", "Diaper", "Injection",
+    "BP Check", "Sugar Check", "Wound Dressing", "Nebulization", "Post-Operative Care", "Any Duty"
   ];
 
   const otherSkillOptions = [
-    // Office & Administrative
-    "Computer Operating",
-    "Data Entry",
-    "Office Assistant",
-    "Receptionist",
-    "Front Desk Executive",
-    "Admin Assistant",
-    "Office Boy",
-    "Peon",
-    "Office Attendant",
-
-    // Customer Service & Telecommunication
-    "Tele Calling",
-    "Customer Support",
-    "Telemarketing",
-    "BPO Executive",
-    "Call Center Agent",
-    "Customer Care Executive",
-
-    // Management & Supervision
-    "Supervisor",
-    "Manager",
-    "Team Leader",
-    "Site Supervisor",
-    "Project Coordinator",
-
-    // Security
-    "Security Guard",
-    "Security Supervisor",
-    "Gatekeeper",
-    "Watchman",
-
-    // Driving & Logistics
-    "Driving",
-    "Delivery Boy",
-    "Delivery Executive",
-    "Rider",
-    "Driver",
-    "Car Driver",
-    "Bike Rider",
-    "Logistics Helper",
-
-    // Technical & Maintenance
-    "Electrician",
-    "Plumber",
-    "Carpenter",
-    "Painter",
-    "Mason",
-    "AC Technician",
-    "Mechanic",
-    "Maintenance Staff",
-    "House Keeping",
-    "Housekeeping Supervisor",
-    // Retail & Sales
-    "Sales Boy",
-    "Sales Girl",
-    "Store Helper",
-    "Retail Assistant",
-    "Shop Attendant",
-
-    // Industrial & Labor
-    "Labour",
-    "Helper",
-    "Loading Unloading",
-    "Warehouse Helper",
-    "Factory Worker",
-    "Production Helper",
-    "Packaging Staff",
+    "Computer Operating", "Data Entry", "Office Assistant", "Receptionist", "Front Desk Executive",
+    "Admin Assistant", "Office Boy", "Peon", "Office Attendant", "Tele Calling", "Customer Support",
+    "Telemarketing", "BPO Executive", "Call Center Agent", "Customer Care Executive", "Supervisor",
+    "Manager", "Team Leader", "Site Supervisor", "Project Coordinator", "Security Guard",
+    "Security Supervisor", "Gatekeeper", "Watchman", "Driving", "Delivery Boy", "Delivery Executive",
+    "Rider", "Driver", "Car Driver", "Bike Rider", "Logistics Helper", "Electrician", "Plumber",
+    "Carpenter", "Painter", "Mason", "AC Technician", "Mechanic", "Maintenance Staff", "House Keeping",
+    "Housekeeping Supervisor", "Sales Boy", "Sales Girl", "Store Helper", "Retail Assistant",
+    "Shop Attendant", "Labour", "Helper", "Loading Unloading", "Warehouse Helper", "Factory Worker",
+    "Production Helper", "Packaging Staff"
   ];
 
   const languageOptions = [
@@ -187,19 +101,8 @@ export default function WorkerCallModal({
   ];
 
   const sourceOptions = [
-    "Apana",
-    "WorkerIndian",
-    "Reference",
-    "Poster",
-    "Agent",
-    "Facebook",
-    "LinkedIn",
-    "Instagram",
-    "YouTube",
-    "Website",
-    "Just Dial",
-    "News Paper",
-    "Other",
+    "Apana", "WorkerIndian", "Reference", "Poster", "Agent", "Facebook", "LinkedIn",
+    "Instagram", "YouTube", "Website", "Just Dial", "News Paper", "Other",
   ];
 
   const [activeTab, setActiveTab] = useState("basic");
@@ -246,7 +149,7 @@ export default function WorkerCallModal({
 
   // ====== Handlers ======
   const handleMultiToggle = (field, value) => {
-    if (!isEditMode) return; // ignore in view mode
+    if (!isEditMode) return;
     setLocalWorker((prev) => {
       const arr = normalizeArray(prev[field]);
       const lower = String(value).toLowerCase();
@@ -257,7 +160,6 @@ export default function WorkerCallModal({
       return { ...prev, [field]: next };
     });
     setDirty(true);
-    // Save is gated by "Add Comment", so do NOT enable here.
   };
 
   const handleAddCustom = (field, inputId) => {
@@ -274,7 +176,6 @@ export default function WorkerCallModal({
     });
     el.value = "";
     setDirty(true);
-    // still gated by comment
   };
 
   const handleChange = (e) => {
@@ -330,17 +231,20 @@ export default function WorkerCallModal({
         user: currentUserName || "user",
       };
 
-      const updated = [entry, ...comments]; // latest on top
+      const updated = [entry, ...comments];
       setComments(updated);
       setNewComment("");
 
-      // Persist full array back (keeps existing, adds new on top)
       await firebaseDB.child(`WorkerCallData/${worker.id}/comments`).set(updated);
 
-      // Reflect in localWorker (helpful if other parts rely on it)
-      setLocalWorker((prev) => ({ ...prev, comments: updated, updatedAt: Date.now(), updatedById: currentUserId || null, updatedByName: currentUserName || "" }));
+      setLocalWorker((prev) => ({
+        ...prev,
+        comments: updated,
+        updatedAt: Date.now(),
+        updatedById: currentUserId || null,
+        updatedByName: currentUserName || ""
+      }));
 
-      // Now Save can be used
       setCanSave(true);
       setDirty(true);
     } catch (err) {
@@ -357,7 +261,6 @@ export default function WorkerCallModal({
       return { ...prev, [field]: [...arr] };
     });
     setDirty(true);
-    // still gated by comment
   };
 
   const handleLanguageSelect = (language) => {
@@ -378,6 +281,21 @@ export default function WorkerCallModal({
     else onClose();
   };
 
+  // Action handlers
+  const handleCall = () => {
+    if (localWorker.mobileNo) {
+      window.open(`tel:${localWorker.mobileNo}`);
+    }
+  };
+
+  const handleWhatsApp = () => {
+    if (localWorker.mobileNo) {
+      const message = `Hello ${localWorker.name || ''}, I found your contact from Apana Staff.`;
+      const encodedMessage = encodeURIComponent(message);
+      window.open(`https://wa.me/${localWorker.mobileNo.replace('+', '')}?text=${encodedMessage}`);
+    }
+  };
+
   // Created/Updated stamps (global Users)
   const createdByName =
     pickUserName(usersMap[localWorker?.createdById]) ||
@@ -388,70 +306,137 @@ export default function WorkerCallModal({
     localWorker?.updatedByName ||
     "";
 
+  // Helper function to render info cards for view mode
+  const renderInfoCard = (label, value, badgeType = null) => {
+    let displayValue = value || "—";
+    let badgeClass = "";
+
+    if (badgeType === "gender") {
+      badgeClass = value === "Male" ? "badge-gender-male" :
+        value === "Female" ? "badge-gender-female" : "badge-gender-other";
+    } else if (badgeType === "conversation") {
+      badgeClass = value === "Very Good" ? "badge-conv-vgood" :
+        value === "Good" ? "badge-conv-good" :
+          value === "Average" ? "badge-conv-average" : "badge-conv-poor";
+    }
+
+    return (
+      <div className="info-card-item">
+        <div className="info-card-label">{label}</div>
+        <div className={`info-card-value ${badgeClass}`}>
+          {badgeClass ? (
+            <span className="info-badge">
+              {displayValue}
+            </span>
+          ) : (
+            displayValue
+          )}
+        </div>
+      </div>
+    );
+  };
+
   return (
     <>
       <div
-        className="modal fade show"
-        style={{ display: "block", background: "rgba(0,0,0,0.9)" }}
+        className="modal fade show dark-modal"
+        style={{ display: "block", background: "rgba(0,0,0,0.95)" }}
       >
-        <div className="modal-dialog modal-xl modal-dialog-centered">
+        <div className="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
           <div
-            className="modal-content border-0 shadow-lg"
-            style={{ borderRadius: "15px", maxWidth: "800px", margin: "auto" }}
+            className="modal-content border-0"
+            style={{
+              borderRadius: "8px",
+              maxWidth: "900px",
+              margin: "auto",
+              maxHeight: "90vh"
+            }}
           >
             {/* Header */}
             <div
-              className="modal-header bg-gradient-primary text-white"
-              style={{ background: "#69656e" }}
+              className="modal-header dark-header"
             >
               <div className="d-flex align-items-center w-100">
                 <div className="flex-grow-1">
-                  <h5 className="modal-title fw-bold mb-1">
-                    {isEditMode ? "Edit Worker" : "Worker Details"}
+                  <h5 className="modal-title fw-bold mb-2 text-white">
+                    {isEditMode ? "✏️ Edit Worker" : "👤 Worker Details"}
                   </h5>
-                  <div className="d-flex flex-wrap align-items-center gap-3 text-white-50 small">
-                    <span>{localWorker?.name || "—"}</span>
-                    <span>{localWorker?.mobileNo || "—"}</span>
-                    <span>{localWorker?.location || "—"}</span>
+                  <div className="d-flex flex-wrap align-items-center gap-3 text-white-90 small">
+                    <span className="d-flex align-items-center gap-2">
+                      <i className="bi bi-person-fill"></i>
+                      {localWorker?.name || "—"}
+                    </span>
+                    <span className="d-flex align-items-center gap-2">
+                      <i className="bi bi-telephone-fill"></i>
+                      {localWorker?.mobileNo || "—"}
+                    </span>
+                    <span className="d-flex align-items-center gap-2">
+                      <i className="bi bi-geo-alt-fill"></i>
+                      {localWorker?.location || "—"}
+                    </span>
                   </div>
-
                 </div>
 
-                {/* Close */}
-                <button
-                  type="button"
-                  className="btn-close btn-close-white"
-                  onClick={confirmClose}
-                ></button>
+                {/* Action Buttons */}
+                <div className="d-flex align-items-center gap-2">
+                  {localWorker.mobileNo && (
+                    <>
+                      <button
+                        type="button"
+                        className="btn btn-success btn-sm d-flex align-items-center gap-2 action-btn"
+                        onClick={handleCall}
+                        title="Call Worker"
+                      >
+                        <i className="bi bi-telephone-fill"></i>
+                        Call
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn-success btn-sm d-flex align-items-center gap-2 action-btn"
+                        onClick={handleWhatsApp}
+                        title="WhatsApp Worker"
+                        style={{ backgroundColor: '#25D366', borderColor: '#25D366' }}
+                      >
+                        <i className="bi bi-whatsapp"></i>
+                        WhatsApp
+                      </button>
+                    </>
+                  )}
+                  <button
+                    type="button"
+                    className="btn-close btn-close-white"
+                    onClick={confirmClose}
+                  ></button>
+                </div>
               </div>
             </div>
 
-            <div className="modal-body p-0">
+            <div className="modal-body p-0 dark-body">
               {/* Tabs */}
-              <div className="bg-light border-bottom">
-                <div className="container-fluid">
+              <div className="dark-tabs-container">
+                <div className="container-fluid px-3">
                   <ul className="nav nav-pills nav-justified gap-2 p-2">
                     <li className="nav-item">
                       <button
-                        className={`nav-link ${activeTab === "basic"
-                          ? "active btn-primary text-white"
-                          : "btn-outline-primary text-primary"
+                        className={`nav-link dark-tab ${activeTab === "basic"
+                          ? "active"
+                          : ""
                           }`}
                         onClick={() => setActiveTab("basic")}
-                        style={{ borderRadius: "5px", fontWeight: "600" }}
                       >
-                        Basic Information
+                        <i className="bi bi-person-vcard me-2"></i>
+                        Basic Info
                       </button>
                     </li>
                     <li className="nav-item">
                       <button
-                        className={`nav-link ${activeTab === "skills"
-                          ? "active btn-primary text-white"
-                          : "btn-outline-primary text-primary"
+                        className={`nav-link dark-tab ${activeTab === "skills"
+                          ? "active"
+                          : ""
                           }`}
                         onClick={() => setActiveTab("skills")}
-                        style={{ borderRadius: "5px", fontWeight: "600" }}
                       >
+                        <i className="bi bi-tools me-2"></i>
                         Skills & Languages
                       </button>
                     </li>
@@ -459,59 +444,54 @@ export default function WorkerCallModal({
                 </div>
               </div>
 
-              <div className="tab-content p-2 bg-white" style={{ minHeight: "500px" }}>
+              <div className="tab-content p-3" style={{ minHeight: "400px", maxHeight: "60vh", overflowY: "auto" }}>
                 {/* Basic Info Tab */}
                 {activeTab === "basic" && (
                   <div className="fade show">
-                    <div className="row g-4">
+                    <div className="row g-3">
                       {/* Personal Information */}
                       <div className="col-12">
-                        <div className="border-0 shadow-sm p-3">
-                          <div className="card-header">
-                            <h6 className=" fw-bold text-primary">
+                        <div className="dark-card">
+                          <div className="card-header dark-card-header">
+                            <h6 className="mb-0 fw-bold d-flex align-items-center text-warning">
+                              <i className="bi bi-person-badge me-2"></i>
                               Personal Information
                             </h6>
                           </div>
-                          <div className="card-body">
-                            <div className="row g-3">
-                              <div className="col-md-6">
-                                <label className="form-label fw-semibold text-dark">
-                                  Mobile Number
-                                </label>
-                                <input
-                                  type="text"
-                                  name="mobileNo"
-                                  value={localWorker.mobileNo || ""}
-                                  disabled
-                                  className="form-control border-secondary bg-light"
-                                />
-                              </div>
+                          <div className="card-body p-3">
+                            {isEditMode ? (
+                              <div className="row g-3">
+                                <div className="col-md-6">
+                                  <label className="form-label fw-semibold text-light">
+                                    Mobile Number
+                                  </label>
+                                  <input
+                                    type="text"
+                                    name="mobileNo"
+                                    value={localWorker.mobileNo || ""}
+                                    disabled
+                                    className="form-control dark-input"
+                                  />
+                                </div>
 
-                              <div className="col-md-6">
-                                <label className="form-label fw-semibold text-dark">
-                                  Full Name
-                                </label>
-                                {isEditMode ? (
+                                <div className="col-md-6">
+                                  <label className="form-label fw-semibold text-light">
+                                    Full Name
+                                  </label>
                                   <input
                                     type="text"
                                     name="name"
                                     value={localWorker.name || ""}
                                     onChange={handleChange}
-                                    className="form-control border-primary"
+                                    className="form-control dark-input"
                                     placeholder="Enter worker name"
                                   />
-                                ) : (
-                                  <div className="form-control border bg-light">
-                                    {localWorker.name || "—"}
-                                  </div>
-                                )}
-                              </div>
+                                </div>
 
-                              <div className="col-md-6">
-                                <label className="form-label fw-semibold text-dark d-block">
-                                  Gender
-                                </label>
-                                {isEditMode ? (
+                                <div className="col-md-6">
+                                  <label className="form-label fw-semibold text-light d-block">
+                                    Gender
+                                  </label>
                                   <div className="d-flex gap-2 flex-wrap">
                                     {["Male", "Female", "Others"].map((g) => (
                                       <button
@@ -523,72 +503,63 @@ export default function WorkerCallModal({
                                           })
                                         }
                                         className={`btn ${localWorker.gender === g
-                                          ? "btn-info"
-                                          : "btn-outline-secondary"
+                                          ? "btn-primary"
+                                          : "btn-outline-light"
                                           } btn-sm`}
                                       >
                                         {g}
                                       </button>
                                     ))}
                                   </div>
-                                ) : (
-                                  <span
-                                    className={`badge ${localWorker.gender === "Male"
-                                      ? "bg-primary"
-                                      : localWorker.gender === "Female"
-                                        ? "bg-pink"
-                                        : "bg-secondary"
-                                      } fs-6 p-2`}
-                                  >
-                                    {localWorker.gender || "—"}
-                                  </span>
-                                )}
-                              </div>
+                                </div>
 
-                              <div className="col-md-6">
-                                <label className="form-label fw-semibold text-dark">
-                                  Location
-                                </label>
-                                {isEditMode ? (
+                                <div className="col-md-6">
+                                  <label className="form-label fw-semibold text-light">
+                                    Location
+                                  </label>
                                   <input
                                     type="text"
                                     name="location"
                                     value={localWorker.location || ""}
                                     onChange={handleChange}
-                                    className="form-control border-primary"
+                                    className="form-control dark-input"
                                     placeholder="Enter location"
                                   />
-                                ) : (
-                                  <div className="form-control border bg-light">
-                                    {localWorker.location || "—"}
-                                  </div>
-                                )}
+                                </div>
                               </div>
-                            </div>
+                            ) : (
+                              <div className="info-grid-compact">
+                                {renderInfoCard("Mobile Number", localWorker.mobileNo)}
+                                {renderInfoCard("Full Name", localWorker.name)}
+                                {renderInfoCard("Gender", localWorker.gender, "gender")}
+                                {renderInfoCard("Location", localWorker.location)}
+                              </div>
+                            )}
                           </div>
                         </div>
                       </div>
 
                       {/* Professional Information */}
                       <div className="col-12">
-                        <div className="border-0 shadow-sm p-3">
-                          <div className="card-header">
-                            <h6 className="fw-bold text-primary">
+                        <div className="dark-card">
+                          <div className="card-header dark-card-header">
+                            <h6 className="mb-0 fw-bold d-flex align-items-center text-warning">
+                              <i className="bi bi-briefcase me-2"></i>
                               Professional Information
                             </h6>
                           </div>
-                          <div className="card-body">
-                            <div className="row g-3">
-                              <div className="col-md-4">
-                                <label className="form-label fw-semibold text-dark">
-                                  Source
-                                </label>
-                                {isEditMode ? (
+                          <div className="card-body p-3">
+                            {isEditMode ? (
+                              <div className="row g-3">
+                                <div className="col-md-4">
+                                  <label className="form-label fw-semibold text-light">
+                                    Source
+                                  </label>
                                   <select
                                     name="source"
                                     value={localWorker.source || ""}
                                     onChange={handleChange}
-                                    className="form-select border-primary"
+                                    className="form-select dark-input"
                                   >
                                     <option value="">Select Source</option>
                                     {sourceOptions.map((s) => (
@@ -597,23 +568,17 @@ export default function WorkerCallModal({
                                       </option>
                                     ))}
                                   </select>
-                                ) : (
-                                  <div className="form-control border bg-light">
-                                    {localWorker.source || "—"}
-                                  </div>
-                                )}
-                              </div>
+                                </div>
 
-                              <div className="col-md-4">
-                                <label className="form-label fw-semibold text-dark">
-                                  Marital Status
-                                </label>
-                                {isEditMode ? (
+                                <div className="col-md-4">
+                                  <label className="form-label fw-semibold text-light">
+                                    Marital Status
+                                  </label>
                                   <select
                                     name="maritalStatus"
                                     value={localWorker.maritalStatus || ""}
                                     onChange={handleChange}
-                                    className="form-select border-primary"
+                                    className="form-select dark-input"
                                   >
                                     <option value="">Select Status</option>
                                     <option value="Single">Single</option>
@@ -621,130 +586,94 @@ export default function WorkerCallModal({
                                     <option value="Separated">Separated</option>
                                     <option value="Widow">Widow</option>
                                   </select>
-                                ) : (
-                                  <div className="form-control border bg-light">
-                                    {localWorker.maritalStatus || "—"}
-                                  </div>
-                                )}
-                              </div>
+                                </div>
 
-                              <div className="col-md-4">
-                                <label className="form-label fw-semibold text-dark">
-                                  Education
-                                </label>
-                                {isEditMode ? (
+                                <div className="col-md-4">
+                                  <label className="form-label fw-semibold text-light">
+                                    Education
+                                  </label>
                                   <input
                                     type="text"
                                     name="education"
                                     value={localWorker.education || ""}
                                     onChange={handleChange}
-                                    className="form-control border-primary"
+                                    className="form-control dark-input"
                                     placeholder="Enter education"
                                   />
-                                ) : (
-                                  <div className="form-control border bg-light">
-                                    {localWorker.education || "—"}
-                                  </div>
-                                )}
-                              </div>
+                                </div>
 
-                              <div className="col-md-4">
-                                <label className="form-label fw-semibold text-dark">
-                                  Age
-                                </label>
-                                {isEditMode ? (
+                                <div className="col-md-4">
+                                  <label className="form-label fw-semibold text-light">
+                                    Age
+                                  </label>
                                   <input
                                     type="number"
                                     name="age"
                                     value={localWorker.age || ""}
                                     onChange={handleChange}
-                                    className="form-control border-primary text-center"
+                                    className="form-control dark-input text-center"
                                     min="10"
                                     max="80"
                                     placeholder="Age"
                                   />
-                                ) : (
-                                  <div className="form-control border bg-light text-center">
-                                    {localWorker.age || "—"}
-                                  </div>
-                                )}
-                              </div>
+                                </div>
 
-                              <div className="col-md-4">
-                                <label className="form-label fw-semibold text-dark">
-                                  Experience
-                                </label>
-                                {isEditMode ? (
+                                <div className="col-md-4">
+                                  <label className="form-label fw-semibold text-light">
+                                    Experience
+                                  </label>
                                   <select
                                     name="experience"
                                     value={localWorker.experience || "No"}
                                     onChange={handleChange}
-                                    className="form-select border-primary"
+                                    className="form-select dark-input"
                                   >
                                     <option value="No">No Experience</option>
                                     <option value="Yes">Has Experience</option>
                                   </select>
-                                ) : (
-                                  <div className="form-control border bg-light">
-                                    {localWorker.experience || "No"}
-                                  </div>
-                                )}
-                              </div>
+                                </div>
 
-                              <div className="col-md-4">
-                                <label className="form-label fw-semibold text-dark">
-                                  Years
-                                </label>
-                                {isEditMode ? (
+                                <div className="col-md-4">
+                                  <label className="form-label fw-semibold text-light">
+                                    Years
+                                  </label>
                                   <input
                                     type="number"
                                     name="years"
                                     value={localWorker.years || ""}
                                     onChange={handleChange}
-                                    className="form-control border-primary text-center"
+                                    className="form-control dark-input text-center"
                                     min="0"
                                     max="50"
                                     placeholder="Years"
                                   />
-                                ) : (
-                                  <div className="form-control border bg-light text-center">
-                                    {localWorker.years || "—"}
-                                  </div>
-                                )}
-                              </div>
+                                </div>
 
-                              <div className="col-md-4">
-                                <label className="form-label fw-semibold text-dark d-block">
-                                  Working Hours
-                                </label>
-                                {isEditMode ? (
+                                <div className="col-md-4">
+                                  <label className="form-label fw-semibold text-light d-block">
+                                    Working Hours
+                                  </label>
                                   <select
                                     name="workingHours"
                                     value={localWorker.workingHours || ""}
                                     onChange={handleChange}
-                                    className="form-select border-primary"
+                                    className="form-select dark-input"
                                   >
-                                    <option value="">Select Working Hours</option>
+                                    <option value="">Select Hours</option>
                                     <option value="24">24HR</option>
                                     <option value="12">12HR</option>
                                   </select>
-                                ) : (
-                                  <div className="p-2 bg-light rounded">
-                                    {localWorker.workingHours || "N/A"}
-                                  </div>
-                                )}
-                              </div>
+                                </div>
 
-                              <div className="col-md-4">
-                                <label className="form-label fw-semibold text-dark d-block">
-                                  Conversation Level
-                                </label>
-                                {isEditMode ? (
+                                <div className="col-md-4">
+                                  <label className="form-label fw-semibold text-light d-block">
+                                    Conversation Level
+                                  </label>
                                   <select
                                     name="conversationLevel"
                                     value={localWorker.conversationLevel || ""}
                                     onChange={handleChange}
-                                    className="form-select border-primary"
+                                    className="form-select dark-input"
                                   >
                                     <option value="">Select Level</option>
                                     <option value="Very Good">Very Good</option>
@@ -754,106 +683,102 @@ export default function WorkerCallModal({
                                     <option value="Bad">Bad</option>
                                     <option value="Very Bad">Very Bad</option>
                                   </select>
-                                ) : (
-                                  <span
-                                    className={`badge ${localWorker.conversationLevel === "Very Good"
-                                      ? "bg-success"
-                                      : localWorker.conversationLevel === "Good"
-                                        ? "bg-primary"
-                                        : localWorker.conversationLevel === "Average"
-                                          ? "bg-warning"
-                                          : "bg-danger"
-                                      } fs-6 p-2  text-center`}
-                                  >
-                                    {localWorker.conversationLevel || "N/A"}
-                                  </span>
-                                )}
-                              </div>
+                                </div>
 
-                              <div className="col-md-4">
-                                <label className="form-label fw-semibold text-dark">
-                                  Reminder Date
-                                </label>
-                                {isEditMode ? (
+                                <div className="col-md-4">
+                                  <label className="form-label fw-semibold text-light">
+                                    Reminder Date
+                                  </label>
                                   <input
                                     type="date"
                                     name="callReminderDate"
                                     value={localWorker.callReminderDate || ""}
                                     onChange={handleChange}
-                                    className="form-control border-primary"
+                                    className="form-control dark-input"
                                   />
-                                ) : (
-                                  <div className="form-control border bg-light">
-                                    {localWorker.callReminderDate
-                                      ? new Date(localWorker.callReminderDate).toLocaleDateString(
-                                        "en-GB"
-                                      )
-                                      : "—"}
-                                  </div>
-                                )}
+                                </div>
                               </div>
-
-                              {/* Removed "Recent Comment" section as requested */}
-                            </div>
+                            ) : (
+                              <div className="info-grid-compact">
+                                {renderInfoCard("Source", localWorker.source)}
+                                {renderInfoCard("Marital Status", localWorker.maritalStatus)}
+                                {renderInfoCard("Education", localWorker.education)}
+                                {renderInfoCard("Age", localWorker.age)}
+                                {renderInfoCard("Experience", localWorker.experience)}
+                                {renderInfoCard("Years", localWorker.years)}
+                                {renderInfoCard("Working Hours", localWorker.workingHours ? `${localWorker.workingHours}HR` : "N/A")}
+                                {renderInfoCard("Conversation Level", localWorker.conversationLevel, "conversation")}
+                                {renderInfoCard("Reminder Date", localWorker.callReminderDate ? new Date(localWorker.callReminderDate).toLocaleDateString("en-GB") : "—")}
+                              </div>
+                            )}
                           </div>
                         </div>
                       </div>
 
-                      {/* Comments (All, latest first). In view mode: no textarea/button */}
+                      {/* Comments */}
                       <div className="col-12">
-                        <div className="border-0 shadow-sm p-3">
-                          <div className="card-header">
-                            <h6 className="mb-0 fw-bold text-primary mb-2">
-                              Comments
+                        <div className="dark-card">
+                          <div className="card-header dark-card-header">
+                            <h6 className="mb-0 fw-bold d-flex align-items-center text-warning">
+                              <i className="bi bi-chat-left-text me-2"></i>
+                              Comments & Activity
                             </h6>
                           </div>
-                          <div className="card-body">
-                            <div className="border rounded p-2 mb-3 bg-light">
-                              <p className="mb-0 text-dark">{localWorker.formComment}</p>
+                          <div className="card-body p-3">
+                            {/* Initial Form Comment */}
+                            {localWorker.formComment && (
+                              <div className="comment-initial mb-3">
+                                <div className="comment-header d-flex justify-content-between align-items-center mb-2">
+                                  <small className="text-light fw-bold">Initial Comment</small>
+                                </div>
+                                <p className="mb-0 text-light">{localWorker.formComment}</p>
+                              </div>
+                            )}
 
-                            </div>
-
-                            <div className="mb-3" style={{ maxHeight: "420px", overflowY: "auto" }}>
+                            {/* Comments List */}
+                            <div className="comments-list-compact mb-3" style={{ maxHeight: "200px", overflowY: "auto" }}>
                               {comments && comments.length > 0 ? (
                                 comments.map((c, idx) => (
-                                  <div key={idx} className="border rounded p-2 mb-3 bg-light">
-                                    <p className="mb-0 text-dark">{c.text}</p>
-                                    <div className="d-flex justify-content-between align-items-start mt-2">
-                                      <small className="text-primary small-text">
+                                  <div key={idx} className="comment-item-compact">
+                                    <p className="comment-text mb-2">{c.text}</p>
+                                    <div className="comment-footer d-flex justify-content-between align-items-center">
+                                      <small className="comment-author text-primary">
+                                        <i className="bi bi-person-circle me-1"></i>
                                         {c.user || pickUserName(usersMap[c.userId]) || "user"}
                                       </small>
-                                      <small className="small-text">
+                                      <small className="comment-date text-muted">
                                         {formatDateTime(c.date)}
                                       </small>
                                     </div>
                                   </div>
                                 ))
                               ) : (
-                                <div className="text-center py-4">
-                                  <p className="mb-0 small-text">No comments yet</p>
+                                <div className="empty-state-compact text-center py-3">
+                                  <i className="bi bi-chat-square-text text-muted"></i>
+                                  <p className="mt-2 mb-0 text-muted">No comments yet</p>
                                 </div>
                               )}
                             </div>
 
                             {isEditMode && (
-                              <div className="align-items-start gap-2 border-top pt-3">
-                                <p>Add Comment  <span className="star">*</span></p>
+                              <div className="add-comment-section">
+                                <label className="form-label fw-semibold text-light">
+                                  Add Comment <span className="text-danger">*</span>
+                                </label>
                                 <textarea
-                                  className="form-control border-primary wc"
-                                  rows="3"
+                                  className="form-control dark-input mb-2"
+                                  rows="2"
                                   value={newComment}
                                   onChange={(e) => setNewComment(e.target.value)}
-                                  placeholder="Add a new comment..."
+                                  placeholder="Add a new comment... (Required to enable saving)"
                                 />
-                                <div className="wc">
-                                  <button
-                                    className="btn btn-primary mt-3"
-                                    onClick={handleAddComment}
-                                    disabled={!newComment.trim()}
-                                  >
-                                    Add Comment
-                                  </button>
-                                </div>
+                                <button
+                                  className="btn btn-primary btn-sm"
+                                  onClick={handleAddComment}
+                                  disabled={!newComment.trim()}
+                                >
+                                  Add Comment
+                                </button>
                               </div>
                             )}
                           </div>
@@ -866,20 +791,23 @@ export default function WorkerCallModal({
                 {/* Skills Tab */}
                 {activeTab === "skills" && (
                   <div className="fade show">
-                    <div className="row g-4">
+                    <div className="row g-3">
                       {/* Languages */}
                       <div className="col-12">
-                        <div className="border-0 shadow-sm p-3">
-                          <div className="card-header">
-                            <h6 className="fw-bold text-primary">Languages</h6>
+                        <div className="dark-card">
+                          <div className="card-header dark-card-header">
+                            <h6 className="mb-0 fw-bold d-flex align-items-center">
+                              <i className="bi bi-translate me-2"></i>
+                              Languages
+                            </h6>
                           </div>
-                          <div className="card-body">
+                          <div className="card-body p-3">
                             {isEditMode && (
                               <div className="position-relative mb-3">
                                 <input
                                   type="text"
-                                  className="form-control border-primary"
-                                  placeholder="Search or type language..."
+                                  className="form-control dark-input"
+                                  placeholder="🔍 Search or type language..."
                                   value={languageSearch}
                                   onChange={(e) => {
                                     setLanguageSearch(e.target.value);
@@ -888,22 +816,18 @@ export default function WorkerCallModal({
                                   onFocus={() => setShowLanguageDropdown(true)}
                                 />
                                 {showLanguageDropdown && (
-                                  <div
-                                    className="position-absolute top-100 start-0 end-0 bg-white border border-primary rounded mt-1 shadow-lg z-3"
-                                    style={{ maxHeight: "200px", overflowY: "auto" }}
-                                  >
+                                  <div className="language-dropdown dark-dropdown">
                                     {filteredLanguages.map((lang) => (
                                       <div
                                         key={lang}
-                                        className="dropdown-item p-2 border-bottom"
+                                        className="dropdown-item"
                                         onClick={() => handleLanguageSelect(lang)}
-                                        style={{ cursor: "pointer" }}
                                       >
                                         {lang}
                                       </div>
                                     ))}
                                     {filteredLanguages.length === 0 && (
-                                      <div className="dropdown-item p-2 text-muted">
+                                      <div className="dropdown-item text-muted">
                                         No languages found
                                       </div>
                                     )}
@@ -912,475 +836,314 @@ export default function WorkerCallModal({
                               </div>
                             )}
 
-                            <div className="d-flex flex-wrap gap-2">
-                              {normalizeArray(localWorker.languages).map((lang, idx) => (
-                                <span
-                                  key={idx}
-                                  className="badge bg-success d-flex align-items-center p-2"
-                                >
-                                  {lang}
-                                  {isEditMode && (
-                                    <button
-                                      type="button"
-                                      className="btn-close btn-close-white ms-2"
-                                      onClick={() => handleTagRemove("languages", idx)}
-                                      style={{ fontSize: "0.7rem" }}
-                                    ></button>
-                                  )}
-                                </span>
-                              ))}
+                            <div className="languages-container-compact">
+                              {normalizeArray(localWorker.languages).length > 0 ? (
+                                <div className="d-flex flex-wrap gap-2">
+                                  {normalizeArray(localWorker.languages).map((lang, idx) => (
+                                    <span
+                                      key={idx}
+                                      className="language-tag-compact"
+                                    >
+                                      {lang}
+                                      {isEditMode && (
+                                        <button
+                                          type="button"
+                                          className="tag-remove"
+                                          onClick={() => handleTagRemove("languages", idx)}
+                                        >
+                                          ×
+                                        </button>
+                                      )}
+                                    </span>
+                                  ))}
+                                </div>
+                              ) : (
+                                <div className="empty-state-compact text-center py-3">
+                                  <i className="bi bi-translate text-muted"></i>
+                                  <p className="mt-2 mb-0 text-muted">No languages selected</p>
+                                </div>
+                              )}
                             </div>
                           </div>
                         </div>
                       </div>
 
-                      {/* Primary Skills (pill buttons) */}
+                      {/* Skills Columns */}
                       <div className="col-md-6">
-                        <h6 className="fw-bold">Primary Skills</h6>
-                        <div className="d-flex flex-wrap justify-content-center gap-2 border rounded p-3 bg-light mb-3">
-                          {primarySkillOptions.map((opt) => {
-                            const active = normalizeArray(localWorker.skills)
-                              .map((x) => String(x).toLowerCase())
-                              .includes(String(opt).toLowerCase());
-                            return (
-                              <button
-                                type="button"
-                                key={`primary-${opt}`}
-                                className={`btn btn-sm rounded-pill ${active
-                                  ? "btn-outline-info btn-info text-black"
-                                  : "btn-outline-info"
-                                  } disabled-keep`}
-                                onClick={() => handleMultiToggle("skills", opt)}
-                                disabled={!isEditMode}
-                                aria-pressed={active}
-                                title={!isEditMode ? "Switch to Edit to modify skills" : ""}
-                              >
-                                {opt}
-                              </button>
-                            );
-                          })}
-                        </div>
+                        <div className="dark-card h-100">
+                          <div className="card-header dark-card-header">
+                            <h6 className="mb-0 fw-bold text-warning">PRIMARY SKILLS</h6>
+                          </div>
+                          <div className="card-body p-3">
+                            {isEditMode ? (
+                              <>
+                                <div className="skills-pills-compact mb-3">
+                                  {primarySkillOptions.map((opt) => {
+                                    const active = normalizeArray(localWorker.skills)
+                                      .map((x) => String(x).toLowerCase())
+                                      .includes(String(opt).toLowerCase());
+                                    return (
+                                      <button
+                                        type="button"
+                                        key={`primary-${opt}`}
+                                        className={`btn btn-sm rounded-pill ${active
+                                          ? "btn-primary"
+                                          : "btn-outline-light"
+                                          } disabled-keep skill-pill-compact`}
+                                        onClick={() => handleMultiToggle("skills", opt)}
+                                        disabled={!isEditMode}
+                                        aria-pressed={active}
+                                      >
+                                        {opt}
+                                      </button>
+                                    );
+                                  })}
+                                </div>
 
-                        {/* Custom primary skill */}
-                        <div className="input-group mb-2">
-                          <input
-                            id="custom-skills"
-                            type="text"
-                            className="form-control border-primary"
-                            placeholder="Add custom skill"
-                            disabled={!isEditMode}
-                          />
-                          <button
-                            type="button"
-                            className="btn btn-primary disabled-keep"
-                            onClick={() => handleAddCustom("skills", "custom-skills")}
-                            disabled={!isEditMode}
-                          >
-                            Add
-                          </button>
-                        </div>
-
-                        <div className="d-flex flex-wrap gap-2 mt-2">
-                          {normalizeArray(localWorker.skills).map((skill, idx) => (
-                            <span
-                              key={idx}
-                              className="badge bg-info text-dark align-items-center p-2"
-                            >
-                              {skill}
-                              {isEditMode && (
-                                <button
-                                  type="button"
-                                  className="btn-close btn-close-dark ms-2"
-                                  onClick={() => handleTagRemove("skills", idx)}
-                                  style={{ fontSize: "0.7rem" }}
-                                ></button>
-                              )}
-                            </span>
-                          ))}
+                                <div className="input-group input-group-sm mb-2">
+                                  <input
+                                    id="custom-skills"
+                                    type="text"
+                                    className="form-control dark-input"
+                                    placeholder="Add custom skill"
+                                    disabled={!isEditMode}
+                                  />
+                                  <button
+                                    type="button"
+                                    className="btn btn-primary disabled-keep"
+                                    onClick={() => handleAddCustom("skills", "custom-skills")}
+                                    disabled={!isEditMode}
+                                  >
+                                    Add
+                                  </button>
+                                </div>
+                              </>
+                            ) : (
+                              <div className="skills-display-compact">
+                                {normalizeArray(localWorker.skills).length > 0 ? (
+                                  <div className="d-flex flex-wrap gap-2">
+                                    {normalizeArray(localWorker.skills).map((skill, idx) => (
+                                      <span
+                                        key={idx}
+                                        className="skill-tag-compact primary"
+                                      >
+                                        {skill}
+                                      </span>
+                                    ))}
+                                  </div>
+                                ) : (
+                                  <div className="empty-state-compact text-center py-3">
+                                    <i className="bi bi-tools text-muted"></i>
+                                    <p className="mt-2 mb-0 text-muted">No primary skills</p>
+                                  </div>
+                                )}
+                              </div>
+                            )}
+                          </div>
                         </div>
                       </div>
 
-                      {/* Home Care Skills (pill buttons) */}
                       <div className="col-md-6">
-                        <h6 className="fw-bold">Home Care Skills</h6>
-                        <div className="d-flex flex-wrap gap-2 border rounded p-3 bg-light mb-3 justify-content-center">
-                          {homeCareSkillOptions.map((opt) => {
-                            const active = normalizeArray(localWorker.homeCareSkills)
-                              .map((x) => String(x).toLowerCase())
-                              .includes(String(opt).toLowerCase());
-                            return (
-                              <button
-                                type="button"
-                                key={`homecare-${opt}`}
-                                className={`btn btn-sm rounded-pill ${active
-                                  ? "btn-outline-success btn-success text-black"
-                                  : "btn-outline-success"
-                                  } disabled-keep`}
-                                onClick={() => handleMultiToggle("homeCareSkills", opt)}
-                                disabled={!isEditMode}
-                                aria-pressed={active}
-                                title={!isEditMode ? "Switch to Edit to modify home care skills" : ""}
-                              >
-                                {opt}
-                              </button>
-                            );
-                          })}
-                        </div>
+                        <div className="dark-card h-100">
+                          <div className="card-header dark-card-header">
+                            <h6 className="mb-0 fw-bold text-warning">HOME CARE SKILLS</h6>
+                          </div>
+                          <div className="card-body p-3">
+                            {isEditMode ? (
+                              <>
+                                <div className="skills-pills-compact mb-3">
+                                  {homeCareSkillOptions.map((opt) => {
+                                    const active = normalizeArray(localWorker.homeCareSkills)
+                                      .map((x) => String(x).toLowerCase())
+                                      .includes(String(opt).toLowerCase());
+                                    return (
+                                      <button
+                                        type="button"
+                                        key={`homecare-${opt}`}
+                                        className={`btn btn-sm rounded-pill ${active
+                                          ? "btn-success"
+                                          : "btn-outline-light"
+                                          } disabled-keep skill-pill-compact`}
+                                        onClick={() => handleMultiToggle("homeCareSkills", opt)}
+                                        disabled={!isEditMode}
+                                        aria-pressed={active}
+                                      >
+                                        {opt}
+                                      </button>
+                                    );
+                                  })}
+                                </div>
 
-                        {/* Custom home care */}
-                        <div className="input-group mb-2">
-                          <input
-                            id="custom-homeCareSkills"
-                            type="text"
-                            className="form-control border-primary"
-                            placeholder="Add custom home care skill"
-                            disabled={!isEditMode}
-                          />
-                          <button
-                            type="button"
-                            className="btn btn-success disabled-keep"
-                            onClick={() =>
-                              handleAddCustom("homeCareSkills", "custom-homeCareSkills")
-                            }
-                            disabled={!isEditMode}
-                          >
-                            Add
-                          </button>
-                        </div>
-
-                        <div className="d-flex flex-wrap gap-2 mt-3 justify-content-center">
-                          {normalizeArray(localWorker.homeCareSkills).map((skill, idx) => (
-                            <span
-                              key={idx}
-                              className="badge bg-success text-white align-items-center p-2"
-                            >
-                              {skill}
-                              {isEditMode && (
-                                <button
-                                  type="button"
-                                  className="btn-close btn-close-white ms-2"
-                                  onClick={() => handleTagRemove("homeCareSkills", idx)}
-                                  style={{ fontSize: "0.7rem" }}
-                                ></button>
-                              )}
-                            </span>
-                          ))}
+                                <div className="input-group input-group-sm mb-2">
+                                  <input
+                                    id="custom-homeCareSkills"
+                                    type="text"
+                                    className="form-control dark-input"
+                                    placeholder="Add custom skill"
+                                    disabled={!isEditMode}
+                                  />
+                                  <button
+                                    type="button"
+                                    className="btn btn-success disabled-keep"
+                                    onClick={() =>
+                                      handleAddCustom("homeCareSkills", "custom-homeCareSkills")
+                                    }
+                                    disabled={!isEditMode}
+                                  >
+                                    Add
+                                  </button>
+                                </div>
+                              </>
+                            ) : (
+                              <div className="skills-display-compact">
+                                {normalizeArray(localWorker.homeCareSkills).length > 0 ? (
+                                  <div className="d-flex flex-wrap gap-2">
+                                    {normalizeArray(localWorker.homeCareSkills).map((skill, idx) => (
+                                      <span
+                                        key={idx}
+                                        className="skill-tag-compact success"
+                                      >
+                                        {skill}
+                                      </span>
+                                    ))}
+                                  </div>
+                                ) : (
+                                  <div className="empty-state-compact text-center py-3">
+                                    <i className="bi bi-house-heart text-muted"></i>
+                                    <p className="mt-2 mb-0 text-muted">No home care skills</p>
+                                  </div>
+                                )}
+                              </div>
+                            )}
+                          </div>
                         </div>
                       </div>
 
-                      {/* Other Skills — two columns, pill buttons */}
+                      {/* Other Skills */}
                       <div className="col-12">
-                        <h6 className="fw-bold">Other Skills</h6>
-                        <div className="border rounded p-3 bg-light mb-3">
-                          <div className="d-flex flex-column  ">
-                            {/* Office & Administrative */}
-                            <div className="category-section">
-                              <h6 className="category-heading text-primary mb-2">Office & Administrative</h6>
-                              <div className="d-flex flex-wrap gap-2">
-                                {[
-                                  "Computer Operating", "Data Entry", "Office Assistant", "Receptionist",
-                                  "Front Desk Executive", "Admin Assistant", "Office Boy", "Peon", "Office Attendant"
-                                ].map((opt) => {
-                                  const active = normalizeArray(localWorker.otherSkills)
-                                    .map((x) => String(x).toLowerCase())
-                                    .includes(String(opt).toLowerCase());
-                                  return (
-                                    <button
-                                      key={`other-${opt}`}
-                                      type="button"
-                                      className={`btn btn-sm rounded-pill ${active
-                                        ? "btn-primary"
-                                        : "btn-outline-primary"
-                                        } disabled-keep`}
-                                      onClick={() => handleMultiToggle("otherSkills", opt)}
-                                      disabled={!isEditMode}
-                                      aria-pressed={active}
-                                      title={!isEditMode ? "Switch to Edit to modify other skills" : ""}
-                                    >
-                                      {opt}
-                                    </button>
-                                  );
-                                })}
-                              </div>
-                            </div>
-
-                            {/* Customer Service & Telecommunication */}
-                            <div className="category-section">
-                              <h6 className="category-heading text-success mb-2">Customer Service & Telecommunication</h6>
-                              <div className="d-flex flex-wrap gap-2">
-                                {[
-                                  "Tele Calling", "Customer Support", "Telemarketing", "BPO Executive",
-                                  "Call Center Agent", "Customer Care Executive"
-                                ].map((opt) => {
-                                  const active = normalizeArray(localWorker.otherSkills)
-                                    .map((x) => String(x).toLowerCase())
-                                    .includes(String(opt).toLowerCase());
-                                  return (
-                                    <button
-                                      key={`other-${opt}`}
-                                      type="button"
-                                      className={`btn btn-sm rounded-pill ${active
-                                        ? "btn-success"
-                                        : "btn-outline-success"
-                                        } disabled-keep`}
-                                      onClick={() => handleMultiToggle("otherSkills", opt)}
-                                      disabled={!isEditMode}
-                                      aria-pressed={active}
-                                      title={!isEditMode ? "Switch to Edit to modify other skills" : ""}
-                                    >
-                                      {opt}
-                                    </button>
-                                  );
-                                })}
-                              </div>
-                            </div>
-
-                            {/* Management & Supervision */}
-                            <div className="category-section">
-                              <h6 className="category-heading text-warning mb-2">Management & Supervision</h6>
-                              <div className="d-flex flex-wrap gap-2">
-                                {[
-                                  "Supervisor", "Manager", "Team Leader", "Site Supervisor", "Project Coordinator"
-                                ].map((opt) => {
-                                  const active = normalizeArray(localWorker.otherSkills)
-                                    .map((x) => String(x).toLowerCase())
-                                    .includes(String(opt).toLowerCase());
-                                  return (
-                                    <button
-                                      key={`other-${opt}`}
-                                      type="button"
-                                      className={`btn btn-sm rounded-pill ${active
-                                        ? "btn-warning"
-                                        : "btn-outline-warning"
-                                        } disabled-keep`}
-                                      onClick={() => handleMultiToggle("otherSkills", opt)}
-                                      disabled={!isEditMode}
-                                      aria-pressed={active}
-                                      title={!isEditMode ? "Switch to Edit to modify other skills" : ""}
-                                    >
-                                      {opt}
-                                    </button>
-                                  );
-                                })}
-                              </div>
-                            </div>
-
-                            {/* Security */}
-                            <div className="category-section">
-                              <h6 className="category-heading text-danger mb-2">Security</h6>
-                              <div className="d-flex flex-wrap gap-2">
-                                {[
-                                  "Security Guard", "Security Supervisor", "Gatekeeper", "Watchman"
-                                ].map((opt) => {
-                                  const active = normalizeArray(localWorker.otherSkills)
-                                    .map((x) => String(x).toLowerCase())
-                                    .includes(String(opt).toLowerCase());
-                                  return (
-                                    <button
-                                      key={`other-${opt}`}
-                                      type="button"
-                                      className={`btn btn-sm rounded-pill ${active
-                                        ? "btn-danger"
-                                        : "btn-outline-danger"
-                                        } disabled-keep`}
-                                      onClick={() => handleMultiToggle("otherSkills", opt)}
-                                      disabled={!isEditMode}
-                                      aria-pressed={active}
-                                      title={!isEditMode ? "Switch to Edit to modify other skills" : ""}
-                                    >
-                                      {opt}
-                                    </button>
-                                  );
-                                })}
-                              </div>
-                            </div>
-
-                            {/* Driving & Logistics */}
-                            <div className="category-section">
-                              <h6 className="category-heading text-info mb-2">Driving & Logistics</h6>
-                              <div className="d-flex flex-wrap gap-2">
-                                {[
-                                  "Driving", "Delivery Boy", "Delivery Executive", "Rider", "Driver",
-                                  "Car Driver", "Bike Rider", "Logistics Helper"
-                                ].map((opt) => {
-                                  const active = normalizeArray(localWorker.otherSkills)
-                                    .map((x) => String(x).toLowerCase())
-                                    .includes(String(opt).toLowerCase());
-                                  return (
-                                    <button
-                                      key={`other-${opt}`}
-                                      type="button"
-                                      className={`btn btn-sm rounded-pill ${active
-                                        ? "btn-info"
-                                        : "btn-outline-info"
-                                        } disabled-keep`}
-                                      onClick={() => handleMultiToggle("otherSkills", opt)}
-                                      disabled={!isEditMode}
-                                      aria-pressed={active}
-                                      title={!isEditMode ? "Switch to Edit to modify other skills" : ""}
-                                    >
-                                      {opt}
-                                    </button>
-                                  );
-                                })}
-                              </div>
-                            </div>
-
-                            {/* Technical & Maintenance */}
-                            <div className="category-section">
-                              <h6 className="category-heading text-secondary mb-2">Technical & Maintenance</h6>
-                              <div className="d-flex flex-wrap gap-2">
-                                {[
-                                  "Electrician", "Plumber", "Carpenter", "Painter", "Mason", "AC Technician",
-                                  "Mechanic", "Maintenance Staff", "House Keeping", "Housekeeping Supervisor"
-                                ].map((opt) => {
-                                  const active = normalizeArray(localWorker.otherSkills)
-                                    .map((x) => String(x).toLowerCase())
-                                    .includes(String(opt).toLowerCase());
-                                  return (
-                                    <button
-                                      key={`other-${opt}`}
-                                      type="button"
-                                      className={`btn btn-sm rounded-pill ${active
-                                        ? "btn-secondary"
-                                        : "btn-outline-secondary"
-                                        } disabled-keep`}
-                                      onClick={() => handleMultiToggle("otherSkills", opt)}
-                                      disabled={!isEditMode}
-                                      aria-pressed={active}
-                                      title={!isEditMode ? "Switch to Edit to modify other skills" : ""}
-                                    >
-                                      {opt}
-                                    </button>
-                                  );
-                                })}
-                              </div>
-                            </div>
-
-                            {/* Retail & Sales */}
-                            <div className="category-section">
-                              <h6 className="category-heading text-primary mb-2">Retail & Sales</h6>
-                              <div className="d-flex flex-wrap gap-2">
-                                {[
-                                  "Sales Boy", "Sales Girl", "Store Helper", "Retail Assistant", "Shop Attendant"
-                                ].map((opt) => {
-                                  const active = normalizeArray(localWorker.otherSkills)
-                                    .map((x) => String(x).toLowerCase())
-                                    .includes(String(opt).toLowerCase());
-                                  return (
-                                    <button
-                                      key={`other-${opt}`}
-                                      type="button"
-                                      className={`btn btn-sm rounded-pill ${active
-                                        ? "btn-primary"
-                                        : "btn-outline-primary"
-                                        } disabled-keep`}
-                                      onClick={() => handleMultiToggle("otherSkills", opt)}
-                                      disabled={!isEditMode}
-                                      aria-pressed={active}
-                                      title={!isEditMode ? "Switch to Edit to modify other skills" : ""}
-                                    >
-                                      {opt}
-                                    </button>
-                                  );
-                                })}
-                              </div>
-                            </div>
-
-                            {/* Industrial & Labor */}
-                            <div className="category-section">
-                              <h6 className="category-heading text-danger mb-2">Industrial & Labor</h6>
-                              <div className="d-flex flex-wrap gap-2">
-                                {[
-                                  "Labour", "Helper", "Loading Unloading", "Warehouse Helper",
-                                  "Factory Worker", "Production Helper", "Packaging Staff"
-                                ].map((opt) => {
-                                  const active = normalizeArray(localWorker.otherSkills)
-                                    .map((x) => String(x).toLowerCase())
-                                    .includes(String(opt).toLowerCase());
-                                  return (
-                                    <button
-                                      key={`other-${opt}`}
-                                      type="button"
-                                      className={`btn btn-sm rounded-pill ${active
-                                        ? "btn-danger"
-                                        : "btn-outline-danger"
-                                        } disabled-keep`}
-                                      onClick={() => handleMultiToggle("otherSkills", opt)}
-                                      disabled={!isEditMode}
-                                      aria-pressed={active}
-                                      title={!isEditMode ? "Switch to Edit to modify other skills" : ""}
-                                    >
-                                      {opt}
-                                    </button>
-                                  );
-                                })}
-                              </div>
-                            </div>
+                        <div className="dark-card">
+                          <div className="card-header dark-card-header">
+                            <h6 className="mb-0 fw-bold text-warning">OTHER SKILLS</h6>
                           </div>
-                        </div>
-                        <div className="input-group mb-2">
-                          <input
-                            id="custom-otherSkills"
-                            type="text"
-                            className="form-control border-primary"
-                            placeholder="Add custom other skill"
-                            disabled={!isEditMode}
-                          />
-                          <button
-                            type="button"
-                            className="btn btn-warning disabled-keep"
-                            onClick={() => handleAddCustom("otherSkills", "custom-otherSkills")}
-                            disabled={!isEditMode}
-                          >
-                            Add
-                          </button>
-                        </div>
+                          <div className="card-body p-3">
+                            {isEditMode ? (
+                              <>
+                                <div className="other-skills-categories">
+                                  {[
+                                    { title: "💼 Office & Administrative", skills: otherSkillOptions.slice(0, 9), color: "office" },
+                                    { title: "📞 Customer Service", skills: otherSkillOptions.slice(9, 15), color: "customer" },
+                                    { title: "👔 Management", skills: otherSkillOptions.slice(15, 20), color: "management" },
+                                    { title: "🛡️ Security", skills: otherSkillOptions.slice(20, 24), color: "security" },
+                                    { title: "🚗 Driving & Logistics", skills: otherSkillOptions.slice(24, 32), color: "driving" },
+                                    { title: "🔧 Technical", skills: otherSkillOptions.slice(32, 42), color: "technical" },
+                                    { title: "🛍️ Retail & Sales", skills: otherSkillOptions.slice(42, 47), color: "retail" },
+                                    { title: "🏭 Industrial", skills: otherSkillOptions.slice(47), color: "industrial" }
+                                  ].map((category, catIndex) => (
+                                    <div key={catIndex} className={`skill-category-compact ${category.color}-category`}>
+                                      <h6 className="category-title-compact">{category.title}</h6>
+                                      <div className="skills-pills-compact">
+                                        {category.skills.map((opt) => {
+                                          const active = normalizeArray(localWorker.otherSkills)
+                                            .map((x) => String(x).toLowerCase())
+                                            .includes(String(opt).toLowerCase());
+                                          return (
+                                            <button
+                                              key={`other-${opt}`}
+                                              type="button"
+                                              className={`btn btn-sm rounded-pill ${active
+                                                ? "btn-warning"
+                                                : "btn-outline-light"
+                                                } disabled-keep skill-pill-compact`}
+                                              onClick={() => handleMultiToggle("otherSkills", opt)}
+                                              disabled={!isEditMode}
+                                              aria-pressed={active}
+                                            >
+                                              {opt}
+                                            </button>
+                                          );
+                                        })}
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
 
-                        <div className="d-flex flex-wrap gap-2 mt-2">
-                          {normalizeArray(localWorker.otherSkills).map((skill, idx) => (
-                            <span
-                              key={idx}
-                              className="badge bg-warning text-dark p-2"
-                            >
-                              {skill}
-                              {isEditMode && (
-                                <button
-                                  type="button"
-                                  className="btn-close btn-close-dark ms-2"
-                                  onClick={() => handleTagRemove("otherSkills", idx)}
-                                  style={{ fontSize: "0.7rem" }}
-                                ></button>
-                              )}
-                            </span>
-                          ))}
+                                <div className="input-group input-group-sm mt-2">
+                                  <input
+                                    id="custom-otherSkills"
+                                    type="text"
+                                    className="form-control dark-input"
+                                    placeholder="Add custom other skill"
+                                    disabled={!isEditMode}
+                                  />
+                                  <button
+                                    type="button"
+                                    className="btn btn-warning disabled-keep"
+                                    onClick={() => handleAddCustom("otherSkills", "custom-otherSkills")}
+                                    disabled={!isEditMode}
+                                  >
+                                    Add
+                                  </button>
+                                </div>
+                              </>
+                            ) : (
+                              <div className="skills-display-compact">
+                                {normalizeArray(localWorker.otherSkills).length > 0 ? (
+                                  <div className="d-flex flex-wrap gap-2">
+                                    {normalizeArray(localWorker.otherSkills).map((skill, idx) => (
+                                      <span
+                                        key={idx}
+                                        className="skill-tag-compact warning"
+                                      >
+                                        {skill}
+                                      </span>
+                                    ))}
+                                  </div>
+                                ) : (
+                                  <div className="empty-state-compact text-center py-3">
+                                    <i className="bi bi-grid-3x3-gap text-muted"></i>
+                                    <p className="mt-2 mb-0 text-muted">No other skills</p>
+                                  </div>
+                                )}
+                              </div>
+                            )}
+                          </div>
                         </div>
                       </div>
                     </div>
+                  </div>
+                )}
+              </div>
 
+              {/* Footer */}
+              <div className="modal-footer dark-footer py-2 px-3">
+                <div className="d-flex justify-content-between align-items-center w-100">
+                  <div className="meta-info-compact">
+                    {createdByName && (
+                      <small className="text-muted">
+                        Created by: <strong>{createdByName}</strong>
+                        {localWorker.createdAt && ` on ${formatDateTime(localWorker.createdAt)}`}
+                      </small>
+                    )}
                   </div>
 
-                )}
-              </div>
-              {/* Footer */}
-              <div className="modal-footer bg-light border-top wc mt-3">
-                {isEditMode && (
-                  <button
-                    className="btn btn-success px-4 fw-bold "
-                    onClick={handleSave}
-                    disabled={!canSave}
-                    title={!canSave ? "Add a comment first to enable saving" : ""}
-                  >
-                    Save Changes
-                  </button>
-                )}
-                <button className="btn btn-secondary px-4" onClick={confirmClose}>
-                  Close
-                </button>
+                  <div className="d-flex gap-2">
+                    {isEditMode && (
+                      <button
+                        className="btn btn-success px-3 fw-bold btn-sm"
+                        onClick={handleSave}
+                        disabled={!canSave}
+                        title={!canSave ? "Add a comment first to enable saving" : ""}
+                      >
+                        Save Changes
+                      </button>
+                    )}
+                    <button className="btn btn-secondary px-3 btn-sm" onClick={confirmClose}>
+                      Close
+                    </button>
+                  </div>
+                </div>
               </div>
             </div>
-
-
           </div>
         </div>
       </div>
@@ -1388,35 +1151,27 @@ export default function WorkerCallModal({
       {/* Save Success Modal */}
       {showSaveModal && (
         <div
-          className="modal fade show"
-          style={{ display: "block", backgroundColor: "rgba(0,0,0,0.6)" }}
+          className="modal fade show dark-modal"
+          style={{ display: "block", backgroundColor: "rgba(0,0,0,0.8)" }}
         >
           <div className="modal-dialog modal-dialog-centered">
-            <div
-              className="modal-content border-0 shadow-lg"
-              style={{ borderRadius: "15px", maxWidth: "800px", margin: "auto" }}
-            >
-              <div className="modal-header bg-success text-white">
-                <h5 className="modal-title fw-bold">Successfully Saved</h5>
-              </div>
-              <div className="modal-body text-center py-4">
-                <p className="mb-0">
-                  Worker{" "}
-                  <strong className="text-success">
-                    {localWorker?.name || "record"}
-                  </strong>{" "}
-                  details have been updated successfully!
+            <div className="modal-content dark-card">
+              <div className="modal-body text-center p-4">
+                <div className="text-success mb-3">
+                  <i className="bi bi-check-circle" style={{ fontSize: "2.5rem" }}></i>
+                </div>
+                <h5 className="fw-bold text-success mb-3">Success!</h5>
+                <p className="text-light mb-4">
+                  Worker details have been saved successfully.
                 </p>
-              </div>
-              <div className="modal-footer">
                 <button
-                  className="btn btn-success fw-bold"
+                  className="btn btn-success px-4 btn-sm"
                   onClick={() => {
                     setShowSaveModal(false);
                     onClose();
                   }}
                 >
-                  OK
+                  Continue
                 </button>
               </div>
             </div>
@@ -1424,68 +1179,497 @@ export default function WorkerCallModal({
         </div>
       )}
 
-      {/* Unsaved Confirmation Modal */}
+      {/* Unsaved Changes Confirmation */}
       {showUnsavedConfirm && (
         <div
-          className="modal fade show"
-          style={{ display: "block", background: "rgba(0,0,0,0.6)" }}
+          className="modal fade show dark-modal"
+          style={{ display: "block", background: "rgba(0,0,0,0.8)" }}
         >
           <div className="modal-dialog modal-dialog-centered">
-            <div
-              className="modal-content border-0 shadow-lg"
-              style={{ borderRadius: "15px" }}
-            >
-              <div className="modal-header bg-warning text-dark">
-                <h5 className="modal-title fw-bold">Unsaved Changes</h5>
-              </div>
-              <div className="modal-body text-center py-4">
-                <p className="mb-0">
-                  You have unsaved changes. Are you sure you want to close?
+            <div className="modal-content dark-card">
+              <div className="modal-body text-center p-4">
+                <div className="text-warning mb-3">
+                  <i className="bi bi-exclamation-triangle" style={{ fontSize: "2.5rem" }}></i>
+                </div>
+                <h5 className="fw-bold text-warning mb-3">Unsaved Changes</h5>
+                <p className="text-light mb-4">
+                  You have unsaved changes. Are you sure you want to close without saving?
                 </p>
-              </div>
-              <div className="modal-footer">
-                <button
-                  className="btn btn-secondary"
-                  onClick={() => setShowUnsavedConfirm(false)}
-                >
-                  Cancel
-                </button>
-                <button
-                  className="btn btn-danger"
-                  onClick={() => {
-                    setShowUnsavedConfirm(false);
-                    setDirty(false);
-                    onClose();
-                  }}
-                >
-                  Discard Changes
-                </button>
+                <div className="d-flex gap-2 justify-content-center">
+                  <button
+                    className="btn btn-secondary px-3 btn-sm"
+                    onClick={() => setShowUnsavedConfirm(false)}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    className="btn btn-warning px-3 btn-sm"
+                    onClick={() => {
+                      setShowUnsavedConfirm(false);
+                      onClose();
+                    }}
+                  >
+                    Discard Changes
+                  </button>
+                </div>
               </div>
             </div>
           </div>
         </div>
       )}
 
-      {/* Keep disabled buttons' colors the same */}
-      <style>{`
-        .bg-gradient-primary {
-          background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      {/* Dark Theme Styles - Jenceo Pattern */}
+      <style jsx>{`
+        .dark-modal {
+          font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
         }
-        .bg-pink { background-color: #e83e8c !important; }
-        .form-control, .form-select { border-radius: 8px; }
-        .badge { border-radius: 20px; font-size: 0.85rem; }
-        .nav-pills .nav-link { border-radius: 10px; transition: all 0.3s ease; }
-        .nav-pills .nav-link:hover { opacity: 0.9; }
+
+        /* Header with dark theme */
+        .dark-header {
+          background: #37384a;
+          border-bottom: 2px solid #333;
+          border-radius: 8px 8px 0 0;
+          padding: 1rem 1.5rem;
+        }
+
+        .dark-body {
+          background: #2d2d2d;
+        }
+
+        /* Tabs with dark theme */
+        .dark-tabs-container {
+          background: #333;
+          border-bottom: 1px solid #444;
+        }
+
+        .dark-tab {
+          background: transparent;
+          border: 1px solid #555;
+          color: #ccc;
+          border-radius: 6px;
+          padding: 0.5rem 1rem;
+          font-weight: 500;
+          transition: all 0.3s ease;
+        }
+
+        .dark-tab:hover {
+          background: #444;
+          border-color: #666;
+          color: #fff;
+        }
+
+        .dark-tab.active {
+          background: #007bff;
+          border-color: #007bff;
+          color: white;
+        }
+
+        /* Cards with dark theme */
+        .dark-card {
+          background: #3a3a3a;
+          border: 1px solid #444;
+          border-radius: 6px;
+          box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+        }
+
+        .dark-card-header {
+          background: #333;
+          border-bottom: 1px solid #444;
+          border-radius: 6px 6px 0 0 !important;
+          padding: 0.75rem 1rem;
+          color: #fff;
+        }
+
+        /* Inputs with dark theme */
+        .dark-input {
+          background: #2d2d2d !important;
+          border: 1px solid #555;
+          border-radius: 4px;
+          padding: 0.5rem 0.75rem;
+          transition: all 0.3s ease;
+          color: #fff;
+        }
+
+        .dark-input:focus {
+          background: #333;
+          border-color: #007bff;
+          box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.25);
+          outline: none;
+          color: #fff;
+        }
+
+        .dark-input::placeholder {
+          color: #888;
+        }
+
+        .dark-footer {
+          background: #333;
+          border-top: 1px solid #444;
+          border-radius: 0 0 8px 8px;
+        }
+
+        /* Buttons with Jenceo colors */
+        .btn-primary {
+          background: #007bff;
+          border-color: #007bff;
+        }
+
+        .btn-primary:hover {
+          background: #0056b3;
+          border-color: #0056b3;
+        }
+
+        .btn-success {
+          background: #28a745;
+          border-color: #28a745;
+        }
+
+        .btn-success:hover {
+          background: #1e7e34;
+          border-color: #1e7e34;
+        }
+
+        .btn-warning {
+          background: #ffc107;
+          border-color: #ffc107;
+          color: #212529;
+        }
+
+        .btn-warning:hover {
+          background: #e0a800;
+          border-color: #e0a800;
+          color: #212529;
+        }
+
+        .btn-secondary {
+          background: #6c757d;
+          border-color: #6c757d;
+          color: #fff;
+        }
+
+        .btn-secondary:hover {
+          background: #545b62;
+          border-color: #545b62;
+          color: #fff;
+        }
+
+        .btn-outline-light {
+          background: transparent;
+          border-color: #6c757d;
+          color: #6c757d;
+        }
+
+        .btn-outline-light:hover {
+          background: #6c757d;
+          border-color: #6c757d;
+          color: #fff;
+        }
+
+        /* Info cards */
+        .info-grid-compact {
+          display: grid;
+          grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+          gap: 1rem;
+        }
+
+        .info-card-item {
+          background: #333;
+          border: 1px solid #444;
+          border-radius: 6px;
+          padding: 0.75rem;
+          transition: all 0.3s ease;
+        }
+
+        .info-card-item:hover {
+          background: #3a3a3a;
+          border-color: #555;
+        }
+
+        .info-card-label {
+          font-size: 0.75rem;
+          color: #aaa;
+          font-weight: 600;
+          margin-bottom: 0.25rem;
+          text-transform: uppercase;
+        }
+
+        .info-card-value {
+          font-size: 0.875rem;
+          color: #6f8aa8ff;
+          font-weight: 600;
+        }
+
+        .info-badge {
+          padding: 0.25rem 0.5rem;
+          border-radius: 12px;
+          font-size: 0.75rem;
+          font-weight: 600;
+        }
+
+        /* Badge styles */
+        .badge-gender-male {
+          background: rgba(0, 123, 255, 0.2);
+          color: #4dabf7;
+          border: 1px solid #339af0;
+        }
+
+        .badge-gender-female {
+          background: rgba(232, 62, 140, 0.2);
+          color: #e64980;
+          border: 1px solid #e0316e;
+        }
+
+        .badge-gender-other {
+          background: rgba(253, 126, 20, 0.2);
+          color: #fd7e14;
+          border: 1px solid #f76707;
+        }
+
+        .badge-conv-vgood {
+          background: rgba(40, 167, 69, 0.2);
+          color: #51cf66;
+          border: 1px solid #40c057;
+        }
+
+        .badge-conv-good {
+          background: rgba(0, 123, 255, 0.2);
+          color: #4dabf7;
+          border: 1px solid #339af0;
+        }
+
+        .badge-conv-average {
+          background: rgba(255, 193, 7, 0.2);
+          color: #ffd43b;
+          border: 1px solid #ffc107;
+        }
+
+        .badge-conv-poor {
+          background: rgba(220, 53, 69, 0.2);
+          color: #fa5252;
+          border: 1px solid #e03131;
+        }
+
+        /* Skills and language tags */
+        .skills-pills-compact {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 0.5rem;
+          max-height: 150px;
+          overflow-y: auto;
+          padding: 0.5rem;
+        }
+
+        .skill-pill-compact {
+          font-size: 0.75rem;
+          padding: 0.25rem 0.75rem;
+          margin: 0.1rem;
+        }
+
+        .skill-tag-compact {
+          padding: 0.375rem 0.75rem;
+          border-radius: 15px;
+          font-size: 0.75rem;
+          font-weight: 500;
+        }
+
+        .skill-tag-compact.primary {
+          background: rgba(0, 123, 255, 0.2);
+          color: #4dabf7;
+          border: 1px solid #339af0;
+        }
+
+        .skill-tag-compact.success {
+          background: rgba(40, 167, 69, 0.2);
+          color: #51cf66;
+          border: 1px solid #40c057;
+        }
+
+        .skill-tag-compact.warning {
+          background: rgba(255, 193, 7, 0.2);
+          color: #ffd43b;
+          border: 1px solid #ffc107;
+        }
+
+        .language-tag-compact {
+          display: inline-flex;
+          align-items: center;
+          background: rgba(108, 117, 125, 0.2);
+          color: #adb5bd;
+          border: 1px solid #6c757d;
+          padding: 0.375rem 0.75rem;
+          border-radius: 15px;
+          font-size: 0.75rem;
+          font-weight: 500;
+          margin: 0.1rem;
+        }
+
+        .tag-remove {
+          background: none;
+          border: none;
+          color: inherit;
+          margin-left: 0.5rem;
+          cursor: pointer;
+          opacity: 0.7;
+          font-size: 1rem;
+          line-height: 1;
+        }
+
+        .tag-remove:hover {
+          opacity: 1;
+        }
+
+        /* Dropdown */
+        .dark-dropdown {
+          background: #3a3a3a;
+          border: 1px solid #555;
+          border-radius: 6px;
+          box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+        }
+
+        .dropdown-item {
+          padding: 0.5rem 1rem;
+          cursor: pointer;
+          border-bottom: 1px solid #444;
+          transition: background 0.3s ease;
+          color: #fff;
+          font-size: 0.875rem;
+        }
+
+        .dropdown-item:hover {
+          background: #007bff;
+          color: white;
+        }
+
+        /* Comments */
+        .comment-item-compact {
+          background: #333;
+          border: 1px solid #444;
+          border-radius: 6px;
+          padding: 0.75rem;
+          margin-bottom: 0.5rem;
+        }
+
+        .comment-text {
+          color: #fff;
+          font-size: 0.875rem;
+          margin-bottom: 0.5rem;
+          background-color:transparent;
+          border:none;
+
+        }
+
+        .comment-initial {
+          background: rgba(0, 123, 255, 0.1);
+          border: 1px solid #339af0;
+          border-radius: 6px;
+          padding: 0.75rem;
+        }
+
+        .empty-state-compact i {
+          font-size: 2rem;
+          opacity: 0.5;
+        }
+
+        /* Other skills categories */
+        .other-skills-categories {
+          max-height: 300px;
+          overflow-y: auto;
+        }
+
+        .skill-category-compact {
+          margin-bottom: 1rem;
+          padding: 0.75rem;
+          border-radius: 6px;
+          background: #333;
+        }
+    
+
+        .office-category { border-left: 4px solid #007bff; }
+        .customer-category { border-left: 4px solid #28a745; }
+        .management-category { border-left: 4px solid #ffc107; }
+        .security-category { border-left: 4px solid #dc3545; }
+        .driving-category { border-left: 4px solid #6f42c1; }
+        .technical-category { border-left: 4px solid #fd7e14; }
+        .retail-category { border-left: 4px solid #20c997; }
+        .industrial-category { border-left: 4px solid #e83e8c; }
+
+        .category-title-compact {
+          font-size: 0.875rem;
+          font-weight: 600;
+          color: #a173f7ff;
+          margin-bottom: 0.5rem;
+        }
+
+        .action-btn {
+          font-size: 0.75rem;
+          padding: 0.25rem 0.75rem;
+        }
+
+        .meta-info-compact {
+          font-size: 0.75rem;
+        }
+
+        /* Form labels */
+        .form-label {
+          color: #aaa !important;
+        }
 
         /* Keep same look even when disabled */
-        .btn.disabled-keep:disabled { opacity: 1 !important; }
-        .btn-outline-info.btn-info.text-black:disabled,
-        .btn-outline-success.btn-success.text-black:disabled,
-        .btn-outline-warning.btn-warning.text-black:disabled,
+        .btn.disabled-keep:disabled { 
+          opacity: .5 !important; 
+        }
+        
+        .btn-outline-light.btn-primary:disabled,
+        .btn-outline-light.btn-success:disabled,
+        .btn-outline-light.btn-warning:disabled,
         .btn-success:disabled,
         .btn-primary:disabled,
         .btn-warning:disabled {
-          opacity: 1 !important;
+          opacity: .5 !important;
+        }
+
+        /* Scrollbar styling */
+        .tab-content::-webkit-scrollbar {
+          width: 6px;
+        }
+
+        .tab-content::-webkit-scrollbar-track {
+          background: #333;
+          border-radius: 3px;
+        }
+
+        .tab-content::-webkit-scrollbar-thumb {
+          background: #555;
+          border-radius: 3px;
+        }
+
+        .tab-content::-webkit-scrollbar-thumb:hover {
+          background: #666;
+        }
+
+        /* Responsive design */
+        @media (max-width: 768px) {
+          .modal-dialog {
+            margin: 0.5rem;
+          }
+          
+          .info-grid-compact {
+            grid-template-columns: 1fr;
+          }
+          
+          .skills-pills-compact {
+            max-height: 200px;
+          }
+          
+          .modal-footer .d-flex {
+            flex-direction: column;
+            gap: 0.5rem;
+          }
+          
+          .meta-info-compact {
+            text-align: center;
+            margin-bottom: 0.5rem;
+          }
         }
       `}</style>
     </>

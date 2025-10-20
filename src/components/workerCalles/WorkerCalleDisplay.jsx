@@ -833,6 +833,16 @@ export default function WorkerCalleDisplay({ permissions: permissionsProp }) {
 
   return (
     <div className="workerCalls">
+
+      {/* reminder badges as filters */}
+      <div className="alert alert-info text-info d-flex justify-content-around flex-wrap reminder-badges mb-4">
+        {["overdue", "today", "tomorrow", "upcoming"].map((k) => (
+          <span key={k} role="button" className={`reminder-badge ${k} ${reminderFilter === k ? "active" : ""}`} onClick={() => setReminderFilter(reminderFilter === k ? "" : k)}>
+            {k[0].toUpperCase() + k.slice(1)}: <strong>{k === "overdue" ? badgeCounts.overdue : k === "today" ? badgeCounts.today : k === "tomorrow" ? badgeCounts.tomorrow : badgeCounts.upcoming}</strong>
+          </span>
+        ))}
+      </div>
+
       {/* top controls */}
       <div className="d-flex justify-content-between flex-wrap gap-2 p-2 bg-dark border rounded-3 mb-3">
 
@@ -883,15 +893,6 @@ export default function WorkerCalleDisplay({ permissions: permissionsProp }) {
           </button>
           <button className={`btn btn-outline-warning text-warning ${hasActiveFilters ? "btn-pulse" : ""}`} onClick={resetFilters}>Reset</button>
         </div>
-      </div>
-
-      {/* reminder badges as filters */}
-      <div className="alert alert-info text-info d-flex justify-content-around flex-wrap reminder-badges mb-4">
-        {["overdue", "today", "tomorrow", "upcoming"].map((k) => (
-          <span key={k} role="button" className={`reminder-badge ${k} ${reminderFilter === k ? "active" : ""}`} onClick={() => setReminderFilter(reminderFilter === k ? "" : k)}>
-            {k[0].toUpperCase() + k.slice(1)}: <strong>{k === "overdue" ? badgeCounts.overdue : k === "today" ? badgeCounts.today : k === "tomorrow" ? badgeCounts.tomorrow : badgeCounts.upcoming}</strong>
-          </span>
-        ))}
       </div>
 
       {/* Filter row (unchanged markup) */}
@@ -1346,13 +1347,13 @@ export default function WorkerCalleDisplay({ permissions: permissionsProp }) {
 
       {/* Bottom pagination */}
 
-      <div className="d-flex align-items-center m-3 d-none d-lg-block">
+      <div className="d-flex align-items-center flex-wrap gap-2 mt-2">
         <div style={{ color: "yellow" }}>
           Showing <strong>{pageItems.length}</strong> of <strong>{sorted.length}</strong> (from <strong>{workers.length}</strong> total){reminderFilter ? ` — ${reminderFilter}` : ""}
         </div>
 
         {Math.ceil(sorted.length / rowsPerPage) > 1 && (
-          <nav aria-label="Workers" className="pagination-top py-2 mb-3 m-auto pagination-wrapper">
+          <nav aria-label="Workers" className="pagination-top py-2 m-auto pagination-wrapper">
             <ul className="pagination justify-content-center mb-0">
               <li className={`page-item ${safePage === 1 ? "disabled" : ""}`}><button className="page-link" onClick={() => setCurrentPage(1)} disabled={safePage === 1}>«</button></li>
               <li className={`page-item ${safePage === 1 ? "disabled" : ""}`}><button className="page-link" onClick={() => setCurrentPage(safePage - 1)} disabled={safePage === 1}>‹</button></li>

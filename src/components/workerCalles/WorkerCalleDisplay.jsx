@@ -462,8 +462,11 @@ export default function WorkerCalleDisplay({ permissions: permissionsProp }) {
   const [rowsPerPage, setRowsPerPage] = useState(10);
 
   // — Controlled dropdown state for Joining Type —
-  const [jtOpen, setJtOpen] = useState(false);
   const jtRef = useRef(null);
+  const usersRef = useRef(null);
+  const [jtOpen, setJtOpen] = useState(false);
+  const [usersOpen, setUsersOpen] = useState(false);
+
   useEffect(() => {
     const onDocClick = (e) => {
       if (!jtRef.current) return;
@@ -471,6 +474,20 @@ export default function WorkerCalleDisplay({ permissions: permissionsProp }) {
     };
     document.addEventListener("click", onDocClick);
     return () => document.removeEventListener("click", onDocClick);
+  }, []);
+
+  useEffect(() => {
+    const handleDocClick = (e) => {
+      if (jtRef.current && !jtRef.current.contains(e.target)) {
+        setJtOpen(false);
+      }
+      if (usersRef.current && !usersRef.current.contains(e.target)) {
+        setUsersOpen(false);
+      }
+    };
+
+    document.addEventListener("click", handleDocClick);
+    return () => document.removeEventListener("click", handleDocClick);
   }, []);
 
 
@@ -577,7 +594,8 @@ export default function WorkerCalleDisplay({ permissions: permissionsProp }) {
 
   // New state for tabs and user selection
   const [activeTab, setActiveTab] = useState("callData");
-  const [selectedUser, setSelectedUser] = useState("");
+  const [selectedUser, setSelectedUser] = useState(null);
+  const [selectedUsers, setSelectedUsers] = useState([]);
   const [selectedRows, setSelectedRows] = useState(new Set());
 
   /* --- FETCH --- */
@@ -1232,12 +1250,18 @@ export default function WorkerCalleDisplay({ permissions: permissionsProp }) {
     return grid;
   };
 
-  const getTotalMonthlyCalls = () => {
-    return Object.keys(usersMap).reduce(
-      (total, userId) => total + getMonthlyUserTotal(userId),
-      0
-    );
+  const getFilteredTotalMonthlyCalls = () => {
+    return Object.keys(usersMap)
+      .filter(userId => selectedUsers.length === 0 || selectedUsers.includes(userId))
+      .reduce((total, userId) => total + getMonthlyUserTotal(userId), 0);
   };
+
+  const getFilteredTotalYearlyCalls = () => {
+    return Object.keys(usersMap)
+      .filter(userId => selectedUsers.length === 0 || selectedUsers.includes(userId))
+      .reduce((total, userId) => total + getYearlyUserTotal(userId), 0);
+  };
+
 
   const getCallCountClass = (count) => {
     if (count === 0) return "perf-none";
@@ -1335,6 +1359,16 @@ export default function WorkerCalleDisplay({ permissions: permissionsProp }) {
     }
 
     return weeklyTotal;
+  };
+
+  const getTotalMonthlyCalls = () => {
+    if (activeMonth === null) return getTotalYearlyCalls();
+
+    return Object.keys(usersMap).reduce((total, userId) => {
+      const userGrid = getUserDayGrid(userId);
+      const monthData = userGrid[activeMonth] || {};
+      return total + Object.values(monthData).reduce((sum, day) => sum + day.total, 0);
+    }, 0);
   };
 
   // Add these helper functions to your component
@@ -1721,6 +1755,8 @@ export default function WorkerCalleDisplay({ permissions: permissionsProp }) {
     setShowJobRoles(false);
     setSelectedRows(new Set());
     setSelectedJoiningTypes([]);
+    setJtOpen(false);
+    setUsersOpen(false);
   };
 
   /* UI */
@@ -1764,24 +1800,61 @@ export default function WorkerCalleDisplay({ permissions: permissionsProp }) {
           style={{ maxWidth: 380 }}
         />
 
-        {/* Joining Type multi-select */}
-        <select
-          className="form-select d-filter"
-          value={selectedJoiningTypes[0] || ""}       // keep array shape, pick first
-          onChange={(e) => {
-            const v = e.target.value;
-            setSelectedJoiningTypes(v ? [v] : []);   // store as [value] or [] for "All"
-          }}
-          title="Joining Type"
-        >
-          <option value="">Select Joining Type</option>
-          <option value="Immediate">Immediate</option>
-          <option value="1 Week">1 Week</option>
-          <option value="15 Days">15 Days</option>
-          <option value="Flexible">Flexible</option>
-          <option value="Negotiable">Negotiable</option>
-        </select>
-
+        <div className="dropdown" ref={jtRef}>
+          <button
+            className="btn btn-outline-info dropdown-toggle"
+            type="button"
+            onClick={() => setJtOpen(!jtOpen)}
+          >
+            {selectedJoiningTypes.length > 0
+              ? `Joining (${selectedJoiningTypes.length})`
+              : "Joining Type"}
+          </button>
+          {jtOpen && (
+            <div className="dropdown-menu dropdown-menu-dark p-3 show" style={{ width: '250px' }}>
+              <h6 className="text-warning mb-2">Select Joining Types</h6>
+              <div className="dropdown-divider"></div>
+              {joiningTypeOptions.map((type) => {
+                const isSelected = selectedJoiningTypes.includes(type);
+                return (
+                  <div key={type} className="form-check">
+                    <input
+                      className="form-check-input"
+                      type="checkbox"
+                      id={`jt-${type}`}
+                      checked={isSelected}
+                      onChange={(e) => {
+                        if (e.target.checked) {
+                          setSelectedJoiningTypes(prev => [...prev, type]);
+                        } else {
+                          setSelectedJoiningTypes(prev => prev.filter(t => t !== type));
+                        }
+                      }}
+                    />
+                    <label className="form-check-label text-white" htmlFor={`jt-${type}`}>
+                      {type}
+                    </label>
+                  </div>
+                );
+              })}
+              <div className="dropdown-divider mt-2"></div>
+              <div className="d-flex justify-content-between">
+                <button
+                  className="btn btn-sm btn-outline-warning"
+                  onClick={() => setSelectedJoiningTypes([])}
+                >
+                  Clear
+                </button>
+                <button
+                  className="btn btn-sm btn-outline-info"
+                  onClick={() => setJtOpen(false)}
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
         <select
           className="form-select d-filter"
           value={selectedSource}
@@ -1795,22 +1868,83 @@ export default function WorkerCalleDisplay({ permissions: permissionsProp }) {
           ))}
         </select>
 
-        {/* User dropdown for admin/super admin */}
-        {(permissions.canManageUsers || permissions.canExport) && (
-          <select
-            className="form-select d-filter"
-            value={selectedUser}
-            onChange={(e) => setSelectedUser(e.target.value)}
-          >
-            <option value="">All Users</option>
-            {Object.entries(usersMap).map(([userId, user]) => (
-              <option key={userId} value={userId}>
-                {user.name || user.displayName || user.email || userId}
-              </option>
-            ))}
-          </select>
-        )}
 
+        {/* Users Dropdown - Fixed */}
+        {/* Users Dropdown - Fixed */}
+        {(permissions.canManageUsers || permissions.canExport) && (
+          <div className="dropdown" ref={usersRef}>
+            <button
+              className="btn btn-outline-info dropdown-toggle"
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                setUsersOpen(!usersOpen);
+              }}
+            >
+              Users ({selectedUsers.length})
+            </button>
+            {usersOpen && (
+              <div
+                className="dropdown-menu dropdown-menu-dark p-3 show"
+                style={{ width: '300px', maxHeight: '400px', overflowY: 'auto' }}
+              >
+                <div className="d-flex justify-content-between align-items-center mb-2">
+                  <h6 className="text-warning mb-0">Select Users</h6>
+                  <div>
+                    <button
+                      className="btn btn-sm btn-outline-warning me-1"
+                      onClick={() => setSelectedUsers(Object.keys(usersMap))}
+                    >
+                      All
+                    </button>
+                    <button
+                      className="btn btn-sm btn-outline-secondary"
+                      onClick={() => setSelectedUsers([])}
+                    >
+                      None
+                    </button>
+                  </div>
+                </div>
+                <div className="dropdown-divider"></div>
+                {Object.entries(usersMap).map(([userId, user]) => (
+                  <div key={userId} className="form-check">
+                    <input
+                      className="form-check-input"
+                      type="checkbox"
+                      id={`user-${userId}`}
+                      checked={selectedUsers.includes(userId)}
+                      onChange={(e) => {
+                        if (e.target.checked) {
+                          setSelectedUsers(prev => [...prev, userId]);
+                        } else {
+                          setSelectedUsers(prev => prev.filter(id => id !== userId));
+                        }
+                      }}
+                    />
+                    <label className="form-check-label text-white" htmlFor={`user-${userId}`}>
+                      {user.name || user.displayName || user.email || userId}
+                    </label>
+                  </div>
+                ))}
+                <div className="dropdown-divider mt-2"></div>
+                <div className="d-flex justify-content-between">
+                  <button
+                    className="btn btn-sm btn-outline-warning"
+                    onClick={() => setSelectedUsers([])}
+                  >
+                    Clear
+                  </button>
+                  <button
+                    className="btn btn-sm btn-outline-info"
+                    onClick={() => setUsersOpen(false)}
+                  >
+                    Close
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
         <select
           className="form-select  d-filter"
           value={sortBy}
@@ -3460,7 +3594,7 @@ export default function WorkerCalleDisplay({ permissions: permissionsProp }) {
                           </tr>
                         </thead>
                         <tbody>
-                          {Object.entries(usersMap).map(([userId, user]) => {
+                          {Object.entries(usersMap).filter(([userId]) => selectedUsers.length === 0 || selectedUsers.includes(userId)).map(([userId, user]) => {
                             let userTotal = 0;
                             const dayCalls = Array.from(
                               { length: 31 },
@@ -3556,62 +3690,48 @@ export default function WorkerCalleDisplay({ permissions: permissionsProp }) {
                               let dailyTotal = 0;
 
                               if (activeMonth === null) {
-                                // Yearly view - sum all users' calls for this day across all months
-                                Object.keys(usersMap).forEach((userId) => {
-                                  for (let month = 0; month < 12; month++) {
-                                    const userGrid = getUserDayGrid(userId);
-                                    const dayData =
-                                      userGrid[month] && userGrid[month][day];
-                                    dailyTotal += dayData ? dayData.total : 0;
-                                  }
-                                });
+                                // Yearly view - sum selected users' calls for this day across all months
+                                Object.keys(usersMap)
+                                  .filter(userId => selectedUsers.length === 0 || selectedUsers.includes(userId))
+                                  .forEach((userId) => {
+                                    for (let month = 0; month < 12; month++) {
+                                      const userGrid = getUserDayGrid(userId);
+                                      const dayData = userGrid[month] && userGrid[month][day];
+                                      dailyTotal += dayData ? dayData.total : 0;
+                                    }
+                                  });
                               } else {
-                                // Monthly view - sum all users' calls for this day in specific month
-                                const daysInMonth = new Date(
-                                  activeYear,
-                                  activeMonth + 1,
-                                  0
-                                ).getDate();
+                                // Monthly view - sum selected users' calls for this day in specific month
+                                const daysInMonth = new Date(activeYear, activeMonth + 1, 0).getDate();
                                 const isDayInMonth = day <= daysInMonth;
                                 if (isDayInMonth) {
-                                  Object.keys(usersMap).forEach((userId) => {
-                                    const userGrid = getUserDayGrid(userId);
-                                    const dayData =
-                                      userGrid[activeMonth] &&
-                                      userGrid[activeMonth][day];
-                                    dailyTotal += dayData ? dayData.total : 0;
-                                  });
+                                  Object.keys(usersMap)
+                                    .filter(userId => selectedUsers.length === 0 || selectedUsers.includes(userId))
+                                    .forEach((userId) => {
+                                      const userGrid = getUserDayGrid(userId);
+                                      const dayData = userGrid[activeMonth] && userGrid[activeMonth][day];
+                                      dailyTotal += dayData ? dayData.total : 0;
+                                    });
                                 }
                               }
 
-                              const isInMonth =
-                                activeMonth === null
-                                  ? true
-                                  : day <=
-                                  new Date(
-                                    activeYear,
-                                    activeMonth + 1,
-                                    0
-                                  ).getDate();
+                              const isInMonth = activeMonth === null
+                                ? true
+                                : day <= new Date(activeYear, activeMonth + 1, 0).getDate();
 
                               return (
                                 <td
                                   key={day}
-                                  className={`text-center ${isInMonth ? "text-warning" : "text-muted"
-                                    }`}
+                                  className={`text-center ${isInMonth ? "text-warning" : "text-muted"}`}
                                 >
-                                  {isInMonth
-                                    ? dailyTotal > 0
-                                      ? dailyTotal
-                                      : "•"
-                                    : "-"}
+                                  {isInMonth ? (dailyTotal > 0 ? dailyTotal : "•") : "-"}
                                 </td>
                               );
                             })}
                             <td className="text-warning text-center bg-success">
                               {activeMonth === null
-                                ? getTotalYearlyCalls()
-                                : getTotalMonthlyCalls()}
+                                ? getFilteredTotalYearlyCalls()
+                                : getFilteredTotalMonthlyCalls()}
                             </td>
                           </tr>
 
@@ -3760,8 +3880,8 @@ export default function WorkerCalleDisplay({ permissions: permissionsProp }) {
                                   )
                                 ) || 1;
 
-                              return Object.entries(usersMap).map(
-                                ([userId, user], index) => {
+                              return Object.entries(usersMap).filter(([userId]) => selectedUsers.length === 0 || selectedUsers.includes(userId))
+                                .map(([userId, user], index) => {
                                   const total =
                                     activeMonth === null
                                       ? getYearlyUserTotal(userId)
@@ -3886,7 +4006,7 @@ export default function WorkerCalleDisplay({ permissions: permissionsProp }) {
                                     </div>
                                   );
                                 }
-                              );
+                                );
                             })()}
                           </div>
 
@@ -3943,12 +4063,11 @@ export default function WorkerCalleDisplay({ permissions: permissionsProp }) {
                           Performance Overview
                         </h6>
                         {(() => {
-                          const userStats = Object.entries(usersMap)
+                          const userStats = Object.entries(usersMap).filter(([userId]) => selectedUsers.length === 0 || selectedUsers.includes(userId))
                             .map(([userId, user]) => {
-                              const total =
-                                activeMonth === null
-                                  ? getYearlyUserTotal(userId)
-                                  : getMonthlyUserTotal(userId);
+                              const total = activeMonth === null
+                                ? getYearlyUserTotal(userId)
+                                : getMonthlyUserTotal(userId);
                               return { userId, user, total };
                             })
                             .sort((a, b) => b.total - a.total);

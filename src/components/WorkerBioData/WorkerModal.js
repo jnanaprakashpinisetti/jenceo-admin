@@ -22,13 +22,13 @@ const BaseModal = ({ open, title, children, onClose, footer }) => {
     return (
         <div
             className="fixed-top d-flex align-items-center justify-content-center"
-            style={{ inset: 0, background: "rgba(0,0,0,.5)", zIndex: 1060 }}
+            style={{ inset: 0, background: "rgba(0,0,0,.9)", zIndex: 1060 }}
             role="dialog"
             aria-modal="true"
         >
-            <div className="card shadow-lg" style={{ width: "min(980px, 96vw)" }}>
+            <div className="card bg-white shadow-lg" style={{ width: "min(980px, 96vw)" }}>
                 <div className="card-header d-flex align-items-center justify-content-between">
-                    <strong className="me-3">{title}</strong>
+                    <strong className="me-3 text-black">{title}</strong>
                     <button type="button" className="btn-close" onClick={onClose} />
                 </div>
                 <div className="card-body">
@@ -111,6 +111,8 @@ const WorkerModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode }
     // validation errors (array per row)
     const [paymentErrors, setPaymentErrors] = useState([{}]);
     const [workErrors, setWorkErrors] = useState([{}]);
+
+    const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
 
     const iframeRef = useRef(null);
 
@@ -307,6 +309,7 @@ const WorkerModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode }
                     employeePhotoFile: file,
                     employeePhotoUrl: ev.target.result, // preview
                 }));
+                setHasUnsavedChanges(true);
             };
             reader.readAsDataURL(file);
         }
@@ -375,6 +378,7 @@ const WorkerModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode }
             idProofFile: file,
             idProofError: null // Clear any previous errors
         }));
+        setHasUnsavedChanges(true);
 
         // Create preview for images
         if (file.type.startsWith('image/')) {
@@ -452,6 +456,7 @@ const WorkerModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode }
     const handleInputChange = (e) => {
         const { name, value } = e.target;
         setFormData((prev) => (name.includes(".") ? setNested(prev || {}, name, value) : { ...prev, [name]: value }));
+        setHasUnsavedChanges(true);
     };
 
     const handleArrayChange = (section, index, field, value) => {
@@ -477,6 +482,8 @@ const WorkerModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode }
             arr[index] = row;
             return { ...prev, [section]: arr };
         });
+
+        setHasUnsavedChanges(true);
 
         if (section === "payments") {
             setPaymentErrors((prev) => {
@@ -1069,6 +1076,8 @@ const WorkerModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode }
                 return updated;
             });
 
+            setHasUnsavedChanges(false);
+
             // Show success message that stays until user closes it
             openAlert("Saved", <span>Changes have been saved successfully.</span>, "success");
 
@@ -1224,6 +1233,22 @@ const WorkerModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode }
             }
         } catch (e) {
             console.error("Client fetch error:", e);
+        }
+    };
+
+    const handleCloseWithConfirmation = () => {
+        if (hasUnsavedChanges) {
+            openConfirm(
+                "Unsaved Changes",
+                "You have unsaved changes. Are you sure you want to close?",
+                () => {
+                    closeConfirm();
+                    setHasUnsavedChanges(false);
+                    onClose && onClose();
+                }
+            );
+        } else {
+            onClose && onClose();
         }
     };
 
@@ -1561,7 +1586,7 @@ const WorkerModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode }
                                 {isEditMode ? "Edit Employee - " : ""}
                                 {formData.idNo || formData.employeeId || "N/A"} - {formData.firstName || ""} {formData.lastName || ""}
                             </h3>
-                            <button type="button" className="btn-close btn-close-white" onClick={onClose}></button>
+                            <button type="button" className="btn-close btn-close-white" onClick={handleCloseWithConfirmation}></button>
                         </div>
 
                         <div className="modal-body">
@@ -2812,12 +2837,8 @@ const WorkerModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode }
 
                             {/* Footer buttons */}
                             <div className="d-flex gap-2 justify-content-end hideInView">
-                                {onDelete && canEdit && (
-                                    <button type="button" className="btn btn-danger" onClick={handleDelete}>
-                                        Delete
-                                    </button>
-                                )}
-                                <button type="button" className="btn btn-secondary" onClick={onClose}>
+
+                                <button type="button" className="btn btn-secondary" onClick={handleCloseWithConfirmation}>
                                     Close
                                 </button>
                                 <button type="button" className="btn btn-primary" onClick={handleSaveClick}>

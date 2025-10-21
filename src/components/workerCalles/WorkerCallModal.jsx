@@ -507,8 +507,8 @@ export default function WorkerCallModal({
                           <div className="card-body p-3">
                             {isEditMode ? (
                               <div className="row g-3">
-                                <div className="col-md-6">
-                                  <label className="form-label fw-semibold text-light">
+                                <div className="col-md-4">
+                                  <label className="form-label fw-semibold text-secondary">
                                     Mobile Number
                                   </label>
                                   <input
@@ -520,8 +520,8 @@ export default function WorkerCallModal({
                                   />
                                 </div>
 
-                                <div className="col-md-6">
-                                  <label className="form-label fw-semibold text-light">
+                                <div className="col-md-4">
+                                  <label className="form-label fw-semibold text-secondary">
                                     Full Name
                                   </label>
                                   <input
@@ -534,33 +534,56 @@ export default function WorkerCallModal({
                                   />
                                 </div>
 
-                                <div className="col-md-6">
-                                  <label className="form-label fw-semibold text-light d-block">
+                                <div className="col-md-4">
+                                  <label className="form-label fw-semibold text-secondary">
                                     Gender
                                   </label>
-                                  <div className="d-flex gap-2 flex-wrap">
-                                    {["Male", "Female", "Others"].map((g) => (
-                                      <button
-                                        key={g}
-                                        type="button"
-                                        onClick={() =>
-                                          handleChange({
-                                            target: { name: "gender", value: g },
-                                          })
-                                        }
-                                        className={`btn ${localWorker.gender === g
-                                          ? "btn-primary"
-                                          : "btn-outline-light"
-                                          } btn-sm`}
-                                      >
-                                        {g}
-                                      </button>
-                                    ))}
-                                  </div>
+                                  <select
+                                    name="gender"
+                                    value={localWorker.gender || ""}
+                                    onChange={handleChange}
+                                    className="form-select dark-input"
+                                  >
+                                    <option value="">Select Gender</option>
+                                    <option value="Male">Male</option>
+                                    <option value="Female">Female</option>
+                                    <option value="Others">Others</option>
+                                  </select>
                                 </div>
 
-                                <div className="col-md-6">
-                                  <label className="form-label fw-semibold text-light">
+
+                                <div className="col-md-4">
+                                  <label className="form-label fw-semibold text-secondary">
+                                    Age
+                                  </label>
+                                  <input
+                                    type="number"
+                                    name="age"
+                                    value={localWorker.age || ""}
+                                    onChange={handleChange}
+                                    className="form-control dark-input text-center"
+                                    min="10"
+                                    max="80"
+                                    placeholder="Age"
+                                  />
+                                </div>
+
+                                <div className="col-md-4">
+                                  <label className="form-label fw-semibold text-secondary">
+                                    Education
+                                  </label>
+                                  <input
+                                    type="text"
+                                    name="education"
+                                    value={localWorker.education || ""}
+                                    onChange={handleChange}
+                                    className="form-control dark-input"
+                                    placeholder="Enter education"
+                                  />
+                                </div>
+
+                                <div className="col-md-4">
+                                  <label className="form-label fw-semibold text-secondary">
                                     Location
                                   </label>
                                   <input
@@ -578,6 +601,8 @@ export default function WorkerCallModal({
                                 {renderInfoCard("Mobile Number", localWorker.mobileNo)}
                                 {renderInfoCard("Full Name", localWorker.name)}
                                 {renderInfoCard("Gender", localWorker.gender, "gender")}
+                                {renderInfoCard("Education", localWorker.education)}
+                                {renderInfoCard("Age", localWorker.age)}
                                 {renderInfoCard("Location", localWorker.location)}
                               </div>
                             )}
@@ -597,8 +622,28 @@ export default function WorkerCallModal({
                           <div className="card-body p-3">
                             {isEditMode ? (
                               <div className="row g-3">
+
                                 <div className="col-md-4">
-                                  <label className="form-label fw-semibold text-light">
+                                  <label className="form-label fw-semibold text-secondary">
+                                    Marital Status
+                                  </label>
+                                  <select
+                                    name="maritalStatus"
+                                    value={localWorker.maritalStatus || ""}
+                                    onChange={handleChange}
+                                    className="form-select dark-input"
+                                  >
+                                    <option value="">Select Status</option>
+                                    <option value="Single">Single</option>
+                                    <option value="Married">Married</option>
+                                    <option value="Separated">Separated</option>
+                                    <option value="Widow">Widow</option>
+                                  </select>
+                                </div>
+
+
+                                <div className="col-md-4">
+                                  <label className="form-label fw-semibold text-secondary">
                                     Source
                                   </label>
                                   <select
@@ -616,56 +661,9 @@ export default function WorkerCallModal({
                                   </select>
                                 </div>
 
-                                <div className="col-md-4">
-                                  <label className="form-label fw-semibold text-light">
-                                    Marital Status
-                                  </label>
-                                  <select
-                                    name="maritalStatus"
-                                    value={localWorker.maritalStatus || ""}
-                                    onChange={handleChange}
-                                    className="form-select dark-input"
-                                  >
-                                    <option value="">Select Status</option>
-                                    <option value="Single">Single</option>
-                                    <option value="Married">Married</option>
-                                    <option value="Separated">Separated</option>
-                                    <option value="Widow">Widow</option>
-                                  </select>
-                                </div>
 
                                 <div className="col-md-4">
-                                  <label className="form-label fw-semibold text-light">
-                                    Education
-                                  </label>
-                                  <input
-                                    type="text"
-                                    name="education"
-                                    value={localWorker.education || ""}
-                                    onChange={handleChange}
-                                    className="form-control dark-input"
-                                    placeholder="Enter education"
-                                  />
-                                </div>
-
-                                <div className="col-md-4">
-                                  <label className="form-label fw-semibold text-light">
-                                    Age
-                                  </label>
-                                  <input
-                                    type="number"
-                                    name="age"
-                                    value={localWorker.age || ""}
-                                    onChange={handleChange}
-                                    className="form-control dark-input text-center"
-                                    min="10"
-                                    max="80"
-                                    placeholder="Age"
-                                  />
-                                </div>
-
-                                <div className="col-md-4">
-                                  <label className="form-label fw-semibold text-light">
+                                  <label className="form-label fw-semibold text-secondary">
                                     Experience
                                   </label>
                                   <select
@@ -680,7 +678,7 @@ export default function WorkerCallModal({
                                 </div>
 
                                 <div className="col-md-4">
-                                  <label className="form-label fw-semibold text-light">
+                                  <label className="form-label fw-semibold text-secondary">
                                     Years
                                   </label>
                                   <input
@@ -696,7 +694,7 @@ export default function WorkerCallModal({
                                 </div>
 
                                 <div className="col-md-4">
-                                  <label className="form-label fw-semibold text-light d-block">
+                                  <label className="form-label fw-semibold text-secondary d-block">
                                     Working Hours
                                   </label>
                                   <select
@@ -711,8 +709,50 @@ export default function WorkerCallModal({
                                   </select>
                                 </div>
 
+
+
+
+
                                 <div className="col-md-4">
-                                  <label className="form-label fw-semibold text-light d-block">
+                                  <label className="form-label fw-semibold text-secondary">
+                                    Joining Type
+                                  </label>
+
+                                  <select
+                                    name="joiningType"
+                                    value={localWorker.joiningType || "No"}
+                                    onChange={handleChange}
+                                    className="form-select dark-input"
+                                  >
+                                    <option value="">Select Joining Type</option>
+                                    <option value="Immediate">Immediate</option>
+                                    <option value="1 Week">1 Week</option>
+                                    <option value="15 Days">15 Days</option>
+                                    <option value="Flexible">Flexible</option>
+                                    <option value="Negotiable">Negotiable</option>
+                                  </select>
+
+                                </div>
+
+                                <div className="col-md-4">
+                                  <label className="form-label fw-semibold text-secondary">
+                                    Expeted Salary
+                                  </label>
+                                  <input
+                                    type="tel"
+                                    name="expectedSalary"
+                                    value={localWorker.expectedSalary || ""}
+                                    onChange={handleChange}
+                                    className="form-control dark-input"
+                                    placeholder=" Expected Salary"
+                                    maxLength={5}
+                                  />
+                                </div>
+
+
+
+                                <div className="col-md-4">
+                                  <label className="form-label fw-semibold text-secondary d-block">
                                     Conversation Level
                                   </label>
                                   <select
@@ -732,7 +772,7 @@ export default function WorkerCallModal({
                                 </div>
 
                                 <div className="col-md-4">
-                                  <label className="form-label fw-semibold text-light">
+                                  <label className="form-label fw-semibold text-secondary">
                                     Reminder Date
                                   </label>
                                   <input
@@ -746,13 +786,13 @@ export default function WorkerCallModal({
                               </div>
                             ) : (
                               <div className="info-grid-compact">
-                                {renderInfoCard("Source", localWorker.source)}
                                 {renderInfoCard("Marital Status", localWorker.maritalStatus)}
-                                {renderInfoCard("Education", localWorker.education)}
-                                {renderInfoCard("Age", localWorker.age)}
+                                {renderInfoCard("Source", localWorker.source)}
                                 {renderInfoCard("Experience", localWorker.experience)}
                                 {renderInfoCard("Years", localWorker.years)}
                                 {renderInfoCard("Working Hours", localWorker.workingHours ? `${localWorker.workingHours}HR` : "N/A")}
+                                {renderInfoCard("Joining Type", localWorker.joiningType, "joiningType")}
+                                {renderInfoCard("Expected Salary", localWorker.expectedSalary, "expectedSalary")}
                                 {renderInfoCard("Conversation Level", localWorker.conversationLevel, "conversation")}
                                 {renderInfoCard("Reminder Date", localWorker.callReminderDate ? new Date(localWorker.callReminderDate).toLocaleDateString("en-GB") : "—")}
                               </div>
@@ -782,7 +822,7 @@ export default function WorkerCallModal({
                             )}
 
                             {/* Comments List */}
-                            <div className="comments-list-compact mb-3" style={{ maxHeight: "200px", overflowY: "auto" }}>
+                            <div className="comments-list-compact " style={{ maxHeight: "200px", overflowY: "auto" }}>
                               {comments && comments.length > 0 ? (
                                 comments.map((c, idx) => (
                                   <div key={idx} className="comment-item-compact">
@@ -875,7 +915,7 @@ export default function WorkerCallModal({
                                     {filteredLanguages.map((lang) => (
                                       <div
                                         key={lang}
-                                        className="dropdown-item"
+                                        className="dropdown-item text-secondary"
                                         onClick={() => handleLanguageSelect(lang)}
                                       >
                                         {lang}
@@ -892,39 +932,44 @@ export default function WorkerCallModal({
                             )}
 
                             <div className="languages-container-compact">
-                              {normalizeArray(localWorker.languages).length > 0 ? (
-                                <div className="d-flex flex-wrap gap-2">
-                                  {normalizeArray(localWorker.languages).map((lang, idx) => (
-                                    <span
-                                      key={idx}
-                                      className="language-tag-compact text-info"
-                                    >
-                                      {lang}
-                                      {isEditMode && (
-                                        <button
-                                          type="button"
-                                          className="tag-remove"
-                                          onClick={() => handleTagRemove("languages", idx)}
-                                        >
-                                          ×
-                                        </button>
-                                      )}
-                                    </span>
-                                  ))}
-                                </div>
-                              ) : (
-                                <div className="empty-state-compact text-center py-3">
-                                  <i className="bi bi-translate text-muted"></i>
-                                  <p className="mt-2 mb-0 text-muted">No languages selected</p>
-                                </div>
-                              )}
-                            </div>
+  {normalizeArray(localWorker.languages).length > 0 ? (
+    <div className="d-flex flex-wrap gap-2">
+      {normalizeArray(localWorker.languages).map((lang, idx) => (
+        <div
+          key={idx}
+          className="language-tag-compact btn btn-outline-warning btn-sm position-relative"
+        >
+          {lang}
+          {isEditMode && (
+            <button
+              type="button"
+              className="btn-close btn-close-white tag-remove position-absolute top-0 start-100 translate-middle"
+              onClick={() => handleTagRemove("languages", idx)}
+              style={{
+                width: '0.5rem',
+                height: '0.5rem',
+                fontSize: '0.6rem',
+                padding: '0.25rem'
+              }}
+            >
+            </button>
+          )}
+        </div>
+      ))}
+    </div>
+  ) : (
+    <div className="empty-state-compact text-center py-3">
+      <i className="bi bi-translate text-muted"></i>
+      <p className="mt-2 mb-0 text-muted">No languages selected</p>
+    </div>
+  )}
+</div>
                           </div>
                         </div>
                       </div>
 
                       {/* Skills Columns */}
-                      <div className="col-md-6">
+                      {/* <div className="col-md-6">
                         <div className="dark-card h-100">
                           <div className="card-header dark-card-header">
                             <h6 className="mb-0 fw-bold text-warning">PRIMARY SKILLS</h6>
@@ -996,10 +1041,10 @@ export default function WorkerCallModal({
                             )}
                           </div>
                         </div>
-                      </div>
+                      </div> */}
 
-                      <div className="col-md-6">
-                        <div className="dark-card h-100">
+                      <div className="col-md-12">
+                        <div className="dark-card">
                           <div className="card-header dark-card-header">
                             <h6 className="mb-0 fw-bold text-warning">HOME CARE SKILLS</h6>
                           </div>
@@ -1080,22 +1125,22 @@ export default function WorkerCallModal({
                           <div className="card-header dark-card-header">
                             <h6 className="mb-0 fw-bold text-warning">OTHER SKILLS</h6>
                           </div>
-                          <div className="card-body p-3">
+                          <div className="card-body">
                             {isEditMode ? (
                               <>
                                 <div className="other-skills-categories">
                                   {[
-                                    { title: "💼 Office & Administrative", skills: otherSkillOptions.slice(0, 9), color: "office" },
-                                    { title: "📞 Customer Service", skills: otherSkillOptions.slice(9, 15), color: "customer" },
-                                    { title: "👔 Management", skills: otherSkillOptions.slice(15, 20), color: "management" },
-                                    { title: "🛡️ Security", skills: otherSkillOptions.slice(20, 24), color: "security" },
-                                    { title: "🚗 Driving & Logistics", skills: otherSkillOptions.slice(24, 32), color: "driving" },
-                                    { title: "🔧 Technical", skills: otherSkillOptions.slice(32, 42), color: "technical" },
-                                    { title: "🛍️ Retail & Sales", skills: otherSkillOptions.slice(42, 47), color: "retail" },
-                                    { title: "🏭 Industrial", skills: otherSkillOptions.slice(47), color: "industrial" }
+                                    { title: "💼 Office & Administrative", skills: otherSkillOptions.slice(0, 9), color: "office", bgClass: "bg-office", btnClass: "btn-office" },
+                                    { title: "📞 Customer Service", skills: otherSkillOptions.slice(9, 15), color: "customer", bgClass: "bg-customer", btnClass: "btn-customer" },
+                                    { title: "👔 Management", skills: otherSkillOptions.slice(15, 20), color: "management", bgClass: "bg-management", btnClass: "btn-management" },
+                                    { title: "🛡️ Security", skills: otherSkillOptions.slice(20, 24), color: "security", bgClass: "bg-security", btnClass: "btn-security" },
+                                    { title: "🚗 Driving & Logistics", skills: otherSkillOptions.slice(24, 32), color: "driving", bgClass: "bg-driving", btnClass: "btn-driving" },
+                                    { title: "🔧 Technical", skills: otherSkillOptions.slice(32, 42), color: "technical", bgClass: "bg-technical", btnClass: "btn-technical" },
+                                    { title: "🛍️ Retail & Sales", skills: otherSkillOptions.slice(42, 47), color: "retail", bgClass: "bg-retail", btnClass: "btn-retail" },
+                                    { title: "🏭 Industrial", skills: otherSkillOptions.slice(47), color: "industrial", bgClass: "bg-industrial", btnClass: "btn-industrial" }
                                   ].map((category, catIndex) => (
-                                    <div key={catIndex} className={`skill-category-compact ${category.color}-category`}>
-                                      <h6 className="category-title-compact">{category.title}</h6>
+                                    <div key={catIndex} className={`skill-category-compact p-3 mb-2 ${category.bgClass} rounded`}>
+                                      <h6 className="category-title-compact text-dark fw-bold">{category.title}</h6>
                                       <div className="skills-pills-compact">
                                         {category.skills.map((opt) => {
                                           const active = normalizeArray(localWorker.otherSkills)
@@ -1106,7 +1151,7 @@ export default function WorkerCallModal({
                                               key={`other-${opt}`}
                                               type="button"
                                               className={`btn btn-sm rounded-pill ${active
-                                                ? "btn-warning"
+                                                ? category.btnClass
                                                 : "btn-outline-light"
                                                 } disabled-keep skill-pill-compact`}
                                               onClick={() => handleMultiToggle("otherSkills", opt)}
@@ -1143,7 +1188,7 @@ export default function WorkerCallModal({
                             ) : (
                               <div className="skills-display-compact">
                                 {normalizeArray(localWorker.otherSkills).length > 0 ? (
-                                  <div className="d-flex flex-wrap gap-2">
+                                  <div className="d-flex flex-wrap gap-2 p-3">
                                     {normalizeArray(localWorker.otherSkills).map((skill, idx) => (
                                       <span
                                         key={idx}

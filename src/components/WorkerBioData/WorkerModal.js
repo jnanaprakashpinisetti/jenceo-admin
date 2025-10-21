@@ -190,9 +190,9 @@ const WorkerModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode }
     };
 
 
- function getEffectiveUserId(u) {
-   return u?.dbId || u?.uid || u?.id || u?.key || null;
- }
+    function getEffectiveUserId(u) {
+        return u?.dbId || u?.uid || u?.id || u?.key || null;
+    }
 
     function getEffectiveUserName(u, fallback = "System") {
         const raw =
@@ -309,6 +309,140 @@ const WorkerModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode }
                 }));
             };
             reader.readAsDataURL(file);
+        }
+    };
+
+    // Add this function to your WorkerModal component or import it from your firebase config
+    // Upload file to storage using your existing Firebase setup
+    const uploadToStorage = async (file, folder = 'id-proofs') => {
+        try {
+            // Use the imported storageRef, uploadFile, and getDownloadURL from your firebase config
+            const fileName = `${folder}/${Date.now()}_${file.name}`;
+            const fileRef = storageRef.child(fileName);
+            const snapshot = await uploadFile(fileRef, file);
+            const downloadURL = await getDownloadURL(snapshot.ref);
+            return { url: downloadURL, success: true };
+        } catch (error) {
+            console.error('Upload error:', error);
+            throw new Error('Failed to upload file: ' + error.message);
+        }
+    };
+
+    // Add these functions to your component
+
+    // Handle ID Proof file change
+    const handleIdProofChange = (e) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        // Clear previous errors
+        setFormData(prev => ({
+            ...prev,
+            idProofError: null
+        }));
+
+        // Validate file type
+        const allowedTypes = ['application/pdf', 'image/jpeg', 'image/jpg', 'image/png'];
+        const fileExtension = file.name.toLowerCase().split('.').pop();
+        const allowedExtensions = ['pdf', 'jpg', 'jpeg', 'png'];
+
+        if (!allowedTypes.includes(file.type) && !allowedExtensions.includes(fileExtension)) {
+            setFormData(prev => ({
+                ...prev,
+                idProofError: 'Please select a PDF, JPG, or PNG file only.',
+                idProofFile: null,
+                idProofPreview: null
+            }));
+            e.target.value = '';
+            return;
+        }
+
+        // Validate file size (150KB)
+        if (file.size > 150 * 1024) {
+            setFormData(prev => ({
+                ...prev,
+                idProofError: 'File size must be less than 150KB.',
+                idProofFile: null,
+                idProofPreview: null
+            }));
+            e.target.value = '';
+            return;
+        }
+
+        // Store the file for upload later
+        setFormData(prev => ({
+            ...prev,
+            idProofFile: file,
+            idProofError: null // Clear any previous errors
+        }));
+
+        // Create preview for images
+        if (file.type.startsWith('image/')) {
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                setFormData(prev => ({
+                    ...prev,
+                    idProofPreview: e.target.result,
+                    idProofError: null
+                }));
+            };
+            reader.readAsDataURL(file);
+        } else {
+            // For PDF files, clear any previous preview
+            setFormData(prev => ({
+                ...prev,
+                idProofPreview: null,
+                idProofError: null
+            }));
+        }
+    };
+
+    // Share ID Proof function
+    const shareIdProof = (idProofUrl) => {
+        if (!idProofUrl) {
+            alert('No ID proof available to share.');
+            return;
+        }
+
+        // Create shareable message
+        const employeeName = `${formData.firstName || ''} ${formData.lastName || ''}`.trim();
+        const shareText = `ID Proof for ${employeeName || 'Employee'}`;
+
+        // For mobile devices with Web Share API
+        if (navigator.share) {
+            navigator.share({
+                title: 'Employee ID Proof',
+                text: shareText,
+                url: idProofUrl,
+            }).catch((error) => {
+                console.log('Error sharing:', error);
+                // Fallback to WhatsApp
+                fallbackShare(idProofUrl, shareText);
+            });
+        } else {
+            // Fallback for desktop and older browsers
+            fallbackShare(idProofUrl, shareText);
+        }
+    };
+
+    // Fallback share function
+    const fallbackShare = (url, text) => {
+        // WhatsApp sharing
+        const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(text + ' ' + url)}`;
+
+        // Try to detect if it's mobile
+        const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+
+        if (isMobile) {
+            window.open(whatsappUrl, '_blank');
+        } else {
+            // For desktop, copy to clipboard
+            navigator.clipboard.writeText(url).then(() => {
+                alert('ID Proof link copied to clipboard! You can now paste it in WhatsApp or any other app.');
+            }).catch(() => {
+                // If clipboard fails, show the URL
+                prompt('Copy this link to share:', url);
+            });
         }
     };
 
@@ -876,12 +1010,10 @@ const WorkerModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode }
                             {errs.map((m, i) => (
                                 <li key={i}>{m}</li>
                             ))}
-
                         </ul>
                     )}
                     {activeTab === "payment" || activeTab === "working" ? summarizeErrors() : null}
                     <p>Please enter All Payment Details </p>
-
                 </>,
                 "danger"
             );
@@ -889,14 +1021,26 @@ const WorkerModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode }
         }
 
         try {
-            let photoURL = formData.employeePhotoUrl;
+            // Upload employee photo if exists
+            let photoURL = formData.employeePhoto;
             if (formData.employeePhotoFile) {
                 photoURL = await handlePhotoUpload(formData.employeePhotoFile);
             }
 
+            // Upload ID proof if exists
+            let idProofUrl = formData.idProofUrl;
+            if (formData.idProofFile) {
+                const uploadResult = await uploadToStorage(formData.idProofFile, 'id-proofs');
+                idProofUrl = uploadResult.url;
+            }
+
+            // Prepare the complete payload
             const payload = {
                 ...formData,
                 employeePhoto: photoURL,
+                idProofUrl: idProofUrl,
+                status,
+                // Process payments and work details
                 payments: (formData.payments || []).map((r) => {
                     const row = r.__locked ? r : stampAuthorOnRow(r);
                     const { __locked, ...rest } = row;
@@ -907,12 +1051,17 @@ const WorkerModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode }
                     const { __locked, ...rest } = row;
                     return rest;
                 }),
-                status,
             };
-            delete payload.employeePhotoFile;
 
+            // Remove file objects and preview data before saving to database
+            delete payload.employeePhotoFile;
+            delete payload.idProofFile;
+            delete payload.idProofPreview;
+
+            // Single save operation
             await Promise.resolve(onSave && onSave(payload));
 
+            // Update local state to lock filled rows
             setFormData((prev) => {
                 const updated = { ...prev };
                 if (activeTab === "payment") updated.payments = lockIfFilled(prev.payments);
@@ -920,13 +1069,13 @@ const WorkerModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode }
                 return updated;
             });
 
+            // Show success message that stays until user closes it
             openAlert("Saved", <span>Changes have been saved successfully.</span>, "success");
 
-            setTimeout(() => {
-                closeAlert();
-                onClose && onClose();
-            }, 900);
+
+
         } catch (error) {
+            console.error('Error saving employee data:', error);
             openAlert("Error", <span>Failed to save changes: {error.message}</span>, "danger");
         }
     };
@@ -1542,6 +1691,88 @@ const WorkerModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode }
                                                                             }
                                                                         >
                                                                             Remove Photo
+                                                                        </button>
+                                                                    )}
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                    <hr></hr>
+
+                                                    <div className="idProof">
+                                                        <label className="form-label center">
+                                                            <strong>ID Proof</strong>
+                                                        </label>
+                                                        <div className="text-center">
+                                                            {formData.idProofUrl || formData.idProofPreview ? (
+                                                                <div className="d-flex flex-column align-items-center gap-2">
+                                                                    {/* Show PDF icon for PDF files */}
+                                                                    {(formData.idProofUrl?.toLowerCase().includes('.pdf') ||
+                                                                        formData.idProofFile?.type === 'application/pdf') ? (
+                                                                        <div className="border rounded p-4 bg-light">
+                                                                            <i className="bi bi-file-earmark-pdf-fill text-danger" style={{ fontSize: '3rem' }}></i>
+                                                                            <div className="mt-2">PDF Document</div>
+                                                                        </div>
+                                                                    ) : (
+                                                                        // Show image for image files
+                                                                        <img
+                                                                            src={formData.idProofUrl || formData.idProofPreview}
+                                                                            alt="ID Proof"
+                                                                            style={{ maxWidth: "300px", maxHeight: "300px", objectFit: "cover" }}
+                                                                            className="rounded img-fluid"
+                                                                        />
+                                                                    )}
+
+                                                                    {/* Share Button - Visible in both view and edit modes */}
+                                                                    {formData.idProofUrl && (
+                                                                        <button
+                                                                            type="button"
+                                                                            className="btn btn-success btn-sm"
+                                                                            onClick={() => shareIdProof(formData.idProofUrl)}
+                                                                            title="Share ID Proof via WhatsApp or social media"
+                                                                        >
+                                                                            <i className="bi bi-share-fill me-1"></i>
+                                                                            Share ID Proof
+                                                                        </button>
+                                                                    )}
+                                                                </div>
+                                                            ) : (
+                                                                <div className="small-text">No ID proof uploaded</div>
+                                                            )}
+
+                                                            {canEdit && (
+                                                                <div className="d-flex flex-column align-items-center gap-2 mt-3">
+                                                                    <input
+                                                                        type="file"
+                                                                        accept=".pdf,.jpg,.jpeg,.png"
+                                                                        onChange={handleIdProofChange}
+                                                                        className={`form-control ${formData.idProofError ? 'is-invalid border-danger' : ''}`}
+                                                                        style={{ maxWidth: 320 }}
+                                                                    />
+                                                                    {/* Error message display */}
+                                                                    {formData.idProofError && (
+                                                                        <div className="text-danger small mt-1" style={{ fontSize: '0.8rem' }}>
+                                                                            {formData.idProofError}
+                                                                        </div>
+                                                                    )}
+                                                                    <div className="small-text small">
+                                                                        PDF, JPG, PNG only (max 150KB)
+                                                                    </div>
+                                                                    {(formData.idProofUrl || formData.idProofPreview) && (
+                                                                        <button
+                                                                            type="button"
+                                                                            className="btn btn-outline-secondary btn-sm"
+                                                                            onClick={() =>
+                                                                                setFormData((prev) => ({
+                                                                                    ...prev,
+                                                                                    idProofFile: undefined,
+                                                                                    idProofUrl: null,
+                                                                                    idProofPreview: null,
+                                                                                    idProofError: null
+                                                                                }))
+                                                                            }
+                                                                        >
+                                                                            Remove ID Proof
                                                                         </button>
                                                                     )}
                                                                 </div>
@@ -2231,8 +2462,8 @@ const WorkerModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode }
 
                                                                 <div className="form-text mt-1">
                                                                     <small className="small-text d-block text-primary mt-2">
-                                                                        Added by {(p.addedByName || p.createdByName || effectiveUserName)} • {formatDDMMYY(p.addedAt || p.createdAt)} {formatTime12h(p.addedAt || p.createdAt). toLocaleLowerCase()}
-                                                                       
+                                                                        Added by {(p.addedByName || p.createdByName || effectiveUserName)} • {formatDDMMYY(p.addedAt || p.createdAt)} {formatTime12h(p.addedAt || p.createdAt).toLocaleLowerCase()}
+
                                                                     </small>
                                                                 </div>
                                                             </div>

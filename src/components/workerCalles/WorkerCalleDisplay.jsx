@@ -196,11 +196,11 @@ const normalizeArray = (val) =>
   Array.isArray(val)
     ? val.filter(Boolean)
     : typeof val === "string"
-    ? val
+      ? val
         .split(",")
         .map((s) => s.trim())
         .filter(Boolean)
-    : [];
+      : [];
 const isWorkerShape = (v) =>
   !!(
     v &&
@@ -461,6 +461,32 @@ export default function WorkerCalleDisplay({ permissions: permissionsProp }) {
   const [currentPage, setCurrentPage] = useState(1);
   const [rowsPerPage, setRowsPerPage] = useState(10);
 
+  // — Controlled dropdown state for Joining Type —
+  const [jtOpen, setJtOpen] = useState(false);
+  const jtRef = useRef(null);
+  useEffect(() => {
+    const onDocClick = (e) => {
+      if (!jtRef.current) return;
+      if (!jtRef.current.contains(e.target)) setJtOpen(false);
+    };
+    document.addEventListener("click", onDocClick);
+    return () => document.removeEventListener("click", onDocClick);
+  }, []);
+
+
+  // === Joining Type options (keep labels user-friendly) ===
+  const joiningTypeOptions = [
+    "Immediate",
+    "1 Week",
+    "15 Days",
+    "Flexible",
+    "Negotiable"
+  ];
+
+  // Selected Joining Types (multi-select)
+  const [selectedJoiningTypes, setSelectedJoiningTypes] = useState([]);
+
+
   // Options
   const callThroughOptions = [
     "Apana",
@@ -586,6 +612,40 @@ export default function WorkerCalleDisplay({ permissions: permissionsProp }) {
     return () => ref.off("value", cb);
   }, []);
 
+  // Normalize worker "joining type" into a lowercase array we can filter on.
+  const getWorkerJoiningTypes = (w) => {
+    // Look across common fields you might be using
+    const raw =
+      w?.joiningType ??
+      w?.expectedJoining ??
+      w?.joining ??
+      w?.joining_status ??
+      w?.noticePeriod ??
+      w?.availability ??
+      "";
+
+    // Turn strings or arrays into a clean, lowercase array
+    const asArray = Array.isArray(raw)
+      ? raw
+      : typeof raw === "string"
+        ? raw.split(/[,\|/]+/).map(s => s.trim()).filter(Boolean)
+        : [];
+
+    // Map variants to our UI options (Immediate, 1 Week, 15 Days, Flexible, Negotiable)
+    const mapOne = (s) => {
+      const t = s.toLowerCase();
+      if (/immed/.test(t) || t === "now" || t === "today") return "immediate";
+      if (/(^|\s)1\s*week/.test(t) || t === "7 days") return "1 week";
+      if (/(^|\s)15\s*day/.test(t) || t === "half month") return "15 days";
+      if (/(flex|any|open)/.test(t)) return "flexible";
+      if (/(nego|discuss)/.test(t)) return "negotiable";
+      return t; // keep unknowns so they can still match if options list grows
+    };
+
+    return asArray.map(mapOne).filter(Boolean);
+  };
+
+
   /* Reminder badge counts */
   const badgeCounts = useMemo(() => {
     const c = { overdue: 0, today: 0, tomorrow: 0, upcoming: 0 };
@@ -690,6 +750,18 @@ export default function WorkerCalleDisplay({ permissions: permissionsProp }) {
         }
       }
 
+      // Joining Type filter (ANY match)
+      if (selectedJoiningTypes.length > 0) {
+        const workerTypes = getWorkerJoiningTypes(w); // normalized lowercase array
+        const wants = selectedJoiningTypes.map(s => s.toLowerCase());
+        const matches = skillMode === "multi"
+          ? wants.every(want => workerTypes.includes(want)) // ALL in multi
+          : wants.some(want => workerTypes.includes(want)); // ANY in single
+        if (!matches) return false;
+      }
+
+
+
       // Source filter
       if (selectedSource !== "All") {
         const src = normalizeSource(
@@ -752,6 +824,7 @@ export default function WorkerCalleDisplay({ permissions: permissionsProp }) {
     timeFormat,
     ageRange,
     experienceRange,
+    selectedJoiningTypes,
   ]);
 
   /* Sorting — add all requested fields */
@@ -1452,10 +1525,10 @@ export default function WorkerCalleDisplay({ permissions: permissionsProp }) {
         ? du === 0
           ? "Today"
           : du === 1
-          ? "Tomorrow"
-          : du < 0
-          ? `${Math.abs(du)} days ago`
-          : `${du} days`
+            ? "Tomorrow"
+            : du < 0
+              ? `${Math.abs(du)} days ago`
+              : `${du} days`
         : "";
       const age = calculateAge(
         w?.dateOfBirth || w?.dob || w?.birthDate,
@@ -1504,10 +1577,10 @@ export default function WorkerCalleDisplay({ permissions: permissionsProp }) {
         ? du === 0
           ? "Today"
           : du === 1
-          ? "Tomorrow"
-          : du < 0
-          ? `${Math.abs(du)} days ago`
-          : `${du} days`
+            ? "Tomorrow"
+            : du < 0
+              ? `${Math.abs(du)} days ago`
+              : `${du} days`
         : "";
       const age = calculateAge(
         w?.dateOfBirth || w?.dob || w?.birthDate,
@@ -1588,23 +1661,24 @@ export default function WorkerCalleDisplay({ permissions: permissionsProp }) {
     () =>
       Boolean(
         searchTerm ||
-          selectedSkills.length ||
-          selectedRoles.length ||
-          selectedLanguages.length ||
-          selectedGender.length ||
-          reminderFilter ||
-          (selectedSource && selectedSource !== "All") ||
-          skillMode !== "single" ||
-          timeFormat !== "all" || // Fixed this line
-          ageRange.min ||
-          ageRange.max ||
-          experienceRange.min ||
-          experienceRange.max ||
-          sortBy !== "id" ||
-          sortDir !== "desc" ||
-          rowsPerPage !== 10 ||
-          currentPage !== 1 ||
-          showJobRoles
+        selectedSkills.length ||
+        selectedRoles.length ||
+        selectedLanguages.length ||
+        selectedGender.length ||
+        reminderFilter ||
+        (selectedSource && selectedSource !== "All") ||
+        selectedJoiningTypes.length ||
+        skillMode !== "single" ||
+        timeFormat !== "all" || // Fixed this line
+        ageRange.min ||
+        ageRange.max ||
+        experienceRange.min ||
+        experienceRange.max ||
+        sortBy !== "id" ||
+        sortDir !== "desc" ||
+        rowsPerPage !== 10 ||
+        currentPage !== 1 ||
+        showJobRoles
       ),
     [
       searchTerm,
@@ -1614,6 +1688,7 @@ export default function WorkerCalleDisplay({ permissions: permissionsProp }) {
       selectedGender,
       reminderFilter,
       selectedSource,
+      selectedJoiningTypes,
       skillMode,
       timeFormat,
       ageRange,
@@ -1645,6 +1720,7 @@ export default function WorkerCalleDisplay({ permissions: permissionsProp }) {
     setCurrentPage(1);
     setShowJobRoles(false);
     setSelectedRows(new Set());
+    setSelectedJoiningTypes([]);
   };
 
   /* UI */
@@ -1659,9 +1735,8 @@ export default function WorkerCalleDisplay({ permissions: permissionsProp }) {
           <span
             key={k}
             role="button"
-            className={`reminder-badge ${k} ${
-              reminderFilter === k ? "active" : ""
-            }`}
+            className={`reminder-badge ${k} ${reminderFilter === k ? "active" : ""
+              }`}
             onClick={() => setReminderFilter(reminderFilter === k ? "" : k)}
           >
             {k[0].toUpperCase() + k.slice(1)}:{" "}
@@ -1669,24 +1744,17 @@ export default function WorkerCalleDisplay({ permissions: permissionsProp }) {
               {k === "overdue"
                 ? badgeCounts.overdue
                 : k === "today"
-                ? badgeCounts.today
-                : k === "tomorrow"
-                ? badgeCounts.tomorrow
-                : badgeCounts.upcoming}
+                  ? badgeCounts.today
+                  : k === "tomorrow"
+                    ? badgeCounts.tomorrow
+                    : badgeCounts.upcoming}
             </strong>
           </span>
         ))}
       </div>
 
       {/* top controls */}
-      <div className="d-flex justify-content-between flex-wrap gap-2 p-2 bg-dark border rounded-3 mb-3">
-        {/* status line */}
-        <div className="small text-center mt-2" style={{ color: "yellow" }}>
-          Showing <strong>{pageItems.length}</strong> of{" "}
-          <strong>{sorted.length}</strong> (from{" "}
-          <strong>{workers.length}</strong> total)
-          {reminderFilter ? ` — ${reminderFilter}` : ""}
-        </div>
+      <div className="d-flex justify-content-between flex-wrap gap-2 p-3 bg-dark border rounded-3 mb-4">
         <input
           type="text"
           className="form-control searchBar workerCallSearch"
@@ -1695,6 +1763,25 @@ export default function WorkerCalleDisplay({ permissions: permissionsProp }) {
           onChange={(e) => setSearchTerm(e.target.value)}
           style={{ maxWidth: 380 }}
         />
+
+        {/* Joining Type multi-select */}
+        <select
+          className="form-select d-filter"
+          value={selectedJoiningTypes[0] || ""}       // keep array shape, pick first
+          onChange={(e) => {
+            const v = e.target.value;
+            setSelectedJoiningTypes(v ? [v] : []);   // store as [value] or [] for "All"
+          }}
+          title="Joining Type"
+        >
+          <option value="">Select Joining Type</option>
+          <option value="Immediate">Immediate</option>
+          <option value="1 Week">1 Week</option>
+          <option value="15 Days">15 Days</option>
+          <option value="Flexible">Flexible</option>
+          <option value="Negotiable">Negotiable</option>
+        </select>
+
         <select
           className="form-select d-filter"
           value={selectedSource}
@@ -1724,49 +1811,45 @@ export default function WorkerCalleDisplay({ permissions: permissionsProp }) {
           </select>
         )}
 
-        <div className="d-flex gap-2 d-filterWrapper">
-          <select
-            className="form-select"
-            value={sortBy}
-            onChange={(e) => setSortBy(e.target.value)}
-          >
-            <option value="id">Sort by ID</option>
-            <option value="date">Sort by Date</option>
-            <option value="name">Sort by Name</option>
-            <option value="gender">Sort by Gender</option>
-            <option value="age">Sort by Age</option>
-            <option value="experience">Sort by Experience</option>
-            <option value="reminder">Sort by Reminder</option>
-            <option value="skills">Sort by Skills</option>
-            <option value="mobile">Sort by Mobile</option>
-            <option value="talking">Sort by Talking</option>
-          </select>
-          <select
-            className="form-select"
-            value={sortDir}
-            onChange={(e) => setSortDir(e.target.value)}
-          >
-            <option value="desc">Desc</option>
-            <option value="asc">Asc</option>
-          </select>
-        </div>
+        <select
+          className="form-select  d-filter"
+          value={sortBy}
+          onChange={(e) => setSortBy(e.target.value)}
+        >
+          <option value="id">Sort by ID</option>
+          <option value="date">Sort by Date</option>
+          <option value="name">Sort by Name</option>
+          <option value="gender">Sort by Gender</option>
+          <option value="age">Sort by Age</option>
+          <option value="experience">Sort by Experience</option>
+          <option value="reminder">Sort by Reminder</option>
+          <option value="skills">Sort by Skills</option>
+          <option value="mobile">Sort by Mobile</option>
+          <option value="talking">Sort by Talking</option>
+        </select>
+        <select
+          className="form-select  d-filter"
+          value={sortDir}
+          onChange={(e) => setSortDir(e.target.value)}
+        >
+          <option value="desc">Desc</option>
+          <option value="asc">Asc</option>
+        </select>
 
-        <div className="d-flex gap-2 d-filterWrapper">
-          <button
-            className={`btn ${
-              permissions.canExport ? "btn-success" : "btn-outline-secondary"
+        <button
+          className={`btn ${permissions.canExport ? "btn-success" : "btn-outline-secondary"
             }`}
-            onClick={permissions.canExport ? handleExport : undefined}
-            title={
-              permissions.canExport
-                ? "Export to Excel"
-                : "Export disabled — ask admin for permission"
-            }
-            disabled={!permissions.canExport}
-          >
-            Export {selectedRows.size > 0 ? `(${selectedRows.size})` : ""}
-          </button>
-          {permissions.canManageUsers && (
+          onClick={permissions.canExport ? handleExport : undefined}
+          title={
+            permissions.canExport
+              ? "Export to Excel"
+              : "Export disabled — ask admin for permission"
+          }
+          disabled={!permissions.canExport}
+        >
+          Export {selectedRows.size > 0 ? `(${selectedRows.size})` : ""}
+        </button>
+        {/* {permissions.canManageUsers && (
             <button
               className="btn btn-info"
               onClick={handleExportAll}
@@ -1774,16 +1857,14 @@ export default function WorkerCalleDisplay({ permissions: permissionsProp }) {
             >
               Export All
             </button>
-          )}
-          <button
-            className={`btn btn-outline-warning text-warning ${
-              hasActiveFilters ? "btn-pulse" : ""
+          )} */}
+        <button
+          className={`btn btn-outline-warning text-warning ${hasActiveFilters ? "btn-pulse" : ""
             }`}
-            onClick={resetFilters}
-          >
-            Reset
-          </button>
-        </div>
+          onClick={resetFilters}
+        >
+          Reset
+        </button>
       </div>
 
       {/* Tabs */}
@@ -1800,9 +1881,8 @@ export default function WorkerCalleDisplay({ permissions: permissionsProp }) {
           </li>
           <li className="nav-item">
             <button
-              className={`nav-link ${
-                activeTab === "callSummary" ? "active" : ""
-              }`}
+              className={`nav-link ${activeTab === "callSummary" ? "active" : ""
+                }`}
               onClick={() => setActiveTab("callSummary")}
             >
               <i className="bi bi-bar-chart me-2"></i>
@@ -1811,9 +1891,8 @@ export default function WorkerCalleDisplay({ permissions: permissionsProp }) {
           </li>
           <li className="nav-item">
             <button
-              className={`nav-link ${
-                activeTab === "callThrough" ? "active" : ""
-              }`}
+              className={`nav-link ${activeTab === "callThrough" ? "active" : ""
+                }`}
               onClick={() => setActiveTab("callThrough")}
             >
               <i className="bi bi-diagram-3 me-2"></i>
@@ -1842,9 +1921,8 @@ export default function WorkerCalleDisplay({ permissions: permissionsProp }) {
                         <button
                           key={g}
                           type="button"
-                          className={`btn ${
-                            on ? "btn-warning" : "btn-outline-warning"
-                          } btn-sm`}
+                          className={`btn ${on ? "btn-warning" : "btn-outline-warning"
+                            } btn-sm`}
                           onClick={() =>
                             setSelectedGender((prev) =>
                               on ? prev.filter((x) => x !== g) : [...prev, g]
@@ -1865,18 +1943,16 @@ export default function WorkerCalleDisplay({ permissions: permissionsProp }) {
                   <div className="d-flex gap-2 justify-content-center">
                     <button
                       type="button"
-                      className={`btn ${
-                        skillMode === "single" ? "btn-info" : "btn-outline-info"
-                      } btn-sm`}
+                      className={`btn ${skillMode === "single" ? "btn-info" : "btn-outline-info"
+                        } btn-sm`}
                       onClick={() => setSkillMode("single")}
                     >
                       Single Sel
                     </button>
                     <button
                       type="button"
-                      className={`btn ${
-                        skillMode === "multi" ? "btn-info" : "btn-outline-info"
-                      } btn-sm`}
+                      className={`btn ${skillMode === "multi" ? "btn-info" : "btn-outline-info"
+                        } btn-sm`}
                       onClick={() => setSkillMode("multi")}
                     >
                       Multi Sel
@@ -1958,27 +2034,24 @@ export default function WorkerCalleDisplay({ permissions: permissionsProp }) {
                   <div className="d-flex gap-2 justify-content-center">
                     <button
                       type="button"
-                      className={`btn ${
-                        timeFormat === "all" ? "btn-info" : "btn-outline-info"
-                      } btn-sm`}
+                      className={`btn ${timeFormat === "all" ? "btn-info" : "btn-outline-info"
+                        } btn-sm`}
                       onClick={() => setTimeFormat("all")}
                     >
                       All
                     </button>
                     <button
                       type="button"
-                      className={`btn ${
-                        timeFormat === "12" ? "btn-info" : "btn-outline-info"
-                      } btn-sm`}
+                      className={`btn ${timeFormat === "12" ? "btn-info" : "btn-outline-info"
+                        } btn-sm`}
                       onClick={() => setTimeFormat("12")}
                     >
                       12HRS
                     </button>
                     <button
                       type="button"
-                      className={`btn ${
-                        timeFormat === "24" ? "btn-info" : "btn-outline-info"
-                      } btn-sm`}
+                      className={`btn ${timeFormat === "24" ? "btn-info" : "btn-outline-info"
+                        } btn-sm`}
                       onClick={() => setTimeFormat("24")}
                     >
                       24HRS
@@ -2020,9 +2093,8 @@ export default function WorkerCalleDisplay({ permissions: permissionsProp }) {
                       return (
                         <button
                           key={l}
-                          className={`btn btn-sm ${
-                            active ? "btn-info text-dark" : "btn-outline-info"
-                          } rounded-pill`}
+                          className={`btn btn-sm ${active ? "btn-info text-dark" : "btn-outline-info"
+                            } rounded-pill`}
                           onClick={() =>
                             setSelectedLanguages((prev) =>
                               active
@@ -2047,11 +2119,10 @@ export default function WorkerCalleDisplay({ permissions: permissionsProp }) {
                       return (
                         <button
                           key={s}
-                          className={`btn btn-sm ${
-                            active
-                              ? "btn-outline-warning btn-warning text-black"
-                              : "btn-outline-warning"
-                          } rounded-pill`}
+                          className={`btn btn-sm ${active
+                            ? "btn-outline-warning btn-warning text-black"
+                            : "btn-outline-warning"
+                            } rounded-pill`}
                           onClick={() =>
                             setSelectedSkills((prev) =>
                               active
@@ -2095,9 +2166,8 @@ export default function WorkerCalleDisplay({ permissions: permissionsProp }) {
                           return (
                             <button
                               key={r}
-                              className={`btn btn-sm ${
-                                active ? "btn-primary" : "btn-outline-primary"
-                              } rounded-pill`}
+                              className={`btn btn-sm ${active ? "btn-primary" : "btn-outline-primary"
+                                } rounded-pill`}
                               onClick={() =>
                                 setSelectedRoles((prev) =>
                                   active
@@ -2133,9 +2203,8 @@ export default function WorkerCalleDisplay({ permissions: permissionsProp }) {
                           return (
                             <button
                               key={r}
-                              className={`btn btn-sm ${
-                                active ? "btn-success" : "btn-outline-success"
-                              } rounded-pill`}
+                              className={`btn btn-sm ${active ? "btn-success" : "btn-outline-success"
+                                } rounded-pill`}
                               onClick={() =>
                                 setSelectedRoles((prev) =>
                                   active
@@ -2170,9 +2239,8 @@ export default function WorkerCalleDisplay({ permissions: permissionsProp }) {
                           return (
                             <button
                               key={r}
-                              className={`btn btn-sm ${
-                                active ? "btn-warning" : "btn-outline-warning"
-                              } rounded-pill`}
+                              className={`btn btn-sm ${active ? "btn-warning" : "btn-outline-warning"
+                                } rounded-pill`}
                               onClick={() =>
                                 setSelectedRoles((prev) =>
                                   active
@@ -2206,9 +2274,8 @@ export default function WorkerCalleDisplay({ permissions: permissionsProp }) {
                           return (
                             <button
                               key={r}
-                              className={`btn btn-sm ${
-                                active ? "btn-danger" : "btn-outline-danger"
-                              } rounded-pill`}
+                              className={`btn btn-sm ${active ? "btn-danger" : "btn-outline-danger"
+                                } rounded-pill`}
                               onClick={() =>
                                 setSelectedRoles((prev) =>
                                   active
@@ -2246,9 +2313,8 @@ export default function WorkerCalleDisplay({ permissions: permissionsProp }) {
                           return (
                             <button
                               key={r}
-                              className={`btn btn-sm ${
-                                active ? "btn-info" : "btn-outline-info"
-                              } rounded-pill`}
+                              className={`btn btn-sm ${active ? "btn-info" : "btn-outline-info"
+                                } rounded-pill`}
                               onClick={() =>
                                 setSelectedRoles((prev) =>
                                   active
@@ -2288,9 +2354,8 @@ export default function WorkerCalleDisplay({ permissions: permissionsProp }) {
                           return (
                             <button
                               key={r}
-                              className={`btn btn-sm ${
-                                active ? "btn-warning" : "btn-outline-warning"
-                              } rounded-pill`}
+                              className={`btn btn-sm ${active ? "btn-warning" : "btn-outline-warning"
+                                } rounded-pill`}
                               onClick={() =>
                                 setSelectedRoles((prev) =>
                                   active
@@ -2325,9 +2390,8 @@ export default function WorkerCalleDisplay({ permissions: permissionsProp }) {
                           return (
                             <button
                               key={r}
-                              className={`btn btn-sm ${
-                                active ? "btn-primary" : "btn-outline-primary"
-                              } rounded-pill`}
+                              className={`btn btn-sm ${active ? "btn-primary" : "btn-outline-primary"
+                                } rounded-pill`}
                               onClick={() =>
                                 setSelectedRoles((prev) =>
                                   active
@@ -2364,9 +2428,8 @@ export default function WorkerCalleDisplay({ permissions: permissionsProp }) {
                           return (
                             <button
                               key={r}
-                              className={`btn btn-sm ${
-                                active ? "btn-danger" : "btn-outline-danger"
-                              } rounded-pill`}
+                              className={`btn btn-sm ${active ? "btn-danger" : "btn-outline-danger"
+                                } rounded-pill`}
                               onClick={() =>
                                 setSelectedRoles((prev) =>
                                   active
@@ -2403,9 +2466,8 @@ export default function WorkerCalleDisplay({ permissions: permissionsProp }) {
                 >
                   <ul className="pagination justify-content-center mb-0">
                     <li
-                      className={`page-item ${
-                        safePage === 1 ? "disabled" : ""
-                      }`}
+                      className={`page-item ${safePage === 1 ? "disabled" : ""
+                        }`}
                     >
                       <button
                         className="page-link"
@@ -2416,9 +2478,8 @@ export default function WorkerCalleDisplay({ permissions: permissionsProp }) {
                       </button>
                     </li>
                     <li
-                      className={`page-item ${
-                        safePage === 1 ? "disabled" : ""
-                      }`}
+                      className={`page-item ${safePage === 1 ? "disabled" : ""
+                        }`}
                     >
                       <button
                         className="page-link"
@@ -2431,9 +2492,8 @@ export default function WorkerCalleDisplay({ permissions: permissionsProp }) {
                     {getDisplayedPageNumbers().map((num) => (
                       <li
                         key={num}
-                        className={`page-item ${
-                          safePage === num ? "active" : ""
-                        }`}
+                        className={`page-item ${safePage === num ? "active" : ""
+                          }`}
                       >
                         <button
                           className="page-link"
@@ -2444,9 +2504,8 @@ export default function WorkerCalleDisplay({ permissions: permissionsProp }) {
                       </li>
                     ))}
                     <li
-                      className={`page-item ${
-                        safePage === totalPages ? "disabled" : ""
-                      }`}
+                      className={`page-item ${safePage === totalPages ? "disabled" : ""
+                        }`}
                     >
                       <button
                         className="page-link"
@@ -2457,9 +2516,8 @@ export default function WorkerCalleDisplay({ permissions: permissionsProp }) {
                       </button>
                     </li>
                     <li
-                      className={`page-item ${
-                        safePage === totalPages ? "disabled" : ""
-                      }`}
+                      className={`page-item ${safePage === totalPages ? "disabled" : ""
+                        }`}
                     >
                       <button
                         className="page-link"
@@ -2542,9 +2600,8 @@ export default function WorkerCalleDisplay({ permissions: permissionsProp }) {
                       ? du === 0
                         ? "Today"
                         : du > 0
-                        ? `in ${du} day${du > 1 ? "s" : ""}`
-                        : `${Math.abs(du)} day${
-                            Math.abs(du) > 1 ? "s" : ""
+                          ? `in ${du} day${du > 1 ? "s" : ""}`
+                          : `${Math.abs(du)} day${Math.abs(du) > 1 ? "s" : ""
                           } ago`
                       : "";
                     const timeStr = hasReminder
@@ -2580,12 +2637,12 @@ export default function WorkerCalleDisplay({ permissions: permissionsProp }) {
                     const reminderTextClass = !hasReminder
                       ? "text-secondary"
                       : du < 0
-                      ? "text-danger"
-                      : du === 0
-                      ? "text-warning"
-                      : du === 1
-                      ? "text-info"
-                      : "text-success";
+                        ? "text-danger"
+                        : du === 0
+                          ? "text-warning"
+                          : du === 1
+                            ? "text-info"
+                            : "text-success";
 
                     return (
                       <tr
@@ -2628,8 +2685,8 @@ export default function WorkerCalleDisplay({ permissions: permissionsProp }) {
                               w?.gender === "Male"
                                 ? "badge bg-primary opacity-50"
                                 : w?.gender === "Female"
-                                ? "badge badge-female opacity-50"
-                                : "badge bg-secondary "
+                                  ? "badge badge-female opacity-50"
+                                  : "badge bg-secondary "
                             }
                           >
                             {w?.gender || "—"}
@@ -2653,19 +2710,18 @@ export default function WorkerCalleDisplay({ permissions: permissionsProp }) {
                         <td>
                           {joiningType ? (
                             <span
-                              className={`badge ${
-                                joiningType.toLowerCase().includes("immediate")
-                                  ? "bg-success"
-                                  : joiningType.toLowerCase().includes("15")
+                              className={`badge ${joiningType.toLowerCase().includes("immediate")
+                                ? "bg-success"
+                                : joiningType.toLowerCase().includes("15")
                                   ? "bg-warning text-dark"
                                   : joiningType.toLowerCase().includes("30")
-                                  ? "bg-info"
-                                  : joiningType
+                                    ? "bg-info"
+                                    : joiningType
                                       .toLowerCase()
                                       .includes("flexible")
-                                  ? "bg-primary"
-                                  : "bg-secondary"
-                              } opacity-50`}
+                                      ? "bg-primary"
+                                      : "bg-secondary"
+                                } opacity-50`}
                             >
                               {joiningType}
                             </span>
@@ -2742,13 +2798,12 @@ export default function WorkerCalleDisplay({ permissions: permissionsProp }) {
                         </td>
                         <td>
                           <span
-                            className={`badge opacity-50 ${
-                              comms.toLowerCase().includes("good")
-                                ? "bg-success"
-                                : comms.toLowerCase().includes("average")
+                            className={`badge opacity-50 ${comms.toLowerCase().includes("good")
+                              ? "bg-success"
+                              : comms.toLowerCase().includes("average")
                                 ? "bg-warning text-dark"
                                 : "bg-secondary"
-                            }`}
+                              }`}
                           >
                             {comms || "—"}
                           </span>
@@ -2841,9 +2896,8 @@ export default function WorkerCalleDisplay({ permissions: permissionsProp }) {
                 >
                   <ul className="pagination justify-content-center mb-0">
                     <li
-                      className={`page-item ${
-                        safePage === 1 ? "disabled" : ""
-                      }`}
+                      className={`page-item ${safePage === 1 ? "disabled" : ""
+                        }`}
                     >
                       <button
                         className="page-link"
@@ -2854,9 +2908,8 @@ export default function WorkerCalleDisplay({ permissions: permissionsProp }) {
                       </button>
                     </li>
                     <li
-                      className={`page-item ${
-                        safePage === 1 ? "disabled" : ""
-                      }`}
+                      className={`page-item ${safePage === 1 ? "disabled" : ""
+                        }`}
                     >
                       <button
                         className="page-link"
@@ -2869,9 +2922,8 @@ export default function WorkerCalleDisplay({ permissions: permissionsProp }) {
                     {getDisplayedPageNumbers().map((num) => (
                       <li
                         key={num}
-                        className={`page-item ${
-                          safePage === num ? "active" : ""
-                        }`}
+                        className={`page-item ${safePage === num ? "active" : ""
+                          }`}
                       >
                         <button
                           className="page-link"
@@ -2882,9 +2934,8 @@ export default function WorkerCalleDisplay({ permissions: permissionsProp }) {
                       </li>
                     ))}
                     <li
-                      className={`page-item ${
-                        safePage === totalPages ? "disabled" : ""
-                      }`}
+                      className={`page-item ${safePage === totalPages ? "disabled" : ""
+                        }`}
                     >
                       <button
                         className="page-link"
@@ -2895,9 +2946,8 @@ export default function WorkerCalleDisplay({ permissions: permissionsProp }) {
                       </button>
                     </li>
                     <li
-                      className={`page-item ${
-                        safePage === totalPages ? "disabled" : ""
-                      }`}
+                      className={`page-item ${safePage === totalPages ? "disabled" : ""
+                        }`}
                     >
                       <button
                         className="page-link"
@@ -2943,8 +2993,8 @@ export default function WorkerCalleDisplay({ permissions: permissionsProp }) {
               <span className="text-warning">
                 {selectedUser
                   ? usersMap[selectedUser]?.name ||
-                    usersMap[selectedUser]?.displayName ||
-                    selectedUser
+                  usersMap[selectedUser]?.displayName ||
+                  selectedUser
                   : currentUserName}
               </span>
             </h4>
@@ -2954,11 +3004,10 @@ export default function WorkerCalleDisplay({ permissions: permissionsProp }) {
                   <button
                     key={m}
                     type="button"
-                    className={`btn btn-sm w-auto ${
-                      mi === activeMonth
-                        ? "btn-warning text-dark"
-                        : "btn-outline-warning"
-                    }`}
+                    className={`btn btn-sm w-auto ${mi === activeMonth
+                      ? "btn-warning text-dark"
+                      : "btn-outline-warning"
+                      }`}
                     onClick={() => setActiveMonth(mi)}
                   >
                     {m}
@@ -3103,9 +3152,8 @@ export default function WorkerCalleDisplay({ permissions: permissionsProp }) {
                             return (
                               <td
                                 key={`${month}-${day}`}
-                                className={`text-center ${
-                                  within ? `perf-text ${cls}` : "bg-secondary"
-                                }`}
+                                className={`text-center ${within ? `perf-text ${cls}` : "bg-secondary"
+                                  }`}
                               >
                                 {within
                                   ? cell.total > 0
@@ -3255,47 +3303,38 @@ export default function WorkerCalleDisplay({ permissions: permissionsProp }) {
                         const seg = (k) => (currentPieAgg[k] / total) * 360;
                         const grads = [
                           `var(--perf-none) 0 ${seg("none")}deg`,
-                          `var(--perf-poor) ${seg("none")}deg ${
-                            seg("none") + seg("poor")
+                          `var(--perf-poor) ${seg("none")}deg ${seg("none") + seg("poor")
                           }deg`,
-                          `var(--perf-avg) ${seg("none") + seg("poor")}deg ${
-                            seg("none") + seg("poor") + seg("avg")
+                          `var(--perf-avg) ${seg("none") + seg("poor")}deg ${seg("none") + seg("poor") + seg("avg")
                           }deg`,
-                          `var(--perf-good) ${
-                            seg("none") + seg("poor") + seg("avg")
-                          }deg ${
-                            seg("none") + seg("poor") + seg("avg") + seg("good")
+                          `var(--perf-good) ${seg("none") + seg("poor") + seg("avg")
+                          }deg ${seg("none") + seg("poor") + seg("avg") + seg("good")
                           }deg`,
-                          `var(--perf-vgood) ${
-                            seg("none") + seg("poor") + seg("avg") + seg("good")
-                          }deg ${
-                            seg("none") +
-                            seg("poor") +
-                            seg("avg") +
-                            seg("good") +
-                            seg("vgood")
+                          `var(--perf-vgood) ${seg("none") + seg("poor") + seg("avg") + seg("good")
+                          }deg ${seg("none") +
+                          seg("poor") +
+                          seg("avg") +
+                          seg("good") +
+                          seg("vgood")
                           }deg`,
-                          `var(--perf-exc) ${
-                            seg("none") +
-                            seg("poor") +
-                            seg("avg") +
-                            seg("good") +
-                            seg("vgood")
-                          }deg ${
-                            seg("none") +
-                            seg("poor") +
-                            seg("avg") +
-                            seg("good") +
-                            seg("vgood") +
-                            seg("exc")
+                          `var(--perf-exc) ${seg("none") +
+                          seg("poor") +
+                          seg("avg") +
+                          seg("good") +
+                          seg("vgood")
+                          }deg ${seg("none") +
+                          seg("poor") +
+                          seg("avg") +
+                          seg("good") +
+                          seg("vgood") +
+                          seg("exc")
                           }deg`,
-                          `var(--perf-marv) ${
-                            seg("none") +
-                            seg("poor") +
-                            seg("avg") +
-                            seg("good") +
-                            seg("vgood") +
-                            seg("exc")
+                          `var(--perf-marv) ${seg("none") +
+                          seg("poor") +
+                          seg("avg") +
+                          seg("good") +
+                          seg("vgood") +
+                          seg("exc")
                           }deg 360deg`,
                         ].join(", ");
                         return (
@@ -3360,11 +3399,10 @@ export default function WorkerCalleDisplay({ permissions: permissionsProp }) {
                     <div className="d-flex flex-wrap gap-2">
                       <button
                         type="button"
-                        className={`btn btn-sm ${
-                          activeMonth === null
-                            ? "btn-warning text-dark"
-                            : "btn-outline-warning"
-                        }`}
+                        className={`btn btn-sm ${activeMonth === null
+                          ? "btn-warning text-dark"
+                          : "btn-outline-warning"
+                          }`}
                         onClick={() => setActiveMonth(null)}
                       >
                         All Months
@@ -3373,11 +3411,10 @@ export default function WorkerCalleDisplay({ permissions: permissionsProp }) {
                         <button
                           key={m}
                           type="button"
-                          className={`btn btn-sm w-auto ${
-                            mi === activeMonth
-                              ? "btn-warning text-dark"
-                              : "btn-outline-warning"
-                          }`}
+                          className={`btn btn-sm w-auto ${mi === activeMonth
+                            ? "btn-warning text-dark"
+                            : "btn-outline-warning"
+                            }`}
                           onClick={() => setActiveMonth(mi)}
                         >
                           {m}
@@ -3464,11 +3501,11 @@ export default function WorkerCalleDisplay({ permissions: permissionsProp }) {
                                     activeMonth === null
                                       ? true
                                       : day <=
-                                        new Date(
-                                          activeYear,
-                                          activeMonth + 1,
-                                          0
-                                        ).getDate(),
+                                      new Date(
+                                        activeYear,
+                                        activeMonth + 1,
+                                        0
+                                      ).getDate(),
                                 };
                               }
                             );
@@ -3487,18 +3524,15 @@ export default function WorkerCalleDisplay({ permissions: permissionsProp }) {
                                 {dayCalls.map(({ day, calls, isInMonth }) => (
                                   <td
                                     key={day}
-                                    className={`text-center ${
-                                      isInMonth
-                                        ? getCallCountClass(calls)
-                                        : "text-muted"
-                                    }`}
-                                    title={`${
-                                      user.name || "User"
-                                    }: ${calls} calls on day ${day}${
-                                      activeMonth !== null
+                                    className={`text-center ${isInMonth
+                                      ? getCallCountClass(calls)
+                                      : "text-muted"
+                                      }`}
+                                    title={`${user.name || "User"
+                                      }: ${calls} calls on day ${day}${activeMonth !== null
                                         ? ` ${months[activeMonth]}`
                                         : ""
-                                    }`}
+                                      }`}
                                   >
                                     {isInMonth
                                       ? calls > 0
@@ -3554,18 +3588,17 @@ export default function WorkerCalleDisplay({ permissions: permissionsProp }) {
                                 activeMonth === null
                                   ? true
                                   : day <=
-                                    new Date(
-                                      activeYear,
-                                      activeMonth + 1,
-                                      0
-                                    ).getDate();
+                                  new Date(
+                                    activeYear,
+                                    activeMonth + 1,
+                                    0
+                                  ).getDate();
 
                               return (
                                 <td
                                   key={day}
-                                  className={`text-center ${
-                                    isInMonth ? "text-warning" : "text-muted"
-                                  }`}
+                                  className={`text-center ${isInMonth ? "text-warning" : "text-muted"
+                                    }`}
                                 >
                                   {isInMonth
                                     ? dailyTotal > 0
@@ -3671,11 +3704,10 @@ export default function WorkerCalleDisplay({ permissions: permissionsProp }) {
                                     return (
                                       <td
                                         key={day}
-                                        className={`text-center ${
-                                          isDayInWeek
-                                            ? "text-info"
-                                            : "text-muted"
-                                        }`}
+                                        className={`text-center ${isDayInWeek
+                                          ? "text-info"
+                                          : "text-muted"
+                                          }`}
                                       >
                                         {isDayInWeek
                                           ? weeklyDailyTotal > 0
@@ -3790,9 +3822,8 @@ export default function WorkerCalleDisplay({ permissions: permissionsProp }) {
                                           border: `2px solid ${theme.main}`,
                                           borderRadius: "8px 8px 0 0",
                                         }}
-                                        title={`${
-                                          user.name || "User"
-                                        }: ${total} calls`}
+                                        title={`${user.name || "User"
+                                          }: ${total} calls`}
                                       >
                                         <span
                                           className="vertical-bar-value"
@@ -3987,9 +4018,8 @@ export default function WorkerCalleDisplay({ permissions: permissionsProp }) {
                                   <div
                                     className="progress-bar bg-success"
                                     style={{
-                                      width: `${
-                                        (activeUsers / userStats.length) * 100
-                                      }%`,
+                                      width: `${(activeUsers / userStats.length) * 100
+                                        }%`,
                                     }}
                                   ></div>
                                 </div>

@@ -79,8 +79,9 @@
   }
 
   .form-select {
-    background-color: #9c9e9e;
-    border: none;
+    background-color: transparent;
+    border-color: #6b6f70;
+    color: #aaa;
 
     @include mobile {
       max-width: 100% !important;

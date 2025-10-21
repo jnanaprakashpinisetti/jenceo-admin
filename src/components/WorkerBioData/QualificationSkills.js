@@ -2,7 +2,15 @@ import React from 'react';
 
 // Dropdown options
 const PRIMARY_SKILL_OPTIONS = [
-  'Cook', 'Baby Care', 'House Maid', 'Nursing', 'Elder Care', 'Patient Care', 'Others'
+   "Nursing",
+    "Diaper",
+    "Patent Care",
+    "Baby Care",
+    "Cook",
+    "Supporting",
+    "Old Age Care",
+    "Any Duty",
+    "Others",
 ];
 
 const MOTHER_TONGUE_OPTIONS = [
@@ -12,7 +20,15 @@ const MOTHER_TONGUE_OPTIONS = [
 
 const QualificationSkills = ({ formData, errors, handleChange, handleBlur, nextStep, prevStep }) => {
   const workingSkillsOptions = [
-    'Cook', 'Baby Care', 'House Maid', 'Nursing', 'Elder Care', 'Patient Care', 'Others'
+    "Nursing",
+    "Diaper",
+    "Patent Care",
+    "Baby Care",
+    "Cook",
+    "Supporting",
+    "Old Age Care",
+    "Any Duty",
+    "Others",
   ];
 
   return (

@@ -285,7 +285,7 @@
       border-radius: 4px;
       padding: 0.5rem 0.75rem;
       transition: all 0.3s ease;
-      color: #bcb8fcff !important;
+      color: #5277bd !important;
 
       &:focus {
         background: #333;
@@ -400,6 +400,134 @@
       }
     }
 
+    /* Background colors for skill categories */
+    .bg-office {
+      /* Amber */
+      background-color: #333;
+    }
+
+    .bg-customer {
+      /* Blue */
+      background-color: #444;
+    }
+
+    .bg-management {
+      /* Purple */
+      background-color: #333;
+    }
+
+    .bg-security {
+      /* Red */
+      background-color: #444;
+    }
+
+    .bg-driving {
+      /* Teal */
+      background-color: #333;
+    }
+
+    .bg-technical {
+      /* Orange */
+      background-color: #444;
+    }
+
+    .bg-retail {
+      /* Pink */
+      background-color: #333;
+    }
+
+    .bg-industrial {
+      /* Gray */
+      background-color: #444;
+    }
+
+    /* Button colors matching the categories */
+    .btn-office {
+      background-color: #ffc107 !important;
+      border-color: #ffc107 !important;
+      color: #000 !important;
+    }
+
+    .btn-customer {
+      background-color: #0d6efd !important;
+      border-color: #0d6efd !important;
+      color: #fff !important;
+    }
+
+    .btn-management {
+      background-color: #6f42c1 !important;
+      border-color: #6f42c1 !important;
+      color: #fff !important;
+    }
+
+    .btn-security {
+      background-color: #dc3545 !important;
+      border-color: #dc3545 !important;
+      color: #fff !important;
+    }
+
+    .btn-driving {
+      background-color: #20c997 !important;
+      border-color: #20c997 !important;
+      color: #fff !important;
+    }
+
+    .btn-technical {
+      background-color: #fd7e14 !important;
+      border-color: #fd7e14 !important;
+      color: #fff !important;
+    }
+
+    .btn-retail {
+      background-color: #d63384 !important;
+      border-color: #d63384 !important;
+      color: #fff !important;
+    }
+
+    .btn-industrial {
+      background-color: #6c757d !important;
+      border-color: #6c757d !important;
+      color: #fff !important;
+    }
+
+    /* Ensure text remains visible in category headers */
+    .category-title-compact.text-dark {
+      color: #212529 !important;
+    }
+
+    /* Dark mode adjustments if needed */
+    .dark-card .category-title-compact.text-dark {
+      color: #f8f9fa !important;
+    }
+
+    /* Custom close button styling */
+    .language-tag-compact {
+      position: relative;
+      padding-right: 2rem !important;
+    }
+
+    .tag-remove {
+      background: #dc3545;
+      border: none;
+      border-radius: 50%;
+      color: white;
+      cursor: pointer;
+      font-size: 0.75rem;
+      font-weight: bold;
+      width: 1.25rem;
+      height: 1.25rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0;
+      transition: all 0.15s ease-in-out;
+    }
+
+    .tag-remove:hover {
+      background: #bb2d3b;
+      transform: scale(1.1);
+    }
+
     // Other modal components...
   }
 
@@ -422,9 +550,11 @@
     0% {
       box-shadow: 0 0 0 0 rgba(255, 193, 7, 0.4);
     }
+
     70% {
       box-shadow: 0 0 0 12px rgba(255, 193, 7, 0);
     }
+
     100% {
       box-shadow: 0 0 0 0 rgba(255, 193, 7, 0);
     }
@@ -472,7 +602,13 @@
     }
 
     // Performance legend variants
-    @each $type in none, poor, avg, good, vgood, exc, marv {
+    @each $type in none,
+    poor,
+    avg,
+    good,
+    vgood,
+    exc,
+    marv {
       &.perf-#{$type} {
         background: var(--perf-#{$type});
         color: if(index((none, poor, exc, marv), $type), #fff, #000);
@@ -481,7 +617,13 @@
   }
 
   // Performance variants for bars and text
-  @each $type in none, poor, avg, good, vgood, exc, marv {
+  @each $type in none,
+  poor,
+  avg,
+  good,
+  vgood,
+  exc,
+  marv {
     .bar.perf-#{$type} {
       background: var(--perf-#{$type});
       color: if(index((none, poor, exc, marv), $type), #fff, #000);
@@ -558,6 +700,7 @@
         &::before {
           left: 100%;
         }
+
         color: #ffffff !important;
         background: rgba(66, 153, 225, 0.1);
         border-color: #4299e1;
@@ -608,9 +751,11 @@
     0% {
       box-shadow: 0 4px 15px rgba(66, 153, 225, 0.4);
     }
+
     50% {
       box-shadow: 0 4px 20px rgba(66, 153, 225, 0.6);
     }
+
     100% {
       box-shadow: 0 4px 15px rgba(66, 153, 225, 0.4);
     }
@@ -643,7 +788,7 @@
     // Special row styles
     .total-row {
       background: rgba(234, 179, 8, 0.2) !important;
-      
+
       td {
         border-top: 3px solid #eab308 !important;
         font-weight: 800;
@@ -655,7 +800,7 @@
     .week-summary-row,
     .daily-totals-row {
       font-weight: 700;
-      
+
       td {
         border-top-width: 2px;
         font-weight: 700;
@@ -771,6 +916,7 @@
       opacity: 0;
       transform: translateY(20px);
     }
+
     100% {
       height: var(--target-height);
       opacity: 1;
@@ -799,13 +945,12 @@
   }
 
   // Performance color classes
-  @each $type, $color in (
-    none: #718096,
+  @each $type,
+  $color in (none: #718096,
     poor: #fc8181,
     avg: #f6e05e,
     good: #68d391,
-    vgood: #4299e1
-  ) {
+    vgood: #4299e1) {
     .perf-#{$type} {
       color: $color !important;
       background: linear-gradient(135deg, rgba($color, 0.1), rgba(lighten($color, 10%), 0.1)) !important;
@@ -841,7 +986,7 @@
       .nav-link {
         padding: 10px 16px;
         font-size: 13px;
-        
+
         i {
           font-size: 14px;
           margin-right: 6px;
@@ -851,11 +996,12 @@
 
     .user-summary-table {
       font-size: 10px !important;
-      
-      th, td {
+
+      th,
+      td {
         padding: 4px 2px;
       }
-      
+
       th:first-child,
       td:first-child {
         min-width: 80px;
@@ -865,7 +1011,7 @@
 
     .vertical-bar {
       width: 45px;
-      
+
       &-value {
         font-size: 11px !important;
       }
@@ -876,11 +1022,11 @@
     .dark-tabs {
       flex-direction: column;
       gap: 8px;
-      
+
       .nav-link {
         justify-content: center;
         text-align: center;
-        
+
         &.active::after {
           display: none;
         }
@@ -947,7 +1093,7 @@
         color: $white;
       }
 
-      &.btn-danger{
+      &.btn-danger {
         background-color: #dc3545;
         color: $white;
       }
@@ -978,9 +1124,11 @@
   0% {
     box-shadow: 0 0 0 0 rgba(255, 193, 7, 0.6);
   }
+
   70% {
     box-shadow: 0 0 0 10px rgba(255, 193, 7, 0);
   }
+
   100% {
     box-shadow: 0 0 0 0 rgba(255, 193, 7, 0);
   }
@@ -1033,6 +1181,14 @@
   }
 }
 
+ .table.table-dark {
+
+    th,
+    td {
+     font-size: 14px;
+    }
+    }
+
 // Mobile overflow handling
 @media (max-width: 767.98px) {
   .container-fluid.px-0.overflow-hidden {
@@ -1040,7 +1196,9 @@
   }
 
   .table.table-dark {
-    th, td {
+
+    th,
+    td {
       white-space: nowrap;
     }
 

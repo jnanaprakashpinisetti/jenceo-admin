@@ -390,6 +390,18 @@ export default function DisplayClient() {
     return () => offs.forEach((fn) => fn());
   }, [clients]);
 
+
+  // Enhanced entries display function
+  const getEntriesDisplay = () => {
+    const totalEntries = filteredSorted.length;
+    if (totalEntries === 0) return 'No entries found';
+
+    const startEntry = (currentPage - 1) * rowsPerPage + 1;
+    const endEntry = Math.min(currentPage * rowsPerPage, totalEntries);
+
+    return `Showing ${startEntry} to ${endEntry}from ${totalEntries} ${totalEntries === 1 ? 'Entry' : 'Entries'}`;
+  };
+
   // Join latest payment meta (name/id/time) per client from in-memory `client.payments`
   useEffect(() => {
     const meta = {};
@@ -763,7 +775,12 @@ export default function DisplayClient() {
 
       {/* Filters row (search / status / sort / reset) */}
       <div className="row mb-3">
-        <div className="col-md-6 mb-2">
+
+        <div className="col-md-2 mb-2">
+          <p style={{ color: "Yellow" }}> {getEntriesDisplay()}</p>
+        </div>
+        <div className="col-md-4 mb-2">
+
           <input
             type="text"
             className="form-control border-secondary bg-dark text-light"

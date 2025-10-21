@@ -223,7 +223,7 @@ const BasicInformation = ({
           </label>
           <input
             type="file"
-            className={`form-control ${errors.employeePhoto ? "is-invalid" : ""}`}
+            className={`form-control opacity-50 ${errors.employeePhoto ? "is-invalid" : ""}`}
             id="employeePhoto"
             name="employeePhoto"
             onChange={handleFileUpload}
@@ -250,7 +250,7 @@ const BasicInformation = ({
           </label>
           <input
             type="file"
-            className={`form-control ${errors.idProof ? "is-invalid" : ""}`}
+            className={`form-control opacity-50 ${errors.idProof ? "is-invalid" : ""}`}
             id="idProof"
             name="idProof"
             onChange={handleFileUpload}

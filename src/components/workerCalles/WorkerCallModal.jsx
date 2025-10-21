@@ -371,7 +371,7 @@ export default function WorkerCallModal({
         <div className="info-card-label">{label}</div>
         <div className={`info-card-value ${badgeClass}`}>
           {badgeClass ? (
-            <span className="info-badge">
+            <span className="info-badge p-2 ">
               {displayValue}
             </span>
           ) : (

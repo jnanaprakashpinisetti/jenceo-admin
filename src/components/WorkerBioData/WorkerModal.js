@@ -10,6 +10,7 @@ const SKILL_OPTIONS = [
     "Cook",
     "Supporting",
     "Old Age Care",
+    "Any Duty",
     "Others",
 ];
 
@@ -1612,7 +1613,7 @@ const WorkerModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode }
                                                 </div>
 
                                                 <div className="row">
-                                                    <div className="col-md-12">
+                                                    <div className="col-md-12 history-section">
                                                         <label className="form-label">
                                                             <strong>About Employee & Skills</strong>
                                                         </label>
@@ -1629,9 +1630,9 @@ const WorkerModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode }
                                                         )}
                                                     </div>
                                                 </div>
-                                                <div className="row mt-3">
+                                                <div className="row mt-3 ">
                                                     <h5>Return / Remove comments</h5>
-                                                    <div className="history-section">
+                                                    <div className="history-section mb-3">
                                                         {(() => {
                                                             const entries = [];
 

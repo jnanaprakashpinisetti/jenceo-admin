@@ -1,6 +1,6 @@
 // BasicInformation.js
 import React, { useMemo, useState } from "react";
-import firebaseDB from "../../firebase"; // <-- added
+import firebaseDB from "../../firebase";
 
 const BasicInformation = ({
   formData,
@@ -8,6 +8,7 @@ const BasicInformation = ({
   handleChange,
   handleBlur,
   handleFileChange,
+  setErrors, // Add setErrors to props
   nextStep,
 }) => {
   const [showIdExistsModal, setShowIdExistsModal] = useState(false);
@@ -18,6 +19,11 @@ const BasicInformation = ({
     const maxDate = new Date();
     maxDate.setFullYear(maxDate.getFullYear() - 18);
     return maxDate.toISOString().split("T")[0];
+  }, []);
+
+  // Set current date for date of joining
+  const currentDateString = useMemo(() => {
+    return new Date().toISOString().split("T")[0];
   }, []);
 
   // Auto-calculate years based on date of birth
@@ -35,8 +41,7 @@ const BasicInformation = ({
 
   // Handle date of birth change
   const handleDobChange = (e) => {
-    handleChange(e); // Update dateOfBirth in parent form data
-    // Auto-update years field
+    handleChange(e);
     const years = calculateAge(e.target.value);
     handleChange({
       target: {
@@ -46,8 +51,58 @@ const BasicInformation = ({
     });
   };
 
+  // Handle file change for both employee photo and ID proof
+  const handleFileUpload = (e) => {
+    const { name, files } = e.target;
+    const file = files?.[0] || null;
+    
+    if (!file) {
+      handleChange({
+        target: {
+          name: name + "File",
+          value: null,
+        },
+      });
+      return;
+    }
+
+    // Validate file type
+    const validImageTypes = ["image/jpeg", "image/jpg", "image/png", "image/gif"];
+    const validPdfType = "application/pdf";
+    
+    if (name === "employeePhoto" && !validImageTypes.includes(file.type)) {
+      setErrors(prev => ({ ...prev, [name]: "Only JPG/PNG/GIF images allowed" }));
+      return;
+    }
+    
+    if (name === "idProof" && file.type !== validPdfType && !validImageTypes.includes(file.type)) {
+      setErrors(prev => ({ ...prev, [name]: "Only PDF or JPG/PNG images allowed" }));
+      return;
+    }
+
+    // Validate file size (150KB max)
+    if (file.size > 150 * 1024) {
+      setErrors(prev => ({ ...prev, [name]: "File must be less than 150KB" }));
+      return;
+    }
+
+    // Clear any previous errors for this field
+    setErrors(prev => {
+      const newErrors = { ...prev };
+      delete newErrors[name];
+      return newErrors;
+    });
+
+    // Update form data
+    handleChange({
+      target: {
+        name: name + "File",
+        value: file,
+      },
+    });
+  };
+
   // Real ID check using Firebase Realtime Database
-  // Returns an object { name, ... } if found, otherwise null
   const checkIdExists = async (idNo) => {
     if (!idNo) return null;
     try {
@@ -58,7 +113,6 @@ const BasicInformation = ({
         .once("value");
       if (snapshot.exists()) {
         const val = snapshot.val();
-        // take the first match
         const firstKey = Object.keys(val)[0];
         const existing = val[firstKey];
         const name = `${existing.firstName || ""} ${existing.lastName || ""}`.trim() || existing.name || "";
@@ -86,7 +140,7 @@ const BasicInformation = ({
 
   return (
     <div>
-      {/* ID Exists Modal */}
+      {/* ID Exists Modal - unchanged */}
       {showIdExistsModal && (
         <div className="id-exists-backdrop">
           <div className="id-exists-card">
@@ -142,7 +196,6 @@ const BasicInformation = ({
               <div className=" text-center">
                 <p className="label mb-0">Employee Name</p>
                 <p className="val"><strong>{existingEmployee?.name || "N/A"}</strong></p>
-
               </div>
             </div>
 
@@ -153,12 +206,9 @@ const BasicInformation = ({
               >
                 Close
               </button>
-
-
             </div>
           </div>
         </div>
-
       )}
 
       <div className="form-card-header mb-4">
@@ -166,8 +216,8 @@ const BasicInformation = ({
       </div>
       <hr />
       <div className="row g-3">
-        {/* Employee Photo - Optional */}
-        <div className="col-12">
+        {/* Employee Photo and ID Proof in one row */}
+        <div className="col-md-6">
           <label htmlFor="employeePhoto" className="form-label">
             Employee Photo <small className="text-muted">(optional)</small>
           </label>
@@ -176,7 +226,7 @@ const BasicInformation = ({
             className={`form-control ${errors.employeePhoto ? "is-invalid" : ""}`}
             id="employeePhoto"
             name="employeePhoto"
-            onChange={handleFileChange}
+            onChange={handleFileUpload}
             accept=".jpg,.jpeg,.png,.gif"
           />
           <div style={{ fontSize: "9px", color: "#f2f2f2", marginTop: "5px" }}>
@@ -186,12 +236,30 @@ const BasicInformation = ({
               target="_blank"
               rel="noopener noreferrer"
               className="ms-1"
-               style={{ fontSize: "9px", color: "#f2f2f2", marginTop: "5px" }}
+              style={{ fontSize: "9px", color: "#f2f2f2", marginTop: "5px" }}
             >
               View sample photo
             </a>
           </div>
           {errors.employeePhoto && <div className="invalid-feedback">{errors.employeePhoto}</div>}
+        </div>
+
+        <div className="col-md-6">
+          <label htmlFor="idProof" className="form-label">
+            ID Proof <small className="text-muted">(optional)</small>
+          </label>
+          <input
+            type="file"
+            className={`form-control ${errors.idProof ? "is-invalid" : ""}`}
+            id="idProof"
+            name="idProof"
+            onChange={handleFileUpload}
+            accept=".jpg,.jpeg,.png,.pdf"
+          />
+          <div style={{ fontSize: "9px", color: "#f2f2f2", marginTop: "5px" }}>
+            Accepts PDF or JPG/PNG images (max 150KB)
+          </div>
+          {errors.idProof && <div className="invalid-feedback">{errors.idProof}</div>}
         </div>
 
         <div className="col-md-6">
@@ -220,11 +288,11 @@ const BasicInformation = ({
             className={`form-control ${errors.date ? "is-invalid" : ""}`}
             id="date"
             name="date"
-            value={formData.date}
+            value={formData.date || currentDateString}
             onChange={handleChange}
             onBlur={handleBlur}
             min={new Date(Date.now() - 20 * 24 * 60 * 60 * 1000).toISOString().split("T")[0]}
-            max={new Date().toISOString().split("T")[0]}
+            max={currentDateString}
           />
           {errors.date && <div className="invalid-feedback">{errors.date}</div>}
         </div>
@@ -377,12 +445,6 @@ const BasicInformation = ({
           {errors.mobileNo2 && <div className="invalid-feedback">{errors.mobileNo2}</div>}
         </div>
       </div>
-
-      {/* <div className="d-flex justify-content-end mt-3">
-        <button type="button" className="btn btn-primary" onClick={handleNextStep}>
-          Next
-        </button>
-      </div> */}
     </div>
   );
 };

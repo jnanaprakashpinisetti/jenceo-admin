@@ -10,7 +10,7 @@ export default function PettyCashForm() {
   const today = new Date();
   const minDate = new Date(today);
   minDate.setDate(today.getDate() - 1000);
-  
+
   // Robust name resolver across common shapes your AuthContext may expose
   const signedInName =
     dbUser?.name ||
@@ -288,14 +288,14 @@ export default function PettyCashForm() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!validateForm()) return;
-    
+
     setIsSubmitting(true);
 
     try {
       // Get current user info
       const authObj = currentUser || user || dbUser || profile || {};
       const branchKey = resolvePettyBranch(authObj, "users");
-      
+
       console.log("Saving data for branch:", branchKey);
       console.log("User info:", { signedInName, signedInUid, signedInRole });
 
@@ -311,23 +311,23 @@ export default function PettyCashForm() {
         price: parseFloat(formData.price) || 0,
         total: parseFloat(formData.total) || 0,
         comments: formData.comments,
-        
+
         // Approval status - use "Pending" to match PettyCashReport expectations
         approval: "Pending",
-        
+
         // Extra fields
         extraField1: formData.extraField1 || "",
         extraField2: formData.extraField2 || "",
         extraField3: formData.extraField3 || "",
         extraField4: formData.extraField4 || "",
-        
+
         // Metadata
         employeeName: signedInName,
         createdAt: nowIso,
         createdById: signedInUid,
         createdByName: signedInName,
         createdByRole: signedInRole,
-        
+
         // Timestamp for sorting
         timestamp: Date.now()
       };
@@ -335,22 +335,22 @@ export default function PettyCashForm() {
       // FIXED: Use proper Firebase path structure
       const basePath = "PettyCash";
       const finalPath = `${basePath}/${branchKey}`;
-      
+
       console.log("Saving to path:", finalPath);
-      
+
       // Create reference and push data
       const listRef = firebaseDB.child(finalPath);
       const newRef = listRef.push();
-      
+
       // Create the expense object with ID
-      const expenseObj = { 
-        id: newRef.key, 
-        ...dataToSave 
+      const expenseObj = {
+        id: newRef.key,
+        ...dataToSave
       };
 
       // Save to Firebase
       await newRef.set(expenseObj);
-      
+
       console.log("Data saved successfully:", expenseObj);
 
       // Set success state
@@ -424,14 +424,6 @@ export default function PettyCashForm() {
   return (
     <div className="container mt-4 client-form">
       <h3 className="mb-4 text-center opacity-75 text-white">Petty Cash Form</h3>
-      <hr className="text-white" />
-      <div className="d-flex justify-content-between align-items-center p-3 opacity-75">
-        {/* Show signed-in user instead of hardcoded Admin */}
-        <p className="text-white">{signedInName}</p>
-
-        <p className="text-white">{formatMonth(today)}</p>
-      </div>
-
       <form onSubmit={handleSubmit} noValidate className="pb-5">
         {/* Main & Sub Category */}
         <div className="row mb-0">
@@ -443,7 +435,7 @@ export default function PettyCashForm() {
             </label>
             <select
               name="mainCategory"
-              className={`form-select ${errors.mainCategory ? "is-invalid" : ""}`}
+              className={`form-select mt-1 ${errors.mainCategory ? "is-invalid" : ""}`}
               value={formData.mainCategory}
               onChange={handleChange}
               onBlur={handleBlur}
@@ -473,7 +465,7 @@ export default function PettyCashForm() {
                   value={formData.subCategory}
                   onChange={handleChange}
                   onBlur={handleBlur}
-                  className={`form-control ${errors.subCategory ? "is-invalid" : ""}`}
+                  className={`form-control mt-1 ${errors.subCategory ? "is-invalid" : ""}`}
                   placeholder="Enter sub category name"
                 />
                 {errors.subCategory && <div className="invalid-feedback">{errors.subCategory}</div>}
@@ -487,11 +479,12 @@ export default function PettyCashForm() {
                 </label>
                 <select
                   name="subCategory"
-                  className={`form-select ${errors.subCategory ? "is-invalid" : ""}`}
+                  className={`form-select mt-1 ${errors.subCategory ? "is-invalid" : ""}`}
                   value={formData.subCategory}
                   onChange={handleChange}
                   onBlur={handleBlur}
                   disabled={!formData.mainCategory}
+                  style={{ background: "transparent" }}
                 >
                   <option value="">Select Sub Category</option>
                   {formData.mainCategory &&
@@ -524,7 +517,7 @@ export default function PettyCashForm() {
               value={formData.date}
               onChange={handleChange}
               onBlur={handleBlur}
-              className={`form-control ${errors.date ? "is-invalid" : ""}`}
+              className={`form-control mt-1 ${errors.date ? "is-invalid" : ""}`}
               min={minDate.toISOString().split("T")[0]}
               max={today.toISOString().split("T")[0]}
             />
@@ -542,7 +535,7 @@ export default function PettyCashForm() {
               value={formData.description}
               onChange={handleChange}
               onBlur={handleBlur}
-              className={`form-control ${errors.description ? "is-invalid" : ""}`}
+              className={`form-control mt-1 ${errors.description ? "is-invalid" : ""}`}
             />
             {errors.description && <div className="invalid-feedback">{errors.description}</div>}
           </div>
@@ -562,7 +555,7 @@ export default function PettyCashForm() {
               value={formData.quantity}
               onChange={handleChange}
               onBlur={handleBlur}
-              className={`form-control ${errors.quantity ? "is-invalid" : ""}`}
+              className={`form-control mt-1 ${errors.quantity ? "is-invalid" : ""}`}
             />
             {errors.quantity && <div className="invalid-feedback">{errors.quantity}</div>}
           </div>
@@ -578,7 +571,7 @@ export default function PettyCashForm() {
               value={formData.price}
               onChange={handleChange}
               onBlur={handleBlur}
-              className={`form-control ${errors.price ? "is-invalid" : ""}`}
+              className={`form-control mt-1 ${errors.price ? "is-invalid" : ""}`}
             />
             {errors.price && <div className="invalid-feedback">{errors.price}</div>}
           </div>
@@ -586,7 +579,7 @@ export default function PettyCashForm() {
             <label>
               <strong>Total</strong>
             </label>
-            <input type="number" name="total" value={formData.total} className="form-control" disabled />
+            <input type="number" name="total" value={formData.total} className="form-control mt-1" disabled style={{ background: "transparent" }} />
           </div>
         </div>
 
@@ -602,14 +595,14 @@ export default function PettyCashForm() {
             value={formData.comments}
             onChange={handleChange}
             onBlur={handleBlur}
-            className={`form-control ${errors.comments ? "is-invalid" : ""}`}
+            className={`form-control mt-1 ${errors.comments ? "is-invalid" : ""}`}
             rows="3"
           ></textarea>
           {errors.comments && <div className="invalid-feedback">{errors.comments}</div>}
         </div>
 
-        <button 
-          type="submit" 
+        <button
+          type="submit"
           className="btn btn-success"
           disabled={isSubmitting}
         >

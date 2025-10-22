@@ -13,6 +13,7 @@ export default function WorkerCallForm({ isOpen, onClose }) {
   const [existingWorker, setExistingWorker] = useState(null);
   const [showCloseConfirmModal, setShowCloseConfirmModal] = useState(false);
   const [errors, setErrors] = useState({});
+  const [openSkill, setOpenSkill] = useState(null)
 
   const [formData, setFormData] = useState({
     callId: "",
@@ -710,303 +711,107 @@ export default function WorkerCallForm({ isOpen, onClose }) {
                       <hr />
 
                       {/* Other Skills */}
+                      {/* Other Skills (Accordion with colored active headings) */}
                       <div className="col-md-12 mt-0">
-                        <div className="d-flex flex-column">
-                          {/* Office & Administrative */}
-                          <div className="category-section bg-dark rounded-3">
-                            <h6 className="category-heading text-primary mb-2">
-                              Office & Administrative
-                            </h6>
-                            <div className="d-flex flex-wrap gap-2">
-                              {[
-                                "Computer Operating",
-                                "Data Entry",
-                                "Office Assistant",
-                                "Receptionist",
-                                "Front Desk Executive",
-                                "Admin Assistant",
-                                "Office Boy",
-                                "Peon",
-                                "Office Attendant",
-                              ].map((skill) => {
-                                const active =
-                                  formData.otherSkills.includes(skill);
-                                return (
+                        <div className="accordion" id="skillsAccordion">
+                          {[
+                            {
+                              title: "Office & Administrative", color: "primary", skills: [
+                                "Computer Operating", "Data Entry", "Office Assistant", "Receptionist", "Front Desk Executive",
+                                "Admin Assistant", "Office Boy", "Peon", "Office Attendant",
+                              ]
+                            },
+                            {
+                              title: "Customer Service & Telecommunication", color: "success", skills: [
+                                "Tele Calling", "Customer Support", "Telemarketing", "BPO Executive", "Call Center Agent", "Customer Care Executive",
+                              ]
+                            },
+                            {
+                              title: "Management & Supervision", color: "warning", skills: [
+                                "Supervisor", "Manager", "Team Leader", "Site Supervisor", "Project Coordinator",
+                              ]
+                            },
+                            {
+                              title: "Security", color: "danger", skills: [
+                                "Security Guard", "Security Supervisor", "Gatekeeper", "Watchman",
+                              ]
+                            },
+                            {
+                              title: "Driving & Logistics", color: "info", skills: [
+                                "Driving", "Delivery Boy", "Delivery Executive", "Rider", "Driver", "Car Driver", "Bike Rider", "Logistics Helper",
+                              ]
+                            },
+                            {
+                              title: "Technical & Maintenance", color: "secondary", skills: [
+                                "Electrician", "Plumber", "Carpenter", "Painter", "Mason", "AC Technician", "Mechanic",
+                                "Maintenance Staff", "House Keeping", "Housekeeping Supervisor",
+                              ]
+                            },
+                            {
+                              title: "Industrial & Labor", color: "danger", skills: [
+                                "Labour", "Helper", "Loading Unloading", "Warehouse Helper", "Factory Worker", "Production Helper", "Packaging Staff",
+                              ]
+                            },
+                            {
+                              title: "Retail & Sales", color: "primary", skills: [
+                                "Sales Boy", "Sales Girl", "Store Helper", "Retail Assistant", "Shop Attendant",
+                              ]
+                            },
+                          ].map((sec, i) => {
+                            const isOpen = openSkill === i;
+                            // readable text on light-ish backgrounds (warning/info when active)
+                            const needsDark = isOpen && (sec.color === "warning" || sec.color === "info");
+                            const headingBtnClass = isOpen
+                              ? `accordion-button bg-${sec.color} ${needsDark ? "text-dark" : "text-white"}`
+                              : "accordion-button collapsed bg-dark text-white";
+                            return (
+                              <div className="accordion-item bg-dark text-white border-0 mb-2 rounded-3" key={sec.title}>
+                                <h2 className="accordion-header">
                                   <button
                                     type="button"
-                                    key={skill}
-                                    className={`btn btn-sm ${active
-                                      ? "btn-primary"
-                                      : "btn-outline-primary"
-                                      } rounded-pill skill-pill`}
-                                    onClick={() =>
-                                      toggleArrayField("otherSkills", skill)
-                                    }
+                                    className={headingBtnClass}
+                                    style={{ borderRadius: "0.5rem" }}
+                                    onClick={() => setOpenSkill(isOpen ? null : i)}
+                                    aria-expanded={isOpen}
+                                    aria-controls={`skillSec${i}`}
                                   >
-                                    {skill}
+                                    {sec.title}
                                   </button>
-                                );
-                              })}
-                            </div>
-                          </div>
+                                </h2>
 
-                          <hr />
-
-                          {/* Customer Service & Telecommunication */}
-                          <div className="category-section bg-dark rounded-3">
-                            <h6 className="category-heading text-success mb-2">
-                              Customer Service & Telecommunication
-                            </h6>
-                            <div className="d-flex flex-wrap gap-2">
-                              {[
-                                "Tele Calling",
-                                "Customer Support",
-                                "Telemarketing",
-                                "BPO Executive",
-                                "Call Center Agent",
-                                "Customer Care Executive",
-                              ].map((skill) => {
-                                const active =
-                                  formData.otherSkills.includes(skill);
-                                return (
-                                  <button
-                                    type="button"
-                                    key={skill}
-                                    className={`btn btn-sm ${active
-                                      ? "btn-success"
-                                      : "btn-outline-success"
-                                      } rounded-pill skill-pill`}
-                                    onClick={() =>
-                                      toggleArrayField("otherSkills", skill)
-                                    }
-                                  >
-                                    {skill}
-                                  </button>
-                                );
-                              })}
-                            </div>
-                          </div>
-                          <hr />
-
-                          {/* Management & Supervision */}
-                          <div className="category-section bg-dark rounded-3">
-                            <h6 className="category-heading text-warning mb-2">
-                              Management & Supervision
-                            </h6>
-                            <div className="d-flex flex-wrap gap-2">
-                              {[
-                                "Supervisor",
-                                "Manager",
-                                "Team Leader",
-                                "Site Supervisor",
-                                "Project Coordinator",
-                              ].map((skill) => {
-                                const active =
-                                  formData.otherSkills.includes(skill);
-                                return (
-                                  <button
-                                    type="button"
-                                    key={skill}
-                                    className={`btn btn-sm ${active
-                                      ? "btn-warning text-dark"
-                                      : "btn-outline-warning"
-                                      } rounded-pill skill-pill`}
-                                    onClick={() =>
-                                      toggleArrayField("otherSkills", skill)
-                                    }
-                                  >
-                                    {skill}
-                                  </button>
-                                );
-                              })}
-                            </div>
-                          </div>
-                          <hr />
-
-                          {/* Security */}
-                          <div className="category-section bg-dark rounded-3">
-                            <h6 className="category-heading text-danger mb-2">
-                              Security
-                            </h6>
-                            <div className="d-flex flex-wrap gap-2">
-                              {[
-                                "Security Guard",
-                                "Security Supervisor",
-                                "Gatekeeper",
-                                "Watchman",
-                              ].map((skill) => {
-                                const active =
-                                  formData.otherSkills.includes(skill);
-                                return (
-                                  <button
-                                    type="button"
-                                    key={skill}
-                                    className={`btn btn-sm ${active
-                                      ? "btn-danger"
-                                      : "btn-outline-danger"
-                                      } rounded-pill skill-pill`}
-                                    onClick={() =>
-                                      toggleArrayField("otherSkills", skill)
-                                    }
-                                  >
-                                    {skill}
-                                  </button>
-                                );
-                              })}
-                            </div>
-                          </div>
-                          <hr />
-
-                          {/* Driving & Logistics */}
-                          <div className="category-section bg-dark rounded-3">
-                            <h6 className="category-heading text-info mb-2">
-                              Driving & Logistics
-                            </h6>
-                            <div className="d-flex flex-wrap gap-2">
-                              {[
-                                "Driving",
-                                "Delivery Boy",
-                                "Delivery Executive",
-                                "Rider",
-                                "Driver",
-                                "Car Driver",
-                                "Bike Rider",
-                                "Logistics Helper",
-                              ].map((skill) => {
-                                const active =
-                                  formData.otherSkills.includes(skill);
-                                return (
-                                  <button
-                                    type="button"
-                                    key={skill}
-                                    className={`btn btn-sm ${active
-                                      ? "btn-info text-dark"
-                                      : "btn-outline-info"
-                                      } rounded-pill skill-pill`}
-                                    onClick={() =>
-                                      toggleArrayField("otherSkills", skill)
-                                    }
-                                  >
-                                    {skill}
-                                  </button>
-                                );
-                              })}
-                            </div>
-                          </div>
-                          <hr />
-
-                          {/* Technical & Maintenance */}
-                          <div className="category-section bg-dark rounded-3">
-                            <h6 className="category-heading text-secondary mb-2">
-                              Technical & Maintenance
-                            </h6>
-                            <div className="d-flex flex-wrap gap-2">
-                              {[
-                                "Electrician",
-                                "Plumber",
-                                "Carpenter",
-                                "Painter",
-                                "Mason",
-                                "AC Technician",
-                                "Mechanic",
-                                "Maintenance Staff",
-                                "House Keeping",
-                                "Housekeeping Supervisor",
-                              ].map((skill) => {
-                                const active =
-                                  formData.otherSkills.includes(skill);
-                                return (
-                                  <button
-                                    type="button"
-                                    key={skill}
-                                    className={`btn btn-sm ${active
-                                      ? "btn-secondary"
-                                      : "btn-outline-secondary"
-                                      } rounded-pill skill-pill`}
-                                    onClick={() =>
-                                      toggleArrayField("otherSkills", skill)
-                                    }
-                                  >
-                                    {skill}
-                                  </button>
-                                );
-                              })}
-                            </div>
-                          </div>
-                          <hr />
-                          {/* Industrial & Labor */}
-                          <div className="category-section bg-dark rounded-3">
-                            <h6 className="category-heading text-danger mb-2">
-                              Industrial & Labor
-                            </h6>
-                            <div className="d-flex flex-wrap gap-2">
-                              {[
-                                "Labour",
-                                "Helper",
-                                "Loading Unloading",
-                                "Warehouse Helper",
-                                "Factory Worker",
-                                "Production Helper",
-                                "Packaging Staff",
-                              ].map((skill) => {
-                                const active =
-                                  formData.otherSkills.includes(skill);
-                                return (
-                                  <button
-                                    type="button"
-                                    key={skill}
-                                    className={`btn btn-sm ${active
-                                      ? "btn-danger"
-                                      : "btn-outline-danger"
-                                      } rounded-pill skill-pill`}
-                                    onClick={() =>
-                                      toggleArrayField("otherSkills", skill)
-                                    }
-                                  >
-                                    {skill}
-                                  </button>
-                                );
-                              })}
-                            </div>
-                          </div>
-
-                          <hr></hr>
-
-                          {/* Retail & Sales */}
-                          <div className="category-section bg-dark rounded-3">
-                            <h6 className="category-heading text-primary mb-2">
-                              Retail & Sales
-                            </h6>
-                            <div className="d-flex flex-wrap gap-2">
-                              {[
-                                "Sales Boy",
-                                "Sales Girl",
-                                "Store Helper",
-                                "Retail Assistant",
-                                "Shop Attendant",
-                              ].map((skill) => {
-                                const active =
-                                  formData.otherSkills.includes(skill);
-                                return (
-                                  <button
-                                    type="button"
-                                    key={skill}
-                                    className={`btn btn-sm ${active
-                                      ? "btn-primary"
-                                      : "btn-outline-primary"
-                                      } rounded-pill skill-pill`}
-                                    onClick={() =>
-                                      toggleArrayField("otherSkills", skill)
-                                    }
-                                  >
-                                    {skill}
-                                  </button>
-                                );
-                              })}
-                            </div>
-                          </div>
+                                <div
+                                  id={`skillSec${i}`}
+                                  className={`accordion-collapse collapse ${isOpen ? "show" : ""}`}
+                                  data-bs-parent="#skillsAccordion"
+                                >
+                                  <div className="accordion-body">
+                                    <div className="d-flex flex-wrap gap-2">
+                                      {sec.skills.map((skill) => {
+                                        const active = formData.otherSkills.includes(skill);
+                                        const pillNeedsDark = (sec.color === "warning" || sec.color === "info") && active;
+                                        return (
+                                          <button
+                                            type="button"
+                                            key={skill}
+                                            className={`btn btn-sm rounded-pill skill-pill ${active
+                                                ? `btn-${sec.color}${pillNeedsDark ? " text-dark" : ""}`
+                                                : `btn-outline-${sec.color}`
+                                              }`}
+                                            onClick={() => toggleArrayField("otherSkills", skill)}
+                                          >
+                                            {skill}
+                                          </button>
+                                        );
+                                      })}
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          })}
                         </div>
                       </div>
+
                     </div>
 
                     <hr />

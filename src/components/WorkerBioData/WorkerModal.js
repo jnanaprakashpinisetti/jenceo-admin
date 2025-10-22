@@ -40,6 +40,218 @@ const BaseModal = ({ open, title, children, onClose, footer }) => {
     );
 };
 
+// === Skills + Languages options (sync with your form) ===
+const LANGUAGE_OPTIONS = [
+    "Telugu", "English", "Hindi", "Urdu", "Tamil", "Kannada", "Malayalam",
+    "Marathi", "Gujarati", "Bengali", "Punjabi", "Odia", "Assamese"
+];
+
+// Nursing sections for accordion
+const NURSING_SECTIONS = [
+    {
+        title: "Basic Patient Care", color: "success", skills: [
+            "Bed Making", "Linen Change", "Bed Bath / Sponge Bath", "Oral Hygiene / Mouth Care",
+            "Feeding Assistance", "Changing Diapers / Pads", "Elimination Assistance (Bedpan/Urinal)",
+            "Perineal Care", "Comfort Positioning", "Patient Positioning / Turning",
+            "Mobility Support (Wheelchair/Walker)", "Dressing Assistance",
+        ]
+    },
+    {
+        title: "Monitoring & Observation", color: "primary", skills: [
+            "Vital Signs Monitoring", "Blood Pressure Check", "Temperature Monitoring",
+            "Pulse and Respiration Check", "Blood Sugar Monitoring", "Intake/Output Charting",
+            "Patient Observation & Reporting",
+        ]
+    },
+    {
+        title: "Feeding & Tubes", color: "info", skills: [
+            "Ryle’s Tube Feeding (Nose Feeding)", "PEG Tube Feeding", "Oxygen Administration",
+            "Nebulization", "Suctioning (Oral/Nasal)",
+        ]
+    },
+    {
+        title: "Wounds & Skin", color: "warning", skills: [
+            "Wound Dressing", "Pressure Sore Care & Prevention", "Skin Inspection & Hygiene",
+        ]
+    },
+    {
+        title: "Catheters & Special Care", color: "danger", skills: [
+            "Catheterization (Male/Female)", "Catheter Care & Cleaning", "Colostomy Care",
+            "Tracheostomy Care", "IV Line Observation", "Drip Monitoring", "Injection Assistance",
+        ]
+    },
+    {
+        title: "Documentation & Coordination", color: "secondary", skills: [
+            "Medication Assistance (as per schedule)", "Daily Nursing Notes",
+            "Family Coordination / Updates", "Emergency Response Assistance",
+            "Hygiene & Sanitization (Handwash/PPE)",
+        ]
+    },
+];
+
+// “Others” grouped sections for accordion
+const OTHER_SECTIONS = [
+    {
+        title: "Office & Administrative", color: "primary", skills: [
+            "Computer Operating", "Data Entry", "Office Assistant", "Receptionist", "Front Desk Executive",
+            "Admin Assistant", "Office Boy", "Peon", "Office Attendant",
+        ]
+    },
+    {
+        title: "Customer Service & Telecommunication", color: "success", skills: [
+            "Tele Calling", "Customer Support", "Telemarketing", "BPO Executive", "Call Center Agent",
+            "Customer Care Executive",
+        ]
+    },
+    {
+        title: "Management & Supervision", color: "warning", skills: [
+            "Supervisor", "Manager", "Team Leader", "Site Supervisor", "Project Coordinator",
+        ]
+    },
+    {
+        title: "Security", color: "danger", skills: [
+            "Security Guard", "Security Supervisor", "Gatekeeper", "Watchman",
+        ]
+    },
+    {
+        title: "Driving & Logistics", color: "info", skills: [
+            "Driving", "Delivery Boy", "Delivery Executive", "Rider", "Driver", "Car Driver",
+            "Bike Rider", "Logistics Helper",
+        ]
+    },
+    {
+        title: "Technical & Maintenance", color: "secondary", skills: [
+            "Electrician", "Plumber", "Carpenter", "Painter", "Mason", "AC Technician", "Mechanic",
+            "Maintenance Staff", "House Keeping", "Housekeeping Supervisor",
+        ]
+    },
+    {
+        title: "Industrial & Labor", color: "danger", skills: [
+            "Labour", "Helper", "Loading Unloading", "Warehouse Helper", "Factory Worker",
+            "Production Helper", "Packaging Staff",
+        ]
+    },
+    {
+        title: "Retail & Sales", color: "primary", skills: [
+            "Sales Boy", "Sales Girl", "Store Helper", "Retail Assistant", "Shop Attendant",
+        ]
+    },
+];
+
+// Reusable chips
+const Chip = ({ children }) => (
+    <span className="badge rounded-pill bg-secondary me-2 mb-2">{children}</span>
+);
+
+// Accordion block for skill groups
+const SkillAccordion = ({ idPrefix, sections, selected = [], onToggle }) => {
+    const [open, setOpen] = React.useState({});
+    const toggleOpen = (k) => setOpen((p) => ({ ...p, [k]: !p[k] }));
+    const isSelected = (s) => selected.includes(s);
+
+    return (
+        <div className="accordion" id={`${idPrefix}-acc`}>
+            {sections.map((sec, idx) => {
+                const key = `${idPrefix}-${idx}`;
+                const activeCount = sec.skills.filter(isSelected).length;
+                return (
+                    <div className="accordion-item" key={key}>
+                        <h2 className="accordion-header">
+                            <button
+                                className={`accordion-button collapsed text-${sec.color}`}
+                                type="button"
+                                onClick={() => toggleOpen(key)}
+                                aria-expanded={!!open[key]}
+                            >
+                                <strong className={`me-2 text-${sec.color}`}>●</strong>
+                                {sec.title}
+                                {activeCount > 0 && (
+                                    <span className="badge ms-2 bg-outline border text-muted">
+                                        {activeCount} selected
+                                    </span>
+                                )}
+                            </button>
+                        </h2>
+                        <div className={`accordion-collapse collapse ${open[key] ? "show" : ""}`}>
+                            <div className="accordion-body">
+                                <div className="d-flex flex-wrap gap-2">
+                                    {sec.skills.map((sk) => {
+                                        const active = isSelected(sk);
+                                        return (
+                                            <button
+                                                type="button"
+                                                key={sk}
+                                                className={`btn btn-sm rounded-pill ${active ? `btn-${sec.color}` : `btn-outline-${sec.color}`
+                                                    }`}
+                                                onClick={() => onToggle(sk)}
+                                            >
+                                                {sk}
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                );
+            })}
+        </div>
+    );
+};
+
+// Minimal multi-select dropdown (same UX pattern as WorkerCalleDisplay)
+const MultiSelectDropdown = ({ label, options, value = [], onChange, btnClass = "btn-outline-info" }) => {
+    const [open, setOpen] = React.useState(false);
+    const ref = React.useRef(null);
+    React.useEffect(() => {
+        const h = (e) => { if (open && ref.current && !ref.current.contains(e.target)) setOpen(false); };
+        document.addEventListener("mousedown", h);
+        return () => document.removeEventListener("mousedown", h);
+    }, [open]);
+    const toggle = (opt) => {
+        const has = value.includes(opt);
+        onChange(has ? value.filter((x) => x !== opt) : [...value, opt]);
+    };
+
+    return (
+        <div className="dropdown" ref={ref}>
+            <button className={`btn w-100 ${btnClass} dropdown-toggle`} type="button" onClick={() => setOpen(!open)}>
+                {value.length > 0 ? `${label} (${value.length})` : label}
+            </button>
+            {open && (
+                <div className="dropdown-menu dropdown-menu-white p-3 show" style={{ width: "100%" }}>
+                    <h6 className="text-info mb-2">Select {label}</h6>
+                    <div className="dropdown-divider"></div>
+                    <div style={{ width: "100%", maxHeight: 220, overflowY: "auto" }}>
+                        {options.map((opt) => {
+                            const id = `ms-${label}-${opt}`;
+                            const checked = value.includes(opt);
+                            return (
+                                <div className="form-check" key={opt}>
+                                    <input
+                                        className="form-check-input text-dark"
+                                        type="checkbox"
+                                        id={id}
+                                        checked={checked}
+                                        onChange={(e) => toggle(opt)}
+                                    />
+                                    <label className="form-check-label text-dark" htmlFor={id}>{opt}</label>
+                                </div>
+                            );
+                        })}
+                    </div>
+                    <div className="dropdown-divider mt-2"></div>
+                    <div className="d-flex justify-content-between">
+                        <button className="btn btn-sm btn-warning" onClick={() => onChange([])}>Clear</button>
+                        <button className="btn btn-sm btn-info" onClick={() => setOpen(false)}>Close</button>
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+};
+
+
 const AlertModal = ({ open, title = "Notice", variant = "info", onClose, children }) => (
     <BaseModal
         open={open}
@@ -85,7 +297,7 @@ const ConfirmModal = ({
             </>
         }
     >
-        <div className="alert alert-warning mb-0">
+        <div className="alert alert-danger mb-0">
             <div style={{ paddingLeft: "1.25rem" }}>{message}</div>
             {error && <div className="text-danger mt-2" style={{ paddingLeft: '1.25rem' }}>{error}</div>}
         </div>
@@ -1663,7 +1875,7 @@ const WorkerModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode }
             </div>
 
             {/* Main Modal */}
-            <div className={`modal fade show ${modalClass}`} style={{ display: "block", backgroundColor: "rgba(0, 0, 0, 0.81)" }}>
+            <div className={`modal fade show ${modalClass}`} style={{ display: "block", backgroundColor: "rgba(0, 0, 0, 0.9)" }}>
                 <div className="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
                     <div className="modal-content">
                         <div className="modal-header bg-secondary text-white">
@@ -2257,11 +2469,13 @@ const WorkerModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode }
 
                                 {/* Qualification & Skills */}
                                 {activeTab === "qualification" && (
-                                    <div className="modal-card ">
+                                    <div className="modal-card">
                                         <div className="modal-card-header">
                                             <h4 className="mb-0">Qualification & Skills</h4>
                                         </div>
+
                                         <div className="modal-card-body">
+                                            {/* Row 1: Qualification / School */}
                                             <div className="row">
                                                 <div className="col-md-4">
                                                     {renderInputField("Qualification", "qualification", formData.qualification)}
@@ -2270,51 +2484,135 @@ const WorkerModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode }
                                                     {renderInputField("School/College", "schoolCollege", formData.schoolCollege)}
                                                 </div>
                                                 <div className="col-md-4">
-                                                    <label htmlFor="primarySkill" className="form-label">
-                                                        Primary Skill
-                                                    </label>
-                                                    <select
-                                                        id="primarySkill"
-                                                        name="primarySkill"
-                                                        className="form-select"
-                                                        value={formData.primarySkill || ""}
-                                                        onChange={(e) =>
-                                                            setFormData((prev) => ({ ...prev, primarySkill: e.target.value }))
-                                                        }
-                                                    >
-                                                        <option value="">Select</option>
-                                                        <option value="Cook">Cook</option>
-                                                        <option value="Baby Care">Baby Care</option>
-                                                        <option value="House Maid">House Maid</option>
-                                                        <option value="Nursing">Nursing</option>
-                                                        <option value="Elder Care">Elder Care</option>
-                                                        <option value="Patient Care">Patient Care</option>
-                                                        <option value="Others">Others</option>
-                                                    </select>
-                                                </div>
-                                            </div>
-                                            <div className="row">
-                                                <div className="col-md-4">
-                                                    {renderArrayField("Secondary Skills", "secondarySkills", "Add secondary skill")}
-                                                </div>
-                                                <div className="col-md-4">
-                                                    {renderArrayField("Other Skills", "workingSkills", "Add skill")}
-                                                </div>
-                                                <div className="col-md-4">
                                                     {renderInputField("Work Experience", "workExperince", formData.workExperince, "text")}
                                                 </div>
                                             </div>
-                                            <div className="row">
+
+                                            {/* Row 2: Primary Skill + Mother Tongue + Languages */}
+                                            <div className="row mt-2">
                                                 <div className="col-md-4">
-                                                    {renderInputField("Mother Tongue", "motherTongue", formData.motherTongue)}
+                                                    {renderSelectField(
+                                                        "Primary Skill",
+                                                        "primarySkill",
+                                                        formData.primarySkill,
+                                                        [
+                                                            { value: "", label: "Select" },
+                                                            { value: "Nursing", label: "Nursing" },
+                                                            { value: "Patient Care", label: "Patient Care" },
+                                                            { value: "Care Taker", label: "Care Taker" },
+                                                            { value: "Baby Care", label: "Baby Care" },
+                                                            { value: "Supporting", label: "Supporting" },
+                                                            { value: "Diaper", label: "Diaper" },
+                                                            { value: "Cook", label: "Cook" },
+                                                            { value: "Housekeeping", label: "Housekeeping" },
+                                                            { value: "Old Age Care", label: "Old Age Care" },
+                                                            { value: "Any Duty", label: "Any Duty" },
+                                                            { value: "Others", label: "Others" },
+                                                        ]
+                                                    )}
                                                 </div>
+
                                                 <div className="col-md-4">
-                                                    {renderInputField("Languages", "languages", formData.languages)}
+                                                    {renderSelectField(
+                                                        "Mother Tongue",
+                                                        "motherTongue",
+                                                        formData.motherTongue,
+                                                        [{ value: "", label: "Select" }, ...LANGUAGE_OPTIONS.map((l) => ({ value: l, label: l }))],
+                                                    )}
                                                 </div>
+
+                                                <div className="col-md-4">
+                                                    <label className="form-label"><strong>Languages</strong></label>
+                                                    {isEditMode ? (
+                                                        <MultiSelectDropdown
+                                                            label="Languages"
+                                                            options={LANGUAGE_OPTIONS}
+                                                            value={Array.isArray(formData.languages) ? formData.languages : []}
+                                                            onChange={(arr) => setFormData((p) => ({ ...p, languages: arr }))}
+                                                            btnClass="btn-outline-info"
+                                                        />
+                                                    ) : (
+                                                        <div>
+                                                            {(Array.isArray(formData.languages) ? formData.languages : String(formData.languages || "").split(",").map(s => s.trim()).filter(Boolean)).map((l) => (
+                                                                <Chip key={l}>{l}</Chip>
+                                                            ))}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </div>
+
+                                            {/* Row 3: Skill accordions (depending on primarySkill) */}
+                                            <div className="mt-3">
+                                                {String(formData.primarySkill || "").toLowerCase() === "nursing" && (
+                                                    <>
+                                                        <h6 className="mb-2">
+                                                            <span className="badge bg-success me-2">Primary: Nursing</span>
+                                                            <small className="text-muted">Select applicable nursing tasks</small>
+                                                        </h6>
+
+                                                        {isEditMode ? (
+                                                            <SkillAccordion
+                                                                idPrefix="nursing"
+                                                                sections={NURSING_SECTIONS}
+                                                                selected={Array.isArray(formData.nursingSkills) ? formData.nursingSkills : []}
+                                                                onToggle={(skill) =>
+                                                                    setFormData((p) => {
+                                                                        const arr = Array.isArray(p.nursingSkills) ? p.nursingSkills.slice() : [];
+                                                                        const has = arr.includes(skill);
+                                                                        return { ...p, nursingSkills: has ? arr.filter((x) => x !== skill) : [...arr, skill] };
+                                                                    })
+                                                                }
+                                                            />
+                                                        ) : (
+                                                            <div className="d-flex flex-wrap">
+                                                                {(Array.isArray(formData.nursingSkills) ? formData.nursingSkills : []).map((s) => (
+                                                                    <Chip key={s}>{s}</Chip>
+                                                                ))}
+                                                                {(!formData.nursingSkills || formData.nursingSkills.length === 0) && (
+                                                                    <div className="text-muted">No nursing tasks selected.</div>
+                                                                )}
+                                                            </div>
+                                                        )}
+                                                    </>
+                                                )}
+
+                                                {String(formData.primarySkill || "").toLowerCase() === "others" && (
+                                                    <>
+                                                        <h6 className="mb-2">
+                                                            <span className="badge bg-warning text-dark me-2">Primary: Others</span>
+                                                            <small className="text-muted">Select applicable skills</small>
+                                                        </h6>
+
+                                                        {isEditMode ? (
+                                                            <SkillAccordion
+                                                                idPrefix="others"
+                                                                sections={OTHER_SECTIONS}
+                                                                selected={Array.isArray(formData.otherSkills) ? formData.otherSkills : []}
+                                                                onToggle={(skill) =>
+                                                                    setFormData((p) => {
+                                                                        const arr = Array.isArray(p.otherSkills) ? p.otherSkills.slice() : [];
+                                                                        const has = arr.includes(skill);
+                                                                        return { ...p, otherSkills: has ? arr.filter((x) => x !== skill) : [...arr, skill] };
+                                                                    })
+                                                                }
+                                                            />
+                                                        ) : (
+                                                            <div className="d-flex flex-wrap">
+                                                                {(Array.isArray(formData.otherSkills) ? formData.otherSkills : []).map((s) => (
+                                                                    <Chip key={s}>{s}</Chip>
+                                                                ))}
+                                                                {(!formData.otherSkills || formData.otherSkills.length === 0) && (
+                                                                    <div className="text-muted">No other skills selected.</div>
+                                                                )}
+                                                            </div>
+                                                        )}
+                                                    </>
+                                                )}
                                             </div>
                                         </div>
                                     </div>
                                 )}
+
 
                                 {/* Health */}
                                 {activeTab === "health" && (

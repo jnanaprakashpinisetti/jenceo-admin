@@ -8,8 +8,8 @@ export default function Accounts() {
     <div className="layout-body enquiry">
       <div className="row">
         <div className="col-md-12">
-          <div className=" m-auto text-center ">
-            <button className="btn btn-warning mmt-3" onClick={() => setShowEnquiryModal(true)}>+ New Enquiry </button>
+          <div className=" m-auto ">
+            <button className="btn btn-warning mmt-3 m-auto d-block" onClick={() => setShowEnquiryModal(true)}>+ New Enquiry </button>
             <EnquiryForm
               show={showEnquiryModal}
               onClose={() => setShowEnquiryModal(false)}

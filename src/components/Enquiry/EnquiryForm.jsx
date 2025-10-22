@@ -67,13 +67,10 @@ const ThankYouModal = ({ open, onClose, name, mobile }) => {
       tabIndex="-1"
       aria-modal="true"
       role="dialog"
-      style={{ background: "rgba(0,0,0,0.5)", zIndex: 1080 }} // above typical bootstrap modal (1050)
+      style={{ background: "rgba(0,0,0,0.5)", zIndex: 1080 }}
     >
       <div className="modal-dialog modal-dialog-centered">
-        <div
-          className="modal-content thankyou-card"
-          style={{ borderRadius: 14 }}
-        >
+        <div className="modal-content thankyou-card" style={{ borderRadius: 14 }}>
           <div
             className="modal-header thankyou-header"
             style={{ borderTopLeftRadius: 14, borderTopRightRadius: 14 }}
@@ -82,7 +79,7 @@ const ThankYouModal = ({ open, onClose, name, mobile }) => {
             <button type="button" className="btn-close" onClick={onClose} />
           </div>
 
-          <div className="modal-body text-center py-4">
+          <div className="modal-body   py-4">
             <div className="mb-3">
               <i className="fas fa-check-circle" style={{ fontSize: "3rem" }} />
             </div>
@@ -142,6 +139,12 @@ const EnquiryForm = ({ show, onClose, title = "Enquiry Form" }) => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isGeneratingId, setIsGeneratingId] = useState(false);
 
+  // 2-step wizard
+  const [step, setStep] = useState(1);
+  useEffect(() => {
+    if (show) setStep(1);
+  }, [show]);
+
   // Data to show in thank-you modal
   const [submittedData, setSubmittedData] = useState({ name: "", mobile: "" });
   const [showThankYou, setShowThankYou] = useState(false);
@@ -159,7 +162,7 @@ const EnquiryForm = ({ show, onClose, title = "Enquiry Form" }) => {
       if (snap.exists()) {
         snap.forEach((child) => {
           const v = child.val();
-          const m = String(v?.idNo || "").match(/(\d+)$/); // grab trailing digits from E-01 / E-160 etc.
+          const m = String(v?.idNo || "").match(/(\d+)$/); // trailing digits
           if (m) {
             const n = parseInt(m[1], 10);
             if (!Number.isNaN(n) && n > maxNum) maxNum = n;
@@ -168,18 +171,16 @@ const EnquiryForm = ({ show, onClose, title = "Enquiry Form" }) => {
       }
 
       const next = maxNum + 1;
-      // keep your current 2-digit style (E-01). If you prefer 3 digits, use padStart(3, "0").
       return `E-${String(next).padStart(2, "0")}`;
     } catch (err) {
       console.error("Error generating ID:", err);
-      // fallback so form still works
       return `E-${String(new Date().getSeconds()).padStart(2, "0")}`;
     } finally {
       setIsGeneratingId(false);
     }
   };
 
-  // Set default date to today and generate ID whenever the modal opens; also reset pristine baseline
+  // Initialize when opened
   useEffect(() => {
     const initializeForm = async () => {
       if (show) {
@@ -207,7 +208,6 @@ const EnquiryForm = ({ show, onClose, title = "Enquiry Form" }) => {
         }
       }
     };
-
     initializeForm();
   }, [show, emptyForm]);
 
@@ -217,7 +217,9 @@ const EnquiryForm = ({ show, onClose, title = "Enquiry Form" }) => {
     return new Date(d).toISOString().split("T")[0];
   };
 
-  const { user: authUser } = useAuth?.() || {};
+  // Auth (stable hook call)
+  const authCtx = useAuth();
+  const authUser = authCtx?.user ?? authCtx;
   const effectiveUserId = getEffectiveUserId(authUser);
   const effectiveUserName = getEffectiveUserName(authUser);
 
@@ -227,33 +229,23 @@ const EnquiryForm = ({ show, onClose, title = "Enquiry Form" }) => {
 
     switch (name) {
       case "idNo":
-        if (!value.trim()) error = "ID number is required.";
+        if (!value?.trim()) error = "ID number is required.";
         break;
       case "date": {
-        const today = new Date();
-        const minDate = new Date();
-        minDate.setDate(today.getDate() - 10);
-
-        const selected = new Date(value);
-        const todayYMD = new Date(toYMD(today));
-        const minYMD = new Date(toYMD(minDate));
-
-        // if (selected < minYMD || selected > todayYMD) {
-        //     error = "Date must be within the past 10 days up to today.";
-        // }
+        // optional guard boundary if you need
         break;
       }
       case "name":
-        if (!value.trim()) error = "Name is required.";
+        if (!value?.trim()) error = "Name is required.";
         break;
       case "mobile":
-        if (!/^\d{10}$/.test(value)) error = "Mobile number must be 10 digits.";
+        if (!/^\d{10}$/.test(value || "")) error = "Mobile number must be 10 digits.";
         break;
       case "gender":
         if (!value) error = "Gender is required.";
         break;
       case "amount":
-        if (!/^\d{1,5}$/.test(String(value)))
+        if (!/^\d{1,5}$/.test(String(value || "")))
           error = "Enter valid amount (max 5 digits).";
         break;
       case "through":
@@ -294,7 +286,6 @@ const EnquiryForm = ({ show, onClose, title = "Enquiry Form" }) => {
   };
 
   const isPristine = useMemo(() => {
-    // shallow compare since structure is flat
     const keys = Object.keys(initialData);
     for (const k of keys) {
       if ((formData[k] ?? "") !== (initialData[k] ?? "")) return false;
@@ -302,85 +293,127 @@ const EnquiryForm = ({ show, onClose, title = "Enquiry Form" }) => {
     return true;
   }, [formData, initialData]);
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setIsSubmitting(true);
+  // ---- Wizard config ----
+  const SECTION1_FIELDS = [
+    "idNo",
+    "date",
+    "name",
+    "mobile",
+    "gender",
+    "location",
+    "service",
+    "amount",
+  ];
+  const SECTION2_FIELDS = [
+    "careRecipientName",
+    "age",
+    "weight",
+    "serviceRequiredPeriod",
+    "through",
+    "status",
+    "communication",
+    "reminderDate",
+    "comments",
+  ];
+  const REQUIRED_SECTION1 = ["idNo", "date", "name", "mobile", "gender", "amount"];
+  const REQUIRED_SECTION2 = ["through", "status", "communication"];
 
-    // Validate required fields (skip optional: service, comments, reminderDate)
-    const fieldsToCheck = Object.keys(formData).filter(
-      (f) =>
-        ![
-          "service",
-          "comments",
-          "reminderDate",
-          "careRecipientName",
-          "age",
-          "weight",
-          "location",
-          "serviceRequiredPeriod",
-        ].includes(f)
-    );
+  const validateSection = (section) => {
+    const fields = section === 1 ? SECTION1_FIELDS : SECTION2_FIELDS;
+    const required = section === 1 ? REQUIRED_SECTION1 : REQUIRED_SECTION2;
 
     const newErrors = {};
-    fieldsToCheck.forEach((f) => {
+    fields.forEach((f) => {
       const err = validateField(f, formData[f]);
-      if (err) newErrors[f] = err;
+      if (required.includes(f) && !formData[f]) {
+        newErrors[f] = err || "This field is required.";
+      } else if (err) {
+        newErrors[f] = err;
+      }
     });
 
-    setErrors(newErrors);
+    setErrors((prev) => ({ ...prev, ...newErrors }));
+    return newErrors;
+  };
 
-    if (Object.keys(newErrors).length === 0) {
-      try {
-        // Save to Firebase under EnquiryData
-        const ref = firebaseDB.child("EnquiryData").push();
-        const nowIso = new Date().toISOString();
-        await ref.set({
-          ...formData,
-          id: ref.key,
-          // creator metadata
-          createdById: effectiveUserId,
-          createdByName: effectiveUserName,
-          createdAt: nowIso,
-          // keep your existing timestamp if other code reads it
-          timestamp: nowIso,
-        });
-
-        setSubmittedData({ name: formData.name, mobile: formData.mobile });
-        setShowThankYou(true);
-
-        // Reset form (keep today's date) and reset pristine baseline
-        const today = new Date().toISOString().split("T")[0];
-        const reset = {
-          idNo: "",
-          date: today,
-          name: "",
-          mobile: "",
-          gender: "",
-          service: "",
-          amount: "",
-          careRecipientName: "",
-          age: "",
-          weight: "",
-          location: "",
-          serviceRequiredPeriod: "",
-          through: "",
-          status: "",
-          communication: "",
-          reminderDate: "",
-          comments: "",
-        };
-        setFormData(reset);
-        setInitialData(reset);
-
-        setErrors({});
-      } catch (err) {
-        console.error("Error adding document:", err);
-        alert("There was an error submitting the form. Please try again.");
-      }
-    } else {
-      const first = Object.keys(newErrors)[0];
+  const handleNext = (e) => {
+    e.preventDefault();
+    const errs = validateSection(1);
+    if (Object.keys(errs).length === 0) setStep(2);
+    else {
+      const first = Object.keys(errs)[0];
       const el = document.querySelector(`#enq-${first}`);
       if (el) el.focus();
+    }
+  };
+
+  const handleBack = (e) => {
+    e.preventDefault();
+    setStep(1);
+  };
+
+  // Submit (only valid on step 2; step 1 triggers Next)
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+
+    if (step === 1) {
+      return handleNext(e);
+    }
+
+    setIsSubmitting(true);
+
+    const errs = validateSection(2);
+    if (Object.keys(errs).length > 0) {
+      const first = Object.keys(errs)[0];
+      const el = document.querySelector(`#enq-${first}`);
+      if (el) el.focus();
+      setIsSubmitting(false);
+      return;
+    }
+
+    try {
+      // Save to Firebase under EnquiryData
+      const ref = firebaseDB.child("EnquiryData").push();
+      const nowIso = new Date().toISOString();
+      await ref.set({
+        ...formData,
+        id: ref.key,
+        createdById: effectiveUserId,
+        createdByName: effectiveUserName,
+        createdAt: nowIso,
+        timestamp: nowIso,
+      });
+
+      setSubmittedData({ name: formData.name, mobile: formData.mobile });
+      setShowThankYou(true);
+
+      // Reset form (keep today's date) and reset pristine baseline
+      const today = new Date().toISOString().split("T")[0];
+      const reset = {
+        idNo: "",
+        date: today,
+        name: "",
+        mobile: "",
+        gender: "",
+        service: "",
+        amount: "",
+        careRecipientName: "",
+        age: "",
+        weight: "",
+        location: "",
+        serviceRequiredPeriod: "",
+        through: "",
+        status: "",
+        communication: "",
+        reminderDate: "",
+        comments: "",
+      };
+      setFormData(reset);
+      setInitialData(reset);
+      setErrors({});
+    } catch (err) {
+      console.error("Error adding document:", err);
+      alert("There was an error submitting the form. Please try again.");
     }
 
     setIsSubmitting(false);
@@ -408,7 +441,7 @@ const EnquiryForm = ({ show, onClose, title = "Enquiry Form" }) => {
   /* ---------------- Render either the form modal OR the thank-you modal ---------------- */
   return (
     <>
-      {/* FORM MODAL (uses its own unique wrapper class "enquiry-modal") */}
+      {/* FORM MODAL */}
       {!showThankYou && (
         <div
           className="modal fade show d-block enquiry-modal"
@@ -433,379 +466,364 @@ const EnquiryForm = ({ show, onClose, title = "Enquiry Form" }) => {
 
               <div className="modal-body">
                 <form onSubmit={handleSubmit} className="enquiryForm">
-                  {/* ID No and Date */}
-                  <div className="row">
-                    <div className="col-md-6 mb-3">
-                      <label className="form-label">
-                        ID No <span className="text-danger">*</span>
-                      </label>
-                      <div className="input-group">
-                        <input
-                          type="text"
-                          name="idNo"
-                          className={`form-control idNo ${
-                            errors.idNo ? "is-invalid" : ""
-                          }`}
-                          value={formData.idNo}
-                          onChange={handleChange}
-                          onBlur={handleBlur}
-                          disabled
-                          placeholder={
-                            isGeneratingId
-                              ? "Generating ID..."
-                              : "Auto-generated ID"
-                          }
-                        />
-                        <div className="input-group-text">
-                          {isGeneratingId ? (
-                            <span className="spinner-border spinner-border-sm" />
-                          ) : (
-                            <i className="fas fa-check text-success" />
+                  {/* STEP INDICATOR */}
+                  <div className="d-flex align-items-center  justify-content-center; gap-2 mb-3">
+                    <span className={`badge ${step === 1 ? "bg-warning" : "bg-secondary"}`}>
+                      1
+                    </span>
+                    <div className="text-info">Basic Details</div>
+                    <span className="mut-dot">•</span>
+                    <span className={`badge ${step === 2 ? "bg-warning" : "bg-secondary"}`}>
+                      2
+                    </span>
+                    <div className="text-info">Additional & Follow-up</div>
+                  </div>
+                  <hr></hr>
+
+                  {/* ===================== SECTION 1 ===================== */}
+                  {step === 1 && (
+                    <>
+                      {/* ID No and Date */}
+                      <div className="row">
+                        <div className="col-md-6 mb-3">
+                          <label className="form-label">
+                            ID No <span className="text-danger">*</span>
+                          </label>
+                          <div className="input-group">
+                            <input
+                              id="enq-idNo"
+                              type="text"
+                              name="idNo"
+                              className={`form-control idNo ${errors.idNo ? "is-invalid" : ""}`}
+                              value={formData.idNo}
+                              onChange={handleChange}
+                              onBlur={handleBlur}
+                              disabled
+                              placeholder={isGeneratingId ? "Generating ID..." : "Auto-generated ID"}
+                            />
+                            <div className="input-group-text">
+                              {isGeneratingId ? (
+                                <span className="spinner-border spinner-border-sm" />
+                              ) : (
+                                <i className="fas fa-check text-success" />
+                              )}
+                            </div>
+                          </div>
+                          {errors.idNo && <div className="invalid-feedback">{errors.idNo}</div>}
+                        </div>
+
+                        {/* Date */}
+                        <div className="col-md-6 mb-3">
+                          <label className="form-label">
+                            Date <span className="text-danger">*</span>
+                          </label>
+                          <input
+                            id="enq-date"
+                            type="date"
+                            name="date"
+                            className={`form-control ${errors.date ? "is-invalid" : ""}`}
+                            value={formData.date}
+                            onChange={handleChange}
+                            onBlur={handleBlur}
+                          />
+                          {errors.date && <div className="invalid-feedback">{errors.date}</div>}
+                        </div>
+                      </div>
+
+                      {/* Mobile and Name */}
+                      <div className="row">
+                        {/* Name */}
+                        <div className="col-md-6 mb-3">
+                          <label className="form-label">
+                            Name <span className="text-danger">*</span>
+                          </label>
+                          <input
+                            id="enq-name"
+                            type="text"
+                            name="name"
+                            className={`form-control ${errors.name ? "is-invalid" : ""}`}
+                            value={formData.name}
+                            onChange={handleChange}
+                            onBlur={handleBlur}
+                            placeholder="Enter Name"
+                            autoFocus
+                          />
+                          {errors.name && <div className="invalid-feedback">{errors.name}</div>}
+                        </div>
+                        <div className="col-md-6 mb-3">
+                          <label className="form-label">
+                            Mobile No <span className="text-danger">*</span>
+                          </label>
+                          <input
+                            id="enq-mobile"
+                            type="text"
+                            name="mobile"
+                            className={`form-control ${errors.mobile ? "is-invalid" : ""}`}
+                            value={formData.mobile}
+                            onChange={handleChange}
+                            onBlur={handleBlur}
+                            maxLength={10}
+                            inputMode="numeric"
+                            placeholder="Enter Mobile No"
+                          />
+                          {errors.mobile && <div className="invalid-feedback">{errors.mobile}</div>}
+                        </div>
+                      </div>
+
+                      {/* Gender and Location */}
+                      <div className="row">
+                        <div className="col-md-6 mb-3">
+                          <label className="form-label">
+                            Gender <span className="text-danger">*</span>
+                          </label>
+                          <select
+                            id="enq-gender"
+                            name="gender"
+                            className={`form-select ${errors.gender ? "is-invalid" : ""}`}
+                            value={formData.gender}
+                            onChange={handleChange}
+                            onBlur={handleBlur}
+                          >
+                            <option value="">Select Gender</option>
+                            <option value="Male">Male</option>
+                            <option value="Female">Female</option>
+                            <option value="Other">Other</option>
+                          </select>
+                          {errors.gender && <div className="invalid-feedback">{errors.gender}</div>}
+                        </div>
+                        <div className="col-md-6 mb-3">
+                          <label className="form-label">Location</label>
+                          <input
+                            id="enq-location"
+                            type="text"
+                            name="location"
+                            className="form-control"
+                            value={formData.location}
+                            onChange={handleChange}
+                            placeholder="Enter location"
+                          />
+                        </div>
+                      </div>
+
+                      {/* Service and Amount */}
+                      <div className="row">
+                        <div className="col-md-6 mb-3">
+                          <label className="form-label">Type of Service</label>
+                          <input
+                            id="enq-service"
+                            type="text"
+                            name="service"
+                            className="form-control"
+                            value={formData.service}
+                            onChange={handleChange}
+                            placeholder="Enter Type of Service"
+                          />
+                        </div>
+                        <div className="col-md-6 mb-3">
+                          <label className="form-label">
+                            Amount <span className="text-danger">*</span>
+                          </label>
+                          <input
+                            id="enq-amount"
+                            type="number"
+                            name="amount"
+                            className={`form-control ${errors.amount ? "is-invalid" : ""}`}
+                            value={formData.amount}
+                            onChange={handleChange}
+                            onBlur={handleBlur}
+                            placeholder="Enter Amount"
+                          />
+                          {errors.amount && <div className="invalid-feedback">{errors.amount}</div>}
+                        </div>
+                      </div>
+                    </>
+                  )}
+
+                  {/* ===================== SECTION 2 ===================== */}
+                  {step === 2 && (
+                    <>
+                      {/* Care Recipient / Age */}
+                      <div className="row">
+                        <div className="col-md-6 mb-3">
+                          <label className="form-label">Care Recipient Name</label>
+                          <input
+                            id="enq-careRecipientName"
+                            type="text"
+                            name="careRecipientName"
+                            className="form-control"
+                            value={formData.careRecipientName}
+                            onChange={handleChange}
+                            placeholder="Enter care recipient name"
+                          />
+                        </div>
+
+                        <div className="col-md-6 mb-3">
+                          <label className="form-label">Age</label>
+                          <input
+                            id="enq-age"
+                            type="number"
+                            name="age"
+                            className="form-control"
+                            value={formData.age}
+                            onChange={handleChange}
+                            placeholder="Age"
+                            min="0"
+                            max="120"
+                          />
+                        </div>
+                      </div>
+
+                      {/* Weight / Period */}
+                      <div className="row">
+                        <div className="col-md-6 mb-3">
+                          <label className="form-label">Weight (kg)</label>
+                          <input
+                            id="enq-weight"
+                            type="number"
+                            name="weight"
+                            className="form-control"
+                            value={formData.weight}
+                            onChange={handleChange}
+                            placeholder="Weight"
+                            min="0"
+                            step="0.1"
+                          />
+                        </div>
+
+                        <div className="col-md-6 mb-3">
+                          <label className="form-label">Service Required Period</label>
+                          <input
+                            id="enq-serviceRequiredPeriod"
+                            type="text"
+                            name="serviceRequiredPeriod"
+                            className="form-control"
+                            value={formData.serviceRequiredPeriod}
+                            onChange={handleChange}
+                            placeholder="e.g., 1 month, 15 days, etc."
+                          />
+                        </div>
+                      </div>
+
+                      {/* Through / Status */}
+                      <div className="row">
+                        <div className="col-md-6 mb-3">
+                          <label className="form-label">
+                            Through <span className="text-danger">*</span>
+                          </label>
+                          <select
+                            id="enq-through"
+                            name="through"
+                            className={`form-select ${errors.through ? "is-invalid" : ""}`}
+                            value={formData.through}
+                            onChange={handleChange}
+                            onBlur={handleBlur}
+                          >
+                            <option value="">Select</option>
+                            <option value="Poster">Poster</option>
+                            <option value="Reference">Reference</option>
+                            <option value="Hospital-Agent">Hospital-Agent</option>
+                            <option value="Medical Cover">Medical Cover</option>
+                            <option value="JustDial">JustDial</option>
+                            <option value="Facebook">Facebook</option>
+                            <option value="Instagram">Instagram</option>
+                            <option value="LinkedIn">LinkedIn</option>
+                            <option value="YouTube">YouTube</option>
+                            <option value="Website">Website</option>
+                            <option value="Google">Google</option>
+                          </select>
+                          {errors.through && <div className="invalid-feedback">{errors.through}</div>}
+                        </div>
+
+                        <div className="col-md-6 mb-3">
+                          <label className="form-label">
+                            Status <span className="text-danger">*</span>
+                          </label>
+                          <select
+                            id="enq-status"
+                            name="status"
+                            className={`form-select ${errors.status ? "is-invalid" : ""}`}
+                            value={formData.status}
+                            onChange={handleChange}
+                            onBlur={handleBlur}
+                          >
+                            <option value="">Select</option>
+                            <option value="Enquiry">Enquiry</option>
+                            <option value="Pending">Pending</option>
+                            <option value="On Boarding">On Boarding</option>
+                            <option value="No Response">No Response</option>
+                          </select>
+                          {errors.status && <div className="invalid-feedback">{errors.status}</div>}
+                        </div>
+                      </div>
+
+                      {/* Communication / Reminder */}
+                      <div className="row">
+                        <div className="col-md-6 mb-3">
+                          <label className="form-label">
+                            Communication <span className="text-danger">*</span>
+                          </label>
+                          <select
+                            id="enq-communication"
+                            name="communication"
+                            className={`form-select ${errors.communication ? "is-invalid" : ""} ${formData.communication
+                                ? "communication-" +
+                                formData.communication.toLowerCase().replace(/\s+/g, "-")
+                                : ""
+                              }`}
+                            value={formData.communication}
+                            onChange={handleChange}
+                            onBlur={handleBlur}
+                          >
+                            <option value="">Select</option>
+                            <option value="Very Good">Very Good</option>
+                            <option value="Good">Good</option>
+                            <option value="Average">Average</option>
+                            <option value="Below Average">Below Average</option>
+                            <option value="Bad">Bad</option>
+                            <option value="Very Bad">Very Bad</option>
+                          </select>
+                          {errors.communication && (
+                            <div className="invalid-feedback">{errors.communication}</div>
+                          )}
+                        </div>
+
+                        <div className="col-md-6 mb-3">
+                          <label className="form-label">Reminder Date</label>
+                          <input
+                            id="enq-reminderDate"
+                            type="date"
+                            name="reminderDate"
+                            className={`form-control ${errors.reminderDate ? "is-invalid" : ""}`}
+                            value={formData.reminderDate}
+                            onChange={handleChange}
+                            onBlur={handleBlur}
+                            min={toYMD(new Date())}
+                          />
+                          {errors.reminderDate && (
+                            <div className="invalid-feedback">{errors.reminderDate}</div>
                           )}
                         </div>
                       </div>
-                      {errors.idNo && (
-                        <div className="invalid-feedback">{errors.idNo}</div>
-                      )}
-                    </div>
 
-                    {/* Date */}
-                    <div className="col-md-6 mb-3">
-                      <label className="form-label">
-                        Date <span className="text-danger">*</span>
-                      </label>
-                      <input
-                        id="enq-date"
-                        type="date"
-                        name="date"
-                        className={`form-control ${
-                          errors.date ? "is-invalid" : ""
-                        }`}
-                        value={formData.date}
-                        onChange={handleChange}
-                        onBlur={handleBlur}
-                      />
-                      {errors.date && (
-                        <div className="invalid-feedback">{errors.date}</div>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Mobile and Name */}
-                  <div className="row">
-                    {/* Name */}
-                    <div className="col-md-6 mb-3">
-                      <label className="form-label">
-                        Name <span className="text-danger">*</span>
-                      </label>
-                      <input
-                        id="enq-name"
-                        type="text"
-                        name="name"
-                        className={`form-control ${
-                          errors.name ? "is-invalid" : ""
-                        }`}
-                        value={formData.name}
-                        onChange={handleChange}
-                        onBlur={handleBlur}
-                        placeholder="Enter Name"
-                        autoFocus
-                      />
-                      {errors.name && (
-                        <div className="invalid-feedback">{errors.name}</div>
-                      )}
-                    </div>
-                    <div className="col-md-6 mb-3">
-                      <label className="form-label">
-                        Mobile No <span className="text-danger">*</span>
-                      </label>
-                      <input
-                        id="enq-mobile"
-                        type="text"
-                        name="mobile"
-                        className={`form-control ${
-                          errors.mobile ? "is-invalid" : ""
-                        }`}
-                        value={formData.mobile}
-                        onChange={handleChange}
-                        onBlur={handleBlur}
-                        maxLength={10}
-                        inputMode="numeric"
-                        placeholder="Enter Mobile No"
-                      />
-                      {errors.mobile && (
-                        <div className="invalid-feedback">{errors.mobile}</div>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Gender and Service */}
-                  <div className="row">
-                    <div className="col-md-6 mb-3">
-                      <label className="form-label">
-                        Gender <span className="text-danger">*</span>
-                      </label>
-                      <select
-                        id="enq-gender"
-                        name="gender"
-                        className={`form-select ${
-                          errors.gender ? "is-invalid" : ""
-                        }`}
-                        value={formData.gender}
-                        onChange={handleChange}
-                        onBlur={handleBlur}
-                      >
-                        <option value="">Select Gender</option>
-                        <option value="Male">Male</option>
-                        <option value="Female">Female</option>
-                        <option value="Other">Other</option>
-                      </select>
-                      {errors.gender && (
-                        <div className="invalid-feedback">{errors.gender}</div>
-                      )}
-                    </div>
-                    <div className="col-md-6 mb-3">
-                      <label className="form-label">Location</label>
-                      <input
-                        type="text"
-                        name="location"
-                        className="form-control"
-                        value={formData.location}
-                        onChange={handleChange}
-                        placeholder="Enter location"
-                      />
-                    </div>
-                  </div>
-
-                  {/* Amount and Care Recipient Name */}
-                  <div className="row">
-                    <div className="col-md-6 mb-3">
-                      <label className="form-label">Type of Service</label>
-                      <input
-                        id="enq-service"
-                        type="text"
-                        name="service"
-                        className="form-control"
-                        value={formData.service}
-                        onChange={handleChange}
-                        placeholder="Enter Type of Service"
-                      />
-                    </div>
-                    <div className="col-md-6 mb-3">
-                      <label className="form-label">
-                        Amount <span className="text-danger">*</span>
-                      </label>
-                      <input
-                        id="enq-amount"
-                        type="number"
-                        name="amount"
-                        className={`form-control ${
-                          errors.amount ? "is-invalid" : ""
-                        }`}
-                        value={formData.amount}
-                        onChange={handleChange}
-                        onBlur={handleBlur}
-                        placeholder="Enter Amount"
-                      />
-                      {errors.amount && (
-                        <div className="invalid-feedback">{errors.amount}</div>
-                      )}
-                    </div>
-
-                    <div className="col-md-6 mb-3">
-                      <label className="form-label">Care Recipient Name</label>
-                      <input
-                        type="text"
-                        name="careRecipientName"
-                        className="form-control"
-                        value={formData.careRecipientName}
-                        onChange={handleChange}
-                        placeholder="Enter care recipient name"
-                      />
-                    </div>
-
-                    <div className="col-md-6 mb-3">
-                      <label className="form-label">Age</label>
-                      <input
-                        type="number"
-                        name="age"
-                        className="form-control"
-                        value={formData.age}
-                        onChange={handleChange}
-                        placeholder="Age"
-                        min="0"
-                        max="120"
-                      />
-                    </div>
-                  </div>
-
-                  {/* Age and Weight */}
-                  <div className="row">
-                    <div className="col-md-6 mb-3">
-                      <label className="form-label">Weight (kg)</label>
-                      <input
-                        type="number"
-                        name="weight"
-                        className="form-control"
-                        value={formData.weight}
-                        onChange={handleChange}
-                        placeholder="Weight"
-                        min="0"
-                        step="0.1"
-                      />
-                    </div>
-
-                    <div className="col-md-6 mb-3">
-                      <label className="form-label">
-                        Service Required Period
-                      </label>
-                      <input
-                        type="text"
-                        name="serviceRequiredPeriod"
-                        className="form-control"
-                        value={formData.serviceRequiredPeriod}
-                        onChange={handleChange}
-                        placeholder="e.g., 1 month, 15 days, etc."
-                      />
-                    </div>
-                  </div>
-
-                  {/* Through and Status */}
-                  <div className="row">
-                    <div className="col-md-6 mb-3">
-                      <label className="form-label">
-                        Through <span className="text-danger">*</span>
-                      </label>
-                      <select
-                        id="enq-through"
-                        name="through"
-                        className={`form-select ${
-                          errors.through ? "is-invalid" : ""
-                        }`}
-                        value={formData.through}
-                        onChange={handleChange}
-                        onBlur={handleBlur}
-                      >
-                        <option value="">Select</option>
-                        <option value="Poster">Poster</option>
-                        <option value="Reference">Reference</option>
-                        <option value="Hospital-Agent">Hospital-Agent</option>
-                        <option value="Medical Cover">Medical Cover</option>
-                        <option value="JustDial">JustDial</option>
-                        <option value="Facebook">Facebook</option>
-                        <option value="Instagram">Instagram</option>
-                        <option value="LinkedIn">LinkedIn</option>
-                        <option value="YouTube">YouTube</option>
-                        <option value="Website">Website</option>
-                        <option value="Google">Google</option>
-                      </select>
-                      {errors.through && (
-                        <div className="invalid-feedback">{errors.through}</div>
-                      )}
-                    </div>
-
-                    <div className="col-md-6 mb-3">
-                      <label className="form-label">
-                        Status <span className="text-danger">*</span>
-                      </label>
-                      <select
-                        id="enq-status"
-                        name="status"
-                        className={`form-select ${
-                          errors.status ? "is-invalid" : ""
-                        }`}
-                        value={formData.status}
-                        onChange={handleChange}
-                        onBlur={handleBlur}
-                      >
-                        <option value="">Select</option>
-                        <option value="Enquiry">Enquiry</option>
-                        <option value="Pending">Pending</option>
-                        <option value="On Boarding">On Boarding</option>
-                        <option value="No Response">No Response</option>
-                      </select>
-                      {errors.status && (
-                        <div className="invalid-feedback">{errors.status}</div>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Communication and Reminder Date */}
-                  <div className="row">
-                    <div className="col-md-6 mb-3">
-                      <label className="form-label">
-                        Communication <span className="text-danger">*</span>
-                      </label>
-                      <select
-                        id="enq-communication"
-                        name="communication"
-                        className={`form-select ${
-                          errors.communication ? "is-invalid" : ""
-                        } ${
-                          formData.communication
-                            ? "communication-" +
-                              formData.communication
-                                .toLowerCase()
-                                .replace(/\s+/g, "-")
-                            : ""
-                        }`}
-                        value={formData.communication}
-                        onChange={handleChange}
-                        onBlur={handleBlur}
-                      >
-                        <option value="">Select</option>
-                        <option value="Very Good">Very Good</option>
-                        <option value="Good">Good</option>
-                        <option value="Average">Average</option>
-                        <option value="Below Average">Below Average</option>
-                        <option value="Bad">Bad</option>
-                        <option value="Very Bad">Very Bad</option>
-                      </select>
-                      {errors.communication && (
-                        <div className="invalid-feedback">
-                          {errors.communication}
+                      {/* Comments */}
+                      <div className="row">
+                        <div className="col-md-12 mb-3">
+                          <label className="form-label">Comments</label>
+                          <textarea
+                            id="enq-comments"
+                            name="comments"
+                            className="form-control"
+                            value={formData.comments}
+                            onChange={handleChange}
+                            rows="3"
+                            placeholder="Enter Comments"
+                          />
                         </div>
-                      )}
-                    </div>
+                      </div>
+                    </>
+                  )}
 
-                    <div className="col-md-6 mb-3">
-                      <label className="form-label">Reminder Date</label>
-                      <input
-                        id="enq-reminderDate"
-                        type="date"
-                        name="reminderDate"
-                        className={`form-control ${
-                          errors.reminderDate ? "is-invalid" : ""
-                        }`}
-                        value={formData.reminderDate}
-                        onChange={handleChange}
-                        onBlur={handleBlur}
-                        min={toYMD(new Date())}
-                      />
-                      {errors.reminderDate && (
-                        <div className="invalid-feedback">
-                          {errors.reminderDate}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Comments */}
-                  <div className="row">
-                    <div className="col-md-12 mb-3">
-                      <label className="form-label">Comments</label>
-                      <textarea
-                        id="enq-comments"
-                        name="comments"
-                        className="form-control"
-                        value={formData.comments}
-                        onChange={handleChange}
-                        rows="3"
-                        placeholder="Enter Comments"
-                      />
-                    </div>
-                  </div>
-
+                  {/* ===================== ACTIONS ===================== */}
                   <div className="d-flex justify-content-end gap-2">
                     <button
                       type="button"
@@ -814,26 +832,43 @@ const EnquiryForm = ({ show, onClose, title = "Enquiry Form" }) => {
                     >
                       Cancel
                     </button>
-                    <button
-                      type="submit"
-                      className="btn btn-primary"
-                      disabled={
-                        isSubmitting || !formData.idNo || isGeneratingId
-                      }
-                    >
-                      {isSubmitting ? (
-                        <>
-                          <span
-                            className="spinner-border spinner-border-sm me-2"
-                            role="status"
-                            aria-hidden="true"
-                          />
-                          Submitting...
-                        </>
-                      ) : (
-                        "Submit Enquiry"
-                      )}
-                    </button>
+
+                    {step === 1 && (
+                      <button
+                        type="button"
+                        className="btn btn-primary"
+                        onClick={handleNext}
+                        disabled={isGeneratingId || !formData.idNo}
+                      >
+                        Next
+                      </button>
+                    )}
+
+                    {step === 2 && (
+                      <>
+                        <button
+                          type="button"
+                          className="btn btn-outline-primary"
+                          onClick={handleBack}
+                        >
+                          Back
+                        </button>
+                        <button type="submit" className="btn btn-success" disabled={isSubmitting}>
+                          {isSubmitting ? (
+                            <>
+                              <span
+                                className="spinner-border spinner-border-sm me-2"
+                                role="status"
+                                aria-hidden="true"
+                              />
+                              Submitting...
+                            </>
+                          ) : (
+                            "Submit Enquiry"
+                          )}
+                        </button>
+                      </>
+                    )}
                   </div>
                 </form>
               </div>
@@ -849,7 +884,7 @@ const EnquiryForm = ({ show, onClose, title = "Enquiry Form" }) => {
         onCancel={() => setShowConfirmClose(false)}
       />
 
-      {/* THANK-YOU MODAL (separate, unique classes; no shared .client-form styles) */}
+      {/* THANK-YOU MODAL */}
       <ThankYouModal
         open={showThankYou}
         onClose={closeAll}

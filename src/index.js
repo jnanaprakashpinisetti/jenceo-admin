@@ -8,6 +8,7 @@ import Popper from 'popper.js';
 import 'bootstrap/dist/js/bootstrap.bundle.min';
 import 'bootstrap/dist/js/bootstrap.bundle.js';
 import 'bootstrap-icons/font/bootstrap-icons.css';
+import "bootstrap/dist/js/bootstrap.bundle.min.js";
 
 import './index.scss';
 

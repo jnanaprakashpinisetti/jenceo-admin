@@ -66,8 +66,10 @@ const initialFormData = {
   primarySkill: "",
   workExperince: "",
   workingSkills: [],
+  nursingSkills: [],
+  otherSkills: [],
   motherTongue: "",
-  languages: "",
+  languages: [],
   healthIssues: [],
   otherIssues: "",
   dietaryPreference: "",
@@ -153,8 +155,8 @@ const WorkerBioDataForm = ({ isOpen = false, onClose = () => { }, onSaved }) => 
   };
 
   const { user: authUser } = useAuth?.() || {};
-const effectiveUserId = getEffectiveUserId(authUser);
-const effectiveUserName = getEffectiveUserName(authUser);
+  const effectiveUserId = getEffectiveUserId(authUser);
+  const effectiveUserName = getEffectiveUserName(authUser);
 
   useEffect(() => {
     const upd = () => setIsMobile(window.innerWidth <= 920);
@@ -369,7 +371,7 @@ const effectiveUserName = getEffectiveUserName(authUser);
       if (value.length > 6) return;
     }
 
-    if (type === "checkbox" && (name === "workingSkills" || name === "healthIssues")) {
+    if (type === "checkbox" && (name === "workingSkills" || name === "healthIssues" || name === "nursingSkills" || name === "otherSkills")) {
       setFormData((prev) => {
         const arr = prev[name] || [];
         return { ...prev, [name]: checked ? [...arr, value] : arr.filter((x) => x !== value) };
@@ -406,36 +408,38 @@ const effectiveUserName = getEffectiveUserName(authUser);
       return;
     }
 
+    
+
     // In the handleChange function, update the file handling section:
-if (type === "file") {
-  const file = e.target.files?.[0] || null;
-  if (!file) {
-    setFormData((prev) => ({ ...prev, [name + "File"]: null }));
-    return;
-  }
-  
-  const validImageTypes = ["image/jpeg", "image/jpg", "image/png", "image/gif"];
-  const validPdfType = "application/pdf";
-  
-  if (name === "employeePhoto" && !validImageTypes.includes(file.type)) {
-    setErrors((prev) => ({ ...prev, [name]: "Only JPG/PNG/GIF allowed" }));
-    return;
-  }
-  
-  if (name === "idProof" && file.type !== validPdfType && !validImageTypes.includes(file.type)) {
-    setErrors((prev) => ({ ...prev, [name]: "Only PDF or JPG/PNG images allowed" }));
-    return;
-  }
+    if (type === "file") {
+      const file = e.target.files?.[0] || null;
+      if (!file) {
+        setFormData((prev) => ({ ...prev, [name + "File"]: null }));
+        return;
+      }
 
-  if (file.size > 150 * 1024) {
-    setErrors((prev) => ({ ...prev, [name]: "File must be less than 150KB" }));
-    return;
-  }
+      const validImageTypes = ["image/jpeg", "image/jpg", "image/png", "image/gif"];
+      const validPdfType = "application/pdf";
 
-  setFormData((prev) => ({ ...prev, [name + "File"]: file }));
-  setErrors((prev) => { const n = { ...prev }; if (n[name]) delete n[name]; return n; });
-  return;
-}
+      if (name === "employeePhoto" && !validImageTypes.includes(file.type)) {
+        setErrors((prev) => ({ ...prev, [name]: "Only JPG/PNG/GIF allowed" }));
+        return;
+      }
+
+      if (name === "idProof" && file.type !== validPdfType && !validImageTypes.includes(file.type)) {
+        setErrors((prev) => ({ ...prev, [name]: "Only PDF or JPG/PNG images allowed" }));
+        return;
+      }
+
+      if (file.size > 150 * 1024) {
+        setErrors((prev) => ({ ...prev, [name]: "File must be less than 150KB" }));
+        return;
+      }
+
+      setFormData((prev) => ({ ...prev, [name + "File"]: file }));
+      setErrors((prev) => { const n = { ...prev }; if (n[name]) delete n[name]; return n; });
+      return;
+    }
 
     if (name.includes(".") && name.startsWith("emergencyContact")) {
       const [parent, field] = name.split(".");
@@ -515,109 +519,141 @@ if (type === "file") {
   };
 
   // validation helpers & validators
-  const checkValidationForStep = (s) => {
-    const e = {};
-    switch (s) {
-      case 1: {
-        if (!formData.idNo || String(formData.idNo).trim() === "") e.idNo = "Enter ID No";
-        else if (String(formData.idNo).trim().length < 3) e.idNo = "Enter Valid ID No";
-        if (!formData.date || String(formData.date).trim() === "") e.date = "Enter Date of Joining";
-        if (!formData.firstName || formData.firstName.trim() === "") e.firstName = "First name required";
-        if (!formData.lastName || formData.lastName.trim() === "") e.lastName = "Last name required";
-        if (!formData.gender) e.gender = "Gender is required";
-        if (!formData.dateOfBirth) e.dateOfBirth = "DOB is required";
-        else if (!isOver18(formData.dateOfBirth)) e.dateOfBirth = "Must be at least 18 years old";
-        if (!formData.years) e.years = "Years is required";
-        else {
-          const num = Number(formData.years);
-          if (!Number.isFinite(num) || num < 18 || num > 100) e.years = "Enter valid years";
-        }
-        if (!formData.mobileNo1) e.mobileNo1 = "Mobile No. 1 is required";
-        else if (!validateMobileNumber(formData.mobileNo1)) e.mobileNo1 = "Mobile number must be 10 digits";
-        if (formData.mobileNo2 && !validateMobileNumber(formData.mobileNo2)) e.mobileNo2 = "Mobile number must be 10 digits";
-        if (formData.employeePhotoFile) {
-          const file = formData.employeePhotoFile;
-          const validTypes = ["image/jpeg", "image/jpg", "image/png", "image/gif"];
-          if (!validTypes.includes(file.type)) e.employeePhoto = "Only JPG/PNG/GIF allowed";
-          if (file.size > 100 * 1024) e.employeePhoto = "Image must be less than 100KB";
-        }
-        break;
+const checkValidationForStep = (s) => {
+  const e = {};
+  switch (s) {
+    case 1: {
+      if (!formData.idNo || String(formData.idNo).trim() === "") e.idNo = "Enter ID No";
+      else if (String(formData.idNo).trim().length < 3) e.idNo = "Enter Valid ID No";
+      if (!formData.date || String(formData.date).trim() === "") e.date = "Enter Date of Joining";
+      if (!formData.firstName || formData.firstName.trim() === "") e.firstName = "First name required";
+      if (!formData.lastName || formData.lastName.trim() === "") e.lastName = "Last name required";
+      if (!formData.gender) e.gender = "Gender is required";
+      if (!formData.dateOfBirth) e.dateOfBirth = "DOB is required";
+      else if (!isOver18(formData.dateOfBirth)) e.dateOfBirth = "Must be at least 18 years old";
+      if (!formData.years) e.years = "Years is required";
+      else {
+        const num = Number(formData.years);
+        if (!Number.isFinite(num) || num < 18 || num > 100) e.years = "Enter valid years";
       }
-      case 2: {
-        if (!formData.permanentAddress || formData.permanentAddress.trim() === "") e.permanentAddress = "Address is required";
-        if (!formData.permanentStreet || formData.permanentStreet.trim() === "") e.permanentStreet = "Street is required";
-        if (!formData.permanentVillage || formData.permanentVillage.trim() === "") e.permanentVillage = "Village/Town is required";
-        if (!formData.permanentMandal || formData.permanentMandal.trim() === "") e.permanentMandal = "Mandal is required";
-        if (!formData.permanentDistrict || formData.permanentDistrict.trim() === "") e.permanentDistrict = "District is required";
-        if (!formData.permanentState || formData.permanentState.trim() === "") e.permanentState = "State is required";
-        if (!formData.permanentPincode) e.permanentPincode = "Pin Code is required";
-        else if (!validatePincode(formData.permanentPincode)) e.permanentPincode = "Pin code must be 6 digits";
-        break;
+      if (!formData.mobileNo1) e.mobileNo1 = "Mobile No. 1 is required";
+      else if (!validateMobileNumber(formData.mobileNo1)) e.mobileNo1 = "Mobile number must be 10 digits";
+      if (formData.mobileNo2 && !validateMobileNumber(formData.mobileNo2)) e.mobileNo2 = "Mobile number must be 10 digits";
+
+      if (formData.employeePhotoFile) {
+        const file = formData.employeePhotoFile;
+        const validTypes = ["image/jpeg", "image/jpg", "image/png", "image/gif"];
+        if (!validTypes.includes(file.type)) e.employeePhoto = "Only JPG/PNG/GIF allowed";
+        if (file.size > 100 * 1024) e.employeePhoto = "Image must be less than 100KB";
       }
-      case 3: {
-        if (!formData.presentAddress || formData.presentAddress.trim() === "") e.presentAddress = "Address is required";
-        if (!formData.presentStreet || formData.presentStreet.trim() === "") e.presentStreet = "Street is required";
-        if (!formData.presentVillage || formData.presentVillage.trim() === "") e.presentVillage = "Village/Town is required";
-        if (!formData.presentMandal || formData.presentMandal.trim() === "") e.presentMandal = "Mandal is required";
-        if (!formData.presentDistrict || formData.presentDistrict.trim() === "") e.presentDistrict = "District is required";
-        if (!formData.presentState || formData.presentState.trim() === "") e.presentState = "State is required";
-        if (!formData.presentPincode) e.presentPincode = "Pin Code is required";
-        else if (!validatePincode(formData.presentPincode)) e.presentPincode = "Pin code must be 6 digits";
-        break;
-      }
-      case 4: {
-        if (!formData.maritalStatus) e.maritalStatus = "Marital Status is required";
-        if (!formData.religion) e.religion = "Religion is required";
-        if (!formData.cast) e.cast = "Cast is required";
-        break;
-      }
-      case 5: {
-        if (!formData.qualification) e.qualification = "Qualification is required";
-        if (!formData.primarySkill) e.primarySkill = "Primary Skill is required";
-        if (formData.workingSkills && formData.workingSkills.length === 0) e.workingSkills = "At least one work experience is required";
-        if (!formData.motherTongue) e.motherTongue = "Mother Tongue is required";
-        if (!formData.languages) e.languages = "Languages are required";
-        break;
-      }
-      case 6:
-        break;
-      case 7: {
-        const ec1 = formData.emergencyContact1 || {};
-        if (!ec1.name) e["emergencyContact1.name"] = "Name required";
-        if (!ec1.relation) e["emergencyContact1.relation"] = "Relation required";
-        if (!ec1.mobile1) e["emergencyContact1.mobile1"] = "Mobile required";
-        else if (!validateMobileNumber(ec1.mobile1)) e["emergencyContact1.mobile1"] = "Mobile must be 10 digits";
-        break;
-      }
-      case 8: {
-        const ec2 = formData.emergencyContact2 || {};
-        if (!ec2.name) e["emergencyContact2.name"] = "Name required";
-        if (!ec2.relation) e["emergencyContact2.relation"] = "Relation required";
-        if (!ec2.mobile1) e["emergencyContact2.mobile1"] = "Mobile required";
-        else if (!validateMobileNumber(ec2.mobile1)) e["emergencyContact2.mobile1"] = "Mobile must be 10 digits";
-        break;
-      }
-      case 9:
-        break;
-      case 10: {
-        if (!formData.basicSalary) e.basicSalary = "Enter valid Salary";
-        if (!formData.pageNo) e.pageNo = "Enter Page No";
-        const pp = (formData.phonePayNo || "").trim();
-        const gp = (formData.googlePayNo || "").trim();
-        if (pp) {
-          if (!validateMobileNumber(pp)) e.phonePayNo = "PhonePe/Pay number must be 10 digits";
-          if (!formData.phonePayName || String(formData.phonePayName).trim() === "") e.phonePayName = "PhonePe/Pay name required";
-        }
-        if (gp) {
-          if (!validateMobileNumber(gp)) e.googlePayNo = "Google Pay number must be 10 digits";
-          if (!formData.googlePayName || String(formData.googlePayName).trim() === "") e.googlePayName = "Google Pay name required";
-        }
-        break;
-      }
-      default: break;
+      break;
     }
-    return e;
-  };
+
+    case 2: {
+      if (!formData.permanentAddress || formData.permanentAddress.trim() === "") e.permanentAddress = "Address is required";
+      if (!formData.permanentStreet || formData.permanentStreet.trim() === "") e.permanentStreet = "Street is required";
+      if (!formData.permanentVillage || formData.permanentVillage.trim() === "") e.permanentVillage = "Village/Town is required";
+      if (!formData.permanentMandal || formData.permanentMandal.trim() === "") e.permanentMandal = "Mandal is required";
+      if (!formData.permanentDistrict || formData.permanentDistrict.trim() === "") e.permanentDistrict = "District is required";
+      if (!formData.permanentState || formData.permanentState.trim() === "") e.permanentState = "State is required";
+      if (!formData.permanentPincode) e.permanentPincode = "Pin Code is required";
+      else if (!validatePincode(formData.permanentPincode)) e.permanentPincode = "Pin code must be 6 digits";
+      break;
+    }
+
+    case 3: {
+      if (!formData.presentAddress || formData.presentAddress.trim() === "") e.presentAddress = "Address is required";
+      if (!formData.presentStreet || formData.presentStreet.trim() === "") e.presentStreet = "Street is required";
+      if (!formData.presentVillage || formData.presentVillage.trim() === "") e.presentVillage = "Village/Town is required";
+      if (!formData.presentMandal || formData.presentMandal.trim() === "") e.presentMandal = "Mandal is required";
+      if (!formData.presentDistrict || formData.presentDistrict.trim() === "") e.presentDistrict = "District is required";
+      if (!formData.presentState || formData.presentState.trim() === "") e.presentState = "State is required";
+      if (!formData.presentPincode) e.presentPincode = "Pin Code is required";
+      else if (!validatePincode(formData.presentPincode)) e.presentPincode = "Pin code must be 6 digits";
+      break;
+    }
+
+    case 4: {
+      if (!formData.maritalStatus) e.maritalStatus = "Marital Status is required";
+      if (!formData.religion) e.religion = "Religion is required";
+      if (!formData.cast) e.cast = "Cast is required";
+      break;
+    }
+
+    case 5: {
+      if (!formData.qualification) e.qualification = "Qualification is required";
+      if (!formData.primarySkill) e.primarySkill = "Primary Skill is required";
+      if (!formData.motherTongue) e.motherTongue = "Mother Tongue is required";
+
+      // Languages must be a non-empty array
+      if (!Array.isArray(formData.languages) || formData.languages.length === 0) {
+        e.languages = "Please select at least one language.";
+      }
+
+      // Nursing requires at least one nursing skill
+      if (String(formData.primarySkill).trim().toLowerCase() === "nursing") {
+        if (!Array.isArray(formData.nursingSkills) || formData.nursingSkills.length === 0) {
+          e.nursingSkills = "Select at least one nursing & patient care skill";
+        }
+      }
+
+      // Others requires at least one other skill
+      if (String(formData.primarySkill).trim().toLowerCase() === "others") {
+        if (!Array.isArray(formData.otherSkills) || formData.otherSkills.length === 0) {
+          e.otherSkills = "Select at least one skill from the Others section";
+        }
+      }
+      break;
+    }
+
+    case 6: {
+      break;
+    }
+
+    case 7: {
+      const ec1 = formData.emergencyContact1 || {};
+      if (!ec1.name) e["emergencyContact1.name"] = "Name required";
+      if (!ec1.relation) e["emergencyContact1.relation"] = "Relation required";
+      if (!ec1.mobile1) e["emergencyContact1.mobile1"] = "Mobile required";
+      else if (!validateMobileNumber(ec1.mobile1)) e["emergencyContact1.mobile1"] = "Mobile must be 10 digits";
+      break;
+    }
+
+    case 8: {
+      const ec2 = formData.emergencyContact2 || {};
+      if (!ec2.name) e["emergencyContact2.name"] = "Name required";
+      if (!ec2.relation) e["emergencyContact2.relation"] = "Relation required";
+      if (!ec2.mobile1) e["emergencyContact2.mobile1"] = "Mobile required";
+      else if (!validateMobileNumber(ec2.mobile1)) e["emergencyContact2.mobile1"] = "Mobile must be 10 digits";
+      break;
+    }
+
+    case 9: {
+      break;
+    }
+
+    case 10: {
+      if (!formData.basicSalary) e.basicSalary = "Enter valid Salary";
+      if (!formData.pageNo) e.pageNo = "Enter Page No";
+      const pp = (formData.phonePayNo || "").trim();
+      const gp = (formData.googlePayNo || "").trim();
+      if (pp) {
+        if (!validateMobileNumber(pp)) e.phonePayNo = "PhonePe/Pay number must be 10 digits";
+        if (!formData.phonePayName || String(formData.phonePayName).trim() === "") e.phonePayName = "PhonePe/Pay name required";
+      }
+      if (gp) {
+        if (!validateMobileNumber(gp)) e.googlePayNo = "Google Pay number must be 10 digits";
+        if (!formData.googlePayName || String(formData.googlePayName).trim() === "") e.googlePayName = "Google Pay name required";
+      }
+      break;
+    }
+
+    default:
+      break;
+  }
+  return e;
+};
+
 
   const mapErrorsForChildren = (errs) => {
     const out = {};
@@ -693,83 +729,83 @@ if (type === "file") {
     return true;
   };
 
-// In the submit section, add ID proof upload:
-const handlePrimaryAction = async (ev) => {
-  ev?.preventDefault?.();
-  if (step < TOTAL_STEPS) {
-    if (validateCurrentStep(step)) setStep((s) => Math.min(TOTAL_STEPS, s + 1));
-    return;
-  }
-  if (!(await validateAllAndJump())) return;
-
-  setIsSubmitting(true);
-  try {
-    let photoURL = DEFAULT_PHOTO_URL;
-    let idProofURL = null;
-
-    // Upload employee photo
-    if (formData.employeePhotoFile) {
-      const ext = formData.employeePhotoFile.name.split(".").pop();
-      const fileName = `employee-photos/${(formData.idNo || "unknown")}-${Date.now()}.${ext}`;
-      const fileRef = storageRef.child(fileName);
-      const snap = await uploadFile(fileRef, formData.employeePhotoFile);
-      photoURL = await getDownloadURL(snap.ref);
+  // In the submit section, add ID proof upload:
+  const handlePrimaryAction = async (ev) => {
+    ev?.preventDefault?.();
+    if (step < TOTAL_STEPS) {
+      if (validateCurrentStep(step)) setStep((s) => Math.min(TOTAL_STEPS, s + 1));
+      return;
     }
+    if (!(await validateAllAndJump())) return;
 
-    // Upload ID proof
-    if (formData.idProofFile) {
-      const ext = formData.idProofFile.name.split(".").pop();
-      const fileName = `id-proofs/${(formData.idNo || "unknown")}-${Date.now()}.${ext}`;
-      const fileRef = storageRef.child(fileName);
-      const snap = await uploadFile(fileRef, formData.idProofFile);
-      idProofURL = await getDownloadURL(snap.ref);
-    }
+    setIsSubmitting(true);
+    try {
+      let photoURL = DEFAULT_PHOTO_URL;
+      let idProofURL = null;
 
-    const nowIso = new Date().toISOString();
-    const submitData = {
-      ...formData,
-      employeePhoto: photoURL,
-      idProof: idProofURL,
-      createdById: formData.createdById ?? effectiveUserId,
-      createdByName: formData.createdByName ?? effectiveUserName,
-      createdAt: formData.createdAt ?? new Date().toISOString(),
-    };
-    
-    delete submitData.employeePhotoFile;
-    delete submitData.idProofFile;
+      // Upload employee photo
+      if (formData.employeePhotoFile) {
+        const ext = formData.employeePhotoFile.name.split(".").pop();
+        const fileName = `employee-photos/${(formData.idNo || "unknown")}-${Date.now()}.${ext}`;
+        const fileRef = storageRef.child(fileName);
+        const snap = await uploadFile(fileRef, formData.employeePhotoFile);
+        photoURL = await getDownloadURL(snap.ref);
+      }
 
-    const listRef = firebaseDB.child("EmployeeBioData");
-    const newRef = listRef.push();
-    await newRef.set(submitData);
-    const recordId = newRef.key;
-    const name = `${formData.firstName || ""} ${formData.lastName || ""}`.trim();
+      // Upload ID proof
+      if (formData.idProofFile) {
+        const ext = formData.idProofFile.name.split(".").pop();
+        const fileName = `id-proofs/${(formData.idNo || "unknown")}-${Date.now()}.${ext}`;
+        const fileRef = storageRef.child(fileName);
+        const snap = await uploadFile(fileRef, formData.idProofFile);
+        idProofURL = await getDownloadURL(snap.ref);
+      }
 
-    setSuccessInfo({ idNo: formData.idNo, name, recordId });
-    setSuccessOpen(true);
+      const nowIso = new Date().toISOString();
+      const submitData = {
+        ...formData,
+        employeePhoto: photoURL,
+        idProof: idProofURL,
+        createdById: formData.createdById ?? effectiveUserId,
+        createdByName: formData.createdByName ?? effectiveUserName,
+        createdAt: formData.createdAt ?? new Date().toISOString(),
+      };
 
-    if (typeof onSaved === "function") {
-      try { onSaved({ id: recordId, ...submitData }); } catch { }
-    }
+      delete submitData.employeePhotoFile;
+      delete submitData.idProofFile;
 
-    // RESET FORM
-    setFormData({ ...initialFormData });
-    setErrors({});
-    setStep(1);
-    setIdAutoGenerated(false);
-    const idEl = document.querySelector('input[name="idNo"]');
-    if (idEl) idEl.removeAttribute("disabled");
-  } catch (err) {
-    console.error("submit error", err);
-    alert("Error submitting form: " + (err?.message || err));
-  } finally { setIsSubmitting(false); }
-};
+      const listRef = firebaseDB.child("EmployeeBioData");
+      const newRef = listRef.push();
+      await newRef.set(submitData);
+      const recordId = newRef.key;
+      const name = `${formData.firstName || ""} ${formData.lastName || ""}`.trim();
+
+      setSuccessInfo({ idNo: formData.idNo, name, recordId });
+      setSuccessOpen(true);
+
+      if (typeof onSaved === "function") {
+        try { onSaved({ id: recordId, ...submitData }); } catch { }
+      }
+
+      // RESET FORM
+      setFormData({ ...initialFormData });
+      setErrors({});
+      setStep(1);
+      setIdAutoGenerated(false);
+      const idEl = document.querySelector('input[name="idNo"]');
+      if (idEl) idEl.removeAttribute("disabled");
+    } catch (err) {
+      console.error("submit error", err);
+      alert("Error submitting form: " + (err?.message || err));
+    } finally { setIsSubmitting(false); }
+  };
 
   const handlePrev = (ev) => {
     ev?.preventDefault?.();
     if (step > 1) setStep((s) => s - 1);
   };
 
-  
+
 
   const renderStep = (s) => {
     const childErrors = mapErrorsForChildren(errors);
@@ -779,7 +815,7 @@ const handlePrimaryAction = async (ev) => {
       handleChange,
       handleBlur,
       handleFileChange: handleChange,
-      setErrors, 
+      setErrors,
       nextStep: () => setStep((p) => Math.min(TOTAL_STEPS, p + 1)),
       prevStep: () => setStep((p) => Math.max(1, p - 1)),
     };

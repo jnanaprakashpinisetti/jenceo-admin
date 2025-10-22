@@ -1399,11 +1399,11 @@ export default function ToDo() {
 
                       <div className="content-wrapper">
                         {/* Title */}
-                        <h6 className="text-white mb-1">{task.title}</h6>
+                        <h6 className="text-info mb-1 opacity-75">{task.title}</h6>
 
                         {/* Description snippet */}
                         {snippet && (
-                          <div className="small text-white-70">
+                          <div className="small text-secondary">
                             {snippet}
                           </div>
                         )}
@@ -1508,8 +1508,8 @@ export default function ToDo() {
                                 .toUpperCase()}
                             </span>
                           )}
-                          <span className="tiny text-muted-300">
-                            by {createdBy} • {fmtDT(task.createdAt)}
+                          <span className="tiny text-muted-300 opacity-50">
+                            Created By {createdBy} • {fmtDT(task.createdAt)}
                           </span>
                         </div>
                       </div>

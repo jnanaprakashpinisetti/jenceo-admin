@@ -1096,54 +1096,7 @@
     .btn {
       margin-bottom: 5px;
       margin-left: 5px;
-      background-color: inherit;
-      color: inherit;
 
-      // Button variants
-      &.btn-warning {
-        background-color: #f59e0b;
-        color: $white;
-      }
-
-      &.btn-outline-warning {
-        border-color: #f59e0b;
-        color: #f59e0b;
-      }
-
-      &.btn-outline-info {
-        color: #02acf2;
-      }
-
-      &.btn-info {
-        background-color: #389ff3;
-        border-color: transparent;
-        color: #fff;
-      }
-
-      &.btn-secondary {
-        background-color: #444;
-        color: $white;
-      }
-
-      &.btn-success {
-        background-color: gold;
-        color: #444;
-      }
-
-      &.btn-primary {
-        background-color: #02519b;
-        color: $white;
-      }
-
-      &.btn-danger {
-        background-color: #dc3545;
-        color: $white;
-      }
-
-      &.btn-success {
-        background-color: #198754;
-        color: $white;
-      }
     }
   }
 }

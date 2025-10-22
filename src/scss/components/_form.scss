@@ -68,18 +68,18 @@ form {
     }
 
     .btn {
-        background-color: #02519b;
-        color: $blue;
+        // background-color: #02519b;
+        // color: $blue;
         border-radius: 30px;
         padding: 3px 25px;
         float: right;
         margin-bottom: 15px;
         margin-left: 15px;
 
-        &:hover {
-            color: $prim-white;
-            background-color: #286397;
-        }
+        // &:hover {
+        //     color: $prim-white;
+        //     background-color: #286397;
+        // }
 
         &.btn-success {
             background-color: gold;

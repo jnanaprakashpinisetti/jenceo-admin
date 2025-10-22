@@ -176,6 +176,16 @@ export default function WorkerCallModal({
     };
   }, [showLanguageDropdown]);
 
+  const cleanObjectForFirebase = (obj) => {
+    const cleaned = { ...obj };
+    Object.keys(cleaned).forEach(key => {
+      if (cleaned[key] === undefined || cleaned[key] === null) {
+        delete cleaned[key];
+      }
+    });
+    return cleaned;
+  };
+
   // Update handleLanguageSelect to close dropdown
   const handleLanguageSelect = useCallback((language) => {
     if (!isEditMode) return;
@@ -248,7 +258,7 @@ export default function WorkerCallModal({
     if (!canSave) return;
     try {
       const now = Date.now();
-      const toSave = {
+      const toSave = cleanObjectForFirebase({
         ...localWorker,
         skills: normalizeArray(localWorker.skills),
         languages: normalizeArray(localWorker.languages),
@@ -257,7 +267,7 @@ export default function WorkerCallModal({
         updatedAt: now,
         updatedById: currentUserId || localWorker.updatedById || null,
         updatedByName: currentUserName || localWorker.updatedByName || "",
-      };
+      });
 
       if (!localWorker.createdAt) {
         toSave.createdAt = localWorker.date || now;
@@ -407,7 +417,7 @@ export default function WorkerCallModal({
                   <h5 className="modal-title fw-bold mb-2 text-white">
                     {isEditMode ? "✏️ Edit Worker" : "👤 Worker Details"}
                   </h5>
-                  <div className="d-flex flex-wrap align-items-center gap-3 text-white-90 small">
+                  <div className="d-flex flex-wrap align-items-center gap-3 text-white-90 small text-warning">
                     <span className="d-flex align-items-center gap-2">
                       <i className="bi bi-person-fill"></i>
                       {localWorker?.name || "—"}
@@ -932,38 +942,38 @@ export default function WorkerCallModal({
                             )}
 
                             <div className="languages-container-compact">
-  {normalizeArray(localWorker.languages).length > 0 ? (
-    <div className="d-flex flex-wrap gap-2">
-      {normalizeArray(localWorker.languages).map((lang, idx) => (
-        <div
-          key={idx}
-          className="language-tag-compact btn btn-outline-warning btn-sm position-relative"
-        >
-          {lang}
-          {isEditMode && (
-            <button
-              type="button"
-              className="btn-close btn-close-white tag-remove position-absolute top-0 start-100 translate-middle"
-              onClick={() => handleTagRemove("languages", idx)}
-              style={{
-                width: '0.5rem',
-                height: '0.5rem',
-                fontSize: '0.6rem',
-                padding: '0.25rem'
-              }}
-            >
-            </button>
-          )}
-        </div>
-      ))}
-    </div>
-  ) : (
-    <div className="empty-state-compact text-center py-3">
-      <i className="bi bi-translate text-muted"></i>
-      <p className="mt-2 mb-0 text-muted">No languages selected</p>
-    </div>
-  )}
-</div>
+                              {normalizeArray(localWorker.languages).length > 0 ? (
+                                <div className="d-flex flex-wrap gap-2">
+                                  {normalizeArray(localWorker.languages).map((lang, idx) => (
+                                    <div
+                                      key={idx}
+                                      className="language-tag-compact btn btn-outline-warning btn-sm position-relative"
+                                    >
+                                      {lang}
+                                      {isEditMode && (
+                                        <button
+                                          type="button"
+                                          className="btn-close btn-close-white tag-remove position-absolute top-0 start-100 translate-middle"
+                                          onClick={() => handleTagRemove("languages", idx)}
+                                          style={{
+                                            width: '0.5rem',
+                                            height: '0.5rem',
+                                            fontSize: '0.6rem',
+                                            padding: '0.25rem'
+                                          }}
+                                        >
+                                        </button>
+                                      )}
+                                    </div>
+                                  ))}
+                                </div>
+                              ) : (
+                                <div className="empty-state-compact text-center py-3">
+                                  <i className="bi bi-translate text-muted"></i>
+                                  <p className="mt-2 mb-0 text-muted">No languages selected</p>
+                                </div>
+                              )}
+                            </div>
                           </div>
                         </div>
                       </div>
@@ -1061,8 +1071,8 @@ export default function WorkerCallModal({
                                         type="button"
                                         key={`homecare-${opt}`}
                                         className={`btn btn-sm rounded-pill ${active
-                                          ? "btn-success"
-                                          : "btn-outline-light"
+                                          ? "btn-info"
+                                          : "btn-outline-info"
                                           } disabled-keep skill-pill-compact`}
                                         onClick={() => handleMultiToggle("homeCareSkills", opt)}
                                         disabled={!isEditMode}
@@ -1139,7 +1149,7 @@ export default function WorkerCallModal({
                                     { title: "🛍️ Retail & Sales", skills: otherSkillOptions.slice(42, 47), color: "retail", bgClass: "bg-retail", btnClass: "btn-retail" },
                                     { title: "🏭 Industrial", skills: otherSkillOptions.slice(47), color: "industrial", bgClass: "bg-industrial", btnClass: "btn-industrial" }
                                   ].map((category, catIndex) => (
-                                    <div key={catIndex} className={`skill-category-compact p-3 mb-2 ${category.bgClass} rounded`}>
+                                    <div key={catIndex} className={`skill-category-compact p-3 mb-2  rounded`}>
                                       <h6 className="category-title-compact text-dark fw-bold">{category.title}</h6>
                                       <div className="skills-pills-compact">
                                         {category.skills.map((opt) => {
@@ -1151,8 +1161,8 @@ export default function WorkerCallModal({
                                               key={`other-${opt}`}
                                               type="button"
                                               className={`btn btn-sm rounded-pill ${active
-                                                ? category.btnClass
-                                                : "btn-outline-light"
+                                                ? category.bgClass
+                                                : category.btnClass
                                                 } disabled-keep skill-pill-compact`}
                                               onClick={() => handleMultiToggle("otherSkills", opt)}
                                               disabled={!isEditMode}

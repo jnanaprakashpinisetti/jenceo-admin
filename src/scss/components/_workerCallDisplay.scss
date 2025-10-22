@@ -401,91 +401,132 @@
       }
     }
 
-    /* Background colors for skill categories */
-    .bg-office {
-      /* Amber */
-      background-color: #333;
-    }
 
-    .bg-customer {
-      /* Blue */
-      background-color: #444;
-    }
 
-    .bg-management {
-      /* Purple */
-      background-color: #333;
-    }
-
-    .bg-security {
-      /* Red */
-      background-color: #444;
-    }
-
-    .bg-driving {
-      /* Teal */
-      background-color: #333;
-    }
-
-    .bg-technical {
-      /* Orange */
-      background-color: #444;
-    }
-
-    .bg-retail {
-      /* Pink */
-      background-color: #333;
-    }
-
-    .bg-industrial {
-      /* Gray */
-      background-color: #444;
-    }
 
     /* Button colors matching the categories */
     .btn-office {
-      background-color: #ffc107 !important;
+
       border-color: #ffc107 !important;
+      color: #ffc107 !important;
+
+      &:hover {
+        background-color: #ffc107 !important;
+        color: #000 !important;
+      }
+    }
+
+    /* Background colors for skill categories */
+    .bg-office {
+      background-color: #ffc107 !important;
       color: #000 !important;
     }
 
     .btn-customer {
-      background-color: #0d6efd !important;
-      border-color: #0d6efd !important;
-      color: #fff !important;
+      border-color: #0dcdfd !important;
+      color: #0dcdfd !important;
+
+      &:hover {
+        background-color: #0dcdfd !important;
+        color: #000 !important;
+      }
+    }
+
+    .bg-customer {
+      background-color: #0dcdfd !important;
+      border-color: #0dcdfd !important;
+      color: #000 !important;
     }
 
     .btn-management {
+      border-color: #6f42c1 !important;
+      color: #fff !important;
+
+      &:hover {
+        background-color: #6f42c1 !important;
+      }
+    }
+
+    .bg-management {
       background-color: #6f42c1 !important;
       border-color: #6f42c1 !important;
       color: #fff !important;
     }
 
     .btn-security {
+      border-color: #dc3545 !important;
+      color: #fff !important;
+
+      &:hover {
+        background-color: #dc3545 !important;
+      }
+    }
+
+    .bg-security {
       background-color: #dc3545 !important;
       border-color: #dc3545 !important;
       color: #fff !important;
     }
 
     .btn-driving {
+      border-color: #20c997 !important;
+      color: #fff !important;
+
+      &:hover {
+        background-color: #20c997 !important;
+
+      }
+    }
+
+    .bg-driving {
       background-color: #20c997 !important;
       border-color: #20c997 !important;
       color: #fff !important;
     }
 
     .btn-technical {
+      border-color: #fd7e14 !important;
+      color: #fff !important;
+
+      &:hover {
+        background-color: #fd7e14 !important;
+
+      }
+    }
+
+    .bg-technical {
       background-color: #fd7e14 !important;
       border-color: #fd7e14 !important;
       color: #fff !important;
     }
 
     .btn-retail {
+      border-color: #d63384 !important;
+      color: #fff !important;
+
+      &:hover {
+        background-color: #d63384 !important;
+
+      }
+    }
+
+    .bg-retail {
       background-color: #d63384 !important;
       border-color: #d63384 !important;
       color: #fff !important;
     }
 
     .btn-industrial {
+      border-color: #6c757d !important;
+      color: #fff !important;
+
+      &:hover {
+        background-color: #6c757d !important;
+
+      }
+    }
+
+    .bg-industrial {
       background-color: #6c757d !important;
       border-color: #6c757d !important;
       color: #fff !important;
@@ -1182,13 +1223,13 @@
   }
 }
 
- .table.table-dark {
+.table.table-dark {
 
-    th,
-    td {
-     font-size: 14px;
-    }
-    }
+  th,
+  td {
+    font-size: 14px;
+  }
+}
 
 // Mobile overflow handling
 @media (max-width: 767.98px) {

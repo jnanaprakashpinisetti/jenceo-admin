@@ -1453,7 +1453,7 @@ export default function ToDo() {
           >
             <div className="modal-content overflow-hidden modal-content-dark">
               <div className="modal-header modal-header-grad">
-                <h5 className="modal-title text-white text-truncate">Create New Issue</h5>
+                <h5 className="modal-title text-white text-truncate">Create New Task</h5>
                 <button
                   className="btn-close btn-close-white"
                   onClick={() => (dirty ? setShowDiscard(true) : setShowAdd(false))}
@@ -1468,7 +1468,7 @@ export default function ToDo() {
                   <div className="row g-3">
                     <div className="col-md-8">
                       <label className="form-label text-muted-200">
-                        Issue Title
+                        Task Title
                       </label>
                       <input
                         className="form-control dark-input"
@@ -1483,7 +1483,7 @@ export default function ToDo() {
                     </div>
                     <div className="col-md-4">
                       <label className="form-label text-muted-200">
-                        Issue Type
+                        Task Type
                       </label>
                       <select
                         className="form-select dark-input"
@@ -1935,7 +1935,7 @@ export default function ToDo() {
                             className="history-item d-flex gap-2 align-items-start mb-2"
                           >
                             <span className="history-dot" />
-                            <div className="history-content flex-grow-1">
+                            <div className="history-content flex-grow-1 opacity-75">
                               <div className="history-text">
                                 <strong>
                                   {h.userName || users[h.user]?.name || h.user}
@@ -1957,7 +1957,7 @@ export default function ToDo() {
                                   </>
                                 ) : null}
                               </div>
-                              <div className="small text-muted-300">
+                              <div className="small-text text-muted-300">
                                 {fmtDT(h.timestamp)}
                               </div>
                             </div>

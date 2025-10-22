@@ -374,7 +374,7 @@ $td-warning: #f59e0b;
     .modal-modern {
         width: min(100%, 1000px);
         border-radius: 12px;
-        overflow: hidden;
+        overflow: auto;
         background: $td-bg;
         border: 1px solid #21314d;
         @include modal-constrain;

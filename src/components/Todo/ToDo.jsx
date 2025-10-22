@@ -1,9 +1,7 @@
 // src/components/Tasks/ToDo.jsx
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import firebaseDB from "../../firebase";
-
-// If you have AuthContext, uncomment this:
-// import { useAuth } from "../../AuthContext";
+import { useAuth } from "../../context/AuthContext";
 
 // ---------- tiny helpers ----------
 const cn = (...xs) => xs.filter(Boolean).join(" ");
@@ -28,6 +26,19 @@ const todayYMD = () => {
   return `${yyyy}-${mm}-${dd}`;
 };
 
+const anyFilterActive = (state) => {
+  const { activeTab, qtext, cat, prio, assignee, issueType, sort } = state;
+  return !(
+    activeTab === "all" &&
+    qtext === "" &&
+    cat === "ALL" &&
+    prio === "ALL" &&
+    assignee === "ALL" &&
+    issueType === "ALL" &&
+    sort === "createdAt_desc"
+  );
+};
+
 // ---------- RTDB helpers ----------
 const hasRTDB =
   !!firebaseDB && (isFn(firebaseDB.child) || isFn(firebaseDB.ref));
@@ -44,7 +55,6 @@ const getRef = (path) => {
 };
 
 // ---------- constants ----------
-// Expanded categories requested
 const CATEGORIES = {
   "Worker Call": "#22c55e",
   "Petty Cash": "#f59e0b",
@@ -92,26 +102,43 @@ const TABS = [
   { id: "Done", label: "Done" },
 ];
 
-// ticket/project keys (choose on create)
 const TICKET_KEYS = ["JEN", "OPS", "CRM", "FIN", "HR"];
+
 
 // ---------- component ----------
 export default function ToDo() {
-  // const { user: authUser } = useAuth?.() || {};
-  // Fallback if no AuthContext:
-  const authUser =
-    // ↓ replace this fallback with your actual auth object if available
-    { uid: "guest", dbId: "guest", name: "Guest", role: "employee", photoURL: "" };
+  // Resolve current user from AuthContext → window → localStorage, with a safe fallback.
+  const authCtx = useAuth();
+  const authFromCtx = authCtx?.user ?? authCtx;
 
-  const myId = authUser?.dbId || authUser?.uid || "guest";
-  const myName = authUser?.name || "Guest";
-  const myRole = (authUser?.role || "employee").toLowerCase();
-  const isPrivileged =
-    myRole === "admin" || myRole === "manager" || myRole === "super admin" || myRole === "superadmin";
+  const authFromWin =
+    typeof window !== "undefined" ? window.JenCeoAuth : null;
+
+  let authFromStorage = null;
+  try {
+    authFromStorage =
+      JSON.parse(localStorage.getItem("JenCeo:user")) ||
+      JSON.parse(localStorage.getItem("authUser")) ||
+      JSON.parse(localStorage.getItem("user"));
+  } catch { }
+
+  const mergedAuth = authFromCtx || authFromWin || authFromStorage || {
+    uid: "guest",
+    dbId: "guest",
+    name: "Guest",
+    role: "user",
+    photoURL: "",
+  };
+
+  const myId = mergedAuth?.dbId || mergedAuth?.uid || "guest";
+  const myName = mergedAuth?.name || mergedAuth?.displayName || "Guest";
+  const myRole = (mergedAuth?.role || mergedAuth?.userRole || "user").toLowerCase();
+  const isPrivileged = ["admin", "manager", "super admin", "superadmin"].includes(myRole);
 
   // data
   const [tasks, setTasks] = useState([]);
-  const [users, setUsers] = useState({}); // { userKey: { name, role, photoURL } }
+  theUsersFix(); // <-- to avoid tree-shake of helper
+  const [users, setUsers] = useState({});
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -133,7 +160,18 @@ export default function ToDo() {
   const [showAdd, setShowAdd] = useState(false);
   const [showDetail, setShowDetail] = useState(false);
   const [dirty, setDirty] = useState(false);
+  const [showDiscard, setShowDiscard] = useState(false);
   const [selectedTask, setSelectedTask] = useState(null);
+
+  const [toasts, setToasts] = useState([]);
+  const notify = (text, variant = "success") => {
+    const id = Date.now() + Math.random();
+    setToasts((ts) => [...ts, { id, text, variant }]);
+    setTimeout(() => {
+      setToasts((ts) => ts.filter((t) => t.id !== id));
+    }, 1600);
+  };
+
 
   // new task form
   const [newTask, setNewTask] = useState({
@@ -142,7 +180,7 @@ export default function ToDo() {
     category: "Worker Call",
     priority: "Medium",
     issueType: "Task",
-    assignedTo: "", // will default to me once users load
+    assignedTo: "",
     status: "To Do",
     dueDate: "",
     storyPoints: 1,
@@ -151,52 +189,60 @@ export default function ToDo() {
     ticketKey: "JEN",
   });
 
-  // comments/subtasks inputs
-  const [comments, setComments] = useState({});
-  const [subtasks, setSubtasks] = useState({});
+  const [showDelete, setShowDelete] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState(null);
 
-  const addFormRef = useRef(null);
+  const isAdmin = ["admin", "super admin", "superadmin"].includes(myRole); // stricter than isPrivileged
+
+
+  const [comments, setComments] = useState({});
+  const [newSubtaskTitle, setNewSubtaskTitle] = useState("");
+
+  const notifRootRef = useRef(null);
   const backendOK = !!hasRTDB;
 
-  // ---------- subscribe USERS (JenCeo-DataBase/Users) ----------
+  // ---------- subscribe USERS (robust: try both DB locations & merge) ----------
   useEffect(() => {
     if (!backendOK) return;
-    const ref = getRef("JenCeo-DataBase/Users");
-    const cb = (snap) => {
+    const refs = [
+      getRef("JenCeo-DataBase/Users"),
+      getRef("Users"),
+      getRef("JenCeo/Users"),
+    ].filter(Boolean);
+
+    const accum = {};
+    const handle = (snap) => {
       const raw = snap.val?.() ?? snap;
       const obj = raw || {};
-      // Normalize into { key: { name, role, photoURL } }
-      const mapped = {};
       Object.entries(obj).forEach(([k, v]) => {
         if (v && typeof v === "object") {
-          mapped[k] = {
+          accum[k] = {
             name: v.name || v.displayName || v.username || k,
-            role: (v.role || v.userRole || "employee").toLowerCase(),
+            role: (v.role || v.userRole || "user").toLowerCase(),
             photoURL: v.photoURL || v.avatar || "",
           };
         }
       });
-      setUsers(mapped);
-      // default assignee in create modal
-      setNewTask((p) => ({
-        ...p,
-        assignedTo: p.assignedTo || myId,
-      }));
+      setUsers({ ...accum });
+      setNewTask((p) => ({ ...p, assignedTo: p.assignedTo || myId }));
     };
-    try {
-      if (isFn(ref.on)) {
-        ref.on("value", cb);
-        return () => {
-          try { ref.off("value", cb); } catch {}
-        };
-      }
-      ref.once?.("value", (s) => cb(s));
-    } catch (e) {
-      console.error("Users subscribe error:", e);
-    }
+
+    const unsubs = [];
+    refs.forEach((ref) => {
+      try {
+        if (isFn(ref.on)) {
+          const cb = (s) => handle(s);
+          ref.on("value", cb);
+          unsubs.push(() => ref.off("value", cb));
+        } else {
+          ref.once?.("value", (s) => handle(s));
+        }
+      } catch { }
+    });
+    return () => unsubs.forEach((u) => u?.());
   }, [backendOK, myId]);
 
-  // ---------- subscribe TASKS (ToDo root) ----------
+  // ---------- subscribe TASKS ----------
   useEffect(() => {
     if (!backendOK) {
       setError("Firebase RTDB not configured. Please check your configuration.");
@@ -227,22 +273,28 @@ export default function ToDo() {
       if (isFn(ref.on)) {
         ref.on("value", cb);
         return () => {
-          try { ref.off("value", cb); } catch {}
+          try { ref.off("value", cb); } catch { }
         };
       }
       ref.once?.("value", (s) => cb(s));
-    } catch (err) {
-      console.error("ToDo RTDB subscribe error:", err);
+    } catch {
       setError("Failed to load tasks from database.");
       setLoading(false);
     }
   }, [backendOK]);
 
+  useEffect(() => {
+    if (!selectedTask) return;
+    const fresh = tasks.find((t) => t.id === selectedTask.id);
+    if (fresh) setSelectedTask(fresh);
+  }, [tasks]); // keeps the detail modal in sync with realtime updates
+
+
   // ---------- computed maps ----------
   const tabCounts = useMemo(() => {
     const base = { all: 0, "To Do": 0, "In Progress": 0, "In Review": 0, Done: 0 };
     tasks.forEach((t) => {
-      // visibility check here so counts match the list a user actually sees
+      // Visibility: privileged see all; others only assigned-to or created-by
       if (!isPrivileged) {
         const mine = t.assignedTo === myId || t.createdById === myId;
         if (!mine) return;
@@ -257,11 +309,9 @@ export default function ToDo() {
   const filtered = useMemo(() => {
     let list = tasks.slice();
 
-    // Visibility: privileged see all; others see only assigned to them or created by them
+    // Visibility rules
     if (!isPrivileged) {
-      list = list.filter(
-        (t) => t.assignedTo === myId || t.createdById === myId
-      );
+      list = list.filter((t) => t.assignedTo === myId || t.createdById === myId);
     }
 
     if (activeTab !== "all") list = list.filter((t) => t.status === activeTab);
@@ -307,65 +357,29 @@ export default function ToDo() {
     sort,
   ]);
 
-  // ---------- notifications (localStorage + UI) ----------
+  // ---------- notifications (localStorage + outside click + close btn) ----------
   const relevantToMe = (t) => t.assignedTo === myId || t.createdById === myId;
   const unread = useMemo(() => {
     const unseen = tasks.filter((t) => relevantToMe(t) && (t.updatedAt || t.createdAt || 0) > lastSeen);
-    // top 8 newest
     return unseen.sort((a, b) => (b.updatedAt || b.createdAt || 0) - (a.updatedAt || a.createdAt || 0)).slice(0, 8);
   }, [tasks, lastSeen]);
+
+  useEffect(() => {
+    const onDoc = (e) => {
+      if (!notifOpen) return;
+      if (notifRootRef.current && !notifRootRef.current.contains(e.target)) {
+        setNotifOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", onDoc);
+    return () => document.removeEventListener("mousedown", onDoc);
+  }, [notifOpen]);
 
   const markAllSeen = () => {
     const now = Date.now();
     localStorage.setItem(lastSeenKey, String(now));
     setLastSeen(now);
     setNotifOpen(false);
-  };
-
-  // ---------- UI pieces ----------
-  const UserAvatar = ({ userId, size = "sm" }) => {
-    const u = users[userId] || {};
-    const photo = u.photoURL;
-    const name = u.name || userId || "User";
-    const initials = name
-      .split(" ")
-      .map((s) => s[0])
-      .join("")
-      .slice(0, 2)
-      .toUpperCase();
-
-    if (photo) {
-      return (
-        <img
-          src={photo}
-          alt={name}
-          title={`${name} (${u.role || "user"})`}
-          className={`avatar avatar-${size}`}
-          style={{ objectFit: "cover" }}
-        />
-      );
-    }
-    return (
-      <span
-        className={`avatar avatar-${size} avatar-fallback`}
-        title={`${name} (${u.role || "user"})`}
-      >
-        {initials}
-      </span>
-    );
-  };
-
-  const IssueTypeBadge = ({ type }) => {
-    const issue = ISSUE_TYPES[type] || ISSUE_TYPES.Task;
-    return (
-      <span
-        className="issue-type-badge"
-        style={{ backgroundColor: issue.color }}
-        title={type}
-      >
-        {issue.icon} {type}
-      </span>
-    );
   };
 
   // ---------- audit helpers ----------
@@ -379,16 +393,15 @@ export default function ToDo() {
         timestamp: now,
       });
       await getRef(`ToDo/${taskId}`).update({ updatedAt: now });
-    } catch (e) {
-      console.error("pushHistory error:", e);
+    } catch (err) {
+      console.error("Failed to push history", err);
     }
   };
 
-  // ---------- ticket sequence per key (JEN-01, JEN-02, …) ----------
+  // ---------- ticket sequence per key ----------
   const nextTicketSeq = async (key) => {
     const ref = getRef(`ToDoSequences/${key}`);
     if (!ref) return 1;
-    // Prefer RTDB transaction if available
     if (isFn(ref.transaction)) {
       let next = 1;
       try {
@@ -397,11 +410,8 @@ export default function ToDo() {
           return next;
         });
         return next;
-      } catch (e) {
-        console.warn("transaction failed, falling back to read/set", e);
-      }
+      } catch { }
     }
-    // Fallback (race-prone, but better than nothing)
     try {
       const snap = await ref.get?.();
       const curr = snap?.val?.() ?? snap?.val ?? 0;
@@ -414,6 +424,7 @@ export default function ToDo() {
   };
 
   const formatTicket = (key, n) => `${key}-${String(n).padStart(2, "0")}`;
+  const formatSubTicket = (parentTicket, n) => `${parentTicket}-${String(n).padStart(2, "0")}`;
 
   // ---------- actions ----------
   const updateTaskStatus = async (taskId, newStatus) => {
@@ -428,8 +439,9 @@ export default function ToDo() {
         from: null,
         to: newStatus,
       });
-    } catch (err) {
-      console.error("update status error:", err);
+      notify("Status updated");
+
+    } catch {
       setError("Failed to update task status.");
     }
   };
@@ -454,8 +466,7 @@ export default function ToDo() {
           assignedToAvatar: u.photoURL || "",
         });
       }
-    } catch (err) {
-      console.error(`update ${field} error:`, err);
+    } catch {
       setError(`Failed to update ${field}.`);
     }
   };
@@ -464,16 +475,14 @@ export default function ToDo() {
     if (!backendOK) return;
     try {
       await getRef(`ToDo/${taskId}`).remove();
-    } catch (err) {
-      console.error("delete task error:", err);
+    } catch {
       setError("Failed to delete task.");
     }
   };
 
   const addComment = async (taskId, text) => {
     const body = (text || "").trim();
-    if (!body) return;
-    if (!backendOK) return;
+    if (!body || !backendOK) return;
     try {
       const now = Date.now();
       const ref = getRef(`ToDo/${taskId}/comments`);
@@ -481,7 +490,7 @@ export default function ToDo() {
         text: body,
         author: myId,
         authorName: myName,
-        authorPhoto: users[myId]?.photoURL || "",
+        authorPhoto: users[myId]?.photoURL || mergedAuth?.photoURL || "",
         timestamp: now,
         type: "comment",
       };
@@ -491,69 +500,110 @@ export default function ToDo() {
         await getRef(`ToDo/${taskId}/comments/${now}`).set(payload);
       }
       setComments((p) => ({ ...p, [taskId]: "" }));
-      // also log to history
       await pushHistory(taskId, {
         action: "comment_added",
         field: "comment",
         from: null,
         to: body.slice(0, 80),
       });
-    } catch (err) {
-      console.error("add comment error:", err);
+      notify("Comment added");
+
+    } catch {
       setError("Failed to add comment.");
     }
   };
 
-  const addSubtask = async (taskId, title) => {
-    if (!title.trim()) return;
-    if (!backendOK) return;
+  // ----- JIRA-like Subtask creation: create a real child task with its own key and parent link
+  const addSubtask = async (parentId, title) => {
+    const t = (title || "").trim();
+    if (!t || !backendOK) return;
     try {
+      const parent = tasks.find((x) => x.id === parentId);
+      if (!parent) return;
       const now = Date.now();
-      const ref = getRef(`ToDo/${taskId}/subtasks`);
-      const subtask = {
-        title: title.trim(),
-        completed: false,
-        createdBy: myId,
-        createdByName: myName,
-        createdAt: now,
-      };
-      let subtaskId = String(now);
-      if (isFn(ref.push)) {
-        const pushed = await ref.push(subtask);
-        subtaskId = pushed?.key || subtaskId;
+
+      // per-parent counter for dashed child key: e.g., JEN-01-01
+      const subSeqRef = getRef(`ToDo/${parentId}/subSeqCounter`);
+      let nextSubNo = 1;
+      if (isFn(subSeqRef.transaction)) {
+        await subSeqRef.transaction((curr) => {
+          nextSubNo = (curr || 0) + 1;
+          return nextSubNo;
+        });
       } else {
-        await getRef(`ToDo/${taskId}/subtasks/${now}`).set(subtask);
+        const snap = await subSeqRef.get?.();
+        nextSubNo = ((snap?.val?.() ?? snap?.val) || 0) + 1;
+        await subSeqRef.set(nextSubNo);
       }
-      setSubtasks((p) => ({ ...p, [taskId]: "" }));
-      await pushHistory(taskId, {
+
+      const child = {
+        title: t,
+        description: "",
+        category: parent.category || "Other",
+        priority: parent.priority || "Medium",
+        issueType: "SubTask",
+        assignedTo: parent.assignedTo,
+        assignedToName: parent.assignedToName,
+        assignedToAvatar: parent.assignedToAvatar,
+        status: "To Do",
+        dueDate: parent.dueDate || "",
+        storyPoints: 1,
+        labels: Array.isArray(parent.labels) ? parent.labels.slice(0, 5) : [],
+        parentTask: parentId,
+        ticketKey: parent.ticketKey,
+        parentTicket: formatTicket(parent.ticketKey, Number(parent.ticketSeq || 0)),
+        childSeq: String(nextSubNo),
+        createdById: myId,
+        createdBy: myName,
+        createdByAvatar: users[myId]?.photoURL || mergedAuth?.photoURL || "",
+        createdAt: now,
+        updatedAt: now,
+        comments: {},
+        subtasks: {},
+        attachments: {},
+        history: {
+          [now]: {
+            action: "created",
+            field: "task",
+            from: null,
+            to: "To Do",
+            user: myId,
+            userName: myName,
+            timestamp: now,
+          },
+        },
+      };
+
+      const listRef = getRef("ToDo");
+      let childId = null;
+      if (isFn(listRef.push)) {
+        const res = await listRef.push(child);
+        childId = res?.key;
+      } else {
+        childId = String(now);
+        await getRef(`ToDo/${childId}`).set(child);
+      }
+
+      await getRef(`ToDo/${parentId}/linkedSubtasks/${childId}`).set(true);
+      setNewSubtaskTitle("");
+      await pushHistory(parentId, {
         action: "subtask_added",
         field: "subtask",
         from: null,
-        to: subtask.title,
+        to: title, // <-- 'title' not 't' or undefined
       });
-    } catch (err) {
-      console.error("add subtask error:", err);
+      notify("Subtask created");
+
+    } catch {
       setError("Failed to add subtask.");
     }
   };
 
-  const toggleSubtask = async (taskId, subtaskId, completed) => {
+  const toggleChildDone = async (childId, checked) => {
     if (!backendOK) return;
     try {
-      await getRef(`ToDo/${taskId}/subtasks/${subtaskId}`).update({
-        completed: !!completed,
-        completedAt: completed ? Date.now() : null,
-      });
-      await pushHistory(taskId, {
-        action: completed ? "subtask_completed" : "subtask_reopened",
-        field: "subtask",
-        from: completed ? "open" : "done",
-        to: completed ? "done" : "open",
-      });
-    } catch (err) {
-      console.error("toggle subtask error:", err);
-      setError("Failed to update subtask.");
-    }
+      await updateTaskStatus(childId, checked ? "Done" : "To Do");
+    } catch { }
   };
 
   // ---------- add task ----------
@@ -571,9 +621,8 @@ export default function ToDo() {
     setError("");
 
     const now = Date.now();
-    // get next per-project sequence
     const nextSeq = await nextTicketSeq(newTask.ticketKey || "JEN");
-    const ticketSeq = String(nextSeq); // store as raw number/string
+    const ticketSeq = String(nextSeq);
     const assUser = users[newTask.assignedTo] || {};
     const payload = {
       title: newTask.title.trim(),
@@ -589,16 +638,13 @@ export default function ToDo() {
       storyPoints: newTask.storyPoints || 1,
       labels: newTask.labels || [],
       parentTask: newTask.parentTask || "",
-      // ticket fields
       ticketKey: newTask.ticketKey || "JEN",
-      ticketSeq, // numeric string; show formatted in UI
-      // creator
+      ticketSeq,
       createdById: myId,
       createdBy: myName,
-      createdByAvatar: users[myId]?.photoURL || "",
+      createdByAvatar: users[myId]?.photoURL || mergedAuth?.photoURL || "",
       createdAt: now,
       updatedAt: now,
-      // audit collections
       comments: {},
       subtasks: {},
       attachments: {},
@@ -638,8 +684,10 @@ export default function ToDo() {
       });
       setDirty(false);
       setShowAdd(false);
-    } catch (err) {
-      console.error("add task error:", err);
+      setShowAdd(false);
+      notify("Issue created");
+
+    } catch {
       setError("Failed to add task. Please verify Firebase rules and network.");
     } finally {
       setLoading(false);
@@ -658,7 +706,7 @@ export default function ToDo() {
     return () => window.removeEventListener("beforeunload", handler);
   }, [showAdd, dirty]);
 
-  // ---------- render ----------
+  // ---------- helpers ----------
   const resetFilters = () => {
     setActiveTab("all");
     setQtext("");
@@ -670,6 +718,9 @@ export default function ToDo() {
   };
 
   const ticketLabel = (task) => {
+    if (task.issueType === "SubTask" && task.parentTicket && task.childSeq) {
+      return formatSubTicket(task.parentTicket, Number(task.childSeq));
+    }
     if (task.ticketKey && task.ticketSeq) {
       const n = Number(task.ticketSeq);
       return formatTicket(task.ticketKey, isNaN(n) ? task.ticketSeq : n);
@@ -688,6 +739,15 @@ export default function ToDo() {
     }
   };
 
+  const linkedChildren = (parentId) =>
+    tasks
+      .filter((t) => t.parentTask === parentId)
+      .sort((a, b) => (a.childSeq || 0) - (b.childSeq || 0));
+
+  // ---------- render ----------
+  const filtersState = { activeTab, qtext, cat, prio, assignee, issueType, sort };
+  const filtersDirty = anyFilterActive(filtersState);
+
   return (
     <div className="todo-wrap">
       {/* Header */}
@@ -695,20 +755,17 @@ export default function ToDo() {
         <div className="d-flex justify-content-between align-items-center">
           <div>
             <div className="tiny text-white-50 text-uppercase">Advanced Task Manager</div>
-            <div className="h3 fw-bold mb-0 text-white">JIRA-like Task Board</div>
-            {!backendOK && (
-              <div className="text-danger small mt-1">
-                Firebase not configured — reads/writes are disabled.
-              </div>
-            )}
-            {error && <div className="text-danger small">{error}</div>}
+            <div className="h3 fw-bold mb-0 text-warning">JenCeo Task Board</div>
           </div>
 
           <div className="d-flex align-items-center gap-2">
-            {/* Notifications bell */}
-            <div className="notif-wrap position-relative">
+            {/* Notifications bell with close button and outside-click close */}
+            <div className="notif-wrap position-relative" ref={notifRootRef}>
               <button
-                className={cn("btn btn-sm", unread.length ? "btn-warning" : "btn-outline-light")}
+                className={cn(
+                  "btn btn-sm",
+                  unread.length ? "btn-warning notif-glow" : "btn-outline-light"
+                )}
                 onClick={() => setNotifOpen((s) => !s)}
                 title={unread.length ? `${unread.length} updates` : "No new updates"}
               >
@@ -721,21 +778,48 @@ export default function ToDo() {
                 <div className="notif-dropdown">
                   <div className="d-flex justify-content-between align-items-center mb-2">
                     <strong>Updates</strong>
-                    <button className="btn btn-sm btn-success" onClick={markAllSeen}>
-                      Mark as read
-                    </button>
+                    <div className="d-flex gap-2">
+                      <button className="btn btn-sm btn-success" onClick={markAllSeen}>
+                        Mark as read
+                      </button>
+                      <button className="btn btn-sm btn-outline-light" onClick={() => setNotifOpen(false)}>
+                        Close
+                      </button>
+                    </div>
                   </div>
                   {unread.length === 0 ? (
                     <div className="text-muted small">You're all caught up.</div>
                   ) : (
                     <ul className="list-unstyled m-0">
                       {unread.map((t) => (
-                        <li key={t.id} className="notif-item" onClick={() => { setSelectedTask(t); setShowDetail(true); setNotifOpen(false); }}>
+                        <li
+                          key={t.id}
+                          className="notif-item"
+                          onClick={() => {
+                            setSelectedTask(t);
+                            setShowDetail(true);
+                            setNotifOpen(false);
+                          }}
+                        >
                           <div className="d-flex align-items-center gap-2">
-                            <UserAvatar userId={t.assignedTo} size="xs" />
+                            {(users[t.assignedTo]?.photoURL || t.assignedToAvatar) ? (
+                              <img
+                                src={users[t.assignedTo]?.photoURL || t.assignedToAvatar}
+                                onError={(e) => (e.currentTarget.style.display = "none")}
+                                alt="avatar"
+                                className="avatar avatar-xs"
+                                style={{ objectFit: "cover" }}
+                              />
+                            ) : (
+                              <span className="avatar avatar-xs avatar-fallback">
+                                {(t.assignedToName || "U").slice(0, 2).toUpperCase()}
+                              </span>
+                            )}
                             <div className="flex-grow-1">
                               <div className="small text-white-90">{t.title}</div>
-                              <div className="tiny text-muted-300">{ticketLabel(t)} • {fmtDT(t.updatedAt || t.createdAt)}</div>
+                              <div className="tiny text-muted-300">
+                                {ticketLabel(t)} • {fmtDT(t.updatedAt || t.createdAt)}
+                              </div>
                             </div>
                             <span
                               className="badge"
@@ -752,8 +836,12 @@ export default function ToDo() {
               )}
             </div>
 
-            <button className="btn btn-warning" onClick={() => setShowAdd(true)} disabled={!backendOK}>
-              + Create Issue
+            <button
+              className="btn btn-warning"
+              onClick={() => setShowAdd(true)}
+              disabled={!backendOK}
+            >
+              + Create Task
             </button>
           </div>
         </div>
@@ -764,7 +852,10 @@ export default function ToDo() {
             {TABS.map((t) => (
               <button
                 key={t.id}
-                className={cn("btn", activeTab === t.id ? "btn-info text-dark" : "btn-outline-info")}
+                className={cn(
+                  "btn",
+                  activeTab === t.id ? "btn-info text-dark" : "btn-outline-info"
+                )}
                 onClick={() => setActiveTab(t.id)}
               >
                 {t.label}
@@ -803,7 +894,7 @@ export default function ToDo() {
 
           <select
             className="form-select form-select-sm dark-input"
-            style={{ width: 200 }}
+            style={{ width: 220 }}
             value={assignee}
             onChange={(e) => setAssignee(e.target.value)}
           >
@@ -853,8 +944,15 @@ export default function ToDo() {
             <option value="priority_asc">Priority Low→High</option>
           </select>
 
-          {/* Reset Filters button */}
-          <button className="btn btn-sm btn-outline-warning ms-auto" onClick={resetFilters}>
+          {/* Reset Filters button with animation when active */}
+          <button
+            className={cn(
+              "btn btn-sm ms-auto",
+              filtersDirty ? "btn-warning pulse" : "btn-outline-warning"
+            )}
+            onClick={resetFilters}
+            title={filtersDirty ? "Some filters are active" : "Reset filters"}
+          >
             Reset Filters
           </button>
         </div>
@@ -875,19 +973,57 @@ export default function ToDo() {
             filtered.map((task) => {
               const ticket = ticketLabel(task);
               const overdue = isOverdue(task);
+              const createdBy =
+                users[task.createdById]?.name || task.createdBy || "—";
+              const desc = (task.description || "").trim();
+              const snippet =
+                desc.length > 120 ? desc.slice(0, 120) + "…" : desc;
+
               return (
                 <div className="col-lg-6 col-xl-4 mb-3" key={task.id}>
-                  <div className="task-card rounded-3 overflow-hidden">
-                    <div className="task-border" style={{ borderColor: STATUS[task.status]?.border }} />
+                  <div
+                    className="task-card rounded-3 overflow-hidden"
+                    onClick={() => {
+                      setSelectedTask(task);
+                      setShowDetail(true);
+                    }}
+                  >
+                    <div
+                      className="task-border"
+                      style={{ borderColor: STATUS[task.status]?.border }}
+                    />
                     <div className="p-3">
                       {/* Header */}
                       <div className="d-flex justify-content-between align-items-start mb-2">
                         <div className="d-flex align-items-center gap-2">
-                          <IssueTypeBadge type={task.issueType} />
-                          <span className="task-id text-muted-300 small">{ticket}</span>
+                          <span
+                            className="category-chip"
+                            style={{
+                              background:
+                                CATEGORIES[task.category] || "#475569",
+                            }}
+                          />
+                          <span
+                            className="issue-type-badge"
+                            style={{
+                              background:
+                                ISSUE_TYPES[task.issueType]?.color ||
+                                "#3b82f6",
+                            }}
+                            title={task.issueType}
+                          >
+                            {ISSUE_TYPES[task.issueType]?.icon || "✓"}{" "}
+                            {task.issueType}
+                          </span>
+                          <span className="task-id text-muted-300 small">
+                            {ticket}
+                          </span>
                         </div>
                         <div className="d-flex align-items-center gap-1">
-                          <span className="story-points-badge" title="Story Points">
+                          <span
+                            className="story-points-badge"
+                            title="Story Points"
+                          >
                             {task.storyPoints || 1} SP
                           </span>
                           <span
@@ -899,13 +1035,47 @@ export default function ToDo() {
                         </div>
                       </div>
 
-                      {/* Title & assignee */}
-                      <h6 className="text-white mb-2">{task.title}</h6>
+                      {/* Title */}
+                      <h6 className="text-white mb-1">{task.title}</h6>
+
+                      {/* Description snippet */}
+                      {snippet && (
+                        <div className="small text-white-70 mb-2">
+                          {snippet}
+                        </div>
+                      )}
+
+                      {/* Assignee & status */}
                       <div className="d-flex justify-content-between align-items-center mb-2">
                         <div className="d-flex align-items-center gap-2">
-                          <UserAvatar userId={task.assignedTo} />
+                          {(users[task.assignedTo]?.photoURL ||
+                            task.assignedToAvatar) ? (
+                            <img
+                              src={
+                                users[task.assignedTo]?.photoURL ||
+                                task.assignedToAvatar
+                              }
+                              onError={(e) =>
+                                (e.currentTarget.style.display = "none")
+                              }
+                              alt="avatar"
+                              className="avatar avatar-sm"
+                              style={{ objectFit: "cover" }}
+                            />
+                          ) : (
+                            <span className="avatar avatar-sm avatar-fallback">
+                              {(task.assignedToName || "U")
+                                .split(" ")
+                                .map((s) => s[0])
+                                .join("")
+                                .slice(0, 2)
+                                .toUpperCase()}
+                            </span>
+                          )}
                           <div className="small text-white-80">
-                            {task.assignedToName || users[task.assignedTo]?.name || task.assignedTo}
+                            {task.assignedToName ||
+                              users[task.assignedTo]?.name ||
+                              task.assignedTo}
                           </div>
                         </div>
                         <span
@@ -917,10 +1087,21 @@ export default function ToDo() {
                             borderRadius: "12px",
                             fontSize: "0.75rem",
                           }}
+                          onClick={(e) => e.stopPropagation()}
                         >
                           {task.status}
                         </span>
                       </div>
+
+                      {/* Parent link if SubTask */}
+                      {task.issueType === "SubTask" && task.parentTicket && (
+                        <div className="tiny text-info mb-2">
+                          Parent:{" "}
+                          <span className="badge bg-dark">
+                            {task.parentTicket}
+                          </span>
+                        </div>
+                      )}
 
                       {/* Labels */}
                       {task.labels && task.labels.length > 0 && (
@@ -941,82 +1122,96 @@ export default function ToDo() {
                       {/* Due date */}
                       {task.dueDate && (
                         <div className="small mb-2">
-                          <strong className={overdue ? "text-danger" : "text-success"}>
+                          <strong
+                            className={overdue ? "text-danger" : "text-success"}
+                          >
                             Due:
                           </strong>{" "}
-                          <span className={overdue ? "text-danger" : "text-success"}>
+                          <span
+                            className={overdue ? "text-danger" : "text-success"}
+                          >
                             {task.dueDate}
                           </span>
                         </div>
                       )}
 
-                      {/* Progress */}
-                      {task.subtasks && Object.keys(task.subtasks).length > 0 && (
-                        <div className="mb-2">
-                          <div className="d-flex justify-content-between small text-muted-300 mb-1">
-                            <span>Progress</span>
-                            <span>
-                              {Object.values(task.subtasks).filter((st) => st.completed).length}/
-                              {Object.keys(task.subtasks).length}
-                            </span>
-                          </div>
-                          <div className="progress" style={{ height: 6 }}>
-                            <div
-                              className="progress-bar"
-                              style={{
-                                width: `${
-                                  (Object.values(task.subtasks).filter((st) => st.completed).length /
-                                    Object.keys(task.subtasks).length) *
-                                  100
-                                }%`,
-                                backgroundColor: PRIORITIES[task.priority],
-                              }}
-                            />
-                          </div>
-                        </div>
-                      )}
-
-                      {/* Quick actions */}
+                      {/* Footer: created by + quick actions */}
                       <div className="d-flex justify-content-between align-items-center mt-3">
-                        <div className="btn-group btn-group-sm">
+                        <div className="d-flex align-items-center gap-2">
+                          {(users[task.createdById]?.photoURL ||
+                            task.createdByAvatar) ? (
+                            <img
+                              src={
+                                users[task.createdById]?.photoURL ||
+                                task.createdByAvatar
+                              }
+                              onError={(e) =>
+                                (e.currentTarget.style.display = "none")
+                              }
+                              alt="creator"
+                              className="avatar avatar-xs"
+                              style={{ objectFit: "cover" }}
+                            />
+                          ) : (
+                            <span className="avatar avatar-xs avatar-fallback">
+                              {(createdBy || "U")
+                                .split(" ")
+                                .map((s) => s[0])
+                                .join("")
+                                .slice(0, 2)
+                                .toUpperCase()}
+                            </span>
+                          )}
+                          <span className="tiny text-muted-300">
+                            by {createdBy} • {fmtDT(task.createdAt)}
+                          </span>
+                        </div>
+                        <div
+                          className="btn-group btn-group-sm"
+                          onClick={(e) => e.stopPropagation()}
+                        >
                           <button
-                            className={cn("btn", task.status === "To Do" ? "btn-secondary" : "btn-outline-secondary")}
+                            className={cn(
+                              "btn",
+                              task.status === "To Do" ? "btn-secondary" : "btn-outline-secondary"
+                            )}
                             onClick={() => updateTaskStatus(task.id, "To Do")}
                           >
                             To Do
                           </button>
                           <button
-                            className={cn("btn", task.status === "In Progress" ? "btn-primary" : "btn-outline-primary")}
+                            className={cn(
+                              "btn",
+                              task.status === "In Progress" ? "btn-primary" : "btn-outline-primary"
+                            )}
                             onClick={() => updateTaskStatus(task.id, "In Progress")}
                           >
                             In Progress
                           </button>
                           <button
-                            className={cn("btn", task.status === "Done" ? "btn-success" : "btn-outline-success")}
+                            className={cn(
+                              "btn",
+                              task.status === "Done" ? "btn-success" : "btn-outline-success"
+                            )}
                             onClick={() => updateTaskStatus(task.id, "Done")}
                           >
                             Done
                           </button>
+
+                          {isAdmin && (
+                            <button
+                              className="btn btn-outline-danger"
+                              title="Delete task"
+                              onClick={() => {
+                                setDeleteTarget(task);
+                                setShowDelete(true);
+                              }}
+                            >
+                              🗑
+                            </button>
+                          )}
                         </div>
-                        <div className="d-flex gap-1">
-                          <button
-                            className="btn btn-sm btn-outline-light"
-                            onClick={() => {
-                              setSelectedTask(task);
-                              setShowDetail(true);
-                            }}
-                          >
-                            View
-                          </button>
-                          <button
-                            className="btn btn-sm btn-outline-danger"
-                            onClick={() => {
-                              if (window.confirm("Delete this task?")) deleteTask(task.id);
-                            }}
-                          >
-                            Delete
-                          </button>
-                        </div>
+
                       </div>
                     </div>
                   </div>
@@ -1032,30 +1227,31 @@ export default function ToDo() {
         <div
           className="modal fade show"
           style={{ display: "block", background: "rgba(2,6,23,.8)" }}
-          onClick={() => {
-            if (!dirty || window.confirm("Discard changes?")) setShowAdd(false);
-          }}
+          onClick={() => (dirty ? setShowDiscard(true) : setShowAdd(false))} // ← close on outside click
         >
           <div
             className="modal-dialog modal-lg modal-dialog-centered"
-            onClick={(e) => e.stopPropagation()}
+            onClick={(e) => e.stopPropagation()} // ← keep clicks inside dialog from closing
           >
             <div className="modal-content overflow-hidden modal-content-dark">
               <div className="modal-header modal-header-grad">
-                <h5 className="modal-title text-white">Create New Issue</h5>
+                <h5 className="modal-title text-white text-truncate">Create New Issue</h5>
                 <button
                   className="btn-close btn-close-white"
-                  onClick={() => {
-                    if (!dirty || window.confirm("Discard changes?")) setShowAdd(false);
-                  }}
+                  onClick={() => (dirty ? setShowDiscard(true) : setShowAdd(false))}
                 />
               </div>
-              <form ref={addFormRef} onSubmit={handleAddTask}>
+
+              <form onSubmit={handleAddTask}>
                 <div className="modal-body modal-body-dark">
-                  {error && <div className="alert alert-danger py-2">{error}</div>}
+                  {error && (
+                    <div className="alert alert-danger py-2">{error}</div>
+                  )}
                   <div className="row g-3">
                     <div className="col-md-8">
-                      <label className="form-label text-muted-200">Issue Title</label>
+                      <label className="form-label text-muted-200">
+                        Issue Title
+                      </label>
                       <input
                         className="form-control dark-input"
                         value={newTask.title}
@@ -1068,12 +1264,17 @@ export default function ToDo() {
                       />
                     </div>
                     <div className="col-md-4">
-                      <label className="form-label text-muted-200">Issue Type</label>
+                      <label className="form-label text-muted-200">
+                        Issue Type
+                      </label>
                       <select
                         className="form-select dark-input"
                         value={newTask.issueType}
                         onChange={(e) => {
-                          setNewTask((p) => ({ ...p, issueType: e.target.value }));
+                          setNewTask((p) => ({
+                            ...p,
+                            issueType: e.target.value,
+                          }));
                           setDirty(true);
                         }}
                       >
@@ -1086,13 +1287,18 @@ export default function ToDo() {
                     </div>
 
                     <div className="col-12">
-                      <label className="form-label text-muted-200">Description</label>
+                      <label className="form-label text-muted-200">
+                        Description
+                      </label>
                       <textarea
                         className="form-control dark-input"
                         rows={4}
                         value={newTask.description}
                         onChange={(e) => {
-                          setNewTask((p) => ({ ...p, description: e.target.value }));
+                          setNewTask((p) => ({
+                            ...p,
+                            description: e.target.value,
+                          }));
                           setDirty(true);
                         }}
                         placeholder="Detailed description of the issue..."
@@ -1105,7 +1311,10 @@ export default function ToDo() {
                         className="form-select dark-input"
                         value={newTask.assignedTo || myId}
                         onChange={(e) => {
-                          setNewTask((p) => ({ ...p, assignedTo: e.target.value }));
+                          setNewTask((p) => ({
+                            ...p,
+                            assignedTo: e.target.value,
+                          }));
                           setDirty(true);
                         }}
                       >
@@ -1123,7 +1332,10 @@ export default function ToDo() {
                         className="form-select dark-input"
                         value={newTask.priority}
                         onChange={(e) => {
-                          setNewTask((p) => ({ ...p, priority: e.target.value }));
+                          setNewTask((p) => ({
+                            ...p,
+                            priority: e.target.value,
+                          }));
                           setDirty(true);
                         }}
                       >
@@ -1136,7 +1348,9 @@ export default function ToDo() {
                     </div>
 
                     <div className="col-md-4">
-                      <label className="form-label text-muted-200">Story Points</label>
+                      <label className="form-label text-muted-200">
+                        Story Points
+                      </label>
                       <input
                         type="number"
                         className="form-control dark-input"
@@ -1189,7 +1403,10 @@ export default function ToDo() {
                         className="form-select dark-input"
                         value={newTask.ticketKey}
                         onChange={(e) => {
-                          setNewTask((p) => ({ ...p, ticketKey: e.target.value }));
+                          setNewTask((p) => ({
+                            ...p,
+                            ticketKey: e.target.value,
+                          }));
                           setDirty(true);
                         }}
                       >
@@ -1210,13 +1427,15 @@ export default function ToDo() {
                   <button
                     type="button"
                     className="btn btn-light"
-                    onClick={() => {
-                      if (!dirty || window.confirm("Discard changes?")) setShowAdd(false);
-                    }}
+                    onClick={() => (dirty ? setShowDiscard(true) : setShowAdd(false))}
                   >
                     Cancel
                   </button>
-                  <button type="submit" className="btn btn-primary" disabled={loading || !backendOK}>
+                  <button
+                    type="submit"
+                    className="btn btn-primary"
+                    disabled={loading || !backendOK}
+                  >
                     {loading ? "Creating..." : "Create Issue"}
                   </button>
                 </div>
@@ -1229,21 +1448,44 @@ export default function ToDo() {
       {/* Detail Modal */}
       {showDetail && selectedTask && (
         <div className="modal-overlay" onClick={() => setShowDetail(false)}>
-          <div className="modal-modern modal-xl" onClick={(e) => e.stopPropagation()}>
+          <div
+            className="modal-modern modal-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
             <div
               className="modal-header"
-              style={{ background: "linear-gradient(90deg,#06b6d4,#3b82f6)", color: "#fff" }}
+              style={{
+                background: "linear-gradient(90deg,#06b6d4,#3b82f6)",
+                color: "#fff",
+              }}
             >
               <div className="d-flex align-items-center gap-2">
-                <IssueTypeBadge type={selectedTask.issueType} />
+                <span
+                  className="category-chip"
+                  style={{
+                    background: CATEGORIES[selectedTask.category] || "#475569",
+                  }}
+                />
+                <span
+                  className="issue-type-badge"
+                  style={{
+                    background:
+                      ISSUE_TYPES[selectedTask.issueType]?.color || "#3b82f6",
+                  }}
+                  title={selectedTask.issueType}
+                >
+                  {ISSUE_TYPES[selectedTask.issueType]?.icon || "✓"}{" "}
+                  {selectedTask.issueType}
+                </span>
                 <h5 className="mb-0">
                   {selectedTask.title}{" "}
-                  <small className="opacity-75">
-                    {ticketLabel(selectedTask)}
-                  </small>
+                  <small className="opacity-75">{ticketLabel(selectedTask)}</small>
                 </h5>
               </div>
-              <button className="btn btn-sm btn-light" onClick={() => setShowDetail(false)}>
+              <button
+                className="btn btn-sm btn-light"
+                onClick={() => setShowDetail(false)}
+              >
                 Close
               </button>
             </div>
@@ -1259,61 +1501,79 @@ export default function ToDo() {
                     </div>
                   </div>
 
-                  {/* Subtasks */}
-                  {selectedTask.subtasks && (
-                    <div className="panel-soft mb-3">
-                      <h6 className="text-white-90 mb-2">Subtasks</h6>
-                      {Object.keys(selectedTask.subtasks).length === 0 ? (
-                        <div className="text-muted-400 small">No subtasks yet.</div>
-                      ) : null}
-                      {Object.entries(selectedTask.subtasks).map(([id, st]) => (
-                        <div key={id} className="subtask-item d-flex align-items-center gap-2 mb-2">
-                          <input
-                            type="checkbox"
-                            checked={!!st.completed}
-                            onChange={(e) => toggleSubtask(selectedTask.id, id, e.target.checked)}
-                            className="form-check-input"
-                          />
-                          <span
-                            className={
-                              st.completed
-                                ? "text-muted-300 text-decoration-line-through"
-                                : "text-white-80"
-                            }
-                          >
-                            {st.title}
-                          </span>
-                        </div>
-                      ))}
-                      <div className="d-flex gap-2 mt-2">
-                        <input
-                          className="form-control form-control-sm dark-input"
-                          placeholder="Add subtask..."
-                          value={subtasks[selectedTask.id] || ""}
-                          onChange={(e) =>
-                            setSubtasks((p) => ({ ...p, [selectedTask.id]: e.target.value }))
-                          }
-                        />
-                        <button
-                          className="btn btn-sm btn-outline-primary"
-                          onClick={() => addSubtask(selectedTask.id, subtasks[selectedTask.id])}
+                  {/* Linked Subtasks (JIRA-like list of real child tasks) */}
+                  <div className="panel-soft mb-3">
+                    <h6 className="text-white-90 mb-2">Subtasks</h6>
+                    {linkedChildren(selectedTask.id).length === 0 ? (
+                      <div className="text-muted-400 small">No subtasks yet.</div>
+                    ) : (
+                      linkedChildren(selectedTask.id).map((child) => (
+                        <div
+                          key={child.id}
+                          className="subtask-item d-flex align-items-center justify-content-between gap-2 mb-2"
                         >
-                          Add
-                        </button>
-                      </div>
+                          <div className="d-flex align-items-center gap-2">
+                            <input
+                              type="checkbox"
+                              checked={child.status === "Done"}
+                              onChange={(e) =>
+                                toggleChildDone(child.id, e.target.checked)
+                              }
+                              className="form-check-input"
+                            />
+                            <span
+                              className={
+                                child.status === "Done"
+                                  ? "text-muted-300 text-decoration-line-through"
+                                  : "text-white-80"
+                              }
+                            >
+                              {child.title}
+                            </span>
+                          </div>
+                          <div className="d-flex align-items-center gap-2">
+                            <span className="tiny badge bg-dark">
+                              {ticketLabel(child)}
+                            </span>
+                            <button
+                              className="btn btn-sm btn-outline-light"
+                              onClick={() => setSelectedTask(child)}
+                            >
+                              Open
+                            </button>
+                          </div>
+                        </div>
+                      ))
+                    )}
+                    <div className="d-flex gap-2 mt-2">
+                      <input
+                        className="form-control form-control-sm dark-input"
+                        placeholder="Add subtask..."
+                        value={newSubtaskTitle}
+                        onChange={(e) => setNewSubtaskTitle(e.target.value)}
+                      />
+                      <button
+                        className="btn btn-sm btn-outline-primary"
+                        onClick={() => addSubtask(selectedTask.id, newSubtaskTitle)}
+                      >
+                        Add
+                      </button>
                     </div>
-                  )}
+                  </div>
 
                   {/* Comments */}
                   <div className="panel-soft">
                     <h6 className="text-white-90 mb-2">Activity & Comments</h6>
-                    {selectedTask.comments && Object.values(selectedTask.comments).length > 0 ? (
+                    {selectedTask.comments &&
+                      Object.values(selectedTask.comments).length > 0 ? (
                       Object.values(selectedTask.comments)
                         .sort((a, b) => b.timestamp - a.timestamp)
                         .map((c, i) => (
-                          <div key={i} className="comment-row d-flex gap-3 p-3 rounded mb-2">
+                          <div
+                            key={i}
+                            className="comment-row d-flex gap-3 p-3 rounded mb-2"
+                          >
                             <div>
-                              {/* avatar */}
                               {c.authorPhoto ? (
                                 <img
                                   src={c.authorPhoto}
@@ -1335,9 +1595,13 @@ export default function ToDo() {
                             <div className="flex-grow-1">
                               <div className="d-flex justify-content-between align-items-center mb-1">
                                 <strong className="text-white-90">
-                                  {c.authorName || users[c.author]?.name || c.author}
+                                  {c.authorName ||
+                                    users[c.author]?.name ||
+                                    c.author}
                                 </strong>
-                                <small className="text-muted-300">{fmtDT(c.timestamp)}</small>
+                                <span className="text-muted-300 small-text">
+                                  {fmtDT(c.timestamp)}
+                                </span>
                               </div>
                               <div className="text-white-80">{c.text}</div>
                             </div>
@@ -1352,12 +1616,17 @@ export default function ToDo() {
                         placeholder="Add a comment..."
                         value={comments[selectedTask.id] || ""}
                         onChange={(e) =>
-                          setComments((p) => ({ ...p, [selectedTask.id]: e.target.value }))
+                          setComments((p) => ({
+                            ...p,
+                            [selectedTask.id]: e.target.value,
+                          }))
                         }
                       />
                       <button
                         className="btn btn-outline-primary"
-                        onClick={() => addComment(selectedTask.id, comments[selectedTask.id])}
+                        onClick={() =>
+                          addComment(selectedTask.id, comments[selectedTask.id])
+                        }
                       >
                         Comment
                       </button>
@@ -1372,13 +1641,20 @@ export default function ToDo() {
                         .sort(([a], [b]) => Number(b) - Number(a))
                         .slice(0, 12)
                         .map(([ts, h]) => (
-                          <div key={ts} className="history-item d-flex gap-2 align-items-start mb-2">
+                          <div
+                            key={ts}
+                            className="history-item d-flex gap-2 align-items-start mb-2"
+                          >
                             <span className="history-dot" />
                             <div className="history-content flex-grow-1">
                               <div className="history-text">
-                                <strong>{h.userName || users[h.user]?.name || h.user}</strong>{" "}
+                                <strong>
+                                  {h.userName || users[h.user]?.name || h.user}
+                                </strong>{" "}
                                 {String(h.action).replace("_", " ")}
-                                {h.field && h.field !== "task" ? ` ${h.field}` : ""}
+                                {h.field && h.field !== "task"
+                                  ? ` ${h.field}`
+                                  : ""}
                                 {h.from ? (
                                   <>
                                     {" "}
@@ -1392,7 +1668,9 @@ export default function ToDo() {
                                   </>
                                 ) : null}
                               </div>
-                              <div className="small text-muted-300">{fmtDT(h.timestamp)}</div>
+                              <div className="small text-muted-300">
+                                {fmtDT(h.timestamp)}
+                              </div>
                             </div>
                           </div>
                         ))
@@ -1409,7 +1687,30 @@ export default function ToDo() {
                     <div className="panel-soft mb-3">
                       <h6 className="text-white-90 mb-2">Assignee</h6>
                       <div className="d-flex align-items-center gap-2">
-                        <UserAvatar userId={selectedTask.assignedTo} />
+                        {(users[selectedTask.assignedTo]?.photoURL ||
+                          selectedTask.assignedToAvatar) ? (
+                          <img
+                            src={
+                              users[selectedTask.assignedTo]?.photoURL ||
+                              selectedTask.assignedToAvatar
+                            }
+                            onError={(e) =>
+                              (e.currentTarget.style.display = "none")
+                            }
+                            alt="assignee"
+                            className="avatar avatar-sm"
+                            style={{ objectFit: "cover" }}
+                          />
+                        ) : (
+                          <span className="avatar avatar-sm avatar-fallback">
+                            {(selectedTask.assignedToName || "U")
+                              .split(" ")
+                              .map((s) => s[0])
+                              .join("")
+                              .slice(0, 2)
+                              .toUpperCase()}
+                          </span>
+                        )}
                         <div>
                           <div className="text-white-90">
                             {selectedTask.assignedToName ||
@@ -1424,7 +1725,13 @@ export default function ToDo() {
                       <select
                         className="form-select form-select-sm dark-input mt-2"
                         value={selectedTask.assignedTo}
-                        onChange={(e) => updateTaskField(selectedTask.id, "assignedTo", e.target.value)}
+                        onChange={(e) =>
+                          updateTaskField(
+                            selectedTask.id,
+                            "assignedTo",
+                            e.target.value
+                          )
+                        }
                       >
                         {Object.entries(users).map(([k, u]) => (
                           <option key={k} value={k}>
@@ -1440,7 +1747,9 @@ export default function ToDo() {
                       <select
                         className="form-select form-select-sm dark-input"
                         value={selectedTask.status}
-                        onChange={(e) => updateTaskStatus(selectedTask.id, e.target.value)}
+                        onChange={(e) =>
+                          updateTaskStatus(selectedTask.id, e.target.value)
+                        }
                       >
                         {Object.keys(STATUS).map((s) => (
                           <option key={s} value={s}>
@@ -1459,7 +1768,13 @@ export default function ToDo() {
                           <select
                             className="form-select form-select-sm dark-input"
                             value={selectedTask.priority}
-                            onChange={(e) => updateTaskField(selectedTask.id, "priority", e.target.value)}
+                            onChange={(e) =>
+                              updateTaskField(
+                                selectedTask.id,
+                                "priority",
+                                e.target.value
+                              )
+                            }
                           >
                             {Object.keys(PRIORITIES).map((p) => (
                               <option key={p} value={p}>
@@ -1490,11 +1805,21 @@ export default function ToDo() {
                             className="form-control form-control-sm dark-input"
                             value={selectedTask.dueDate || ""}
                             onChange={(e) =>
-                              updateTaskField(selectedTask.id, "dueDate", e.target.value)
+                              updateTaskField(
+                                selectedTask.id,
+                                "dueDate",
+                                e.target.value
+                              )
                             }
                           />
                           {selectedTask.dueDate && (
-                            <div className={isOverdue(selectedTask) ? "text-danger tiny mt-1" : "text-success tiny mt-1"}>
+                            <div
+                              className={
+                                isOverdue(selectedTask)
+                                  ? "text-danger tiny mt-1"
+                                  : "text-success tiny mt-1"
+                              }
+                            >
                               {isOverdue(selectedTask) ? "Overdue" : "On time"}
                             </div>
                           )}
@@ -1505,7 +1830,11 @@ export default function ToDo() {
                             className="form-select form-select-sm dark-input"
                             value={selectedTask.category}
                             onChange={(e) =>
-                              updateTaskField(selectedTask.id, "category", e.target.value)
+                              updateTaskField(
+                                selectedTask.id,
+                                "category",
+                                e.target.value
+                              )
                             }
                           >
                             {Object.keys(CATEGORIES).map((c) => (
@@ -1515,6 +1844,15 @@ export default function ToDo() {
                             ))}
                           </select>
                         </div>
+                        {selectedTask.issueType === "SubTask" &&
+                          selectedTask.parentTicket && (
+                            <div className="detail-item">
+                              <span className="text-muted-300">Parent:</span>
+                              <div className=" text-warning">
+                                {selectedTask.parentTicket}
+                              </div>
+                            </div>
+                          )}
                         <div className="detail-item">
                           <span className="text-muted-300">Ticket:</span>
                           <div className="text-white-90">
@@ -1527,12 +1865,18 @@ export default function ToDo() {
                     {/* Created/Updated */}
                     <div className="panel-soft">
                       <div className="small text-muted-300">Created</div>
-                      <div className="text-white-90 small">
+                      <div className="text-white-90 small-text">
                         {fmtDT(selectedTask.createdAt)} by{" "}
-                        {selectedTask.createdBy || users[selectedTask.createdById]?.name || "—"}
+                        {selectedTask.createdBy ||
+                          users[selectedTask.createdById]?.name ||
+                          "—"}
                       </div>
-                      <div className="small text-muted-300 mt-1">Last Updated</div>
-                      <div className="text-white-90 small">{fmtDT(selectedTask.updatedAt)}</div>
+                      <div className="small text-muted-300 mt-1">
+                        Last Updated
+                      </div>
+                      <div className="text-white-90 small-text">
+                        {fmtDT(selectedTask.updatedAt)}
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -1541,6 +1885,114 @@ export default function ToDo() {
           </div>
         </div>
       )}
+
+      {/* Discard Changes Modal */}
+      {showDiscard && (
+        <div className="modal-overlay" onClick={() => setShowDiscard(false)}>
+          <div
+            className="modal-modern"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div
+              className="modal-header"
+              style={{
+                background: "linear-gradient(90deg,#ef4444,#f97316)",
+                color: "#fff",
+              }}
+            >
+              <h6 className="mb-0">Discard changes?</h6>
+              <button
+                className="btn btn-sm btn-light"
+                onClick={() => setShowDiscard(false)}
+              >
+                Close
+              </button>
+            </div>
+            <div className="modal-body p-3" style={{ background: "#0f172a" }}>
+              <div className="text-white-80">
+                You have unsaved changes. Are you sure you want to discard
+                them?
+              </div>
+              <div className="d-flex justify-content-end gap-2 mt-3">
+                <button
+                  className="btn btn-light"
+                  onClick={() => setShowDiscard(false)}
+                >
+                  Keep Editing
+                </button>
+                <button
+                  className="btn btn-danger"
+                  onClick={() => {
+                    setShowDiscard(false);
+                    setShowAdd(false);
+                    setDirty(false);
+                  }}
+                >
+                  Discard
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showDelete && deleteTarget && (
+        <div className="modal-overlay" onClick={() => setShowDelete(false)}>
+          <div className="modal-modern" style={{ maxWidth: "700px" }} onClick={(e) => e.stopPropagation()}>
+            <div
+              className="modal-header"
+              style={{ background: "linear-gradient(90deg,#ef4444,#b91c1c)", color: "#fff" }}
+            >
+              <h6 className="mb-0 text-truncate">
+                Delete “{deleteTarget.title}”?
+              </h6>
+              <button className="btn btn-sm btn-light" onClick={() => setShowDelete(false)}>
+                Close
+              </button>
+            </div>
+            <div className="modal-body p-3" style={{ background: "#0f172a" }}>
+              <div className="text-white-80">
+                This action cannot be undone. The task and its comments/subtasks will be removed.
+              </div>
+              <div className="d-flex justify-content-end gap-2 mt-3">
+                <button className="btn btn-light" onClick={() => setShowDelete(false)}>
+                  Cancel
+                </button>
+                <button
+                  className="btn btn-danger"
+                  onClick={async () => {
+                    try {
+                      if (showDetail && selectedTask?.id === deleteTarget.id) {
+                        setShowDetail(false);
+                      }
+                      await deleteTask(deleteTarget.id);
+                      notify("Task deleted");
+                    } catch (e) {
+                      notify("Failed to delete", "error");
+                    } finally {
+                      setShowDelete(false);
+                      setDeleteTarget(null);
+                    }
+                  }}
+                >
+                  Delete
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* toasts */}
+      <div className="toast-wrap">
+        {toasts.map((t) => (
+          <div key={t.id} className={`toast-item ${t.variant}`}>
+            {t.text}
+          </div>
+        ))}
+      </div>
     </div>
   );
+
+  // no-op to satisfy earlier reference; hoisted function declaration
+  function theUsersFix() { }
 }

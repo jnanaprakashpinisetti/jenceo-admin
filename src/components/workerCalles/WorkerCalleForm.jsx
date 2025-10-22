@@ -196,8 +196,7 @@ export default function WorkerCallForm({ isOpen, onClose }) {
     }
   };
 
-  const nextStep = async () => {
-    if (!validateStep()) return;
+  const dupiliCateNo = async () => {
     if (step === 1) {
       const dup = await checkDuplicateMobile(formData.mobileNo);
       if (dup) {
@@ -207,8 +206,16 @@ export default function WorkerCallForm({ isOpen, onClose }) {
         return;
       }
     }
+
+  }
+  const nextStep = async () => {
+    if (!validateStep()) return;
+    dupiliCateNo()
+
     setStep((s) => s + 1);
   };
+
+
   const prevStep = () => setStep((s) => s - 1);
 
   const resetForm = () => {
@@ -355,9 +362,8 @@ export default function WorkerCallForm({ isOpen, onClose }) {
                           type="text"
                           name="callId"
                           value={formData.callId}
-                          className={`form-control ${
-                            errors.callId ? "is-invalid" : ""
-                          }`}
+                          className={`form-control ${errors.callId ? "is-invalid" : ""
+                            }`}
                           disabled
                           readOnly
                           style={{ backgroundColor: "transparent" }}
@@ -378,9 +384,8 @@ export default function WorkerCallForm({ isOpen, onClose }) {
                           value={formData.callDate}
                           onChange={handleChange}
                           onBlur={handleBlur}
-                          className={`form-control ${
-                            errors.callDate ? "is-invalid" : ""
-                          }`}
+                          className={`form-control ${errors.callDate ? "is-invalid" : ""
+                            }`}
                           max={getToday()}
                           disabled
                         />
@@ -402,10 +407,9 @@ export default function WorkerCallForm({ isOpen, onClose }) {
                           name="mobileNo"
                           value={formData.mobileNo}
                           onChange={handleChange}
-                          onBlur={handleBlur}
-                          className={`form-control ${
-                            errors.mobileNo ? "is-invalid" : ""
-                          }`}
+                          onBlur={dupiliCateNo}
+                          className={`form-control ${errors.mobileNo ? "is-invalid" : ""
+                            }`}
                           maxLength={10}
                           autoFocus
                         />
@@ -425,9 +429,8 @@ export default function WorkerCallForm({ isOpen, onClose }) {
                           value={formData.name}
                           onChange={handleChange}
                           onBlur={handleBlur}
-                          className={`form-control ${
-                            errors.name ? "is-invalid" : ""
-                          }`}
+                          className={`form-control ${errors.name ? "is-invalid" : ""
+                            }`}
                         />
                         {errors.name && (
                           <div className="invalid-feedback">{errors.name}</div>
@@ -447,9 +450,8 @@ export default function WorkerCallForm({ isOpen, onClose }) {
                           value={formData.location}
                           onChange={handleChange}
                           onBlur={handleBlur}
-                          className={`form-control ${
-                            errors.location ? "is-invalid" : ""
-                          }`}
+                          className={`form-control ${errors.location ? "is-invalid" : ""
+                            }`}
                         />
                         {errors.location && (
                           <div className="invalid-feedback">
@@ -466,9 +468,8 @@ export default function WorkerCallForm({ isOpen, onClose }) {
                           value={formData.source}
                           onChange={handleChange}
                           onBlur={handleBlur}
-                          className={`form-select ${
-                            errors.source ? "is-invalid" : ""
-                          }`}
+                          className={`form-select ${errors.source ? "is-invalid" : ""
+                            }`}
                         >
                           <option value="">Select</option>
                           {[
@@ -509,9 +510,8 @@ export default function WorkerCallForm({ isOpen, onClose }) {
                           value={formData.gender}
                           onChange={handleChange}
                           onBlur={handleBlur}
-                          className={`form-select ${
-                            errors.gender ? "is-invalid" : ""
-                          }`}
+                          className={`form-select ${errors.gender ? "is-invalid" : ""
+                            }`}
                         >
                           <option value="">Select</option>
                           <option value="Male">Male</option>
@@ -552,9 +552,8 @@ export default function WorkerCallForm({ isOpen, onClose }) {
                           value={formData.age}
                           onChange={handleChange}
                           onBlur={handleBlur}
-                          className={`form-control ${
-                            errors.age ? "is-invalid" : ""
-                          }`}
+                          className={`form-control ${errors.age ? "is-invalid" : ""
+                            }`}
                         />
                         {errors.age && (
                           <div className="invalid-feedback">{errors.age}</div>
@@ -599,9 +598,8 @@ export default function WorkerCallForm({ isOpen, onClose }) {
                             value={formData.years}
                             onChange={handleChange}
                             onBlur={handleBlur}
-                            className={`form-control ${
-                              errors.years ? "is-invalid" : ""
-                            }`}
+                            className={`form-control ${errors.years ? "is-invalid" : ""
+                              }`}
                           />
                           {errors.years && (
                             <div className="invalid-feedback">
@@ -616,9 +614,8 @@ export default function WorkerCallForm({ isOpen, onClose }) {
                             value={formData.skills}
                             onChange={handleChange}
                             onBlur={handleBlur}
-                            className={`form-select ${
-                              errors.skills ? "is-invalid" : ""
-                            }`}
+                            className={`form-select ${errors.skills ? "is-invalid" : ""
+                              }`}
                           >
                             <option value="">-- Select Skill --</option>
                             {[
@@ -695,11 +692,10 @@ export default function WorkerCallForm({ isOpen, onClose }) {
                                 <button
                                   type="button"
                                   key={skill}
-                                  className={`btn btn-sm ${
-                                    active
-                                      ? "btn-warning"
-                                      : "btn-outline-warning"
-                                  } rounded-pill skill-pill`}
+                                  className={`btn btn-sm ${active
+                                    ? "btn-warning"
+                                    : "btn-outline-warning"
+                                    } rounded-pill skill-pill`}
                                   onClick={() =>
                                     toggleArrayField("homeCareSkills", skill)
                                   }
@@ -739,11 +735,10 @@ export default function WorkerCallForm({ isOpen, onClose }) {
                                   <button
                                     type="button"
                                     key={skill}
-                                    className={`btn btn-sm ${
-                                      active
-                                        ? "btn-primary"
-                                        : "btn-outline-primary"
-                                    } rounded-pill skill-pill`}
+                                    className={`btn btn-sm ${active
+                                      ? "btn-primary"
+                                      : "btn-outline-primary"
+                                      } rounded-pill skill-pill`}
                                     onClick={() =>
                                       toggleArrayField("otherSkills", skill)
                                     }
@@ -777,11 +772,10 @@ export default function WorkerCallForm({ isOpen, onClose }) {
                                   <button
                                     type="button"
                                     key={skill}
-                                    className={`btn btn-sm ${
-                                      active
-                                        ? "btn-success"
-                                        : "btn-outline-success"
-                                    } rounded-pill skill-pill`}
+                                    className={`btn btn-sm ${active
+                                      ? "btn-success"
+                                      : "btn-outline-success"
+                                      } rounded-pill skill-pill`}
                                     onClick={() =>
                                       toggleArrayField("otherSkills", skill)
                                     }
@@ -813,11 +807,10 @@ export default function WorkerCallForm({ isOpen, onClose }) {
                                   <button
                                     type="button"
                                     key={skill}
-                                    className={`btn btn-sm ${
-                                      active
-                                        ? "btn-warning text-dark"
-                                        : "btn-outline-warning"
-                                    } rounded-pill skill-pill`}
+                                    className={`btn btn-sm ${active
+                                      ? "btn-warning text-dark"
+                                      : "btn-outline-warning"
+                                      } rounded-pill skill-pill`}
                                     onClick={() =>
                                       toggleArrayField("otherSkills", skill)
                                     }
@@ -848,11 +841,10 @@ export default function WorkerCallForm({ isOpen, onClose }) {
                                   <button
                                     type="button"
                                     key={skill}
-                                    className={`btn btn-sm ${
-                                      active
-                                        ? "btn-danger"
-                                        : "btn-outline-danger"
-                                    } rounded-pill skill-pill`}
+                                    className={`btn btn-sm ${active
+                                      ? "btn-danger"
+                                      : "btn-outline-danger"
+                                      } rounded-pill skill-pill`}
                                     onClick={() =>
                                       toggleArrayField("otherSkills", skill)
                                     }
@@ -887,11 +879,10 @@ export default function WorkerCallForm({ isOpen, onClose }) {
                                   <button
                                     type="button"
                                     key={skill}
-                                    className={`btn btn-sm ${
-                                      active
-                                        ? "btn-info text-dark"
-                                        : "btn-outline-info"
-                                    } rounded-pill skill-pill`}
+                                    className={`btn btn-sm ${active
+                                      ? "btn-info text-dark"
+                                      : "btn-outline-info"
+                                      } rounded-pill skill-pill`}
                                     onClick={() =>
                                       toggleArrayField("otherSkills", skill)
                                     }
@@ -928,11 +919,10 @@ export default function WorkerCallForm({ isOpen, onClose }) {
                                   <button
                                     type="button"
                                     key={skill}
-                                    className={`btn btn-sm ${
-                                      active
-                                        ? "btn-secondary"
-                                        : "btn-outline-secondary"
-                                    } rounded-pill skill-pill`}
+                                    className={`btn btn-sm ${active
+                                      ? "btn-secondary"
+                                      : "btn-outline-secondary"
+                                      } rounded-pill skill-pill`}
                                     onClick={() =>
                                       toggleArrayField("otherSkills", skill)
                                     }
@@ -965,11 +955,10 @@ export default function WorkerCallForm({ isOpen, onClose }) {
                                   <button
                                     type="button"
                                     key={skill}
-                                    className={`btn btn-sm ${
-                                      active
-                                        ? "btn-danger"
-                                        : "btn-outline-danger"
-                                    } rounded-pill skill-pill`}
+                                    className={`btn btn-sm ${active
+                                      ? "btn-danger"
+                                      : "btn-outline-danger"
+                                      } rounded-pill skill-pill`}
                                     onClick={() =>
                                       toggleArrayField("otherSkills", skill)
                                     }
@@ -1002,11 +991,10 @@ export default function WorkerCallForm({ isOpen, onClose }) {
                                   <button
                                     type="button"
                                     key={skill}
-                                    className={`btn btn-sm ${
-                                      active
-                                        ? "btn-primary"
-                                        : "btn-outline-primary"
-                                    } rounded-pill skill-pill`}
+                                    className={`btn btn-sm ${active
+                                      ? "btn-primary"
+                                      : "btn-outline-primary"
+                                      } rounded-pill skill-pill`}
                                     onClick={() =>
                                       toggleArrayField("otherSkills", skill)
                                     }
@@ -1034,9 +1022,8 @@ export default function WorkerCallForm({ isOpen, onClose }) {
                           value={formData.education}
                           onChange={handleChange}
                           onBlur={handleBlur}
-                          className={`form-control ${
-                            errors.education ? "is-invalid" : ""
-                          }`}
+                          className={`form-control ${errors.education ? "is-invalid" : ""
+                            }`}
                         />
                         {errors.education && (
                           <div className="invalid-feedback">
@@ -1152,9 +1139,8 @@ export default function WorkerCallForm({ isOpen, onClose }) {
                           value={formData.conversationLevel}
                           onChange={handleChange}
                           onBlur={handleBlur}
-                          className={`form-select ${
-                            errors.conversationLevel ? "is-invalid" : ""
-                          }`}
+                          className={`form-select ${errors.conversationLevel ? "is-invalid" : ""
+                            }`}
                         >
                           <option value="">Select</option>
                           <option value="Very Good">Very Good</option>
@@ -1178,9 +1164,8 @@ export default function WorkerCallForm({ isOpen, onClose }) {
                             name="callReminderDate"
                             value={formData.callReminderDate}
                             onChange={handleChange}
-                            className={`form-control ${
-                              errors.callReminderDate ? "is-invalid" : ""
-                            }`}
+                            className={`form-control ${errors.callReminderDate ? "is-invalid" : ""
+                              }`}
                             min={getToday()}
                           />
                           {formData.callReminderDate && (
@@ -1309,6 +1294,9 @@ export default function WorkerCallForm({ isOpen, onClose }) {
               </div>
               <div className="modal-body">
                 <p>This mobile number already exists in our system:</p>
+                <p className="text-danger">
+                  <strong>ID:</strong> {existingWorker.callId}
+                </p>
                 <p>
                   <strong>Name:</strong> {existingWorker.name}
                 </p>

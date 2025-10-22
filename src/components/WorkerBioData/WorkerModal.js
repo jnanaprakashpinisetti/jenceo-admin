@@ -1035,17 +1035,23 @@ const WorkerModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode }
             }
 
             // Upload ID proof if exists
-            let idProofUrl = formData.idProofUrl;
+            let idProofUrl = formData.idProofUrl; // Keep existing URL if no new file
             if (formData.idProofFile) {
-                const uploadResult = await uploadToStorage(formData.idProofFile, 'id-proofs');
-                idProofUrl = uploadResult.url;
+                try {
+                    const uploadResult = await uploadToStorage(formData.idProofFile, 'id-proofs');
+                    idProofUrl = uploadResult.url;
+                } catch (error) {
+                    console.error('Error uploading ID proof:', error);
+                    // Don't throw error, just keep existing URL or null
+                    idProofUrl = formData.idProofUrl || null;
+                }
             }
 
             // Prepare the complete payload
             const payload = {
                 ...formData,
                 employeePhoto: photoURL,
-                idProofUrl: idProofUrl,
+                idProofUrl: idProofUrl || null, // Ensure it's never undefined
                 status,
                 // Process payments and work details
                 payments: (formData.payments || []).map((r) => {

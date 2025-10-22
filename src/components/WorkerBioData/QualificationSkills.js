@@ -1,21 +1,25 @@
-import React from 'react';
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import LanguagesDropdown from "../common/LangaugesDropdown";
+
 
 // Dropdown options
 const PRIMARY_SKILL_OPTIONS = [
-   "Nursing",
-    "Diaper",
-    "Patent Care",
-    "Baby Care",
-    "Cook",
-    "Supporting",
-    "Old Age Care",
-    "Any Duty",
-    "Others",
+  "Nursing",
+  "Patent Care",
+  "Care Taker",
+  "Baby Care",
+  "Supporting",
+  "Diaper",
+  "Cook",
+  "Housekeeping",
+  "Old Age Care",
+  "Any Duty",
+  "Others",
 ];
 
 const MOTHER_TONGUE_OPTIONS = [
-  'Telugu','English','Hindi','Urdu','Tamil','Kannada','Malayalam','Marathi','Gujarati','Bengali',
-  'Punjabi','Odia','Assamese'
+  'Telugu', 'English', 'Hindi', 'Urdu', 'Tamil', 'Kannada', 'Malayalam', 'Marathi', 'Gujarati', 'Bengali',
+  'Punjabi', 'Odia', 'Assamese'
 ];
 
 const QualificationSkills = ({ formData, errors, handleChange, handleBlur, nextStep, prevStep }) => {
@@ -30,6 +34,158 @@ const QualificationSkills = ({ formData, errors, handleChange, handleBlur, nextS
     "Any Duty",
     "Others",
   ];
+
+  // ---------------- Nursing & Patient Care (Accordion Data) ----------------
+  const NURSING_SECTIONS = [
+    {
+      title: "Basic Patient Care",
+      color: "success",
+      skills: [
+        "Bed Making",
+        "Linen Change",
+        "Bed Bath / Sponge Bath",
+        "Oral Hygiene / Mouth Care",
+        "Feeding Assistance",
+        "Changing Diapers / Pads",
+        "Elimination Assistance (Bedpan/Urinal)",
+        "Perineal Care",
+        "Comfort Positioning",
+        "Patient Positioning / Turning",
+        "Mobility Support (Wheelchair/Walker)",
+        "Dressing Assistance",
+      ],
+    },
+    {
+      title: "Monitoring & Observation",
+      color: "primary",
+      skills: [
+        "Vital Signs Monitoring",
+        "Blood Pressure Check",
+        "Temperature Monitoring",
+        "Pulse and Respiration Check",
+        "Blood Sugar Monitoring",
+        "Intake/Output Charting",
+        "Patient Observation & Reporting",
+      ],
+    },
+    {
+      title: "Feeding & Tubes",
+      color: "info",
+      skills: [
+        "Ryle’s Tube Feeding (Nose Feeding)",
+        "PEG Tube Feeding",
+        "Oxygen Administration",
+        "Nebulization",
+        "Suctioning (Oral/Nasal)",
+      ],
+    },
+    {
+      title: "Wounds & Skin",
+      color: "warning",
+      skills: [
+        "Wound Dressing",
+        "Pressure Sore Care & Prevention",
+        "Skin Inspection & Hygiene",
+      ],
+    },
+    {
+      title: "Catheters & Special Care",
+      color: "danger",
+      skills: [
+        "Catheterization (Male/Female)",
+        "Catheter Care & Cleaning",
+        "Colostomy Care",
+        "Tracheostomy Care",
+        "IV Line Observation",
+        "Drip Monitoring",
+        "Injection Assistance",
+      ],
+    },
+    {
+      title: "Documentation & Coordination",
+      color: "secondary",
+      skills: [
+        "Medication Assistance (as per schedule)",
+        "Daily Nursing Notes",
+        "Family Coordination / Updates",
+        "Emergency Response Assistance",
+        "Hygiene & Sanitization (Handwash/PPE)",
+      ],
+    },
+  ];
+
+  const isNursing = String(formData.primarySkill || "").toLowerCase() === "nursing";
+  const selected = Array.isArray(formData.nursingSkills) ? formData.nursingSkills : [];
+
+  // Are we in "Others" mode?
+  const isOthers = String(formData.primarySkill || "").toLowerCase() === "others";
+  const otherSelected = Array.isArray(formData.otherSkills) ? formData.otherSkills : [];
+
+  // Other Skills – grouped sections
+  const OTHER_SECTIONS = [
+    {
+      title: "Office & Administrative",
+      color: "primary",
+      skills: [
+        "Computer Operating", "Data Entry", "Office Assistant", "Receptionist",
+        "Front Desk Executive", "Admin Assistant", "Office Boy", "Peon", "Office Attendant",
+      ],
+    },
+    {
+      title: "Customer Service & Telecommunication",
+      color: "success",
+      skills: [
+        "Tele Calling", "Customer Support", "Telemarketing", "BPO Executive",
+        "Call Center Agent", "Customer Care Executive",
+      ],
+    },
+    {
+      title: "Management & Supervision",
+      color: "warning",
+      skills: [
+        "Supervisor", "Manager", "Team Leader", "Site Supervisor", "Project Coordinator",
+      ],
+    },
+    {
+      title: "Security",
+      color: "danger",
+      skills: ["Security Guard", "Security Supervisor", "Gatekeeper", "Watchman"],
+    },
+    {
+      title: "Driving & Logistics",
+      color: "info",
+      skills: [
+        "Driving", "Delivery Boy", "Delivery Executive", "Rider", "Driver",
+        "Car Driver", "Bike Rider", "Logistics Helper",
+      ],
+    },
+    {
+      title: "Technical & Maintenance",
+      color: "secondary",
+      skills: [
+        "Electrician", "Plumber", "Carpenter", "Painter", "Mason", "AC Technician",
+        "Mechanic", "Maintenance Staff", "House Keeping", "Housekeeping Supervisor",
+      ],
+    },
+    {
+      title: "Industrial & Labor",
+      color: "danger",
+      skills: [
+        "Labour", "Helper", "Loading Unloading", "Warehouse Helper",
+        "Factory Worker", "Production Helper", "Packaging Staff",
+      ],
+    },
+    {
+      title: "Retail & Sales",
+      color: "primary",
+      skills: [
+        "Sales Boy", "Sales Girl", "Store Helper", "Retail Assistant", "Shop Attendant",
+      ],
+    },
+  ];
+
+
+
 
   return (
     <div>
@@ -69,7 +225,7 @@ const QualificationSkills = ({ formData, errors, handleChange, handleBlur, nextS
           />
         </div>
 
-        {/* Primary Skill (dropdown) */}
+        {/* Primary Skill */}
         <div className="col-md-6">
           <label htmlFor="primarySkill" className="form-label">
             Primary Skill<span className="star">*</span>
@@ -104,6 +260,156 @@ const QualificationSkills = ({ formData, errors, handleChange, handleBlur, nextS
           />
         </div>
 
+        {/* -------------- NEW: Nursing & Patient Care Accordion (when Nursing chosen) -------------- */}
+        {isNursing && (
+          <div className="col-12">
+            <label className="form-label d-flex align-items-center justify-content-between">
+              <span className='text-warning'>NURSING SKILLS<span className="star">*</span></span>
+              {errors.nursingSkills && <span className="text-danger small">{errors.nursingSkills}</span>}
+            </label>
+
+            <div className="accordion" id="nursingSkillsAccordion">
+              {NURSING_SECTIONS.map((sec, i) => {
+                const collapseId = `nursingSec${i}`;
+                const headingId = `nursingHead${i}`;
+                const needsDark = false; // headings remain readable
+
+                return (
+                  <div className="accordion-item bg-dark text-white border-0 mb-2 rounded-3" key={sec.title}>
+                    <h2 className="accordion-header" id={headingId}>
+                      <button
+                        className="accordion-button collapsed bg-acc text-white"
+                        type="button"
+                        data-bs-toggle="collapse"
+                        data-bs-target={`#${collapseId}`}
+                        aria-expanded="false"
+                        aria-controls={collapseId}
+                        style={{ borderRadius: "0.5rem" }}
+                      >
+                        {sec.title}
+                      </button>
+                    </h2>
+                    <div
+                      id={collapseId}
+                      className="accordion-collapse collapse"
+                      aria-labelledby={headingId}
+                      data-bs-parent="#nursingSkillsAccordion"
+                    >
+                      <div className="accordion-body">
+                        <div className="d-flex flex-wrap gap-2">
+                          {sec.skills.map((skill) => {
+                            const isChecked = selected.includes(skill);
+                            // Use Bootstrap btn-check + label pills so it’s a real checkbox for your handleChange
+                            const inputId = `nursing-${i}-${skill.replace(/\W+/g, "_")}`;
+                            // for warning/info active states, ensure readable text
+                            const pillNeedsDark = (sec.color === "warning" || sec.color === "info") && isChecked;
+                            return (
+                              <div key={skill} className="d-inline-block">
+                                <input
+                                  className="btn-check"
+                                  type="checkbox"
+                                  id={inputId}
+                                  name="nursingSkills"
+                                  value={skill}
+                                  checked={isChecked}
+                                  onChange={handleChange}
+                                />
+                                <label
+                                  className={`btn btn-sm rounded-pill ${isChecked
+                                    ? `btn-${sec.color}${pillNeedsDark ? " text-dark" : ""}`
+                                    : `btn-outline-${sec.color}`
+                                    }`}
+                                  htmlFor={inputId}
+                                >
+                                  {skill}
+                                </label>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* -------------- NEW: Others Skills Accordion (when Primary Skill = Others) -------------- */}
+        {isOthers && (
+          <div className="col-12">
+            <label className="form-label d-flex align-items-center justify-content-between">
+              <span className='text-warning'>OTHER SKILLS <span className="star">*</span></span>
+              {errors.otherSkills && <span className="text-danger small">{errors.otherSkills}</span>}
+            </label>
+
+            <div className="accordion" id="otherSkillsAccordion">
+              {OTHER_SECTIONS.map((sec, i) => {
+                const collapseId = `otherSec${i}`;
+                const headingId = `otherHead${i}`;
+                return (
+                  <div className="accordion-item bg-dark text-white border-0 mb-2 rounded-3" key={sec.title}>
+                    <h2 className="accordion-header" id={headingId}>
+                      <button
+                        className="accordion-button collapsed bg-acc text-white"
+                        type="button"
+                        data-bs-toggle="collapse"
+                        data-bs-target={`#${collapseId}`}
+                        aria-expanded="false"
+                        aria-controls={collapseId}
+                        style={{ borderRadius: "0.5rem" }}
+                      >
+                        {sec.title}
+                      </button>
+                    </h2>
+                    <div
+                      id={collapseId}
+                      className="accordion-collapse collapse"
+                      aria-labelledby={headingId}
+                      data-bs-parent="#otherSkillsAccordion"
+                    >
+                      <div className="accordion-body">
+                        <div className="d-flex flex-wrap gap-2">
+                          {sec.skills.map((skill) => {
+                            const checked = otherSelected.includes(skill);
+                            const inputId = `other-${i}-${skill.replace(/\W+/g, "_")}`;
+                            const pillNeedsDark = (sec.color === "warning" || sec.color === "info") && checked;
+                            return (
+                              <div key={skill} className="d-inline-block">
+                                <input
+                                  className="btn-check"
+                                  type="checkbox"
+                                  id={inputId}
+                                  name="otherSkills"
+                                  value={skill}
+                                  checked={checked}
+                                  onChange={handleChange}
+                                />
+                                <label
+                                  className={`btn btn-sm rounded-pill ${checked
+                                    ? `btn-${sec.color}${pillNeedsDark ? " text-dark" : ""}`
+                                    : `btn-outline-${sec.color}`
+                                    }`}
+                                  htmlFor={inputId}
+                                >
+                                  {skill}
+                                </label>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* -------------- /NEW -------------- */}
+
         {/* Working Skills (checkbox list) */}
         <div className="col-12">
           <label className="form-label">
@@ -131,7 +437,7 @@ const QualificationSkills = ({ formData, errors, handleChange, handleBlur, nextS
           {errors.workingSkills && <div className="invalid-feedback d-block">{errors.workingSkills}</div>}
         </div>
 
-        {/* Mother Tongue (dropdown) */}
+        {/* Mother Tongue */}
         <div className="col-md-6">
           <label htmlFor="motherTongue" className="form-label">
             Mother Tongue<span className="star">*</span>
@@ -152,34 +458,29 @@ const QualificationSkills = ({ formData, errors, handleChange, handleBlur, nextS
           {errors.motherTongue && <div className="invalid-feedback">{errors.motherTongue}</div>}
         </div>
 
-        {/* Languages (free text) */}
+        {/* Languages */}
+        {/* Languages */}
         <div className="col-md-6">
           <label htmlFor="languages" className="form-label">
-            Languages<span className="star">*</span>
+            Languages <span className="star">*</span>
           </label>
-          <input
-            type="text"
-            className={`form-control ${errors.languages ? 'is-invalid' : ''}`}
-            id="languages"
-            name="languages"
+
+          <LanguagesDropdown
             value={formData.languages}
-            onChange={handleChange}
-            onBlur={handleBlur}
+            onChange={(selectedLanguages) => {
+              // Convert to synthetic event for your handleChange
+              handleChange({
+                target: {
+                  name: "languages",
+                  value: selectedLanguages
+                }
+              });
+            }}
+            error={errors.languages}
           />
-          {errors.languages && <div className="invalid-feedback">{errors.languages}</div>}
         </div>
 
-        {/* Nav buttons (kept commented as in your file) */}
-        {/*
-        <div className="col-12 mt-4">
-          <button type="button" className="btn btn-primary float-end" onClick={nextStep}>
-            Next <i className="bi bi-arrow-right"></i>
-          </button>
-          <button type="button" className="btn btn-secondary me-2" onClick={prevStep}>
-            <i className="bi bi-arrow-left"></i> Previous
-          </button>
-        </div>
-        */}
+
       </div>
     </div>
   );

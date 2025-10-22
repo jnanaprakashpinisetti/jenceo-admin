@@ -191,6 +191,78 @@ const WorkerModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode }
         };
     };
 
+    // state for ID preview modal
+    const [idModalOpen, setIdModalOpen] = useState(false);
+    const [idModalSrc, setIdModalSrc] = useState(null);
+    const [idModalType, setIdModalType] = useState("image"); // "image" | "pdf"
+
+    // Detect MIME/type from URL or File
+    const detectIdType = (urlOrFile, fallback = "image") => {
+        try {
+            if (urlOrFile?.type) {
+                if (urlOrFile.type === "application/pdf") return "pdf";
+                if (urlOrFile.type.startsWith("image/")) return "image";
+            }
+            const s = String(urlOrFile || "").toLowerCase();
+            if (s.endsWith(".pdf")) return "pdf";
+            if (s.endsWith(".jpg") || s.endsWith(".jpeg") || s.endsWith(".png")) return "image";
+            return fallback;
+        } catch {
+            return fallback;
+        }
+    };
+
+    // Open modal
+    const handleViewId = () => {
+        const src = formData.idProofUrl || formData.idProofPreview || null;
+        if (!src) return;
+        const t = detectIdType(formData.idProofFile || formData.idProofUrl, "image");
+        setIdModalSrc(src);
+        setIdModalType(t);
+        setIdModalOpen(true);
+    };
+
+    // Download (works for URL or preview/base64)
+    const handleDownloadId = async () => {
+        try {
+            // Prefer the original file if user just uploaded (better filename/MIME)
+            if (formData.idProofFile instanceof File) {
+                const file = formData.idProofFile;
+                const a = document.createElement("a");
+                a.href = URL.createObjectURL(file);
+                a.download = file.name || "id-proof";
+                document.body.appendChild(a);
+                a.click();
+                a.remove();
+                URL.revokeObjectURL(a.href);
+                return;
+            }
+
+            const src = formData.idProofUrl || formData.idProofPreview;
+            if (!src) return;
+
+            // If same-origin or CORS allowed, fetch blob and force download
+            const res = await fetch(src, { mode: "cors" });
+            const blob = await res.blob();
+            const a = document.createElement("a");
+            const url = URL.createObjectURL(blob);
+            const guessedName =
+                (formData.idProofUrl && formData.idProofUrl.split("/").pop().split("?")[0]) ||
+                (idModalType === "pdf" ? "id-proof.pdf" : "id-proof.jpg");
+            a.href = url;
+            a.download = guessedName || "id-proof";
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            URL.revokeObjectURL(url);
+        } catch (e) {
+            // Last-resort: try a normal navigation download (may open new tab)
+            const src = formData.idProofUrl || formData.idProofPreview;
+            if (src) window.open(src, "_blank", "noopener,noreferrer");
+        }
+    };
+
+
 
     function getEffectiveUserId(u) {
         return u?.dbId || u?.uid || u?.id || u?.key || null;
@@ -207,6 +279,13 @@ const WorkerModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode }
             "System";
         return String(raw).trim().replace(/@.*/, "") || "System";
     }
+
+    useEffect(() => {
+        const onEsc = (e) => e.key === "Escape" && setIdModalOpen(false);
+        if (idModalOpen) document.addEventListener("keydown", onEsc);
+        return () => document.removeEventListener("keydown", onEsc);
+    }, [idModalOpen]);
+
 
 
 
@@ -1734,18 +1813,18 @@ const WorkerModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode }
                                                         <label className="form-label center">
                                                             <strong>ID Proof</strong>
                                                         </label>
+
                                                         <div className="text-center">
                                                             {formData.idProofUrl || formData.idProofPreview ? (
                                                                 <div className="d-flex flex-column align-items-center gap-2">
-                                                                    {/* Show PDF icon for PDF files */}
-                                                                    {(formData.idProofUrl?.toLowerCase().includes('.pdf') ||
-                                                                        formData.idProofFile?.type === 'application/pdf') ? (
+                                                                    {/* Thumbnail / icon */}
+                                                                    {(formData.idProofUrl?.toLowerCase().includes(".pdf") ||
+                                                                        formData.idProofFile?.type === "application/pdf") ? (
                                                                         <div className="border rounded p-4 bg-light">
-                                                                            <i className="bi bi-file-earmark-pdf-fill text-danger" style={{ fontSize: '3rem' }}></i>
+                                                                            <i className="bi bi-file-earmark-pdf-fill text-danger" style={{ fontSize: "3rem" }} />
                                                                             <div className="mt-2">PDF Document</div>
                                                                         </div>
                                                                     ) : (
-                                                                        // Show image for image files
                                                                         <img
                                                                             src={formData.idProofUrl || formData.idProofPreview}
                                                                             alt="ID Proof"
@@ -1754,18 +1833,50 @@ const WorkerModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode }
                                                                         />
                                                                     )}
 
-                                                                    {/* Share Button - Visible in both view and edit modes */}
-                                                                    {formData.idProofUrl && (
+                                                                    {/* Action row: View | Remove | Download */}
+                                                                    <div className="d-flex align-items-center gap-2 mt-2">
+                                                                        {/* View icon */}
                                                                         <button
                                                                             type="button"
-                                                                            className="btn btn-success btn-sm"
-                                                                            onClick={() => shareIdProof(formData.idProofUrl)}
-                                                                            title="Share ID Proof via WhatsApp or social media"
+                                                                            className="btn btn-outline-primary btn-sm d-inline-flex align-items-center"
+                                                                            onClick={handleViewId}
+                                                                            title="View full ID"
                                                                         >
-                                                                            <i className="bi bi-share-fill me-1"></i>
-                                                                            Share ID Proof
+                                                                            <i className="bi bi-eye me-1" /> View
                                                                         </button>
-                                                                    )}
+
+                                                                        {/* Remove */}
+                                                                        {canEdit && (
+                                                                            <button
+                                                                                type="button"
+                                                                                className="btn btn-outline-secondary btn-sm"
+                                                                                onClick={() =>
+                                                                                    setFormData((prev) => ({
+                                                                                        ...prev,
+                                                                                        idProofFile: undefined,
+                                                                                        idProofUrl: null,
+                                                                                        idProofPreview: null,
+                                                                                        idProofError: null,
+                                                                                    }))
+                                                                                }
+                                                                                title="Remove ID Proof"
+                                                                            >
+                                                                                Remove ID Proof
+                                                                            </button>
+                                                                        )}
+
+                                                                        {/* Download icon */}
+                                                                        {(formData.idProofUrl || formData.idProofPreview) && (
+                                                                            <button
+                                                                                type="button"
+                                                                                className="btn btn-outline-success btn-sm d-inline-flex align-items-center"
+                                                                                onClick={handleDownloadId}
+                                                                                title="Download ID Proof"
+                                                                            >
+                                                                                <i className="bi bi-download me-1" /> Download
+                                                                            </button>
+                                                                        )}
+                                                                    </div>
                                                                 </div>
                                                             ) : (
                                                                 <div className="small-text">No ID proof uploaded</div>
@@ -1777,39 +1888,65 @@ const WorkerModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode }
                                                                         type="file"
                                                                         accept=".pdf,.jpg,.jpeg,.png"
                                                                         onChange={handleIdProofChange}
-                                                                        className={`form-control ${formData.idProofError ? 'is-invalid border-danger' : ''}`}
+                                                                        className={`form-control ${formData.idProofError ? "is-invalid border-danger" : ""}`}
                                                                         style={{ maxWidth: 320 }}
                                                                     />
-                                                                    {/* Error message display */}
                                                                     {formData.idProofError && (
-                                                                        <div className="text-danger small mt-1" style={{ fontSize: '0.8rem' }}>
+                                                                        <div className="text-danger small mt-1" style={{ fontSize: "0.8rem" }}>
                                                                             {formData.idProofError}
                                                                         </div>
                                                                     )}
-                                                                    <div className="small-text small">
-                                                                        PDF, JPG, PNG only (max 150KB)
-                                                                    </div>
-                                                                    {(formData.idProofUrl || formData.idProofPreview) && (
-                                                                        <button
-                                                                            type="button"
-                                                                            className="btn btn-outline-secondary btn-sm"
-                                                                            onClick={() =>
-                                                                                setFormData((prev) => ({
-                                                                                    ...prev,
-                                                                                    idProofFile: undefined,
-                                                                                    idProofUrl: null,
-                                                                                    idProofPreview: null,
-                                                                                    idProofError: null
-                                                                                }))
-                                                                            }
-                                                                        >
-                                                                            Remove ID Proof
-                                                                        </button>
-                                                                    )}
+                                                                    <div className="small-text small">PDF, JPG, PNG only (max 150KB)</div>
                                                                 </div>
                                                             )}
                                                         </div>
                                                     </div>
+
+                                                    {/* VIEW MODAL */}
+                                                    {idModalOpen && idModalSrc && (
+                                                        <div
+                                                            className="modal fade show d-block"
+                                                            tabIndex="-1"
+                                                            aria-modal="true"
+                                                            role="dialog"
+                                                            style={{ background: "rgba(0,0,0,0.8)", zIndex: 3001 }}
+                                                            onClick={() => setIdModalOpen(false)} // click outside closes
+                                                        >
+                                                            <div className="modal-dialog modal-xl modal-dialog-centered" onClick={(e) => e.stopPropagation()}>
+                                                                <div className="modal-content" style={{ background: "#0b1220", color: "#e2e8f0" }}>
+                                                                    <div className="modal-header">
+                                                                        <h5 className="modal-title">ID Proof</h5>
+                                                                        <button type="button" className="btn-close btn-close-white" onClick={() => setIdModalOpen(false)} />
+                                                                    </div>
+                                                                    <div className="modal-body" style={{ maxHeight: "80vh", overflow: "auto" }}>
+                                                                        {idModalType === "pdf" ? (
+                                                                            // Prefer <embed>; fallback <iframe> if needed
+                                                                            <embed
+                                                                                src={idModalSrc}
+                                                                                type="application/pdf"
+                                                                                style={{ width: "100%", height: "75vh", borderRadius: 8 }}
+                                                                            />
+                                                                        ) : (
+                                                                            <img
+                                                                                src={idModalSrc}
+                                                                                alt="ID Proof"
+                                                                                style={{ width: "100%", height: "auto", borderRadius: 8, objectFit: "contain" }}
+                                                                            />
+                                                                        )}
+                                                                    </div>
+                                                                    <div className="modal-footer">
+                                                                        <button className="btn btn-outline-secondary" onClick={() => setIdModalOpen(false)}>
+                                                                            Close
+                                                                        </button>
+                                                                        <button className="btn btn-primary" onClick={handleDownloadId}>
+                                                                            <i className="bi bi-download me-1" /> Download
+                                                                        </button>
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    )}
+
                                                 </div>
 
                                                 <div className="col-md-8">

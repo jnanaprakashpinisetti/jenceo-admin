@@ -1765,6 +1765,48 @@ export default function WorkerCalleDisplay({ permissions: permissionsProp }) {
 
   return (
     <div className="workerCalls">
+
+      {/* Tabs */}
+      <div className="tabs-container mb-4">
+        <ul className="nav nav-tabs dark-tabs">
+          <li className="nav-item">
+            <button
+              className={`nav-link ${activeTab === "callData" ? "active" : ""}`}
+              onClick={() => setActiveTab("callData")}
+            >
+              <i className="bi bi-table me-2"></i>
+              Call Data
+            </button>
+          </li>
+          <li className="nav-item">
+            <button
+              className={`nav-link ${activeTab === "callSummary" ? "active" : ""
+                }`}
+              onClick={() => setActiveTab("callSummary")}
+            >
+              <i className="bi bi-bar-chart me-2"></i>
+              Call Summary
+            </button>
+          </li>
+          <li className="nav-item">
+            <button
+              className={`nav-link ${activeTab === "callThrough" ? "active" : ""
+                }`}
+              onClick={() => setActiveTab("callThrough")}
+            >
+              <i className="bi bi-diagram-3 me-2"></i>
+              Call Through
+            </button>
+          </li>
+        </ul>
+      </div>
+
+      {/* Tab Content */}
+      <div className="tab-content">
+        {/* Call Data Tab */}
+        {activeTab === "callData" && (
+          <div className="tab-pane fade show active">
+
       {/* reminder badges as filters */}
       <div className="alert alert-info text-info d-flex justify-content-around flex-wrap reminder-badges mb-4">
         {["overdue", "today", "tomorrow", "upcoming"].map((k) => (
@@ -1868,83 +1910,6 @@ export default function WorkerCalleDisplay({ permissions: permissionsProp }) {
           ))}
         </select>
 
-
-        {/* Users Dropdown - Fixed */}
-        {/* Users Dropdown - Fixed */}
-        {(permissions.canManageUsers || permissions.canExport) && (
-          <div className="dropdown" ref={usersRef}>
-            <button
-              className="btn btn-outline-info dropdown-toggle"
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                setUsersOpen(!usersOpen);
-              }}
-            >
-              Users ({selectedUsers.length})
-            </button>
-            {usersOpen && (
-              <div
-                className="dropdown-menu dropdown-menu-dark p-3 show"
-                style={{ width: '300px', maxHeight: '400px', overflowY: 'auto' }}
-              >
-                <div className="d-flex justify-content-between align-items-center mb-2">
-                  <h6 className="text-warning mb-0">Select Users</h6>
-                  <div>
-                    <button
-                      className="btn btn-sm btn-outline-warning me-1"
-                      onClick={() => setSelectedUsers(Object.keys(usersMap))}
-                    >
-                      All
-                    </button>
-                    <button
-                      className="btn btn-sm btn-outline-secondary"
-                      onClick={() => setSelectedUsers([])}
-                    >
-                      None
-                    </button>
-                  </div>
-                </div>
-                <div className="dropdown-divider"></div>
-                {Object.entries(usersMap).map(([userId, user]) => (
-                  <div key={userId} className="form-check">
-                    <input
-                      className="form-check-input"
-                      type="checkbox"
-                      id={`user-${userId}`}
-                      checked={selectedUsers.includes(userId)}
-                      onChange={(e) => {
-                        if (e.target.checked) {
-                          setSelectedUsers(prev => [...prev, userId]);
-                        } else {
-                          setSelectedUsers(prev => prev.filter(id => id !== userId));
-                        }
-                      }}
-                    />
-                    <label className="form-check-label text-white" htmlFor={`user-${userId}`}>
-                      {user.name || user.displayName || user.email || userId}
-                    </label>
-                  </div>
-                ))}
-                <div className="dropdown-divider mt-2"></div>
-                <div className="d-flex justify-content-between">
-                  <button
-                    className="btn btn-sm btn-outline-warning"
-                    onClick={() => setSelectedUsers([])}
-                  >
-                    Clear
-                  </button>
-                  <button
-                    className="btn btn-sm btn-outline-info"
-                    onClick={() => setUsersOpen(false)}
-                  >
-                    Close
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
-        )}
         <select
           className="form-select  d-filter"
           value={sortBy}
@@ -2001,46 +1966,7 @@ export default function WorkerCalleDisplay({ permissions: permissionsProp }) {
         </button>
       </div>
 
-      {/* Tabs */}
-      <div className="tabs-container mb-4">
-        <ul className="nav nav-tabs dark-tabs">
-          <li className="nav-item">
-            <button
-              className={`nav-link ${activeTab === "callData" ? "active" : ""}`}
-              onClick={() => setActiveTab("callData")}
-            >
-              <i className="bi bi-table me-2"></i>
-              Call Data
-            </button>
-          </li>
-          <li className="nav-item">
-            <button
-              className={`nav-link ${activeTab === "callSummary" ? "active" : ""
-                }`}
-              onClick={() => setActiveTab("callSummary")}
-            >
-              <i className="bi bi-bar-chart me-2"></i>
-              Call Summary
-            </button>
-          </li>
-          <li className="nav-item">
-            <button
-              className={`nav-link ${activeTab === "callThrough" ? "active" : ""
-                }`}
-              onClick={() => setActiveTab("callThrough")}
-            >
-              <i className="bi bi-diagram-3 me-2"></i>
-              Call Through
-            </button>
-          </li>
-        </ul>
-      </div>
 
-      {/* Tab Content */}
-      <div className="tab-content">
-        {/* Call Data Tab */}
-        {activeTab === "callData" && (
-          <div className="tab-pane fade show active">
             {/* Filter row (unchanged markup) */}
             <div className="p-3 mb-3 bg-dark border rounded-3">
               <div className="row g-3 align-items-center justify-content-between sillFilterWrapper">
@@ -3148,6 +3074,82 @@ export default function WorkerCalleDisplay({ permissions: permissionsProp }) {
                   </button>
                 ))}
               </div>
+
+              {/* Users Dropdown - Fixed */}
+              {(permissions.canManageUsers || permissions.canExport) && (
+                <div className="dropdown mb-3" ref={usersRef}>
+                  <button
+                    className="btn btn-outline-warning dropdown-toggle"
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setUsersOpen(!usersOpen);
+                    }}
+                  >
+                    Users ({selectedUsers.length})
+                  </button>
+                  {usersOpen && (
+                    <div
+                      className="dropdown-menu dropdown-menu-dark p-3 show"
+                      style={{ width: '300px', maxHeight: '400px', overflowY: 'auto' }}
+                    >
+                      <div className="d-flex justify-content-between align-items-center mb-2">
+                        <h6 className="text-warning mb-0">Select Users</h6>
+                        <div>
+                          <button
+                            className="btn btn-sm btn-outline-warning me-1"
+                            onClick={() => setSelectedUsers(Object.keys(usersMap))}
+                          >
+                            All
+                          </button>
+                          <button
+                            className="btn btn-sm btn-outline-secondary"
+                            onClick={() => setSelectedUsers([])}
+                          >
+                            None
+                          </button>
+                        </div>
+                      </div>
+                      <div className="dropdown-divider"></div>
+                      {Object.entries(usersMap).map(([userId, user]) => (
+                        <div key={userId} className="form-check">
+                          <input
+                            className="form-check-input"
+                            type="checkbox"
+                            id={`user-${userId}`}
+                            checked={selectedUsers.includes(userId)}
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                setSelectedUsers(prev => [...prev, userId]);
+                              } else {
+                                setSelectedUsers(prev => prev.filter(id => id !== userId));
+                              }
+                            }}
+                          />
+                          <label className="form-check-label text-white" htmlFor={`user-${userId}`}>
+                            {user.name || user.displayName || user.email || userId}
+                          </label>
+                        </div>
+                      ))}
+                      <div className="dropdown-divider mt-2"></div>
+                      <div className="d-flex justify-content-between">
+                        <button
+                          className="btn btn-sm btn-outline-warning"
+                          onClick={() => setSelectedUsers([])}
+                        >
+                          Clear
+                        </button>
+                        <button
+                          className="btn btn-sm btn-outline-info"
+                          onClick={() => setUsersOpen(false)}
+                        >
+                          Close
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
               <div className="d-flex gap-2 mb-3">
                 <select
                   className="form-select form-select-sm"

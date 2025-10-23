@@ -883,7 +883,7 @@ export default function WorkerCalleForm2({ isOpen, onClose }) {
                           {errors.years && <div className="invalid-feedback">{errors.years}</div>}
                         </div>
                         <div className="col-md-6">
-                          <label className="form-label">Primary Skill</label>
+                          <label className="form-label">Primary Skill <span className="star">*</span></label>
                           <select
                             name="skills"
                             value={formData.skills}

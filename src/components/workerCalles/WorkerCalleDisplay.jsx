@@ -630,6 +630,82 @@ export default function WorkerCalleDisplay({ permissions: permissionsProp }) {
     return () => ref.off("value", cb);
   }, []);
 
+  const computeProfilePercent = (w) => {
+    const _normArr = (v) => Array.isArray(v) ? v.filter(Boolean) : (v ? String(v).split(",").map(s => s.trim()).filter(Boolean) : []);
+    const _filled = (v) => Array.isArray(v) ? v.length > 0 : (v !== undefined && v !== null && String(v).trim() !== "");
+
+    const obj = {
+      callId: w.callId,
+      callDate: w.callDate,
+      mobileNo: w.mobileNo || w.phone || w.contactNumber,
+      name: w.name,
+      location: w.location,
+      source: w.source,
+      gender: w.gender,
+      maritalStatus: w.maritalStatus,
+      age: w.age,
+      experience: w.experience,
+      years: w.years,
+      skills: w.skills,
+      email: w.email,
+
+      nursingWorks: _normArr(w.nursingWorks),
+      homeCareSkills: _normArr(w.homeCareSkills),
+      otherSkills: _normArr(w.otherSkills),
+      education: w.education,
+      workingHours: w.workingHours,
+      languages: _normArr(w.languages),
+
+      addressLine1: w.addressLine1,
+      addressLine2: w.addressLine2,
+      city: w.city,
+      state: w.state,
+      pincode: w.pincode,
+
+      joiningType: w.joiningType,
+      expectedSalary: w.expectedSalary,
+      conversationLevel: w.conversationLevel,
+      callReminderDate: w.callReminderDate,
+      formComment: w.formComment,
+
+      photoDataUrl: w.photoDataUrl,
+      idProofDataUrl: w.idProofDataUrl,
+    };
+
+    const BASE_FIELDS = [
+      "callId", "callDate", "mobileNo", "name", "location", "source",
+      "gender", "age", "education", "workingHours",
+      "homeCareSkills", "otherSkills", "languages",
+      "addressLine1", "addressLine2", "city", "state", "pincode",
+      "joiningType", "expectedSalary", "conversationLevel", "callReminderDate", "formComment",
+      "photoDataUrl", "idProofDataUrl",
+      "email", "maritalStatus"
+    ];
+
+    const expFields = (obj.experience === "Yes") ? ["years", "skills"] : [];
+    const nursingFields = (String(obj.skills).toLowerCase() === "nursing") ? ["nursingWorks"] : [];
+
+    const ALL_FIELDS = [...BASE_FIELDS, ...expFields, ...nursingFields];
+
+    let filledCount = 0;
+    ALL_FIELDS.forEach((k) => {
+      if (_filled(obj[k])) filledCount += 1;
+    });
+
+    const total = Math.max(1, ALL_FIELDS.length);
+    const rawPct = Math.round((filledCount / total) * 100); // Now 0–100%
+    return rawPct;
+  };
+
+  const getProfileColor = (pct) => {
+    if (pct >= 61) return "text-success";       // green
+    if (pct >= 60) return "text-info";       // green
+    if (pct >= 40) return "text-warning";       // yellow
+    return "text-danger";                       // red
+  };
+
+
+
   // Normalize worker "joining type" into a lowercase array we can filter on.
   const getWorkerJoiningTypes = (w) => {
     // Look across common fields you might be using
@@ -1807,148 +1883,148 @@ export default function WorkerCalleDisplay({ permissions: permissionsProp }) {
         {activeTab === "callData" && (
           <div className="tab-pane fade show active">
 
-      {/* reminder badges as filters */}
-      <div className="alert alert-info text-info d-flex justify-content-around flex-wrap reminder-badges mb-4">
-        {["overdue", "today", "tomorrow", "upcoming"].map((k) => (
-          <span
-            key={k}
-            role="button"
-            className={`reminder-badge ${k} ${reminderFilter === k ? "active" : ""
-              }`}
-            onClick={() => setReminderFilter(reminderFilter === k ? "" : k)}
-          >
-            {k[0].toUpperCase() + k.slice(1)}:{" "}
-            <strong>
-              {k === "overdue"
-                ? badgeCounts.overdue
-                : k === "today"
-                  ? badgeCounts.today
-                  : k === "tomorrow"
-                    ? badgeCounts.tomorrow
-                    : badgeCounts.upcoming}
-            </strong>
-          </span>
-        ))}
-      </div>
-
-      {/* top controls */}
-      <div className="d-flex justify-content-between flex-wrap gap-2 p-3 bg-dark border rounded-3 mb-4">
-        <input
-          type="text"
-          className="form-control searchBar workerCallSearch"
-          placeholder="Search name, location, mobile, or ID (WC-01)…"
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          style={{ maxWidth: 380 }}
-        />
-
-        <div className="dropdown" ref={jtRef}>
-          <button
-            className="btn btn-outline-info dropdown-toggle"
-            type="button"
-            onClick={() => setJtOpen(!jtOpen)}
-          >
-            {selectedJoiningTypes.length > 0
-              ? `Joining (${selectedJoiningTypes.length})`
-              : "Joining Type"}
-          </button>
-          {jtOpen && (
-            <div className="dropdown-menu dropdown-menu-dark p-3 show" style={{ width: '250px' }}>
-              <h6 className="text-warning mb-2">Select Joining Types</h6>
-              <div className="dropdown-divider"></div>
-              {joiningTypeOptions.map((type) => {
-                const isSelected = selectedJoiningTypes.includes(type);
-                return (
-                  <div key={type} className="form-check">
-                    <input
-                      className="form-check-input"
-                      type="checkbox"
-                      id={`jt-${type}`}
-                      checked={isSelected}
-                      onChange={(e) => {
-                        if (e.target.checked) {
-                          setSelectedJoiningTypes(prev => [...prev, type]);
-                        } else {
-                          setSelectedJoiningTypes(prev => prev.filter(t => t !== type));
-                        }
-                      }}
-                    />
-                    <label className="form-check-label text-white" htmlFor={`jt-${type}`}>
-                      {type}
-                    </label>
-                  </div>
-                );
-              })}
-              <div className="dropdown-divider mt-2"></div>
-              <div className="d-flex justify-content-between">
-                <button
-                  className="btn btn-sm btn-outline-warning"
-                  onClick={() => setSelectedJoiningTypes([])}
+            {/* reminder badges as filters */}
+            <div className="alert alert-info text-info d-flex justify-content-around flex-wrap reminder-badges mb-4">
+              {["overdue", "today", "tomorrow", "upcoming"].map((k) => (
+                <span
+                  key={k}
+                  role="button"
+                  className={`reminder-badge ${k} ${reminderFilter === k ? "active" : ""
+                    }`}
+                  onClick={() => setReminderFilter(reminderFilter === k ? "" : k)}
                 >
-                  Clear
-                </button>
-                <button
-                  className="btn btn-sm btn-outline-info"
-                  onClick={() => setJtOpen(false)}
-                >
-                  Close
-                </button>
-              </div>
+                  {k[0].toUpperCase() + k.slice(1)}:{" "}
+                  <strong>
+                    {k === "overdue"
+                      ? badgeCounts.overdue
+                      : k === "today"
+                        ? badgeCounts.today
+                        : k === "tomorrow"
+                          ? badgeCounts.tomorrow
+                          : badgeCounts.upcoming}
+                  </strong>
+                </span>
+              ))}
             </div>
-          )}
-        </div>
-        <select
-          className="form-select d-filter"
-          value={selectedSource}
-          onChange={(e) => setSelectedSource(e.target.value)}
-        >
-          <option value="All">All Call Through</option>
-          {callThroughOptions.map((opt) => (
-            <option key={opt} value={opt}>
-              {opt}
-            </option>
-          ))}
-        </select>
 
-        <select
-          className="form-select  d-filter"
-          value={sortBy}
-          onChange={(e) => setSortBy(e.target.value)}
-        >
-          <option value="id">Sort by ID</option>
-          <option value="date">Sort by Date</option>
-          <option value="name">Sort by Name</option>
-          <option value="gender">Sort by Gender</option>
-          <option value="age">Sort by Age</option>
-          <option value="experience">Sort by Experience</option>
-          <option value="reminder">Sort by Reminder</option>
-          <option value="skills">Sort by Skills</option>
-          <option value="mobile">Sort by Mobile</option>
-          <option value="talking">Sort by Talking</option>
-        </select>
-        <select
-          className="form-select  d-filter"
-          value={sortDir}
-          onChange={(e) => setSortDir(e.target.value)}
-        >
-          <option value="desc">Desc</option>
-          <option value="asc">Asc</option>
-        </select>
+            {/* top controls */}
+            <div className="d-flex justify-content-between flex-wrap gap-2 p-3 bg-dark border rounded-3 mb-4">
+              <input
+                type="text"
+                className="form-control searchBar workerCallSearch"
+                placeholder="Search name, location, mobile, or ID (WC-01)…"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                style={{ maxWidth: 380 }}
+              />
 
-        <button
-          className={`btn ${permissions.canExport ? "btn-success" : "btn-outline-secondary"
-            }`}
-          onClick={permissions.canExport ? handleExport : undefined}
-          title={
-            permissions.canExport
-              ? "Export to Excel"
-              : "Export disabled — ask admin for permission"
-          }
-          disabled={!permissions.canExport}
-        >
-          Export {selectedRows.size > 0 ? `(${selectedRows.size})` : ""}
-        </button>
-        {/* {permissions.canManageUsers && (
+              <div className="dropdown" ref={jtRef}>
+                <button
+                  className="btn btn-outline-info dropdown-toggle"
+                  type="button"
+                  onClick={() => setJtOpen(!jtOpen)}
+                >
+                  {selectedJoiningTypes.length > 0
+                    ? `Joining (${selectedJoiningTypes.length})`
+                    : "Joining Type"}
+                </button>
+                {jtOpen && (
+                  <div className="dropdown-menu dropdown-menu-dark p-3 show" style={{ width: '250px' }}>
+                    <h6 className="text-warning mb-2">Select Joining Types</h6>
+                    <div className="dropdown-divider"></div>
+                    {joiningTypeOptions.map((type) => {
+                      const isSelected = selectedJoiningTypes.includes(type);
+                      return (
+                        <div key={type} className="form-check">
+                          <input
+                            className="form-check-input"
+                            type="checkbox"
+                            id={`jt-${type}`}
+                            checked={isSelected}
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                setSelectedJoiningTypes(prev => [...prev, type]);
+                              } else {
+                                setSelectedJoiningTypes(prev => prev.filter(t => t !== type));
+                              }
+                            }}
+                          />
+                          <label className="form-check-label text-white" htmlFor={`jt-${type}`}>
+                            {type}
+                          </label>
+                        </div>
+                      );
+                    })}
+                    <div className="dropdown-divider mt-2"></div>
+                    <div className="d-flex justify-content-between">
+                      <button
+                        className="btn btn-sm btn-outline-warning"
+                        onClick={() => setSelectedJoiningTypes([])}
+                      >
+                        Clear
+                      </button>
+                      <button
+                        className="btn btn-sm btn-outline-info"
+                        onClick={() => setJtOpen(false)}
+                      >
+                        Close
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+              <select
+                className="form-select d-filter"
+                value={selectedSource}
+                onChange={(e) => setSelectedSource(e.target.value)}
+              >
+                <option value="All">All Call Through</option>
+                {callThroughOptions.map((opt) => (
+                  <option key={opt} value={opt}>
+                    {opt}
+                  </option>
+                ))}
+              </select>
+
+              <select
+                className="form-select  d-filter"
+                value={sortBy}
+                onChange={(e) => setSortBy(e.target.value)}
+              >
+                <option value="id">Sort by ID</option>
+                <option value="date">Sort by Date</option>
+                <option value="name">Sort by Name</option>
+                <option value="gender">Sort by Gender</option>
+                <option value="age">Sort by Age</option>
+                <option value="experience">Sort by Experience</option>
+                <option value="reminder">Sort by Reminder</option>
+                <option value="skills">Sort by Skills</option>
+                <option value="mobile">Sort by Mobile</option>
+                <option value="talking">Sort by Talking</option>
+              </select>
+              <select
+                className="form-select  d-filter"
+                value={sortDir}
+                onChange={(e) => setSortDir(e.target.value)}
+              >
+                <option value="desc">Desc</option>
+                <option value="asc">Asc</option>
+              </select>
+
+              <button
+                className={`btn ${permissions.canExport ? "btn-success" : "btn-outline-secondary"
+                  }`}
+                onClick={permissions.canExport ? handleExport : undefined}
+                title={
+                  permissions.canExport
+                    ? "Export to Excel"
+                    : "Export disabled — ask admin for permission"
+                }
+                disabled={!permissions.canExport}
+              >
+                Export {selectedRows.size > 0 ? `(${selectedRows.size})` : ""}
+              </button>
+              {/* {permissions.canManageUsers && (
             <button
               className="btn btn-info"
               onClick={handleExportAll}
@@ -1957,14 +2033,14 @@ export default function WorkerCalleDisplay({ permissions: permissionsProp }) {
               Export All
             </button>
           )} */}
-        <button
-          className={`btn btn-outline-warning text-warning ${hasActiveFilters ? "btn-pulse" : ""
-            }`}
-          onClick={resetFilters}
-        >
-          Reset
-        </button>
-      </div>
+              <button
+                className={`btn btn-outline-warning text-warning ${hasActiveFilters ? "btn-pulse" : ""
+                  }`}
+                onClick={resetFilters}
+              >
+                Reset
+              </button>
+            </div>
 
 
             {/* Filter row (unchanged markup) */}
@@ -2738,7 +2814,12 @@ export default function WorkerCalleDisplay({ permissions: permissionsProp }) {
                             </small>
                           )}
                         </td>
-                        <td>{w?.name || "—"}</td>
+                        <td>{w?.name || "—"}
+                          <span className={`small fw-semibold ms-2 ${getProfileColor(computeProfilePercent(w))}`}>
+                            {computeProfilePercent(w)}%
+                          </span>
+
+                        </td>
                         <td>
                           <span
                             className={

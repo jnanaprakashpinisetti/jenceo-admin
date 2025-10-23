@@ -2282,7 +2282,7 @@ export default function ToDo() {
                           )}
                         <div className="detail-item">
                           <span className="text-muted-300">Ticket:</span>
-                          <div className="text-white-90">
+                          <div className="text-info">
                             {ticketLabel(selectedTask)}
                           </div>
                         </div>

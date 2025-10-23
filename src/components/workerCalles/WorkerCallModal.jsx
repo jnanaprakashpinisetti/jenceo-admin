@@ -1129,96 +1129,126 @@ export default function WorkerCallModal({
                         </div>
                       </div>
 
-                      {/* Other Skills */}
-                      <div className="col-12">
-                        <div className="dark-card">
-                          <div className="card-header dark-card-header">
-                            <h6 className="mb-0 fw-bold text-warning">OTHER SKILLS</h6>
-                          </div>
-                          <div className="card-body">
-                            {isEditMode ? (
-                              <>
-                                <div className="other-skills-categories">
-                                  {[
-                                    { title: "💼 Office & Administrative", skills: otherSkillOptions.slice(0, 9), color: "office", bgClass: "bg-office", btnClass: "btn-office" },
-                                    { title: "📞 Customer Service", skills: otherSkillOptions.slice(9, 15), color: "customer", bgClass: "bg-customer", btnClass: "btn-customer" },
-                                    { title: "👔 Management", skills: otherSkillOptions.slice(15, 20), color: "management", bgClass: "bg-management", btnClass: "btn-management" },
-                                    { title: "🛡️ Security", skills: otherSkillOptions.slice(20, 24), color: "security", bgClass: "bg-security", btnClass: "btn-security" },
-                                    { title: "🚗 Driving & Logistics", skills: otherSkillOptions.slice(24, 32), color: "driving", bgClass: "bg-driving", btnClass: "btn-driving" },
-                                    { title: "🔧 Technical", skills: otherSkillOptions.slice(32, 42), color: "technical", bgClass: "bg-technical", btnClass: "btn-technical" },
-                                    { title: "🛍️ Retail & Sales", skills: otherSkillOptions.slice(42, 47), color: "retail", bgClass: "bg-retail", btnClass: "btn-retail" },
-                                    { title: "🏭 Industrial", skills: otherSkillOptions.slice(47), color: "industrial", bgClass: "bg-industrial", btnClass: "btn-industrial" }
-                                  ].map((category, catIndex) => (
-                                    <div key={catIndex} className={`skill-category-compact p-3 mb-2  rounded`}>
-                                      <h6 className="category-title-compact text-dark fw-bold">{category.title}</h6>
-                                      <div className="skills-pills-compact">
-                                        {category.skills.map((opt) => {
-                                          const active = normalizeArray(localWorker.otherSkills)
-                                            .map((x) => String(x).toLowerCase())
-                                            .includes(String(opt).toLowerCase());
-                                          return (
-                                            <button
-                                              key={`other-${opt}`}
-                                              type="button"
-                                              className={`btn btn-sm rounded-pill ${active
-                                                ? category.bgClass
-                                                : category.btnClass
-                                                } disabled-keep skill-pill-compact`}
-                                              onClick={() => handleMultiToggle("otherSkills", opt)}
-                                              disabled={!isEditMode}
-                                              aria-pressed={active}
-                                            >
-                                              {opt}
-                                            </button>
-                                          );
-                                        })}
-                                      </div>
-                                    </div>
-                                  ))}
-                                </div>
+                   {/* Other Skills Accordion */}
+<div className="col-12">
+  <div className="dark-card">
+    <div className="card-header dark-card-header">
+      <h6 className="mb-0 fw-bold text-warning">OTHER SKILLS</h6>
+    </div>
+    <div className="card-body">
+      {isEditMode ? (
+        <>
+          <div className="accordion" id="otherSkillsAccordion">
+            {[
+              { title: "💼 Office & Administrative", skills: otherSkillOptions.slice(0, 9), color: "office", bgClass: "bg-office", btnClass: "btn-office" },
+              { title: "📞 Customer Service", skills: otherSkillOptions.slice(9, 15), color: "customer", bgClass: "bg-customer", btnClass: "btn-customer" },
+              { title: "👔 Management", skills: otherSkillOptions.slice(15, 20), color: "management", bgClass: "bg-management", btnClass: "btn-management" },
+              { title: "🛡️ Security", skills: otherSkillOptions.slice(20, 24), color: "security", bgClass: "bg-security", btnClass: "btn-security" },
+              { title: "🚗 Driving & Logistics", skills: otherSkillOptions.slice(24, 32), color: "driving", bgClass: "bg-driving", btnClass: "btn-driving" },
+              { title: "🔧 Technical", skills: otherSkillOptions.slice(32, 42), color: "technical", bgClass: "bg-technical", btnClass: "btn-technical" },
+              { title: "🛍️ Retail & Sales", skills: otherSkillOptions.slice(42, 47), color: "retail", bgClass: "bg-retail", btnClass: "btn-retail" },
+              { title: "🏭 Industrial", skills: otherSkillOptions.slice(47), color: "industrial", bgClass: "bg-industrial", btnClass: "btn-industrial" }
+            ].map((category, index) => {
+              const selectedCount = normalizeArray(localWorker.otherSkills).filter((x) =>
+                category.skills.map((s) => s.toLowerCase()).includes(String(x).toLowerCase())
+              ).length;
 
-                                <div className="input-group input-group-sm mt-2">
-                                  <input
-                                    id="custom-otherSkills"
-                                    type="text"
-                                    className="form-control dark-input"
-                                    placeholder="Add custom other skill"
-                                    disabled={!isEditMode}
-                                  />
-                                  <button
-                                    type="button"
-                                    className="btn btn-warning disabled-keep"
-                                    onClick={() => handleAddCustom("otherSkills", "custom-otherSkills")}
-                                    disabled={!isEditMode}
-                                  >
-                                    Add
-                                  </button>
-                                </div>
-                              </>
-                            ) : (
-                              <div className="skills-display-compact">
-                                {normalizeArray(localWorker.otherSkills).length > 0 ? (
-                                  <div className="d-flex flex-wrap gap-2 p-3">
-                                    {normalizeArray(localWorker.otherSkills).map((skill, idx) => (
-                                      <span
-                                        key={idx}
-                                        className="skill-tag-compact warning"
-                                      >
-                                        {skill}
-                                      </span>
-                                    ))}
-                                  </div>
-                                ) : (
-                                  <div className="empty-state-compact text-center py-3">
-                                    <i className="bi bi-grid-3x3-gap text-muted"></i>
-                                    <p className="mt-2 mb-0 text-muted">No other skills</p>
-                                  </div>
-                                )}
-                              </div>
-                            )}
-                          </div>
-                        </div>
+              return (
+                <div className="accordion-item mb-2" key={index}>
+                  <h2 className="accordion-header" id={`heading-${index}`}>
+                    <button
+                      className={`accordion-button collapsed fw-bold text-dark`}
+                      type="button"
+                      data-bs-toggle="collapse"
+                      data-bs-target={`#collapse-${index}`}
+                      aria-expanded="false"
+                      aria-controls={`collapse-${index}`}
+                   
+                    >
+                      {category.title}
+                      {selectedCount > 0 && (
+                        <span className="badge bg-warning text-dark ms-2">
+                          {selectedCount} Selected
+                        </span>
+                      )}
+                    </button>
+                  </h2>
+                  <div
+                    id={`collapse-${index}`}
+                    className="accordion-collapse collapse"
+                    aria-labelledby={`heading-${index}`}
+                    data-bs-parent="#otherSkillsAccordion"
+                  >
+                    <div className="accordion-body">
+                      <div className="skills-pills-compact d-flex flex-wrap gap-2">
+                        {category.skills.map((opt) => {
+                          const active = normalizeArray(localWorker.otherSkills)
+                            .map((x) => String(x).toLowerCase())
+                            .includes(String(opt).toLowerCase());
+                          return (
+                            <button
+                              key={`other-${opt}`}
+                              type="button"
+                              className={`btn btn-sm rounded-pill ${
+                                active ? category.bgClass : category.btnClass
+                              } disabled-keep skill-pill-compact`}
+                              onClick={() => handleMultiToggle("otherSkills", opt)}
+                              disabled={!isEditMode}
+                              aria-pressed={active}
+                            >
+                              {opt}
+                            </button>
+                          );
+                        })}
                       </div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Custom Add Input */}
+          <div className="input-group input-group-sm mt-3">
+            <input
+              id="custom-otherSkills"
+              type="text"
+              className="form-control dark-input"
+              placeholder="Add custom other skill"
+              disabled={!isEditMode}
+            />
+            <button
+              type="button"
+              className="btn btn-warning disabled-keep"
+              onClick={() => handleAddCustom("otherSkills", "custom-otherSkills")}
+              disabled={!isEditMode}
+            >
+              Add
+            </button>
+          </div>
+        </>
+      ) : (
+        <div className="skills-display-compact">
+          {normalizeArray(localWorker.otherSkills).length > 0 ? (
+            <div className="d-flex flex-wrap gap-2 p-3">
+              {normalizeArray(localWorker.otherSkills).map((skill, idx) => (
+                <span key={idx} className="skill-tag-compact warning">
+                  {skill}
+                </span>
+              ))}
+            </div>
+          ) : (
+            <div className="empty-state-compact text-center py-3">
+              <i className="bi bi-grid-3x3-gap text-muted"></i>
+              <p className="mt-2 mb-0 text-muted">No other skills</p>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  </div>
+</div>
+
                     </div>
                   </div>
                 )}

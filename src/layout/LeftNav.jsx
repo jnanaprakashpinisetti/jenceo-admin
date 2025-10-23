@@ -276,7 +276,7 @@ export default function LeftNav() {
         <div className={collapseClass} id="collapsibleNavbar">
           {/* ===== Mobile header bar ===== */}
           <div
-            className="d-block d-lg-none mb-2"
+            className="d-block d-lg-none mb-2 bg-dark"
             style={{
               background: "#0b1220",
               color: "#e2e8f0",
@@ -385,8 +385,8 @@ export default function LeftNav() {
 
           {/* ===== Mobile quick links ===== */}
           <div className="mobile-top d-block d-lg-none mb-3">
-            <div className="d-flex flex-column gap-2 px-2">
-              <form className="input-group input-group-sm" onSubmit={submitSearch}>
+            <div className="d-flex flex-column gap-2">
+              <form className="input-group input-group-sm bg-dark" onSubmit={submitSearch}>
                 <input
                   type="search"
                   className="form-control"

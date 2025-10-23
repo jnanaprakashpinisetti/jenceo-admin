@@ -563,6 +563,71 @@ export default function WorkerCalleDisplay({ permissions: permissionsProp }) {
     "Office Boy",
     "Peon",
   ];
+
+  // --- Nursing tasks you want to filter on ---
+  const NURSING_TASKS = [
+    "Vital Signs Monitoring",
+    "BP Check",
+    "Sugar Check (Glucometer)",
+    "Medication Administration",
+    "IV/IM Injection",
+    "IV Cannulation",
+    "IV Infusion",
+    "Wound Dressing",
+    "Catheter Care",
+    "Catheterization",
+    "Ryle’s Tube / NG Feeding",
+    "Ryles/Nasogastric Feeding",
+    "NG Tube Care",
+    "PEG Feeding",
+    "Nebulization",
+    "Suctioning",
+    "Oxygen Support",
+    "Tracheostomy Care",
+    "Bedsore Care",
+    "Positioning & Mobility",
+    "Bed Bath & Hygiene",
+    "Diaper Change",
+    "Urine Bag Change",
+    "Post-Operative Care",
+  ];
+
+  const normalizeArray = (v) =>
+    Array.isArray(v)
+      ? v.filter(Boolean)
+      : v
+        ? String(v).split(",").map((s) => s.trim()).filter(Boolean)
+        : [];
+
+  // Collect any nursing-related skills the worker has across fields
+  const getWorkerNursingTasks = (w) => {
+    const pools = [
+      w?.nursingWorks,
+      w?.homeCareSkills,
+      w?.skills,
+      w?.primarySkills,
+      w?.otherSkills,
+      w?.additionalSkills,
+    ];
+    const all = []
+      .concat(...pools.map(normalizeArray))
+      .map((s) => String(s).toLowerCase());
+
+    return NURSING_TASKS.filter((ns) => all.includes(ns.toLowerCase()));
+  };
+
+  // Show panel only when "Nursing" pill is active
+  const [showNursingPanel, setShowNursingPanel] = useState(false);
+
+  // Selected nursing sub-tasks
+  const [selectedNursingTasks, setSelectedNursingTasks] = useState([]);
+
+  // Match logic: 'all' = worker must have ALL selected; 'any' = at least ONE
+  const [nursingTasksMode, setNursingTasksMode] = useState("all"); // 'all' | 'any'
+
+
+
+
   const languageOptions = [
     "Telugu",
     "English",
@@ -698,8 +763,8 @@ export default function WorkerCalleDisplay({ permissions: permissionsProp }) {
   };
 
   const getProfileColor = (pct) => {
-    if (pct >= 61) return "text-success";       // green
-    if (pct >= 60) return "text-info";       // green
+    if (pct >= 71) return "text-success";       // green
+    if (pct >= 70) return "text-info";       // green
     if (pct >= 40) return "text-warning";       // yellow
     return "text-danger";                       // red
   };
@@ -903,6 +968,20 @@ export default function WorkerCalleDisplay({ permissions: permissionsProp }) {
         }
       }
 
+      // If Nursing is selected and some nursing tasks picked, enforce combo match
+      const nursingSelected = selectedSkills.map((s) => s.toLowerCase()).includes("nursing");
+      if (nursingSelected && selectedNursingTasks.length > 0) {
+        const have = getWorkerNursingTasks(w).map((s) => s.toLowerCase());
+        const want = selectedNursingTasks.map((s) => s.toLowerCase());
+
+        const ok = nursingTasksMode === "all"
+          ? want.every((s) => have.includes(s))   // ALL selected tasks must be present
+          : want.some((s) => have.includes(s));   // ANY selected task is ok
+
+        if (!ok) return false;
+      }
+
+
       return true;
     });
   }, [
@@ -919,6 +998,8 @@ export default function WorkerCalleDisplay({ permissions: permissionsProp }) {
     ageRange,
     experienceRange,
     selectedJoiningTypes,
+    selectedNursingTasks,   
+    nursingTasksMode,      
   ]);
 
   /* Sorting — add all requested fields */
@@ -1835,6 +1916,22 @@ export default function WorkerCalleDisplay({ permissions: permissionsProp }) {
     setUsersOpen(false);
   };
 
+  // Example toggler for Home Care skills
+  const toggleSkill = (opt) => {
+    setSelectedSkills((prev) => {
+      const on = prev.includes(opt);
+      const next = on ? prev.filter((s) => s !== opt) : [...prev, opt];
+
+      // Nursing panel visibility
+      const nursingOn = next.map((x) => x.toLowerCase()).includes("nursing");
+      setShowNursingPanel(nursingOn);
+
+      // If Nursing turned OFF, clear sub-task selection
+      if (!nursingOn) setSelectedNursingTasks([]);
+      return next;
+    });
+  };
+
   /* UI */
   if (loading) return <div className="text-center my-5">Loading…</div>;
   if (error) return <div className="alert alert-danger">Error: {error}</div>;
@@ -2249,32 +2346,88 @@ export default function WorkerCalleDisplay({ permissions: permissionsProp }) {
               <div className="col-md-6">
                 <div className="p-3 bg-dark border rounded-3 h-100">
                   <h6 className="mb-2 text-warning">Housekeeping Skills</h6>
+                  {/* Example skills toolbar */}
                   <div className="d-flex flex-wrap gap-2">
-                    {skillOptions.map((s) => {
-                      const active = selectedSkills.includes(s);
+                    {skillOptions.map((opt) => {
+                      const active = selectedSkills.includes(opt);
                       return (
                         <button
-                          key={s}
-                          className={`btn btn-sm ${active
-                            ? "btn-outline-warning btn-warning text-black"
-                            : "btn-outline-warning"
-                            } rounded-pill`}
-                          onClick={() =>
-                            setSelectedSkills((prev) =>
-                              active
-                                ? prev.filter((x) => x !== s)
-                                : [...prev, s]
-                            )
-                          }
+                          key={opt}
+                          type="button"
+                          className={`btn btn-sm rounded-pill ${active ? "btn-warning" : "btn-outline-warning"}`}
+                          onClick={() => toggleSkill(opt)}
+                          aria-pressed={active}
                         >
-                          {s}
+                          {opt}
                         </button>
                       );
                     })}
                   </div>
+
                 </div>
               </div>
             </div>
+
+            {showNursingPanel && (
+              <div className="col-12">
+                <div className="p-3 mt-2 border rounded-3 bg-dark bg-opacity-50 mb-3">
+                  <div className="d-flex align-items-center justify-content-between flex-wrap gap-2">
+                    <div className="d-flex align-items-center gap-2">
+                      <h6 className="mb-0 text-info">Nursing Tasks</h6>
+                      <span className="badge bg-secondary">
+                        {nursingTasksMode === "all" ? "Match: ALL" : "Match: ANY"}
+                      </span>
+                    </div>
+                    <div className="btn-group btn-group-sm">
+                      <button
+                        type="button"
+                        className={`btn ${nursingTasksMode === "all" ? "btn-info" : "btn-outline-info"}`}
+                        onClick={() => setNursingTasksMode("all")}
+                      >
+                        All
+                      </button>
+                      <button
+                        type="button"
+                        className={`btn ${nursingTasksMode === "any" ? "btn-info" : "btn-outline-info"}`}
+                        onClick={() => setNursingTasksMode("any")}
+                      >
+                        Any
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="d-flex flex-wrap gap-2 mt-2">
+                    {NURSING_TASKS.map((ns) => {
+                      const on = selectedNursingTasks.includes(ns);
+                      return (
+                        <button
+                          key={ns}
+                          type="button"
+                          className={`btn btn-sm rounded-pill ${on ? "btn-danger  text-dark" : "btn-outline-danger "}`}
+                          onClick={() =>
+                            setSelectedNursingTasks((prev) =>
+                              prev.includes(ns) ? prev.filter((x) => x !== ns) : [...prev, ns]
+                            )
+                          }
+                        >
+                          {ns}
+                        </button>
+                      );
+                    })}
+                    {!!selectedNursingTasks.length && (
+                      <button
+                        type="button"
+                        className="btn btn-sm btn-outline-warning ms-1"
+                        onClick={() => setSelectedNursingTasks([])}
+                      >
+                        Clear
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+
 
             {showJobRoles && (
               <div className="p-3 bg-dark border rounded-3 mb-3">

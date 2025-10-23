@@ -389,6 +389,7 @@ export default function WorkerCallForm({ isOpen, onClose }) {
                             }`}
                           max={getToday()}
                           disabled
+                          style={{backgroundColor:"transparent"}}
                         />
                         {errors.callDate && (
                           <div className="invalid-feedback">

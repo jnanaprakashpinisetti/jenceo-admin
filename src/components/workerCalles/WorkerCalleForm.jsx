@@ -259,6 +259,16 @@ export default function WorkerCalleForm2({ isOpen, onClose }) {
     };
   }, [isOpen, currentUser]);
 
+  useEffect(() => {
+    if (isOpen) {
+      // Reset all modal states when form opens
+      setShowSuccessModal(false);
+      setShowDuplicateModal(false);
+      setShowCloseConfirmModal(false);
+      setViewOpen(false);
+    }
+  }, [isOpen]);
+
   // ----- handlers -----
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
@@ -572,6 +582,7 @@ export default function WorkerCalleForm2({ isOpen, onClose }) {
   const handleCloseClick = () => (hasUnsavedChanges() ? setShowCloseConfirmModal(true) : onClose?.());
   const confirmClose = () => {
     setShowCloseConfirmModal(false);
+    setShowSuccessModal(false); // Reset success modal
     resetForm();
     onClose?.();
   };
@@ -1334,14 +1345,16 @@ export default function WorkerCalleForm2({ isOpen, onClose }) {
         <div className="modal fade show d-block" style={{ background: "rgba(0,0,0,.6)", zIndex: 1110 }}>
           <div className="modal-dialog modal-dialog-centered">
             <div className="modal-content rounded-3">
-              <div className="modal-header">
-                <h5 className="modal-title">Duplicate Mobile Number</h5>
+              <div className="modal-header bg-danger">
+                <h5 className="modal-title text-white ">Duplicate Mobile Number</h5>
                 <button className="btn-close" onClick={() => setShowDuplicateModal(false)} />
               </div>
               <div className="modal-body">
                 <p className="mb-2">
                   The mobile number <strong>{formData.mobileNo}</strong> already exists in the system.
                 </p>
+                <p>Name <strong>{formData.name}</strong> </p>
+                <p>ID No <strong>{formData.callId}</strong> </p>
                 {existingWorker ? (
                   <div className="small text-muted">
                     Existing: <strong>{existingWorker.name || "-"}</strong>{" "}
@@ -1365,7 +1378,7 @@ export default function WorkerCalleForm2({ isOpen, onClose }) {
           <div className="modal-dialog modal-dialog-centered">
             <div className="modal-content rounded-3">
               <div className="modal-header">
-                <h5 className="modal-title">Discard changes?</h5>
+                <h5 className="modal-title text-danger">Discard changes?</h5>
                 <button className="btn-close" onClick={cancelClose} />
               </div>
               <div className="modal-body">You have unsaved changes. Are you sure you want to close?</div>
@@ -1383,7 +1396,18 @@ export default function WorkerCalleForm2({ isOpen, onClose }) {
       )}
 
       {/* Success Modal (existing) */}
-      {showSuccessModal && <SuccessModal show={true} onClose={confirmClose} title="Saved" message="Worker call saved successfully." />}
+      {showSuccessModal && (
+        <SuccessModal
+          show={true}
+          onClose={() => {
+            setShowSuccessModal(false);
+            resetForm();
+            onClose?.();
+          }}
+          title="Saved"
+          message="Worker call saved successfully."
+        />
+      )}
 
       {/* View Modal for Photo / ID Proof */}
       {viewOpen && (

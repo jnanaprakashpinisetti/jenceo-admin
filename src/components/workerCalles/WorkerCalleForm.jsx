@@ -37,12 +37,6 @@ const HOME_CARE_OPTS = [
   "Cook",
   "Housekeeping",
   "Diaper",
-  "Injection",
-  "BP Check",
-  "Sugar Check",
-  "Wound Dressing",
-  "Nebulization",
-  "Post-Operative Care",
   "Any Duty",
 ];
 

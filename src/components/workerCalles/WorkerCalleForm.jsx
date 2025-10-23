@@ -1,10 +1,10 @@
-// src/components/workerCalles/WorkerCalleForm-2.jsx
-import React, { useEffect, useMemo, useState, useRef } from "react";
+// src/components/workerCalles/WorkerCalleForm.jsx
+import React, { useEffect, useMemo, useState } from "react";
 import firebaseDB from "../../firebase";
 import SuccessModal from "../common/SuccessModal";
 import { useAuth } from "../../context/AuthContext";
 
-// ---------- helpers ----------
+/* -------------------- helpers -------------------- */
 const todayYMD = () => {
   const d = new Date();
   const yyyy = d.getFullYear();
@@ -25,7 +25,7 @@ const toBase64 = (file) =>
     reader.readAsDataURL(file);
   });
 
-// ---------- constants ----------
+/* -------------------- constants -------------------- */
 const HOME_CARE_OPTS = [
   "Nursing",
   "Patient Care",
@@ -93,13 +93,32 @@ const OTHER_SKILL_SECTIONS = [
   {
     title: "Management & Supervision",
     color: "warning",
-    skills: ["Supervisor", "Manager", "Team Leader", "Site Supervisor", "Project Coordinator"],
+    skills: [
+      "Supervisor",
+      "Manager",
+      "Team Leader",
+      "Site Supervisor",
+      "Project Coordinator",
+    ],
   },
-  { title: "Security", color: "danger", skills: ["Security Guard", "Security Supervisor", "Gatekeeper", "Watchman"] },
+  {
+    title: "Security",
+    color: "danger",
+    skills: ["Security Guard", "Security Supervisor", "Gatekeeper", "Watchman"],
+  },
   {
     title: "Driving & Logistics",
     color: "info",
-    skills: ["Driving", "Delivery Boy", "Delivery Executive", "Rider", "Driver", "Car Driver", "Bike Rider", "Logistics Helper"],
+    skills: [
+      "Driving",
+      "Delivery Boy",
+      "Delivery Executive",
+      "Rider",
+      "Driver",
+      "Car Driver",
+      "Bike Rider",
+      "Logistics Helper",
+    ],
   },
   {
     title: "Technical & Maintenance",
@@ -120,15 +139,34 @@ const OTHER_SKILL_SECTIONS = [
   {
     title: "Industrial & Labor",
     color: "danger",
-    skills: ["Labour", "Helper", "Loading Unloading", "Warehouse Helper", "Factory Worker", "Production Helper", "Packaging Staff"],
+    skills: [
+      "Labour",
+      "Helper",
+      "Loading Unloading",
+      "Warehouse Helper",
+      "Factory Worker",
+      "Production Helper",
+      "Packaging Staff",
+    ],
   },
-  { title: "Retail & Sales", color: "primary", skills: ["Sales Boy", "Sales Girl", "Store Helper", "Retail Assistant", "Shop Attendant"] },
+  {
+    title: "Retail & Sales",
+    color: "primary",
+    skills: [
+      "Sales Boy",
+      "Sales Girl",
+      "Store Helper",
+      "Retail Assistant",
+      "Shop Attendant",
+    ],
+  },
 ];
 
-export default function WorkerCalleForm2({ isOpen, onClose }) {
+/* -------------------- component -------------------- */
+export default function WorkerCalleForm({ isOpen, onClose }) {
   const { user: currentUser } = useAuth();
 
-  // ----- wizard state -----
+  // ----- wizard -----
   const [step, setStep] = useState(1);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [showDuplicateModal, setShowDuplicateModal] = useState(false);
@@ -136,15 +174,18 @@ export default function WorkerCalleForm2({ isOpen, onClose }) {
   const [showCloseConfirmModal, setShowCloseConfirmModal] = useState(false);
   const [errors, setErrors] = useState({});
   const [openSkill, setOpenSkill] = useState(null);
-  const [openNursing, setOpenNursing] = useState(false);
 
-  // View modal for ID/Photo
+  // Nursing UI state (shared for dropdown + pill)
+  const [openNursing, setOpenNursing] = useState(false);
+  const [nursingPanelEverOpened, setNursingPanelEverOpened] = useState(false);
+
+  // Viewer for photo / id proof
   const [viewOpen, setViewOpen] = useState(false);
   const [viewTitle, setViewTitle] = useState("");
   const [viewSrc, setViewSrc] = useState("");
   const [viewType, setViewType] = useState("");
 
-  // ----- form model -----
+  // ----- model -----
   const [formData, setFormData] = useState({
     // step 1
     callId: "",
@@ -156,22 +197,21 @@ export default function WorkerCalleForm2({ isOpen, onClose }) {
     gender: "",
     maritalStatus: "",
     age: "",
-    experience: "No",
-    years: "",
-    skills: "", // primary
     email: "",
 
-    // nursing works in step 1 when skills === Nursing (mandatory ≥ 1)
+    // step 2 (moved here per request)
+    experience: "No",
+    years: "",
+    skills: "", // Primary Skill
     nursingWorks: [],
 
-    // step 2
     homeCareSkills: [],
     otherSkills: [],
     education: "",
     workingHours: "",
     languages: [],
 
-    // step 3 (optional)
+    // step 3
     addressLine1: "",
     addressLine2: "",
     city: "",
@@ -184,12 +224,12 @@ export default function WorkerCalleForm2({ isOpen, onClose }) {
     formComment: "",
 
     // uploads (optional)
-    photoDataUrl: "", // <= 100KB (image)
+    photoDataUrl: "",
     photoName: "",
     photoType: "",
     photoSize: 0,
 
-    idProofDataUrl: "", // <= 150KB (pdf/image)
+    idProofDataUrl: "",
     idProofName: "",
     idProofType: "",
     idProofSize: 0,
@@ -201,12 +241,12 @@ export default function WorkerCalleForm2({ isOpen, onClose }) {
     addedBy: "",
     userName: "",
 
-    // progress snapshots
+    // progress
     completionRequiredPct: 0,
     completionOverallPct: 0,
   });
 
-  // ----- next WC id -----
+  /* -------------------- init next WC id -------------------- */
   const fetchNextCallId = async () => {
     try {
       const snap = await firebaseDB.child("WorkerCallData").once("value");
@@ -224,7 +264,6 @@ export default function WorkerCalleForm2({ isOpen, onClose }) {
     }
   };
 
-  // ----- init -----
   useEffect(() => {
     let alive = true;
     const init = async () => {
@@ -234,7 +273,10 @@ export default function WorkerCalleForm2({ isOpen, onClose }) {
 
       const createdById = currentUser?.dbId || "";
       const createdByName =
-        currentUser?.name || currentUser?.username || currentUser?.email?.split("@")[0] || "Unknown";
+        currentUser?.name ||
+        currentUser?.username ||
+        currentUser?.email?.split("@")[0] ||
+        "Unknown";
 
       setFormData((p) => ({
         ...p,
@@ -255,7 +297,6 @@ export default function WorkerCalleForm2({ isOpen, onClose }) {
 
   useEffect(() => {
     if (isOpen) {
-      // Reset all modal states when form opens
       setShowSuccessModal(false);
       setShowDuplicateModal(false);
       setShowCloseConfirmModal(false);
@@ -263,31 +304,42 @@ export default function WorkerCalleForm2({ isOpen, onClose }) {
     }
   }, [isOpen]);
 
-  // ----- handlers -----
+  /* -------------------- handlers -------------------- */
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
     if (type === "checkbox") {
       const arr = Array.isArray(formData[name]) ? formData[name] : [];
-      setFormData({ ...formData, [name]: checked ? [...arr, value] : arr.filter((x) => x !== value) });
+      setFormData({
+        ...formData,
+        [name]: checked ? [...arr, value] : arr.filter((x) => x !== value),
+      });
     } else {
       setFormData({ ...formData, [name]: value });
     }
   };
-
   const handleBlur = (e) => {
     const { name } = e.target;
     if (errors[name]) setErrors((p) => ({ ...p, [name]: "" }));
   };
-
   const toggleArrayField = (field, value) => {
     setFormData((prev) => {
       const current = Array.isArray(prev[field]) ? prev[field] : [];
-      const updated = current.includes(value) ? current.filter((v) => v !== value) : [...current, value];
+      const updated = current.includes(value)
+        ? current.filter((v) => v !== value)
+        : [...current, value];
       return { ...prev, [field]: updated };
     });
   };
 
-  // Upload: Photo (<=100KB, JPG/PNG) and ID proof (<=150KB, PDF/JPG/PNG)
+  // Shared reveal logic for Nursing panel (dropdown + pill)
+  const revealNursingPanel = (forceOpen = true) => {
+    if (forceOpen) {
+      setOpenNursing(true);
+      if (!nursingPanelEverOpened) setNursingPanelEverOpened(true);
+    }
+  };
+
+  // Uploads
   const onPhotoChange = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -295,7 +347,6 @@ export default function WorkerCalleForm2({ isOpen, onClose }) {
     const sizeOk = file.size <= 100 * 1024;
     if (!typeOk) return alert("Photo must be JPG or PNG");
     if (!sizeOk) return alert("Photo must be ≤ 100 KB");
-
     const dataUrl = await toBase64(file);
     setFormData((p) => ({
       ...p,
@@ -309,11 +360,11 @@ export default function WorkerCalleForm2({ isOpen, onClose }) {
   const onIdProofChange = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    const typeOk = /^(application\/pdf|image\/jpeg|image\/jpg|image\/png)$/i.test(file.type);
+    const typeOk =
+      /^(application\/pdf|image\/jpeg|image\/jpg|image\/png)$/i.test(file.type);
     const sizeOk = file.size <= 150 * 1024;
     if (!typeOk) return alert("ID Proof must be PDF, JPG, or PNG");
     if (!sizeOk) return alert("ID Proof must be ≤ 150 KB");
-
     const dataUrl = await toBase64(file);
     setFormData((p) => ({
       ...p,
@@ -330,7 +381,6 @@ export default function WorkerCalleForm2({ isOpen, onClose }) {
     setViewType(mime || "");
     setViewOpen(true);
   };
-
   const handleDownloadDataUrl = (name, dataUrl) => {
     const a = document.createElement("a");
     a.href = dataUrl;
@@ -340,10 +390,14 @@ export default function WorkerCalleForm2({ isOpen, onClose }) {
     a.remove();
   };
 
-  // ----- duplicate check -----
+  /* -------------------- duplicate check -------------------- */
   const checkDuplicateMobile = async (mobileNo) => {
     try {
-      const snap = await firebaseDB.child("WorkerCallData").orderByChild("mobileNo").equalTo(mobileNo).once("value");
+      const snap = await firebaseDB
+        .child("WorkerCallData")
+        .orderByChild("mobileNo")
+        .equalTo(mobileNo)
+        .once("value");
       return snap.exists() ? snap.val() : null;
     } catch {
       return null;
@@ -357,67 +411,72 @@ export default function WorkerCalleForm2({ isOpen, onClose }) {
       const existing = Object.values(dup)[0];
       setExistingWorker(existing);
       setShowDuplicateModal(true);
-      return true; // blocked
+      return true; // block next step
     }
     return false;
   };
 
-  // ----- validation -----
+  /* -------------------- validation -------------------- */
   const validateStep = () => {
     const err = {};
     if (step === 1) {
       if (!formData.callId) err.callId = "Call ID is required";
       if (!formData.callDate) err.callDate = "Call Date is required";
       if (!formData.mobileNo) err.mobileNo = "Mobile No is required";
-      else if (!/^\d{10}$/.test(formData.mobileNo)) err.mobileNo = "Mobile No must be 10 digits";
+      else if (!/^\d{10}$/.test(formData.mobileNo))
+        err.mobileNo = "Mobile No must be 10 digits";
       if (!formData.name) err.name = "Name is required";
       if (!formData.location) err.location = "Location is required";
       if (!formData.source) err.source = "Source is required";
       if (!formData.gender) err.gender = "Gender is required";
       if (!formData.age) err.age = "Age is required";
+      if (formData.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email))
+        err.email = "Invalid email format";
+    } else if (step === 2) {
+      // education + NEW mandatory workingHours + languages
+      if (!formData.education) err.education = "Education is required";
+      if (!formData.workingHours)
+        err.workingHours = "Working Hours is required";
+      if (!Array.isArray(formData.languages) || formData.languages.length === 0)
+        err.languages = "Select at least one language";
 
-      if (formData.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) err.email = "Invalid email format";
-
+      // If experienced, require years + primary skill
       if (formData.experience === "Yes") {
         if (!formData.years) err.years = "Years required";
         if (!formData.skills) err.skills = "Primary Skill required";
       }
-
-      // NEW: If Primary Skill is Nursing => require at least 1 nursing work in STEP 1
-      if (formData.skills === "Nursing" && (!formData.nursingWorks || formData.nursingWorks.length === 0)) {
+      // If Primary Skill = Nursing → require at least 1 nursing work
+      if (
+        formData.skills === "Nursing" &&
+        (!formData.nursingWorks || formData.nursingWorks.length === 0)
+      ) {
         err.nursingWorks = "Select at least one nursing work.";
-        if (!openNursing) setOpenNursing(true);
+        revealNursingPanel(true);
       }
-    } else if (step === 2) {
-      if (!formData.education) err.education = "Education is required";
-      // workingHours/languages optional
     } else if (step === 3) {
-      // existing checks
       if (formData.callReminderDate) {
         const d = new Date(formData.callReminderDate);
-        if (d < startOfToday()) err.callReminderDate = "Reminder date cannot be in the past";
+        if (d < startOfToday())
+          err.callReminderDate = "Reminder date cannot be in the past";
       }
-      if (formData.pincode && !/^\d{6}$/.test(formData.pincode)) err.pincode = "PIN code must be 6 digits";
-
-      // NEW: mandatory fields
-      if (!formData.joiningType) {
-        err.joiningType = "Joining Type is required";
-      }
-      if (!formData.conversationLevel) {
+      if (formData.pincode && !/^\d{6}$/.test(formData.pincode))
+        err.pincode = "PIN code must be 6 digits";
+      // Joining Type, Conversation Level, Comment mandatory (kept from earlier)
+      if (!formData.joiningType) err.joiningType = "Joining Type is required";
+      if (!formData.conversationLevel)
         err.conversationLevel = "Conversation Level is required";
-      }
-      if (!formData.formComment || !formData.formComment.trim()) {
+      if (!formData.formComment || !formData.formComment.trim())
         err.formComment = "Comment is required";
-      }
     }
 
     setErrors(err);
     return Object.keys(err).length === 0;
   };
 
-  // ----- progress tracking -----
+  /* -------------------- progress tracking -------------------- */
   const REQUIRED_FIELDS = useMemo(
     () => [
+      // Step 1
       "callId",
       "callDate",
       "mobileNo",
@@ -426,10 +485,13 @@ export default function WorkerCalleForm2({ isOpen, onClose }) {
       "source",
       "gender",
       "age",
+      // Step 2
+      "education",
+      "workingHours",
+      "languages",
       ...(formData.experience === "Yes" ? ["years", "skills"] : []),
       ...(formData.skills === "Nursing" ? ["nursingWorks"] : []),
-      "education",
-      // NEW required in Step 3:
+      // Step 3
       "joiningType",
       "conversationLevel",
       "formComment",
@@ -437,25 +499,19 @@ export default function WorkerCalleForm2({ isOpen, onClose }) {
     [formData.experience, formData.skills]
   );
 
-
   const OVERALL_FIELDS = [
     ...REQUIRED_FIELDS,
     "maritalStatus",
     "email",
     "homeCareSkills",
     "otherSkills",
-    "languages",
-    "workingHours",
     "addressLine1",
     "addressLine2",
     "city",
     "state",
     "pincode",
-    "joiningType",
     "expectedSalary",
-    "conversationLevel",
     "callReminderDate",
-    "formComment",
     "photoDataUrl",
     "idProofDataUrl",
   ];
@@ -466,22 +522,29 @@ export default function WorkerCalleForm2({ isOpen, onClose }) {
     return v !== undefined && v !== null && String(v).trim() !== "" ? 1 : 0;
   };
   const reqFilled = REQUIRED_FIELDS.reduce((acc, f) => acc + countFilled(f), 0);
-  const overallFilled = OVERALL_FIELDS.reduce((acc, f) => acc + countFilled(f), 0);
-  const reqPct = Math.round((reqFilled / Math.max(1, REQUIRED_FIELDS.length)) * 100);
-  const overallPct = Math.round((overallFilled / Math.max(1, OVERALL_FIELDS.length)) * 100);
+  const overallFilled = OVERALL_FIELDS.reduce(
+    (acc, f) => acc + countFilled(f),
+    0
+  );
+  const reqPct = Math.round(
+    (reqFilled / Math.max(1, REQUIRED_FIELDS.length)) * 100
+  );
+  const overallPct = Math.round(
+    (overallFilled / Math.max(1, OVERALL_FIELDS.length)) * 100
+  );
 
-  // ----- step nav -----
+  /* -------------------- step nav -------------------- */
   const nextStep = async () => {
     if (!validateStep()) return;
     if (step === 1) {
       const blocked = await dupCheckBlocking();
-      if (blocked) return; // stop moving if duplicate
+      if (blocked) return;
     }
     setStep((s) => Math.min(3, s + 1));
   };
   const prevStep = () => setStep((s) => Math.max(1, s - 1));
 
-  // ----- close handling -----
+  /* -------------------- close / reset -------------------- */
   const hasUnsavedChanges = () => {
     const keys = [
       "mobileNo",
@@ -491,16 +554,16 @@ export default function WorkerCalleForm2({ isOpen, onClose }) {
       "gender",
       "maritalStatus",
       "age",
+      "email",
       "experience",
       "years",
       "skills",
-      "email",
       "nursingWorks",
       "homeCareSkills",
       "otherSkills",
-      "languages",
       "education",
       "workingHours",
+      "languages",
       "addressLine1",
       "addressLine2",
       "city",
@@ -531,10 +594,10 @@ export default function WorkerCalleForm2({ isOpen, onClose }) {
       gender: "",
       maritalStatus: "",
       age: "",
+      email: "",
       experience: "No",
       years: "",
       skills: "",
-      email: "",
       nursingWorks: [],
       homeCareSkills: [],
       otherSkills: [],
@@ -571,18 +634,20 @@ export default function WorkerCalleForm2({ isOpen, onClose }) {
     setErrors({});
     setOpenNursing(false);
     setOpenSkill(null);
+    setNursingPanelEverOpened(false);
   };
 
-  const handleCloseClick = () => (hasUnsavedChanges() ? setShowCloseConfirmModal(true) : onClose?.());
+  const handleCloseClick = () =>
+    hasUnsavedChanges() ? setShowCloseConfirmModal(true) : onClose?.();
   const confirmClose = () => {
     setShowCloseConfirmModal(false);
-    setShowSuccessModal(false); // Reset success modal
+    setShowSuccessModal(false);
     resetForm();
     onClose?.();
   };
   const cancelClose = () => setShowCloseConfirmModal(false);
 
-  // ----- submit -----
+  /* -------------------- submit -------------------- */
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!validateStep()) return;
@@ -600,7 +665,10 @@ export default function WorkerCalleForm2({ isOpen, onClose }) {
 
     const createdById = currentUser?.dbId || "";
     const createdByName =
-      currentUser?.name || currentUser?.username || currentUser?.email?.split("@")[0] || "Unknown";
+      currentUser?.name ||
+      currentUser?.username ||
+      currentUser?.email?.split("@")[0] ||
+      "Unknown";
 
     const payload = {
       ...formData,
@@ -609,7 +677,6 @@ export default function WorkerCalleForm2({ isOpen, onClose }) {
       createdAt: formData.createdAt || new Date().toISOString(),
       addedBy: formData.addedBy || createdByName,
       userName: formData.userName || createdByName,
-      // progress snapshots
       completionRequiredPct: reqPct,
       completionOverallPct: overallPct,
     };
@@ -625,24 +692,37 @@ export default function WorkerCalleForm2({ isOpen, onClose }) {
 
   if (!isOpen) return null;
 
-  const stepTitle = step === 1 ? "Basic Details" : step === 2 ? "Skills Details" : "Address & Preferences";
+  const stepTitle =
+    step === 1
+      ? "Basic Details"
+      : step === 2
+      ? "Skills Details"
+      : "Address & Preferences";
 
+  /* -------------------- render -------------------- */
   return (
     <>
       {/* Main Modal */}
-      <div className="modal fade show" style={{ display: "block", backgroundColor: "rgba(0,0,0,.9)" }}>
+      <div
+        className="modal fade show"
+        style={{ display: "block", backgroundColor: "rgba(0,0,0,.9)" }}
+      >
         <div className="modal-dialog modal-lg modal-dialog-centered client-form workerCallForm">
           <div className="modal-content shadow-lg border-0 rounded-4">
             <div className="modal-header">
               <div className="w-100">
                 <div className="d-flex justify-content-between align-items-center">
                   <h3 className="modal-title mb-0">Worker Call Form</h3>
-                  <button type="button" className="btn-close btn-close-white" onClick={handleCloseClick} />
+                  <button
+                    type="button"
+                    className="btn-close btn-close-white"
+                    onClick={handleCloseClick}
+                  />
                 </div>
 
-                {/* Progress */}
+                {/* Stylish Stepper + Progress */}
                 <div className="mt-2">
-                  <div className="small text-muted d-flex justify-content-between">
+                  <div className="d-flex justify-content-between align-items-center small text-muted">
                     <span>
                       Step {step} of 3 · <strong>{stepTitle}</strong>
                     </span>
@@ -650,8 +730,51 @@ export default function WorkerCalleForm2({ isOpen, onClose }) {
                       Required: {reqPct}% · Overall: {overallPct}%
                     </span>
                   </div>
-                  <div className="progress" style={{ height: 6 }}>
-                    <div className="progress-bar bg-info" role="progressbar" style={{ width: `${reqPct}%` }} />
+
+                  {/* Stepper */}
+                  <div className="position-relative mt-2 mb-1">
+                    <div
+                      className="progress"
+                      style={{ height: 6, background: "rgba(255,255,255,.1)" }}
+                    >
+                      <div
+                        className="progress-bar"
+                        role="progressbar"
+                        style={{
+                          width: `${(step / 3) * 100}%`,
+                          transition: "width .25s ease",
+                          background: "linear-gradient(90deg,#06b6d4,#3b82f6)",
+                        }}
+                      />
+                    </div>
+                    <div className="d-flex justify-content-between mt-2">
+                      {["1", "2", "3"].map((n, idx) => {
+                        const active = step >= idx + 1;
+                        return (
+                          <div
+                            key={n}
+                            className="text-center"
+                            style={{ width: 32 }}
+                          >
+                            <div
+                              className={`rounded-circle ${
+                                active
+                                  ? "bg-info text-dark"
+                                  : "bg-secondary text-white"
+                              }`}
+                              style={{
+                                width: 28,
+                                height: 28,
+                                lineHeight: "28px",
+                                fontWeight: 700,
+                              }}
+                            >
+                              {n}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
                   </div>
                 </div>
               </div>
@@ -659,7 +782,7 @@ export default function WorkerCalleForm2({ isOpen, onClose }) {
 
             <div className="modal-body">
               <form onSubmit={handleSubmit}>
-                {/* STEP 1 */}
+                {/* STEP 1: Basic */}
                 {step === 1 && (
                   <div>
                     <h5 className="mb-3">Basic Details</h5>
@@ -673,11 +796,17 @@ export default function WorkerCalleForm2({ isOpen, onClose }) {
                           type="text"
                           name="callId"
                           value={formData.callId}
-                          className={`form-control ${errors.callId ? "is-invalid" : ""}`}
+                          className={`form-control ${
+                            errors.callId ? "is-invalid" : ""
+                          }`}
                           disabled
                           readOnly
                         />
-                        {errors.callId && <div className="invalid-feedback">{errors.callId}</div>}
+                        {errors.callId && (
+                          <div className="invalid-feedback">
+                            {errors.callId}
+                          </div>
+                        )}
                       </div>
                       <div className="col-md-6">
                         <label className="form-label">
@@ -689,11 +818,17 @@ export default function WorkerCalleForm2({ isOpen, onClose }) {
                           value={formData.callDate}
                           onChange={handleChange}
                           onBlur={handleBlur}
-                          className={`form-control ${errors.callDate ? "is-invalid" : ""}`}
+                          className={`form-control ${
+                            errors.callDate ? "is-invalid" : ""
+                          }`}
                           disabled
                           max={todayYMD()}
                         />
-                        {errors.callDate && <div className="invalid-feedback">{errors.callDate}</div>}
+                        {errors.callDate && (
+                          <div className="invalid-feedback">
+                            {errors.callDate}
+                          </div>
+                        )}
                       </div>
                     </div>
 
@@ -708,15 +843,21 @@ export default function WorkerCalleForm2({ isOpen, onClose }) {
                           value={formData.mobileNo}
                           onChange={handleChange}
                           onBlur={async () => {
-                            // show dup modal on blur (informational), but block in nextStep too
                             const blocked = await dupCheckBlocking();
-                            if (!blocked && errors.mobileNo) setErrors((p) => ({ ...p, mobileNo: "" }));
+                            if (!blocked && errors.mobileNo)
+                              setErrors((p) => ({ ...p, mobileNo: "" }));
                           }}
-                          className={`form-control ${errors.mobileNo ? "is-invalid" : ""}`}
+                          className={`form-control ${
+                            errors.mobileNo ? "is-invalid" : ""
+                          }`}
                           maxLength={10}
                           autoFocus
                         />
-                        {errors.mobileNo && <div className="invalid-feedback">{errors.mobileNo}</div>}
+                        {errors.mobileNo && (
+                          <div className="invalid-feedback">
+                            {errors.mobileNo}
+                          </div>
+                        )}
                       </div>
                       <div className="col-md-6">
                         <label className="form-label">
@@ -728,9 +869,13 @@ export default function WorkerCalleForm2({ isOpen, onClose }) {
                           value={formData.name}
                           onChange={handleChange}
                           onBlur={handleBlur}
-                          className={`form-control ${errors.name ? "is-invalid" : ""}`}
+                          className={`form-control ${
+                            errors.name ? "is-invalid" : ""
+                          }`}
                         />
-                        {errors.name && <div className="invalid-feedback">{errors.name}</div>}
+                        {errors.name && (
+                          <div className="invalid-feedback">{errors.name}</div>
+                        )}
                       </div>
                     </div>
 
@@ -745,9 +890,15 @@ export default function WorkerCalleForm2({ isOpen, onClose }) {
                           value={formData.location}
                           onChange={handleChange}
                           onBlur={handleBlur}
-                          className={`form-control ${errors.location ? "is-invalid" : ""}`}
+                          className={`form-control ${
+                            errors.location ? "is-invalid" : ""
+                          }`}
                         />
-                        {errors.location && <div className="invalid-feedback">{errors.location}</div>}
+                        {errors.location && (
+                          <div className="invalid-feedback">
+                            {errors.location}
+                          </div>
+                        )}
                       </div>
                       <div className="col-md-6">
                         <label className="form-label">
@@ -758,7 +909,9 @@ export default function WorkerCalleForm2({ isOpen, onClose }) {
                           value={formData.source}
                           onChange={handleChange}
                           onBlur={handleBlur}
-                          className={`form-select ${errors.source ? "is-invalid" : ""}`}
+                          className={`form-select ${
+                            errors.source ? "is-invalid" : ""
+                          }`}
                         >
                           <option value="">Select</option>
                           {[
@@ -780,7 +933,11 @@ export default function WorkerCalleForm2({ isOpen, onClose }) {
                             </option>
                           ))}
                         </select>
-                        {errors.source && <div className="invalid-feedback">{errors.source}</div>}
+                        {errors.source && (
+                          <div className="invalid-feedback">
+                            {errors.source}
+                          </div>
+                        )}
                       </div>
                     </div>
 
@@ -794,14 +951,20 @@ export default function WorkerCalleForm2({ isOpen, onClose }) {
                           value={formData.gender}
                           onChange={handleChange}
                           onBlur={handleBlur}
-                          className={`form-select ${errors.gender ? "is-invalid" : ""}`}
+                          className={`form-select ${
+                            errors.gender ? "is-invalid" : ""
+                          }`}
                         >
                           <option value="">Select</option>
                           <option value="Male">Male</option>
                           <option value="Female">Female</option>
                           <option value="Others">Others</option>
                         </select>
-                        {errors.gender && <div className="invalid-feedback">{errors.gender}</div>}
+                        {errors.gender && (
+                          <div className="invalid-feedback">
+                            {errors.gender}
+                          </div>
+                        )}
                       </div>
                       <div className="col-md-6">
                         <label className="form-label">Marital Status</label>
@@ -831,9 +994,13 @@ export default function WorkerCalleForm2({ isOpen, onClose }) {
                           value={formData.age}
                           onChange={handleChange}
                           onBlur={handleBlur}
-                          className={`form-control ${errors.age ? "is-invalid" : ""}`}
+                          className={`form-control ${
+                            errors.age ? "is-invalid" : ""
+                          }`}
                         />
-                        {errors.age && <div className="invalid-feedback">{errors.age}</div>}
+                        {errors.age && (
+                          <div className="invalid-feedback">{errors.age}</div>
+                        )}
                       </div>
                       <div className="col-md-6">
                         <label className="form-label">Email (optional)</label>
@@ -843,34 +1010,61 @@ export default function WorkerCalleForm2({ isOpen, onClose }) {
                           value={formData.email}
                           onChange={handleChange}
                           onBlur={handleBlur}
-                          className={`form-control ${errors.email ? "is-invalid" : ""}`}
+                          className={`form-control ${
+                            errors.email ? "is-invalid" : ""
+                          }`}
                           placeholder="name@example.com"
                         />
-                        {errors.email && <div className="invalid-feedback">{errors.email}</div>}
+                        {errors.email && (
+                          <div className="invalid-feedback">{errors.email}</div>
+                        )}
                       </div>
                     </div>
+                  </div>
+                )}
 
-                    <div className="row mb-2">
-                      <div className="col-md-6">
+                {/* STEP 2: Skills (now contains Experience + Years + Primary + Nursing Works) */}
+                {step === 2 && (
+                  <div>
+                    <h5 className="mb-3">Skills Details</h5>
+                    <hr />
+
+                    {/* Experience + Years + Primary Skill */}
+                    <div className="row mb-3">
+                      <div className="col-md-4">
                         <label className="form-label">
                           Experience <span className="star">*</span>
                         </label>
                         <div>
                           <div className="form-check form-check-inline">
-                            <input type="radio" name="experience" value="Yes" checked={formData.experience === "Yes"} onChange={handleChange} />
-                            <label className="form-check-label">&nbsp;&nbsp;Yes</label>
+                            <input
+                              type="radio"
+                              name="experience"
+                              value="Yes"
+                              checked={formData.experience === "Yes"}
+                              onChange={handleChange}
+                            />
+                            <label className="form-check-label">
+                              &nbsp;&nbsp;Yes
+                            </label>
                           </div>
                           <div className="form-check form-check-inline">
-                            <input type="radio" name="experience" value="No" checked={formData.experience === "No"} onChange={handleChange} />
-                            <label className="form-check-label">&nbsp;&nbsp;No</label>
+                            <input
+                              type="radio"
+                              name="experience"
+                              value="No"
+                              checked={formData.experience === "No"}
+                              onChange={handleChange}
+                            />
+                            <label className="form-check-label">
+                              &nbsp;&nbsp;No
+                            </label>
                           </div>
                         </div>
                       </div>
-                    </div>
 
-                    {formData.experience === "Yes" && (
-                      <div className="row mb-3">
-                        <div className="col-md-6">
+                      {formData.experience === "Yes" && (
+                        <div className="col-md-4">
                           <label className="form-label">Years</label>
                           <input
                             type="text"
@@ -878,110 +1072,184 @@ export default function WorkerCalleForm2({ isOpen, onClose }) {
                             value={formData.years}
                             onChange={handleChange}
                             onBlur={handleBlur}
-                            className={`form-control ${errors.years ? "is-invalid" : ""}`}
+                            className={`form-control ${
+                              errors.years ? "is-invalid" : ""
+                            }`}
                           />
-                          {errors.years && <div className="invalid-feedback">{errors.years}</div>}
-                        </div>
-                        <div className="col-md-6">
-                          <label className="form-label">Primary Skill <span className="star">*</span></label>
-                          <select
-                            name="skills"
-                            value={formData.skills}
-                            onChange={(e) => {
-                              const v = e.target.value;
-                              setFormData((p) => ({ ...p, skills: v }));
-                              if (v === "Nursing") setOpenNursing(true);
-                            }}
-                            onBlur={handleBlur}
-                            className={`form-select ${errors.skills ? "is-invalid" : ""}`}
-                          >
-                            <option value="">-- Select Skill --</option>
-                            {HOME_CARE_OPTS.map((s) => (
-                              <option key={s} value={s}>
-                                {s}
-                              </option>
-                            ))}
-                          </select>
-                          {errors.skills && <div className="invalid-feedback">{errors.skills}</div>}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Nursing Works IN STEP 1 (mandatory if Primary=Nursing) */}
-                    {formData.skills === "Nursing" && (
-                      <div className="mb-2">
-                        <div className="accordion" id="nursingAccordion">
-                          <div className="accordion-item bg-dark text-white border-0 rounded-3">
-                            <h2 className="accordion-header">
-                              <button
-                                type="button"
-                                className={`accordion-button ${openNursing ? "" : "collapsed"} bg-info text-dark`}
-                                onClick={() => setOpenNursing(!openNursing)}
-                              >
-                                Nursing Works (select at least one)
-                              </button>
-                            </h2>
-                            <div className={`accordion-collapse collapse ${openNursing ? "show" : ""}`}>
-                              <div className="accordion-body">
-                                <div className="d-flex flex-wrap gap-2">
-                                  {NURSING_WORKS.map((nw) => {
-                                    const active = formData.nursingWorks.includes(nw);
-                                    return (
-                                      <button
-                                        key={nw}
-                                        type="button"
-                                        className={`btn btn-sm rounded-pill ${active ? "btn-info text-dark" : "btn-outline-info"}`}
-                                        onClick={() => toggleArrayField("nursingWorks", nw)}
-                                      >
-                                        {nw}
-                                      </button>
-                                    );
-                                  })}
-                                </div>
-                                {errors.nursingWorks && <div className="text-danger small mt-2">{errors.nursingWorks}</div>}
-                              </div>
+                          {errors.years && (
+                            <div className="invalid-feedback">
+                              {errors.years}
                             </div>
-                          </div>
+                          )}
                         </div>
+                      )}
+
+                      <div
+                        className={
+                          formData.experience === "Yes"
+                            ? "col-md-4"
+                            : "col-md-8"
+                        }
+                      >
+                        <label className="form-label">
+                          Primary Skill <span className="star">*</span>
+                        </label>
+                        <select
+                          name="skills"
+                          value={formData.skills}
+                          onChange={(e) => {
+                            const v = e.target.value;
+                            setFormData((p) => ({ ...p, skills: v }));
+                            if (v === "Nursing") revealNursingPanel(true); // shared logic
+                          }}
+                          onBlur={handleBlur}
+                          className={`form-select ${
+                            errors.skills ? "is-invalid" : ""
+                          }`}
+                        >
+                          <option value="">-- Select Skill --</option>
+                          {HOME_CARE_OPTS.map((s) => (
+                            <option key={s} value={s}>
+                              {s}
+                            </option>
+                          ))}
+                        </select>
+                        {errors.skills && (
+                          <div className="invalid-feedback">
+                            {errors.skills}
+                          </div>
+                        )}
                       </div>
-                    )}
-                  </div>
-                )}
+                    </div>
 
-                {/* STEP 2 */}
-                {step === 2 && (
-                  <div>
-                    <h5 className="mb-3">Skills Details</h5>
-                    <hr />
-
+                    {/* Home Care Skills (Nursing pill disabled if Primary = Nursing) */}
                     <div className="mb-3 p-3 bg-dark rounded-3">
                       <h6 className="mb-2 text-warning">HOME CARE SKILLS</h6>
                       <div className="d-flex flex-wrap gap-2">
-                        {HOME_CARE_OPTS.map((skill) => {
-                          const active = formData.homeCareSkills.includes(skill);
+                        {HOME_CARE_OPTS.map((opt) => {
+                          const active = formData.homeCareSkills.includes(opt);
+
+                          // ✅ Disable whichever skill is selected in Primary Skill
+                          const disabled = formData.skills === opt;
+
                           return (
                             <button
+                              key={opt}
                               type="button"
-                              key={skill}
-                              className={`btn btn-sm ${active ? "btn-warning" : "btn-outline-warning"} rounded-pill`}
-                              onClick={() => toggleArrayField("homeCareSkills", skill)}
+                              className={`btn btn-sm rounded-pill ${
+                                active ? "btn-warning" : "btn-outline-warning"
+                              }`}
+                              onClick={() => {
+                                if (disabled) return;
+
+                                const wasActive = active;
+                                // toggle the pill
+                                setFormData((prev) => {
+                                  const curr = Array.isArray(
+                                    prev.homeCareSkills
+                                  )
+                                    ? prev.homeCareSkills
+                                    : [];
+                                  const next = wasActive
+                                    ? curr.filter((x) => x !== opt)
+                                    : [...curr, opt];
+                                  return { ...prev, homeCareSkills: next };
+                                });
+
+                                // ✅ If user clicks Nursing pill (first time or anytime), show nursing tasks
+                                if (opt === "Nursing" && !wasActive) {
+                                  revealNursingPanel();
+                                }
+                              }}
+                              disabled={disabled}
+                              title={
+                                disabled
+                                  ? "Disabled because it's selected as Primary Skill"
+                                  : ""
+                              }
+                              aria-disabled={disabled}
+                              aria-pressed={active}
                             >
-                              {skill}
+                              {opt}
                             </button>
                           );
                         })}
                       </div>
                     </div>
 
+                    {/* Nursing Works accordion (visible when Primary = Nursing OR user opened via pill) */}
+                    {(formData.skills === "Nursing" || openNursing) && (
+                      <div className="mb-2">
+                        <div className="accordion" id="nursingAccordion">
+                          <div className="accordion-item bg-dark text-white border-0 rounded-3">
+                            <h2 className="accordion-header">
+                              <button
+                                type="button"
+                                className={`accordion-button ${
+                                  openNursing ? "" : "collapsed"
+                                } bg-info text-dark`}
+                                onClick={() => setOpenNursing(!openNursing)}
+                              >
+                                Nursing Works (select at least one)
+                              </button>
+                            </h2>
+                            <div
+                              className={`accordion-collapse collapse ${
+                                openNursing ? "show" : ""
+                              }`}
+                            >
+                              <div className="accordion-body">
+                                <div className="d-flex flex-wrap gap-2">
+                                  {NURSING_WORKS.map((nw) => {
+                                    const active =
+                                      formData.nursingWorks.includes(nw);
+                                    return (
+                                      <button
+                                        key={nw}
+                                        type="button"
+                                        className={`btn btn-sm rounded-pill ${
+                                          active
+                                            ? "btn-info text-dark"
+                                            : "btn-outline-info"
+                                        }`}
+                                        onClick={() =>
+                                          toggleArrayField("nursingWorks", nw)
+                                        }
+                                      >
+                                        {nw}
+                                      </button>
+                                    );
+                                  })}
+                                </div>
+                                {errors.nursingWorks && (
+                                  <div className="text-danger small mt-2">
+                                    {errors.nursingWorks}
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Other Skills accordion (unchanged) */}
                     <div className="accordion" id="skillsAccordion">
                       {OTHER_SKILL_SECTIONS.map((sec, i) => {
                         const isOpen = openSkill === i;
-                        const needsDark = isOpen && (sec.color === "warning" || sec.color === "info");
+                        const needsDark =
+                          isOpen &&
+                          (sec.color === "warning" || sec.color === "info");
                         const headingBtnClass = isOpen
-                          ? `accordion-button bg-${sec.color} ${needsDark ? "text-dark" : "text-white"}`
+                          ? `accordion-button bg-${sec.color} ${
+                              needsDark ? "text-dark" : "text-white"
+                            }`
                           : "accordion-button collapsed bg-dark text-white";
                         return (
-                          <div className="accordion-item bg-dark text-white border-0 mb-2 rounded-3" key={sec.title}>
+                          <div
+                            className="accordion-item bg-dark text-white border-0 mb-2 rounded-3"
+                            key={sec.title}
+                          >
                             <h2 className="accordion-header">
                               <button
                                 type="button"
@@ -996,21 +1264,36 @@ export default function WorkerCalleForm2({ isOpen, onClose }) {
                             </h2>
                             <div
                               id={`skillSec${i}`}
-                              className={`accordion-collapse collapse ${isOpen ? "show" : ""}`}
+                              className={`accordion-collapse collapse ${
+                                isOpen ? "show" : ""
+                              }`}
                               data-bs-parent="#skillsAccordion"
                             >
                               <div className="accordion-body">
                                 <div className="d-flex flex-wrap gap-2">
                                   {sec.skills.map((s) => {
-                                    const active = formData.otherSkills.includes(s);
-                                    const pillNeedsDark = (sec.color === "warning" || sec.color === "info") && active;
+                                    const active =
+                                      formData.otherSkills.includes(s);
+                                    const pillNeedsDark =
+                                      (sec.color === "warning" ||
+                                        sec.color === "info") &&
+                                      active;
                                     return (
                                       <button
                                         key={s}
                                         type="button"
-                                        className={`btn btn-sm rounded-pill ${active ? `btn-${sec.color}${pillNeedsDark ? " text-dark" : ""}` : `btn-outline-${sec.color}`
-                                          }`}
-                                        onClick={() => toggleArrayField("otherSkills", s)}
+                                        className={`btn btn-sm rounded-pill ${
+                                          active
+                                            ? `btn-${sec.color}${
+                                                pillNeedsDark
+                                                  ? " text-dark"
+                                                  : ""
+                                              }`
+                                            : `btn-outline-${sec.color}`
+                                        }`}
+                                        onClick={() =>
+                                          toggleArrayField("otherSkills", s)
+                                        }
                                       >
                                         {s}
                                       </button>
@@ -1036,31 +1319,82 @@ export default function WorkerCalleForm2({ isOpen, onClose }) {
                           value={formData.education}
                           onChange={handleChange}
                           onBlur={handleBlur}
-                          className={`form-control ${errors.education ? "is-invalid" : ""}`}
+                          className={`form-control ${
+                            errors.education ? "is-invalid" : ""
+                          }`}
                         />
-                        {errors.education && <div className="invalid-feedback">{errors.education}</div>}
+                        {errors.education && (
+                          <div className="invalid-feedback">
+                            {errors.education}
+                          </div>
+                        )}
                       </div>
                       <div className="col-md-6">
-                        <label className="form-label">Working Hours</label>
-                        <div>
+                        <label className="form-label">
+                          Working Hours <span className="star">*</span>
+                        </label>
+                        <div
+                          className={`${
+                            errors.workingHours
+                              ? "is-invalid border rounded p-2"
+                              : ""
+                          }`}
+                        >
                           <div className="form-check form-check-inline">
-                            <input type="radio" name="workingHours" value="12" checked={formData.workingHours === "12"} onChange={handleChange} />
-                            <label className="form-check-label">&nbsp;&nbsp;12 Hours</label>
+                            <input
+                              type="radio"
+                              name="workingHours"
+                              value="12"
+                              checked={formData.workingHours === "12"}
+                              onChange={handleChange}
+                            />
+                            <label className="form-check-label">
+                              &nbsp;&nbsp;12 Hours
+                            </label>
                           </div>
                           <div className="form-check form-check-inline">
-                            <input type="radio" name="workingHours" value="24" checked={formData.workingHours === "24"} onChange={handleChange} />
-                            <label className="form-check-label">&nbsp;&nbsp;24 Hours</label>
+                            <input
+                              type="radio"
+                              name="workingHours"
+                              value="24"
+                              checked={formData.workingHours === "24"}
+                              onChange={handleChange}
+                            />
+                            <label className="form-check-label">
+                              &nbsp;&nbsp;24 Hours
+                            </label>
                           </div>
                         </div>
+                        {errors.workingHours && (
+                          <div className="text-danger small mt-1">
+                            {errors.workingHours}
+                          </div>
+                        )}
                       </div>
                     </div>
 
                     <div className="mb-2 p-3 bg-dark rounded-3">
-                      <p className="form-label text-warning">
-                        <strong>Languages Known</strong>
+                      <p className="form-label text-warning mb-2">
+                        <strong>
+                          Languages Known <span className="star">*</span>
+                        </strong>
                       </p>
-                      {["Telugu", "Hindi", "English", "Urdu", "Kannada", "Malayalam", "Tamil", "Oriya", "Bengali", "Marathi"].map((lang) => (
-                        <div className="form-check form-check-inline" key={lang}>
+                      {[
+                        "Telugu",
+                        "Hindi",
+                        "English",
+                        "Urdu",
+                        "Kannada",
+                        "Malayalam",
+                        "Tamil",
+                        "Oriya",
+                        "Bengali",
+                        "Marathi",
+                      ].map((lang) => (
+                        <div
+                          className="form-check form-check-inline"
+                          key={lang}
+                        >
                           <input
                             type="checkbox"
                             className="form-check-input"
@@ -1072,11 +1406,16 @@ export default function WorkerCalleForm2({ isOpen, onClose }) {
                           <label className="form-check-label">{lang}</label>
                         </div>
                       ))}
+                      {errors.languages && (
+                        <div className="text-danger small mt-1">
+                          {errors.languages}
+                        </div>
+                      )}
                     </div>
                   </div>
                 )}
 
-                {/* STEP 3 */}
+                {/* STEP 3: Address & Preferences (unchanged except requireds kept) */}
                 {step === 3 && (
                   <div>
                     <h5 className="mb-3">Address & Preferences (Optional)</h5>
@@ -1084,23 +1423,46 @@ export default function WorkerCalleForm2({ isOpen, onClose }) {
                     <div className="row mb-2">
                       <div className="col-md-6">
                         <label className="form-label">Address Line 1</label>
-                        <input type="text" name="addressLine1" value={formData.addressLine1} onChange={handleChange} className="form-control" />
+                        <input
+                          type="text"
+                          name="addressLine1"
+                          value={formData.addressLine1}
+                          onChange={handleChange}
+                          className="form-control"
+                        />
                       </div>
-
                       <div className="col-md-6">
                         <label className="form-label">Address Line 2</label>
-                        <input type="text" name="addressLine2" value={formData.addressLine2} onChange={handleChange} className="form-control" />
+                        <input
+                          type="text"
+                          name="addressLine2"
+                          value={formData.addressLine2}
+                          onChange={handleChange}
+                          className="form-control"
+                        />
                       </div>
                     </div>
 
                     <div className="row mb-3">
                       <div className="col-md-4">
                         <label className="form-label">City</label>
-                        <input type="text" name="city" value={formData.city} onChange={handleChange} className="form-control" />
+                        <input
+                          type="text"
+                          name="city"
+                          value={formData.city}
+                          onChange={handleChange}
+                          className="form-control"
+                        />
                       </div>
                       <div className="col-md-4">
                         <label className="form-label">State</label>
-                        <input type="text" name="state" value={formData.state} onChange={handleChange} className="form-control" />
+                        <input
+                          type="text"
+                          name="state"
+                          value={formData.state}
+                          onChange={handleChange}
+                          className="form-control"
+                        />
                       </div>
                       <div className="col-md-4">
                         <label className="form-label">PIN Code</label>
@@ -1109,10 +1471,16 @@ export default function WorkerCalleForm2({ isOpen, onClose }) {
                           name="pincode"
                           value={formData.pincode}
                           onChange={handleChange}
-                          className={`form-control ${errors.pincode ? "is-invalid" : ""}`}
+                          className={`form-control ${
+                            errors.pincode ? "is-invalid" : ""
+                          }`}
                           maxLength={6}
                         />
-                        {errors.pincode && <div className="invalid-feedback">{errors.pincode}</div>}
+                        {errors.pincode && (
+                          <div className="invalid-feedback">
+                            {errors.pincode}
+                          </div>
+                        )}
                       </div>
                     </div>
 
@@ -1125,7 +1493,9 @@ export default function WorkerCalleForm2({ isOpen, onClose }) {
                           name="joiningType"
                           value={formData.joiningType}
                           onChange={handleChange}
-                          className={`form-select ${errors.joiningType ? "is-invalid" : ""}`}
+                          className={`form-select ${
+                            errors.joiningType ? "is-invalid" : ""
+                          }`}
                         >
                           <option value="">Select Joining Type</option>
                           <option value="Immediate">Immediate</option>
@@ -1134,23 +1504,38 @@ export default function WorkerCalleForm2({ isOpen, onClose }) {
                           <option value="Flexible">Flexible</option>
                           <option value="Negotiable">Negotiable</option>
                         </select>
-                        {errors.joiningType && <div className="invalid-feedback">{errors.joiningType}</div>}
+                        {errors.joiningType && (
+                          <div className="invalid-feedback">
+                            {errors.joiningType}
+                          </div>
+                        )}
                       </div>
 
                       <div className="col-md-6">
                         <label className="form-label">Expected Salary</label>
-                        <input type="tel" name="expectedSalary" value={formData.expectedSalary} onChange={handleChange} className="form-control" maxLength={6} />
+                        <input
+                          type="tel"
+                          name="expectedSalary"
+                          value={formData.expectedSalary}
+                          onChange={handleChange}
+                          className="form-control"
+                          maxLength={6}
+                        />
                       </div>
                     </div>
 
                     <div className="row mb-3">
                       <div className="col-md-6">
-                        <label className="form-label">Conversation Level  <span className="star">*</span></label>
+                        <label className="form-label">
+                          Conversation Level <span className="star">*</span>
+                        </label>
                         <select
                           name="conversationLevel"
                           value={formData.conversationLevel}
                           onChange={handleChange}
-                          className={`form-select ${errors.conversationLevel ? "is-invalid" : ""}`}
+                          className={`form-select ${
+                            errors.conversationLevel ? "is-invalid" : ""
+                          }`}
                         >
                           <option value="">Select</option>
                           <option value="Very Good">Very Good</option>
@@ -1160,7 +1545,11 @@ export default function WorkerCalleForm2({ isOpen, onClose }) {
                           <option value="Bad">Bad</option>
                           <option value="Very Bad">Very Bad</option>
                         </select>
-                        {errors.conversationLevel && <div className="invalid-feedback">{errors.conversationLevel}</div>}
+                        {errors.conversationLevel && (
+                          <div className="invalid-feedback">
+                            {errors.conversationLevel}
+                          </div>
+                        )}
                       </div>
                       <div className="col-md-6">
                         <label className="form-label">Call Reminder Date</label>
@@ -1170,48 +1559,79 @@ export default function WorkerCalleForm2({ isOpen, onClose }) {
                             name="callReminderDate"
                             value={formData.callReminderDate}
                             onChange={handleChange}
-                            className={`form-control ${errors.callReminderDate ? "is-invalid" : ""}`}
+                            className={`form-control ${
+                              errors.callReminderDate ? "is-invalid" : ""
+                            }`}
                             min={todayYMD()}
                           />
                           {formData.callReminderDate && (
                             <button
                               type="button"
                               className="btn btn-outline-secondary"
-                              onClick={() => setFormData((p) => ({ ...p, callReminderDate: "" }))}
+                              onClick={() =>
+                                setFormData((p) => ({
+                                  ...p,
+                                  callReminderDate: "",
+                                }))
+                              }
                             >
                               Clear
                             </button>
                           )}
-                          {errors.callReminderDate && <div className="invalid-feedback d-block">{errors.callReminderDate}</div>}
+                          {errors.callReminderDate && (
+                            <div className="invalid-feedback d-block">
+                              {errors.callReminderDate}
+                            </div>
+                          )}
                         </div>
                       </div>
                     </div>
 
+                    {/* Uploads */}
                     <div className="row mb-3">
-                      {/* Photo (≤100KB, JPG/PNG) */}
                       <div className="col-md-6">
                         <label className="form-label">Photo (optional)</label>
-                        <input type="file" accept=".jpg,.jpeg,.png" className="form-control" onChange={onPhotoChange} />
+                        <input
+                          type="file"
+                          accept=".jpg,.jpeg,.png"
+                          className="form-control"
+                          onChange={onPhotoChange}
+                        />
                         {formData.photoDataUrl && (
                           <div className="mt-2 d-flex align-items-center gap-2">
                             <img
                               src={formData.photoDataUrl}
                               alt="photo"
                               className="rounded"
-                              style={{ width: 72, height: 72, objectFit: "cover" }}
+                              style={{
+                                width: 72,
+                                height: 72,
+                                objectFit: "cover",
+                              }}
                             />
                             <div className="btn-group">
                               <button
                                 type="button"
                                 className="btn btn-outline-primary btn-sm"
-                                onClick={() => openViewer("Photo", formData.photoDataUrl, formData.photoType)}
+                                onClick={() =>
+                                  openViewer(
+                                    "Photo",
+                                    formData.photoDataUrl,
+                                    formData.photoType
+                                  )
+                                }
                               >
                                 View
                               </button>
                               <button
                                 type="button"
                                 className="btn btn-outline-success btn-sm"
-                                onClick={() => handleDownloadDataUrl(formData.photoName || "photo.jpg", formData.photoDataUrl)}
+                                onClick={() =>
+                                  handleDownloadDataUrl(
+                                    formData.photoName || "photo.jpg",
+                                    formData.photoDataUrl
+                                  )
+                                }
                               >
                                 Download
                               </button>
@@ -1233,40 +1653,70 @@ export default function WorkerCalleForm2({ isOpen, onClose }) {
                             </div>
                           </div>
                         )}
-                        <div className="text-muted mt-1 opacity-75">JPG/PNG, ≤ 100 KB</div>
+                        <div className="text-muted mt-1 opacity-75">
+                          JPG/PNG, ≤ 100 KB
+                        </div>
                       </div>
 
-                      {/* ID Proof (≤150KB, PDF/JPG/PNG) */}
                       <div className="col-md-6">
-                        <label className="form-label">ID Proof (optional)</label>
-                        <input type="file" accept=".pdf,.jpg,.jpeg,.png" className="form-control" onChange={onIdProofChange} />
+                        <label className="form-label">
+                          ID Proof (optional)
+                        </label>
+                        <input
+                          type="file"
+                          accept=".pdf,.jpg,.jpeg,.png"
+                          className="form-control"
+                          onChange={onIdProofChange}
+                        />
                         {formData.idProofDataUrl && (
                           <div className="mt-2 d-flex align-items-center gap-2">
-                            {/* thumbnail icon */}
-                            {/^application\/pdf$/i.test(formData.idProofType) ? (
-                              <div className="border rounded p-3 bg-light text-center" style={{ width: 72, height: 72 }}>
-                                <i className="bi bi-file-earmark-pdf-fill text-danger" style={{ fontSize: "2rem" }} />
+                            {/^application\/pdf$/i.test(
+                              formData.idProofType
+                            ) ? (
+                              <div
+                                className="border rounded p-3 bg-light text-center"
+                                style={{ width: 72, height: 72 }}
+                              >
+                                <i
+                                  className="bi bi-file-earmark-pdf-fill text-danger"
+                                  style={{ fontSize: "2rem" }}
+                                />
                               </div>
                             ) : (
                               <img
                                 src={formData.idProofDataUrl}
                                 alt="id"
                                 className="rounded"
-                                style={{ width: 72, height: 72, objectFit: "cover" }}
+                                style={{
+                                  width: 72,
+                                  height: 72,
+                                  objectFit: "cover",
+                                }}
                               />
                             )}
                             <div className="btn-group">
                               <button
                                 type="button"
                                 className="btn btn-outline-primary btn-sm"
-                                onClick={() => openViewer("ID Proof", formData.idProofDataUrl, formData.idProofType)}
+                                onClick={() =>
+                                  openViewer(
+                                    "ID Proof",
+                                    formData.idProofDataUrl,
+                                    formData.idProofType
+                                  )
+                                }
                               >
                                 View
                               </button>
                               <button
                                 type="button"
                                 className="btn btn-outline-success btn-sm"
-                                onClick={() => handleDownloadDataUrl(formData.idProofName || "id-proof", formData.idProofDataUrl)}
+                                onClick={() =>
+                                  handleDownloadDataUrl(
+                                    formData.idProofName || "id-proof",
+                                    formData.idProofDataUrl
+                                  )
+                                }
                               >
                                 Download
                               </button>
@@ -1288,7 +1738,9 @@ export default function WorkerCalleForm2({ isOpen, onClose }) {
                             </div>
                           </div>
                         )}
-                        <div className="text-muted mt-1 opacity-75">PDF/JPG/PNG, ≤ 150 KB</div>
+                        <div className="text-muted mt-1 opacity-75">
+                          PDF/JPG/PNG, ≤ 150 KB
+                        </div>
                       </div>
                     </div>
 
@@ -1297,28 +1749,41 @@ export default function WorkerCalleForm2({ isOpen, onClose }) {
                         Comment <span className="star">*</span>
                       </label>
                       <textarea
-                        className={`form-control border-secondary ${errors.formComment ? "is-invalid" : ""}`}
+                        className={`form-control border-secondary ${
+                          errors.formComment ? "is-invalid" : ""
+                        }`}
                         name="formComment"
                         value={formData.formComment}
                         onChange={handleChange}
                         rows={3}
                         placeholder="Enter a brief comment"
                       />
-                      {errors.formComment && <div className="invalid-feedback">{errors.formComment}</div>}
+                      {errors.formComment && (
+                        <div className="invalid-feedback">
+                          {errors.formComment}
+                        </div>
+                      )}
                     </div>
-
                   </div>
                 )}
 
                 {/* Footer */}
                 <div className="card-footer d-flex justify-content-end w-100 gap-2 mt-2">
                   {step > 1 && (
-                    <button type="button" className="btn btn-secondary" onClick={prevStep}>
+                    <button
+                      type="button"
+                      className="btn btn-secondary"
+                      onClick={prevStep}
+                    >
                       Previous
                     </button>
                   )}
                   {step < 3 && (
-                    <button type="button" className="btn btn-info" onClick={nextStep}>
+                    <button
+                      type="button"
+                      className="btn btn-info"
+                      onClick={nextStep}
+                    >
                       Next
                     </button>
                   )}
@@ -1336,28 +1801,46 @@ export default function WorkerCalleForm2({ isOpen, onClose }) {
 
       {/* Duplicate Modal */}
       {showDuplicateModal && (
-        <div className="modal fade show d-block" style={{ background: "rgba(0,0,0,.6)", zIndex: 1110 }}>
+        <div
+          className="modal fade show d-block"
+          style={{ background: "rgba(0,0,0,.6)", zIndex: 1110 }}
+        >
           <div className="modal-dialog modal-dialog-centered">
             <div className="modal-content rounded-3">
               <div className="modal-header bg-danger">
-                <h5 className="modal-title text-white ">Duplicate Mobile Number</h5>
-                <button className="btn-close" onClick={() => setShowDuplicateModal(false)} />
+                <h5 className="modal-title text-white">
+                  Duplicate Mobile Number
+                </h5>
+                <button
+                  className="btn-close"
+                  onClick={() => setShowDuplicateModal(false)}
+                />
               </div>
               <div className="modal-body">
                 <p className="mb-2">
-                  The mobile number <strong>{formData.mobileNo}</strong> already exists in the system.
+                  The mobile number <strong>{formData.mobileNo}</strong> already
+                  exists in the system.
                 </p>
-                <p>Name <strong>{formData.name}</strong> </p>
-                <p>ID No <strong>{formData.callId}</strong> </p>
+                <p>
+                  Name <strong>{formData.name}</strong>
+                </p>
+                <p>
+                  ID No <strong>{formData.callId}</strong>
+                </p>
                 {existingWorker ? (
                   <div className="small text-muted">
                     Existing: <strong>{existingWorker.name || "-"}</strong>{" "}
-                    {existingWorker.callId ? `(Call ID: ${existingWorker.callId})` : ""}
+                    {existingWorker.callId
+                      ? `(Call ID: ${existingWorker.callId})`
+                      : ""}
                   </div>
                 ) : null}
               </div>
               <div className="modal-footer">
-                <button className="btn btn-secondary" onClick={() => setShowDuplicateModal(false)}>
+                <button
+                  className="btn btn-secondary"
+                  onClick={() => setShowDuplicateModal(false)}
+                >
                   Close
                 </button>
               </div>
@@ -1368,14 +1851,19 @@ export default function WorkerCalleForm2({ isOpen, onClose }) {
 
       {/* Close-confirm Modal */}
       {showCloseConfirmModal && (
-        <div className="modal fade show d-block" style={{ background: "rgba(0,0,0,.6)", zIndex: 1110 }}>
+        <div
+          className="modal fade show d-block"
+          style={{ background: "rgba(0,0,0,.6)", zIndex: 1110 }}
+        >
           <div className="modal-dialog modal-dialog-centered">
             <div className="modal-content rounded-3">
               <div className="modal-header">
                 <h5 className="modal-title text-danger">Discard changes?</h5>
                 <button className="btn-close" onClick={cancelClose} />
               </div>
-              <div className="modal-body">You have unsaved changes. Are you sure you want to close?</div>
+              <div className="modal-body">
+                You have unsaved changes. Are you sure you want to close?
+              </div>
               <div className="modal-footer">
                 <button className="btn btn-secondary" onClick={cancelClose}>
                   No, stay
@@ -1389,7 +1877,7 @@ export default function WorkerCalleForm2({ isOpen, onClose }) {
         </div>
       )}
 
-      {/* Success Modal (existing) */}
+      {/* Success Modal */}
       {showSuccessModal && (
         <SuccessModal
           show={true}
@@ -1405,35 +1893,58 @@ export default function WorkerCalleForm2({ isOpen, onClose }) {
 
       {/* View Modal for Photo / ID Proof */}
       {viewOpen && (
-        <div className="modal fade show d-block" style={{ background: "rgba(0,0,0,.7)", zIndex: 1120 }}>
+        <div
+          className="modal fade show d-block"
+          style={{ background: "rgba(0,0,0,.7)", zIndex: 1120 }}
+        >
           <div className="modal-dialog modal-xl modal-dialog-centered">
             <div className="modal-content rounded-3">
               <div className="modal-header">
                 <h5 className="modal-title">{viewTitle}</h5>
-                <button className="btn-close" onClick={() => setViewOpen(false)} />
+                <button
+                  className="btn-close"
+                  onClick={() => setViewOpen(false)}
+                />
               </div>
               <div className="modal-body" style={{ background: "#0b1220" }}>
                 {/^application\/pdf$/i.test(viewType) ? (
                   <iframe
                     title="PDF Preview"
                     src={viewSrc}
-                    style={{ width: "100%", height: "80vh", border: "none", background: "#fff" }}
+                    style={{
+                      width: "100%",
+                      height: "80vh",
+                      border: "none",
+                      background: "#fff",
+                    }}
                   />
                 ) : (
                   <div className="text-center">
                     <img
                       src={viewSrc}
                       alt="preview"
-                      style={{ maxWidth: "100%", maxHeight: "80vh", objectFit: "contain" }}
+                      style={{
+                        maxWidth: "100%",
+                        maxHeight: "80vh",
+                        objectFit: "contain",
+                      }}
                     />
                   </div>
                 )}
               </div>
               <div className="modal-footer">
-                <button className="btn btn-light" onClick={() => setViewOpen(false)}>
+                <button
+                  className="btn btn-light"
+                  onClick={() => setViewOpen(false)}
+                >
                   Close
                 </button>
-                <button className="btn btn-success" onClick={() => handleDownloadDataUrl(viewTitle || "file", viewSrc)}>
+                <button
+                  className="btn btn-success"
+                  onClick={() =>
+                    handleDownloadDataUrl(viewTitle || "file", viewSrc)
+                  }
+                >
                   Download
                 </button>
               </div>

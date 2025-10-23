@@ -1084,6 +1084,22 @@
       border: 1px solid rgba(255, 255, 255, 0.1);
     }
   }
+
+  .accordion-item {
+    background-color: #1d1d1d;
+    border: none;
+    border-radius: 5px;
+  }
+
+  .accordion-button {
+    background-color: #4e4e4e;
+    color: #0dcdfd !important;
+
+    &:focus {
+      box-shadow: none;
+    }
+
+  }
 }
 
 // Worker Call Form styles

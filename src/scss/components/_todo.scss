@@ -125,6 +125,18 @@ $td-warning: #f59e0b;
         border-radius: 1rem;
         padding: 1rem;
         margin-bottom: 1rem;
+
+    .form-select {
+        @include mobile {
+            width: 48% !important;
+        }
+    }
+
+    .btn-outline-warning {
+        @include mobile {
+            width: 48%;
+        }
+    }
     }
 
     // ============================
@@ -448,6 +460,7 @@ $td-warning: #f59e0b;
 
     .notif-glow {
         animation: glow 1.6s infinite;
+        padding: 7px;
     }
 
     // ============================
@@ -580,12 +593,6 @@ $td-warning: #f59e0b;
         }
     }
 
-    .dark-input {
-        @include mobile {
-            width: 48% !important;
-        }
-    }
-
     .items-start {
         flex-wrap: wrap !important;
     }
@@ -644,6 +651,7 @@ $td-warning: #f59e0b;
             flex-wrap: wrap;
             gap: 5px;
             margin-bottom: 30px;
+            justify-content: center;
         }
     }
 

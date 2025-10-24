@@ -8,6 +8,13 @@ import React, {
 } from "react";
 import firebaseDB from "../../firebase";
 import { useAuth } from "../../context/AuthContext";
+import { getStorage, ref as storageRef, uploadBytes, getDownloadURL } from "firebase/storage";
+
+
+const WORKER_BASE = "WorkerCallData";
+const workerRef = (id) => firebaseDB.child(`${WORKER_BASE}/${id}`);
+const workerCommentsRef = (id) => firebaseDB.child(`${WORKER_BASE}/${id}/comments`);
+
 
 /** Resolve a nice display name for a user id from the global Users node */
 const pickUserName = (u) => {
@@ -57,6 +64,302 @@ const formatDateTime = (dLike) => {
   );
 };
 
+
+
+async function uploadToStorage(file, pathPrefix = "WorkerFiles") {
+  if (!file) return null;
+  const storage = getStorage(); // or use your exported storage instance
+  const name = `${pathPrefix}/${Date.now()}_${file.name || "file"}`;
+  const sRef = storageRef(storage, name);
+  await uploadBytes(sRef, file);
+  return await getDownloadURL(sRef);
+}
+
+
+
+
+// ---------- Biodata HTML helpers ----------
+const safe = (v) => (v === null || v === undefined ? "" : String(v).trim());
+const asArr = (v) => (Array.isArray(v) ? v : v ? [v] : []);
+const chips = (arr) =>
+  asArr(arr)
+    .filter(Boolean)
+    .map((x) => `<span class="tag">${safe(x)}</span>`)
+    .join(" ");
+
+const addrLines = (a = {}) => {
+  const l1 = safe(a.line1 || a.addressLine1 || a.address1);
+  const l2 = safe(a.line2 || a.addressLine2 || a.address2);
+  const city = safe(a.city);
+  const state = safe(a.state);
+  const pin = safe(a.pincode || a.pin || a.zip);
+  return `
+    <div class="row">
+      <div class="col-md-4"><strong>Address Line 1</strong></div><div class="col-md-1 text-center">:</div><div class="col-md-7">${l1}</div>
+    </div>
+    <div class="row">
+      <div class="col-md-4"><strong>Address Line 2</strong></div><div class="col-md-1 text-center">:</div><div class="col-md-7">${l2}</div>
+    </div>
+    <div class="row">
+      <div class="col-md-4"><strong>City</strong></div><div class="col-md-1 text-center">:</div><div class="col-md-7">${city}</div>
+    </div>
+    <div class="row">
+      <div class="col-md-4"><strong>State</strong></div><div class="col-md-1 text-center">:</div><div class="col-md-7">${state}</div>
+    </div>
+    <div class="row">
+      <div class="col-md-4"><strong>Pincode</strong></div><div class="col-md-1 text-center">:</div><div class="col-md-7">${pin}</div>
+    </div>
+  `;
+};
+
+const addressBlock = (title, a) => `
+  <div class="addr">
+    <div class="addr-title">${title}</div>
+    <div class="addr-line">${addrLines(a)}</div>
+  </div>
+`;
+
+const section = (titleHtml, bodyHtml) => `
+  <div class="sec">
+    <div class="sec-title">${titleHtml}</div>
+    <div class="sec-body">${bodyHtml}</div>
+  </div>
+`;
+
+const buildBiodataHTML = (w) => {
+  const headerImage = "https://firebasestorage.googleapis.com/v0/b/jenceo-admin.firebasestorage.app/o/OfficeFiles%2FHeadder.svg?alt=media&token=fa65a3ab-ba03-4959-bc36-e293c6db48ae";
+
+  const empId = safe(w.callId);
+  const fullName = safe(w.name || `${safe(w.firstName)} ${safe(w.lastName)}`.trim());
+  const gender = safe(w.gender);
+  const dobText = safe(w.dob || w.dateOfBirth);
+  const ageText = safe(w.age);
+  const co = safe(w.careOf || w.guardianName || w.fatherName || w.motherName);
+  const marital = safe(w.maritalStatus);
+
+  const qual = safe(w.qualification || w.education);
+  const college = safe(w.schoolCollege || w.college || w.school);
+  const pskill = chips(w.primarySkill || w.skills);
+  const otherSkills = w.otherSkills || [];
+  const mtongue = chips(w.motherTongue);
+  const experince = safe(w.years);
+  const langs = safe(w.languages || []);
+
+  const permAddr = {
+    line1: w.permanentAddressLine1 || w.addressLine1 || w.address1,
+    line2: w.permanentAddressLine2 || w.addressLine2 || w.address2,
+    city: w.permanentCity || w.city,
+    state: w.permanentState || w.state,
+    pincode: w.permanentPincode || w.pincode || w.pin,
+  };
+  // Present address – if missing, fall back to permanent (as requested)
+  const presentAddr = {
+    line1: w.presentAddressLine1 || w.addressLine1 || w.address1 || permAddr.line1,
+    line2: w.presentAddressLine2 || w.addressLine2 || w.address2 || permAddr.line2,
+    city: w.presentCity || w.city || permAddr.city,
+    state: w.presentState || w.state || permAddr.state,
+    pincode: w.presentPincode || w.pincode || w.pin || permAddr.pincode,
+  };
+
+  const metaDate = new Date().toLocaleDateString("en-GB");
+  const idDisplay = safe(w.idNo || w.employeeId || w.id || w.key);
+
+  const stars = Number(w.rating ?? 0);
+  const starColor = stars >= 4 ? "#16a34a" : (stars >= 3 ? "#f59e0b" : "#ef4444");
+  const ratingHtml = `
+  <div style="margin-top:6px;text-align:center;color:${starColor}">
+    ${[1, 2, 3, 4, 5].map(n => n <= stars ? "★" : "☆").join(" ")}
+    <span style="margin-left:6px;font-size:12px;color:#555">(${stars}/5)</span>
+  </div>
+`;
+
+  // then use ${photoHtml}${ratingHtml} where you render the photo box
+
+
+  // Photo (prefer saved URL, then in-memory preview)
+  const photoUrl = w.employeePhotoUrl || w.employeePhoto || w.photoURL || "";
+  const photoPreview = w.employeePhotoPreview || "";
+  const photoHtml = (photoUrl || photoPreview)
+    ? `<img src="${safe(photoUrl || photoPreview)}" alt="Photo" />`
+    : `<div class="no-photo">No Photo</div>`;
+
+  const html = `
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8" />
+<title>Employee Biodata - ${fullName}</title>
+<style>
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0;font-family:Arial,Helvetica,sans-serif;color:#111}
+  .page{ max-width:900px; margin:auto;background:#fff;border:1px solid #e5e5e5;padding:20px}
+  .header{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;border-bottom:2px solid #b7b4b4; padding:20px; margin:0 -20px; background: #c7d1f5; border-radius: 5px;}
+  .row { display: flex; flex-wrap: wrap; margin-left: -6px; margin-right: -6px; border-bottom:1px solid #f1f1f1; margin-bottom:6px }
+  .row > div { padding-left: 6px; padding-right: 6px; }
+  .col-md-1 { flex: 0 0 8.3333%;  max-width: 8.3333%; }
+  .col-md-4 { flex: 0 0 33.3333%; max-width: 33.3333%; }
+  .col-md-7 { flex: 0 0 58.3333%; max-width: 58.3333%; }
+
+  .biodataHeader {display:flex; justify-content:space-between; align-items: stretch; color:#fff; margin: -20px -20px 20px -20px}
+  .logoSection {flex: 0 0 40%; align-content: center; border-bottom:10px solid #02acf2 }
+  .logoSection h1 {color:#FCC603; margin:0; font-size:40px; margin-left:50px; font-weight:900; line-height:1}
+  .logoSection h1 spane {color:#02acf2; margin:0; font-size:100px; }
+  .logoSection .subText {color:#817f7f; margin-left:65px; font-size:12px; font-weight:bold; letter-spacing:3px  }
+  .dataSection {background:#02acf2; flex: 1;  padding:10px 20px; border-top-left-radius: 125px; padding-left: 70px; }
+  .dataSection * {margin:0; }
+  .dataSection span {font-size:10px; }
+
+  .h-left{flex:1; margin-top:25px}
+  .title{font-size:40px;font-weight:700;letter-spacing:.4px;margin:0}
+  .subtitle{font-size:12px;color:#444;margin-top:2px}
+  .meta{font-size:11px;color:#555;margin-top:4px;display:flex;gap:14px;flex-wrap:wrap}
+  .sec{margin-top:14px;border:1px solid #ddd;border-radius:6px;overflow:hidden}
+  .sec-title{background:#dfe2f5; padding:8px 10px;font-weight:700}
+  .sec-title h3{margin:0;font-size:14px}
+  .sec-body{padding:10px}
+  .kv-row{display:grid;grid-template-columns: 240px 12px 1fr;gap:10px;align-items:start; margin-bottom:0; padding: 8px 0 2px 5px;}
+  .kv-row:nth-child(even) {background-color: #f2f3fd;}
+  .kv-label{font-weight:600; font-size:12px}
+  .kv-colon{text-align:center}
+  .kv-value{font-weight:500;word-break:break-word; font-size:12px}
+  .addr{border:1px dashed #c9c9c9;border-radius:6px; padding:10px;margin-top:10px; margin-bottom:5px}
+  .addr-title{font-weight:700;margin-bottom:4px; font-size:14px}
+  .addr-line{font-size:10px;line-height:1; margin-bottom:5px}
+  .addr-line .row {padding-top:10px; padding-bottom:10px; border-bottom:0; margin-bottom:0}
+  .addr-line .row:nth-child(odd) {background-color:#f2f3fd;}
+  .two-col{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  .tags{display:flex;flex-wrap:wrap;gap:6px}
+  .tag{border:1px solid #02acf2;color:#02acf2;font-size:12px;padding:3px 8px;border-radius:999px}
+  .muted{color:#777}
+  .footer{margin :20px -20px -20px -20px;font-size:10px; color:#fff;display:flex;justify-content:space-between; background-color:#02acf2; padding:10px 20px}
+  .blue {color:#02acf2}
+  @media print{.page{border:none;margin:0;width:100%}}
+  .header-img{width:100%;max-height:120px;object-fit:contain;margin-bottom:6px}
+  .photo-box img{width:120px;height:120px;object-fit:cover;border-radius:6px;border:1px solid #ccc}
+  .photo-box .no-photo{width:120px;height:120px;border:1px solid #ccc;border-radius:6px;display:flex;align-items:center;justify-content:center;color:#888;font-size:12px}
+  .heaerImg {margin: -21px -20px 10px -20px}
+  .heaerImg img {width:100%}
+
+  @media only screen and (max-width: 767px) {
+    .biodataHeader {display:none}
+    .header {display:block}
+    .header .h-left {text-align:center; margin-top:10px}
+    .header .meta {justify-content:center; margin-bottom:15px}
+    .title {font-size: 20px}
+    .kv-row {display:block}
+    .kv-colon {display:none}
+    .kv-label {margin-bottom:5px}
+    .two-col {display:block}
+    .col-md-1 { display:none}
+    .col-md-4 { flex: 0 0 100%; max-width: 100%; }
+    .col-md-7 { flex: 0 0 100%; max-width: 100%; }
+    .addr-title {font-size:12px}
+    .addr-line .col-md-4 {padding-bottom:5px}
+  }
+</style>
+</head>
+<body>
+<div class="page">
+  <div class="heaerImg"><img src="${headerImage}" alt="Header" /></div>
+
+  <div class="header">
+    <div class="h-left">
+      <h1 class="title">EMPLOYEE BIO-DATA</h1>
+      <div class="subtitle">H.R Department (Reg No: SEA/HYD/ALO/26/1040178/2025)</div>
+      <div class="meta">
+        <div><strong>ID:</strong> ${empId}</div>
+        <div><strong>Date:</strong> ${metaDate}</div>
+      </div>
+    </div>
+    <div class="photo-box">
+      ${photoHtml}
+      ${ratingHtml}
+    </div>
+    
+  </div>
+
+  ${section("<h3>Basic Information</h3>", `
+    <div class="kv-row">
+      <div class="kv-label">Full Name</div><div class="kv-colon">:</div>
+      <div class="kv-value blue"><strong>${fullName}</strong></div>
+    </div>
+    <div class="kv-row">
+      <div class="kv-label">Gender</div><div class="kv-colon">:</div>
+      <div class="kv-value blue">${gender}</div>
+    </div>
+    <div class="kv-row">
+      <div class="kv-label">Date of Birth</div><div class="kv-colon">:</div>
+      <div class="kv-value">${dobText}</div>
+    </div>
+    <div class="kv-row">
+      <div class="kv-label">Age</div><div class="kv-colon">:</div>
+      <div class="kv-value blue">${ageText}</div>
+    </div>
+    <div class="kv-row">
+      <div class="kv-label">Care of</div><div class="kv-colon">:</div>
+      <div class="kv-value">${co}</div>
+    </div>
+    <div class="kv-row">
+      <div class="kv-label">Marital Status</div><div class="kv-colon">:</div>
+      <div class="kv-value blue">${marital}</div>
+    </div>
+  `)}
+
+  ${section("<h3>Addresses</h3>", `
+    <div class="two-col">
+      <div>${addressBlock("Permanent Address", permAddr)}</div>
+      <div>${addressBlock("Present Address", presentAddr)}</div>
+    </div>
+  `)}
+
+  ${section("<h3>Qualification & Skills</h3>", `
+    <div class="kv-row">
+      <div class="kv-label">Qualification</div><div class="kv-colon">:</div>
+      <div class="kv-value blue">${qual}</div>
+    </div>
+    <div class="kv-row">
+      <div class="kv-label">College / School</div><div class="kv-colon">:</div>
+      <div class="kv-value">${college}</div>
+    </div>
+    <div class="kv-row">
+      <div class="kv-label">Primary Skill</div><div class="kv-colon">:</div>
+      <div class="kv-value blue"><strong>${pskill}</strong></div>
+    </div>
+    <div class="kv-row">
+      <div class="kv-label">Other Skills</div><div class="kv-colon">:</div>
+      <div class="kv-value">${safe(otherSkills)}</div>
+    </div>
+    <div class="kv-row">
+      <div class="kv-label">Experience</div><div class="kv-colon">:</div>
+      <div class="kv-value blue"><strong>${chips(experince)}</strong></div>
+    </div>
+    <div class="kv-row">
+      <div class="kv-label">Mother Tongue</div><div class="kv-colon">:</div>
+      <div class="kv-value">${mtongue}</div>
+    </div>
+    <div class="kv-row">
+      <div class="kv-label">Languages</div><div class="kv-colon">:</div>
+      <div class="kv-value">${langs}</div>
+    </div>
+  `)}
+
+  <div class="footer">
+    <div>Doc Ref: JC-HR-07</div>
+    <div>Revision: 1</div>
+    <div>Date: 1st May 2025</div>
+    <div>Page 1 of 1</div>
+  </div>
+</div>
+<script>window.focus && window.focus();</script>
+</body>
+</html>
+`;
+  return html;
+};
+
+
+
+
 export default function WorkerCallModal({
   worker,
   isOpen,
@@ -65,6 +368,12 @@ export default function WorkerCallModal({
   workerData
 }) {
   const { user: authUser } = useAuth();
+  useEffect(() => {
+    if (worker && typeof worker === "object") {
+      setLocalWorker(worker);
+    }
+  }, [worker]);
+
 
   // Global Users map (no local auth)
   const [usersMap, setUsersMap] = useState({});
@@ -191,6 +500,23 @@ export default function WorkerCallModal({
     "Marati",
   ];
 
+  const MOTHER_TONGUE_OPTIONS = [
+    "Telugu",
+    "English",
+    "Hindi",
+    "Urdu",
+    "Tamil",
+    "Kannada",
+    "Malayalam",
+    "Marathi",
+    "Gujarati",
+    "Bengali",
+    "Punjabi",
+    "Odia",
+    "Assamese"
+  ];
+
+
   const sourceOptions = [
     "Apana",
     "WorkerIndian",
@@ -209,83 +535,6 @@ export default function WorkerCallModal({
 
   const iframeRef = useRef(null);
 
-  // Build the biodata HTML. Present & Permanent address are the same by design.
-  const buildBiodataHTML = ({ hideSensitive = false } = {}) => {
-    const w = localWorker || {};
-    const addr1 = [w.addressLine1, w.addressLine2].filter(Boolean).join(", ");
-    const addr2 = [w.city, w.state, w.pincode].filter(Boolean).join(", ");
-    const fullAddress = [addr1, addr2].filter(Boolean).join(", ");
-
-    const phone = hideSensitive ? "**********" : w.mobileNo || "";
-    const email = hideSensitive ? "********" : w.email || "";
-
-    const langs = (w.languages || []).join(", ");
-    const pskills = Array.isArray(w.skills)
-      ? w.skills.join(", ")
-      : w.skills || "";
-    const hskills = (w.homeCareSkills || []).join(", ");
-    const nworks = (w.nursingWorks || []).join(", ");
-
-    return `
-<!doctype html>
-<html>
-<head>
-  <meta charset="utf-8" />
-  <title>Biodata</title>
-  <style>
-    body{font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial; padding:20px; color:#111}
-    .h{font-size:18px; font-weight:700; margin:16px 0 8px}
-    .row{display:flex; gap:16px; margin:8px 0}
-    .col{flex:1}
-    .box{border:1px solid #ddd; border-radius:8px; padding:12px}
-    .muted{color:#666; font-size:12px}
-    .tag{display:inline-block; padding:2px 8px; border-radius:999px; background:#eef; margin:2px; font-size:12px}
-    .small{font-size:12px}
-  </style>
-</head>
-<body>
-  <div class="h">Employee Biodata</div>
-  <div class="row">
-    <div class="col box">
-      <div><strong>Name:</strong> ${w.name || "-"}</div>
-      <div><strong>Mobile:</strong> ${phone}</div>
-      <div><strong>Email:</strong> ${email}</div>
-      <div><strong>Gender:</strong> ${w.gender || "-"}</div>
-      <div><strong>Age:</strong> ${w.age || "-"}</div>
-      <div><strong>Experience:</strong> ${w.experience || "-"} ${w.years ? `(${w.years} yrs)` : ""
-      }</div>
-      <div><strong>Location:</strong> ${w.location || "-"}</div>
-      <div class="small muted">Source: ${w.source || "-"}</div>
-    </div>
-    <div class="col box">
-      <div class="h" style="margin-top:0">Address</div>
-      <div><strong>Present Address:</strong><br/>${fullAddress || "-"}</div>
-      <div style="margin-top:8px"><strong>Permanent Address:</strong><br/>${fullAddress || "-"
-      }</div>
-    </div>
-  </div>
-
-  <div class="row">
-    <div class="col box">
-      <div class="h" style="margin-top:0">Skills & Languages</div>
-      <div><strong>Primary Skill(s):</strong> ${pskills || "-"}</div>
-      <div><strong>Home Care Skills:</strong> ${hskills || "-"}</div>
-      <div><strong>Nursing Tasks:</strong> ${nworks || "-"}</div>
-      <div><strong>Languages:</strong> ${langs || "-"}</div>
-      <div><strong>Working Hours:</strong> ${w.workingHours || "-"}</div>
-    </div>
-    <div class="col box">
-      <div class="h" style="margin-top:0">Notes</div>
-      <div><strong>Conversation:</strong> ${w.conversationLevel || "-"}</div>
-      <div><strong>Comment:</strong> ${w.formComment || w.comment || "-"}</div>
-      <div><strong>Joining:</strong> ${w.joiningType || "-"}</div>
-      <div><strong>Expected Salary:</strong> ${w.expectedSalary || "-"}</div>
-      <div><strong>Reminder:</strong> ${w.callReminderDate || "-"}</div>
-    </div>
-  </div>
-</body>
-</html>`;
-  };
 
   const handleDownloadBiodata = () => {
     const html = buildBiodataHTML({ hideSensitive: true });
@@ -322,11 +571,35 @@ export default function WorkerCallModal({
       ? Object.values(localWorker.comments).filter(Boolean)
       : [];
 
+
+
   useEffect(() => {
     if (activeTab === "biodata" && iframeRef.current) {
       iframeRef.current.srcdoc = buildBiodataHTML({ hideSensitive: false });
     }
   }, [activeTab, localWorker]);
+
+  // Live subscribe to the worker node so UI always reflects latest DB state
+  useEffect(() => {
+    if (!worker?.id) return;
+    const ref = workerRef(worker.id);
+
+    const onVal = (snap) => {
+      const fresh = snap.val() || {};
+      setLocalWorker((prev) => ({ ...prev, ...fresh }));
+      // keep rating state in sync
+      setRating(Number(fresh.rating ?? 0));
+
+      // if Biodata tab is open, refresh the iframe
+      if (activeTab === "biodata" && iframeRef.current) {
+        iframeRef.current.srcdoc = buildBiodataHTML(fresh);
+      }
+    };
+
+    ref.on("value", onVal);
+    return () => ref.off("value", onVal);
+  }, [worker?.id, activeTab]);
+
 
   // Canonical comments array; ALWAYS sorted desc by date
   const [comments, setComments] = useState([]);
@@ -338,11 +611,16 @@ export default function WorkerCallModal({
   const [languageSearch, setLanguageSearch] = useState("");
   const [showLanguageDropdown, setShowLanguageDropdown] = useState(false);
 
+  const [rating, setRating] = useState(
+    Number(worker?.rating ?? 0)
+  );
+
+
   const languageInputRef = useRef(null);
   const dropdownRef = useRef(null);
 
   // Save remains disabled until a comment is added this session
-  const [canSave, setCanSave] = useState(false);
+  const [canSave, setCanSave] = useState(true);
 
   // Rehydrate when the record changes
   useEffect(() => {
@@ -426,7 +704,7 @@ export default function WorkerCallModal({
   // ⬇️ ADD: live comments subscription (array OR object) -----------------------
   useEffect(() => {
     if (!worker?.id) return;
-    const ref = firebaseDB.child(`WorkerCallData/${worker.id}/comments`);
+    const ref = workerCommentsRef(worker.id);
     const onVal = (snap) => {
       const raw = snap.val();
       let list = [];
@@ -449,6 +727,11 @@ export default function WorkerCallModal({
     return () => ref.off("value", onVal);
   }, [worker?.id]);
   // ---------------------------------------------------------------------------
+  useEffect(() => {
+    if (activeTab !== "biodata") return;
+    if (!iframeRef.current) return;
+    iframeRef.current.srcdoc = buildBiodataHTML(localWorker || {});
+  }, [activeTab, localWorker]);
 
 
   // Update handleLanguageSelect to close dropdown
@@ -531,50 +814,32 @@ export default function WorkerCallModal({
   };
 
 
-  // === View ID proof in modal (PDF or image) ===
+  // Open ID proof in a new tab (PDF or image)
   const handleViewId = () => {
-    const url =
-      localWorker.idProofUrl || localWorker.idProofPreview || null;
+    const url = localWorker.idProofUrl || localWorker.idProofPreview || null;
+    if (!url) return alert("No ID proof available to view.");
+    const win = window.open("", "_blank", "noopener,noreferrer");
+    if (!win) return alert("Popup blocked. Please allow popups.");
 
-    if (!url) {
-      alert("No ID proof available to view.");
-      return;
-    }
-
-    // open in modal for image/pdf preview
-    const win = window.open();
-    if (win) {
-      if (url.toLowerCase().endsWith(".pdf")) {
-        win.document.write(
-          `<embed src="${url}" type="application/pdf" width="100%" height="100%">`
-        );
-      } else {
-        win.document.write(`<img src="${url}" style="width:100%">`);
-      }
+    const lower = url.toLowerCase();
+    if (lower.endsWith(".pdf") || lower.includes("application/pdf")) {
+      win.document.write(`<embed src="${url}" type="application/pdf" width="100%" height="100%" />`);
     } else {
-      alert("Popup blocked. Please allow popups to view file.");
+      win.document.write(`<img src="${url}" style="width:100%" />`);
     }
   };
 
-
-  // === Download ID proof (image or PDF) ===
   const handleDownloadId = () => {
-    const url =
-      localWorker.idProofUrl || localWorker.idProofPreview || null;
-
-    if (!url) {
-      alert("No ID proof available to download.");
-      return;
-    }
-
-    const link = document.createElement("a");
-    link.href = url;
-    const ext = url.toLowerCase().endsWith(".pdf") ? ".pdf" : ".jpg";
-    link.download = `${localWorker.name || "ID_Proof"}${ext}`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    const url = localWorker.idProofUrl || localWorker.idProofPreview || null;
+    if (!url) return alert("No ID proof available to download.");
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${localWorker.name || "ID_Proof"}${url.toLowerCase().endsWith(".pdf") ? ".pdf" : ""}`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
   };
+
 
 
   // Hooks above any early returns
@@ -625,39 +890,185 @@ export default function WorkerCallModal({
     setDirty(true);
   };
 
+  // Remove disallowed values (undefined, functions, File/Blob) recursively
+  function cleanForFirebase(input) {
+    if (input == null) return input; // keep null
+    if (Array.isArray(input)) {
+      return input
+        .map((x) => cleanForFirebase(x))
+        .filter((x) => x !== undefined); // strip undefined array items
+    }
+    if (typeof input === "object") {
+      // Skip File/Blob
+      const isFileLike =
+        (typeof File !== "undefined" && input instanceof File) ||
+        (typeof Blob !== "undefined" && input instanceof Blob);
+      if (isFileLike) return undefined;
+
+      const out = {};
+      for (const [k, v] of Object.entries(input)) {
+        if (typeof v === "function") continue;
+        const cleaned = cleanForFirebase(v);
+        if (cleaned !== undefined) out[k] = cleaned; // omit undefined keys
+      }
+      return out;
+    }
+    // primitives: keep (string/number/boolean)
+    return input;
+  }
+
+  // Convenience: ensure arrays + clear transient upload fields
+  function buildWorkerSavePayload(localWorker, {
+    employeePhotoUrl,
+    idProofUrl,
+    currentUserId,
+    currentUserName
+  }) {
+    const now = Date.now();
+    const base = {
+      ...localWorker,
+
+      // normalize arrays
+      skills: Array.isArray(localWorker.skills) ? localWorker.skills : (localWorker.skills ? [localWorker.skills] : []),
+      languages: Array.isArray(localWorker.languages) ? localWorker.languages : (localWorker.languages ? [localWorker.languages] : []),
+      homeCareSkills: Array.isArray(localWorker.homeCareSkills) ? localWorker.homeCareSkills : (localWorker.homeCareSkills ? [localWorker.homeCareSkills] : []),
+      otherSkills: Array.isArray(localWorker.otherSkills) ? localWorker.otherSkills : (localWorker.otherSkills ? [localWorker.otherSkills] : []),
+
+      // uploaded URLs
+      employeePhotoUrl: employeePhotoUrl ?? localWorker.employeePhotoUrl ?? null,
+      idProofUrl: idProofUrl ?? localWorker.idProofUrl ?? null,
+
+      // NEW: persist rating
+      rating: Number(localWorker.rating ?? 0),
+
+      // explicitly clear previews in DB (null, not undefined)
+      employeePhotoPreview: null,
+      idProofPreview: null,
+
+      // NEVER store File/Blob in RTDB
+      employeePhotoFile: undefined,
+      idProofFile: undefined,
+
+      updatedAt: now,
+      updatedById: currentUserId || localWorker.updatedById || null,
+      updatedByName: currentUserName || localWorker.updatedByName || ""
+    };
+
+    if (!localWorker.createdAt) base.createdAt = localWorker.date || now;
+    if (!localWorker.createdById && currentUserId) {
+      base.createdById = currentUserId;
+      base.createdByName = currentUserName || "";
+    }
+
+    return cleanForFirebase(base);
+  }
+
+
+
   /** Save worker details (disabled until a comment is added) */
+  // Remove undefined/File/Blob and clear previews before writing to RTDB
+  function cleanForFirebase(input) {
+    if (input == null) return input;                        // keep null
+    if (Array.isArray(input)) return input.map(cleanForFirebase).filter(v => v !== undefined);
+    if (typeof input === "object") {
+      // skip File/Blob
+      if ((typeof File !== "undefined" && input instanceof File) ||
+        (typeof Blob !== "undefined" && input instanceof Blob)) return undefined;
+      const out = {};
+      for (const [k, v] of Object.entries(input)) {
+        if (typeof v === "function") continue;
+        const cleaned = cleanForFirebase(v);
+        if (cleaned !== undefined) out[k] = cleaned;        // omit undefined keys
+      }
+      return out;
+    }
+    return input;                                          // primitives ok
+  }
+
+  function buildWorkerSavePayload(source, { employeePhotoUrl, idProofUrl, currentUserId, currentUserName }) {
+    const now = Date.now();
+
+    const base = {
+      ...source,
+
+      // normalize arrays
+      skills: Array.isArray(source.skills) ? source.skills : (source.skills ? [source.skills] : []),
+      languages: Array.isArray(source.languages) ? source.languages : (source.languages ? [source.languages] : []),
+      homeCareSkills: Array.isArray(source.homeCareSkills) ? source.homeCareSkills : (source.homeCareSkills ? [source.homeCareSkills] : []),
+      otherSkills: Array.isArray(source.otherSkills) ? source.otherSkills : (source.otherSkills ? [source.otherSkills] : []),
+      nursingWorks: Array.isArray(source.nursingWorks) ? source.nursingWorks : (source.nursingWorks ? [source.nursingWorks] : []),
+
+      // URLs coming from uploads (fall back to existing)
+      employeePhotoUrl: employeePhotoUrl ?? source.employeePhotoUrl ?? null,
+      idProofUrl: idProofUrl ?? source.idProofUrl ?? null,
+
+      // persist rating
+      rating: Number(source.rating ?? 0),
+
+      // clear previews in DB (use null, not undefined)
+      employeePhotoPreview: null,
+      idProofPreview: null,
+
+      // never store File/Blob
+      employeePhotoFile: undefined,
+      idProofFile: undefined,
+
+      updatedAt: now,
+      updatedById: currentUserId || source.updatedById || null,
+      updatedByName: currentUserName || source.updatedByName || "",
+    };
+
+    if (!source.createdAt) base.createdAt = source.date || now;
+    if (!source.createdById && currentUserId) {
+      base.createdById = currentUserId;
+      base.createdByName = currentUserName || "";
+    }
+
+    return cleanForFirebase(base);
+  }
+
   const handleSave = async () => {
-    if (!canSave) return;
     try {
-      const now = Date.now();
-      const toSave = cleanObjectForFirebase({
-        ...localWorker,
-        skills: normalizeArray(localWorker.skills),
-        languages: normalizeArray(localWorker.languages),
-        homeCareSkills: normalizeArray(localWorker.homeCareSkills),
-        otherSkills: normalizeArray(localWorker.otherSkills),
-        updatedAt: now,
-        updatedById: currentUserId || localWorker.updatedById || null,
-        updatedByName: currentUserName || localWorker.updatedByName || "",
-      });
+      // 1) Upload files if present
+      let employeePhotoUrl = localWorker.employeePhotoUrl || null;
+      let idProofUrl = localWorker.idProofUrl || null;
 
-      if (!localWorker.createdAt) {
-        toSave.createdAt = localWorker.date || now;
+      if (localWorker.employeePhotoFile) {
+        employeePhotoUrl = await uploadToStorage(localWorker.employeePhotoFile, "WorkerPhotos");
       }
-      if (!localWorker.createdById && currentUserId) {
-        toSave.createdById = currentUserId;
-        toSave.createdByName = currentUserName;
+      if (localWorker.idProofFile) {
+        idProofUrl = await uploadToStorage(localWorker.idProofFile, "WorkerIdProofs");
       }
 
-      await firebaseDB.child(`WorkerCallData/${worker.id}`).update(toSave);
-      setLocalWorker((prev) => ({ ...prev, ...toSave }));
-      setShowSaveModal(true);
+      // 2) Build safe payload (includes rating)
+      const payload = buildWorkerSavePayload(
+        { ...localWorker, rating },                 // include latest rating state
+        { employeePhotoUrl, idProofUrl, currentUserId, currentUserName }
+      );
+
+      // 3) Write to RTDB
+      await firebaseDB.child(`${WORKER_BASE}/${localWorker.id}`).update(payload);
+
+      // 4) Reflect immediately in UI
+      setLocalWorker((prev) => ({ ...prev, ...payload }));
       setDirty(false);
+
+      // 5) Refresh biodata iframe if open
+      if (activeTab === "biodata" && iframeRef.current) {
+        iframeRef.current.srcdoc = buildBiodataHTML({ ...localWorker, ...payload });
+      }
+
+      // Optional: small toast/modal you already have
+      setShowSaveModal?.(true);
     } catch (err) {
       console.error("Save failed:", err);
       alert("Failed to save worker details.");
     }
   };
+
+
+
+
 
   /** Add a comment → enables Save; shows at the top; never overwrites history */
   const handleAddComment = async () => {
@@ -676,9 +1087,7 @@ export default function WorkerCallModal({
       setComments(updated);
       setNewComment("");
 
-      await firebaseDB
-        .child(`WorkerCallData/${worker.id}/comments`)
-        .set(updated);
+      await workerCommentsRef(worker.id).set(updated);
 
       setLocalWorker((prev) => ({
         ...prev,
@@ -731,6 +1140,8 @@ export default function WorkerCallModal({
       );
     }
   };
+
+
 
   // Created/Updated stamps (global Users)
   const createdByName =
@@ -802,6 +1213,7 @@ export default function WorkerCallModal({
                   <h5 className="modal-title fw-bold mb-2 text-white">
                     {isEditMode ? "✏️ Edit Worker" : "👤 Worker Details"}
                   </h5>
+
                   <div className="d-flex flex-wrap align-items-center gap-3 text-white-90 small text-warning">
                     <span className="d-flex align-items-center gap-2">
                       <i className="bi bi-person-fill"></i>
@@ -815,6 +1227,41 @@ export default function WorkerCallModal({
                       <i className="bi bi-geo-alt-fill"></i>
                       {localWorker?.location || "—"}
                     </span>
+                  </div>
+                  <div>
+                    <div className="d-flex align-items-center gap-1 ms-3">
+                      {[1, 2, 3, 4, 5].map(n => {
+                        let starColor = "";
+                        if (n <= rating) {
+                          if (rating >= 4) {
+                            starColor = "text-success"; // Green for 4-5 stars
+                          } else if (rating === 3) {
+                            starColor = "text-warning"; // Yellow for 3 stars
+                          } else {
+                            starColor = "text-danger"; // Red for 1-2 stars
+                          }
+                        }
+
+                        return (
+                          <i
+                            key={n}
+                            className={`bi ${n <= rating ? `bi-star-fill ${starColor}` : "bi-star text-secondary"}`}
+                            style={{
+                              cursor: isEditMode ? "pointer" : "default",
+                              fontSize: "1.05rem"
+                            }}
+                            onClick={() => {
+                              if (isEditMode) {
+                                setRating(n);
+                                setDirty(true);
+                              }
+                            }}
+                            title={`${rating || 0}/5`}
+                          />
+                        );
+                      })}
+                    </div>
+
                   </div>
                 </div>
 
@@ -1271,19 +1718,19 @@ export default function WorkerCallModal({
                           <div className="card-header dark-card-header">
                             <h6 className="mb-0 fw-bold d-flex align-items-center text-warning">
                               <i className="bi bi-chat-left-text me-2"></i>
-                              Comments & Activity
+                              COMMENTS & ACTIVITY
                             </h6>
                           </div>
                           <div className="card-body p-3">
                             {/* Initial Form Comment */}
                             {localWorker.formComment && (
-                              <div className="comment-initial mb-3">
+                              <div className="comment-initial mb-2">
                                 <div className="comment-header d-flex justify-content-between align-items-center mb-2">
                                   <small className="text-primary fw-bold">
                                     Initial Comment
                                   </small>
                                 </div>
-                                <p className="mb-0 text-info">
+                                <p className="mb-0 text-white opacity-75">
                                   {localWorker.formComment}
                                 </p>
 
@@ -1340,41 +1787,20 @@ export default function WorkerCallModal({
                                     return (
                                       <div
                                         key={c?.id || c?.timestamp || c?.date || i}
-                                        className="comment-row d-flex gap-3 p-3 rounded mb-2"
+                                        className="comment-row d-flex gap-3 p-3 rounded mb-2 comment-initial"
                                       >
-                                        <div>
-                                          {avatarUrl ? (
-                                            <img
-                                              src={avatarUrl}
-                                              alt={authorName}
-                                              className="avatar avatar-sm"
-                                              style={{ objectFit: "cover", width: 32, height: 32 }}
-                                              onError={(e) => (e.currentTarget.style.display = "none")}
-                                            />
-                                          ) : (
-                                            <span
-                                              className="avatar avatar-sm avatar-fallback"
-                                              style={{ width: 32, height: 32 }}
-                                            >
-                                              {authorName
-                                                .split(" ")
-                                                .map((s) => s[0])
-                                                .join("")
-                                                .slice(0, 2)
-                                                .toUpperCase()}
-                                            </span>
-                                          )}
-                                        </div>
+
                                         <div className="flex-grow-1">
-                                          <div className="d-flex justify-content-between align-items-center mb-1">
-                                            <strong className="text-white-90">{authorName}</strong>
-                                            <span className="text-muted-300 small">{when}</span>
-                                          </div>
-                                          <div className="text-white-80">
+                                          <div className="text-white-80 mb-1">
                                             {text || (
                                               <span className="text-muted-400 fst-italic">— no content —</span>
                                             )}
                                           </div>
+                                          <div className="d-flex justify-content-between align-items-center">
+                                            <strong className="text-white-50 small-text">By {authorName}</strong>
+                                            <span className="text-white-50 small-text">{when}</span>
+                                          </div>
+
                                         </div>
                                       </div>
                                     );
@@ -1419,6 +1845,40 @@ export default function WorkerCallModal({
                 {activeTab === "skills" && (
                   <div className="fade show">
                     <div className="row g-3">
+                      {/* Mother Tongue (simple select) */}
+                      <div className="col-12">
+                        <div className="dark-card">
+                          <div className="card-header dark-card-header">
+                            <h6 className="mb-0 fw-bold d-flex align-items-center">
+                              <i className="bi bi-megaphone me-2"></i>
+                              Mother Tongue
+                            </h6>
+                          </div>
+                          <div className="card-body p-3">
+                            {isEditMode ? (
+                              <select
+                                name="motherTongue"
+                                value={localWorker.motherTongue || ""}
+                                onChange={(e) => {
+                                  setLocalWorker(prev => ({ ...prev, motherTongue: e.target.value }));
+                                  setDirty(true);
+                                }}
+                                className="form-select dark-input"
+                              >
+                                <option value="">Select Mother Tongue</option>
+                                {MOTHER_TONGUE_OPTIONS.map(mt => (
+                                  <option key={mt} value={mt}>{mt}</option>
+                                ))}
+                              </select>
+                            ) : (
+                              <div className="info-grid-compact">
+                                {renderInfoCard("Mother Tongue", localWorker.motherTongue || "—")}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+
                       {/* Languages */}
                       <div className="col-12">
                         <div className="dark-card">
@@ -1945,7 +2405,7 @@ export default function WorkerCallModal({
                 {activeTab === "address" && (
                   <div className="fade show">
                     <div className="row g-3">
-                      <div className="col-12">
+                      <div className="col-12 mb-3">
                         <div className="dark-card">
                           <div className="card-header dark-card-header">
                             <h6 className="mb-0 fw-bold d-flex align-items-center text-warning">
@@ -2055,30 +2515,85 @@ export default function WorkerCallModal({
                           </div>
                         </div>
                       </div>
+
+                      {/* Left: Photo + upload (optional) */}
+                      <div className="col-md-4">
+                        <div className="glass-card p-3 text-center">
+                          <div className="mb-2">
+                            {localWorker.employeePhotoUrl ? (
+                              <img
+                                src={localWorker.employeePhotoUrl}
+                                alt="photo"
+                                className="rounded"
+                                style={{ width: "100%", maxHeight: 260, objectFit: "cover" }}
+                              />
+                            ) : (
+                              <div className="p-4 border rounded text-muted">No Photo</div>
+                            )}
+                          </div>
+
+                          {/* Upload photo (optional) */}
+                          <div className="d-grid gap-2">
+                            <input
+                              type="file"
+                              accept=".jpg,.jpeg,.png"
+                              hidden
+                              id="wm-photo-input"
+                              onChange={handlePhotoChange}
+                              disabled={!isEditMode}
+                            />
+                            <label htmlFor="wm-photo-input" className={`btn btn-sm ${isEditMode ? "btn-outline-info" : "btn-outline-secondary disabled"}`}>
+                              <i className="bi bi-image me-1" /> {isEditMode ? "Upload Photo (≤100KB)" : "Upload Disabled"}
+                            </label>
+                          </div>
+
+                          {/* ID Proof (optional) */}
+                          <div className="mt-3 text-start">
+                            <label className="form-label text-secondary mb-1"><strong>ID Proof</strong></label>
+                            <div className="d-flex align-items-center gap-2 mt-2">
+                              <button type="button" className="btn btn-outline-primary btn-sm" onClick={handleViewId}>
+                                <i className="bi bi-eye me-1" /> View
+                              </button>
+                              <button type="button" className="btn btn-outline-success btn-sm" onClick={handleDownloadId}>
+                                <i className="bi bi-download me-1" /> Download
+                              </button>
+                            </div>
+
+
+                            <div className="d-grid gap-2 mt-2">
+                              <input
+                                type="file"
+                                accept=".pdf,.jpg,.jpeg,.png"
+                                hidden
+                                id="wm-id-input"
+                                onChange={handleIdProofChange}
+                                disabled={!isEditMode}
+                              />
+                              <label htmlFor="wm-id-input" className={`btn btn-sm ${isEditMode ? "btn-outline-warning" : "btn-outline-secondary disabled"}`}>
+                                <i className="bi bi-file-earmark-arrow-up me-1" /> {isEditMode ? "Upload ID (≤150KB)" : "Upload Disabled"}
+                              </label>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
                     </div>
                   </div>
                 )}
 
                 {/* Biodata Tab */}
-                {/* ========== BIODATA TAB (match WorkerModal style) ========== */}
+
                 {activeTab === "biodata" && (
                   <div className="modal-card">
-                    {/* Header strip (same gradient / header image look) */}
-                    <div className="modal-card-header d-flex align-items-center justify-content-between" style={{ background: "linear-gradient(90deg,#0ea5e9,#7c3aed)", color: "#fff" }}>
-                      <h4 className="mb-0 d-flex align-items-center gap-2">
-                        <img
-                          src="https://firebasestorage.googleapis.com/v0/b/jenceo-admin.firebasestorage.app/o/OfficeFiles%2FHeadder.svg?alt=media&token=fa65a3ab-ba03-4959-bc36-e293c6db48ae"
-                          alt="header"
-                          height={24}
-                          style={{ opacity: 0.9 }}
-                        />
-                        Biodata
-                      </h4>
+                    <div
+                      className="modal-card-header d-flex align-items-center justify-content-end"
+
+                    >
+
                       <div className="d-flex align-items-center gap-2">
-                        <button className="btn btn-sm btn-outline-success" onClick={handleDownloadBiodata}>
+                        <button className="btn btn-sm btn-outline-warning" onClick={handleDownloadBiodata}>
                           <i className="bi bi-download me-1" /> Download
                         </button>
-                        <button className="btn btn-sm btn-outline-primary" onClick={handleShareBiodata}>
+                        <button className="btn btn-sm btn-outline-info" onClick={handleShareBiodata}>
                           <i className="bi bi-share me-1" /> Share
                         </button>
                       </div>
@@ -2086,86 +2601,21 @@ export default function WorkerCallModal({
 
                     <div className="modal-card-body">
                       <div className="row g-3">
-                        {/* Left: Photo + upload (optional) */}
-                        <div className="col-md-4">
-                          <div className="neo-card p-3 text-center">
-                            <div className="mb-2">
-                              {localWorker.employeePhotoUrl ? (
-                                <img
-                                  src={localWorker.employeePhotoUrl}
-                                  alt="photo"
-                                  className="rounded"
-                                  style={{ width: "100%", maxHeight: 260, objectFit: "cover" }}
-                                />
-                              ) : (
-                                <div className="p-4 border rounded text-muted">No Photo</div>
-                              )}
-                            </div>
-
-                            {/* Upload photo (optional) */}
-                            <div className="d-grid gap-2">
-                              <input
-                                type="file"
-                                accept=".jpg,.jpeg,.png"
-                                hidden
-                                id="wm-photo-input"
-                                onChange={handlePhotoChange}
-                                disabled={!isEditMode}
-                              />
-                              <label htmlFor="wm-photo-input" className={`btn btn-sm ${isEditMode ? "btn-outline-info" : "btn-outline-secondary disabled"}`}>
-                                <i className="bi bi-image me-1" /> {isEditMode ? "Upload Photo (≤100KB)" : "Upload Disabled"}
-                              </label>
-                            </div>
-
-                            {/* ID Proof (optional) */}
-                            <div className="mt-3 text-start">
-                              <label className="form-label mb-1"><strong>ID Proof</strong></label>
-                              <div className="d-flex align-items-center gap-2">
-                                <button type="button" className="btn btn-outline-primary btn-sm" onClick={handleViewId} disabled={!localWorker.idProofUrl && !localWorker.idProofPreview}>
-                                  <i className="bi bi-eye me-1" /> View
-                                </button>
-                                <button type="button" className="btn btn-outline-success btn-sm" onClick={handleDownloadId} disabled={!localWorker.idProofUrl && !localWorker.idProofPreview}>
-                                  <i className="bi bi-download me-1" /> Download
-                                </button>
-                              </div>
-                              <div className="d-grid gap-2 mt-2">
-                                <input
-                                  type="file"
-                                  accept=".pdf,.jpg,.jpeg,.png"
-                                  hidden
-                                  id="wm-id-input"
-                                  onChange={handleIdProofChange}
-                                  disabled={!isEditMode}
-                                />
-                                <label htmlFor="wm-id-input" className={`btn btn-sm ${isEditMode ? "btn-outline-warning" : "btn-outline-secondary disabled"}`}>
-                                  <i className="bi bi-file-earmark-arrow-up me-1" /> {isEditMode ? "Upload ID (≤150KB)" : "Upload Disabled"}
-                                </label>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* Right: Preview (kept as iframe for full HTML biodata) */}
-                        <div className="col-md-8">
+                        <div className="col-md-12">
                           <div className="neo-card p-0 overflow-hidden">
                             <iframe
                               ref={iframeRef}
                               title="Biodata"
                               style={{ width: "100%", height: "520px", border: "0", background: "#fff" }}
-                            // srcdoc is set via useEffect when tab opens
                             />
                           </div>
                         </div>
                       </div>
                     </div>
 
-                    {/* Footer */}
-                    <div className="modal-card-footer d-flex justify-content-end gap-2">
-                      <button className="btn btn-secondary" onClick={onClose}><i className="bi bi-x-lg me-1" /> Close</button>
-                      <button className="btn btn-primary" onClick={handleDownloadBiodata}><i className="bi bi-download me-1" /> Download</button>
-                    </div>
                   </div>
                 )}
+
 
               </div>
 

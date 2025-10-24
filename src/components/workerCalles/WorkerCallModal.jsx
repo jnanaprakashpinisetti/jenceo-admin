@@ -255,6 +255,7 @@ const buildBiodataHTML = (w) => {
     .col-md-7 { flex: 0 0 100%; max-width: 100%; }
     .addr-title {font-size:12px}
     .addr-line .col-md-4 {padding-bottom:5px}
+    .photo-box {text-align:center}
   }
 </style>
 </head>
@@ -536,30 +537,55 @@ export default function WorkerCallModal({
   const iframeRef = useRef(null);
 
 
-  const handleDownloadBiodata = () => {
-    const html = buildBiodataHTML({ hideSensitive: true });
+  // Builds a Blob URL with the same HTML you see in the Biodata iframe
+  const makeBiodataBlobUrl = (workerObj) => {
+    const html = buildBiodataHTML(workerObj || {});
     const blob = new Blob([html], { type: "text/html" });
-    const url = URL.createObjectURL(blob);
+    return URL.createObjectURL(blob);
+  };
+
+  // Download the full biodata (HTML with photo & content)
+  const handleDownloadBiodata = () => {
+    const url = makeBiodataBlobUrl(localWorker); // ✅ use current worker
     const a = document.createElement("a");
     a.href = url;
-    a.download = `Biodata_${localWorker?.callId || "worker"}.html`;
+    a.download = `Biodata_${localWorker?.callId || localWorker?.name || "worker"}.html`;
     document.body.appendChild(a);
     a.click();
     a.remove();
-    URL.revokeObjectURL(url);
+    setTimeout(() => URL.revokeObjectURL(url), 0);
   };
 
-  const handleShareBiodata = () => {
-    const txt =
-      `Biodata - ${localWorker?.name || ""}\n` +
-      `Mobile: ${localWorker?.mobileNo || ""}\n` +
-      `Primary: ${Array.isArray(localWorker?.skills)
-        ? localWorker.skills.join(", ")
-        : localWorker?.skills || ""
-      }\n` +
-      `Location: ${localWorker?.location || ""}`;
-    const url = `https://wa.me/?text=${encodeURIComponent(txt)}`;
-    window.open(url, "_blank", "noopener,noreferrer");
+  const handleShareBiodata = async () => {
+    try {
+      // Try to share as image (optional) if html2canvas is present
+      const canShareFiles = !!(navigator.share && navigator.canShare);
+      const canvasRoot = iframeRef?.current?.contentDocument?.body;
+      if (canShareFiles && window.html2canvas && canvasRoot) {
+        const canvas = await window.html2canvas(canvasRoot, { useCORS: true, backgroundColor: "#fff", scale: 2 });
+        const blob = await new Promise((res) => canvas.toBlob(res, "image/png"));
+        if (blob) {
+          const file = new File([blob], `Biodata_${localWorker?.callId || "worker"}.png`, { type: "image/png" });
+          if (navigator.canShare({ files: [file] })) {
+            await navigator.share({
+              title: `Biodata - ${localWorker?.name || ""}`,
+              text: `Biodata - ${localWorker?.name || ""}\nMobile: ${localWorker?.mobileNo || ""}`,
+              files: [file],
+            });
+            return;
+          }
+        }
+      }
+
+      // Fallback: share/open a temporary HTML page (exact same UI content)
+      const url = makeBiodataBlobUrl(localWorker);
+      // On desktop this opens a tab; on mobile you can copy/share the URL
+      window.open(url, "_blank", "noopener,noreferrer");
+    } catch (e) {
+      // Final fallback: open HTML in a new tab
+      const url = makeBiodataBlobUrl(localWorker);
+      window.open(url, "_blank", "noopener,noreferrer");
+    }
   };
 
   const [activeTab, setActiveTab] = useState("basic");
@@ -732,6 +758,7 @@ export default function WorkerCallModal({
     if (!iframeRef.current) return;
     iframeRef.current.srcdoc = buildBiodataHTML(localWorker || {});
   }, [activeTab, localWorker]);
+
 
 
   // Update handleLanguageSelect to close dropdown
@@ -1208,61 +1235,46 @@ export default function WorkerCallModal({
           >
             {/* Header */}
             <div className="modal-header dark-header">
-              <div className="d-flex align-items-center w-100">
+              <div className="d-flex align-items-center w-100 flex-wrap">
                 <div className="flex-grow-1">
-                  <h5 className="modal-title fw-bold mb-2 text-white">
-                    {isEditMode ? "✏️ Edit Worker" : "👤 Worker Details"}
+
+
+                  <h5 className="modal-title fw-bold mb-2 text-warning">
+                    {localWorker?.name}
                   </h5>
-
-                  <div className="d-flex flex-wrap align-items-center gap-3 text-white-90 small text-warning">
-                    <span className="d-flex align-items-center gap-2">
-                      <i className="bi bi-person-fill"></i>
-                      {localWorker?.name || "—"}
-                    </span>
-                    <span className="d-flex align-items-center gap-2">
-                      <i className="bi bi-telephone-fill"></i>
-                      {localWorker?.mobileNo || "—"}
-                    </span>
-                    <span className="d-flex align-items-center gap-2">
-                      <i className="bi bi-geo-alt-fill"></i>
-                      {localWorker?.location || "—"}
-                    </span>
-                  </div>
-                  <div>
-                    <div className="d-flex align-items-center gap-1 ms-3">
-                      {[1, 2, 3, 4, 5].map(n => {
-                        let starColor = "";
-                        if (n <= rating) {
-                          if (rating >= 4) {
-                            starColor = "text-success"; // Green for 4-5 stars
-                          } else if (rating === 3) {
-                            starColor = "text-warning"; // Yellow for 3 stars
-                          } else {
-                            starColor = "text-danger"; // Red for 1-2 stars
-                          }
+                  <div className="d-flex align-items-center gap-1 ms-3">
+                    {[1, 2, 3, 4, 5].map(n => {
+                      let starColor = "";
+                      if (n <= rating) {
+                        if (rating >= 4) {
+                          starColor = "text-success"; // Green for 4-5 stars
+                        } else if (rating === 3) {
+                          starColor = "text-warning"; // Yellow for 3 stars
+                        } else {
+                          starColor = "text-danger"; // Red for 1-2 stars
                         }
+                      }
 
-                        return (
-                          <i
-                            key={n}
-                            className={`bi ${n <= rating ? `bi-star-fill ${starColor}` : "bi-star text-secondary"}`}
-                            style={{
-                              cursor: isEditMode ? "pointer" : "default",
-                              fontSize: "1.05rem"
-                            }}
-                            onClick={() => {
-                              if (isEditMode) {
-                                setRating(n);
-                                setDirty(true);
-                              }
-                            }}
-                            title={`${rating || 0}/5`}
-                          />
-                        );
-                      })}
-                    </div>
-
+                      return (
+                        <i
+                          key={n}
+                          className={`bi ${n <= rating ? `bi-star-fill ${starColor}` : "bi-star text-secondary"}`}
+                          style={{
+                            cursor: isEditMode ? "pointer" : "default",
+                            fontSize: "1.05rem"
+                          }}
+                          onClick={() => {
+                            if (isEditMode) {
+                              setRating(n);
+                              setDirty(true);
+                            }
+                          }}
+                          title={`${rating || 0}/5`}
+                        />
+                      );
+                    })}
                   </div>
+
                 </div>
 
                 {/* Action Buttons */}
@@ -1271,7 +1283,7 @@ export default function WorkerCallModal({
                     <>
                       <button
                         type="button"
-                        className="btn btn-success btn-sm d-flex align-items-center gap-2 action-btn"
+                        className="btn btn-success btn-sm d-flex align-items-center gap-2 action-btn mb-0"
                         onClick={handleCall}
                         title="Call Worker"
                       >
@@ -1280,7 +1292,7 @@ export default function WorkerCallModal({
                       </button>
                       <button
                         type="button"
-                        className="btn btn-success btn-sm d-flex align-items-center gap-2 action-btn"
+                        className="btn btn-success btn-sm d-flex align-items-center gap-2 action-btn mb-0"
                         onClick={handleWhatsApp}
                         title="WhatsApp Worker"
                         style={{
@@ -1309,11 +1321,11 @@ export default function WorkerCallModal({
                   <ul className="nav nav-pills nav-justified gap-2 p-2">
                     <li className="nav-item">
                       <button
-                        className={`nav-link dark-tab ${activeTab === "basic" ? "active" : ""
+                        className={`nav-link text-nowrap dark-tab ${activeTab === "basic" ? "active" : ""
                           }`}
                         onClick={() => setActiveTab("basic")}
                       >
-                        <i className="bi bi-person-vcard me-2"></i>
+                        <i className="bi bi-person-vcard me-2 "></i>
                         Basic Info
                       </button>
                     </li>
@@ -2554,9 +2566,11 @@ export default function WorkerCallModal({
                               <button type="button" className="btn btn-outline-primary btn-sm" onClick={handleViewId}>
                                 <i className="bi bi-eye me-1" /> View
                               </button>
+
                               <button type="button" className="btn btn-outline-success btn-sm" onClick={handleDownloadId}>
                                 <i className="bi bi-download me-1" /> Download
                               </button>
+
                             </div>
 
 

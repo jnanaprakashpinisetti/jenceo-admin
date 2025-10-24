@@ -62,6 +62,7 @@ export default function WorkerCallModal({
   isOpen,
   onClose,
   isEditMode,
+  workerData
 }) {
   const { user: authUser } = useAuth();
 
@@ -251,17 +252,15 @@ export default function WorkerCallModal({
       <div><strong>Email:</strong> ${email}</div>
       <div><strong>Gender:</strong> ${w.gender || "-"}</div>
       <div><strong>Age:</strong> ${w.age || "-"}</div>
-      <div><strong>Experience:</strong> ${w.experience || "-"} ${
-      w.years ? `(${w.years} yrs)` : ""
-    }</div>
+      <div><strong>Experience:</strong> ${w.experience || "-"} ${w.years ? `(${w.years} yrs)` : ""
+      }</div>
       <div><strong>Location:</strong> ${w.location || "-"}</div>
       <div class="small muted">Source: ${w.source || "-"}</div>
     </div>
     <div class="col box">
       <div class="h" style="margin-top:0">Address</div>
       <div><strong>Present Address:</strong><br/>${fullAddress || "-"}</div>
-      <div style="margin-top:8px"><strong>Permanent Address:</strong><br/>${
-        fullAddress || "-"
+      <div style="margin-top:8px"><strong>Permanent Address:</strong><br/>${fullAddress || "-"
       }</div>
     </div>
   </div>
@@ -305,10 +304,9 @@ export default function WorkerCallModal({
     const txt =
       `Biodata - ${localWorker?.name || ""}\n` +
       `Mobile: ${localWorker?.mobileNo || ""}\n` +
-      `Primary: ${
-        Array.isArray(localWorker?.skills)
-          ? localWorker.skills.join(", ")
-          : localWorker?.skills || ""
+      `Primary: ${Array.isArray(localWorker?.skills)
+        ? localWorker.skills.join(", ")
+        : localWorker?.skills || ""
       }\n` +
       `Location: ${localWorker?.location || ""}`;
     const url = `https://wa.me/?text=${encodeURIComponent(txt)}`;
@@ -321,8 +319,8 @@ export default function WorkerCallModal({
   const commentsList = Array.isArray(localWorker?.comments)
     ? localWorker.comments.filter(Boolean)
     : localWorker?.comments && typeof localWorker.comments === "object"
-    ? Object.values(localWorker.comments).filter(Boolean)
-    : [];
+      ? Object.values(localWorker.comments).filter(Boolean)
+      : [];
 
   useEffect(() => {
     if (activeTab === "biodata" && iframeRef.current) {
@@ -348,18 +346,23 @@ export default function WorkerCallModal({
 
   // Rehydrate when the record changes
   useEffect(() => {
-    setLocalWorker({ ...worker });
-    const list = Array.isArray(worker?.comments) ? worker.comments.slice() : [];
-    list.sort((a, b) => {
-      const da = parseDate(a?.date).getTime() || 0;
-      const db = parseDate(b?.date).getTime() || 0;
-      return db - da; // latest first
-    });
-    setComments(list);
-    setNewComment("");
-    setDirty(false);
-    setCanSave(false); // locked until a comment is added
-  }, [worker?.id]);
+    if (!worker) return;
+    // Normalize a few possible legacy keys just in case
+    const nursing =
+      worker.nursingWorks ??
+      worker.nursingTasks ??
+      worker.nurseWorks ??
+      [];
+
+    setLocalWorker(prev => ({
+      ...prev,
+      ...worker,
+      nursingWorks: Array.isArray(nursing) ? nursing : [],
+      homeCareSkills: Array.isArray(worker.homeCareSkills) ? worker.homeCareSkills : [],
+      // keep other fields as you already do...
+    }));
+  }, [worker]);
+
 
   // Click outside dropdown handler
   useEffect(() => {
@@ -418,34 +421,34 @@ export default function WorkerCallModal({
       idProofError: null,
     }));
   }, [worker]);
-  
+
 
   // ⬇️ ADD: live comments subscription (array OR object) -----------------------
-useEffect(() => {
-  if (!worker?.id) return;
-  const ref = firebaseDB.child(`WorkerCallData/${worker.id}/comments`);
-  const onVal = (snap) => {
-    const raw = snap.val();
-    let list = [];
-    if (Array.isArray(raw)) {
-      list = raw.filter(Boolean);
-    } else if (raw && typeof raw === "object") {
-      list = Object.values(raw).filter(Boolean);
-    }
-    list.sort((a, b) => {
-      const ta = new Date(a?.date || a?.timestamp || 0).getTime() || 0;
-      const tb = new Date(b?.date || b?.timestamp || 0).getTime() || 0;
-      return tb - ta; // latest first
-    });
+  useEffect(() => {
+    if (!worker?.id) return;
+    const ref = firebaseDB.child(`WorkerCallData/${worker.id}/comments`);
+    const onVal = (snap) => {
+      const raw = snap.val();
+      let list = [];
+      if (Array.isArray(raw)) {
+        list = raw.filter(Boolean);
+      } else if (raw && typeof raw === "object") {
+        list = Object.values(raw).filter(Boolean);
+      }
+      list.sort((a, b) => {
+        const ta = new Date(a?.date || a?.timestamp || 0).getTime() || 0;
+        const tb = new Date(b?.date || b?.timestamp || 0).getTime() || 0;
+        return tb - ta; // latest first
+      });
 
-    setComments(list);
-    setLocalWorker((prev) => ({ ...prev, comments: list }));
-  };
+      setComments(list);
+      setLocalWorker((prev) => ({ ...prev, comments: list }));
+    };
 
-  ref.on("value", onVal);
-  return () => ref.off("value", onVal);
-}, [worker?.id]);
-// ---------------------------------------------------------------------------
+    ref.on("value", onVal);
+    return () => ref.off("value", onVal);
+  }, [worker?.id]);
+  // ---------------------------------------------------------------------------
 
 
   // Update handleLanguageSelect to close dropdown
@@ -471,107 +474,107 @@ useEffect(() => {
   );
 
   // === Handle employee photo upload (JPG, PNG ≤ 100KB) ===
-const handlePhotoChange = async (e) => {
-  const file = e.target.files[0];
-  if (!file) return;
+  const handlePhotoChange = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
 
-  if (!["image/jpeg", "image/png"].includes(file.type)) {
-    alert("Only JPG or PNG files are allowed.");
-    return;
-  }
-
-  if (file.size > 100 * 1024) {
-    alert("Photo size should be less than 100KB.");
-    return;
-  }
-
-  const reader = new FileReader();
-  reader.onload = (ev) => {
-    setLocalWorker((prev) => ({
-      ...prev,
-      employeePhotoFile: file,
-      employeePhotoUrl: null,
-      employeePhotoPreview: ev.target.result,
-    }));
-  };
-  reader.readAsDataURL(file);
-};
-
-
-// === Handle ID Proof upload (PDF, JPG, PNG ≤ 150KB) ===
-const handleIdProofChange = async (e) => {
-  const file = e.target.files[0];
-  if (!file) return;
-
-  if (
-    !["application/pdf", "image/jpeg", "image/png"].includes(file.type)
-  ) {
-    alert("Only PDF, JPG or PNG files are allowed.");
-    return;
-  }
-
-  if (file.size > 150 * 1024) {
-    alert("ID Proof file size should be less than 150KB.");
-    return;
-  }
-
-  const reader = new FileReader();
-  reader.onload = (ev) => {
-    setLocalWorker((prev) => ({
-      ...prev,
-      idProofFile: file,
-      idProofUrl: null,
-      idProofPreview: ev.target.result,
-    }));
-  };
-  reader.readAsDataURL(file);
-};
-
-
-// === View ID proof in modal (PDF or image) ===
-const handleViewId = () => {
-  const url =
-    localWorker.idProofUrl || localWorker.idProofPreview || null;
-
-  if (!url) {
-    alert("No ID proof available to view.");
-    return;
-  }
-
-  // open in modal for image/pdf preview
-  const win = window.open();
-  if (win) {
-    if (url.toLowerCase().endsWith(".pdf")) {
-      win.document.write(
-        `<embed src="${url}" type="application/pdf" width="100%" height="100%">`
-      );
-    } else {
-      win.document.write(`<img src="${url}" style="width:100%">`);
+    if (!["image/jpeg", "image/png"].includes(file.type)) {
+      alert("Only JPG or PNG files are allowed.");
+      return;
     }
-  } else {
-    alert("Popup blocked. Please allow popups to view file.");
-  }
-};
+
+    if (file.size > 100 * 1024) {
+      alert("Photo size should be less than 100KB.");
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      setLocalWorker((prev) => ({
+        ...prev,
+        employeePhotoFile: file,
+        employeePhotoUrl: null,
+        employeePhotoPreview: ev.target.result,
+      }));
+    };
+    reader.readAsDataURL(file);
+  };
 
 
-// === Download ID proof (image or PDF) ===
-const handleDownloadId = () => {
-  const url =
-    localWorker.idProofUrl || localWorker.idProofPreview || null;
+  // === Handle ID Proof upload (PDF, JPG, PNG ≤ 150KB) ===
+  const handleIdProofChange = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
 
-  if (!url) {
-    alert("No ID proof available to download.");
-    return;
-  }
+    if (
+      !["application/pdf", "image/jpeg", "image/png"].includes(file.type)
+    ) {
+      alert("Only PDF, JPG or PNG files are allowed.");
+      return;
+    }
 
-  const link = document.createElement("a");
-  link.href = url;
-  const ext = url.toLowerCase().endsWith(".pdf") ? ".pdf" : ".jpg";
-  link.download = `${localWorker.name || "ID_Proof"}${ext}`;
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
-};
+    if (file.size > 150 * 1024) {
+      alert("ID Proof file size should be less than 150KB.");
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      setLocalWorker((prev) => ({
+        ...prev,
+        idProofFile: file,
+        idProofUrl: null,
+        idProofPreview: ev.target.result,
+      }));
+    };
+    reader.readAsDataURL(file);
+  };
+
+
+  // === View ID proof in modal (PDF or image) ===
+  const handleViewId = () => {
+    const url =
+      localWorker.idProofUrl || localWorker.idProofPreview || null;
+
+    if (!url) {
+      alert("No ID proof available to view.");
+      return;
+    }
+
+    // open in modal for image/pdf preview
+    const win = window.open();
+    if (win) {
+      if (url.toLowerCase().endsWith(".pdf")) {
+        win.document.write(
+          `<embed src="${url}" type="application/pdf" width="100%" height="100%">`
+        );
+      } else {
+        win.document.write(`<img src="${url}" style="width:100%">`);
+      }
+    } else {
+      alert("Popup blocked. Please allow popups to view file.");
+    }
+  };
+
+
+  // === Download ID proof (image or PDF) ===
+  const handleDownloadId = () => {
+    const url =
+      localWorker.idProofUrl || localWorker.idProofPreview || null;
+
+    if (!url) {
+      alert("No ID proof available to download.");
+      return;
+    }
+
+    const link = document.createElement("a");
+    link.href = url;
+    const ext = url.toLowerCase().endsWith(".pdf") ? ".pdf" : ".jpg";
+    link.download = `${localWorker.name || "ID_Proof"}${ext}`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
 
 
   // Hooks above any early returns
@@ -717,9 +720,8 @@ const handleDownloadId = () => {
 
   const handleWhatsApp = () => {
     if (localWorker.mobileNo) {
-      const message = `Hello ${
-        localWorker.name || ""
-      }, I found your contact from Apana Staff.`;
+      const message = `Hello ${localWorker.name || ""
+        }, I found your contact from Apana Staff.`;
       const encodedMessage = encodeURIComponent(message);
       window.open(
         `https://wa.me/${localWorker.mobileNo.replace(
@@ -750,17 +752,17 @@ const handleDownloadId = () => {
         value === "Male"
           ? "badge-gender-male"
           : value === "Female"
-          ? "badge-gender-female"
-          : "badge-gender-other";
+            ? "badge-gender-female"
+            : "badge-gender-other";
     } else if (badgeType === "conversation") {
       badgeClass =
         value === "Very Good"
           ? "badge-conv-vgood"
           : value === "Good"
-          ? "badge-conv-good"
-          : value === "Average"
-          ? "badge-conv-average"
-          : "badge-conv-poor";
+            ? "badge-conv-good"
+            : value === "Average"
+              ? "badge-conv-average"
+              : "badge-conv-poor";
     }
 
     return (
@@ -860,9 +862,8 @@ const handleDownloadId = () => {
                   <ul className="nav nav-pills nav-justified gap-2 p-2">
                     <li className="nav-item">
                       <button
-                        className={`nav-link dark-tab ${
-                          activeTab === "basic" ? "active" : ""
-                        }`}
+                        className={`nav-link dark-tab ${activeTab === "basic" ? "active" : ""
+                          }`}
                         onClick={() => setActiveTab("basic")}
                       >
                         <i className="bi bi-person-vcard me-2"></i>
@@ -872,9 +873,8 @@ const handleDownloadId = () => {
 
                     <li className="nav-item">
                       <button
-                        className={`nav-link dark-tab ${
-                          activeTab === "skills" ? "active" : ""
-                        }`}
+                        className={`nav-link dark-tab ${activeTab === "skills" ? "active" : ""
+                          }`}
                         onClick={() => setActiveTab("skills")}
                       >
                         <i className="bi bi-tools me-2"></i>
@@ -885,9 +885,8 @@ const handleDownloadId = () => {
                     {/* NEW: Address */}
                     <li className="nav-item">
                       <button
-                        className={`nav-link dark-tab ${
-                          activeTab === "address" ? "active" : ""
-                        }`}
+                        className={`nav-link dark-tab ${activeTab === "address" ? "active" : ""
+                          }`}
                         onClick={() => setActiveTab("address")}
                       >
                         <i className="bi bi-geo-alt me-2"></i>
@@ -898,9 +897,8 @@ const handleDownloadId = () => {
                     {/* NEW: Biodata */}
                     <li className="nav-item">
                       <button
-                        className={`nav-link dark-tab ${
-                          activeTab === "biodata" ? "active" : ""
-                        }`}
+                        className={`nav-link dark-tab ${activeTab === "biodata" ? "active" : ""
+                          }`}
                         onClick={() => setActiveTab("biodata")}
                       >
                         <i className="bi bi-file-earmark-text me-2"></i>
@@ -1257,8 +1255,8 @@ const handleDownloadId = () => {
                                   "Reminder Date",
                                   localWorker.callReminderDate
                                     ? new Date(
-                                        localWorker.callReminderDate
-                                      ).toLocaleDateString("en-GB")
+                                      localWorker.callReminderDate
+                                    ).toLocaleDateString("en-GB")
                                     : "—"
                                 )}
                               </div>
@@ -1288,55 +1286,103 @@ const handleDownloadId = () => {
                                 <p className="mb-0 text-info">
                                   {localWorker.formComment}
                                 </p>
+
                               </div>
                             )}
 
                             {/* Comments List */}
                             <div
-                              className="comments-list-compact "
+                              className="comments-list-compact"
                               style={{ maxHeight: "200px", overflowY: "auto" }}
                             >
-                              {/* Comments list (now uses state "comments" fed by DB subscription) */}
-{comments.length > 0 ? (
-  comments.map((c, i) => {
-    const authorName = c?.authorName || c?.user || c?.author || "User";
-    const avatarUrl = c?.authorPhoto || "";
-    const when = c?.timestamp || c?.date
-      ? new Date(c.timestamp || c.date).toLocaleString("en-GB", { hour12: true })
-      : "Recent";
-    const text = (c?.text || "").trim();
+                              {(() => {
+                                // 1) If comment is a single string on the worker, show just that
+                                const singleComment =
+                                  typeof localWorker?.comment === "string"
+                                    ? localWorker.comment.trim()
+                                    : "";
 
-    return (
-      <div key={c?.id || c?.timestamp || c?.date || i} className="comment-row d-flex gap-3 p-3 rounded mb-2">
-        <div>
-          {avatarUrl ? (
-            <img src={avatarUrl} alt={authorName} className="avatar avatar-sm" style={{ objectFit: "cover", width: 32, height: 32 }} />
-          ) : (
-            <span className="avatar avatar-sm avatar-fallback" style={{ width: 32, height: 32 }}>
-              {authorName.split(" ").map(s => s[0]).join("").slice(0, 2).toUpperCase()}
-            </span>
-          )}
-        </div>
-        <div className="flex-grow-1">
-          <div className="d-flex justify-content-between align-items-center mb-1">
-            <strong className="text-white-90">{authorName}</strong>
-            <span className="text-muted-300 small">{when}</span>
-          </div>
-          <div className="text-white-80">
-            {text || <span className="text-muted-400 fst-italic">— no content —</span>}
-          </div>
-        </div>
-      </div>
-    );
-  })
-) : (
-  <div className="empty-state-compact text-center py-3">
-    <i className="bi bi-chat-left-text text-muted"></i>
-    <p className="mt-2 mb-0 text-muted">No comments yet</p>
-  </div>
-)}
+                                if (singleComment) {
+                                  return <p className="mb-0 text-white opacity-50">{singleComment}</p>;
+                                }
 
+                                // 2) Else, attempt to render a list (from state "comments" or object at localWorker.comment)
+                                const listFromState = Array.isArray(comments) ? comments : [];
+                                const listFromObject =
+                                  localWorker?.comment && typeof localWorker.comment === "object"
+                                    ? Object.values(localWorker.comment).filter(Boolean)
+                                    : [];
+
+                                const allComments =
+                                  listFromState.length > 0 ? listFromState : listFromObject;
+
+                                if (allComments.length === 0) {
+                                  return (
+                                    <div className="empty-state-compact text-center py-3">
+                                      <i className="bi bi-chat-left-text text-muted"></i>
+                                      <p className="mt-2 mb-0 text-muted">No comments yet</p>
+                                    </div>
+                                  );
+                                }
+
+                                return allComments
+                                  .slice()
+                                  .sort((a, b) => (b?.timestamp || 0) - (a?.timestamp || 0))
+                                  .map((c, i) => {
+                                    const authorName =
+                                      c?.authorName || c?.user || c?.author || localWorker?.createdByName || "User";
+                                    const avatarUrl = c?.authorPhoto || localWorker?.photoURL || "";
+                                    const when = c?.timestamp || c?.date
+                                      ? new Date(c.timestamp || c.date).toLocaleString("en-GB", { hour12: true })
+                                      : "Recent";
+                                    const text = (c?.text || c?.comment || "").trim();
+
+                                    return (
+                                      <div
+                                        key={c?.id || c?.timestamp || c?.date || i}
+                                        className="comment-row d-flex gap-3 p-3 rounded mb-2"
+                                      >
+                                        <div>
+                                          {avatarUrl ? (
+                                            <img
+                                              src={avatarUrl}
+                                              alt={authorName}
+                                              className="avatar avatar-sm"
+                                              style={{ objectFit: "cover", width: 32, height: 32 }}
+                                              onError={(e) => (e.currentTarget.style.display = "none")}
+                                            />
+                                          ) : (
+                                            <span
+                                              className="avatar avatar-sm avatar-fallback"
+                                              style={{ width: 32, height: 32 }}
+                                            >
+                                              {authorName
+                                                .split(" ")
+                                                .map((s) => s[0])
+                                                .join("")
+                                                .slice(0, 2)
+                                                .toUpperCase()}
+                                            </span>
+                                          )}
+                                        </div>
+                                        <div className="flex-grow-1">
+                                          <div className="d-flex justify-content-between align-items-center mb-1">
+                                            <strong className="text-white-90">{authorName}</strong>
+                                            <span className="text-muted-300 small">{when}</span>
+                                          </div>
+                                          <div className="text-white-80">
+                                            {text || (
+                                              <span className="text-muted-400 fst-italic">— no content —</span>
+                                            )}
+                                          </div>
+                                        </div>
+                                      </div>
+                                    );
+                                  });
+                              })()}
                             </div>
+
+
 
                             {isEditMode && (
                               <div className="add-comment-section">
@@ -1430,7 +1476,7 @@ const handleDownloadId = () => {
 
                             <div className="languages-container-compact">
                               {normalizeArray(localWorker.languages).length >
-                              0 ? (
+                                0 ? (
                                 <div className="d-flex flex-wrap gap-2">
                                   {normalizeArray(localWorker.languages).map(
                                     (lang, idx) => (
@@ -1546,6 +1592,52 @@ const handleDownloadId = () => {
                         </div>
                       </div> */}
 
+                      {/* Nursing Tasks (shown if primary skill is Nursing or Nursing is in homeCareSkills) */}
+                      {(
+                        String(localWorker?.skills).toLowerCase() === "nursing" ||
+                        (Array.isArray(localWorker?.homeCareSkills) &&
+                          localWorker.homeCareSkills.some(s => String(s).toLowerCase() === "nursing"))
+                      ) && (
+                          <div className="glass-card p-3 mb-3">
+                            <h6 className=" text-warning mb-3">NURSING TASKS</h6>
+                            <div className="d-flex flex-wrap gap-2">
+                              {[
+                                "Vital Signs Monitoring", "BP Check", "Sugar Check (Glucometer)", "Medication Administration", "IV/IM Injection",
+                                "Wound Dressing", "Catheter Care", "Ryle’s Tube / NG Feeding", "PEG Feeding", "Nebulization", "Suctioning",
+                                "Oxygen Support", "Tracheostomy Care", "Bedsore Care", "Positioning & Mobility", "Bed Bath & Hygiene",
+                                "Diaper Change", "Urine Bag Change", "Post-Operative Care",
+                              ].map(task => {
+                                const active = Array.isArray(localWorker.nursingWorks) && localWorker.nursingWorks.includes(task);
+                                return (
+                                  <button
+                                    key={task}
+                                    type="button"
+                                    className={`btn btn-sm rounded-pill ${active ? "btn-info" : "btn-outline-info"}`}
+                                    onClick={() => {
+                                      if (!isEditMode) return; // keep your edit guard if you have one
+                                      setLocalWorker(prev => {
+                                        const curr = Array.isArray(prev.nursingWorks) ? prev.nursingWorks : [];
+                                        const next = active ? curr.filter(x => x !== task) : [...curr, task];
+                                        return { ...prev, nursingWorks: next };
+                                      });
+                                    }}
+                                    aria-pressed={active}
+                                    disabled={!isEditMode}
+                                  >
+                                    {task}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                            {/* If you want to enforce at least one when Primary is Nursing (UI hint) */}
+                            {String(localWorker?.skills).toLowerCase() === "nursing" &&
+                              (!localWorker.nursingWorks || localWorker.nursingWorks.length === 0) && (
+                                <div className="text-danger small mt-2">Select at least one nursing task.</div>
+                              )}
+                          </div>
+                        )}
+
+
                       <div className="col-md-12">
                         <div className="dark-card">
                           <div className="card-header dark-card-header">
@@ -1567,11 +1659,10 @@ const handleDownloadId = () => {
                                       <button
                                         type="button"
                                         key={`homecare-${opt}`}
-                                        className={`btn btn-sm rounded-pill ${
-                                          active
-                                            ? "btn-info"
-                                            : "btn-outline-info"
-                                        } disabled-keep skill-pill-compact`}
+                                        className={`btn btn-sm rounded-pill ${active
+                                          ? "btn-info"
+                                          : "btn-outline-info"
+                                          } disabled-keep skill-pill-compact`}
                                         onClick={() =>
                                           handleMultiToggle(
                                             "homeCareSkills",
@@ -1768,11 +1859,10 @@ const handleDownloadId = () => {
                                                   <button
                                                     key={`other-${opt}`}
                                                     type="button"
-                                                    className={`btn btn-sm rounded-pill ${
-                                                      active
-                                                        ? category.bgClass
-                                                        : category.btnClass
-                                                    } disabled-keep skill-pill-compact`}
+                                                    className={`btn btn-sm rounded-pill ${active
+                                                      ? category.bgClass
+                                                      : category.btnClass
+                                                      } disabled-keep skill-pill-compact`}
                                                     onClick={() =>
                                                       handleMultiToggle(
                                                         "otherSkills",
@@ -1970,112 +2060,112 @@ const handleDownloadId = () => {
                 )}
 
                 {/* Biodata Tab */}
-               {/* ========== BIODATA TAB (match WorkerModal style) ========== */}
-{activeTab === "biodata" && (
-  <div className="modal-card">
-    {/* Header strip (same gradient / header image look) */}
-    <div className="modal-card-header d-flex align-items-center justify-content-between" style={{ background: "linear-gradient(90deg,#0ea5e9,#7c3aed)", color: "#fff" }}>
-      <h4 className="mb-0 d-flex align-items-center gap-2">
-        <img
-          src="https://firebasestorage.googleapis.com/v0/b/jenceo-admin.firebasestorage.app/o/OfficeFiles%2FHeadder.svg?alt=media&token=fa65a3ab-ba03-4959-bc36-e293c6db48ae"
-          alt="header"
-          height={24}
-          style={{ opacity: 0.9 }}
-        />
-        Biodata
-      </h4>
-      <div className="d-flex align-items-center gap-2">
-        <button className="btn btn-sm btn-outline-success" onClick={handleDownloadBiodata}>
-          <i className="bi bi-download me-1" /> Download
-        </button>
-        <button className="btn btn-sm btn-outline-primary" onClick={handleShareBiodata}>
-          <i className="bi bi-share me-1" /> Share
-        </button>
-      </div>
-    </div>
+                {/* ========== BIODATA TAB (match WorkerModal style) ========== */}
+                {activeTab === "biodata" && (
+                  <div className="modal-card">
+                    {/* Header strip (same gradient / header image look) */}
+                    <div className="modal-card-header d-flex align-items-center justify-content-between" style={{ background: "linear-gradient(90deg,#0ea5e9,#7c3aed)", color: "#fff" }}>
+                      <h4 className="mb-0 d-flex align-items-center gap-2">
+                        <img
+                          src="https://firebasestorage.googleapis.com/v0/b/jenceo-admin.firebasestorage.app/o/OfficeFiles%2FHeadder.svg?alt=media&token=fa65a3ab-ba03-4959-bc36-e293c6db48ae"
+                          alt="header"
+                          height={24}
+                          style={{ opacity: 0.9 }}
+                        />
+                        Biodata
+                      </h4>
+                      <div className="d-flex align-items-center gap-2">
+                        <button className="btn btn-sm btn-outline-success" onClick={handleDownloadBiodata}>
+                          <i className="bi bi-download me-1" /> Download
+                        </button>
+                        <button className="btn btn-sm btn-outline-primary" onClick={handleShareBiodata}>
+                          <i className="bi bi-share me-1" /> Share
+                        </button>
+                      </div>
+                    </div>
 
-    <div className="modal-card-body">
-      <div className="row g-3">
-        {/* Left: Photo + upload (optional) */}
-        <div className="col-md-4">
-          <div className="neo-card p-3 text-center">
-            <div className="mb-2">
-              {localWorker.employeePhotoUrl ? (
-                <img
-                  src={localWorker.employeePhotoUrl}
-                  alt="photo"
-                  className="rounded"
-                  style={{ width: "100%", maxHeight: 260, objectFit: "cover" }}
-                />
-              ) : (
-                <div className="p-4 border rounded text-muted">No Photo</div>
-              )}
-            </div>
+                    <div className="modal-card-body">
+                      <div className="row g-3">
+                        {/* Left: Photo + upload (optional) */}
+                        <div className="col-md-4">
+                          <div className="neo-card p-3 text-center">
+                            <div className="mb-2">
+                              {localWorker.employeePhotoUrl ? (
+                                <img
+                                  src={localWorker.employeePhotoUrl}
+                                  alt="photo"
+                                  className="rounded"
+                                  style={{ width: "100%", maxHeight: 260, objectFit: "cover" }}
+                                />
+                              ) : (
+                                <div className="p-4 border rounded text-muted">No Photo</div>
+                              )}
+                            </div>
 
-            {/* Upload photo (optional) */}
-            <div className="d-grid gap-2">
-              <input
-                type="file"
-                accept=".jpg,.jpeg,.png"
-                hidden
-                id="wm-photo-input"
-                onChange={handlePhotoChange}
-                disabled={!isEditMode}
-              />
-              <label htmlFor="wm-photo-input" className={`btn btn-sm ${isEditMode ? "btn-outline-info" : "btn-outline-secondary disabled"}`}>
-                <i className="bi bi-image me-1" /> {isEditMode ? "Upload Photo (≤100KB)" : "Upload Disabled"}
-              </label>
-            </div>
+                            {/* Upload photo (optional) */}
+                            <div className="d-grid gap-2">
+                              <input
+                                type="file"
+                                accept=".jpg,.jpeg,.png"
+                                hidden
+                                id="wm-photo-input"
+                                onChange={handlePhotoChange}
+                                disabled={!isEditMode}
+                              />
+                              <label htmlFor="wm-photo-input" className={`btn btn-sm ${isEditMode ? "btn-outline-info" : "btn-outline-secondary disabled"}`}>
+                                <i className="bi bi-image me-1" /> {isEditMode ? "Upload Photo (≤100KB)" : "Upload Disabled"}
+                              </label>
+                            </div>
 
-            {/* ID Proof (optional) */}
-            <div className="mt-3 text-start">
-              <label className="form-label mb-1"><strong>ID Proof</strong></label>
-              <div className="d-flex align-items-center gap-2">
-                <button type="button" className="btn btn-outline-primary btn-sm" onClick={handleViewId} disabled={!localWorker.idProofUrl && !localWorker.idProofPreview}>
-                  <i className="bi bi-eye me-1" /> View
-                </button>
-                <button type="button" className="btn btn-outline-success btn-sm" onClick={handleDownloadId} disabled={!localWorker.idProofUrl && !localWorker.idProofPreview}>
-                  <i className="bi bi-download me-1" /> Download
-                </button>
-              </div>
-              <div className="d-grid gap-2 mt-2">
-                <input
-                  type="file"
-                  accept=".pdf,.jpg,.jpeg,.png"
-                  hidden
-                  id="wm-id-input"
-                  onChange={handleIdProofChange}
-                  disabled={!isEditMode}
-                />
-                <label htmlFor="wm-id-input" className={`btn btn-sm ${isEditMode ? "btn-outline-warning" : "btn-outline-secondary disabled"}`}>
-                  <i className="bi bi-file-earmark-arrow-up me-1" /> {isEditMode ? "Upload ID (≤150KB)" : "Upload Disabled"}
-                </label>
-              </div>
-            </div>
-          </div>
-        </div>
+                            {/* ID Proof (optional) */}
+                            <div className="mt-3 text-start">
+                              <label className="form-label mb-1"><strong>ID Proof</strong></label>
+                              <div className="d-flex align-items-center gap-2">
+                                <button type="button" className="btn btn-outline-primary btn-sm" onClick={handleViewId} disabled={!localWorker.idProofUrl && !localWorker.idProofPreview}>
+                                  <i className="bi bi-eye me-1" /> View
+                                </button>
+                                <button type="button" className="btn btn-outline-success btn-sm" onClick={handleDownloadId} disabled={!localWorker.idProofUrl && !localWorker.idProofPreview}>
+                                  <i className="bi bi-download me-1" /> Download
+                                </button>
+                              </div>
+                              <div className="d-grid gap-2 mt-2">
+                                <input
+                                  type="file"
+                                  accept=".pdf,.jpg,.jpeg,.png"
+                                  hidden
+                                  id="wm-id-input"
+                                  onChange={handleIdProofChange}
+                                  disabled={!isEditMode}
+                                />
+                                <label htmlFor="wm-id-input" className={`btn btn-sm ${isEditMode ? "btn-outline-warning" : "btn-outline-secondary disabled"}`}>
+                                  <i className="bi bi-file-earmark-arrow-up me-1" /> {isEditMode ? "Upload ID (≤150KB)" : "Upload Disabled"}
+                                </label>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
 
-        {/* Right: Preview (kept as iframe for full HTML biodata) */}
-        <div className="col-md-8">
-          <div className="neo-card p-0 overflow-hidden">
-            <iframe
-              ref={iframeRef}
-              title="Biodata"
-              style={{ width: "100%", height: "520px", border: "0", background: "#fff" }}
-              // srcdoc is set via useEffect when tab opens
-            />
-          </div>
-        </div>
-      </div>
-    </div>
+                        {/* Right: Preview (kept as iframe for full HTML biodata) */}
+                        <div className="col-md-8">
+                          <div className="neo-card p-0 overflow-hidden">
+                            <iframe
+                              ref={iframeRef}
+                              title="Biodata"
+                              style={{ width: "100%", height: "520px", border: "0", background: "#fff" }}
+                            // srcdoc is set via useEffect when tab opens
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    </div>
 
-    {/* Footer */}
-    <div className="modal-card-footer d-flex justify-content-end gap-2">
-      <button className="btn btn-secondary" onClick={onClose}><i className="bi bi-x-lg me-1" /> Close</button>
-      <button className="btn btn-primary" onClick={handleDownloadBiodata}><i className="bi bi-download me-1" /> Download</button>
-    </div>
-  </div>
-)}
+                    {/* Footer */}
+                    <div className="modal-card-footer d-flex justify-content-end gap-2">
+                      <button className="btn btn-secondary" onClick={onClose}><i className="bi bi-x-lg me-1" /> Close</button>
+                      <button className="btn btn-primary" onClick={handleDownloadBiodata}><i className="bi bi-download me-1" /> Download</button>
+                    </div>
+                  </div>
+                )}
 
               </div>
 

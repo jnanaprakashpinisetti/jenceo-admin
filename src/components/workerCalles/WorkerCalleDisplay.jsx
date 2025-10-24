@@ -998,8 +998,8 @@ export default function WorkerCalleDisplay({ permissions: permissionsProp }) {
     ageRange,
     experienceRange,
     selectedJoiningTypes,
-    selectedNursingTasks,   
-    nursingTasksMode,      
+    selectedNursingTasks,
+    nursingTasksMode,
   ]);
 
   /* Sorting — add all requested fields */
@@ -2856,8 +2856,9 @@ export default function WorkerCalleDisplay({ permissions: permissionsProp }) {
                         }
                       />
                     </th>
-                    <th>ID</th>
+                    <th>Photo</th>
                     <th>Date</th>
+                    <th>ID</th>
                     <th>Name</th>
                     <th>Gender</th>
                     <th>Age</th>
@@ -2948,12 +2949,28 @@ export default function WorkerCalleDisplay({ permissions: permissionsProp }) {
                             }
                           />
                         </td>
+
                         <td>
-                          {displayId}
-                          {addedBy && (
-                            <small className="d-block small-text text-info opacity-50">
-                              By {addedBy}
-                            </small>
+                          {w.photoDataUrl ? (
+                            <img
+                              src={w.photoDataUrl}
+                              alt="Employee"
+                              style={{ width: '50px', height: '50px', objectFit: 'cover', borderRadius: '50%' }}
+                            />
+                          ) : (
+                            <div
+                              style={{
+                                width: '50px',
+                                height: '50px',
+                                backgroundColor: '#4c4b4b',
+                                borderRadius: '50%',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                margin:'auto',
+                                opacity:.3
+                              }}
+                            />
                           )}
                         </td>
                         <td>
@@ -2967,6 +2984,17 @@ export default function WorkerCalleDisplay({ permissions: permissionsProp }) {
                             </small>
                           )}
                         </td>
+                        <td>
+                          {displayId}
+                          {addedBy && (
+                            <small className="d-block small-text text-info opacity-50">
+                              By {addedBy}
+                            </small>
+                          )}
+                        </td>
+
+                        
+
                         <td>{w?.name || "—"}
                           <span className={`small fw-semibold ms-2 ${getProfileColor(computeProfilePercent(w))}`}>
                             {computeProfilePercent(w)}%

@@ -138,7 +138,7 @@ const buildBiodataHTML = (w) => {
   const marital = safe(w.maritalStatus);
 
   const qual = safe(w.qualification || w.education);
-  const college = safe(w.schoolCollege || w.college || w.school);
+  const college = safe(w.collegeName || w.college || w.school);
   const pskill = chips(w.primarySkill || w.skills);
   const otherSkills = w.otherSkills || [];
   const mtongue = chips(w.motherTongue);
@@ -1465,6 +1465,19 @@ export default function WorkerCallModal({
                                     placeholder="Enter education"
                                   />
                                 </div>
+                                <div className="col-md-4">
+                                  <label className="form-label fw-semibold text-secondary">
+                                    Collage / School
+                                  </label>
+                                  <input
+                                    type="text"
+                                    name="collegeName"
+                                    value={localWorker.collegeName || ""}
+                                    onChange={handleChange}
+                                    className="form-control dark-input"
+                                    placeholder="Enter CollegeName"
+                                  />
+                                </div>
 
                                 <div className="col-md-4">
                                   <label className="form-label fw-semibold text-secondary">
@@ -1495,6 +1508,10 @@ export default function WorkerCallModal({
                                 {renderInfoCard(
                                   "Education",
                                   localWorker.education
+                                )}
+                                {renderInfoCard(
+                                  "Collage",
+                                  localWorker.collegeName
                                 )}
                                 {renderInfoCard("Age", localWorker.age)}
                                 {renderInfoCard(
@@ -2545,7 +2562,7 @@ export default function WorkerCallModal({
                           </div>
 
                           {/* Upload photo (optional) */}
-                          <div className="d-grid gap-2">
+                          {/* <div className="d-grid gap-2">
                             <input
                               type="file"
                               accept=".jpg,.jpeg,.png"
@@ -2557,10 +2574,10 @@ export default function WorkerCallModal({
                             <label htmlFor="wm-photo-input" className={`btn btn-sm ${isEditMode ? "btn-outline-info" : "btn-outline-secondary disabled"}`}>
                               <i className="bi bi-image me-1" /> {isEditMode ? "Upload Photo (≤100KB)" : "Upload Disabled"}
                             </label>
-                          </div>
+                          </div> */}
 
                           {/* ID Proof (optional) */}
-                          <div className="mt-3 text-start">
+                          {/* <div className="mt-3 text-start">
                             <label className="form-label text-secondary mb-1"><strong>ID Proof</strong></label>
                             <div className="d-flex align-items-center gap-2 mt-2">
                               <button type="button" className="btn btn-outline-primary btn-sm" onClick={handleViewId}>
@@ -2587,7 +2604,7 @@ export default function WorkerCallModal({
                                 <i className="bi bi-file-earmark-arrow-up me-1" /> {isEditMode ? "Upload ID (≤150KB)" : "Upload Disabled"}
                               </label>
                             </div>
-                          </div>
+                          </div> */}
                         </div>
                       </div>
                     </div>

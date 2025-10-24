@@ -605,6 +605,8 @@ export default function WorkerCalleForm({ isOpen, onClose }) {
       homeCareSkills: [],
       otherSkills: [],
       education: "",
+      collegeName:"",
+      motherTongue:"",
       workingHours: "",
       languages: [],
       addressLine1: "",
@@ -802,6 +804,7 @@ export default function WorkerCalleForm({ isOpen, onClose }) {
                             }`}
                           disabled
                           readOnly
+                          style={{backgroundColor:"transparent"}}
                         />
                         {errors.callId && (
                           <div className="invalid-feedback">
@@ -823,6 +826,7 @@ export default function WorkerCalleForm({ isOpen, onClose }) {
                             }`}
                           disabled
                           max={todayYMD()}
+                          style={{backgroundColor:"transparent"}}
                         />
                         {errors.callDate && (
                           <div className="invalid-feedback">

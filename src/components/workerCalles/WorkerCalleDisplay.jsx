@@ -3005,13 +3005,15 @@ export default function WorkerCalleDisplay({ permissions: permissionsProp }) {
                                 getBaseDate(w),
                                 timeFormat === "24" ? "24hr" : "12hr"
                               )}
+
+                              {addedBy && (
+                                <small className="ms-2 small-text text-warning">
+                                  By {addedBy}
+                                </small>
+                              )}
                             </small>
                           )}
-                          {addedBy && (
-                            <small className="d-block small-text text-info opacity-50">
-                              By {addedBy}
-                            </small>
-                          )}
+
                         </td>
                         <td>
                           {displayId}

@@ -1158,8 +1158,9 @@ const WorkerModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode }
   @media print{.page{border:none;margin:0;width:100%}}
   .header-img{width:100%;max-height:120px;object-fit:contain;margin-bottom:6px}
   /* photo box on the right */
-  .photo-box{display:block;align-items:center;justify-content:center text-align:center}
-  .photo-box img{width:120px;height:120px;object-fit:cover;border-radius:6px;border:1px solid #ccc}
+  .photo-box{display:block;align-items:center;text-align:center}
+  .photo-box .rating{background: #f5f5f5; padding: 3px; border-radius: 5px;}
+  .photo-box img{width:130px;height:130px;object-fit:cover;border-radius:6px;border:1px solid #ccc}
   .photo-box .no-photo{width:120px;height:120px;border:1px solid #ccc;border-radius:6px;display:flex;align-items:center;justify-content:center;color:#888;font-size:12px}
   .heaerImg {margin: -21px -20px 10px -20px}
   .heaerImg img {width:100%}
@@ -1198,7 +1199,7 @@ const WorkerModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode }
     </div>
     <div class="photo-box">
       ${photoHtml}
-      <div class="kv-value">${ratingStarsHTML(formData.rating)}</div>
+      <div class="kv-value rating">${ratingStarsHTML(formData.rating)}</div>
     </div>
   </div>
 

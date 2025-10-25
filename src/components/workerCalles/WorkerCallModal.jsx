@@ -167,7 +167,7 @@ const buildBiodataHTML = (w) => {
   const stars = Number(w.rating ?? 0);
   const starColor = stars >= 4 ? "#16a34a" : (stars >= 3 ? "#f59e0b" : "#ef4444");
   const ratingHtml = `
-  <div style="margin-top:6px;text-align:center;color:${starColor}">
+  <div style= "margin-top:6px;text-align:center;color:${starColor}; background: #f5f5f5; max-width: max-content; margin: auto; padding: 3px; border-radius: 4px;">
     ${[1, 2, 3, 4, 5].map(n => n <= stars ? "★" : "☆").join(" ")}
     <span style="margin-left:6px;font-size:12px;color:#555">(${stars}/5)</span>
   </div>
@@ -235,7 +235,8 @@ const buildBiodataHTML = (w) => {
   .blue {color:#02acf2}
   @media print{.page{border:none;margin:0;width:100%}}
   .header-img{width:100%;max-height:120px;object-fit:contain;margin-bottom:6px}
-  .photo-box img{width:120px;height:120px;object-fit:cover;border-radius:6px;border:1px solid #ccc}
+  .photo-box {text-align: center;}
+  .photo-box img{width:130px;height:130px;object-fit:cover;border-radius:6px;border:1px solid #ccc}
   .photo-box .no-photo{width:120px;height:120px;border:1px solid #ccc;border-radius:6px;display:flex;align-items:center;justify-content:center;color:#888;font-size:12px}
   .heaerImg {margin: -21px -20px 10px -20px}
   .heaerImg img {width:100%}
@@ -2570,8 +2571,7 @@ export default function WorkerCallModal({
                       </div>
 
                       {/* Left: Photo + upload (optional) */}
-                     // Update the photo display logic in the Address tab to use preview first
-                      <div className="col-md-4">
+                      <div className="col-md-4 m-auto">
                         <div className="glass-card p-3 text-center">
                           <div className="mb-2">
                             {/* Show preview first, then URL, then fallback */}
@@ -2612,7 +2612,7 @@ export default function WorkerCallModal({
                           {/* ID Proof */}
                           <div className="mt-3 text-start">
                             <label className="form-label text-secondary mb-1"><strong>ID Proof</strong></label>
-                            <div className="d-flex align-items-center gap-2 mt-2">
+                            <div className="d-flex align-items-center gap-2 mt-2 justify-content-around">
                               <button type="button" className="btn btn-outline-primary btn-sm" onClick={handleViewId}>
                                 <i className="bi bi-eye me-1" /> View
                               </button>

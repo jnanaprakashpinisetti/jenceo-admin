@@ -879,7 +879,27 @@ export default function DisplayWorkers() {
                                             )} */}
                                         </small>
                                     </td>
-                                    <td>{employee.firstName} {employee.lastName}</td>
+                                    <td>{employee.firstName} {employee.lastName}
+                                        <div className="">
+                                            {[1, 2, 3, 4, 5].map((n) => {
+                                                const filled = n <= Number(employee.rating || 0);
+                                                let color = "text-secondary";
+                                                if (filled) {
+                                                    if (employee.rating >= 4) color = "text-success";     // green for 4–5
+                                                    else if (employee.rating === 3) color = "text-warning"; // yellow for 3
+                                                    else color = "text-danger";                             // red for 1–2
+                                                }
+                                                return (
+                                                    <i
+                                                        key={n}
+                                                        className={`bi ${filled ? "bi-star-fill" : "bi-star"} ${color}`}
+                                                        style={{ fontSize: "0.7rem", marginRight: 2 }}
+                                                        title={`${employee.rating || 0}/5`}
+                                                    />
+                                                );
+                                            })}
+                                        </div>
+                                    </td>
                                     <td>{employee.gender || 'N/A'}</td>
                                     <td>{employee.primarySkill || 'N/A'}</td>
                                     <td>{employee.workExperince ? `${employee.workExperince}` : 'N/A'}</td>

@@ -24,7 +24,6 @@ const MOTHER_TONGUE_OPTIONS = [
 
 const QualificationSkills = ({ formData, errors, handleChange, handleBlur, nextStep, prevStep }) => {
   const workingSkillsOptions = [
-    "Nursing",
     "Diaper",
     "Patent Care",
     "Baby Care",

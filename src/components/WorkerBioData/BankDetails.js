@@ -160,53 +160,7 @@ const BankDetails = ({
         </div>
 
         {/* Salary Information */}
-        <div className="col-12 mt-3">
-          <h6 className="border-bottom pb-2">Salary Information</h6>
-        </div>
-
-        <div className="col-md-6">
-          <label htmlFor="basicSalary" className="form-label">Basic Salary <span className="star">*</span></label>
-          <input
-            type="tel"
-            className={`form-control ${errors.basicSalary ? "is-invalid" : ""}`}
-            id="basicSalary"
-            name="basicSalary"
-            value={formData.basicSalary}
-            onChange={handleChange}
-            onBlur={handleBlur}
-            // placeholder="Enter salary"
-            maxLength={5}
-          />
-          {errors.basicSalary && <div className="invalid-feedback">{errors.basicSalary}</div>}
-        </div>
-
-        <div className="col-md-6">
-          <label htmlFor="pageNo" className="form-label">Page No <span className="star">*</span></label>
-          <input
-            type="tel"
-            className={`form-control ${errors.pageNo ? "is-invalid" : ""}`}
-            id="pageNo"
-            name="pageNo"
-            value={formData.pageNo}
-            onChange={handleChange}
-            onBlur={handleBlur}
-            // placeholder="Enter page no"
-            maxLength={3}
-          />
-          {errors.pageNo && <div className="invalid-feedback">{errors.pageNo}</div>}
-        </div>
-
-        <div className="col-12">
-          <label htmlFor="aboutEmployee" className="form-label">About Employee</label>
-          <textarea
-            className="form-control"
-            id="aboutEmployee"
-            name="aboutEmployee"
-            value={formData.aboutEmployee}
-            onChange={handleChange}
-            rows={3}
-          />
-        </div>
+        
       </div>
 
       {/* <div className="d-flex justify-content-between mt-4">

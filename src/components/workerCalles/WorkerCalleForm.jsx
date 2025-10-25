@@ -32,6 +32,10 @@ const getEffectiveUserName = (u, fallback = "System") => {
   return String(raw).trim().replace(/@.*/, "") || "System";
 };
 
+const DEFAULT_PHOTO_URL =
+  "https://firebasestorage.googleapis.com/v0/b/jenceo-admin.firebasestorage.app/o/OfficeFiles%2FSample-Photo.jpg?alt=media&token=01855b47-c9c2-490e-b400-05851192dde7";
+
+
 /* =======================================================
    Constants
 ======================================================= */
@@ -100,7 +104,7 @@ export default function WorkerCalleForm({ isOpen = false, onClose = () => { }, o
     email: "",
 
     // Step 2 — Skills & Education
-    experience: "No",
+    experience: "",
     years: "",
     skills: "",           // Primary Skill
     nursingWorks: [],
@@ -125,7 +129,7 @@ export default function WorkerCalleForm({ isOpen = false, onClose = () => { }, o
     formComment: "",
 
     // Step 4 — Uploads
-    photoDataUrl: "",
+    photoDataUrl: DEFAULT_PHOTO_URL,
     photoName: "",
     photoType: "",
     photoSize: 0,
@@ -346,13 +350,14 @@ export default function WorkerCalleForm({ isOpen = false, onClose = () => { }, o
       // Step 1
       "mobileNo", "name", "gender", "age", "location", "source",
       // Step 2
-      "education", "motherTongue", "skills",
+      "education", "motherTongue", "experience", "skills",
       ...(formData.experience === "Yes" ? ["years"] : []),
       ...(formData.skills === "Nursing" ? ["nursingWorks"] : []),
       // Step 4
       "joiningType", "conversationLevel", "formComment",
     ];
   }, [formData.experience, formData.skills]);
+
 
   const countFilled = (f) => {
     const v = formData[f];
@@ -399,6 +404,7 @@ export default function WorkerCalleForm({ isOpen = false, onClose = () => { }, o
       case 2: {
         // Education + Primary skill (languages optional)
         if (!formData.education) e.education = "Education is required";
+        if (!formData.experience) e.experience = "Experience is required";
         if (!formData.skills) e.skills = "Primary Skill is required";
         break;
       }
@@ -528,7 +534,7 @@ export default function WorkerCalleForm({ isOpen = false, onClose = () => { }, o
       conversationLevel: "",
       callReminderDate: "",
       formComment: "",
-      photoDataUrl: "",
+      photoDataUrl: DEFAULT_PHOTO_URL,
       photoName: "",
       photoType: "",
       photoSize: 0,
@@ -536,6 +542,7 @@ export default function WorkerCalleForm({ isOpen = false, onClose = () => { }, o
       idProofName: "",
       idProofType: "",
       idProofSize: 0,
+      setRating: 0,
     }));
     setErrors({});
     setStep(1);
@@ -729,30 +736,106 @@ export default function WorkerCalleForm({ isOpen = false, onClose = () => { }, o
                 </div>
 
                 {/* Progress + Stepper */}
-                <div className="mt-2">
-                  <div className="d-flex justify-content-between align-items-center small text-muted">
-                    <span>Step {step} of {TOTAL_STEPS} · <strong>{StepTitle()}</strong></span>
-                    <span>Progress: <strong>{overallPct}%</strong> completed</span>
+                {/* Progress + Stepper */}
+                <div className="mt-3">
+                  <div className="d-flex justify-content-between align-items-center mb-2">
+                    <span className="text-light small">
+                      Step <strong className="text-warning">{step}</strong> of <strong>{TOTAL_STEPS}</strong> ·
+                      <span className="text-warning ms-1">{StepTitle()}</span>
+                    </span>
+                    <span className="text-light small">
+                      Progress: <strong className="text-warning">{overallPct}%</strong> completed
+                    </span>
                   </div>
-                  <div className="position-relative mt-2 mb-1">
-                    <div className="progress" style={{ height: 6, background: "rgba(255,255,255,.12)" }}>
+
+                  {/* Progress Bar */}
+                  <div className="position-relative"
+                    style={{
+                      top: "20px",
+                    }}
+
+                  >
+                    <div
+                      className="progress"
+                      style={{
+                        height: "8px",
+                        background: "rgba(255,255,255,0.1)",
+                        borderRadius: "10px",
+                        overflow: "hidden",
+                      }}
+                    >
                       <div
                         className="progress-bar"
                         role="progressbar"
-                        style={{ width: `${(step / TOTAL_STEPS) * 100}%`, transition: "width .25s ease", background: "linear-gradient(90deg,#06b6d4,#3b82f6)" }}
+                        style={{
+                          width: `${(step / TOTAL_STEPS) * 100}%`,
+                          transition: "width 0.4s ease-in-out",
+                          background: "linear-gradient(90deg, #f59e0b, #fbbf24)",
+                          borderRadius: "10px"
+                        }}
                       />
                     </div>
-                    <div className="d-flex justify-content-between mt-2">
-                      {Array.from({ length: TOTAL_STEPS }, (_, i) => String(i + 1)).map((n, idx) => {
-                        const active = step >= idx + 1;
-                        return (
-                          <div key={n} className="text-center" style={{ width: 32 }}>
-                            <div className={`rounded-circle ${active ? "bg-info text-dark" : "bg-secondary text-white"}`}
-                              style={{ width: 28, height: 28, lineHeight: "28px", fontWeight: 700 }}>{n}</div>
+                  </div>
+
+                  {/* Step Indicators */}
+                  <div className="d-flex justify-content-between position-relative">
+                    {/* Connecting Line */}
+                    <div
+                      className="position-absolute top-0 start-0 end-0" />
+
+                    {Array.from({ length: TOTAL_STEPS }, (_, i) => {
+                      const stepNumber = i + 1;
+                      const isActive = step >= stepNumber;
+                      const isCurrent = step === stepNumber;
+
+                      return (
+                        <div key={stepNumber} className="text-center position-relative" style={{ zIndex: 2 }}>
+                          {/* Step Circle */}
+                          <div
+                            className={`rounded-circle d-flex align-items-center justify-content-center ${isActive
+                              ? "bg-warning border-warning"
+                              : "bg-secondary border-secondary"
+                              } border-2`}
+                            style={{
+                              width: "30px",
+                              height: "30px",
+                              transition: "all 0.3s ease",
+                              transform: isCurrent ? "scale(1.1)" : "scale(1)",
+                              boxShadow: isCurrent ? "0 0 0 3px rgba(245, 158, 11, 0.3)" : "none"
+                            }}
+                          >
+                            {isActive ? (
+                              <i className="bi bi-check-lg text-dark small fw-bold"></i>
+                            ) : (
+                              <span className={`small fw-bold ${isActive ? "text-dark" : "text-light"}`}>
+                                {stepNumber}
+                              </span>
+                            )}
                           </div>
-                        );
-                      })}
-                    </div>
+
+                          {/* Step Label */}
+                          <div className="mt-2">
+                            <small
+                              className={`fw-medium ${isActive ? "text-warning" : "text-muted"
+                                }`}
+                              style={{ fontSize: "0.7rem" }}
+                            >
+                              {(() => {
+                                const stepLabels = {
+                                  1: "Basic",
+                                  2: "Education",
+                                  3: "Skills",
+                                  4: "Details",
+                                  5: "Upload",
+                                  6: "Review"
+                                };
+                                return stepLabels[stepNumber] || `Step ${stepNumber}`;
+                              })()}
+                            </small>
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
               </div>
@@ -879,16 +962,20 @@ export default function WorkerCalleForm({ isOpen = false, onClose = () => { }, o
                       {errors.motherTongue && <div className="invalid-feedback">{errors.motherTongue}</div>}
                     </div>
                     <div className="col-md-6">
-                      <label className="form-label">Experience</label><br />
+                      <label className="form-label">Experience <span className="star">*</span></label><br />
                       <div className="form-check form-check-inline">
-                        <input className="form-check-input" type="radio" name="experience" value="Yes" checked={formData.experience === "Yes"} onChange={handleChange} />
+                        <input className="form-check-input" type="radio" name="experience" value="Yes"
+                          checked={formData.experience === "Yes"} onChange={handleChange} />
                         <label className="form-check-label">Yes</label>
                       </div>
                       <div className="form-check form-check-inline">
-                        <input className="form-check-input" type="radio" name="experience" value="No" checked={formData.experience === "No"} onChange={handleChange} />
+                        <input className="form-check-input" type="radio" name="experience" value="No"
+                          checked={formData.experience === "No"} onChange={handleChange} />
                         <label className="form-check-label">No</label>
                       </div>
+                      {errors.experience && <div className="text-danger small mt-1">{errors.experience}</div>}
                     </div>
+
 
                   </div>
                   <div className="row mb-3">
@@ -925,7 +1012,7 @@ export default function WorkerCalleForm({ isOpen = false, onClose = () => { }, o
 
                   <div className="row mb-3">
                     <div className="col-md-12">
-                      <div className="bg-dark rounded-3 p-3">
+                      <div className="languages">
                         <label className="form-label">Languages Known (optional)</label>
                         <div>
                           {["Telugu", "Hindi", "English", "Urdu", "Kannada", "Malayalam", "Tamil", "Oriya", "Bengali", "Marathi"].map((lang) => (
@@ -1011,21 +1098,43 @@ export default function WorkerCalleForm({ isOpen = false, onClose = () => { }, o
                     {OTHER_SKILL_SECTIONS.map((sec, i) => {
                       const isOpen = openOtherSkill === i;
                       const needsDark = isOpen && (sec.color === "warning" || sec.color === "info");
-                      const headingBtnClass = isOpen ? `accordion-button bg-${sec.color} ${needsDark ? "text-dark" : "text-white"}` : `accordion-button collapsed`;
+                      const headingBtnClass = isOpen
+                        ? `accordion-button bg-${sec.color} ${needsDark ? "text-dark" : "text-white"}`
+                        : `accordion-button collapsed bg-dark text-light border-0`;
+
                       return (
-                        <div key={sec.title} className="accordion-item bg-dark text-white border-0 rounded-3 mb-2">
+                        <div
+                          key={sec.title}
+                          className="accordion-item bg-dark text-white border-0 rounded-3 mb-2 shadow-sm"
+                        >
                           <h2 className="accordion-header">
-                            <button className={headingBtnClass} type="button" onClick={() => setOpenOtherSkill(isOpen ? null : i)}>
+                            <button
+                              className={headingBtnClass}
+                              type="button"
+                              onClick={() => setOpenOtherSkill(isOpen ? null : i)}
+                            >
                               {sec.title}
                             </button>
                           </h2>
+
                           <div className={`accordion-collapse collapse ${isOpen ? "show" : ""}`}>
                             <div className="accordion-body">
                               <div className="d-flex flex-wrap gap-2">
                                 {sec.skills.map((s) => {
                                   const active = formData.otherSkills.includes(s);
+
+                                  // Each section’s skills use its theme color
+                                  const btnClass = active
+                                    ? `btn btn-sm rounded-pill btn-${sec.color} text-dark fw-semibold`
+                                    : `btn btn-sm rounded-pill btn-outline-${sec.color}`;
+
                                   return (
-                                    <button type="button" key={s} className={`btn btn-sm rounded-pill ${active ? "btn-light text-dark" : "btn-outline-light"}`} onClick={() => toggleSkillPill("otherSkills", s)}>
+                                    <button
+                                      type="button"
+                                      key={s}
+                                      className={btnClass}
+                                      onClick={() => toggleSkillPill("otherSkills", s)}
+                                    >
                                       {s}
                                     </button>
                                   );
@@ -1037,6 +1146,7 @@ export default function WorkerCalleForm({ isOpen = false, onClose = () => { }, o
                       );
                     })}
                   </div>
+
                 </div>
               )}
 
@@ -1101,7 +1211,7 @@ export default function WorkerCalleForm({ isOpen = false, onClose = () => { }, o
                     </div>
                     <div className="col-md-6">
                       <label className="form-label">Call Reminder Date</label>
-                      <input type="date" name="callReminderDate" className={`form-control ${errors.callReminderDate ? "is-invalid" : ""}`} value={formData.callReminderDate} onChange={handleChange} />
+                      <input type="date" name="callReminderDate" className={`form-control ${errors.callReminderDate ? "is-invalid" : ""}`} value={formData.callReminderDate} onChange={handleChange} min={toYMD(new Date())} />
                       {errors.callReminderDate && <div className="invalid-feedback">{errors.callReminderDate}</div>}
                     </div>
 
@@ -1125,14 +1235,35 @@ export default function WorkerCalleForm({ isOpen = false, onClose = () => { }, o
                   <div className="row mb-3">
                     <div className="col-md-6">
                       <label className="form-label">Photo (≤100KB, JPG/PNG/GIF)</label>
-                      <input className={`form-control ${errors.photoDataUrl ? "is-invalid" : ""}`} type="file" accept="image/jpeg,image/png,image/jpg,image/gif" onChange={onPhotoChange} />
-                      {errors.photoDataUrl && <div className="invalid-feedback">{errors.photoDataUrl}</div>}
-                      {formData.photoDataUrl && (
-                        <div className="mt-2">
-                          <img src={formData.photoDataUrl} alt="preview" style={{ maxWidth: 120, borderRadius: 8 }} />
-                        </div>
+                      <input
+                        className={`form-control ${errors.photoDataUrl ? "is-invalid" : ""}`}
+                        type="file"
+                        accept="image/jpeg,image/png,image/jpg,image/gif"
+                        onChange={onPhotoChange}
+                      />
+                      {errors.photoDataUrl && (
+                        <div className="invalid-feedback">{errors.photoDataUrl}</div>
                       )}
+
+                      <div className="mt-2 text-center">
+                        <img
+                          src={formData.photoDataUrl || DEFAULT_PHOTO_URL}
+                          alt="preview"
+                          style={{
+                            maxWidth: 120,
+                            borderRadius: 8,
+                            border: "1px solid #555",
+                            padding: 2,
+                            backgroundColor: "#222",
+                          }}
+                          onError={(e) => (e.target.src = DEFAULT_PHOTO_URL)}
+                        />
+                        <div className="small text-muted mt-1">
+                          {formData.photoName ? formData.photoName : "Default photo"}
+                        </div>
+                      </div>
                     </div>
+
                     <div className="col-md-6">
                       <label className="form-label">ID Proof (≤150KB, PDF/JPG/PNG)</label>
                       <input className={`form-control ${errors.idProofDataUrl ? "is-invalid" : ""}`} type="file" accept="application/pdf,image/jpeg,image/jpg,image/png" onChange={onIdProofChange} />
@@ -1149,46 +1280,330 @@ export default function WorkerCalleForm({ isOpen = false, onClose = () => { }, o
 
               {/* STEP 6 */}
               {step === 6 && (
-                <div className="bg-dark p-3 rounded-4">
-                  <h5 className="mb-3">Review & Submit</h5><hr />
-                  <div className="alert alert-secondary">
-                    <div className="d-flex justify-content-between align-items-center">
-                      <div>
-                        <strong>Call ID:</strong> {formData.callId} &nbsp; | &nbsp;
-                        <strong>Date:</strong> {formData.callDate} &nbsp; | &nbsp;
-                        <strong>By:</strong> {formData.createdByName}
+                <div className="bg-dark p-4 rounded-4 border border-secondary">
+                  <h5 className="mb-3 text-warning d-flex align-items-center">
+                    <i className="bi bi-check-circle-fill me-2"></i>
+                    Review & Submit
+                  </h5>
+                  <hr className="border-secondary" />
+
+                  {/* Header Card */}
+                  <div className="card bg-dark border-secondary mb-4">
+                    <div className="card-body p-3">
+                      <div className="row align-items-center">
+                        <div className="col-md-8">
+                          <div className="d-flex flex-wrap gap-3 align-items-center">
+                            <div className="d-flex align-items-center">
+                              <i className="bi bi-person-badge text-warning me-2"></i>
+                              <strong className="text-light">Call ID:</strong>
+                              <span className="ms-1 text-warning">{formData.callId}</span>
+                            </div>
+                            <div className="d-flex align-items-center">
+                              <i className="bi bi-calendar text-warning me-2"></i>
+                              <strong className="text-light">Date:</strong>
+                              <span className="ms-1 text-warning">{formData.callDate}</span>
+                            </div>
+                            <div className="d-flex align-items-center">
+                              <i className="bi bi-person text-warning me-2"></i>
+                              <strong className="text-light">By:</strong>
+                              <span className="ms-1 text-warning">{formData.createdByName}</span>
+                            </div>
+                          </div>
+                        </div>
+                        <div className="col-md-4 text-end">
+                          <div className="bg-warning rounded-pill px-3 py-2 d-inline-block">
+                            <strong className="text-dark">
+                              <i className="bi bi-graph-up me-1"></i>
+                              {reqPct}% Complete
+                            </strong>
+                          </div>
+                        </div>
                       </div>
-                      <div><strong>Required Complete:</strong> {reqPct}%</div>
-                    </div>
-                  </div>
-                  <div className="mb-3">
-                    <label className="form-label">
-                      Rating (1–5) <span className="text-muted">(optional)</span>
-                    </label>
-                    <div className="d-flex align-items-center gap-1">
-                      {[1, 2, 3, 4, 5].map(n => (
-                        <i
-                          key={n}
-                          className={`bi ${n <= (rating || 0) ? "bi-star-fill text-warning" : "bi-star text-secondary"}`}
-                          style={{ cursor: "pointer", fontSize: "1.2rem" }}
-                          onClick={() => { setRating(n); setFormData(p => ({ ...p, rating: n })); }}
-                          title={`${rating || 0}/5`}
-                        />
-                      ))}
-                      <span className="ms-2 small">{rating || 0}/5</span>
                     </div>
                   </div>
 
-                  <ul className="small">
-                    <li><strong>Name:</strong> {formData.name} &nbsp; <strong>Mobile:</strong> {formData.mobileNo}</li>
-                    <li><strong>Location:</strong> {formData.location} &nbsp; <strong>Source:</strong> {formData.source}</li>
-                    <li><strong>Primary Skill:</strong> {formData.skills || "—"} &nbsp; <strong>Education:</strong> {formData.education}</li>
-                    <li><strong>Mother Tongue:</strong> {formData.motherTongue} &nbsp; <strong>Working Hours:</strong> {formData.workingHours || "—"}</li>
-                    <li><strong>Joining Type:</strong> {formData.joiningType || "—"} &nbsp; <strong>Conversation:</strong> {formData.conversationLevel || "—"}</li>
-                    <li><strong>Comment:</strong> {formData.formComment ? formData.formComment : "—"}</li>
-                  </ul>
+                  {/* Rating Card */}
+                  <div className="card bg-dark border-secondary mb-4">
+                    <div className="card-header bg-secondary bg-opacity-25 border-secondary">
+                      <h6 className="mb-0 text-light">
+                        <i className="bi bi-star me-2 text-warning"></i>
+                        Candidate Rating
+                      </h6>
+                    </div>
+                    <div className="card-body">
+                      <div className="row align-items-center">
+                        <div className="col-md-6">
+                          <label className="form-label text-light mb-2">
+                            Rate this candidate <span className="text-danger">*</span>
+                          </label>
+                          <div className="d-flex align-items-center gap-1">
+                            {[1, 2, 3, 4, 5].map(n => (
+                              <button
+                                key={n}
+                                type="button"
+                                className={`btn btn-lg p-0 ${n <= (rating || 0) ? "text-warning" : "text-secondary"}`}
+                                onClick={() => {
+                                  setRating(n);
+                                  setFormData(p => ({ ...p, rating: n }));
+                                }}
+                                style={{
+                                  fontSize: "2rem",
+                                  lineHeight: 1,
+                                  transition: "all 0.2s ease",
+                                  transform: n <= (rating || 0) ? "scale(1.1)" : "scale(1)"
+                                }}
+                                title={`Rate ${n} star${n > 1 ? 's' : ''}`}
+                              >
+                                ★
+                              </button>
+                            ))}
+                            <span className="ms-3 text-light fw-bold fs-5">{rating || 0}/5</span>
+                          </div>
+                          {!rating && <div className="text-danger small mt-2">Please provide a rating before submitting</div>}
+                        </div>
+                        <div className="col-md-6 text-end">
+                          <div className="bg-dark border border-secondary rounded p-3">
+                            <small className="text-muted">
+                              <i className="bi bi-info-circle me-1"></i>
+                              Rate based on communication, skills, and overall impression
+                            </small>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
 
-                  <div className="text-muted small">Please go back and correct anything if needed.</div>
+                  {/* Information Cards Grid */}
+                  <div className="row g-3 mb-4">
+                    {/* Personal Information Card */}
+                    <div className="col-md-6">
+                      <div className="card bg-dark h-100 border-secondary">
+                        <div className="card-header bg-secondary bg-opacity-25 border-secondary">
+                          <h6 className="mb-0 text-light">
+                            <i className="bi bi-person-vcard me-2 text-warning"></i>
+                            Personal Information
+                          </h6>
+                        </div>
+                        <div className="card-body">
+                          <div className="info-grid">
+                            <div className="info-item">
+                              <span className="info-label">Full Name</span>
+                              <span className="info-value text-light">{formData.name || "—"}</span>
+                            </div>
+                            <div className="info-item">
+                              <span className="info-label">Mobile</span>
+                              <span className="info-value text-warning">{formData.mobileNo || "—"}</span>
+                            </div>
+                            <div className="info-item">
+                              <span className="info-label">Location</span>
+                              <span className="info-value text-light">{formData.location || "—"}</span>
+                            </div>
+                            <div className="info-item">
+                              <span className="info-label">Source</span>
+                              <span className="info-value text-light">{formData.source || "—"}</span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Professional Information Card */}
+                    <div className="col-md-6">
+                      <div className="card bg-dark h-100 border-secondary">
+                        <div className="card-header bg-secondary bg-opacity-25 border-secondary">
+                          <h6 className="mb-0 text-light">
+                            <i className="bi bi-briefcase me-2 text-warning"></i>
+                            Professional Details
+                          </h6>
+                        </div>
+                        <div className="card-body">
+                          <div className="info-grid">
+                            <div className="info-item">
+                              <span className="info-label">Primary Skill</span>
+                              <span className="info-value text-warning">{formData.skills || "—"}</span>
+                            </div>
+                            <div className="info-item">
+                              <span className="info-label">Education</span>
+                              <span className="info-value text-light">{formData.education || "—"}</span>
+                            </div>
+                            <div className="info-item">
+                              <span className="info-label">Mother Tongue</span>
+                              <span className="info-value text-light">{formData.motherTongue || "—"}</span>
+                            </div>
+                            <div className="info-item">
+                              <span className="info-label">Working Hours</span>
+                              <span className="info-value text-light">{formData.workingHours || "—"}</span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Additional Details Card */}
+                    <div className="col-md-6">
+                      <div className="card bg-dark h-100 border-secondary">
+                        <div className="card-header bg-secondary bg-opacity-25 border-secondary">
+                          <h6 className="mb-0 text-light">
+                            <i className="bi bi-gear me-2 text-warning"></i>
+                            Job Preferences
+                          </h6>
+                        </div>
+                        <div className="card-body">
+                          <div className="info-grid">
+                            <div className="info-item">
+                              <span className="info-label">Joining Type</span>
+                              <span className="info-value text-light">{formData.joiningType || "—"}</span>
+                            </div>
+                            <div className="info-item">
+                              <span className="info-label">Conversation Level</span>
+                              <span className={`info-value ${formData.conversationLevel === 'Good' ? 'text-success' :
+                                formData.conversationLevel === 'Average' ? 'text-warning' :
+                                  formData.conversationLevel === 'Poor' ? 'text-danger' : 'text-light'
+                                }`}>
+                                {formData.conversationLevel || "—"}
+                              </span>
+                            </div>
+                            <div className="info-item">
+                              <span className="info-label">Experience</span>
+                              <span className="info-value text-light">
+                                {formData.experience === 'Yes' ? `${formData.years || '0'} years` : 'No Experience'}
+                              </span>
+                            </div>
+                            <div className="info-item">
+                              <span className="info-label">Expected Salary</span>
+                              <span className="info-value text-warning">
+                                {formData.expectedSalary ? `₹${formData.expectedSalary}` : "—"}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Skills Summary Card */}
+                    <div className="col-md-6">
+                      <div className="card bg-dark h-100 border-secondary">
+                        <div className="card-header bg-secondary bg-opacity-25 border-secondary">
+                          <h6 className="mb-0 text-light">
+                            <i className="bi bi-tools me-2 text-warning"></i>
+                            Skills Summary
+                          </h6>
+                        </div>
+                        <div className="card-body">
+                          <div className="skills-summary">
+                            {formData.nursingWorks.length > 0 && (
+                              <div className="skill-category mb-3">
+                                <small className="text-warning fw-bold">Nursing Works:</small>
+                                <div className="d-flex flex-wrap gap-1 mt-1">
+                                  {formData.nursingWorks.slice(0, 3).map(skill => (
+                                    <span key={skill} className="badge bg-warning bg-opacity-25 text-warning border border-warning">
+                                      {skill}
+                                    </span>
+                                  ))}
+                                  {formData.nursingWorks.length > 3 && (
+                                    <span className="badge bg-secondary">+{formData.nursingWorks.length - 3} more</span>
+                                  )}
+                                </div>
+                              </div>
+                            )}
+
+                            {formData.homeCareSkills.length > 0 && (
+                              <div className="skill-category mb-3">
+                                <small className="text-warning fw-bold">Home Care:</small>
+                                <div className="d-flex flex-wrap gap-1 mt-1">
+                                  {formData.homeCareSkills.slice(0, 3).map(skill => (
+                                    <span key={skill} className="badge bg-warning bg-opacity-25 text-warning border border-warning">
+                                      {skill}
+                                    </span>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+
+                            {formData.otherSkills.length > 0 && (
+                              <div className="skill-category">
+                                <small className="text-warning fw-bold">Other Skills:</small>
+                                <div className="d-flex flex-wrap gap-1 mt-1">
+                                  {formData.otherSkills.slice(0, 4).map(skill => (
+                                    <span key={skill} className="badge bg-warning bg-opacity-25 text-warning border border-warning">
+                                      {skill}
+                                    </span>
+                                  ))}
+                                  {formData.otherSkills.length > 4 && (
+                                    <span className="badge bg-secondary">+{formData.otherSkills.length - 4} more</span>
+                                  )}
+                                </div>
+                              </div>
+                            )}
+
+                            {formData.nursingWorks.length === 0 && formData.homeCareSkills.length === 0 && formData.otherSkills.length === 0 && (
+                              <div className="text-center text-muted py-2">
+                                <i className="bi bi-inbox" style={{ fontSize: '2rem' }}></i>
+                                <p className="mt-2 mb-0 small">No skills added</p>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Comment Card */}
+                  {formData.formComment && (
+                    <div className="card bg-dark border-secondary mb-4">
+                      <div className="card-header bg-secondary bg-opacity-25 border-secondary">
+                        <h6 className="mb-0 text-light">
+                          <i className="bi bi-chat-left-text me-2 text-warning"></i>
+                          Additional Comments
+                        </h6>
+                      </div>
+                      <div className="card-body">
+                        <div className="bg-dark bg-opacity-50 rounded p-3 border border-secondary">
+                          <p className="mb-0 text-light opacity-75" style={{ lineHeight: '1.6' }}>
+                            "{formData.formComment}"
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Final Action Card */}
+                  <div className="card bg-dark border-secondary">
+                    <div className="card-body text-center py-4">
+                      <div className="mb-3">
+                        <i className="bi bi-shield-check text-warning" style={{ fontSize: '3rem' }}></i>
+                      </div>
+                      <h5 className="text-warning mb-3">Ready to Submit?</h5>
+                      <p className="text-light mb-4 opacity-75">
+                        Please review all information carefully. Once submitted, this worker call will be saved to the database.
+                      </p>
+                      <div className="d-flex justify-content-center gap-3">
+                        <button
+                          type="button"
+                          className="btn btn-outline-warning"
+                          onClick={() => setStep(1)}
+                        >
+                          <i className="bi bi-arrow-left me-2"></i>
+                          Review Again
+                        </button>
+                        <button
+                          type="button"
+                          className="btn btn-warning px-4"
+                          onClick={handleSubmit}
+                          disabled={!rating}
+                        >
+                          <i className="bi bi-check-lg me-2"></i>
+                          Submit Worker Call
+                        </button>
+                      </div>
+                      {!rating && (
+                        <div className="text-danger small mt-3">
+                          <i className="bi bi-exclamation-triangle me-1"></i>
+                          Please provide a rating before submitting
+                        </div>
+                      )}
+                    </div>
+                  </div>
                 </div>
               )}
             </div>
@@ -1196,13 +1611,20 @@ export default function WorkerCalleForm({ isOpen = false, onClose = () => { }, o
 
             <div className="modal-footer bg-dark text-light d-flex justify-content-between border-dark">
               <div>
-                <button type="button" className="btn btn-outline-light me-2" onClick={() => setStep(1)}>Step 1</button>
-                <button type="button" className="btn btn-outline-light me-2" onClick={() => setStep(2)}>Step 2</button>
-                <button type="button" className="btn btn-outline-light me-2" onClick={() => setStep(3)}>Step 3</button>
-                <button type="button" className="btn btn-outline-light me-2" onClick={() => setStep(4)}>Step 4</button>
-                <button type="button" className="btn btn-outline-light me-2" onClick={() => setStep(5)}>Step 5</button>
-                <button type="button" className="btn btn-outline-light" onClick={() => setStep(6)}>Step 6</button>
+                {[1, 2, 3, 4, 5, 6].map(n => (
+                  <button
+                    key={n}
+                    type="button"
+                    onClick={() => setStep(n)}
+                    className={`btn me-2 ${step === n ? "btn-warning text-dark fw-semibold" : "btn-outline-light"
+                      }`}
+                    aria-current={step === n ? "step" : undefined}
+                  >
+                    Step {n}
+                  </button>
+                ))}
               </div>
+
               <div className="d-flex align-items-center gap-2">
                 {step > 1 && <button type="button" className="btn btn-secondary" onClick={prevStep}>Back</button>}
                 {step < TOTAL_STEPS && <button type="button" className="btn btn-info text-dark" onClick={nextStep}>Next</button>}
@@ -1220,15 +1642,15 @@ export default function WorkerCalleForm({ isOpen = false, onClose = () => { }, o
 
       {/* Close confirm */}
       {showCloseConfirm && (
-        <div className="modal fade show worker-call-gray" style={{ display: "block", backgroundColor: "rgba(0,0,0,.6)" }}>
-          <div className="modal-dialog modal-sm modal-dialog-centered">
+        <div className="modal fade show worker-call-gray" style={{ display: "block", backgroundColor: "rgba(0,0,0,.9)" }}>
+          <div className="modal-dialog modal-md modal-dialog-centered">
             <div className="modal-content">
               <div className="modal-header bg-dark text-light border-dark">
-                <h5 className="modal-title">Discard changes?</h5>
+                <h5 className="modal-title text-danger">Discard changes?</h5>
                 <button type="button" className="btn-close" onClick={() => setShowCloseConfirm(false)} />
               </div>
-              <div className="modal-body bg-dark text-light">
-                You have unsaved changes. Do you really want to close?
+              <div className="modal-body bg-dark text-light text-center">
+                You have unsaved changes. <br></br> Do you really want to close?
               </div>
               <div className="modal-footer">
                 <button className="btn btn-secondary" onClick={() => setShowCloseConfirm(false)}>Cancel</button>
@@ -1241,15 +1663,15 @@ export default function WorkerCalleForm({ isOpen = false, onClose = () => { }, o
 
       {/* Success toast/modal */}
       {success && (
-        <div className="modal fade show worker-call-gray" style={{ display: "block", backgroundColor: "rgba(0,0,0,.6)" }}>
-          <div className="modal-dialog modal-sm modal-dialog-centered">
+        <div className="modal fade show worker-call-gray" style={{ display: "block", backgroundColor: "rgba(0,0,0,.9)" }}>
+          <div className="modal-dialog modal-md modal-dialog-centered">
             <div className="modal-content">
               <div className="modal-header bg-dark text-light border-dark">
-                <h5 className="modal-title">Saved!</h5>
+                <h5 className="modal-title text-warning">Saved!</h5>
                 <button type="button" className="btn-close" onClick={() => { setSuccess(null); onClose?.(); }} />
               </div>
-              <div className="modal-body bg-dark text-light">
-                Worker call saved for <strong>{success.name}</strong> (ID: <strong>{success.callId}</strong>).
+              <div className="modal-body bg-dark text-info text-center">
+                Worker call saved for <br></br> <strong>{success.name}</strong> <br></br> (ID: <strong>{success.callId}</strong>).
               </div>
               <div className="modal-footer">
                 <button className="btn btn-success" onClick={() => { setSuccess(null); onClose?.(); }}>OK</button>

@@ -1223,3 +1223,47 @@
     }
   }
 }
+
+
+/* Worker Call Form Gray Theme */
+.worker-call-gray .modal-content,
+.worker-call-gray .modal-header,
+.worker-call-gray .modal-body,
+.worker-call-gray .modal-footer { background-color: #2e2e2e !important; color: #f1f1f1 !important; }
+
+.worker-call-gray .form-control,
+.worker-call-gray .form-select,
+.worker-call-gray textarea {
+  background-color: #3a3a3a !important;
+  color: #f1f1f1 !important;
+  border-color: #555 !important;
+}
+.worker-call-gray .form-control::placeholder,
+.worker-call-gray .form-select::placeholder,
+.worker-call-gray textarea::placeholder { color: #bdbdbd !important; }
+
+.worker-call-gray .form-check-input {
+  background-color: #3a3a3a !important;
+  border-color: #555 !important;
+}
+.worker-call-gray .form-check-input:checked {
+  background-color: #06b6d4 !important;
+  border-color: #06b6d4 !important;
+}
+
+.worker-call-gray .accordion-item { background-color: #333 !important; }
+.worker-call-gray .accordion-button { background-color: #3a3a3a !important; color: #f1f1f1 !important; }
+.worker-call-gray .accordion-button:not(.collapsed) { box-shadow: none; }
+
+.worker-call-gray .progress { background-color: #3a3a3a !important; }
+
+.worker-call-gray .list-group-item { background-color: #2e2e2e !important; color: #e8e8e8 !important; border-color: #444 !important; }
+.worker-call-gray .list-group-item.active { background-color: #06b6d4 !important; color: #0b1320 !important; border-color: #06b6d4 !important; }
+
+.worker-call-gray .btn-outline-light { border-color: #666 !important; color: #f1f1f1 !important; }
+.worker-call-gray .btn-outline-light:hover { background-color: #3c3c3c !important; }
+
+.worker-call-gray .btn-secondary { background-color: #555 !important; border-color: #555 !important; }
+.worker-call-gray .btn-info { color: #0b1320 !important; }
+
+.worker-call-gray .alert-secondary { background-color: #3a3a3a !important; color: #e8e8e8 !important; border-color: #444 !important; }

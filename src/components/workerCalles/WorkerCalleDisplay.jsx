@@ -804,6 +804,11 @@ export default function WorkerCalleDisplay({ permissions: permissionsProp }) {
     return asArray.map(mapOne).filter(Boolean);
   };
 
+  // Prefer saved storage URL, then old inline dataURL, then default image
+  const DEFAULT_PHOTO_URL =
+    "https://firebasestorage.googleapis.com/v0/b/jenceo-admin.firebasestorage.app/o/OfficeFiles%2FSample-Photo.jpg?alt=media&token=01855b47-c9c2-490e-b400-05851192dde7";
+
+
 
   /* Reminder badge counts */
   const badgeCounts = useMemo(() => {
@@ -2950,29 +2955,48 @@ export default function WorkerCalleDisplay({ permissions: permissionsProp }) {
                           />
                         </td>
 
-                        <td>
-                          {w.photoDataUrl ? (
-                            <img
-                              src={w.photoDataUrl}
-                              alt="Employee"
-                              style={{ width: '50px', height: '50px', objectFit: 'cover', borderRadius: '50%' }}
-                            />
-                          ) : (
-                            <div
-                              style={{
-                                width: '50px',
-                                height: '50px',
-                                backgroundColor: '#4c4b4b',
-                                borderRadius: '50%',
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                margin:'auto',
-                                opacity:.3
-                              }}
-                            />
-                          )}
+                        <td onClick={(e) => e.stopPropagation()}>
+                          {(() => {
+                            const avatar =
+                              w.employeePhotoUrl ||           // ← new storage URL (what modal writes)
+                              w.photoDataUrl ||               // ← your legacy inline data URL
+                              w.employeePhoto ||              // ← any older field names you might have
+                              w.photoURL ||
+                              "";                             // leave empty to show gray placeholder below
+
+                            return avatar ? (
+                              <img
+                                src={avatar}
+                                alt="Employee"
+                                style={{
+                                  width: 50,
+                                  height: 50,
+                                  objectFit: "cover",
+                                  borderRadius: "50%",
+                                  display: "block",
+                                  margin: "auto",
+                                }}
+                                referrerPolicy="no-referrer"
+                              />
+                            ) : (
+                              <img
+                                src={DEFAULT_PHOTO_URL}
+                                alt="Employee"
+                                style={{
+                                  width: 50,
+                                  height: 50,
+                                  objectFit: "cover",
+                                  borderRadius: "50%",
+                                  display: "block",
+                                  margin: "auto",
+                                  opacity: 0.5,
+                                }}
+                                referrerPolicy="no-referrer"
+                              />
+                            );
+                          })()}
                         </td>
+
                         <td>
                           {formatPrettyDate(getBaseDate(w))}
                           {hasTimeData(w) && (
@@ -2983,17 +3007,38 @@ export default function WorkerCalleDisplay({ permissions: permissionsProp }) {
                               )}
                             </small>
                           )}
-                        </td>
-                        <td>
-                          {displayId}
                           {addedBy && (
                             <small className="d-block small-text text-info opacity-50">
                               By {addedBy}
                             </small>
                           )}
                         </td>
+                        <td>
+                          {displayId}
+                          <div className="mt-1">
+                            {[1, 2, 3, 4, 5].map((n) => {
+                              const filled = n <= Number(w.rating || 0);
+                              let color = "text-secondary";
+                              if (filled) {
+                                color =
+                                  w.rating >= 4
+                                    ? "text-success"
+                                    : w.rating === 3
+                                      ? "text-warning"
+                                      : "text-danger";
+                              }
+                              return (
+                                <i
+                                  key={n}
+                                  className={`bi ${filled ? "bi-star-fill" : "bi-star"} ${color}`}
+                                  style={{ fontSize: "0.6rem", marginRight: 2 }}
+                                />
+                              );
+                            })}
+                          </div>
+                        </td>
 
-                        
+
 
                         <td>{w?.name || "—"}
                           <span className={`small fw-semibold ms-2 ${getProfileColor(computeProfilePercent(w))}`}>

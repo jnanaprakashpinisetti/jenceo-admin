@@ -969,6 +969,14 @@ const WorkerModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode }
         const gender = safe(formData.gender);
         const marital = safe(formData.maritalStatus);
         const co = safe(formData.co || formData.careOfPersonal);
+        const ratingStarsHTML = (r) => {
+            const val = Number(r || 0);
+            const color = val >= 4 ? "#198754" : val === 3 ? "#ffc107" : val > 0 ? "#dc3545" : "#6c757d";
+            const stars = Array.from({ length: 5 }, (_, i) => (i < val ? "★" : "☆")).join("");
+            return `<span style="color:${color}; font-size:18px; letter-spacing:1px">${stars}</span>
+          <span style="color:#666; font-size:12px; margin-left:6px">(${val}/5)</span>`;
+        };
+
 
         const permAddr = [`
   <div class="row">
@@ -1150,7 +1158,7 @@ const WorkerModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode }
   @media print{.page{border:none;margin:0;width:100%}}
   .header-img{width:100%;max-height:120px;object-fit:contain;margin-bottom:6px}
   /* photo box on the right */
-  .photo-box{display:flex;align-items:center;justify-content:center}
+  .photo-box{display:block;align-items:center;justify-content:center text-align:center}
   .photo-box img{width:120px;height:120px;object-fit:cover;border-radius:6px;border:1px solid #ccc}
   .photo-box .no-photo{width:120px;height:120px;border:1px solid #ccc;border-radius:6px;display:flex;align-items:center;justify-content:center;color:#888;font-size:12px}
   .heaerImg {margin: -21px -20px 10px -20px}
@@ -1190,6 +1198,7 @@ const WorkerModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode }
     </div>
     <div class="photo-box">
       ${photoHtml}
+      <div class="kv-value">${ratingStarsHTML(formData.rating)}</div>
     </div>
   </div>
 
@@ -1451,6 +1460,7 @@ const WorkerModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode }
         // attach return info to payload and call onSave to revert status
         const payload = {
             ...formData,
+            rating: Number(formData.rating || 0),
             status: "On Duty",
             __returnInfo: {
                 reasonType: reasonForm.reasonType,
@@ -1965,11 +1975,40 @@ const WorkerModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode }
                                                         </span>
                                                     </div>
                                                 )}
+
                                             </div>
+                                            {/* Rating (editable) */}
+                                            <div className="col-md-4">
+                                                <div className="mt-3">
+                                                    {[1, 2, 3, 4, 5].map((n) => {
+                                                        const val = Number(formData.rating || 0);
+                                                        const filled = n <= val;
+                                                        let color = "text-secondary";
+                                                        if (filled) {
+                                                            if (val >= 4) color = "text-success";       // green 4–5
+                                                            else if (val === 3) color = "text-warning"; // yellow 3
+                                                            else color = "text-danger";                 // red 1–2
+                                                        }
+                                                        return (
+                                                            <i
+                                                                key={n}
+                                                                className={`bi ${filled ? "bi-star-fill" : "bi-star"} ${color}`}
+                                                                style={{ fontSize: "2rem", cursor: "pointer", marginRight: 2 }}
+                                                                title={`${val}/5`}
+                                                                onClick={() =>
+                                                                    setFormData(prev => ({ ...prev, rating: String(n) }))
+                                                                }
+                                                            />
+                                                        );
+                                                    })}
+                                                </div>
+
+                                            </div>
+
                                         </div>
 
                                         <div className="modal-card-header">
-                                            <h4 className="mb-0">Basic Information</h4>
+                                            <h4 className="mb-0 mt-2">Basic Information</h4>
                                         </div>
                                         <div className="modal-card-body">
                                             {/* Photo lives ONLY in Basic Info now */}

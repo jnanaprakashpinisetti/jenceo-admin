@@ -785,14 +785,13 @@ export default function WorkerCallModal({
 
   // === Handle employee photo upload (JPG, PNG ≤ 100KB) ===
   const handlePhotoChange = async (e) => {
-    const file = e.target.files[0];
+    const file = e.target.files?.[0];
     if (!file) return;
 
     if (!["image/jpeg", "image/png"].includes(file.type)) {
       alert("Only JPG or PNG files are allowed.");
       return;
     }
-
     if (file.size > 100 * 1024) {
       alert("Photo size should be less than 100KB.");
       return;
@@ -803,13 +802,13 @@ export default function WorkerCallModal({
       setLocalWorker((prev) => ({
         ...prev,
         employeePhotoFile: file,
-        employeePhotoUrl: null,
+        employeePhotoUrl: null, // Clear the old URL to force using preview
         employeePhotoPreview: ev.target.result,
       }));
+      setDirty(true);
     };
     reader.readAsDataURL(file);
   };
-
 
   // === Handle ID Proof upload (PDF, JPG, PNG ≤ 150KB) ===
   const handleIdProofChange = async (e) => {
@@ -833,13 +832,13 @@ export default function WorkerCallModal({
       setLocalWorker((prev) => ({
         ...prev,
         idProofFile: file,
-        idProofUrl: null,
+        idProofUrl: null, // Clear the old URL to force using preview
         idProofPreview: ev.target.result,
       }));
+      setDirty(true);
     };
     reader.readAsDataURL(file);
   };
-
 
   // Open ID proof in a new tab (PDF or image)
   const handleViewId = () => {
@@ -857,11 +856,19 @@ export default function WorkerCallModal({
   };
 
   const handleDownloadId = () => {
-    const url = localWorker.idProofUrl || localWorker.idProofPreview || null;
+    // Use preview first, then URL
+    const url = localWorker.idProofPreview || localWorker.idProofUrl || null;
     if (!url) return alert("No ID proof available to download.");
     const a = document.createElement("a");
     a.href = url;
-    a.download = `${localWorker.name || "ID_Proof"}${url.toLowerCase().endsWith(".pdf") ? ".pdf" : ""}`;
+    // Determine file extension based on content type
+    let extension = ".jpg";
+    if (url.toLowerCase().endsWith(".pdf") || url.includes("application/pdf")) {
+      extension = ".pdf";
+    } else if (url.includes("image/png")) {
+      extension = ".png";
+    }
+    a.download = `${localWorker.name || "ID_Proof"}${extension}`;
     document.body.appendChild(a);
     a.click();
     a.remove();
@@ -1492,6 +1499,19 @@ export default function WorkerCallModal({
                                     placeholder="Enter location"
                                   />
                                 </div>
+                                <div className="col-md-4">
+                                  <label className="form-label fw-semibold text-secondary">
+                                    Email
+                                  </label>
+                                  <input
+                                    type="text"
+                                    name="location"
+                                    value={localWorker.email || ""}
+                                    onChange={handleChange}
+                                    className="form-control dark-input"
+                                    placeholder="Enter Email"
+                                  />
+                                </div>
                               </div>
                             ) : (
                               <div className="info-grid-compact">
@@ -1517,6 +1537,10 @@ export default function WorkerCallModal({
                                 {renderInfoCard(
                                   "Location",
                                   localWorker.location
+                                )}
+                                {renderInfoCard(
+                                  "Email",
+                                  localWorker.email
                                 )}
                               </div>
                             )}
@@ -2546,10 +2570,19 @@ export default function WorkerCallModal({
                       </div>
 
                       {/* Left: Photo + upload (optional) */}
+                     // Update the photo display logic in the Address tab to use preview first
                       <div className="col-md-4">
                         <div className="glass-card p-3 text-center">
                           <div className="mb-2">
-                            {localWorker.employeePhotoUrl ? (
+                            {/* Show preview first, then URL, then fallback */}
+                            {localWorker.employeePhotoPreview ? (
+                              <img
+                                src={localWorker.employeePhotoPreview}
+                                alt="photo preview"
+                                className="rounded"
+                                style={{ width: "100%", maxHeight: 260, objectFit: "cover" }}
+                              />
+                            ) : localWorker.employeePhotoUrl ? (
                               <img
                                 src={localWorker.employeePhotoUrl}
                                 alt="photo"
@@ -2561,8 +2594,8 @@ export default function WorkerCallModal({
                             )}
                           </div>
 
-                          {/* Upload photo (optional) */}
-                          {/* <div className="d-grid gap-2">
+                          {/* Upload photo */}
+                          <div className="d-grid gap-2">
                             <input
                               type="file"
                               accept=".jpg,.jpeg,.png"
@@ -2574,22 +2607,19 @@ export default function WorkerCallModal({
                             <label htmlFor="wm-photo-input" className={`btn btn-sm ${isEditMode ? "btn-outline-info" : "btn-outline-secondary disabled"}`}>
                               <i className="bi bi-image me-1" /> {isEditMode ? "Upload Photo (≤100KB)" : "Upload Disabled"}
                             </label>
-                          </div> */}
+                          </div>
 
-                          {/* ID Proof (optional) */}
-                          {/* <div className="mt-3 text-start">
+                          {/* ID Proof */}
+                          <div className="mt-3 text-start">
                             <label className="form-label text-secondary mb-1"><strong>ID Proof</strong></label>
                             <div className="d-flex align-items-center gap-2 mt-2">
                               <button type="button" className="btn btn-outline-primary btn-sm" onClick={handleViewId}>
                                 <i className="bi bi-eye me-1" /> View
                               </button>
-
                               <button type="button" className="btn btn-outline-success btn-sm" onClick={handleDownloadId}>
                                 <i className="bi bi-download me-1" /> Download
                               </button>
-
                             </div>
-
 
                             <div className="d-grid gap-2 mt-2">
                               <input
@@ -2604,9 +2634,10 @@ export default function WorkerCallModal({
                                 <i className="bi bi-file-earmark-arrow-up me-1" /> {isEditMode ? "Upload ID (≤150KB)" : "Upload Disabled"}
                               </label>
                             </div>
-                          </div> */}
+                          </div>
                         </div>
                       </div>
+
                     </div>
                   </div>
                 )}

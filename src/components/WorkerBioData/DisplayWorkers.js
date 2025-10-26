@@ -103,28 +103,56 @@ export default function DisplayWorkers() {
         Array.isArray(v)
             ? v.filter(Boolean)
             : v
-                ? String(v)
-                    .split(",")
-                    .map((s) => s.trim())
-                    .filter(Boolean)
+                ? String(v).split(",").map((s) => s.trim()).filter(Boolean)
                 : [];
 
-    // Get a worker’s nursing tasks from all possible fields (same logic as WorkerCalleDisplay)
+
+    // Return canonical NURSING_TASKS that match the employee's canonical list
     const getWorkerNursingTasks = (w) => {
         const pools = [
             w?.nursingWorks,
+            w?.nursingTasks,
+            w?.nurseTasks,
+            w?.nurseWorks,
             w?.homeCareSkills,
             w?.skills,
             w?.primarySkills,
             w?.otherSkills,
             w?.additionalSkills,
+            w?.nursingSkills, // Add this if it exists
         ];
-        const all = []
-            .concat(...pools.map(normalizeArray))
-            .map((s) => String(s).toLowerCase());
 
-        return NURSING_TASKS.filter((ns) => all.includes(ns.toLowerCase()));
+        // Flatten all skills and convert to lowercase for comparison
+        const allSkills = []
+            .concat(...pools.map(normalizeArray))
+            .map(s => String(s).toLowerCase().trim())
+            .filter(s => s); // Remove empty strings
+
+        console.log("All skills for employee:", w.employeeId, allSkills);
+
+        // Return only the nursing tasks that actually exist in the worker's skills
+        const foundTasks = NURSING_TASKS.filter(nursingTask => {
+            const taskLower = nursingTask.toLowerCase().trim();
+
+            // Direct match
+            if (allSkills.includes(taskLower)) {
+                console.log("Direct match found:", nursingTask);
+                return true;
+            }
+
+            // Check for aliases
+            const aliases = NURSING_ALIASES[canon(nursingTask)] || [];
+            const aliasMatch = aliases.some(alias => allSkills.includes(alias));
+            if (aliasMatch) {
+                console.log("Alias match found:", nursingTask, "via", aliases);
+            }
+            return aliasMatch;
+        });
+
+        console.log("Found nursing tasks for", w.employeeId, ":", foundTasks);
+        return foundTasks;
     };
+
 
     useEffect(() => {
         const fetchEmployees = () => {
@@ -229,10 +257,18 @@ export default function DisplayWorkers() {
                 }
             }
 
-            // Housekeeping skills (separate from your Home Care pills)
-            const skillsArr = normArr(e.houseSkills || e.skills || e.otherSkills || e.primarySkill).map(
-                (s) => String(s).toLowerCase()
-            );
+            // Housekeeping skills (check all common fields like in WorkerCalleDisplay)
+            const skillsArr = []
+                .concat(
+                    normArr(e.houseSkills),
+                    normArr(e.skills),
+                    normArr(e.otherSkills),
+                    normArr(e.primarySkill),     // sometimes a single value
+                    normArr(e.primarySkills),    // array in many records
+                    normArr(e.homeCareSkills)    // <-- this was missing; caused nurses to be dropped
+                )
+                .map((s) => String(s).toLowerCase());
+
             const wantSkills = selectedHouseSkills.map((s) => s.toLowerCase());
             if (hasHouseSel) {
                 if (skillMode === "single") {
@@ -280,15 +316,72 @@ export default function DisplayWorkers() {
 
         // === Nursing sub-tasks filter (Home Care “Nursing” pill) ===
         const nursingSelected = selectedHouseSkills.map((s) => s.toLowerCase()).includes("nursing");
+
         if (nursingSelected && selectedNursingTasks.length > 0) {
-            filtered = filtered.filter((e) => {
-                const have = getWorkerNursingTasks(e).map((s) => s.toLowerCase());
-                const want = selectedNursingTasks.map((s) => s.toLowerCase());
-                return nursingTasksMode === "all"
-                    ? want.every((s) => have.includes(s))
-                    : want.some((s) => have.includes(s));
+            console.log("Nursing filter active:", {
+                selectedNursingTasks,
+                nursingTasksMode,
+                beforeFilterCount: filtered.length
             });
+
+            filtered = filtered.filter((e) => {
+                // First, check if this employee has nursing in their skills
+                const hasNursingSkill = () => {
+                    const normArr = (v) =>
+                        Array.isArray(v)
+                            ? v
+                            : typeof v === "string"
+                                ? v.split(",").map((s) => s.trim()).filter(Boolean)
+                                : [];
+
+                    const allSkills = []
+                        .concat(
+                            normArr(e.houseSkills),
+                            normArr(e.skills),
+                            normArr(e.otherSkills),
+                            normArr(e.primarySkill),
+                            normArr(e.primarySkills),
+                            normArr(e.homeCareSkills),
+                            normArr(e.nursingWorks)
+                        )
+                        .map((s) => String(s).toLowerCase());
+
+                    return allSkills.includes("nursing");
+                };
+
+                // If employee doesn't have nursing skill, skip
+                if (!hasNursingSkill()) {
+                    console.log("Employee filtered out - no nursing skill:", e.employeeId);
+                    return false;
+                }
+
+                // Now check nursing tasks
+                const workerTasks = getWorkerNursingTasks(e);
+                console.log("Employee nursing tasks:", e.employeeId, workerTasks);
+
+                if (nursingTasksMode === "all") {
+                    const hasAllTasks = selectedNursingTasks.every(task =>
+                        workerTasks.some(workerTask =>
+                            workerTask.toLowerCase() === task.toLowerCase()
+                        )
+                    );
+                    console.log("ALL mode - has all tasks:", e.employeeId, hasAllTasks);
+                    return hasAllTasks;
+                } else {
+                    const hasAnyTask = selectedNursingTasks.some(task =>
+                        workerTasks.some(workerTask =>
+                            workerTask.toLowerCase() === task.toLowerCase()
+                        )
+                    );
+                    console.log("ANY mode - has any task:", e.employeeId, hasAnyTask);
+                    return hasAnyTask;
+                }
+            });
+
+            console.log("After nursing filter count:", filtered.length);
         }
+
+
 
 
         // === Other Skills (Job Roles) — works with Any / Multi like others ===
@@ -356,16 +449,19 @@ export default function DisplayWorkers() {
             const on = prev.includes(s);
             const next = on ? prev.filter((x) => x !== s) : [...prev, s];
 
-            // Show Nursing Tasks panel only if "Nursing" is among housekeeping skills
             const nursingOn = next.map((x) => x.toLowerCase()).includes("nursing");
             setShowNursingPanel(nursingOn);
 
-            // If Nursing turned OFF, clear sub-task selection
-            if (!nursingOn) setSelectedNursingTasks([]);
+            // If Nursing turned OFF, clear sub-task selection + reset mode
+            if (!nursingOn) {
+                setSelectedNursingTasks([]);
+                setNursingTasksMode("all");
+            }
 
             return next;
         });
     };
+
 
 
 
@@ -497,6 +593,9 @@ export default function DisplayWorkers() {
         Object.values(skillFilters).some(Boolean) ||
         selectedLanguages.length ||
         selectedHouseSkills.length ||
+        selectedNursingTasks.length ||     // <— NEW: nursing sub-tasks
+        (nursingTasksMode !== "all") ||    // <— NEW: mode switched to ANY
+        selectedRoles.length ||            // <— NEW: other skills selected
         dutyFilter !== "All" ||
         skillMode !== "single" ||
         ageRange.min || ageRange.max ||
@@ -504,20 +603,72 @@ export default function DisplayWorkers() {
         searchTerm
     );
 
+    const canon = (s) => String(s || "")
+        .toLowerCase()
+        .normalize("NFKD")
+        .replace(/[\u0300-\u036f]/g, "")   // strip diacritics
+        .replace(/['’`"]/g, "")            // quotes
+        .replace(/[^a-z0-9]+/g, " ")       // collapse punctuation to spaces
+        .replace(/\s+/g, " ")              // collapse spaces
+        .trim();
+
+
+
+    // Aliases: map canonical needles -> array of canonical patterns considered equivalent
+    // Aliases: map canonical needles -> array of canonical patterns considered equivalent
+    const NURSING_ALIASES = {
+        [canon("Ryle's Tube / NG Feeding")]: [
+            canon("Ryle's Tube / NG Feeding"),
+            canon("Ryles Tube / NG Feeding"),
+            canon("Ryles/Nasogastric Feeding"),
+            canon("Ryles Tube"),
+            canon("NG Feeding"),
+            canon("Nasogastric Feeding"),
+            canon("NG feed"),
+            canon("Ryle tube"),
+        ],
+        [canon("Catheter Care")]: [canon("Foley care"), canon("Catheter")],
+        [canon("Catheterization")]: [canon("Foley insertion"), canon("Catheter Insert")],
+        [canon("IV/IM Injection")]: [canon("IM Injection"), canon("IV Injection"), canon("Injection")],
+        [canon("IV Cannulation")]: [canon("Cannulation"), canon("IV Line")],
+        [canon("IV Infusion")]: [canon("Drip"), canon("IV Drip"), canon("IV infusion")],
+        [canon("Wound Dressing")]: [canon("Dressing"), canon("Wound care")],
+        [canon("Bedsore Care")]: [canon("Pressure sore care"), canon("Bed sore dressing")],
+        [canon("Tracheostomy Care")]: [canon("Trache care"), canon("Tracheostomy")],
+        [canon("Sugar Check (Glucometer)")]: [canon("Sugar Check"), canon("Glucometer"), canon("Blood sugar")],
+        [canon("BP Check")]: [canon("Blood Pressure"), canon("BP monitoring")],
+        [canon("Nebulization")]: [canon("Nebuliser"), canon("Nebulizer"), canon("Nebulisation")],
+        [canon("Suctioning")]: [canon("Oral suction"), canon("Airway suction")],
+        [canon("Oxygen Support")]: [canon("O2 support"), canon("Oxygen"), canon("Oxygen therapy")],
+        [canon("PEG Feeding")]: [canon("PEG feed")],
+        [canon("Diaper Change")]: [canon("Diaper"), canon("Diaper changing")],
+        [canon("Urine Bag Change")]: [canon("Urine bag"), canon("Urinary bag")],
+        [canon("Positioning & Mobility")]: [canon("Mobility"), canon("Positioning"), canon("Repositioning")],
+        [canon("Bed Bath & Hygiene")]: [canon("Bed bath"), canon("Hygiene")],
+        [canon("Medication Administration")]: [canon("Med admin"), canon("Medication")],
+        [canon("Vital Signs Monitoring")]: [canon("Vitals"), canon("Vitals monitoring")],
+        [canon("Post-Operative Care")]: [canon("Post op care"), canon("Post-operative")],
+        [canon("NG Tube Care")]: [canon("NG Tube"), canon("Nasogastric tube")],
+    };
+
     // Reset all filters
     const resetFilters = () => {
         setGenderFilters({});
         setSkillFilters({});
         setSelectedLanguages([]);
         setSelectedHouseSkills([]);
-        setSelectedNursingTasks([]);      // ensure sub-tasks reset
-        setShowNursingPanel(false);       // collapse the panel explicitly
+        setSelectedNursingTasks([]);
+        setNursingTasksMode("all");       // ensure back to ALL
+        setShowNursingPanel(false);
+        setSelectedRoles([]);             // <— clear Other Skills
+        setShowJobRoles(false);           // <— collapse Other Skills panel
         setDutyFilter("All");
         setSkillMode("single");
         setAgeRange({ min: "", max: "" });
         setExperienceRange({ min: "", max: "" });
         setSearchTerm("");
     };
+
 
 
     // When user confirms on the first confirm -> open reason modal
@@ -817,7 +968,11 @@ export default function DisplayWorkers() {
                                         className="form-check-input"
                                         id="showJobRoles"
                                         checked={showJobRoles}
-                                        onChange={(e) => setShowJobRoles(e.target.checked)}
+                                        onChange={(e) => {
+                                            const val = e.target.checked;
+                                            setShowJobRoles(val);
+                                            if (!val) setSelectedRoles([]);    // <— clear on close
+                                        }}
                                     />
                                     <label
                                         className="form-check-label text-white small fw-bold"
@@ -931,11 +1086,19 @@ export default function DisplayWorkers() {
                                         key={ns}
                                         type="button"
                                         className={`btn btn-sm rounded-pill ${on ? "btn-danger  text-dark" : "btn-outline-danger "}`}
-                                        onClick={() =>
-                                            setSelectedNursingTasks((prev) =>
-                                                prev.includes(ns) ? prev.filter((x) => x !== ns) : [...prev, ns]
-                                            )
-                                        }
+                                        onClick={() => {
+                                            // Ensure "Nursing" pill is ON when a task is toggled
+                                            const nursingOn = selectedHouseSkills.map(x => x.toLowerCase()).includes("nursing");
+                                            if (!nursingOn) {
+                                                setSelectedHouseSkills(prev => [...prev, "Nursing"]);
+                                                setShowNursingPanel(true);
+                                            }
+                                            // Toggle the task
+                                            setSelectedNursingTasks(prev =>
+                                                prev.includes(ns) ? prev.filter(x => x !== ns) : [...prev, ns]
+                                            );
+                                        }}
+
                                     >
                                         {ns}
                                     </button>

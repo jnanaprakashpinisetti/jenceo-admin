@@ -439,7 +439,7 @@ export default function WorkerCalleDisplay({ permissions: permissionsProp }) {
 
   // Filters
   const [searchTerm, setSearchTerm] = useState("");
-  const [selectedSkills, setSelectedSkills] = useState([]); // <-- fixed
+  const [selectedSkills, setSelectedSkills] = useState([]);  
   const [selectedRoles, setSelectedRoles] = useState([]);
   const [selectedLanguages, setSelectedLanguages] = useState([]);
   const [selectedGender, setSelectedGender] = useState([]);

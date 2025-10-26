@@ -23,49 +23,7 @@
   }
 
   // Toggle pill styling
-  .toggle-pill {
-    .form-check-input {
-      width: 42px;
-      height: 22px;
-      cursor: pointer;
-      position: relative;
-      appearance: none;
-      -webkit-appearance: none;
-      outline: none;
-      background: linear-gradient(180deg, #efb819, #f5d516);
-      border: 1px solid rgba(255, 255, 255, 0.15);
-      border-radius: 9px !important;
-      transition: all 0.2s ease;
-
-      &::after {
-        content: "";
-        position: absolute;
-        top: 50%;
-        left: 3px;
-        width: 16px;
-        height: 16px;
-        border-radius: 50%;
-        background: #a9771c;
-        transform: translateY(-50%);
-        transition: all 0.2s ease;
-        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
-      }
-
-      &:checked {
-        background: linear-gradient(135deg, #0ea5e9, #7c3aed);
-        border-color: transparent;
-
-        &::after {
-          left: 23px;
-          background: #fff;
-        }
-      }
-    }
-
-    .form-check-label {
-      padding-left: 4px;
-    }
-  }
+  
 
   // Form controls
   .form-control {
@@ -1379,3 +1337,47 @@
   color: #e8e8e8 !important;
   border-color: #444 !important;
 }
+
+.toggle-pill {
+    #showJobRoles {
+      width: 42px;
+      height: 22px;
+      cursor: pointer;
+      position: relative;
+      appearance: none;
+      -webkit-appearance: none;
+      outline: none;
+      background: linear-gradient(180deg, #efb819, #f5d516);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      border-radius: 9px !important;
+      transition: all 0.2s ease;
+
+      &::after {
+        content: "";
+        position: absolute;
+        top: 50%;
+        left: 3px;
+        width: 16px;
+        height: 16px;
+        border-radius: 50%;
+        background: #a9771c;
+        transform: translateY(-50%);
+        transition: all 0.2s ease;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+      }
+
+      &:checked {
+        background: linear-gradient(135deg, #0ea5e9, #7c3aed);
+        border-color: transparent;
+
+        &::after {
+          left: 23px;
+          background: #fff;
+        }
+      }
+    }
+
+    .form-check-label {
+      padding-left: 4px;
+    }
+  }

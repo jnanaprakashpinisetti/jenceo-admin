@@ -13,6 +13,33 @@ const HOUSE_SKILL_OPTIONS = [
     "Supporting", "Maid", "Cook", "House Keeper", "Chauffeur", "Cleaner", "Compounder", "Diaper", "Elder Care"
 ];
 
+const NURSING_TASKS = [
+    "Vital Signs Monitoring",
+    "BP Check",
+    "Sugar Check (Glucometer)",
+    "Medication Administration",
+    "IV/IM Injection",
+    "IV Cannulation",
+    "IV Infusion",
+    "Wound Dressing",
+    "Catheter Care",
+    "Catheterization",
+    "Ryle’s Tube / NG Feeding",
+    "Ryles/Nasogastric Feeding",
+    "NG Tube Care",
+    "PEG Feeding",
+    "Nebulization",
+    "Suctioning",
+    "Oxygen Support",
+    "Tracheostomy Care",
+    "Bedsore Care",
+    "Positioning & Mobility",
+    "Bed Bath & Hygiene",
+    "Diaper Change",
+    "Urine Bag Change",
+    "Post-Operative Care",
+];
+
 
 export default function DisplayWorkers() {
     const [employees, setEmployees] = useState([]);
@@ -30,6 +57,22 @@ export default function DisplayWorkers() {
     const [dutyFilter, setDutyFilter] = useState("All"); // All | On Duty | Off Duty
     const [selectedLanguages, setSelectedLanguages] = useState([]);
     const [selectedHouseSkills, setSelectedHouseSkills] = useState([]);
+    const [showJobRoles, setShowJobRoles] = useState(false);
+
+    const [selectedRoles, setSelectedRoles] = useState([]);
+    const [selectedGender, setSelectedGender] = useState([]);
+    const [reminderFilter, setReminderFilter] = useState("");
+    const [selectedSource, setSelectedSource] = useState("All");
+    const [timeFormat, setTimeFormat] = useState("all");
+
+    // Show panel only when "Nursing" pill is active
+    const [showNursingPanel, setShowNursingPanel] = useState(false);
+
+    // Selected nursing sub-tasks
+    const [selectedNursingTasks, setSelectedNursingTasks] = useState([]);
+
+    // Match logic: 'all' = worker must have ALL selected; 'any' = at least ONE
+    const [nursingTasksMode, setNursingTasksMode] = useState("all"); // 'all' | 'any'
 
 
     // Search and filters
@@ -55,6 +98,33 @@ export default function DisplayWorkers() {
     const [currentPage, setCurrentPage] = useState(1);
     const [rowsPerPage, setRowsPerPage] = useState(10);
     const [totalPages, setTotalPages] = useState(1);
+
+    const normalizeArray = (v) =>
+        Array.isArray(v)
+            ? v.filter(Boolean)
+            : v
+                ? String(v)
+                    .split(",")
+                    .map((s) => s.trim())
+                    .filter(Boolean)
+                : [];
+
+    // Get a worker’s nursing tasks from all possible fields (same logic as WorkerCalleDisplay)
+    const getWorkerNursingTasks = (w) => {
+        const pools = [
+            w?.nursingWorks,
+            w?.homeCareSkills,
+            w?.skills,
+            w?.primarySkills,
+            w?.otherSkills,
+            w?.additionalSkills,
+        ];
+        const all = []
+            .concat(...pools.map(normalizeArray))
+            .map((s) => String(s).toLowerCase());
+
+        return NURSING_TASKS.filter((ns) => all.includes(ns.toLowerCase()));
+    };
 
     useEffect(() => {
         const fetchEmployees = () => {
@@ -95,13 +165,14 @@ export default function DisplayWorkers() {
     }, []); // eslint-disable-line
 
     // Filter employees based on search term and filters
+    // Filter employees based on search term and filters
     useEffect(() => {
         let filtered = employees;
 
-        // Apply search filter
+        // — Search —
         if (searchTerm) {
             const term = searchTerm.toLowerCase();
-            filtered = filtered.filter(employee =>
+            filtered = filtered.filter((employee) =>
                 (employee.firstName && employee.firstName.toLowerCase().includes(term)) ||
                 (employee.lastName && employee.lastName.toLowerCase().includes(term)) ||
                 (employee.idNo && employee.idNo.toLowerCase().includes(term)) ||
@@ -111,58 +182,67 @@ export default function DisplayWorkers() {
             );
         }
 
-        // Apply gender filters
-        const activeGenderFilters = Object.keys(genderFilters).filter(key => genderFilters[key]);
+        // — Gender —
+        const activeGenderFilters = Object.keys(genderFilters).filter((key) => genderFilters[key]);
         if (activeGenderFilters.length > 0) {
-            filtered = filtered.filter(employee =>
-                employee.gender && activeGenderFilters.includes(employee.gender)
+            filtered = filtered.filter(
+                (employee) => employee.gender && activeGenderFilters.includes(employee.gender)
             );
         }
 
-        // Apply skill filters
-        const activeSkillFilters = Object.keys(skillFilters).filter(key => skillFilters[key]);
+        // — Primary “skillFilters” (checkbox group on the left) —
+        const activeSkillFilters = Object.keys(skillFilters).filter((key) => skillFilters[key]);
         if (activeSkillFilters.length > 0) {
-            filtered = filtered.filter(employee =>
-                employee.primarySkill && activeSkillFilters.includes(employee.primarySkill)
+            filtered = filtered.filter(
+                (employee) => employee.primarySkill && activeSkillFilters.includes(employee.primarySkill)
             );
         }
 
-        // New filters start
+        // === New unified filters start ===
 
-        // Duty filter
+        // Duty
         if (dutyFilter !== "All") {
-            filtered = filtered.filter(e => (e.status || "On Duty") === dutyFilter);
+            filtered = filtered.filter((e) => (e.status || "On Duty") === dutyFilter);
         }
 
         // Languages & Housekeeping skills with Any/All logic
         const hasLangSel = selectedLanguages.length > 0;
         const hasHouseSel = selectedHouseSkills.length > 0;
-        const normArr = (v) => Array.isArray(v) ? v : (typeof v === 'string' ? v.split(',').map(s => s.trim()).filter(Boolean) : []);
+        const normArr = (v) =>
+            Array.isArray(v)
+                ? v
+                : typeof v === "string"
+                    ? v.split(",").map((s) => s.trim()).filter(Boolean)
+                    : [];
 
-        filtered = filtered.filter(e => {
-            // Langs
-            const langs = normArr(e.languages || e.language || e.knownLanguages || e.speaks).map(s => s.toLowerCase());
-            const wantLangs = selectedLanguages.map(s => s.toLowerCase());
+        filtered = filtered.filter((e) => {
+            // Languages
+            const langs = normArr(e.languages || e.language || e.knownLanguages || e.speaks).map((s) =>
+                s.toLowerCase()
+            );
+            const wantLangs = selectedLanguages.map((s) => s.toLowerCase());
             if (hasLangSel) {
                 if (skillMode === "single") {
-                    if (!wantLangs.some(s => langs.includes(s))) return false;
+                    if (!wantLangs.some((s) => langs.includes(s))) return false;
                 } else {
-                    if (!wantLangs.every(s => langs.includes(s))) return false;
+                    if (!wantLangs.every((s) => langs.includes(s))) return false;
                 }
             }
 
-            // Housekeeping Skills
-            const skillsArr = normArr(e.houseSkills || e.skills || e.otherSkills || e.primarySkill).map(s => String(s).toLowerCase());
-            const wantSkills = selectedHouseSkills.map(s => s.toLowerCase());
+            // Housekeeping skills (separate from your Home Care pills)
+            const skillsArr = normArr(e.houseSkills || e.skills || e.otherSkills || e.primarySkill).map(
+                (s) => String(s).toLowerCase()
+            );
+            const wantSkills = selectedHouseSkills.map((s) => s.toLowerCase());
             if (hasHouseSel) {
                 if (skillMode === "single") {
-                    if (!wantSkills.some(s => skillsArr.includes(s))) return false;
+                    if (!wantSkills.some((s) => skillsArr.includes(s))) return false;
                 } else {
-                    if (!wantSkills.every(s => skillsArr.includes(s))) return false;
+                    if (!wantSkills.every((s) => skillsArr.includes(s))) return false;
                 }
             }
 
-            // Age (from DOB or age field)
+            // Age
             const calcAge = (dob, fallback) => {
                 if (fallback != null && !isNaN(fallback)) return Number(fallback);
                 const d = new Date(dob);
@@ -178,7 +258,11 @@ export default function DisplayWorkers() {
             if (ageRange.max && age != null && age > parseInt(ageRange.max, 10)) return false;
 
             // Experience
-            const takeNum = (v) => { if (v == null) return null; const m = String(v).match(/(\d+(?:\.\d+)?)/); return m ? Number(m[1]) : null; };
+            const takeNum = (v) => {
+                if (v == null) return null;
+                const m = String(v).match(/(\d+(?:\.\d+)?)/);
+                return m ? Number(m[1]) : null;
+            };
             const rawExp = takeNum(e.workExperince || e.experience || e.expYears || e.totalExperience || e.years);
             const minRaw = String(experienceRange.min ?? "").trim();
             const maxRaw = String(experienceRange.max ?? "").trim();
@@ -194,12 +278,96 @@ export default function DisplayWorkers() {
             return true;
         });
 
-        // New filters end
+        // === Nursing sub-tasks filter (Home Care “Nursing” pill) ===
+        const nursingSelected = selectedHouseSkills.map((s) => s.toLowerCase()).includes("nursing");
+        if (nursingSelected && selectedNursingTasks.length > 0) {
+            filtered = filtered.filter((e) => {
+                const have = getWorkerNursingTasks(e).map((s) => s.toLowerCase());
+                const want = selectedNursingTasks.map((s) => s.toLowerCase());
+                return nursingTasksMode === "all"
+                    ? want.every((s) => have.includes(s))
+                    : want.some((s) => have.includes(s));
+            });
+        }
+
+
+        // === Other Skills (Job Roles) — works with Any / Multi like others ===
+        const hasOtherSel = selectedRoles.length > 0;
+        if (hasOtherSel) {
+            const wantOther = selectedRoles.map((s) => s.toLowerCase());
+
+            filtered = filtered.filter((e) => {
+                // unify all skill sources the employees might use
+                const normArr = (v) =>
+                    Array.isArray(v)
+                        ? v
+                        : typeof v === "string"
+                            ? v.split(",").map((s) => s.trim()).filter(Boolean)
+                            : [];
+
+                const allSkills = []
+                    .concat(
+                        normArr(e.houseSkills),
+                        normArr(e.skills),
+                        normArr(e.otherSkills),
+                        normArr(e.primarySkill),          // sometimes stored as a single value
+                        normArr(e.homeCareSkills),
+                        normArr(e.nursingWorks),
+                        normArr(e.additionalSkills),
+                        normArr(e.jobRoles),              // in case you store them here
+                    )
+                    .map((s) => String(s).toLowerCase());
+
+                // respect your skillMode switch:
+                //  - "single" -> ANY selected role must match
+                //  - "multi"  -> ALL selected roles must match
+                return skillMode === "single"
+                    ? wantOther.some((s) => allSkills.includes(s))
+                    : wantOther.every((s) => allSkills.includes(s));
+            });
+        }
+
+
+        // === New unified filters end ===
 
         setFilteredEmployees(filtered);
         setTotalPages(Math.ceil(filtered.length / rowsPerPage));
         setCurrentPage(1);
-    }, [employees, searchTerm, genderFilters, skillFilters, rowsPerPage, dutyFilter, selectedLanguages, selectedHouseSkills, skillMode, ageRange, experienceRange]);
+    }, [
+        employees,
+        searchTerm,
+        genderFilters,
+        skillFilters,
+        rowsPerPage,
+        dutyFilter,
+        selectedLanguages,
+        selectedHouseSkills,
+        skillMode,
+        ageRange,
+        experienceRange,
+        selectedNursingTasks,
+        nursingTasksMode,
+        selectedRoles,
+    ]);
+
+    // Toggle Housekeeping Skill pill (drives Nursing panel)
+    const handleHouseSkillClick = (s) => {
+        setSelectedHouseSkills((prev) => {
+            const on = prev.includes(s);
+            const next = on ? prev.filter((x) => x !== s) : [...prev, s];
+
+            // Show Nursing Tasks panel only if "Nursing" is among housekeeping skills
+            const nursingOn = next.map((x) => x.toLowerCase()).includes("nursing");
+            setShowNursingPanel(nursingOn);
+
+            // If Nursing turned OFF, clear sub-task selection
+            if (!nursingOn) setSelectedNursingTasks([]);
+
+            return next;
+        });
+    };
+
+
 
     // Update total pages when rowsPerPage changes
     useEffect(() => {
@@ -342,6 +510,8 @@ export default function DisplayWorkers() {
         setSkillFilters({});
         setSelectedLanguages([]);
         setSelectedHouseSkills([]);
+        setSelectedNursingTasks([]);      // ensure sub-tasks reset
+        setShowNursingPanel(false);       // collapse the panel explicitly
         setDutyFilter("All");
         setSkillMode("single");
         setAgeRange({ min: "", max: "" });
@@ -637,6 +807,27 @@ export default function DisplayWorkers() {
                                 </div>
                             </div>
 
+                            <div className="col-lg-1 col-md-2 text-center">
+                                <label className="form-label text-warning small mb-2">
+                                    Other Skills
+                                </label>
+                                <div className="d-flex justify-content-center align-items-center gap-2 toggle-pill">
+                                    <input
+                                        type="checkbox"
+                                        className="form-check-input"
+                                        id="showJobRoles"
+                                        checked={showJobRoles}
+                                        onChange={(e) => setShowJobRoles(e.target.checked)}
+                                    />
+                                    <label
+                                        className="form-check-label text-white small fw-bold"
+                                        htmlFor="showJobRoles"
+                                    >
+                                        {showJobRoles ? "ON" : "OFF"}
+                                    </label>
+                                </div>
+                            </div>
+
                             {/* Reset filter */}
 
                             <div className="col-lg-2 col-md-4 text-center">
@@ -691,16 +882,389 @@ export default function DisplayWorkers() {
                                         key={s}
                                         type="button"
                                         className={`btn btn-sm ${on ? "btn-warning text-black" : "btn-outline-warning"} rounded-pill`}
-                                        onClick={() => setSelectedHouseSkills(prev => on ? prev.filter(x => x !== s) : [...prev, s])}
+                                        onClick={() => handleHouseSkillClick(s)}
                                     >
                                         {s}
                                     </button>
+
                                 );
                             })}
+
                         </div>
                     </div>
                 </div>
             </div>
+
+            {showNursingPanel && (
+                <div className="col-12">
+                    <div className="p-3 mt-2 border rounded-3 bg-dark bg-opacity-50 mb-3">
+                        <div className="d-flex align-items-center justify-content-between flex-wrap gap-2">
+                            <div className="d-flex align-items-center gap-2">
+                                <h6 className="mb-0 text-info">Nursing Tasks</h6>
+                                <span className="badge bg-secondary">
+                                    {nursingTasksMode === "all" ? "Match: ALL" : "Match: ANY"}
+                                </span>
+                            </div>
+                            <div className="btn-group btn-group-sm">
+                                <button
+                                    type="button"
+                                    className={`btn ${nursingTasksMode === "all" ? "btn-info" : "btn-outline-info"}`}
+                                    onClick={() => setNursingTasksMode("all")}
+                                >
+                                    All
+                                </button>
+                                <button
+                                    type="button"
+                                    className={`btn ${nursingTasksMode === "any" ? "btn-info" : "btn-outline-info"}`}
+                                    onClick={() => setNursingTasksMode("any")}
+                                >
+                                    Any
+                                </button>
+                            </div>
+                        </div>
+
+                        <div className="d-flex flex-wrap gap-2 mt-2">
+                            {NURSING_TASKS.map((ns) => {
+                                const on = selectedNursingTasks.includes(ns);
+                                return (
+                                    <button
+                                        key={ns}
+                                        type="button"
+                                        className={`btn btn-sm rounded-pill ${on ? "btn-danger  text-dark" : "btn-outline-danger "}`}
+                                        onClick={() =>
+                                            setSelectedNursingTasks((prev) =>
+                                                prev.includes(ns) ? prev.filter((x) => x !== ns) : [...prev, ns]
+                                            )
+                                        }
+                                    >
+                                        {ns}
+                                    </button>
+                                );
+                            })}
+                            {!!selectedNursingTasks.length && (
+                                <button
+                                    type="button"
+                                    className="btn btn-sm btn-outline-warning ms-1"
+                                    onClick={() => setSelectedNursingTasks([])}
+                                >
+                                    Clear
+                                </button>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            )}
+
+
+            {showJobRoles && (
+                <div className="p-3 bg-dark border rounded-3 mb-3">
+                    <h6 className="mb-2 text-warning">Other Skills</h6>
+                    <div className="row g-3">
+                        {/* Office & Administrative */}
+                        <div className="col-md-3 col-lg-3">
+                            <div className="category-section">
+                                <h6 className="category-heading text-primary mb-2">
+                                    Office & Administrative
+                                </h6>
+                                <div className="d-flex flex-wrap gap-2">
+                                    {[
+                                        "Computer Operating",
+                                        "Data Entry",
+                                        "Office Assistant",
+                                        "Receptionist",
+                                        "Front Desk Executive",
+                                        "Admin Assistant",
+                                        "Office Boy",
+                                        "Peon",
+                                        "Office Attendant",
+                                    ].map((r) => {
+                                        const active = selectedRoles.includes(r);
+                                        return (
+                                            <button
+                                                key={r}
+                                                className={`btn btn-sm ${active ? "btn-primary" : "btn-outline-primary"
+                                                    } rounded-pill`}
+                                                onClick={() =>
+                                                    setSelectedRoles((prev) =>
+                                                        active
+                                                            ? prev.filter((x) => x !== r)
+                                                            : [...prev, r]
+                                                    )
+                                                }
+                                            >
+                                                {r}
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Customer Service & Telecommunication */}
+                        <div className="col-md-3 col-lg-3">
+                            <div className="category-section">
+                                <h6 className="category-heading text-success mb-2">
+                                    Customer Service
+                                </h6>
+                                <div className="d-flex flex-wrap gap-2">
+                                    {[
+                                        "Tele Calling",
+                                        "Customer Support",
+                                        "Telemarketing",
+                                        "BPO Executive",
+                                        "Call Center Agent",
+                                        "Customer Care Executive",
+                                    ].map((r) => {
+                                        const active = selectedRoles.includes(r);
+                                        return (
+                                            <button
+                                                key={r}
+                                                className={`btn btn-sm ${active ? "btn-success" : "btn-outline-success"
+                                                    } rounded-pill`}
+                                                onClick={() =>
+                                                    setSelectedRoles((prev) =>
+                                                        active
+                                                            ? prev.filter((x) => x !== r)
+                                                            : [...prev, r]
+                                                    )
+                                                }
+                                            >
+                                                {r}
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Management & Supervision */}
+                        <div className="col-md-3 col-lg-3">
+                            <div className="category-section">
+                                <h6 className="category-heading text-warning mb-2">
+                                    Management & Supervision
+                                </h6>
+                                <div className="d-flex flex-wrap gap-2">
+                                    {[
+                                        "Supervisor",
+                                        "Manager",
+                                        "Team Leader",
+                                        "Site Supervisor",
+                                        "Project Coordinator",
+                                    ].map((r) => {
+                                        const active = selectedRoles.includes(r);
+                                        return (
+                                            <button
+                                                key={r}
+                                                className={`btn btn-sm ${active ? "btn-warning" : "btn-outline-warning"
+                                                    } rounded-pill`}
+                                                onClick={() =>
+                                                    setSelectedRoles((prev) =>
+                                                        active
+                                                            ? prev.filter((x) => x !== r)
+                                                            : [...prev, r]
+                                                    )
+                                                }
+                                            >
+                                                {r}
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Security */}
+                        <div className="col-md-3 col-lg-3">
+                            <div className="category-section">
+                                <h6 className="category-heading text-danger mb-2">
+                                    Security
+                                </h6>
+                                <div className="d-flex flex-wrap gap-2">
+                                    {[
+                                        "Security Guard",
+                                        "Security Supervisor",
+                                        "Gatekeeper",
+                                        "Watchman",
+                                    ].map((r) => {
+                                        const active = selectedRoles.includes(r);
+                                        return (
+                                            <button
+                                                key={r}
+                                                className={`btn btn-sm ${active ? "btn-danger" : "btn-outline-danger"
+                                                    } rounded-pill`}
+                                                onClick={() =>
+                                                    setSelectedRoles((prev) =>
+                                                        active
+                                                            ? prev.filter((x) => x !== r)
+                                                            : [...prev, r]
+                                                    )
+                                                }
+                                            >
+                                                {r}
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Driving & Logistics */}
+                        <div className="col-md-3 col-lg-3">
+                            <div className="category-section">
+                                <h6 className="category-heading text-info mb-2">
+                                    Driving & Logistics
+                                </h6>
+                                <div className="d-flex flex-wrap gap-2">
+                                    {[
+                                        "Driving",
+                                        "Delivery Boy",
+                                        "Delivery Executive",
+                                        "Rider",
+                                        "Driver",
+                                        "Car Driver",
+                                        "Bike Rider",
+                                        "Logistics Helper",
+                                    ].map((r) => {
+                                        const active = selectedRoles.includes(r);
+                                        return (
+                                            <button
+                                                key={r}
+                                                className={`btn btn-sm ${active ? "btn-info" : "btn-outline-info"
+                                                    } rounded-pill`}
+                                                onClick={() =>
+                                                    setSelectedRoles((prev) =>
+                                                        active
+                                                            ? prev.filter((x) => x !== r)
+                                                            : [...prev, r]
+                                                    )
+                                                }
+                                            >
+                                                {r}
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Technical & Maintenance - Updated Color */}
+                        <div className="col-md-3 col-lg-3">
+                            <div className="category-section">
+                                <h6 className="category-heading text-warning mb-2">
+                                    Technical & Maintenance
+                                </h6>
+                                <div className="d-flex flex-wrap gap-2">
+                                    {[
+                                        "Electrician",
+                                        "Plumber",
+                                        "Carpenter",
+                                        "Painter",
+                                        "Mason",
+                                        "AC Technician",
+                                        "Mechanic",
+                                        "Maintenance Staff",
+                                        "House Keeping",
+                                        "Housekeeping Supervisor",
+                                    ].map((r) => {
+                                        const active = selectedRoles.includes(r);
+                                        return (
+                                            <button
+                                                key={r}
+                                                className={`btn btn-sm ${active ? "btn-warning" : "btn-outline-warning"
+                                                    } rounded-pill`}
+                                                onClick={() =>
+                                                    setSelectedRoles((prev) =>
+                                                        active
+                                                            ? prev.filter((x) => x !== r)
+                                                            : [...prev, r]
+                                                    )
+                                                }
+                                            >
+                                                {r}
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Retail & Sales */}
+                        <div className="col-md-3 col-lg-3">
+                            <div className="category-section">
+                                <h6 className="category-heading text-primary mb-2">
+                                    Retail & Sales
+                                </h6>
+                                <div className="d-flex flex-wrap gap-2">
+                                    {[
+                                        "Sales Boy",
+                                        "Sales Girl",
+                                        "Store Helper",
+                                        "Retail Assistant",
+                                        "Shop Attendant",
+                                    ].map((r) => {
+                                        const active = selectedRoles.includes(r);
+                                        return (
+                                            <button
+                                                key={r}
+                                                className={`btn btn-sm ${active ? "btn-primary" : "btn-outline-primary"
+                                                    } rounded-pill`}
+                                                onClick={() =>
+                                                    setSelectedRoles((prev) =>
+                                                        active
+                                                            ? prev.filter((x) => x !== r)
+                                                            : [...prev, r]
+                                                    )
+                                                }
+                                            >
+                                                {r}
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Industrial & Labor */}
+                        <div className="col-md-3 col-lg-3">
+                            <div className="category-section">
+                                <h6 className="category-heading text-danger mb-2">
+                                    Industrial & Labor
+                                </h6>
+                                <div className="d-flex flex-wrap gap-2">
+                                    {[
+                                        "Labour",
+                                        "Helper",
+                                        "Loading Unloading",
+                                        "Warehouse Helper",
+                                        "Factory Worker",
+                                        "Production Helper",
+                                        "Packaging Staff",
+                                    ].map((r) => {
+                                        const active = selectedRoles.includes(r);
+                                        return (
+                                            <button
+                                                key={r}
+                                                className={`btn btn-sm ${active ? "btn-danger" : "btn-outline-danger"
+                                                    } rounded-pill`}
+                                                onClick={() =>
+                                                    setSelectedRoles((prev) =>
+                                                        active
+                                                            ? prev.filter((x) => x !== r)
+                                                            : [...prev, r]
+                                                    )
+                                                }
+                                            >
+                                                {r}
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
 
             {/* Filter Checkboxes */}
             <div className="row mb-4">

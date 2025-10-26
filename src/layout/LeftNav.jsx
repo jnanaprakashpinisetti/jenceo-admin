@@ -74,6 +74,8 @@ import AdminUsers from "../pages/AdminUsers";
 import Accounts from "../pages/Accounts";
 import SearchResults from "../pages/SearchResults";
 import Profile from "../pages/Profile";
+import TimesheetEntryPage from "../pages/TimesheetEntryPage ";
+import TimesheetDashboard from "../pages/TimesheetDashboard ";
 
 // FIXED: Move PermRoute outside the component to prevent re-renders
 const PermRoute = ({ allowed, children }) => {
@@ -674,6 +676,16 @@ export default function LeftNav() {
                     <img src={task} alt="" /> <span className="ms-1">Task</span>
                   </NavLink>
                 </li>
+                <li className="nav-item">
+                  <NavLink to="TimesheetEntryPage" className="nav-link" title="Time Sheet" onClick={onNavClick}>
+                    <img src={task} alt="" /> <span className="ms-1">Time Sheet</span>
+                  </NavLink>
+                </li>
+                <li className="nav-item">
+                  <NavLink to="TimesheetDashboard" className="nav-link" title="Time Sheet Dashboard" onClick={onNavClick}>
+                    <img src={task} alt="" /> <span className="ms-1">Time Sheet Dashboard</span>
+                  </NavLink>
+                </li>
               </>
             )}
 
@@ -724,6 +736,8 @@ export default function LeftNav() {
 
         {/* Task / Accounts / Hospital / Admin */}
         <Route path="Task" element={<PermRoute allowed={canTask}><Task /></PermRoute>} />
+        <Route path="TimesheetEntryPage" element={<PermRoute allowed={canTask}><TimesheetEntryPage /></PermRoute>} />
+        <Route path="TimesheetDashboard" element={<PermRoute allowed={canTask}><TimesheetDashboard /></PermRoute>} />
         <Route path="Accounts" element={<PermRoute allowed={canAccounts}><Accounts /></PermRoute>} />
         <Route path="HospitalList" element={<PermRoute allowed={canHospitalList}><HospitalList /></PermRoute>} />
         <Route path="HospitalDeleteList" element={<PermRoute allowed={canHospitalDeleteList}><HospitalDeleteList /></PermRoute>} />

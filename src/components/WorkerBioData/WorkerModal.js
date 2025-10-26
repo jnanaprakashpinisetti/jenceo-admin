@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import firebaseDB, { storageRef, uploadFile, getDownloadURL } from "../../firebase";
 import { useAuth } from "../../context/AuthContext";
+import TimesheetTable  from "./TimesheetTable ";
 
 const SKILL_OPTIONS = [
     "Nursing",
@@ -1923,6 +1924,7 @@ const WorkerModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode }
                                     ["payment", "Payment"],
                                     ["working", "Working"],
                                     ["pay-info", "Pay Info"],
+                                    ["timesheet", "Timesheet"],
                                     // ["detail ", " "],
                                     ["biodata", "Biodata"],
                                 ].map(([key, label]) => (
@@ -3182,6 +3184,18 @@ const WorkerModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode }
                                                     </button>
                                                 </div>
                                             )}
+                                        </div>
+                                    </div>
+                                )}
+
+
+                                {activeTab === "timesheet" && (
+                                    <div className="modal-card bg-dark p-3 rounded-4">
+                                        <div className="modal-card-header">
+                                            <h4 className="mb-0">Timesheet Management</h4>
+                                        </div>
+                                        <div className="modal-card-body">
+                                            <TimesheetTable employee={formData} />
                                         </div>
                                     </div>
                                 )}

@@ -1,8 +1,24 @@
 import React, { useEffect, useMemo, useState } from "react";
 import firebaseDB from "../../firebase";
 
+const JOB_ROLE_OPTIONS = [
+  "Nursing",
+  "Patient Care",
+  "Care Taker",
+  "Baby Care",
+  "Supporting",
+  "Diaper",
+  "Cook",
+  "Housekeeping",
+  "Old Age Care",
+  "Any Duty",
+  "Others",
+];
+
 const DailyEntryModal = ({ entry, isEditing, employee, onSave, onClose }) => {
-  // ---- form state (kept) ----
+  // ========= STATE VARIABLES =========
+  
+  // Main form data
   const [formData, setFormData] = useState({
     date: "",
     clientId: "",
@@ -14,37 +30,53 @@ const DailyEntryModal = ({ entry, isEditing, employee, onSave, onClose }) => {
     notes: "",
   });
 
-  // ---- your layout state (kept) ----
+  // Custom job role when "Others" is selected
+  const [jobRoleCustom, setJobRoleCustom] = useState("");
+
+  // Client management
   const [clients, setClients] = useState([]);
   const [filteredClients, setFilteredClients] = useState([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [showClientDropdown, setShowClientDropdown] = useState(false);
-  const [basicSalary, setBasicSalary] = useState(0);
+
+  // Salary calculations - FIXED: Use employee's basic salary directly
+  const [basicSalary, setBasicSalary] = useState(employee?.basicSalary || 0);
+  
+  // Emergency duty details
+  const [emergencyType, setEmergencyType] = useState("");
+  const [emergencyClient, setEmergencyClient] = useState("");
+  const [emergencyAmount, setEmergencyAmount] = useState("");
+
+  // Manual daily amount override
+  const [allowManualDaily, setAllowManualDaily] = useState(false);
+  const [manualDailyAmount, setManualDailyAmount] = useState("");
+
+  // Modals
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [entryDataToSave, setEntryDataToSave] = useState(null);
-
-  // duplicate modal
   const [dupModalOpen, setDupModalOpen] = useState(false);
   const [dupList, setDupList] = useState([]);
 
-  // ========= helpers =========
+  // ========= UTILITY FUNCTIONS =========
+  
   const toStr = (v) => (v == null ? "" : String(v));
+  
   const canon = (v) =>
     toStr(v).toLowerCase().normalize("NFKD").replace(/[\u0300-\u036f]/g, "").trim();
 
+  // Calculate daily salary from basic salary - FIXED: Use current basicSalary state
   const calculateDailySalary = () => Math.round((Number(basicSalary) || 0) / 30);
 
-  // unify ONE client object shape no matter the source fields
+  // ========= CLIENT MANAGEMENT =========
+  
+  // Normalize client data from different sources
   const normalizeClient = (firebaseKey, data) => {
-    const idNo =
-      toStr(data?.idNo) ||
-      toStr(data?.clientId) ||
-      toStr(data?.id) ||
-      ""; // business ID we display/store
+    const idNo = toStr(data?.idNo) || toStr(data?.clientId) || toStr(data?.id) || "";
     const clientName = toStr(data?.clientName) || toStr(data?.name) || "";
+    
     return {
       key: firebaseKey,
-      clientId: idNo,          // business ID only (never show firebase key)
+      clientId: idNo,
       clientName,
       location: toStr(data?.location || data?.area || ""),
       _idC: canon(idNo),
@@ -52,7 +84,7 @@ const DailyEntryModal = ({ entry, isEditing, employee, onSave, onClose }) => {
     };
   };
 
-  // try multiple DB paths and merge
+  // Load clients from Firebase path
   const loadFromPath = async (path) => {
     try {
       const snap = await firebaseDB.child(path).get();
@@ -64,75 +96,118 @@ const DailyEntryModal = ({ entry, isEditing, employee, onSave, onClose }) => {
     }
   };
 
+  // Load all clients from multiple paths and deduplicate
   const loadClients = async () => {
-    // priority order; first one that contains data will already make search work.
     const sources = [
       "JenCeo-DataBase/ClientData",
       "ClientData",
       "JenCeo-DataBase/Clients",
       "Clients",
     ];
-    const all = [];
-    // load sequentially, merge and de-dupe by (clientId+clientName)
-    for (const p of sources) {
-      const part = await loadFromPath(p);
-      all.push(...part);
+    
+    const allClients = [];
+    for (const path of sources) {
+      const clientsFromPath = await loadFromPath(path);
+      allClients.push(...clientsFromPath);
     }
-    const dedup = [];
-    const seen = new Set();
-    all.forEach((c) => {
-      const key = `${c._idC}|${c._nmC}`;
-      if (!seen.has(key) && (c.clientId || c.clientName)) {
-        seen.add(key);
-        dedup.push(c);
+
+    // Deduplicate clients
+    const dedupedClients = [];
+    const seenClients = new Set();
+    
+    allClients.forEach((client) => {
+      const clientKey = `${client._idC}|${client._nmC}`;
+      if (!seenClients.has(clientKey) && (client.clientId || client.clientName)) {
+        seenClients.add(clientKey);
+        dedupedClients.push(client);
       }
     });
-    setClients(dedup);
+    
+    setClients(dedupedClients);
   };
 
-  // ========= effects (kept) =========
+  // ========= EFFECTS =========
+  
   useEffect(() => {
     loadClients();
-    if (employee) setBasicSalary(employee.basicSalary || 0);
-
+    
+    // Initialize form with employee data or existing entry
     if (entry) {
+      // Handle job role (known vs custom)
+      const incomingRole = entry.jobRole || employee?.primarySkill || "";
+      const isKnownRole = JOB_ROLE_OPTIONS.some(
+        (opt) => opt.toLowerCase() === incomingRole?.toLowerCase()
+      );
+      const selectValue = isKnownRole ? incomingRole : "Others";
+      const customValue = isKnownRole ? "" : incomingRole;
+
       setFormData({
         date: entry.date || "",
         clientId: entry.clientId || "",
         clientName: entry.clientName || "",
-        jobRole: entry.jobRole || employee?.primarySkill || "",
+        jobRole: selectValue || "",
         status: entry.status || "present",
         isPublicHoliday: entry.isPublicHoliday || false,
         isEmergency: entry.isEmergency || false,
         notes: entry.notes || "",
       });
+      
+      setJobRoleCustom(customValue);
+      
+      // Set search term for client display
       if (entry.clientName) {
-        const label = [entry.clientId, entry.clientName].filter(Boolean).join(" - ");
-        setSearchTerm(label);
+        const clientLabel = [entry.clientId, entry.clientName].filter(Boolean).join(" - ");
+        setSearchTerm(clientLabel);
+      }
+      
+      // Initialize emergency data if exists
+      if (entry.isEmergency) {
+        setEmergencyType(entry.emergencyType || "");
+        setEmergencyClient(entry.emergencyClient || "");
+        setEmergencyAmount(entry.emergencyAmount?.toString() || "");
+      }
+      
+      // Initialize manual amount if exists
+      if (entry.manualDailyEnabled) {
+        setAllowManualDaily(true);
+        setManualDailyAmount(entry.manualDailyAmount?.toString() || "");
       }
     } else {
+      // New entry - set defaults
       const today = new Date().toISOString().split("T")[0];
+      const employeeRole = employee?.primarySkill || "";
+      const isKnownRole = JOB_ROLE_OPTIONS.some(
+        (opt) => opt.toLowerCase() === employeeRole?.toLowerCase()
+      );
+      
       setFormData((prev) => ({
         ...prev,
         date: today,
-        jobRole: employee?.primarySkill || "",
+        jobRole: isKnownRole ? employeeRole : "Others",
       }));
+      
+      setJobRoleCustom(isKnownRole ? "" : employeeRole);
     }
   }, [entry, employee]);
 
-  // ======= search – same feel as WorkerSearch (case-insensitive) =======
+  // Filter clients based on search term
   useEffect(() => {
-    const q = canon(searchTerm);
-    if (!q) {
+    const query = canon(searchTerm);
+    if (!query) {
       setFilteredClients([]);
       setShowClientDropdown(false);
       return;
     }
-    const filtered = clients.filter((c) => c._idC.includes(q) || c._nmC.includes(q));
+    
+    const filtered = clients.filter(
+      (client) => client._idC.includes(query) || client._nmC.includes(query)
+    );
     setFilteredClients(filtered.slice(0, 12));
     setShowClientDropdown(true);
   }, [searchTerm, clients]);
 
+  // ========= CLIENT SEARCH HANDLERS =========
+  
   const searchClients = (term) => setSearchTerm(term);
 
   const selectClient = (client) => {
@@ -141,70 +216,136 @@ const DailyEntryModal = ({ entry, isEditing, employee, onSave, onClose }) => {
       clientId: client.clientId || "",
       clientName: client.clientName || "",
     }));
-    setSearchTerm(
-      [client.clientId || "", client.clientName || ""].filter(Boolean).join(" - ")
-    );
+    
+    const clientLabel = [client.clientId || "", client.clientName || ""]
+      .filter(Boolean)
+      .join(" - ");
+    setSearchTerm(clientLabel);
     setShowClientDropdown(false);
   };
 
-  const handleChange = (field, value) =>
-    setFormData((prev) => ({ ...prev, [field]: value }));
+  const clearSelectedClient = () => {
+    setFormData((prev) => ({ ...prev, clientId: "", clientName: "" }));
+    setSearchTerm("");
+    setShowClientDropdown(false);
+    
+    // Refocus search input
+    setTimeout(() => {
+      const searchInput = document.getElementById("client-search-input");
+      if (searchInput) searchInput.focus();
+    }, 0);
+  };
 
-  // ========= duplicate check =========
+  // ========= FORM HANDLERS =========
+  
+  const handleChange = (field, value) => {
+    setFormData((prev) => ({ ...prev, [field]: value }));
+  };
+
+  // ========= DUPLICATE CHECK =========
+  
   const checkDuplicate = async (employeeId, date, excludeId = null) => {
     if (!employeeId || !date) return false;
+    
     try {
-      const snap = await firebaseDB
+      const snapshot = await firebaseDB
         .child("TimesheetEntries")
         .orderByChild("employeeId_date")
         .equalTo(`${employeeId}_${date}`)
         .once("value");
-      if (snap.exists()) {
-        const rows = Object.entries(snap.val()).map(([id, data]) => ({ id, ...data }));
-        const others = excludeId ? rows.filter((r) => r.id !== excludeId) : rows;
-        if (others.length > 0) {
-          setDupList(others);
+        
+      if (snapshot.exists()) {
+        const entries = Object.entries(snapshot.val()).map(([id, data]) => ({ id, ...data }));
+        const duplicates = excludeId ? entries.filter((entry) => entry.id !== excludeId) : entries;
+        
+        if (duplicates.length > 0) {
+          setDupList(duplicates);
           setDupModalOpen(true);
           return true;
         }
       }
-    } catch {
-      // ignore errors; if it fails we won't block, but fallback is possible here if needed
+    } catch (error) {
+      console.error("Duplicate check error:", error);
     }
+    
     return false;
   };
 
-  // ========= submit (same layout, added dup guard + default client) =========
+  // ========= SALARY CALCULATION - FIXED =========
+  
+  const calculateFinalDailySalary = () => {
+    const baseDaily = calculateDailySalary();
+    
+    // If manual amount is enabled and not emergency, use manual amount
+    if (allowManualDaily && !formData.isEmergency) {
+      return Number(manualDailyAmount) || 0;
+    }
+    
+    // If emergency duty, add emergency amount to base
+    if (formData.isEmergency) {
+      return baseDaily + (Number(emergencyAmount) || 0);
+    }
+    
+    // Default: base daily salary
+    return baseDaily;
+  };
+
+  // ========= SUBMIT HANDLER =========
+  
   const handleSubmit = async (e) => {
     e.preventDefault();
-    const empId = employee?.id || employee?.employeeId;
-    if (!empId) {
+    
+    const employeeId = employee?.id || employee?.employeeId;
+    if (!employeeId) {
       alert("Please select an employee first.");
       return;
     }
+    
     if (!formData.date) {
       alert("Please pick a date.");
       return;
     }
 
-    // block duplicate dates
-    const isDup = await checkDuplicate(empId, formData.date, isEditing ? entry?.id : null);
-    if (isDup) return;
+    // Check for duplicate entries
+    const hasDuplicate = await checkDuplicate(
+      employeeId, 
+      formData.date, 
+      isEditing ? entry?.id : null
+    );
+    
+    if (hasDuplicate) return;
 
-    // default client if none picked
+    // Set default client if none selected
     const finalClientId = formData.clientId || "DEFAULT";
     const finalClientName = formData.clientName || "Default Client";
 
+    // Determine final job role (select value or custom)
+    const finalJobRole = formData.jobRole === "Others" 
+      ? jobRoleCustom.trim() 
+      : formData.jobRole || "";
+
+    // Calculate final daily salary - FIXED
+    const finalDailySalary = calculateFinalDailySalary();
+
+    // Prepare entry data
     const entryData = {
       ...formData,
+      jobRole: finalJobRole,
       clientId: finalClientId,
       clientName: finalClientName,
       id: entry?.id || Date.now().toString(),
-      dailySalary: calculateDailySalary(),
-      basicSalary: basicSalary,
-      employeeId: empId,
+      basicSalary: Number(basicSalary),
+      dailySalary: Math.max(0, Math.round(finalDailySalary)),
+      emergencyType: formData.isEmergency ? emergencyType : "",
+      emergencyClient: formData.isEmergency ? emergencyClient : "",
+      emergencyAmount: formData.isEmergency ? Number(emergencyAmount || 0) : 0,
+      manualDailyEnabled: !formData.isEmergency && allowManualDaily,
+      manualDailyAmount: !formData.isEmergency && allowManualDaily 
+        ? Number(manualDailyAmount || 0) 
+        : null,
+      employeeId: employeeId,
       employeeName: `${employee?.firstName || ""} ${employee?.lastName || ""}`.trim(),
-      employeeId_date: `${empId}_${formData.date}`,
+      employeeId_date: `${employeeId}_${formData.date}`,
       timestamp: new Date().toISOString(),
     };
 
@@ -212,6 +353,8 @@ const DailyEntryModal = ({ entry, isEditing, employee, onSave, onClose }) => {
     setShowConfirmModal(true);
   };
 
+  // ========= MODAL HANDLERS =========
+  
   const confirmSave = () => {
     if (entryDataToSave) onSave(entryDataToSave);
     setShowConfirmModal(false);
@@ -223,9 +366,11 @@ const DailyEntryModal = ({ entry, isEditing, employee, onSave, onClose }) => {
     setEntryDataToSave(null);
   };
 
-  // ========= UI (unchanged layout) =========
+  // ========= RENDER =========
+  
   return (
     <>
+      {/* Main Modal */}
       <div
         className="modal fade show"
         style={{ display: "block", backgroundColor: "rgba(0,0,0,0.8)" }}
@@ -259,7 +404,7 @@ const DailyEntryModal = ({ entry, isEditing, employee, onSave, onClose }) => {
             <form onSubmit={handleSubmit}>
               <div className="modal-body">
                 <div className="row g-3">
-                  {/* Basic Salary */}
+                  {/* Basic Salary Input - FIXED */}
                   <div className="col-md-6">
                     <label className="form-label text-warning">
                       <strong>Basic Salary (₹)</strong>
@@ -268,23 +413,63 @@ const DailyEntryModal = ({ entry, isEditing, employee, onSave, onClose }) => {
                       type="number"
                       className="form-control bg-dark text-white border-warning"
                       value={basicSalary}
-                      onChange={(e) => setBasicSalary(parseFloat(e.target.value) || 0)}
+                      onChange={(e) => setBasicSalary(Number(e.target.value) || 0)}
                       min="0"
                       step="100"
                     />
                     <small className="text-muted">Monthly basic salary</small>
                   </div>
 
-                  {/* Daily Salary */}
+                  {/* Daily Salary Display - FIXED */}
                   <div className="col-md-6">
                     <label className="form-label text-success">
-                      <strong>Daily Salary</strong>
+                      <strong>Calculated Daily Salary</strong>
                     </label>
                     <div className="form-control bg-dark text-success border-success">
                       <strong>₹{calculateDailySalary()}</strong>
                       <small className="text-muted ms-2">(₹{basicSalary} ÷ 30 days)</small>
                     </div>
                   </div>
+
+                  {/* Manual Daily Amount Toggle - FIXED */}
+                  {!formData.isEmergency && (
+                    <div className="col-md-12">
+                      <div className="form-check form-switch">
+                        <input
+                          className="form-check-input"
+                          type="checkbox"
+                          id="allowManualDaily"
+                          checked={allowManualDaily}
+                          onChange={(e) => setAllowManualDaily(e.target.checked)}
+                        />
+                        <label className="form-check-label text-info" htmlFor="allowManualDaily">
+                          Allow manual daily amount
+                        </label>
+                      </div>
+                      
+                      {allowManualDaily && (
+                        <div className="row mt-2">
+                          <div className="col-md-12">
+                            <label className="form-label text-info">
+                              <strong>Manual Daily Amount (₹)</strong>
+                            </label>
+                            <input
+                              type="number"
+                              min="0"
+                              step="50"
+                              className="form-control bg-dark text-white border-info"
+                              placeholder="Enter custom daily amount"
+                              value={manualDailyAmount}
+                              onChange={(e) => setManualDailyAmount(e.target.value)}
+                            />
+                            <small className="text-muted">
+                              When enabled, this replaces the calculated Daily Salary for this day.
+                            </small>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
 
                   {/* Date */}
                   <div className="col-md-6">
@@ -308,31 +493,42 @@ const DailyEntryModal = ({ entry, isEditing, employee, onSave, onClose }) => {
                     <select
                       className="form-select bg-dark text-white border-secondary"
                       value={formData.jobRole}
-                      onChange={(e) => handleChange("jobRole", e.target.value)}
+                      onChange={(e) => {
+                        const value = e.target.value;
+                        handleChange("jobRole", value);
+                        if (value !== "Others") setJobRoleCustom("");
+                      }}
                       required
                     >
                       <option value="">Select Job Role</option>
-                      <option value="Nursing">Nursing</option>
-                      <option value="Patient Care">Patient Care</option>
-                      <option value="Care Taker">Care Taker</option>
-                      <option value="Baby Care">Baby Care</option>
-                      <option value="Supporting">Supporting</option>
-                      <option value="Diaper">Diaper</option>
-                      <option value="Cook">Cook</option>
-                      <option value="Housekeeping">Housekeeping</option>
-                      <option value="Old Age Care">Old Age Care</option>
-                      <option value="Any Duty">Any Duty</option>
-                      <option value="Others">Others</option>
+                      {JOB_ROLE_OPTIONS.map((option) => (
+                        <option key={option} value={option}>
+                          {option}
+                        </option>
+                      ))}
                     </select>
+
+                    {/* Custom Job Role Input */}
+                    {formData.jobRole === "Others" && (
+                      <input
+                        type="text"
+                        className="form-control bg-dark text-white border-secondary mt-2"
+                        placeholder="Type custom job role"
+                        value={jobRoleCustom}
+                        onChange={(e) => setJobRoleCustom(e.target.value)}
+                        required
+                      />
+                    )}
                   </div>
 
-                  {/* Client Search (kept layout, worker-style search) */}
+                  {/* Client Search */}
                   <div className="col-12">
                     <label className="form-label text-info">
                       <strong>Search Client (ID or Name)</strong>
                     </label>
                     <div className="position-relative">
                       <input
+                        id="client-search-input"
                         type="text"
                         className="form-control bg-dark text-white border-secondary"
                         placeholder="Search by client ID (e.g., JC00001) or name…"
@@ -364,11 +560,19 @@ const DailyEntryModal = ({ entry, isEditing, employee, onSave, onClose }) => {
 
                     {/* Selected Client Display */}
                     {(formData.clientId || formData.clientName) && (
-                      <div className="mt-2 p-2 bg-success bg-opacity-10 border border-success rounded">
-                        <small className="text-success">
+                      <div className="mt-2 p-2 bg-success bg-opacity-10 border border-success rounded d-flex align-items-center justify-content-between">
+                        <small className="text-success me-2">
                           <strong>Selected Client:</strong>{" "}
                           {[formData.clientId, formData.clientName].filter(Boolean).join(" - ")}
                         </small>
+                        <button
+                          type="button"
+                          className="btn btn-sm btn-outline-danger m-0"
+                          title="Clear selected client"
+                          onClick={clearSelectedClient}
+                        >
+                          ✕
+                        </button>
                       </div>
                     )}
                   </div>
@@ -391,7 +595,7 @@ const DailyEntryModal = ({ entry, isEditing, employee, onSave, onClose }) => {
                     </select>
                   </div>
 
-                  {/* Specials */}
+                  {/* Special Conditions */}
                   <div className="col-md-6">
                     <label className="form-label text-warning">
                       <strong>Special Conditions</strong>
@@ -425,6 +629,55 @@ const DailyEntryModal = ({ entry, isEditing, employee, onSave, onClose }) => {
                     </div>
                   </div>
 
+                  {/* Emergency Details */}
+                  {formData.isEmergency && (
+                    <>
+                      <div className="col-md-4">
+                        <label className="form-label text-danger">
+                          <strong>Emergency Duty Type</strong>
+                        </label>
+                        <input
+                          type="text"
+                          className="form-control bg-dark text-white border-danger"
+                          placeholder="e.g., Night Duty"
+                          value={emergencyType}
+                          onChange={(e) => setEmergencyType(e.target.value)}
+                        />
+                      </div>
+
+                      <div className="col-md-4">
+                        <label className="form-label text-danger">
+                          <strong>Emergency Client</strong>
+                        </label>
+                        <input
+                          type="text"
+                          className="form-control bg-dark text-white border-danger"
+                          placeholder="Client name for this emergency"
+                          value={emergencyClient}
+                          onChange={(e) => setEmergencyClient(e.target.value)}
+                        />
+                      </div>
+
+                      <div className="col-md-4">
+                        <label className="form-label text-danger">
+                          <strong>Emergency Amount (₹)</strong>
+                        </label>
+                        <input
+                          type="number"
+                          min="0"
+                          step="50"
+                          className="form-control bg-dark text-white border-danger"
+                          placeholder="0"
+                          value={emergencyAmount}
+                          onChange={(e) => setEmergencyAmount(e.target.value)}
+                        />
+                        <small className="text-muted">
+                          Final day = Daily Salary + Emergency Amount
+                        </small>
+                      </div>
+                    </>
+                  )}
+
                   {/* Notes */}
                   <div className="col-12">
                     <label className="form-label text-info">
@@ -439,7 +692,7 @@ const DailyEntryModal = ({ entry, isEditing, employee, onSave, onClose }) => {
                     />
                   </div>
 
-                  {/* Summary (kept) */}
+                  {/* Summary */}
                   <div className="col-12">
                     <div className="card bg-gray-800 border-info">
                       <div className="card-body">
@@ -465,17 +718,17 @@ const DailyEntryModal = ({ entry, isEditing, employee, onSave, onClose }) => {
                           </div>
                           <div className="col-md-3">
                             <small className="text-muted">Daily Salary</small>
-                            <div className="fw-bold text-success">₹{calculateDailySalary()}</div>
+                            <div className="fw-bold text-success">
+                              ₹{calculateFinalDailySalary()}
+                            </div>
                           </div>
                         </div>
                       </div>
                     </div>
                   </div>
-
                 </div>
               </div>
 
-              {/* footer (kept) */}
               <div className="modal-footer">
                 <button type="button" className="btn btn-secondary" onClick={onClose}>
                   Cancel
@@ -489,7 +742,7 @@ const DailyEntryModal = ({ entry, isEditing, employee, onSave, onClose }) => {
         </div>
       </div>
 
-      {/* ===== Duplicate Entry Modal ===== */}
+      {/* Duplicate Entry Modal */}
       {dupModalOpen && (
         <div
           className="modal fade show"
@@ -497,15 +750,15 @@ const DailyEntryModal = ({ entry, isEditing, employee, onSave, onClose }) => {
           tabIndex="-1"
         >
           <div className="modal-dialog modal-dialog-centered">
-            <div className="modal-content bg-dark border border-warning">
-              <div className="modal-header border-warning">
-                <h5 className="modal-title text-warning">
+            <div className="modal-content bg-dark border border-danger">
+              <div className="modal-header border-danger">
+                <h5 className="modal-title text-danger">
                   <i className="bi bi-exclamation-triangle me-2" />
                   Date Already Exists
                 </h5>
               </div>
               <div className="modal-body">
-                <div className="alert alert-warning bg-warning bg-opacity-10 border-warning">
+                <div className="alert alert-warning bg-warning bg-opacity-10 text-white">
                   An entry already exists for <strong>{formData.date}</strong>.
                 </div>
                 <div className="table-responsive">
@@ -518,29 +771,29 @@ const DailyEntryModal = ({ entry, isEditing, employee, onSave, onClose }) => {
                       </tr>
                     </thead>
                     <tbody>
-                      {dupList.map((d) => (
-                        <tr key={d.id}>
+                      {dupList.map((duplicate) => (
+                        <tr key={duplicate.id}>
                           <td className="text-info">
-                            {[d.clientId, d.clientName].filter(Boolean).join(" - ")}
+                            {[duplicate.clientId, duplicate.clientName].filter(Boolean).join(" - ")}
                           </td>
                           <td>
                             <span
                               className={`badge ${
-                                d.status === "present"
+                                duplicate.status === "present"
                                   ? "bg-success"
-                                  : d.status === "absent"
+                                  : duplicate.status === "absent"
                                   ? "bg-danger"
                                   : "bg-secondary"
                               }`}
                             >
-                              {d.status}
+                              {duplicate.status}
                             </span>
                           </td>
                           <td className="text-muted">
-                            {d.updatedAt
-                              ? new Date(d.updatedAt).toLocaleString("en-IN")
-                              : d.timestamp
-                              ? new Date(d.timestamp).toLocaleString("en-IN")
+                            {duplicate.updatedAt
+                              ? new Date(duplicate.updatedAt).toLocaleString("en-IN")
+                              : duplicate.timestamp
+                              ? new Date(duplicate.timestamp).toLocaleString("en-IN")
                               : "-"}
                           </td>
                         </tr>
@@ -569,7 +822,7 @@ const DailyEntryModal = ({ entry, isEditing, employee, onSave, onClose }) => {
         </div>
       )}
 
-      {/* ===== Confirmation Modal (kept layout) ===== */}
+      {/* Confirmation Modal */}
       {showConfirmModal && entryDataToSave && (
         <div
           className="modal fade show"
@@ -587,6 +840,36 @@ const DailyEntryModal = ({ entry, isEditing, employee, onSave, onClose }) => {
               <div className="modal-body">
                 <div className="alert alert-warning bg-warning bg-opacity-10 border-warning">
                   <strong>Please review the entry details:</strong>
+                </div>
+
+                {/* Salary Breakdown - FIXED */}
+                <div className="card bg-gray-800 border-success mt-2">
+                  <div className="card-body py-2">
+                    <div className="d-flex justify-content-between text-white">
+                      <span>Base Daily Salary</span>
+                      <strong>₹{calculateDailySalary()}</strong>
+                    </div>
+                    
+                    {entryDataToSave.isEmergency && (
+                      <div className="d-flex justify-content-between text-danger">
+                        <span>Emergency Amount</span>
+                        <strong>₹{Number(emergencyAmount || 0)}</strong>
+                      </div>
+                    )}
+                    
+                    {entryDataToSave.manualDailyEnabled && (
+                      <div className="d-flex justify-content-between text-info">
+                        <span>Manual Override</span>
+                        <strong>₹{Number(manualDailyAmount || 0)}</strong>
+                      </div>
+                    )}
+                    
+                    <hr className="border-secondary my-2" />
+                    <div className="d-flex justify-content-between text-success">
+                      <span>Total for the day</span>
+                      <strong>₹{calculateFinalDailySalary()}</strong>
+                    </div>
+                  </div>
                 </div>
 
                 <div className="row g-2 mb-3">
@@ -614,7 +897,9 @@ const DailyEntryModal = ({ entry, isEditing, employee, onSave, onClose }) => {
                   </div>
                   <div className="col-6">
                     <small className="text-muted">Daily Salary</small>
-                    <div className="fw-bold text-success">₹{entryDataToSave.dailySalary}</div>
+                    <div className="fw-bold text-success">
+                      ₹{calculateFinalDailySalary()}
+                    </div>
                   </div>
                   {(entryDataToSave.isPublicHoliday || entryDataToSave.isEmergency) && (
                     <div className="col-12">

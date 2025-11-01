@@ -6,6 +6,69 @@ import WorkerSearch from './WorkerSearch';
 import { getAuth, onAuthStateChanged, signOut } from 'firebase/auth';
 import { useAuth } from "../../context/AuthContext";
 
+
+
+// Build human ID like JW1-01-25 or JW1-01-25-2
+const buildTimesheetId = async (emp, periodKey) => {
+    const base = shortEmpCode(
+        emp?.basicInfo?.employeeId || emp?.employeeId || emp?.idNo || "EMP"
+    );
+    let mm = "01",
+        yy = "00";
+    if (/^\d{4}-\d{2}$/.test(periodKey)) {
+        ({ mm, yy } = monthParts(periodKey));
+    } else {
+        const [start = "2000-01-01"] = String(periodKey).split("_to_");
+        ({ mm, yy } = monthParts(start.slice(0, 7)));
+    }
+    const idBase = `${base}-${mm}-${yy}`;
+
+    // If this period already has a header under EmployeeBioData -> reuse its id; else suffix
+    const allTsSnap = await firebaseDB.child(`${empPath(emp.id)}/timesheets`).get();
+    if (!allTsSnap.exists()) return idBase;
+
+    const all = Object.values(allTsSnap.val() || {});
+    const samePrefix = all.filter((t) => (t.timesheetId || "").startsWith(idBase));
+    if (samePrefix.length === 0) return idBase;
+
+    const thisPeriod = all.find((t) => t.periodKey === periodKey);
+    if (thisPeriod?.timesheetId) return thisPeriod.timesheetId;
+
+    return `${idBase}-${samePrefix.length + 1}`;
+};
+
+// --- PATH HELPERS (Employee-scoped only) ---
+const empPath = (empId) => `EmployeeBioData/${empId}`;
+const empTsById = (empId, tsId) => `${empPath(empId)}/timesheets/${tsId}`;
+const empEntryById = (empId, tsId, dateStr) =>
+    `${empTsById(empId, tsId)}/dailyEntries/${dateStr}`;
+
+// Compat helpers for older calls (so no-undef goes away)
+const tsNode = (empId, tsKeyOrId) =>
+    `${empTsById(empId, tsKeyOrId)}`;
+const entryNode = (empId, tsKeyOrId, dateStr = "") =>
+    `${tsNode(empId, tsKeyOrId)}/dailyEntries${dateStr ? `/${dateStr}` : ""}`;
+const entryNodeByDate = (empId, tsKeyOrId, dateStr) =>
+    `${tsNode(empId, tsKeyOrId)}/dailyEntries/${dateStr}`;
+
+// Build period key from modal fields
+const makePeriodKey = ({ tsMode, tsMonth, tsStart, tsEnd }) =>
+    tsMode === "month" ? tsMonth : `${tsStart}_to_${tsEnd}`;
+
+// Short employee code from JW00001 -> JW1 (used in timesheetId)
+const shortEmpCode = (code) => {
+    const raw = String(code || "");
+    const m = raw.match(/^([A-Za-z]+)0*([0-9]+)/);
+    return m ? `${m[1]}${parseInt(m[2], 10)}` : raw.replace(/[^A-Za-z0-9]/g, "");
+};
+const monthParts = (yyyyMm) => {
+    const [y, m] = (yyyyMm || "").split("-");
+    return { mm: m || "01", yy: (y || "").slice(-2) };
+};
+
+
+
+
 const DisplayTimeSheet = () => {
     // State declarations
     const [employees, setEmployees] = useState([]);
@@ -33,13 +96,100 @@ const DisplayTimeSheet = () => {
     const [submittedTimesheetInfo, setSubmittedTimesheetInfo] = useState(null);
     const [showAssignModal, setShowAssignModal] = useState(false);
     const [assignTo, setAssignTo] = useState('');
+    const [submitComment, setSubmitComment] = useState('');
     const [selectedEntries, setSelectedEntries] = useState([]);
     const [showDateChangeWarning, setShowDateChangeWarning] = useState(false);
     const [dateChangeEntry, setDateChangeEntry] = useState(null);
     const [newDate, setNewDate] = useState('');
 
+    const [entryModalMode, setEntryModalMode] = useState('single');
+
     const [showPrevTsDelete, setShowPrevTsDelete] = useState(false);
     const [prevTsToDelete, setPrevTsToDelete] = useState(null);
+
+    const [isSaving, setIsSaving] = useState(false);
+
+    const [showYearPrev, setShowYearPrev] = useState(false);
+    const [yearPrevTimesheets, setYearPrevTimesheets] = useState([]);
+
+    const [showNoteModal, setShowNoteModal] = useState(false);
+    const [currentNote, setCurrentNote] = useState('');
+
+    const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+
+
+
+    // Add these states
+    const [showCustomModal, setShowCustomModal] = useState(false);
+    const [modalConfig, setModalConfig] = useState({
+        title: '',
+        message: '',
+        type: 'info', // 'info', 'success', 'warning', 'error'
+        onConfirm: null,
+        showConfirm: false
+    });
+
+    // Modal helper function
+    const showModal = (title, message, type = 'info', onConfirm = null) => {
+        setModalConfig({
+            title,
+            message,
+            type,
+            onConfirm,
+            showConfirm: !!onConfirm
+        });
+        setShowCustomModal(true);
+    };
+
+    const getRowKey = (e) => String(e?.id || e?.date);
+
+    // Active Timesheet ID we are viewing/editing
+    const [currentTimesheetId, setCurrentTimesheetId] = useState('');
+
+
+    const ensureTimesheetHeader = async (empId, tsId, header = {}) => {
+        const now = new Date().toISOString();
+        const emp = employees.find(e => e.id === empId);
+        const periodKey = getCurrentPeriodKey();
+        const periodStr = useDateRange ? `${startDate} to ${endDate}` : selectedMonth;
+
+        const headerData = {
+            employeeId: empId,
+            timesheetId: tsId,
+            employeeName: `${emp?.firstName || ''} ${emp?.lastName || ''}`.trim(),
+            period: periodStr,
+            periodKey: periodKey,
+            startDate: useDateRange ? startDate : `${selectedMonth}-01`,
+            endDate: useDateRange ? endDate : `${selectedMonth}-31`,
+            status: 'draft',
+            updatedAt: now,
+            updatedBy: currentUser?.uid || 'admin',
+            updatedByName: currentUser?.displayName || 'Admin',
+            ...header,
+        };
+
+        await firebaseDB.child(empTsById(empId, tsId)).update(headerData);
+        return headerData;
+    };
+
+
+    // Load entries by employee + timesheetId
+    const loadDailyEntriesByTimesheetId = async (empId, tsId) => {
+        const snap = await firebaseDB.child(`${empTsById(empId, tsId)}/dailyEntries`).get();
+        const obj = snap.val() || {};
+        const list = Object.keys(obj)
+            .sort()
+            .map((date) => ({
+                id: date,
+                _rowKey: `${empId}_${date}`,
+                ...obj[date],
+                date, // keep guaranteed
+            }));
+        setDailyEntries(list);
+    };
+
+
+
 
     // NEW: open confirm modal
     const openPrevTsDelete = (ts) => {
@@ -50,6 +200,7 @@ const DisplayTimeSheet = () => {
     // Use Auth Context
     const authContext = useAuth();
 
+
     // ---- NEW STATE (add near other useState) ----
     const [showDeleteTsModal, setShowDeleteTsModal] = useState(false);
     const [tsToDelete, setTsToDelete] = useState(null);
@@ -58,9 +209,11 @@ const DisplayTimeSheet = () => {
     const [clientSearch, setClientSearch] = useState("");
     const [selectedClientId, setSelectedClientId] = useState("");
     const [clientDropdownOpen, setClientDropdownOpen] = useState(false);
+    // FIXED: Remove the async function from filteredClients
     const filteredClients = useMemo(() => {
         const q = (clientSearch || "").toLowerCase();
         if (!q) return clients || [];
+
         return (clients || []).filter(c =>
             (c.name || "").toLowerCase().includes(q) ||
             (c.id || "").toLowerCase().includes(q) ||
@@ -68,35 +221,76 @@ const DisplayTimeSheet = () => {
         );
     }, [clientSearch, clients]);
 
-    // ---- NEW: robust daily rate + entry salary helper ----
-
-
-
-
-
-    // NEW: delete Timesheet + its entries
-    const deletePreviousTimesheet = async () => {
-        if (!prevTsToDelete?.id) return;
-        // Inside the Delete Timesheet confirm button handler, after removing entries:
-        if (timesheet?.id === tsToDelete.id) {
-            setTimesheet(null);
-            setDailyEntries([]);
+    // Move the loadYearTimesheets function outside
+    const loadYearTimesheets = async () => {
+        if (!selectedEmployee) {
+            setYearPrevTimesheets([]);
+            return;
         }
-        await loadPreviousTimesheets();
+        try {
+            const snap = await firebaseDB.child('Timesheets')
+                .orderByChild('employeeId')
+                .equalTo(selectedEmployee)
+                .once('value');
+            if (!snap.exists()) {
+                setYearPrevTimesheets([]);
+                return;
+            }
+            const list = Object.entries(snap.val()).map(([id, data]) => ({ id, ...data }));
+            const now = new Date();
+            const y = now.getFullYear();
+            const filtered = list.filter(ts => {
+                const dt = new Date(ts.createdAt || ts.updatedAt || ts.submittedAt || ts.startDate || ts.period);
+                return !isNaN(dt) && dt.getFullYear() === y;
+            }).sort((a, b) => new Date(b.createdAt || b.updatedAt || 0) - new Date(a.createdAt || a.updatedAt || 0));
+
+            const pad = (n) => (n < 10 ? '0' + n : '' + n);
+            const withDisplay = filtered.map((ts, idx) => {
+                let mm = '01', yy = '00';
+                if (ts.period && /^\d{4}-\d{2}/.test(ts.period)) {
+                    const parts = ts.period.split('-');
+                    mm = parts[1];
+                    yy = String(parts[0]).slice(-2);
+                } else {
+                    const dt = new Date(ts.createdAt || ts.updatedAt || Date.now());
+                    mm = pad(dt.getMonth() + 1);
+                    yy = String(dt.getFullYear()).slice(-2);
+                }
+                return { ...ts, displayId: `JC-${mm}-${yy}-(${idx + 1})` };
+            });
+            setYearPrevTimesheets(withDisplay);
+        } catch (e) {
+            console.error('loadYearTimesheets error', e);
+            setYearPrevTimesheets([]);
+        }
+    };
+
+
+    // Period key used everywhere: "YYYY-MM" or "YYYY-MM-DD_to_YYYY-MM-DD"
+    const getCurrentPeriodKey = () => {
+        return useDateRange && startDate && endDate
+            ? `${startDate}_to_${endDate}`
+            : (selectedMonth || '');
+    };
+
+
+
+
+
+
+    // PATCH: delete an entire timesheet (no dual nodes)
+    const deletePreviousTimesheet = async () => {
+        if (!prevTsToDelete?.id || !selectedEmployee) return;
 
         try {
-            // remove the timesheet doc
-            await firebaseDB.child(`Timesheets/${prevTsToDelete.id}`).remove();
-            // remove all its entries
-            const snap = await firebaseDB.child(`TimesheetEntries`)
-                .orderByChild('timesheetId')
-                .equalTo(prevTsToDelete.id)
-                .once('value');
-            if (snap.exists()) {
-                const obj = snap.val();
-                await Promise.all(Object.keys(obj).map(k => firebaseDB.child(`TimesheetEntries/${k}`).remove()));
+            await firebaseDB.child(empTsNode(selectedEmployee, prevTsToDelete.id)).remove();
+
+            // If it was currently open, clear it
+            if (timesheet?.id === prevTsToDelete.id) {
+                setTimesheet(null);
+                setDailyEntries([]);
             }
-            // refresh list
+
             await loadPreviousTimesheets();
         } catch (e) {
             console.error('Error deleting previous timesheet:', e);
@@ -107,7 +301,18 @@ const DisplayTimeSheet = () => {
         }
     };
 
+    useEffect(() => {
+        setHasUnsavedChanges(true);
+    }, [dailyEntries, advances]);
 
+
+
+    useEffect(() => {
+        if (selectedEmployee) {
+            loadPreviousTimesheets();
+            loadYearTimesheets();
+        }
+    }, [selectedEmployee]);
 
     // Initialize current month and get current user
     useEffect(() => {
@@ -150,19 +355,102 @@ const DisplayTimeSheet = () => {
         return () => unsubscribe();
     }, [authContext]);
 
+    const [allUsers, setAllUsers] = useState([]);
+    const [userSearch, setUserSearch] = useState("");
+    const filteredUsers = useMemo(() => {
+        const q = (userSearch || "").toLowerCase();
+        if (!q) return allUsers;
+        return allUsers.filter(u =>
+            (u.displayName || "").toLowerCase().includes(q) ||
+            (u.email || "").toLowerCase().includes(q)
+        );
+    }, [userSearch, allUsers]);
+
+    // Update fetchUsers function to filter by role
+    const fetchUsers = async () => {
+        const paths = ['Users', 'JenCeo-DataBase/Users', 'AppUsers'];
+        const tmp = [];
+
+        for (const p of paths) {
+            try {
+                const snap = await firebaseDB.child(p).once('value');
+                if (!snap.exists()) continue;
+                const obj = snap.val() || {};
+                Object.entries(obj).forEach(([uid, val]) => {
+                    // Only include admin, manager, superadmin roles
+                    const userRole = val.role?.toLowerCase() || '';
+                    if (['admin', 'manager', 'superadmin', 'super_admin'].includes(userRole)) {
+                        tmp.push({
+                            uid,
+                            displayName: val.displayName || val.name || val.email || uid,
+                            email: val.email || '',
+                            role: val.role || 'user'
+                        });
+                    }
+                });
+            } catch (error) {
+                console.warn(`Error loading users from ${p}:`, error);
+            }
+        }
+
+        // dedupe by uid
+        const uniq = [];
+        const seen = new Set();
+        tmp.forEach(u => {
+            if (!seen.has(u.uid)) {
+                seen.add(u.uid);
+                uniq.push(u);
+            }
+        });
+        setAllUsers(uniq);
+    };
+
+    {
+        filteredUsers.map(u => (
+            <div
+                key={u.uid}
+                className={`p-2 rounded ${assignTo === u.uid ? 'bg-primary' : 'hover-bg-gray-700'}`}
+                onClick={() => setAssignTo(u.uid)}
+                style={{ cursor: 'pointer' }}
+            >
+                <div className="fw-bold text-white">{u.displayName}</div>
+                <div className="text-info small">Role: {u.role || 'user'}</div>
+                <div className="text-muted small">{u.email}</div>
+            </div>
+        ))
+    }
+
+    useEffect(() => { fetchUsers(); }, []);
+
+
     // Fetch employees and clients
     useEffect(() => {
         fetchEmployees();
         fetchClients();
     }, []);
 
-    // Load timesheet when employee or period changes
+    // Add this state for tracking Firebase listeners
+    const [listeners, setListeners] = useState([]);
+
+
+    // Fix the useEffect that loads timesheet
     useEffect(() => {
         if (selectedEmployee && (selectedMonth || (useDateRange && startDate && endDate))) {
-            loadTimesheet();
+            // Only load existing timesheet, don't create new one
+            loadTimesheet(false);
             loadAdvances();
             loadPreviousTimesheets();
         }
+
+        // Cleanup function
+        return () => {
+            listeners.forEach(listener => {
+                if (listener && typeof listener === 'function') {
+                    listener();
+                }
+            });
+            setListeners([]);
+        };
     }, [selectedEmployee, selectedMonth, startDate, endDate, useDateRange]);
 
     // Auto-recalculate summary when entries or advances change
@@ -171,6 +459,50 @@ const DisplayTimeSheet = () => {
             calculateSummary();
         }
     }, [dailyEntries, advances]);
+
+    // Update the useEffect that sets current user
+    useEffect(() => {
+        const current = new Date().toISOString().slice(0, 7);
+        setSelectedMonth(current);
+
+        // Set default date range (current month)
+        const today = new Date();
+        const firstDay = new Date(today.getFullYear(), today.getMonth(), 1);
+        const lastDay = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+
+        setStartDate(firstDay.toISOString().split('T')[0]);
+        setEndDate(lastDay.toISOString().split('T')[0]);
+
+        // Initialize Firebase Auth
+        const auth = getAuth();
+        const unsubscribe = onAuthStateChanged(auth, (user) => {
+            if (user) {
+                const userData = {
+                    uid: user.uid,
+                    displayName: user.displayName || user.email, // Ensure displayName is set
+                    email: user.email,
+                    photoURL: user.photoURL
+                };
+                setCurrentUser(userData);
+                // Store in localStorage for backup
+                localStorage.setItem('currentUser', JSON.stringify(userData));
+            } else {
+                // Use auth context if available
+                if (authContext && authContext.currentUser) {
+                    setCurrentUser(authContext.currentUser);
+                } else {
+                    console.log('No user logged in');
+                    // Fallback to localStorage
+                    const storedUser = localStorage.getItem('currentUser');
+                    if (storedUser) {
+                        setCurrentUser(JSON.parse(storedUser));
+                    }
+                }
+            }
+        });
+
+        return () => unsubscribe();
+    }, [authContext]);
 
     const fetchEmployees = async () => {
         const snapshot = await firebaseDB.child("EmployeeBioData").once('value');
@@ -184,6 +516,163 @@ const DisplayTimeSheet = () => {
         }
     };
 
+    // PATCH: timesheet path helpers — single source of truth
+    const empTsNode = (empId, tsId = '') =>
+        `EmployeeBioData/${empId}/timesheets${tsId ? `/${tsId}` : ''}`;
+
+    const empTsEntriesNode = (empId, tsId) =>
+        `${empTsNode(empId, tsId)}/dailyEntries`;
+
+
+    const nameForUid = (uid) => {
+        if (!uid) return 'N/A';
+
+        // Check if it's current user first
+        if (uid === currentUser?.uid) {
+            return currentUser?.displayName || currentUser?.email || 'Current User';
+        }
+
+        // Check allUsers array
+        const user = allUsers.find(u => u.uid === uid);
+        if (user) {
+            return user.displayName || user.email || uid;
+        }
+
+        // Try to get from auth context if available
+        if (authContext && authContext.user && authContext.user.uid === uid) {
+            return authContext.user.displayName || authContext.user.email || 'Auth User';
+        }
+
+        return uid; // fallback to UID if no name found
+    };
+    const handleAutoFill = async (tpl) => {
+        const emp = employees.find(e => e.id === selectedEmployee);
+        if (!emp) { alert('Select employee first.'); return; }
+
+        // Build timesheetId from employee + tpl period
+        const periodKey = makePeriodKey(tpl);
+
+        
+ // 🔍 Check existing timesheet for that period; block if submitted/approved
+ const dup = await checkDuplicateTimesheet(selectedEmployee, periodKey);
+ if (dup.exists && dup.timesheet?.status && dup.timesheet.status !== 'draft') {
+   showModal(
+     'Timesheet Exists',
+     `A timesheet for ${periodKey} already exists with status: ${dup.timesheet.status}.`,
+     'warning',
+     dup.timesheet?.id
+       ? () => openPreviousTimesheet(dup.timesheet.id)
+       : null
+   );
+   return;
+ }
+        const timesheetId = await buildTimesheetId(emp, periodKey);
+
+        // Create timesheet header in UI state (not in DB yet)
+        const newTimesheet = {
+            timesheetId,
+            periodKey,
+            employeeId: selectedEmployee,
+            employeeName: `${emp?.firstName || ''} ${emp?.lastName || ''}`.trim(),
+            status: 'draft',
+            period: /^\d{4}-\d{2}$/.test(periodKey) ? periodKey : periodKey.replace('_to_', ' to '),
+            startDate: periodKey.includes('_to_') ? periodKey.split('_to_')[0] : `${periodKey}-01`,
+            endDate: periodKey.includes('_to_') ? periodKey.split('_to_')[1] : `${periodKey}-31`,
+            createdBy: currentUser?.uid || 'admin',
+            createdByName: currentUser?.displayName || 'Admin',
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString()
+        };
+
+        setTimesheet(newTimesheet);
+        setCurrentTimesheetId(timesheetId);
+
+        // Generate entries in UI state (not in DB yet)
+        const [s, e] = periodKey.includes('_to_') ? periodKey.split('_to_') : [`${periodKey}-01`, `${periodKey}-31`];
+        const start = new Date(s);
+        const end = new Date(e);
+        const rate = (Number(emp?.basicSalary) || 0) / 30;
+
+        const newEntries = [];
+        for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+            const dateStr = d.toISOString().slice(0, 10);
+
+            const status = (tpl.status || 'present').toLowerCase();
+            const isHalf = false;
+            const base = status === 'present' ? (isHalf ? rate / 2 : rate) : 0;
+            // In handleAutoFill function, replace the salary calculation part:
+            const dailySalary = salaryForEntry(emp, {
+                status: tpl.status || 'present',
+                isHalfDay: false,
+                isPublicHoliday: status === 'holiday',
+                isEmergency: false,
+                manualDailyEnabled: tpl.manualDailyEnabled,
+                manualDailyAmount: tpl.manualDailyAmount,
+                editedBasicSalary: tpl.editedBasicSalary
+            });
+
+            const entry = {
+                date: dateStr,
+                status,
+                isHalfDay: isHalf,
+                isPublicHoliday: status === 'holiday',
+                isEmergency: false,
+                jobRole: tpl.jobRole === 'Others' ? (tpl.jobRoleCustom || '') : (tpl.jobRole || emp?.primarySkill || ''),
+                clientId: tpl.clientId || 'DEFAULT',
+                clientName: tpl.clientName || 'Default Client',
+                periodKey,
+                timesheetId,
+                employeeId: selectedEmployee,
+                employeeName: `${emp?.firstName || ''} ${emp?.lastName || ''}`.trim(),
+                basicSalary: Number(emp?.basicSalary) || 0,
+                dailySalary: Math.round(dailySalary),
+                employeeId_date: `${selectedEmployee}_${dateStr}`,
+                createdBy: currentUser?.uid || 'admin',
+                createdByName: currentUser?.displayName || 'Admin',
+                createdAt: new Date().toISOString(),
+                updatedBy: currentUser?.uid || 'admin',
+                updatedByName: currentUser?.displayName || 'Admin',
+                updatedAt: new Date().toISOString()
+            };
+
+            newEntries.push(entry);
+        }
+
+        setDailyEntries(newEntries);
+        setShowEntryModal(false);
+        showModal('Success', `Auto-fill completed for period ${periodKey}. Click "Submit Timesheet" to save to database.`, 'success');
+    };
+
+
+    // Update the edit entry handler
+    const handleEditEntry = (entry) => {
+        if (!checkEditPermission(timesheet?.status)) {
+            return;
+        }
+        setCurrentEntry(entry);
+        setIsEditing(true);
+        setEntryModalMode('single'); // Ensure it's in single mode for editing
+        setShowEntryModal(true);
+    };
+
+    // Update the add new entry handler
+    const handleAddEntry = () => {
+        if (!selectedEmployee) {
+            alert('Please select an employee first.');
+            return;
+        }
+
+        // Ensure we have a timesheet before adding entries
+        if (!timesheet || !currentTimesheetId) {
+            alert('Please wait while we set up the timesheet...');
+            return;
+        }
+
+        setCurrentEntry(null);
+        setIsEditing(false);
+        setEntryModalMode('single');
+        setShowEntryModal(true);
+    };
     // Keep your fetchClients, but guarantee name/clientId fields exist:
     const fetchClients = async () => {
         const paths = ['Clients', 'ClientData', 'JenCeo-DataBase/ClientData', 'JenCeo-DataBase/Clients'];
@@ -210,62 +699,410 @@ const DisplayTimeSheet = () => {
         setClients(unique);
     };
 
-
-
     const getTimesheetId = () => {
-        if (useDateRange) {
-            return `${selectedEmployee}_${startDate}_to_${endDate}`;
-        }
+        if (useDateRange) return `${selectedEmployee}_${startDate}_to_${endDate}`;
         return `${selectedEmployee}_${selectedMonth}`;
     };
 
-    const loadTimesheet = async () => {
-        const id = getTimesheetId();
-        const snap = await firebaseDB.child(`Timesheets/${id}`).once('value');
+    const [isCreatingTimesheet, setIsCreatingTimesheet] = useState(false);
 
-        if (snap.exists()) {
-            const data = snap.val();
 
-            // backfill name if missing
-            if (!data.employeeName) {
-                const emp = employees.find(e => e.id === data.employeeId);
-                data.employeeName = `${emp?.firstName || ''} ${emp?.lastName || ''}`.trim() || 'Employee';
-                await firebaseDB.child(`Timesheets/${id}`).update({ employeeName: data.employeeName });
+    // Update the loadTimesheet function to properly set timesheet state
+    const loadTimesheet = async (createIfMissing = false) => {
+        if (!selectedEmployee) {
+            setTimesheet(null);
+            setCurrentTimesheetId('');
+            setDailyEntries([]);
+            return;
+        }
+
+        setIsCreatingTimesheet(true);
+
+        try {
+            const periodKey = getCurrentPeriodKey();
+            const employee = employees.find(emp => emp.id === selectedEmployee);
+
+            if (!employee) {
+                setTimesheet(null);
+                setCurrentTimesheetId('');
+                setDailyEntries([]);
+                return;
             }
 
-            setTimesheet(data);
-            // submitted status handling (kept)
-            // …
-            loadDailyEntries(id);
-        } else {
-            createNewTimesheet(id);
-            setShowSubmittedError(false);
+            // 1) Check if timesheet exists for CURRENT period only
+            const allTsSnap = await firebaseDB.child(`EmployeeBioData/${selectedEmployee}/timesheets`).get();
+            let foundHeader = null;
+            let foundTsId = null;
+
+            if (allTsSnap.exists()) {
+                const all = allTsSnap.val() || {};
+                for (const [tsId, header] of Object.entries(all)) {
+                    if (header?.periodKey === periodKey) {
+                        foundHeader = { ...header, id: tsId, timesheetId: tsId };
+                        foundTsId = tsId;
+                        break;
+                    }
+                }
+            }
+
+
+
+            if (foundHeader) {
+                // Load existing timesheet ONLY if it matches current period
+                setTimesheet(foundHeader);
+                setCurrentTimesheetId(foundTsId);
+
+                const entriesRef = firebaseDB.child(`${empTsById(selectedEmployee, foundTsId)}/dailyEntries`);
+                const entriesSnap = await entriesRef.get();
+
+                if (entriesSnap.exists()) {
+                    const obj = entriesSnap.val() || {};
+                    const rows = Object.entries(obj)
+                        .map(([k, v]) => ({
+                            ...v,
+                            date: v?.date || k,
+                            _rowKey: v?.employeeId_date || `${selectedEmployee}_${k}`,
+                        }))
+                        .sort((a, b) => new Date(a.date) - new Date(b.date));
+                    setDailyEntries(rows);
+                } else {
+                    setDailyEntries([]);
+                }
+            } else if (createIfMissing) {
+                // Create new timesheet - ensure empty entries
+                const newTimesheetId = await buildTimesheetId(employee, periodKey);
+
+                const newTimesheet = {
+                    timesheetId: newTimesheetId,
+                    periodKey: periodKey,
+                    employeeId: selectedEmployee,
+                    employeeName: `${employee?.firstName || ''} ${employee?.lastName || ''}`.trim(),
+                    status: 'draft',
+                    period: useDateRange ? `${startDate} to ${endDate}` : selectedMonth,
+                    startDate: useDateRange ? startDate : `${selectedMonth}-01`,
+                    endDate: useDateRange ? endDate : `${selectedMonth}-31`,
+                    useDateRange: useDateRange,
+                    totalDays: 0,
+                    workingDays: 0,
+                    leaves: 0,
+                    holidays: 0,
+                    emergencies: 0,
+                    absents: 0,
+                    totalSalary: 0,
+                    advances: 0,
+                    netPayable: 0,
+                    createdBy: currentUser?.uid || 'admin',
+                    createdByName: currentUser?.displayName || currentUser?.email || 'Admin',
+                    createdAt: new Date().toISOString(),
+                    updatedAt: new Date().toISOString()
+                };
+
+                setTimesheet(newTimesheet);
+                setCurrentTimesheetId(newTimesheetId);
+                setDailyEntries([]);
+            } else {
+                // No timesheet found and not creating new one
+                setTimesheet(null);
+                setCurrentTimesheetId('');
+                setDailyEntries([]);
+            }
+
+        } catch (error) {
+            console.error('Error loading timesheet:', error);
+            showModal('Error', 'Error loading timesheet', 'error');
+        } finally {
+            setIsCreatingTimesheet(false);
+        }
+    };
+    // Alternative method to load timesheets from different paths
+    const loadAlternativeTimesheets = async () => {
+        if (!selectedEmployee) return;
+
+        setLoadingPrevious(true);
+        try {
+            // Try multiple paths to find timesheets
+            const paths = [
+                `EmployeeBioData/${selectedEmployee}/timesheets`,
+                'Timesheets' // Fallback to root Timesheets collection
+            ];
+
+            let allTimesheets = [];
+
+            for (const path of paths) {
+                try {
+                    const snap = await firebaseDB.child(path).get();
+                    if (snap.exists()) {
+                        const data = snap.val() || {};
+
+                        // Handle different data structures
+                        const timesheetsFromPath = Object.entries(data)
+                            .map(([id, tsData]) => {
+                                // If this is the root Timesheets collection, filter by employeeId
+                                if (path === 'Timesheets' && tsData.employeeId !== selectedEmployee) {
+                                    return null;
+                                }
+
+                                return {
+                                    id,
+                                    timesheetId: id,
+                                    ...tsData,
+                                    employeeId: selectedEmployee,
+                                    employeeName: tsData.employeeName || 'Unknown Employee'
+                                };
+                            })
+                            .filter(ts => ts !== null);
+
+                        allTimesheets = [...allTimesheets, ...timesheetsFromPath];
+                    }
+                } catch (error) {
+                    console.warn(`Error loading from ${path}:`, error);
+                }
+            }
+
+            // Remove duplicates and sort
+            const uniqueTimesheets = allTimesheets.filter((ts, index, self) =>
+                index === self.findIndex(t => t.id === ts.id)
+            ).sort((a, b) => {
+                const dateA = new Date(a.updatedAt || a.createdAt || 0);
+                const dateB = new Date(b.updatedAt || b.createdAt || 0);
+                return dateB - dateA;
+            }).slice(0, 12);
+
+            setPreviousTimesheets(uniqueTimesheets);
+
+            if (uniqueTimesheets.length === 0) {
+                console.log('No timesheets found in any location for employee:', selectedEmployee);
+            }
+        } catch (err) {
+            console.error('Error in alternative timesheet loading:', err);
+        } finally {
+            setLoadingPrevious(false);
         }
     };
 
 
-    const loadPreviousTimesheets = async () => {
-        if (!selectedEmployee) return;
 
+    // Add this helper function
+    const calculateTotalDaysInPeriod = () => {
         try {
-            const snap = await firebaseDB.child('Timesheets')
-                .orderByChild('employeeId')
-                .equalTo(selectedEmployee)
-                .once('value');
+            const start = new Date(useDateRange ? startDate : `${selectedMonth}-01`);
+            const end = new Date(useDateRange ? endDate : `${selectedMonth}-31`);
 
-            if (!snap.exists()) { setPreviousTimesheets([]); return; }
-
-            const list = Object.entries(snap.val()).map(([id, data]) => ({ id, ...data }));
-            const previous = list
-                .filter(ts => ts.id !== getTimesheetId())
-                .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
-                .slice(0, 6);
-
-            setPreviousTimesheets(previous);
-        } catch (err) {
-            console.error('Error loading previous timesheets:', err);
-            setPreviousTimesheets([]);
+            let totalDays = 0;
+            for (let date = new Date(start); date <= end; date.setDate(date.getDate() + 1)) {
+                totalDays++;
+            }
+            return totalDays;
+        } catch (error) {
+            console.error('Error calculating total days:', error);
+            return 0;
         }
+    };
+
+    // PATCH: jump to a selected previous timesheet and hydrate the live view
+    // Update the openPreviousTimesheet function
+    const openPreviousTimesheet = async (tsId) => {
+        if (!selectedEmployee || !tsId) return;
+
+        const tsSnap = await firebaseDB.child(empTsNode(selectedEmployee, tsId)).once('value');
+        if (!tsSnap.exists()) return;
+
+        const ts = tsSnap.val();
+        // Ensure all required fields are set
+        const enhancedTs = {
+            id: tsId,
+            timesheetId: tsId,
+            ...ts,
+            employeeId: selectedEmployee,
+            employeeName: ts.employeeName || employees.find(e => e.id === selectedEmployee)?.displayName || 'Employee',
+            submittedByName: ts.submittedByName || ts.submittedBy || 'Not Submitted',
+            assignedToName: ts.assignedToName || ts.assignedTo || 'Not Assigned',
+            assignedByName: ts.assignedByName || ts.assignedBy || 'Not Assigned'
+        };
+
+        setTimesheet(enhancedTs);
+        setCurrentTimesheetId(tsId);
+
+        // Load daily entries
+        const entriesSnap = await firebaseDB.child(`${empTsById(selectedEmployee, tsId)}/dailyEntries`).get();
+        if (entriesSnap.exists()) {
+            const obj = entriesSnap.val() || {};
+            const entries = Object.entries(obj)
+                .map(([k, v]) => ({
+                    id: k,
+                    ...v,
+                    date: v?.date || k,
+                    _rowKey: v?.employeeId_date || `${selectedEmployee}_${k}`
+                }))
+                .sort((a, b) => new Date(a.date) - new Date(b.date));
+            setDailyEntries(entries);
+        } else {
+            setDailyEntries([]);
+        }
+    };
+
+
+
+    const [loadingPrevious, setLoadingPrevious] = useState(false);
+
+    const [previousTimesheetsLoading, setPreviousTimesheetsLoading] = useState(false);
+
+    // Replace the loadPreviousTimesheets function:
+    const loadPreviousTimesheets = async () => {
+        if (!selectedEmployee || previousTimesheetsLoading) {
+            return;
+        }
+
+        setPreviousTimesheetsLoading(true);
+        try {
+            const snap = await firebaseDB.child(empTsNode(selectedEmployee)).once('value');
+
+            if (!snap.exists()) {
+                setPreviousTimesheets([]);
+                return;
+            }
+
+            const obj = snap.val();
+            const list = Object.keys(obj)
+                .map(id => {
+                    const tsData = obj[id] || {};
+
+                    // Only include timesheets for the selected employee
+                    if (tsData.employeeId !== selectedEmployee) {
+                        return null;
+                    }
+
+                    const submittedByName = tsData.submittedByName
+                        || tsData.submittedBy
+                        || (tsData.submittedBy ? nameForUid(tsData.submittedBy) : 'Not Submitted');
+
+                    const assignedToName = tsData.assignedToName
+                        || tsData.assignedTo
+                        || (tsData.assignedTo ? nameForUid(tsData.assignedTo) : 'Not Assigned');
+
+                    const assignedByName = tsData.assignedByName
+                        || tsData.assignedBy
+                        || (tsData.assignedBy ? nameForUid(tsData.assignedBy) : 'Not Assigned');
+
+                    return {
+                        id,
+                        timesheetId: id,
+                        ...tsData,
+                        submittedByName: submittedByName,
+                        submittedAt: tsData.submittedAt || tsData.updatedAt || tsData.createdAt,
+                        submittedBy: tsData.submittedBy,
+                        assignedToName: assignedToName,
+                        assignedTo: tsData.assignedTo,
+                        assignedByName: assignedByName,
+                        assignedBy: tsData.assignedBy,
+                        assignedAt: tsData.assignedAt,
+                        employeeId: selectedEmployee,
+                        employeeName: tsData.employeeName || employees.find(e => e.id === selectedEmployee)?.displayName || 'Employee'
+                    };
+                })
+                .filter(ts => ts !== null && ts.employeeId === selectedEmployee) // Double filter for safety
+                .sort((a, b) => (b.updatedAt || b.createdAt || '').localeCompare(a.updatedAt || a.createdAt || ''));
+
+            setPreviousTimesheets(list);
+        } catch (error) {
+            console.error('Error loading previous timesheets:', error);
+            setPreviousTimesheets([]);
+        } finally {
+            setPreviousTimesheetsLoading(false);
+        }
+    };
+
+    // Helper function to get user name from UID
+    const getUserName = (uid) => {
+        if (!uid) return 'N/A';
+        const user = allUsers.find(u => u.uid === uid);
+        return user?.displayName || user?.email || 'Unknown User';
+    };
+    // ---- Salary helpers (final) ----
+    const dailyRateFor = (emp) => {
+        const basic = Number(emp?.basicSalary) || 0;
+        return basic / 30;
+    };
+
+    // Normalizes emergency amount coming from various field names / string inputs
+    const getEmergencyAmount = (src) => {
+        const v =
+            src?.emergencyAmount ??
+            src?.emergencySalary ??
+            src?.emergencyPay ??
+            0;
+        const n = Number(v);
+        return Number.isFinite(n) ? n : 0;
+    };
+
+
+    // Enhanced salary calculation with manual amounts and emergency duty — FINAL
+    const salaryForEntry = (emp, entryLike) => {
+        // 1) manual/override wins
+        if (entryLike?.manualDailyEnabled && entryLike?.manualDailyAmount) {
+            const manualAmount = Number(entryLike.manualDailyAmount) || 0;
+            return manualAmount;
+        }
+
+        // 2) compute the daily rate from edited basic or employee basic
+        const basicSalary = Number(entryLike?.editedBasicSalary) || Number(emp?.basicSalary) || 0;
+        const rate = basicSalary / 30;
+
+        const status = String(entryLike?.status || 'present').toLowerCase();
+        const isHalf = !!entryLike?.isHalfDay;
+        const isEmergency = !!entryLike?.isEmergency;
+
+        // normalize emergency add-on from any key name
+        const emergencyAdd = getEmergencyAmount(entryLike);
+
+        // Emergency Duty always uses full/half base + emergency add-on
+        if (isEmergency) {
+            const base = isHalf ? rate / 2 : rate;
+            return base + emergencyAdd;
+        }
+
+        // Only 'present' gets base salary (with half-day logic); leave/absent/holiday = 0
+        if (status !== 'present') return 0;
+
+        return isHalf ? rate / 2 : rate;
+    };
+
+    // Update calculateSummary to properly count half days
+    const calculateSummary = async (
+        entries = dailyEntries,
+        advancesData = advances
+    ) => {
+        if (!selectedEmployee || !currentTimesheetId) return;
+
+        const fullDays = entries.filter(e => e.status === 'present' && !e.isPublicHoliday && !e.isHalfDay).length;
+        const halfDays = entries.filter(e => e.status === 'present' && !e.isPublicHoliday && e.isHalfDay).length;
+        const workingDays = fullDays + (halfDays * 0.5);
+        const holidays = entries.filter(e => e.isPublicHoliday || e.status === 'holiday').length;
+        const emergencies = entries.filter(e => e.isEmergency).length;
+        const leaves = entries.filter(e => e.status === 'leave').length;
+        const absents = entries.filter(e => e.status === 'absent').length;
+        const totalSalary = entries.reduce((s, e) => s + (parseFloat(e.dailySalary) || 0), 0);
+        const totalAdv = (advancesData || []).reduce((s, a) => s + (parseFloat(a.amount) || 0), 0);
+
+        const patch = {
+            workingDays,
+            fullDays,
+            halfDays,
+            totalDays: entries.length,
+            leaves,
+            holidays,
+            emergencies,
+            absents,
+            totalSalary,
+            advances: totalAdv,
+            netPayable: Math.round(totalSalary - totalAdv),
+            updatedBy: currentUser?.uid || 'admin',
+            updatedByName: currentUser?.displayName || 'Admin',
+            updatedAt: new Date().toISOString(),
+        };
+
+        setTimesheet(prev => ({ ...(prev || { timesheetId: currentTimesheetId }), ...patch, timesheetId: currentTimesheetId }));
+        await firebaseDB.child(empTsById(selectedEmployee, currentTimesheetId)).update(patch);
     };
 
     const createNewTimesheet = (timesheetId) => {
@@ -301,29 +1138,15 @@ const DisplayTimeSheet = () => {
         setTimesheet(newTimesheet);
         setDailyEntries([]);
 
-        // NEW: also persist immediately so it has an id & name in DB
-        firebaseDB.child(`Timesheets/${timesheetId}`).set(newTimesheet);
     };
+    const loadDailyEntries = async (periodKeyParam) => {
+        const periodKey = periodKeyParam || getCurrentPeriodKey();
+        const ref = firebaseDB.child(entryNode(selectedEmployee, periodKey, '')); // will not exist
+        const snap = await firebaseDB.child(tsNode(selectedEmployee, periodKey) + '/dailyEntries').get();
 
-
-    const loadDailyEntries = async (tsId) => {
-        const timesheetId = tsId || (timesheet?.id ?? getTimesheetId());
-        if (!timesheetId) {
-            // nothing to load yet
-            setDailyEntries([]);
-            return;
-        }
-
-
-
-        const snapshot = await firebaseDB.child(`TimesheetEntries`)
-            .orderByChild('timesheetId')
-            .equalTo(timesheetId)
-            .once('value');
-
-        if (snapshot.exists()) {
-            const entries = Object.entries(snapshot.val()).map(([id, data]) => ({ id, ...data }));
-            entries.sort((a, b) => new Date(a.date) - new Date(b.date));
+        if (snap.exists()) {
+            const obj = snap.val() || {};
+            const entries = Object.values(obj).sort((a, b) => new Date(a.date) - new Date(b.date));
             setDailyEntries(entries);
             setTimeout(() => calculateSummary(entries), 0);
         } else {
@@ -331,7 +1154,6 @@ const DisplayTimeSheet = () => {
             calculateSummary([]);
         }
     };
-
 
     const loadAdvances = async () => {
         const snapshot = await firebaseDB.child(`Advances`)
@@ -373,6 +1195,73 @@ const DisplayTimeSheet = () => {
             console.error('Error checking duplicates:', error);
             return false;
         }
+    };
+
+    const checkDuplicateTimesheet = async (empId, periodKey) => {
+        try {
+            const allTsSnap = await firebaseDB.child(`EmployeeBioData/${empId}/timesheets`).get();
+            if (allTsSnap.exists()) {
+                const all = allTsSnap.val() || {};
+                for (const [tsId, header] of Object.entries(all)) {
+                    if (header?.periodKey === periodKey && header?.status !== 'draft') {
+                        return { exists: true, timesheet: { ...header, id: tsId } };
+                    }
+                }
+            }
+            return { exists: false };
+        } catch (error) {
+            console.error('Error checking duplicate timesheet:', error);
+            return { exists: false };
+        }
+    };
+
+    // Update handleAddTimesheet function
+    const handleAddTimesheet = async () => {
+        if (!selectedEmployee) {
+            showModal('Error', 'Please select an employee first.', 'error');
+            return;
+        }
+
+  setEntryModalMode('autofill');
+ setShowEntryModal(true);
+    };
+
+    // Add helper function to check existing entries
+    const checkExistingEntries = async (empId, periodKey) => {
+        try {
+            const allEntriesSnap = await firebaseDB.child(`EmployeeBioData/${empId}/timesheets`).get();
+            if (allEntriesSnap.exists()) {
+                const all = allEntriesSnap.val() || {};
+                for (const [tsId, header] of Object.entries(all)) {
+                    if (header?.periodKey === periodKey) {
+                        const entriesSnap = await firebaseDB.child(`${empTsById(empId, tsId)}/dailyEntries`).get();
+                        if (entriesSnap.exists() && Object.keys(entriesSnap.val()).length > 0) {
+                            return { exists: true, timesheet: header };
+                        }
+                    }
+                }
+            }
+            return { exists: false };
+        } catch (error) {
+            console.error('Error checking existing entries:', error);
+            return { exists: false };
+        }
+    };
+
+    // Update auto-fill to check timesheet status
+    const openAutoFillModal = () => {
+        if (timesheet?.status === 'submitted' || timesheet?.status === 'approved') {
+            showModal('Auto-fill Restricted',
+                `Cannot auto-fill a ${timesheet.status} timesheet. Only draft timesheets can be modified.`,
+                'warning'
+            );
+            return;
+        }
+
+        setEntryModalMode('autofill');
+        setIsEditing(false);
+        setCurrentEntry(null);
+        setShowEntryModal(true);
     };
 
     const handlePreviousTimesheetClick = (previousTimesheet) => {
@@ -455,296 +1344,541 @@ const DisplayTimeSheet = () => {
 
     const calculateEntrySalary = (employee, entryData) => {
         const rate = calculateDailyRate(employee);
-        const half = rate * 0.5;
         const status = entryData?.status || 'present';
-        const isHalf = !!entryData?.isHalfDay;
-        const isHoliday = !!entryData?.isPublicHoliday || status === 'holiday';
 
-        if (status === 'present' || status === 'leave' || isHoliday) {
-            return isHalf ? half : rate;  // <-- half day fix
+        // Only "present" status gets salary
+        if (status === 'present') {
+            if (entryData?.isHalfDay) {
+                return rate / 2; // Half day = daily salary / 2
+            }
+            return rate;
         }
+
+        // Leave, absent, holiday = 0 salary
         return 0;
     };
 
+    // Add save timesheet function
+    const saveTimesheet = async () => {
+        if (!selectedEmployee || !currentTimesheetId) {
+            showModal('Error', 'Please select an employee and ensure timesheet is loaded.', 'error');
+            return;
+        }
 
-    const saveEntry = async (entry) => {
+        setIsSaving(true);
         try {
-            const timestamp = new Date().toISOString();
-            const userData = {
+            const periodKey = getCurrentPeriodKey();
+            const periodStr = useDateRange ? `${startDate} to ${endDate}` : selectedMonth;
+
+            // Ensure timesheet header exists in DB
+            await ensureTimesheetHeader(selectedEmployee, currentTimesheetId, {
+                ...timesheet,
+                period: periodStr,
+                periodKey: periodKey,
+                status: 'draft',
+                updatedAt: new Date().toISOString(),
                 updatedBy: currentUser?.uid || 'admin',
-                updatedByName: currentUser?.displayName || 'Admin',
-                updatedAt: timestamp
+                updatedByName: currentUser?.displayName || 'Admin'
+            });
+
+            // Save all entries to DB
+            for (const entry of dailyEntries) {
+                await saveEntry(entry);
+            }
+
+            await calculateSummary();
+            showModal('Success', 'Timesheet Saved Successfully', 'success');
+
+            // Refresh the data
+            await loadPreviousTimesheets();
+
+            setHasUnsavedChanges(false);
+            showModal('Success', 'Timesheet Saved Successfully', 'success');
+
+        } catch (error) {
+            console.error('Error saving timesheet:', error);
+            showModal('Error', 'Error saving timesheet. Please try again.', 'error');
+        } finally {
+            setIsSaving(false);
+        }
+    };
+    // Save/Upsert one daily entry under the employee’s timesheet
+    const saveEntry = async (entry) => {
+        if (!selectedEmployee || !currentTimesheetId) return;
+        if (!entry?.date) return;
+
+        const empId = selectedEmployee;
+        const tsId = currentTimesheetId;
+        const now = new Date().toISOString();
+
+        // Derive period from the current search selection
+        const periodKey = getCurrentPeriodKey();
+        const periodStr = useDateRange ? `${startDate} to ${endDate}` : selectedMonth;
+
+        await ensureTimesheetHeader(empId, tsId, {
+            period: entry.period || periodStr || '',
+            periodKey: entry.periodKey || periodKey || tsId,
+            status: timesheet?.status || 'draft',
+        });
+
+        // Normalize entry data
+        // Normalize entry data before computing/saving
+        const employee = employees.find(e => e.id === empId);
+
+        const normalized = {
+            status: (entry.status || 'present').toLowerCase(),
+            isHalfDay: !!entry.isHalfDay,
+            isPublicHoliday: !!entry.isPublicHoliday,
+            isEmergency: !!entry.isEmergency,
+            // accept any incoming key and persist as emergencyAmount
+            emergencyAmount: getEmergencyAmount(entry),
+            manualDailyEnabled: !!entry.manualDailyEnabled,
+            manualDailyAmount: entry.manualDailyAmount ?? null,
+            editedBasicSalary: entry.editedBasicSalary ?? null,
+        };
+
+        // Use the enhanced salary calculation (with normalized emergencyAmount)
+        const toPay = salaryForEntry(employee, normalized);
+
+
+        // Write a single node per date under the timesheet
+        await firebaseDB.child(entryNodeByDate(empId, tsId, entry.date)).set({
+            timesheetId: tsId,
+            employeeId: empId,
+            date: entry.date,
+            clientId: entry.clientId || 'DEFAULT',
+            clientName: entry.clientName || 'Client',
+            jobRole: entry.jobRole || employee?.primarySkill || 'Worker',
+            notes: entry.notes || '',
+            ...normalized,
+            dailySalary: toPay,
+
+            // audit
+            updatedBy: currentUser?.uid || 'admin',
+            updatedByName: currentUser?.displayName || 'Admin',
+            updatedAt: now,
+
+            // create audit if not present already (first set)
+            createdBy: entry.createdBy || currentUser?.uid || 'admin',
+            createdByName: entry.createdByName || currentUser?.displayName || 'Admin',
+            createdAt: entry.createdAt || now,
+        });
+
+        return toPay; // Return the calculated salary
+    };
+    // PATCH: ensure the target timesheet exists and has core metadata
+    const ensureTimesheet = async (empId, tsId, periodLabel, startDate, endDate) => {
+        const ref = firebaseDB.child(empTsNode(empId, tsId));
+        const snap = await ref.once('value');
+        if (!snap.exists()) {
+            const emp = employees.find(e => e.id === empId);
+            const fullName = `${emp?.firstName || ''} ${emp?.lastName || ''}`.trim() || emp?.displayName || 'Employee';
+
+            const base = {
+                timesheetId: tsId,
+                employeeId: empId,
+                employeeName: fullName,              // fixes “Unknown Employee”
+                period: periodLabel,                 // e.g., "2025-09-01 to 2025-09-30" or "2025-10"
+                startDate,                           // optional, for range mode
+                endDate,                             // optional
+                status: 'draft',
+                workingDays: 0,
+                fullDays: 0,
+                halfDays: 0,
+                absents: 0,
+                holidays: 0,
+                leaves: 0,
+                emergencies: 0,
+                advances: 0,
+                totalDays: 0,
+                totalSalary: 0,
+                netPayable: 0,
+                createdAt: new Date().toISOString(),
+                createdBy: currentUser?.uid,
+                createdByName: currentUser?.displayName || authContext?.user?.name || 'System',
+                updatedAt: new Date().toISOString(),
             };
 
-            if (entry.id) {
-                await firebaseDB.child(`TimesheetEntries/${entry.id}`).update({
-                    ...entry,
-                    ...userData
-                });
-            } else {
-                const newRef = firebaseDB.child('TimesheetEntries').push();
-                const newEntry = {
-                    ...entry,
-                    createdBy: currentUser?.uid || 'admin',
-                    createdByName: currentUser?.displayName || 'Admin',
-                    createdAt: timestamp,
-                    ...userData
-                };
-                await newRef.set(newEntry);
-            }
-        } catch (error) {
-            console.error('Error saving entry:', error);
+            await ref.set(base);
+            setTimesheet({ id: tsId, ...base });
+        } else {
+            const data = snap.val();
+            setTimesheet({ id: tsId, ...data });
         }
     };
 
 
-    const confirmDeleteEntry = (entryId) => {
-        setEntryToDelete(entryId);
+    const confirmDeleteEntry = (entry) => {
+        // pass the whole entry or at least { date }
+        setEntryToDelete(entry);
         setShowDeleteModal(true);
     };
 
+    // single delete
     const deleteEntry = async () => {
-        if (entryToDelete) {
-            try {
-                await firebaseDB.child(`TimesheetEntries/${entryToDelete}`).remove();
-                await loadDailyEntries();
-                setShowDeleteModal(false);
-                setEntryToDelete(null);
-            } catch (error) {
-                console.error('Error deleting entry:', error);
-            }
+        try {
+            if (!entryToDelete?.date || !currentTimesheetId || !selectedEmployee) return;
+
+            // ✅ Optimistic UI update – keep table skeleton visible
+            setDailyEntries(prev => prev.filter(e => e.date !== entryToDelete.date));
+            setShowDeleteModal(false);
+            setEntryToDelete(null);
+
+            await firebaseDB
+                .child(empEntryById(selectedEmployee, currentTimesheetId, entryToDelete.date))
+                .remove();
+
+            // Refresh counts, previous list
+            await calculateSummary();
+            await loadPreviousTimesheets();
+        } catch (e) {
+            console.error(e);
+            showModal('Error', 'Delete failed. Please try again.', 'error');
         }
     };
 
+    // bulk delete
+    // ✅ Delete selected daily entries safely (no table flicker, no ESLint errors)
+    const deleteSelectedEntries = async () => {
+        if (!selectedEntries?.length || !currentTimesheetId || !selectedEmployee) {
+            showModal('Error', 'No entries selected or missing required data.', 'error');
+            return;
+        }
 
+        try {
+            // 1️⃣ Resolve selected entries into a Set of unique dates
+            const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+            const selectedDates = new Set(); // ✅ Declare here!
 
+            for (const key of selectedEntries) {
+                const k = String(key);
+                if (dateRegex.test(k)) {
+                    selectedDates.add(k);
+                } else {
+                    // Try to extract YYYY-MM-DD from end of string like emp_2025-10-31
+                    const tail10 = k.slice(-10);
+                    if (dateRegex.test(tail10)) selectedDates.add(tail10);
+                }
+            }
+
+            if (!selectedDates.size) {
+                showModal('Warning', 'Could not determine valid dates to delete.', 'warning');
+                return;
+            }
+
+            // 2️⃣ Optimistic UI update — keeps table visible
+            setDailyEntries((prev) => prev.filter((e) => !selectedDates.has(e.date)));
+
+            // 3️⃣ Prepare multi-path delete in Firebase
+            const updates = {};
+            for (const d of selectedDates) {
+                updates[
+                    `EmployeeBioData/${selectedEmployee}/timesheets/${currentTimesheetId}/dailyEntries/${d}`
+                ] = null;
+            }
+
+            await firebaseDB.update(updates);
+
+            // 4️⃣ Reset selections and refresh totals
+            setSelectedEntries([]);
+            await calculateSummary();
+            await loadPreviousTimesheets();
+
+            showModal(
+                'Success',
+                `${selectedDates.size} entr${selectedDates.size === 1 ? 'y' : 'ies'} deleted successfully.`,
+                'success'
+            );
+        } catch (err) {
+            console.error('Error deleting selected entries:', err);
+            showModal('Error', 'Failed to delete selected entries. Please try again.', 'error');
+        }
+    };
 
 
 
     const handleSaveEntry = async (entryData) => {
-        // duplicates (unchanged) …
+        try {
+            const emp = employees.find(e => e.id === selectedEmployee);
+            if (!emp) return showModal('Error', 'Select employee first.', 'error');
 
-        const employee = employees.find(emp => emp.id === selectedEmployee);
+            if (!entryData.date && entryModalMode === 'single') {
+                return showModal('Error', 'Date is required for single entry.', 'error');
+            }
 
-        // GUARANTEED TS ID
-        const tsId = timesheet?.id || getTimesheetId();
-        if (!tsId) { alert('Timesheet is not ready yet.'); return; }
+            const periodKey = getCurrentPeriodKey();
+            const tsId = currentTimesheetId || await buildTimesheetId(emp, periodKey);
+            const dateStr = entryData.date;
 
-        // salary (unchanged) …
-        const rate = calculateDailyRate(employee);
-        const half = rate * 0.5;
-        const status = entryData?.status || 'present';
-        const isHalf = !!entryData?.isHalfDay;
-        const isHoliday = !!entryData?.isPublicHoliday || status === 'holiday';
+            // 🚫 Block duplicates in the CURRENT timesheet (run AFTER tsId/dateStr exist)
+            if (!isEditing) {
+                const existsSnap = await firebaseDB
+                    .child(empEntryById(selectedEmployee, tsId, dateStr))
+                    .get();
+                if (existsSnap.exists()) {
+                    showModal('Duplicate Entry', `An entry for ${dateStr} already exists in this timesheet.`, 'warning');
+                    return;
+                }
+            }
 
-        let dailySalary = 0;
-        if (status === 'present' || status === 'leave' || isHoliday) {
-            dailySalary = isHalf ? half : rate;
-        }
+            // start from current list
+            let updatedEntries = [...dailyEntries];
 
-        const normalized = {
-            status: (entryData.status || 'present').toLowerCase(),
-            isHalfDay: !!entryData.isHalfDay,
-            isPublicHoliday: !!entryData.isPublicHoliday,
-            isEmergency: !!entryData.isEmergency,
-        };
-
-        const picked = clients.find(c => c.id === (entryData.clientId || selectedClientId));
-        const clientName = picked?.name || entryData.clientName || 'Client';
-        const clientId = picked?.clientId || entryData.clientId || picked?.id;
-
-        const payload = {
-            ...entryData,
-            ...normalized,
-            timesheetId: tsId,                     // <— never undefined now
-            employeeId: selectedEmployee,
-            clientId,
-            clientName,
-            dailySalary,
-            employeeId_date: `${selectedEmployee}_${entryData.date}`,
-            updatedBy: currentUser?.uid || 'admin',
-            updatedByName: currentUser?.displayName || 'Admin',
-            updatedAt: new Date().toISOString(),
-        };
-
-        if (!payload.id) {
-            payload.createdBy = currentUser?.uid || 'admin';
-            payload.createdByName = currentUser?.displayName || 'Admin';
-            payload.createdAt = new Date().toISOString();
-        }
-
-        await saveEntry(payload);
-        await loadDailyEntries();   // safe call (no undefined equalTo)
-        setShowEntryModal(false);
-        setIsEditing(false);
-        setCurrentEntry(null);
-    };
-
-
-    // Enhanced calculateSummary function with proper working days and leaves calculation - FIXED
-    const calculateSummary = (entries = dailyEntries, advancesData = advances) => {
-        if (!entries.length) {
-            const resetTimesheet = {
-                ...timesheet,
-                totalDays: 0,
-                workingDays: 0,
-                leaves: 0,
-                holidays: 0,
-                emergencies: 0,
-                absents: 0,
-                totalSalary: 0,
-                advances: 0,
-                netPayable: 0,
-                updatedBy: currentUser?.uid || 'admin',
-                updatedByName: currentUser?.displayName || 'Admin',
-                updatedAt: new Date().toISOString()
+            // normalize once
+            const normalizedForCalc = {
+                status: entryData.status || 'present',
+                isHalfDay: !!entryData.isHalfDay,
+                isPublicHoliday: !!entryData.isPublicHoliday,
+                isEmergency: !!entryData.isEmergency,
+                manualDailyEnabled: !!entryData.manualDailyEnabled,
+                manualDailyAmount: entryData.manualDailyAmount ?? null,
+                editedBasicSalary: entryData.editedBasicSalary ?? null,
+                emergencyAmount: getEmergencyAmount(entryData),
             };
-            setTimesheet(resetTimesheet);
-            if (timesheet) firebaseDB.child(`Timesheets/${timesheet.id}`).update(resetTimesheet);
-            return;
+
+            const computedSalary = salaryForEntry(emp, normalizedForCalc);
+
+            const idx = updatedEntries.findIndex(e => e.date === dateStr);
+            if (idx >= 0) {
+                updatedEntries[idx] = {
+                    ...updatedEntries[idx],
+                    ...entryData,
+                    ...normalizedForCalc,
+                    dailySalary: computedSalary,
+                    updatedAt: new Date().toISOString(),
+                    updatedBy: currentUser?.uid,
+                    updatedByName: currentUser?.displayName,
+                };
+            } else {
+                updatedEntries.push({
+                    ...entryData,
+                    ...normalizedForCalc,
+                    date: dateStr,
+                    periodKey,
+                    timesheetId: tsId,
+                    employeeId: selectedEmployee,
+                    employeeName: `${emp?.firstName || ''} ${emp?.lastName || ''}`.trim(),
+                    employeeId_date: `${selectedEmployee}_${dateStr}`,
+                    dailySalary: computedSalary,
+                    createdBy: currentUser?.uid || 'admin',
+                    createdByName: currentUser?.displayName || 'Admin',
+                    createdAt: new Date().toISOString(),
+                    updatedAt: new Date().toISOString(),
+                });
+            }
+
+            updatedEntries.sort((a, b) => new Date(a.date) - new Date(b.date));
+            setDailyEntries(updatedEntries);
+            calculateSummary(updatedEntries, advances);
+
+            // persist exactly this date row
+            const toPersist = updatedEntries.find(e => e.date === dateStr);
+            await saveEntry(toPersist);
+
+            showModal('Success', 'Entry saved successfully!', 'success');
+        } catch (err) {
+            console.error('handleSaveEntry error:', err);
+            showModal('Error', 'Save failed. Please try again.', 'error');
+        } finally {
+            setShowEntryModal(false);
+            setIsEditing(false);
+            setCurrentEntry(null);
+            setEntryModalMode('single');
         }
-
-        const fullWorkingDays = entries.filter(e =>
-            e.status === 'present' && !e.isPublicHoliday && !e.isHalfDay
-        ).length;
-
-        const halfWorkingDays = entries.filter(e =>
-            e.status === 'present' && !e.isPublicHoliday && e.isHalfDay
-        ).length;
-
-        const workingDays = fullWorkingDays + (halfWorkingDays * 0.5); // <- the X + n(.5)
-
-        const holidaysCount = entries.filter(e => e.isPublicHoliday || e.status === 'holiday').length;
-        const emergencies = entries.filter(e => e.isEmergency).length;
-        const leaveDays = entries.filter(e => e.status === 'leave').length;
-        const absentDays = entries.filter(e => e.status === 'absent').length;
-
-
-        const totalSalary = entries.reduce((sum, e) => sum + (parseFloat(e.dailySalary) || 0), 0);
-
-        const periodAdvances = (advancesData || []).filter(a => !a.timesheetId || a.timesheetId === timesheet?.id);
-        const totalAdvances = periodAdvances.reduce((s, a) => s + (parseFloat(a.amount) || 0), 0);
-
-        const updatedTimesheet = {
-            ...timesheet,
-            totalDays: entries.length,
-            workingDays,
-            leaves: leaveDays,
-            holidays: holidaysCount,
-            emergencies,
-            absents: absentDays,
-            totalSalary,
-            advances: totalAdvances,
-            netPayable: Math.round(totalSalary - totalAdvances),
-            updatedBy: currentUser?.uid || 'admin',
-            updatedByName: currentUser?.displayName || 'Admin',
-            updatedAt: new Date().toISOString()
-        };
-
-        setTimesheet(updatedTimesheet);
-        if (timesheet) firebaseDB.child(`Timesheets/${timesheet.id}`).update(updatedTimesheet);
     };
 
-    // Group actions for selected entries
-    const handleSelectEntry = (entryId) => {
+    // Toggle one row
+    // Toggle one row
+    const handleSelectEntry = (entryOrKey) => {
+        const key = typeof entryOrKey === 'string'
+            ? entryOrKey
+            : String(entryOrKey?.id || entryOrKey?.date);  // fallback to the same logic as getRowKey
+
         setSelectedEntries(prev =>
-            prev.includes(entryId)
-                ? prev.filter(id => id !== entryId)
-                : [...prev, entryId]
+            prev.includes(key) ? prev.filter(k => k !== key) : [...prev, key]
         );
     };
 
+
+    // Select / Deselect all visible rows
     const handleSelectAllEntries = () => {
-        if (selectedEntries.length === dailyEntries.length) {
-            setSelectedEntries([]);
-        } else {
-            setSelectedEntries(dailyEntries.map(entry => entry.id));
-        }
+        const allKeys = (dailyEntries || []).map(getRowKey);
+        const allSelected = selectedEntries.length === allKeys.length && allKeys.length > 0;
+        setSelectedEntries(allSelected ? [] : allKeys);
     };
 
-    const deleteSelectedEntries = async () => {
-        if (selectedEntries.length === 0) return;
 
-        try {
-            for (const entryId of selectedEntries) {
-                await firebaseDB.child(`TimesheetEntries/${entryId}`).remove();
-            }
-            await loadDailyEntries();
-            setSelectedEntries([]);
-        } catch (error) {
-            console.error('Error deleting selected entries:', error);
-        }
+    // PATCH: add or update one entry under dailyEntries
+    const saveDailyEntry = async (empId, tsId, entry) => {
+        const id = entry.id || entry.date || firebaseDB.push().key; // stable key
+        await firebaseDB.child(`${empTsEntriesNode(empId, tsId)}/${id}`).set({ id, ...entry });
+
+        // refresh table
+        const es = await firebaseDB.child(empTsEntriesNode(empId, tsId)).once('value');
+        const list = es.exists() ? Object.values(es.val()) : [];
+        list.sort((a, b) => (a.date || '').localeCompare(b.date || ''));
+        setDailyEntries(list);
     };
+
+    // PATCH: delete entry
+    const deleteDailyEntry = async (empId, tsId, entryId) => {
+        await firebaseDB.child(`${empTsEntriesNode(empId, tsId)}/${entryId}`).remove();
+        // refresh table + previous list counts if you display them
+        const es = await firebaseDB.child(empTsEntriesNode(empId, tsId)).once('value');
+        const list = es.exists() ? Object.values(es.val()) : [];
+        list.sort((a, b) => (a.date || '').localeCompare(b.date || ''));
+        setDailyEntries(list);
+        await loadPreviousTimesheets(); // so the summary row reflects totals
+    };
+
+
+
+
+
 
     const submitTimesheet = async () => {
-        // Prevent submission if no entries
         if (dailyEntries.length === 0) {
-            alert('Cannot submit timesheet with no entries. Please add daily entries first.');
+            showModal('Error', 'Cannot submit timesheet with no entries. Please add daily entries first.', 'error');
             return;
         }
-        setShowConfirmModal(true);
+
+        // Check if timesheet needs assignment
+        const needsAssignment = timesheet?.status === 'draft';
+
+        if (needsAssignment) {
+            setShowAssignModal(true);
+        } else {
+            setShowConfirmModal(true);
+        }
     };
 
+    // Update the submit function to include proper user info
     const confirmSubmit = async () => {
-        const updatedTimesheet = {
-            ...timesheet,
-            status: 'submitted',
-            submittedBy: currentUser?.uid || 'admin',
-            submittedByName: currentUser?.displayName || 'Admin',
-            submittedAt: new Date().toISOString(),
-            updatedBy: currentUser?.uid || 'admin',
-            updatedByName: currentUser?.displayName || 'Admin',
-            updatedAt: new Date().toISOString()
-        };
+        // FIXED: Use timesheetId instead of currentTimesheetId for consistency
+        if (!selectedEmployee || !timesheet?.timesheetId) {
+            showModal('Error', 'Timesheet context missing.', 'error');
+            return;
+        }
 
-        await firebaseDB.child(`Timesheets/${timesheet.id}`).update(updatedTimesheet);
-        setTimesheet(updatedTimesheet);
-        setShowConfirmModal(false);
-        setShowAssignModal(true); // Show assign modal after submission
+        try {
+            const headerData = {
+                ...timesheet,
+                status: 'submitted',
+                submittedBy: currentUser?.uid || 'admin',
+                submittedByName: currentUser?.displayName || currentUser?.email || 'System User',
+                submittedAt: new Date().toISOString(),
+                submissionComment: submitComment || '',
+                assignedTo: assignTo || timesheet?.assignedTo,
+                assignedAt: assignTo ? new Date().toISOString() : timesheet?.assignedAt,
+                updatedAt: new Date().toISOString()
+            };
+
+            // FIXED: Use timesheetId in the path
+            await firebaseDB.child(empTsById(selectedEmployee, timesheet.timesheetId)).set(headerData);
+
+            // Clear daily entries and timesheet after submission
+            setDailyEntries([]);
+            setTimesheet(null);
+            setCurrentTimesheetId('');
+
+            setShowConfirmModal(false);
+            setShowAssignModal(false);
+
+            await loadPreviousTimesheets();
+            showModal('Success', 'Timesheet submitted successfully!', 'success');
+
+        } catch (error) {
+            console.error('Error submitting timesheet:', error);
+            showModal('Error', 'Error submitting timesheet. Please try again.', 'error');
+        }
     };
-
     const assignTimesheet = async () => {
-        if (!assignTo) return;
+        // FIXED: Use timesheetId instead of timesheet?.id
+        if (!timesheet?.timesheetId || !selectedEmployee || !assignTo) {
+            showModal('Error', 'Please select a user to assign.', 'error');
+            return;
+        }
 
-        const updatedTimesheet = {
-            ...timesheet,
-            assignedTo: assignTo,
-            assignedBy: currentUser?.uid,
-            assignedByName: currentUser?.displayName,
-            assignedAt: new Date().toISOString(),
-            status: 'assigned'
-        };
+        try {
+            const assignedUser = allUsers.find(u => u.uid === assignTo);
+            if (!assignedUser) {
+                showModal('Error', 'Selected user not found. Please try again.', 'error');
+                return;
+            }
 
-        await firebaseDB.child(`Timesheets/${timesheet.id}`).update(updatedTimesheet);
-        setTimesheet(updatedTimesheet);
-        setShowAssignModal(false);
-        setAssignTo('');
+            const patch = {
+                assignedTo: assignTo,
+                assignedToName: assignedUser.displayName || assignedUser.email || 'Unknown User',
+                assignedToRole: assignedUser.role || 'user',
+                assignedBy: currentUser?.uid,
+                assignedByName: currentUser?.displayName || currentUser?.email || 'System',
+                assignedAt: new Date().toISOString(),
+                status: 'assigned',
+                updatedAt: new Date().toISOString(),
+            };
+
+            // FIXED: Use timesheetId in the path
+            await firebaseDB.child(empTsNode(selectedEmployee, timesheet.timesheetId)).update(patch);
+            setTimesheet(prev => ({ ...(prev || {}), ...patch }));
+            setShowAssignModal(false);
+            setAssignTo('');
+
+            showModal('Success', `Timesheet assigned to ${assignedUser.displayName || assignedUser.email}`, 'success');
+            await loadPreviousTimesheets();
+        } catch (error) {
+            console.error('Error assigning timesheet:', error);
+            showModal('Error', 'Failed to assign timesheet. Please try again.', 'error');
+        }
     };
-
     // Add this state
     const [showEditProtectedModal, setShowEditProtectedModal] = useState(false);
 
-    // Add this function to check edit permissions - FIXED
-    const checkEditPermission = (timesheetStatus) => {
-        if (timesheetStatus === 'approved') {
-            // Only admin can edit approved timesheets
-            if (authContext.user?.role !== 'admin') {
-                setShowEditProtectedModal(true);
+    const checkEditPermission = (timesheetStatus, action = 'edit') => {
+        const userRole = authContext.user?.role || 'user';
+
+        if (timesheetStatus === 'submitted' || timesheetStatus === 'approved') {
+            if (userRole !== 'admin') {
+                showModal('Edit Restricted',
+                    `This timesheet has been ${timesheetStatus} and cannot be ${action}ed. Only administrators can modify ${timesheetStatus} timesheets.`,
+                    'warning'
+                );
                 return false;
             }
         }
         return true;
     };
 
-    // Update the edit handler - FIXED
-    const handleEditEntry = (entry) => {
-        if (!checkEditPermission(timesheet.status)) {
-            return;
+    // Enhanced save with audit trail
+    const saveEntryWithAudit = async (entryData, isNew = false) => {
+        const auditTrail = {
+            updatedBy: currentUser?.uid,
+            updatedByName: currentUser?.displayName || 'System',
+            updatedAt: new Date().toISOString(),
+            updateReason: isNew ? 'created' : 'modified'
+        };
+
+        if (isNew) {
+            auditTrail.createdBy = currentUser?.uid;
+            auditTrail.createdByName = currentUser?.displayName || 'System';
+            auditTrail.createdAt = new Date().toISOString();
         }
 
-        setCurrentEntry(entry);
-        setIsEditing(true);
-        setShowEntryModal(true);
+        return {
+            ...entryData,
+            ...auditTrail,
+            auditHistory: [
+                ...(entryData.auditHistory || []),
+                {
+                    action: isNew ? 'created' : 'updated',
+                    by: currentUser?.uid,
+                    byName: currentUser?.displayName || 'System',
+                    at: new Date().toISOString(),
+                    changes: Object.keys(entryData).filter(key =>
+                        !['auditHistory', 'createdAt', 'updatedAt', 'createdBy', 'updatedBy'].includes(key)
+                    )
+                }
+            ]
+        };
     };
 
     // Calculate total salary for the table footer
@@ -769,163 +1903,175 @@ const DisplayTimeSheet = () => {
                                     />
                                 </div>
 
-                                {/* Period Type Toggle */}
-                                <div className="col-md-2">
-                                    <label className="form-label text-info mb-1">
-                                        <strong><i className="fas fa-calendar-alt me-2"></i>Period Type</strong>
-                                    </label>
-                                    <div className="form-check form-switch">
-                                        <input
-                                            className="form-check-input"
-                                            type="checkbox"
-                                            id="useDateRange"
-                                            checked={useDateRange}
-                                            onChange={(e) => setUseDateRange(e.target.checked)}
-                                        />
-                                        <label className="form-check-label text-info" htmlFor="useDateRange">
-                                            Custom Range
-                                        </label>
-                                    </div>
-                                </div>
 
-                                {/* Period Selection */}
-                                {useDateRange ? (
-                                    <>
-                                        <div className="col-md-3">
-                                            <label className="form-label text-info mb-1">
-                                                <strong>Start Date</strong>
-                                            </label>
-                                            <input
-                                                type="date"
-                                                className="form-control bg-dark text-white border-secondary"
-                                                value={startDate}
-                                                onChange={(e) => setStartDate(e.target.value)}
-                                            />
-                                        </div>
-                                        <div className="col-md-3">
-                                            <label className="form-label text-info mb-1">
-                                                <strong>End Date</strong>
-                                            </label>
-                                            <input
-                                                type="date"
-                                                className="form-control bg-dark text-white border-secondary"
-                                                value={endDate}
-                                                onChange={(e) => setEndDate(e.target.value)}
-                                            />
-                                        </div>
-                                    </>
-                                ) : (
-                                    <div className="col-md-3">
-                                        <label className="form-label text-info mb-1">
-                                            <strong>Select Month</strong>
-                                        </label>
-                                        <input
-                                            type="month"
-                                            className="form-control bg-dark text-white border-secondary"
-                                            value={selectedMonth}
-                                            onChange={(e) => setSelectedMonth(e.target.value)}
-                                        />
-                                    </div>
-                                )}
+                                {/* Add this in the search section card, after the period selection */}
+                                <div className="col-md-2">
+                                    <label className="form-label text-warning mb-1">
+                                        <strong><i className="bi bi-clock-history me-2"></i>Previous Timesheets</strong>
+                                    </label>
+                                    <button
+                                        className="btn btn-outline-info w-100"
+                                        onClick={loadPreviousTimesheets}
+                                        disabled={!selectedEmployee}
+                                    >
+                                        <i className="bi bi-list-ul me-2"></i>
+                                        Show All Previous
+                                    </button>
+                                </div>
                             </div>
                         </div>
                     </div>
                 </div>
             </div>
 
+
+
+
             {/* Previous Timesheets Table */}
-            {previousTimesheets.length > 0 && (
+            {loadingPrevious ? (
+                <div className="row mb-4">
+                    <div className="col-12">
+                        <div className="card bg-dark border-secondary text-center">
+                            <div className="card-body py-4">
+                                <div className="spinner-border text-info mb-3" role="status">
+                                    <span className="visually-hidden">Loading...</span>
+                                </div>
+                                <h5 className="text-white">Loading Timesheets...</h5>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            ) : previousTimesheets.length > 0 ? (
                 <div className="row mb-4">
                     <div className="col-12">
                         <div className="card bg-dark border-secondary">
-                            <div className="card-header bg-info bg-opacity-25 border-seconday">
+                            <div className="card-header bg-info bg-opacity-25 border-secondary">
                                 <h5 className="card-title mb-0 text-white">
-                                    <i className="fas fa-history me-2"></i>
-                                    Previous Timesheets
+                                    <i className="bi bi-clock-history me-2"></i>
+                                    Previous Timesheets for {employees.find(e => e.id === selectedEmployee)?.firstName} ({previousTimesheets.length})
                                 </h5>
                             </div>
                             <div className="card-body p-0">
                                 <div className="table-responsive">
-                                    <table className="table table-dark table-sm mb-0">
+                                    <table className="table table-dark table-striped mb-0">
                                         <thead>
                                             <tr>
+                                                <th>Timesheet ID</th>
                                                 <th>Period</th>
                                                 <th>Status</th>
-                                                <th>Working Days</th>
-                                                <th>Total Salary</th>
-                                                <th>Net Payable</th>
                                                 <th>Submitted By</th>
                                                 <th>Submitted At</th>
-                                                <th>Modified By</th>
-                                                <th>Last Modified</th>
-                                                <th>Actions</th>
+                                                <th>Assigned To</th>
+                                                <th>Assigned By</th>
+                                                <th>Assigned At</th>
+                                                <th>Working Days</th>
+                                                <th>Total Salary</th>
+                                                <th style={{ width: 120 }}>Actions</th>
                                             </tr>
                                         </thead>
                                         <tbody>
-                                            {previousTimesheets.map((ts, index) => (
-                                                <tr key={index}>
-                                                    <td>
-                                                        <button
-                                                            className="btn btn-link p-0 text-info"
-                                                            onClick={() => handlePreviousTimesheetClick(ts)}
-                                                            title="Open timesheet"
-                                                        >
-                                                            <small>{ts.period}</small>
-                                                        </button>
+                                            {previousTimesheets.map((ts) => (
+                                                <tr key={ts.timesheetId || ts.id}>
+                                                    <td className="text-info fw-bold">
+                                                        {ts.timesheetId || ts.id}
                                                     </td>
+                                                    <td>{ts.period || ts.periodKey}</td>
                                                     <td>
-                                                        <span className={`badge ${ts.status === 'draft' ? 'bg-warning' :
-                                                            ts.status === 'submitted' ? 'bg-info' :
-                                                                ts.status === 'approved' ? 'bg-success' :
-                                                                    ts.status === 'assigned' ? 'bg-primary' : 'bg-secondary'
-                                                            }`}>
-                                                            {ts.status?.toUpperCase()}
+                                                        <span className={
+                                                            `badge ${ts.status === 'approved' ? 'bg-success' :
+                                                                ts.status === 'assigned' ? 'bg-primary' :
+                                                                    ts.status === 'submitted' ? 'bg-warning' : 'bg-secondary'
+                                                            }`}
+                                                        >
+                                                            {ts.status || 'draft'}
                                                         </span>
                                                     </td>
-                                                    <td className="text-white">{ts.workingDays}</td>
-                                                    <td className="text-success">₹{Number(ts.totalSalary || 0).toFixed(2)}</td>
-                                                    <td className="text-warning">₹{Math.round(ts.netPayable || 0)}</td>
-                                                    <td><small className="text-muted">{ts.submittedByName || 'N/A'}</small></td>
                                                     <td>
-                                                        <small className="text-muted">
-                                                            {ts.submittedAt ? new Date(ts.submittedAt).toLocaleDateString('en-IN') : 'N/A'}
-                                                        </small>
+                                                        <small>{ts.submittedByName || 'Not Submitted'}</small>
                                                     </td>
                                                     <td>
                                                         <small className="text-muted">
-                                                            {ts.updatedByName || ts.createdByName || 'N/A'}
+                                                            {ts.submittedAt ? new Date(ts.submittedAt).toLocaleString('en-IN') : '-'}
                                                         </small>
+                                                    </td>
+                                                    <td>
+                                                        <small>{ts.assignedToName || 'Not Assigned'}</small>
+                                                    </td>
+                                                    <td>
+                                                        <small>{ts.assignedByName || 'Not Assigned'}</small>
                                                     </td>
                                                     <td>
                                                         <small className="text-muted">
-                                                            {ts.updatedAt ? new Date(ts.updatedAt).toLocaleDateString('en-IN') :
-                                                                ts.createdAt ? new Date(ts.createdAt).toLocaleDateString('en-IN') : 'N/A'}
+                                                            {ts.assignedAt ? new Date(ts.assignedAt).toLocaleString('en-IN') : '-'}
                                                         </small>
                                                     </td>
+                                                    <td>{ts.workingDays ?? 0}</td>
+                                                    <td>₹{Number(ts.totalSalary || 0).toFixed(0)}</td>
                                                     <td>
-                                                        <button
-                                                            className="btn btn-outline-danger btn-sm"
-                                                            onClick={(e) => {
-                                                                e.stopPropagation();
-                                                                setTsToDelete(ts);
-                                                                setShowDeleteTsModal(true);
-                                                            }}
-                                                            title="Delete this timesheet"
-                                                        >
-                                                            <i className="bi bi-trash"></i>
-                                                        </button>
+                                                        <div className="btn-group btn-group-sm">
+                                                            <button
+                                                                className="btn btn-outline-info"
+                                                                title="Open this timesheet"
+                                                                onClick={async () => {
+                                                                    setSelectedEmployee(ts.employeeId);
+                                                                    setTimesheet(ts);
+                                                                    setCurrentTimesheetId(ts.timesheetId || ts.id);
+                                                                    await loadDailyEntriesByTimesheetId(ts.employeeId, ts.timesheetId || ts.id);
+                                                                }}
+                                                            >
+                                                                <i className="bi bi-folder2-open"></i>
+                                                            </button>
+                                                            <button
+                                                                className="btn btn-outline-warning"
+                                                                title="Jump to period"
+                                                                onClick={() => {
+                                                                    if ((ts.periodKey || '').includes('_to_')) {
+                                                                        const [s, e] = (ts.periodKey || '').split('_to_');
+                                                                        setUseDateRange(true);
+                                                                        setStartDate(s);
+                                                                        setEndDate(e);
+                                                                    } else {
+                                                                        setUseDateRange(false);
+                                                                        setSelectedMonth(ts.periodKey || (ts.period ?? '').slice(0, 7));
+                                                                    }
+                                                                }}
+                                                            >
+                                                                <i className="bi bi-calendar-range"></i>
+                                                            </button>
+                                                        </div>
                                                     </td>
                                                 </tr>
                                             ))}
                                         </tbody>
-
                                     </table>
                                 </div>
                             </div>
                         </div>
                     </div>
                 </div>
-            )}
+            ) : selectedEmployee ? (
+                <div className="row mb-4">
+                    <div className="col-12">
+                        <div className="card bg-dark border-secondary text-center">
+                            <div className="card-body py-4">
+                                <i className="bi bi-inbox display-4 text-muted mb-3"></i>
+                                <h5 className="text-white opacity-50">No Previous Timesheets Found</h5>
+                                <p className="text-muted mb-3">
+                                    No timesheets found for this employee. Create a new timesheet to get started.
+                                </p>
+                                <button
+                                    className="btn btn-outline-info"
+                                    onClick={handleAddTimesheet}
+                                >
+                                    <i className="bi bi-plus-lg me-2"></i>
+                                    Create First Timesheet
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            ) : null}
+
             {/* Empty Layout Placeholder */}
             {!selectedEmployee && (
                 <div className="row">
@@ -978,101 +2124,151 @@ const DisplayTimeSheet = () => {
                 </div>
             )}
 
-            {timesheet && selectedEmployee && (
+            {selectedEmployee && (
                 <>
-                    {/* Timesheet Summary */}
-                    <TimesheetSummary
-                        timesheet={timesheet}
-                        advances={advances}
-                        employee={employees.find(emp => emp.id === selectedEmployee)}
-                        currentUser={currentUser}
-                    />
-
-                    {/* Action Buttons */}
+                    {/* Show summary only when timesheet exists */}
+                    {timesheet && (
+                        <TimesheetSummary
+                            timesheet={timesheet}
+                            advances={advances}
+                            employee={employees.find(emp => emp.id === selectedEmployee)}
+                            currentUser={currentUser}
+                        />
+                    )}
+                    {/* Always show action buttons when employee is selected */}
                     <div className="row mb-3">
                         <div className="col-12">
                             <button
-                                className="btn btn-warning me-2"
-                                onClick={() => setShowAutoFillModal(true)}
-                                disabled={!selectedEmployee || isAutoFilling || showSubmittedError}
+                                className="btn btn-outline-primary me-2"
+                                onClick={saveTimesheet}
+                                disabled={!timesheet || dailyEntries.length === 0 || isSaving || !hasUnsavedChanges}
                             >
-                                {isAutoFilling ? (
+                                {isSaving ? (
                                     <>
-                                        <span className="spinner-border spinner-border-sm me-2" role="status"></span>
-                                        Auto-Filling...
+                                        <div className="spinner-border spinner-border-sm me-2" role="status">
+                                            <span className="visually-hidden">Loading...</span>
+                                        </div>
+                                        Saving...
                                     </>
                                 ) : (
                                     <>
-                                        <i className="fas fa-magic me-2"></i>
-                                        Auto-Fill Period
+                                        <i className="bi bi-save me-2"></i> Save
                                     </>
                                 )}
                             </button>
 
                             <button
-                                className="btn btn-info me-2"
-                                onClick={() => {
-                                    setCurrentEntry(null);
-                                    setIsEditing(false);
-                                    setShowEntryModal(true);
-                                }}
-                                disabled={showSubmittedError}
+                                className="btn btn-outline-warning me-2"
+                                onClick={openAutoFillModal}
+                                disabled={!timesheet}
                             >
-                                <i className="fas fa-plus me-2"></i>
-                                Add Daily Entry
+                                <i className="bi bi-magic me-2"></i> Auto-Fill
                             </button>
-                            {selectedEntries.length > 0 && (
+
+                            {/* Add Create Timesheet button that's always visible */}
+                            <button
+                                className="btn btn-outline-info me-2"
+                                onClick={handleAddTimesheet}
+                                disabled={!selectedEmployee}
+                            >
+                                <i className="bi bi-plus-lg me-2"></i>
+                                {timesheet ? 'Create New' : 'Create Timesheet'}
+                            </button>
+
+                            {timesheet && (
                                 <>
+                                    {selectedEntries.length > 0 && (
+                                        <>
+                                            <button
+                                                className="btn btn-outline-danger me-2"
+                                                onClick={deleteSelectedEntries}
+                                                disabled={showSubmittedError}
+                                            >
+                                                <i className="bi bi-trash me-2"></i>
+                                                Delete Selected ({selectedEntries.length})
+                                            </button>
+                                            <button
+                                                className="btn btn-outline-secondary me-2"
+                                                onClick={() => setSelectedEntries([])}
+                                            >
+                                                <i className="fas fa-times me-2"></i>
+                                                Clear Selection
+                                            </button>
+                                        </>
+                                    )}
+
+
                                     <button
-                                        className="btn btn-outline-danger me-2"
-                                        onClick={deleteSelectedEntries}
-                                        disabled={showSubmittedError}
+                                        className="btn btn-outline-danger"
+                                        onClick={() => {
+                                            setDailyEntries([]);
+                                            if (timesheet) {
+                                                const resetTimesheet = {
+                                                    ...timesheet,
+                                                    status: 'draft',
+                                                    workingDays: 0,
+                                                    fullDays: 0,
+                                                    halfDays: 0,
+                                                    leaves: 0,
+                                                    holidays: 0,
+                                                    emergencies: 0,
+                                                    absents: 0,
+                                                    totalDays: 0,
+                                                    totalSalary: 0,
+                                                    advances: 0,
+                                                    netPayable: 0,
+                                                    updatedAt: new Date().toISOString()
+                                                };
+                                                setTimesheet(resetTimesheet);
+                                            }
+                                            setHasUnsavedChanges(false);
+                                            showModal('Cleared', 'Daily entries cleared. Timesheet reset to draft status.', 'info');
+                                        }}
                                     >
-                                        <i className="bi bi-trash me-2"></i>
-                                        Delete Selected ({selectedEntries.length})
+                                        <i className="bi bi-x-circle me-2"></i> Clear Entries
                                     </button>
+
                                     <button
-                                        className="btn btn-outline-secondary"
-                                        onClick={() => setSelectedEntries([])}
+                                        className="btn btn-success ms-2"
+                                        onClick={submitTimesheet}
+                                        disabled={timesheet?.status === 'submitted' || showSubmittedError || dailyEntries.length === 0}
                                     >
-                                        <i className="fas fa-times me-2"></i>
-                                        Clear Selection
+                                        {timesheet?.status === 'submitted' ? (
+                                            <>
+                                                <i className="fas fa-check me-2"></i>
+                                                Submitted
+                                            </>
+                                        ) : (
+                                            <>
+                                                <i className="fas fa-paper-plane me-2"></i>
+                                                Submit
+                                            </>
+                                        )}
                                     </button>
                                 </>
                             )}
-                            <button
-                                className="btn btn-success me-2"
-                                onClick={submitTimesheet}
-                                disabled={timesheet.status === 'submitted' || showSubmittedError || dailyEntries.length === 0}
-                            >
-                                {timesheet.status === 'submitted' ? (
-                                    <>
-                                        <i className="fas fa-check me-2"></i>
-                                        Submitted
-                                    </>
-                                ) : (
-                                    <>
-                                        <i className="fas fa-paper-plane me-2"></i>
-                                        Submit Timesheet
-                                    </>
-                                )}
-                            </button>
                         </div>
                     </div>
 
-                    {/* Daily Entries and Advances */}
+
+
+                    {/* Daily Entries and Advances - show even when no timesheet but allow creation */}
                     <div className="row">
                         <div className="col-lg-8">
                             <DailyEntriesTable
                                 entries={dailyEntries}
                                 onEdit={(entry) => {
+                                    if (!timesheet) {
+                                        showModal('Info', 'Please create a timesheet first.', 'info');
+                                        return;
+                                    }
                                     setCurrentEntry(entry);
                                     setIsEditing(true);
                                     setShowEntryModal(true);
                                 }}
                                 onDelete={confirmDeleteEntry}
                                 totalSalary={totalSalary}
-                                isDisabled={showSubmittedError}
+                                isDisabled={!timesheet || showSubmittedError}
                                 selectedEntries={selectedEntries}
                                 onSelectEntry={handleSelectEntry}
                                 onSelectAllEntries={handleSelectAllEntries}
@@ -1081,27 +2277,32 @@ const DisplayTimeSheet = () => {
                         <div className="col-lg-4">
                             <AdvanceManagement
                                 employeeId={selectedEmployee}
-                                timesheetId={timesheet.id}
+                                timesheetId={timesheet?.id || ''}
                                 advances={advances}
                                 onAdvanceAdded={loadAdvances}
                                 currentUser={currentUser}
-                                isDisabled={showSubmittedError}
+                                isDisabled={!timesheet || showSubmittedError}
                             />
                         </div>
                     </div>
                 </>
             )}
-
             {/* Entry Modal */}
             {showEntryModal && (
                 <DailyEntryModal
+                    mode={entryModalMode}
                     entry={currentEntry}
-                    isEditing={isEditing}
-                    clients={clients}
-                    employee={employees.find(emp => emp.id === selectedEmployee)}
+                    isEditing={isEditing && entryModalMode === 'single'} // Only true when editing single entry
+                    employee={employees.find(e => e.id === selectedEmployee)}
                     onSave={handleSaveEntry}
-                    onClose={() => setShowEntryModal(false)}
-                    isDisabled={showSubmittedError}
+                    onAutoFill={handleAutoFill}
+                    onClose={() => {
+                        setShowEntryModal(false);
+                        setIsEditing(false);
+                        setCurrentEntry(null);
+                        setEntryModalMode('single'); // Reset to default
+                    }}
+                    timesheetId={timesheet?.timesheetId}
                 />
             )}
 
@@ -1185,59 +2386,69 @@ const DisplayTimeSheet = () => {
             )}
 
             {/* Confirmation Modal for Timesheet Submission */}
+            {/* Submit Confirmation Modal */}
             {showConfirmModal && (
-                <div className="modal fade show" style={{ display: 'block', backgroundColor: 'rgba(0,0,0,0.8)' }} tabIndex="-1">
-                    <div className="modal-dialog modal-dialog-centered">
-                        <div className="modal-content bg-dark border border-warning">
-                            <div className="modal-header border-warning">
-                                <h5 className="modal-title text-warning">
-                                    <i className="fas fa-check-circle me-2"></i>
-                                    Confirm Timesheet Submission
+                <div className="modal show d-block" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}>
+                    <div className="modal-dialog">
+                        <div className="modal-content bg-dark border border-secondary">
+                            <div className="modal-header border-secondary">
+                                <h5 className="modal-title text-white">
+                                    <i className="bi bi-send-check me-2"></i>
+                                    Submit Timesheet
                                 </h5>
+                                <button
+                                    type="button"
+                                    className="btn-close btn-close-white"
+                                    onClick={() => setShowConfirmModal(false)}
+                                ></button>
                             </div>
                             <div className="modal-body">
-                                <div className="alert alert-warning bg-warning bg-opacity-10 border-warning">
-                                    <strong>Are you sure you want to submit this timesheet?</strong>
-                                </div>
+                                <p className="text-white">
+                                    Are you sure you want to submit this timesheet? Once submitted, it cannot be edited.
+                                </p>
+                                <div className="bg-dark border border-secondary rounded p-3">
+                                    <h6 className="text-info mb-3">
+                                        <i className="fas fa-check-circle me-2"></i>
+                                        Ready to Submit
+                                    </h6>
 
-                                <div className="row g-2 mb-3">
-                                    <div className="col-12">
-                                        <small className="text-muted">Employee</small>
-                                        <div className="fw-bold text-white">{timesheet?.employeeName}</div>
+                                    <div className="list-group list-group-flush bg-transparent">
+                                        <div className="list-group-item bg-transparent border-secondary d-flex justify-content-between align-items-center px-0">
+                                            <span className="text-muted">Submitted By</span>
+                                            <span className="text-white">{currentUser?.displayName || currentUser?.email || 'Current User'}</span>
+                                        </div>
+                                        <div className="list-group-item bg-transparent border-secondary d-flex justify-content-between align-items-center px-0">
+                                            <span className="text-muted">Working Days</span>
+                                            <span className="text-success">{timesheet?.workingDays || 0}</span>
+                                        </div>
+                                        <div className="list-group-item bg-transparent border-secondary d-flex justify-content-between align-items-center px-0">
+                                            <span className="text-muted">Total Salary</span>
+                                            <span className="text-success">₹{Number(timesheet?.totalSalary || 0).toFixed(2)}</span>
+                                        </div>
+                                        <div className="list-group-item bg-transparent border-secondary d-flex justify-content-between align-items-center px-0">
+                                            <span className="text-muted">Advances</span>
+                                            <span className="text-danger">₹{Number(timesheet?.advances || 0).toFixed(2)}</span>
+                                        </div>
+                                        <div className="list-group-item bg-transparent border-0 d-flex justify-content-between align-items-center px-0 pt-3">
+                                            <strong className="text-warning">Net Payable</strong>
+                                            <strong className="text-warning fs-5">₹{Math.round(timesheet?.netPayable || 0)}</strong>
+                                        </div>
                                     </div>
-                                    <div className="col-6">
-                                        <small className="text-muted">Period</small>
-                                        <div className="fw-bold text-white">{timesheet?.period}</div>
-                                    </div>
-                                    <div className="col-6">
-                                        <small className="text-muted">Total Salary</small>
-                                        <div className="fw-bold text-success">₹{timesheet?.totalSalary?.toFixed(2)}</div>
-                                    </div>
-                                    <div className="col-6">
-                                        <small className="text-muted">Working Days</small>
-                                        <div className="fw-bold text-white">{timesheet?.workingDays}</div>
-                                    </div>
-                                    <div className="col-6">
-                                        <small className="text-muted">Net Payable</small>
-                                        <div className="fw-bold text-success">₹{Math.round(timesheet?.netPayable || 0)}</div>
-                                    </div>
-                                </div>
-
-                                <div className="alert alert-info bg-info bg-opacity-10 border-info">
-                                    <small>
-                                        <strong>Submitted by:</strong> {currentUser?.displayName} ({currentUser?.email})
-                                        <br />
-                                        <strong>Timestamp:</strong> {new Date().toLocaleString('en-IN')}
-                                    </small>
                                 </div>
                             </div>
-                            <div className="modal-footer">
-                                <button type="button" className="btn btn-secondary" onClick={() => setShowConfirmModal(false)}>
-                                    <i className="fas fa-times me-1"></i>
+                            <div className="modal-footer border-secondary">
+                                <button
+                                    type="button"
+                                    className="btn btn-secondary"
+                                    onClick={() => setShowConfirmModal(false)}
+                                >
                                     Cancel
                                 </button>
-                                <button type="button" className="btn btn-success" onClick={confirmSubmit}>
-                                    <i className="fas fa-check me-1"></i>
+                                <button
+                                    type="button"
+                                    className="btn btn-success"
+                                    onClick={confirmSubmit}
+                                >
                                     Confirm Submit
                                 </button>
                             </div>
@@ -1268,7 +2479,7 @@ const DisplayTimeSheet = () => {
                                     <i className="fas fa-times me-1"></i>
                                     Cancel
                                 </button>
-                                <button type="button" className="btn btn-danger" onClick={deleteEntry}>
+                                <button type="button" className="btn btn-danger" onClick={deleteSelectedEntries}>
                                     <i className="bi bi-trash me-1"></i>
                                     Delete
                                 </button>
@@ -1292,7 +2503,7 @@ const DisplayTimeSheet = () => {
                                 <p className="text-white">
                                     Are you sure you want to permanently delete the timesheet for <strong>{tsToDelete.period}</strong>?
                                 </p>
-                                <div className="alert alert-danger bg-danger bg-opacity-10 border-danger">
+                                <div className="alert alert-warning bg-danger bg-opacity-10 border-danger">
                                     This will also delete all daily entries linked to this timesheet. This action cannot be undone.
                                 </div>
                             </div>
@@ -1469,7 +2680,6 @@ const DisplayTimeSheet = () => {
                 </div>
             )}
 
-            {/* Assign Timesheet Modal */}
             {showAssignModal && (
                 <div className="modal fade show" style={{ display: 'block', backgroundColor: 'rgba(0,0,0,0.8)' }} tabIndex="-1">
                     <div className="modal-dialog modal-dialog-centered">
@@ -1481,37 +2691,67 @@ const DisplayTimeSheet = () => {
                                 </h5>
                             </div>
                             <div className="modal-body">
-                                <div className="alert alert-primary bg-primary bg-opacity-10 border-primary">
-                                    <strong>Timesheet submitted successfully!</strong>
+                                <div className="alert alert-primary bg-primary bg-opacity-10 border-primary tex-info">
+                                    <p className='text-info mb-0'> <strong>Timesheet submitted successfully!</strong></p>
                                 </div>
 
-                                <div className="mb-3">
-                                    <label className="form-label text-white">Assign To</label>
-                                    <select
-                                        className="form-select bg-dark text-white border-secondary"
-                                        value={assignTo}
-                                        onChange={(e) => setAssignTo(e.target.value)}
-                                    >
-                                        <option value="">Select approver...</option>
-                                        <option value="manager">Manager</option>
-                                        <option value="hr">HR Department</option>
-                                        <option value="accountant">Accountant</option>
-                                    </select>
+                                <label className="form-label text-white">Assign To (search name or email)</label>
+                                <div className="position-relative mb-2">
+                                    <input
+                                        type="text"
+                                        className="form-control bg-dark text-white border-secondary"
+                                        placeholder="Search user..."
+                                        value={userSearch}
+                                        onChange={(e) => setUserSearch(e.target.value)}
+                                        onFocus={() => setUserSearch(userSearch)}
+                                    />
+                                    <div className="mt-2 p-2 bg-dark border border-secondary rounded" style={{ maxHeight: 220, overflowY: 'auto' }}>
+                                        {filteredUsers.map(u => (
+                                            <div
+                                                key={u.uid}
+                                                className={`p-2 rounded ${assignTo === u.uid ? 'bg-primary' : 'hover-bg-gray-700'}`}
+                                                onClick={() => {
+                                                    setAssignTo(u.uid);
+                                                    setUserSearch(u.displayName || u.email); // Show selected user in search box
+                                                }}
+                                                style={{ cursor: 'pointer' }}
+                                            >
+                                                <div className="fw-bold text-white">{u.displayName}</div>
+                                                <div className="text-info small">Role: {u.role || 'user'}</div>
+                                                <div className="text-muted small">{u.email}</div>
+                                            </div>
+                                        ))}
+                                        {filteredUsers.length === 0 && <div className="text-muted">No users found</div>}
+                                    </div>
                                 </div>
+
+                                {/* Show selected user info */}
+                                {assignTo && (
+                                    <div className="alert alert-success bg-success bg-opacity-10 border-success mt-2">
+                                        <small className='text-white opacity-75'>
+                                            <strong>Selected:</strong> {filteredUsers.find(u => u.uid === assignTo)?.displayName || filteredUsers.find(u => u.uid === assignTo)?.email}
+                                        </small>
+                                    </div>
+                                )}
 
                                 <div className="alert alert-info bg-info bg-opacity-10 border-info">
                                     <small>
-                                        <strong>Submitted by:</strong> {currentUser?.displayName}
+                                        <strong>Submitted by:</strong> {currentUser?.displayName || currentUser?.email || 'Current User'}
                                         <br />
                                         <strong>Timestamp:</strong> {new Date().toLocaleString('en-IN')}
                                     </small>
                                 </div>
                             </div>
+
                             <div className="modal-footer">
                                 <button
                                     type="button"
                                     className="btn btn-secondary"
-                                    onClick={() => setShowAssignModal(false)}
+                                    onClick={() => {
+                                        setShowAssignModal(false);
+                                        setAssignTo('');
+                                        setUserSearch('');
+                                    }}
                                 >
                                     Skip
                                 </button>
@@ -1522,21 +2762,20 @@ const DisplayTimeSheet = () => {
                                     disabled={!assignTo}
                                 >
                                     <i className="fas fa-user-check me-1"></i>
-                                    Assign
+                                    {assignTo ? `Assign to ${filteredUsers.find(u => u.uid === assignTo)?.displayName || filteredUsers.find(u => u.uid === assignTo)?.email}` : 'Assign'}
                                 </button>
                             </div>
                         </div>
                     </div>
                 </div>
             )}
-
-            {showAutoFillModal && (
+            {false && (
                 <div className="modal fade show" style={{ display: 'block', backgroundColor: 'rgba(0,0,0,0.85)' }}>
                     <div className="modal-dialog modal-lg modal-dialog-centered">
                         <div className="modal-content bg-dark border border-info">
                             <div className="modal-header border-info">
                                 <h5 className="modal-title text-info">
-                                    <i className="fas fa-magic me-2"></i> Auto-Fill Period
+                                    <i className="bi bi-magic me-2"></i> Auto-Fill Period
                                 </h5>
                                 <button className="btn-close btn-close-white" onClick={() => setShowAutoFillModal(false)} />
                             </div>
@@ -1630,39 +2869,32 @@ const DisplayTimeSheet = () => {
                                             const end = new Date(useDateRange ? endDate : `${selectedMonth}-31`);
                                             const employee = employees.find(emp => emp.id === selectedEmployee);
                                             const client = clients.find(c => c.id === selectedClientId) || clients[0];
-                                            const entry = {
-                                                // ...
-                                                clientId: client.clientId || client.id,
-                                                clientName: client.name || client.clientName || 'Client',
-                                                // ...
-                                            };
+                                            const emp = employees.find(e => e.id === selectedEmployee);
+
+                                            // Get current period information
+                                            const currentPeriod = useDateRange ? `${startDate} to ${endDate}` : selectedMonth;
+                                            const periodKey = getCurrentPeriodKey();
 
                                             for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
-                                                const dateStr = d.toISOString().split('T')[0];
-                                                // Skip existing
+                                                const dateStr = d.toISOString().slice(0, 10);
                                                 if (dailyEntries.some(e => e.date === dateStr)) continue;
-                                                // Strict duplicate block
-                                                const dup = await checkDuplicateEntries(selectedEmployee, dateStr);
-                                                if (dup) continue;
 
-                                                const entry = {
-                                                    timesheetId: getTimesheetId(),
-                                                    employeeId: selectedEmployee,
+                                                await saveEntry({
                                                     date: dateStr,
-                                                    clientId: client.clientId || client.id,
-                                                    clientName: client.name || client.clientName || 'Client',
-                                                    jobRole: employees.find(e => e.id === selectedEmployee)?.primarySkill || 'Worker',
+                                                    clientId: client?.clientId || client?.id || 'DEFAULT', // ✅ Use defined 'client' variable
+                                                    clientName: client?.name || 'Client', // ✅ Use defined 'client' variable
+                                                    jobRole: emp?.primarySkill || 'Worker',
                                                     status: 'present',
+                                                    isHalfDay: false,
                                                     isPublicHoliday: false,
                                                     isEmergency: false,
-                                                    isHalfDay: false,
-                                                    dailySalary: calculateEntrySalary(employee, { status: 'present', isHalfDay: false }),
-                                                    notes: 'Auto-filled'
-                                                };
-                                                // write
-                                                await saveEntry(entry);
+                                                    notes: 'Auto-filled',
+                                                    period: currentPeriod, // ✅ Use computed currentPeriod
+                                                    periodKey: periodKey // ✅ Use computed periodKey
+                                                });
                                             }
-                                            await loadDailyEntries(getTimesheetId());
+
+                                            await loadDailyEntriesByTimesheetId(selectedEmployee, currentTimesheetId);
                                             setShowAutoFillModal(false);
                                         } catch (err) {
                                             console.error('Auto-fill failed:', err);
@@ -1715,6 +2947,57 @@ const DisplayTimeSheet = () => {
                     </div>
                 </div>
             )}
+
+            {showCustomModal && (
+                <div className="modal fade show" style={{ display: 'block', backgroundColor: 'rgba(0,0,0,0.8)' }}>
+                    <div className="modal-dialog modal-dialog-centered">
+                        <div className={`modal-content bg-dark border ${modalConfig.type === 'error' ? 'border-danger' :
+                            modalConfig.type === 'warning' ? 'border-warning' :
+                                modalConfig.type === 'success' ? 'border-success' : 'border-info'
+                            }`}>
+                            <div className={`modal-header border-${modalConfig.type === 'error' ? 'danger' :
+                                modalConfig.type === 'warning' ? 'warning' :
+                                    modalConfig.type === 'success' ? 'success' : 'info'
+                                }`}>
+                                <h5 className={`modal-title text-${modalConfig.type === 'error' ? 'danger' :
+                                    modalConfig.type === 'warning' ? 'warning' :
+                                        modalConfig.type === 'success' ? 'success' : 'info'
+                                    }`}>
+                                    <i className={`bi ${modalConfig.type === 'error' ? 'bi-exclamation-triangle' :
+                                        modalConfig.type === 'warning' ? 'bi-exclamation-circle' :
+                                            modalConfig.type === 'success' ? 'bi-check-circle' : 'bi-info-circle'
+                                        } me-2`}></i>
+                                    {modalConfig.title}
+                                </h5>
+                            </div>
+                            <div className="modal-body">
+                                <div className={`alert text-white alert-${modalConfig.type} bg-${modalConfig.type} bg-opacity-10 border-${modalConfig.type}`}>
+                                    {modalConfig.message}
+                                </div>
+                            </div>
+                            <div className="modal-footer">
+                                <button
+                                    className="btn btn-secondary"
+                                    onClick={() => setShowCustomModal(false)}
+                                >
+                                    {modalConfig.showConfirm ? 'Cancel' : 'Close'}
+                                </button>
+                                {modalConfig.showConfirm && modalConfig.onConfirm && (
+                                    <button
+                                        className={`btn btn-${modalConfig.type === 'error' ? 'danger' : modalConfig.type}`}
+                                        onClick={() => {
+                                            modalConfig.onConfirm();
+                                            setShowCustomModal(false);
+                                        }}
+                                    >
+                                        Confirm
+                                    </button>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };
@@ -1728,7 +3011,7 @@ const TimesheetSummary = ({ timesheet, advances, employee, currentUser }) => {
             <div className="col-12">
                 <div className="card bg-dark border-primary">
                     <div className="card-header bg-primary bg-opacity-25 border-primary d-flex justify-content-between align-items-center">
-                        <div className="d-flex align-items-center">
+                        <div className="d-flex align-items-center justify-content-between">
                             {/* Employee Photo - FIXED: Using employee photo instead of current user */}
                             {employee?.employeePhotoUrl ? (
                                 <img
@@ -1746,13 +3029,24 @@ const TimesheetSummary = ({ timesheet, advances, employee, currentUser }) => {
                             ) : null}
 
                             <div>
-                                <h5 className="card-title mb-0 text-white">
+                                <h5 className="card-title mb-0 text-info">
                                     Timesheet Summary - {timesheet.employeeName}
                                 </h5>
                                 <small className="text-light">
                                     {employee?.employeeId || employee?.idNo} • {employee?.primarySkill}
                                 </small>
+                                <small className="ms-2 text-warning">
+                                    Basic Salary:   {employee?.basicSalary}
+                                </small>
                             </div>
+
+
+                        </div>
+
+                        <div className="mb-2 text-center">
+                            <small className="text-muted me-3">Timesheet ID:</small>
+                            <br></br>
+                            <span className="badge bg-warning">{timesheet.timesheetId || timesheet.id}</span>
                         </div>
                         <span className={`badge ${timesheet.status === 'draft' ? 'bg-warning' :
                             timesheet.status === 'submitted' ? 'bg-info' :
@@ -1763,133 +3057,116 @@ const TimesheetSummary = ({ timesheet, advances, employee, currentUser }) => {
                     </div>
                     {/* Rest of the component remains same */}
                     <div className="card-body">
-                        <div className="row g-3">
-                            <div className="col-md-3">
-                                <div className="text-center p-3 bg-primary bg-opacity-10 rounded border border-primary">
-                                    <h6 className="text-info mb-1 d-block">Working Days</h6>
-                                    <h3 className="text-white mb-0">{timesheet.workingDays}</h3>
-                                </div>
-                            </div>
-                            <div className="col-md-3">
-                                <div className="text-center p-3 bg-warning bg-opacity-10 rounded border border-warning">
-                                    <h6 className="text-warning mb-1 d-block">Leaves</h6>
-                                    <h3 className="text-white mb-0">{timesheet.leaves}</h3>
-                                </div>
-                            </div>
-                            <div className="col-md-3">
-                                <div className="text-center p-3 bg-success bg-opacity-10 rounded border border-success">
-                                    <h6 className="text-success mb-1 d-block">Total Salary</h6>
-                                    <h3 className="text-white mb-0">₹{timesheet.totalSalary?.toFixed(2)}</h3>
-                                </div>
-                            </div>
-                            <div className="col-md-3">
-                                <div className="text-center p-3 bg-danger bg-opacity-10 rounded border border-danger">
-                                    <h6 className="text-danger mb-1 d-block">Net Payable</h6>
-                                    <h3 className="text-white mb-0">₹{Math.round(timesheet.netPayable || 0)}</h3>
-                                </div>
-                            </div>
-                        </div>
 
-                        <div className="row mt-3">
-                            <div className="col-md-6">
-                                <div className="d-flex justify-content-between text-white py-1">
-                                    <span>Employee:</span>
-                                    <span className="text-info">{timesheet.employeeName}</span>
-                                </div>
-                                <div className="d-flex justify-content-between text-white py-1">
-                                    <span>Period:</span>
-                                    <span className="text-info">{timesheet.period}</span>
-                                </div>
-                                <div className="d-flex justify-content-between text-white py-1">
-                                    <span>Status:</span>
-                                    <span className={`badge ${timesheet.status === 'draft' ? 'bg-warning' :
-                                        timesheet.status === 'submitted' ? 'bg-info' :
-                                            timesheet.status === 'approved' ? 'bg-success' : 'bg-secondary'
-                                        }`}>
-                                        {timesheet.status?.toUpperCase()}
-                                    </span>
-                                </div>
-                            </div>
-                            <div className="col-md-6">
-                                <div className="d-flex justify-content-between text-white py-1">
-                                    <span>Basic Salary:</span>
-                                    <span className="text-success">₹{employee?.basicSalary || 0}</span>
-                                </div>
-                                <div className="d-flex justify-content-between text-white py-1">
-                                    <span>Advances:</span>
-                                    <span className="text-danger">₹{timesheet.advances}</span>
-                                </div>
-                                <div className="d-flex justify-content-between text-white py-1">
-                                    <span>Total Days:</span>
-                                    <span className="text-info">{timesheet.totalDays}</span>
-                                </div>
-                            </div>
-                        </div>
 
-                        {/* Attendance Summary and Salary Breakdown */}
-                        <div className="row mt-4">
-                            <div className="col-md-6">
-                                <div className="card bg-dark border-secondary">
-                                    <div className="card-header bg-secondary bg-opacity-25 border-secondary">
-                                        <h6 className="mb-0 text-white">Salary Breakdown</h6>
+
+                        {/* Detailed Breakdown - Salary & Attendance */}
+                        <div className="row">
+
+                            {/* Attendance Summary */}
+                            <div className="col-lg-6 mb-4">
+                                <div className="card bg-dark border-info h-100">
+                                    <div className="card-header bg-info bg-opacity-10 border-info">
+                                        <h6 className="mb-0 text-white">
+                                            <i className="fas fa-calendar-check me-2"></i>
+                                            Attendance Summary
+                                        </h6>
                                     </div>
                                     <div className="card-body">
-                                        <div className="row g-2">
-                                            <div className="col-6">
-                                                <small className="text-muted">Basic Salary</small>
-                                                <div className="text-white">₹{employee?.basicSalary || 0}</div>
+                                        <div className="row g-3">
+                                            <div className="col-md-4 col-6">
+                                                <div className="bg-success bg-opacity-10 rounded p-3 border border-success text-center">
+                                                    <small className="text-muted d-block">Working Days</small>
+                                                    <div className="text-success h4 mb-0">{timesheet.workingDays}</div>
+                                                </div>
                                             </div>
-                                            <div className="col-6">
-                                                <small className="text-muted">Daily Rate</small>
-                                                <div className="text-white">₹{Math.round((employee?.basicSalary || 0) / 30)}</div>
+                                            <div className="col-md-4 col-6">
+                                                <div className="bg-warning bg-opacity-10 rounded p-3 border border-warning text-center">
+                                                    <small className="text-muted d-block">Leaves</small>
+                                                    <div className="text-warning h4 mb-0">{timesheet.leaves || 0}</div>
+                                                </div>
                                             </div>
-                                            <div className="col-6">
-                                                <small className="text-muted">Total Salary</small>
-                                                <div className="text-success">₹{timesheet.totalSalary?.toFixed(2)}</div>
+                                            <div className="col-md-4 col-6">
+                                                <div className="bg-primary bg-opacity-10 rounded p-3 border border-primary text-center">
+                                                    <small className="text-muted d-block">Holidays</small>
+                                                    <div className="text-primary h4 mb-0">{timesheet.holidays || 0}</div>
+                                                </div>
                                             </div>
-                                            <div className="col-6">
-                                                <small className="text-muted">Advances</small>
-                                                <div className="text-danger">₹{timesheet.advances}</div>
+                                            <div className="col-md-4 col-6">
+                                                <div className="bg-info bg-opacity-10 rounded p-3 border border-info text-center">
+                                                    <small className="text-muted d-block">Emergencies</small>
+                                                    <div className="text-info h4 mb-0">{timesheet.emergencies || 0}</div>
+                                                </div>
+                                            </div>
+                                            <div className="col-md-4 col-6">
+                                                <div className="bg-danger bg-opacity-10 rounded p-3 border border-danger text-center">
+                                                    <small className="text-muted d-block">Absents</small>
+                                                    <div className="text-danger h4 mb-0">{timesheet.absents || 0}</div>
+                                                </div>
+                                            </div>
+                                            <div className="col-md-4 col-6">
+                                                <div className="bg-secondary bg-opacity-10 rounded p-3 border border-secondary text-center">
+                                                    <small className="text-muted d-block">Total Days</small>
+                                                    <div className="text-white h4 mb-0">{timesheet.totalDays || 0}</div>
+                                                </div>
                                             </div>
                                         </div>
                                     </div>
                                 </div>
                             </div>
-                            <div className="col-md-6">
-                                <div className="card bg-dark border-secondary">
-                                    <div className="card-header bg-secondary bg-opacity-25 border-secondary">
-                                        <h6 className="mb-0 text-white">Attendance Summary</h6>
+
+                            {/* Salary Breakdown */}
+                            <div className="col-lg-6 mb-4">
+                                <div className="card bg-dark border-success h-100">
+                                    <div className="card-header bg-success bg-opacity-10 border-success">
+                                        <h6 className="mb-0 text-white">
+                                            <i className="fas fa-money-bill-wave me-2"></i>
+                                            Salary Breakdown
+                                        </h6>
                                     </div>
                                     <div className="card-body">
-                                        <div className="row g-2">
-                                            <div className="col-6">
-                                                <small className="text-muted">Working Days</small>
-                                                <div className="text-success">{timesheet.workingDays}</div>
+                                        <div className="row g-3">
+                                            <div className="col-md-6">
+                                                <div className="bg-dark bg-opacity-50 rounded p-3 border border-secondary text-center">
+                                                    <small className="text-muted d-block">Basic Salary</small>
+                                                    <div className="text-white h5 mb-0">₹{employee?.basicSalary || 0}</div>
+                                                </div>
                                             </div>
-                                            <div className="col-6">
-                                                <small className="text-muted">Leaves</small>
-                                                <div className="text-warning">{timesheet.leaves || 0}</div>
+                                            <div className="col-md-6">
+                                                <div className="bg-dark bg-opacity-50 rounded p-3 border border-secondary text-center">
+                                                    <small className="text-muted d-block">Daily Rate</small>
+                                                    <div className="text-white h5 mb-0">₹{Math.round((employee?.basicSalary || 0) / 30)}</div>
+                                                </div>
                                             </div>
-                                            <div className="col-6">
-                                                <small className="text-muted">Holidays</small>
-                                                <div className="text-primary">{timesheet.holidays || 0}</div>
+                                            <div className="col-md-6">
+                                                <div className="bg-success bg-opacity-10 rounded p-3 border border-success text-center">
+                                                    <small className="text-muted d-block">Total Salary</small>
+                                                    <div className="text-success h5 mb-0">₹{timesheet.totalSalary?.toFixed(2)}</div>
+                                                </div>
                                             </div>
-                                            <div className="col-6">
-                                                <small className="text-muted">Emergencies</small>
-                                                <div className="text-info">{timesheet.emergencies || 0}</div>
+                                            <div className="col-md-6">
+                                                <div className="bg-danger bg-opacity-10 rounded p-3 border border-danger text-center">
+                                                    <small className="text-muted d-block">Advances</small>
+                                                    <div className="text-danger h5 mb-0">₹{timesheet.advances}</div>
+                                                </div>
                                             </div>
-                                            <div className="col-6">
-                                                <small className="text-muted">Absents</small>
-                                                <div className="text-danger">{timesheet.absents || 0}</div>
-                                            </div>
-                                            <div className="col-6">
-                                                <small className="text-muted">Total Days</small>
-                                                <div className="text-white">{timesheet.totalDays || 0}</div>
+                                        </div>
+
+                                        {/* Net Payable Highlight */}
+                                        <div className="mt-4 p-3 bg-dark bg-opacity-25 rounded border border-warning">
+                                            <div className="d-flex justify-content-between align-items-center">
+                                                <div>
+                                                    <span className="text-white h6 mb-0">Net Payable Amount</span>
+                                                    <br />
+                                                    <small className="text-muted">Total Salary - Advances</small>
+                                                </div>
+                                                <span className="text-warning h4 mb-0">₹{Math.round(timesheet.netPayable || 0)}</span>
                                             </div>
                                         </div>
                                     </div>
                                 </div>
                             </div>
+
                         </div>
                     </div>
                 </div>
@@ -1897,8 +3174,8 @@ const TimesheetSummary = ({ timesheet, advances, employee, currentUser }) => {
         </div>
     );
 };
-// Daily Entries Table Component with Checkboxes and Modified By
 
+// Daily Entries Table Component with Checkboxes and Modified By
 const DailyEntriesTable = ({
     entries,
     onEdit,
@@ -1911,6 +3188,10 @@ const DailyEntriesTable = ({
 }) => {
     const { user: authUser } = useAuth(); // Get current logged-in user from auth context
 
+    // Add these state variables inside the DailyEntriesTable component
+    const [showNoteModal, setShowNoteModal] = useState(false);
+    const [currentNote, setCurrentNote] = useState('');
+
     return (
         <div className="card bg-dark border-secondary">
             <div className="card-header bg-info bg-opacity-25 border-info d-flex justify-content-between align-items-center">
@@ -1918,25 +3199,24 @@ const DailyEntriesTable = ({
                     <i className="fas fa-calendar-day me-2"></i>
                     Daily Entries ({entries.length})
                 </h5>
-                <div className="form-check">
-                    <input
-                        className="form-check-input"
-                        type="checkbox"
-                        checked={selectedEntries.length === entries.length && entries.length > 0}
-                        onChange={onSelectAllEntries}
-                        disabled={isDisabled}
-                    />
-                    <label className="form-check-label text-white">
-                        Select All
-                    </label>
-                </div>
+
             </div>
             <div className="card-body p-0">
                 <div className="table-responsive">
                     <table className="table table-dark table-hover mb-0">
                         <thead>
                             <tr>
-                                <th width="50"></th>
+                                <th width="50">
+                                    <input
+                                        className="form-check-input"
+                                        type="checkbox"
+                                        checked={selectedEntries.length === entries.length && entries.length > 0}
+                                        onChange={onSelectAllEntries}
+                                        disabled={isDisabled}
+                                    />
+
+
+                                </th>
                                 <th>Date</th>
                                 <th>Client ID</th>
                                 <th>Client Name</th>
@@ -1944,24 +3224,27 @@ const DailyEntriesTable = ({
                                 <th>Status</th>
                                 <th>Salary</th>
                                 <th>Modified By</th>
+                                <th>Comments</th>
                                 <th>Actions</th>
                             </tr>
                         </thead>
                         <tbody>
-                            {entries.map((entry) => (
-                                <tr key={entry.id} className={selectedEntries.includes(entry.id) ? 'table-active' : ''}>
+                            {entries.map((e) => (
+                                <tr key={e._rowKey || `${e.employeeId}_${e.date}`}>
                                     <td>
                                         <input
                                             type="checkbox"
                                             className="form-check-input"
-                                            checked={selectedEntries.includes(entry.id)}
-                                            onChange={() => onSelectEntry(entry.id)}
+                                            checked={selectedEntries.includes(String(e.id || e.date))}
+                                            onChange={() => onSelectEntry(e)}              // ← pass the full entry
                                             disabled={isDisabled}
+                                            value={e.date}
                                         />
+
                                     </td>
                                     <td>
                                         <small className="text-info">
-                                            {new Date(entry.date).toLocaleDateString('en-IN', {
+                                            {new Date(e.date).toLocaleDateString('en-IN', {
                                                 weekday: 'short',
                                                 year: 'numeric',
                                                 month: 'short',
@@ -1970,45 +3253,77 @@ const DailyEntriesTable = ({
                                         </small>
                                     </td>
                                     <td>
-                                        <small className="text-warning">{entry.clientId}</small>
+                                        <small className="text-warning">{e.clientId}</small>
                                     </td>
-                                    <td>{entry.clientName}</td>
+                                    <td>{e.clientName}</td>
                                     <td>
-                                        <small className="text-muted">{entry.jobRole}</small>
+                                        <small className="text-muted">{e.jobRole}</small>
                                     </td>
                                     <td>
-                                        <span className={`badge ${entry.status === 'present' ? 'bg-success' :
-                                            entry.status === 'leave' ? 'bg-warning' : 'bg-secondary'
+                                        <span className={`badge ${e.isEmergency ? 'bg-danger' :
+                                            e.status === 'present' ? 'bg-success' :
+                                                e.status === 'leave' ? 'bg-warning' :
+                                                    e.status === 'absent' ? 'bg-info' :
+                                                        e.status === 'holiday' ? 'bg-primary' :
+                                                            'bg-secondary'
                                             }`}>
-                                            {entry.status}
+                                            {e.isEmergency ? 'Emergency' : e.status}
                                         </span>
-                                        {entry.isHalfDay && (
-                                            <span className="badge bg-secondary ms-1">½</span>
+                                        {e.isHalfDay && !e.isEmergency && (
+                                            <span className="badge bg-info ms-1">½</span>
+                                        )}
+                                        {e.isPublicHoliday && !e.isEmergency && (
+                                            <span className="badge bg-primary ms-1">Holiday</span>
                                         )}
                                     </td>
-                                    <td className="text-success">₹{entry.dailySalary?.toFixed(2)}</td>
+                                    <td className={
+                                        e.dailySalary === 0 ? 'text-danger' :
+                                            e.isHalfDay ? 'text-warning' :
+                                                'text-success'
+                                    }>
+                                        ₹{e.dailySalary?.toFixed(2)}
+                                    </td>
                                     <td>
                                         <small className="text-muted">
                                             {/* FIXED: Show current logged-in user's name for modifications */}
                                             By {authUser?.name || authUser?.displayName || 'Current User'}
                                         </small>
                                         <br></br>
-                                        <small className='small-text text-white opacity-50'>
-                                            {entry.updatedAt ? new Date(entry.updatedAt).toLocaleDateString('en-IN') :
-                                                entry.createdAt ? new Date(entry.createdAt).toLocaleDateString('en-IN') : ''}
+                                        <small className="text-white opacity-50 small-text">
+                                            {e.updatedAt ? new Date(e.updatedAt).toLocaleString('en-IN') :
+                                                e.createdAt ? new Date(e.createdAt).toLocaleString('en-IN') : ''}
                                         </small>
+                                    </td>
+                                    <td>
+                                        {e.notes ? (
+                                            <div className="">
+                                                <button
+                                                    type="button"
+                                                    className="btn btn-sm btn-outline-warning"
+                                                    onClick={() => {
+                                                        setCurrentNote(e.notes);
+                                                        setShowNoteModal(true);
+                                                    }}
+                                                >
+                                                    <i className="bi bi-chat-left-text"></i>
+                                                </button>
+
+                                            </div>
+                                        ) : (
+                                            <span className="text-muted">—</span>
+                                        )}
                                     </td>
                                     <td>
                                         <div className="btn-group btn-group-sm">
                                             <button
                                                 className="btn btn-outline-info"
-                                                onClick={() => onEdit(entry)}
+                                                onClick={() => onEdit(e)}
                                                 disabled={isDisabled}
                                                 title="Edit Entry"
                                             >
                                                 <i className="bi bi-pencil"></i>
                                             </button>
-                                            <button className="btn btn-outline-danger btn-sm" onClick={() => onDelete(entry.id)} disabled={isDisabled}>
+                                            <button className="btn btn-outline-danger btn-sm" onClick={() => onDelete(e.id)} disabled={isDisabled}>
                                                 <i className="bi bi-trash"></i>
                                             </button>
                                         </div>
@@ -2017,19 +3332,54 @@ const DailyEntriesTable = ({
                             ))}
                         </tbody>
                         <tfoot>
-                            <tr className="bg-dark border-top border-info">
+                            <tr className="bg-dark border-top border-secondary">
                                 <td colSpan="6" className="text-end text-white">
                                     <strong>Total Salary:</strong>
                                 </td>
-                                <td className="text-success">
+                                <td className="text-warning">
                                     <strong>₹{totalSalary?.toFixed(2)}</strong>
                                 </td>
-                                <td colSpan="2"></td>
+                                <td colSpan="3"></td>
                             </tr>
                         </tfoot>
                     </table>
                 </div>
             </div>
+
+            {/* Note Modal */}
+            {showNoteModal && (
+                <div className="modal fade show" style={{ display: 'block', backgroundColor: 'rgba(0,0,0,0.8)' }}>
+                    <div className="modal-dialog modal-dialog-centered">
+                        <div className="modal-content bg-dark border border-info">
+                            <div className="modal-header border-info">
+                                <h5 className="modal-title text-info">
+                                    <i className="bi bi-chat-left-text me-2"></i>
+                                    Entry Comment
+                                </h5>
+                                <button
+                                    type="button"
+                                    className="btn-close btn-close-white"
+                                    onClick={() => setShowNoteModal(false)}
+                                ></button>
+                            </div>
+                            <div className="modal-body">
+                                <div className="text-white" style={{ whiteSpace: 'pre-wrap' }}>
+                                    {currentNote}
+                                </div>
+                            </div>
+                            <div className="modal-footer">
+                                <button
+                                    type="button"
+                                    className="btn btn-secondary"
+                                    onClick={() => setShowNoteModal(false)}
+                                >
+                                    Close
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

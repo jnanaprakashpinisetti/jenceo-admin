@@ -21,7 +21,7 @@ const buildTimesheetId = async (emp, periodKey) => {
         const [start = "2000-01-01"] = String(periodKey).split("_to_");
         ({ mm, yy } = monthParts(start.slice(0, 7)));
     }
-    const idBase = `${base}-${mm}-${yy}`;
+    const idBase = `${base}-${yy}-${mm}`;
 
     // If this period already has a header under EmployeeBioData -> reuse its id; else suffix
     const allTsSnap = await firebaseDB.child(`${empPath(emp.id)}/timesheets`).get();
@@ -180,6 +180,49 @@ const DisplayTimeSheet = () => {
         await firebaseDB.child(empTsById(empId, tsId)).update(patch);
         return patch;
     };
+
+    // --- ADVANCE DEDUCTION HELPERS ---
+
+    // true if a yyyy-mm-dd date is inside the currently selected period
+    const isDateInActivePeriod = (yyyyMmDd) => {
+        if (!yyyyMmDd) return false;
+        if (useDateRange && startDate && endDate) {
+            return yyyyMmDd >= startDate && yyyyMmDd <= endDate;
+        }
+        // month mode
+        return (selectedMonth && yyyyMmDd.slice(0, 7) === selectedMonth);
+    };
+
+    // get the first (earliest) timesheet id for the active period
+    const getFirstTimesheetIdForActivePeriod = async (empId) => {
+        const snap = await firebaseDB.child(empTsNode(empId)).get();
+        if (!snap.exists()) return currentTimesheetId;
+
+        const all = snap.val() || {};
+        // identify period by periodKey: for month it'll be "YYYY-MM"; for range, "YYYY-MM-DD_to_YYYY-MM-DD"
+        const activeKey = getCurrentPeriodKey();
+
+        // Collect only sheets of this period
+        const samePeriod = Object.entries(all)
+            .filter(([id, ts]) => (ts?.periodKey || '') === activeKey)
+            .map(([id, ts]) => ({
+                id,
+                createdAt: ts?.createdAt || ts?.updatedAt || ts?.startDate || '9999-12-31',
+                startDate: ts?.startDate || '9999-12-31',
+                timesheetId: id
+            }));
+
+        if (samePeriod.length === 0) return currentTimesheetId;
+
+        // Earliest by createdAt, then startDate, then id
+        samePeriod.sort((a, b) =>
+            (a.createdAt || '').localeCompare(b.createdAt || '') ||
+            (a.startDate || '').localeCompare(b.startDate || '') ||
+            (a.id || '').localeCompare(b.id || '')
+        );
+        return samePeriod[0].id;
+    };
+
 
 
     // Load entries by employee + timesheetId
@@ -1171,7 +1214,15 @@ const DisplayTimeSheet = () => {
         const leaves = entries.filter(e => e.status === 'leave').length;
         const absents = entries.filter(e => e.status === 'absent').length;
         const totalSalary = entries.reduce((s, e) => s + (parseFloat(e.dailySalary) || 0), 0);
-        const totalAdv = (advancesData || []).reduce((s, a) => s + (parseFloat(a.amount) || 0), 0);
+        // 1) Only advances that fall in the ACTIVE period
+        const advancesInPeriod = (advancesData || [])
+            .filter(a => isDateInActivePeriod(a.date) && (a.status || '').toLowerCase() !== 'settled');
+
+        // 2) Only the FIRST timesheet of the period actually deducts
+        const firstTsId = await getFirstTimesheetIdForActivePeriod(selectedEmployee);
+        const totalAdv = (currentTimesheetId === firstTsId)
+            ? advancesInPeriod.reduce((s, a) => s + (parseFloat(a.amount) || 0), 0)
+            : 0;
 
         const patch = {
             workingDays,
@@ -1183,8 +1234,8 @@ const DisplayTimeSheet = () => {
             emergencies,
             absents,
             totalSalary,
-            advances: totalAdv,
-            netPayable: Math.round(totalSalary - totalAdv),
+            advances: totalAdv,                                  // ← use period + first-sheet only
+            netPayable: Math.round(totalSalary - totalAdv),      // ← recomputed
             updatedBy: currentUser?.uid || 'admin',
             updatedByName: currentUser?.displayName || 'Admin',
             updatedAt: new Date().toISOString(),
@@ -1228,6 +1279,36 @@ const DisplayTimeSheet = () => {
         setDailyEntries([]);
 
     };
+
+    // Settle all advances for the active period so they won't deduct again
+    const settleAdvancesForActivePeriod = async (empId, tsId) => {
+        // load employee's advances
+        const snap = await firebaseDB.child('Advances')
+            .orderByChild('employeeId')
+            .equalTo(empId)
+            .once('value');
+
+        if (!snap.exists()) return;
+
+        const updates = {};
+        const now = new Date().toISOString();
+
+        Object.entries(snap.val() || {}).forEach(([advId, adv]) => {
+            // Only settle those inside current period and not already settled
+            if (isDateInActivePeriod(adv?.date) && String(adv?.status || '').toLowerCase() !== 'settled') {
+                updates[`Advances/${advId}/status`] = 'settled';
+                updates[`Advances/${advId}/settledAt`] = now;
+                updates[`Advances/${advId}/settledBy`] = currentUser?.uid || 'admin';
+                updates[`Advances/${advId}/settledByName`] = currentUser?.displayName || currentUser?.email || 'Admin';
+                updates[`Advances/${advId}/settledTimesheetId`] = tsId;
+            }
+        });
+
+        if (Object.keys(updates).length) {
+            await firebaseDB.update(updates);
+        }
+    };
+
     const loadDailyEntries = async (periodKeyParam) => {
         const periodKey = periodKeyParam || getCurrentPeriodKey();
         const ref = firebaseDB.child(entryNode(selectedEmployee, periodKey, '')); // will not exist
@@ -1923,6 +2004,7 @@ const DisplayTimeSheet = () => {
 
     const confirmSubmit = async () => {
         await calculateSummary();
+        await loadAdvances();
         if (!selectedEmployee || !timesheet?.timesheetId) {
             showModal('Error', 'Timesheet context missing.', 'error');
             return;
@@ -1946,6 +2028,7 @@ const DisplayTimeSheet = () => {
             });
 
             await firebaseDB.child(empTsById(selectedEmployee, timesheet.timesheetId)).update(finalHeader);
+            await settleAdvancesForActivePeriod(selectedEmployee, timesheet.timesheetId);
 
             setShowConfirmModal(false);
             showModal('Success', 'Timesheet submitted successfully!', 'success');
@@ -2112,6 +2195,7 @@ const DisplayTimeSheet = () => {
                                                 <th>Assigned At</th>
                                                 <th>Working Days</th>
                                                 <th>Total Salary</th>
+                                                <th>Net Salary</th>
                                                 <th style={{ width: 120 }}>Actions</th>
                                             </tr>
                                         </thead>
@@ -2136,7 +2220,7 @@ const DisplayTimeSheet = () => {
                                                         <small>{authUser.name || 'Not Submitted'}</small>
                                                     </td>
                                                     <td>
-                                                        <small className="text-muted">
+                                                        <small className="text-muted opacity-75">
                                                             {ts.submittedAt ? new Date(ts.submittedAt).toLocaleString('en-IN') : '-'}
                                                         </small>
                                                     </td>
@@ -2147,12 +2231,13 @@ const DisplayTimeSheet = () => {
                                                         <small>{authUser.name || 'Not Assigned'}</small>
                                                     </td>
                                                     <td>
-                                                        <small className="text-muted">
+                                                        <small className="text-muted opacity-75">
                                                             {ts.assignedAt ? new Date(ts.assignedAt).toLocaleString('en-IN') : '-'}
                                                         </small>
                                                     </td>
                                                     <td>{ts.workingDays ?? 0}</td>
                                                     <td>₹{Number(ts.totalSalary || 0).toFixed(0)}</td>
+                                                    <td className='text-warning'>₹{Number(ts.netPayable || 0).toFixed(0)}</td>
                                                     <td>
                                                         <div className="btn-group btn-group-sm">
                                                             <button
@@ -2179,7 +2264,7 @@ const DisplayTimeSheet = () => {
                                                                 <i className="bi bi-folder2-open"></i>
                                                             </button>
                                                             <button
-                                                                className="btn btn-outline-warning"
+                                                                className="btn btn-outline-primary"
                                                                 title="Jump to period"
                                                                 onClick={() => {
                                                                     if ((ts.periodKey || '').includes('_to_')) {

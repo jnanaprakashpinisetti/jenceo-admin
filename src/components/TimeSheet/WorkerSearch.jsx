@@ -53,7 +53,7 @@ const WorkerSearch = ({ employees, onSelectEmployee, selectedEmployee }) => {
           {filteredEmployees.map(emp => (
             <div
               key={emp.id}
-              className={`p-3 border-bottom border-secondary cursor-pointer ${
+              className={`p-3 border-bottom border-secondary ${
                 selectedEmployee === emp.id ? 'bg-primary' : 'hover-bg-secondary'
               }`}
               onClick={() => {
@@ -61,6 +61,7 @@ const WorkerSearch = ({ employees, onSelectEmployee, selectedEmployee }) => {
                 setSearchTerm(`${emp.firstName} ${emp.lastName} (${emp.employeeId || emp.idNo})`);
                 setShowDropdown(false);
               }}
+              style={{cursor:'pointer'}}
             >
               <div className="d-flex justify-content-between align-items-center">
                 <div>

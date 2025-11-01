@@ -66,6 +66,8 @@ const monthParts = (yyyyMm) => {
     return { mm: m || "01", yy: (y || "").slice(-2) };
 };
 
+const pruneUndefined = (obj = {}) =>
+    Object.fromEntries(Object.entries(obj).filter(([_, v]) => v !== undefined));
 
 
 
@@ -117,6 +119,14 @@ const DisplayTimeSheet = () => {
 
     const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
 
+    const [showSubmitModal, setShowSubmitModal] = useState(false);
+
+    const [pendingSubmitAfterAssign, setPendingSubmitAfterAssign] = useState(false)
+
+    const newEntriesLocal = [];
+    const childUpdates = {};
+
+
 
 
     // Add these states
@@ -148,28 +158,27 @@ const DisplayTimeSheet = () => {
 
 
     const ensureTimesheetHeader = async (empId, tsId, header = {}) => {
-        const now = new Date().toISOString();
         const emp = employees.find(e => e.id === empId);
         const periodKey = getCurrentPeriodKey();
         const periodStr = useDateRange ? `${startDate} to ${endDate}` : selectedMonth;
 
-        const headerData = {
+        const base = {
             employeeId: empId,
             timesheetId: tsId,
             employeeName: `${emp?.firstName || ''} ${emp?.lastName || ''}`.trim(),
-            period: periodStr,
-            periodKey: periodKey,
+            period: periodStr || '',
+            periodKey: periodKey || '',
             startDate: useDateRange ? startDate : `${selectedMonth}-01`,
             endDate: useDateRange ? endDate : `${selectedMonth}-31`,
             status: 'draft',
-            updatedAt: now,
+            updatedAt: new Date().toISOString(),
             updatedBy: currentUser?.uid || 'admin',
             updatedByName: currentUser?.displayName || 'Admin',
-            ...header,
         };
 
-        await firebaseDB.child(empTsById(empId, tsId)).update(headerData);
-        return headerData;
+        const patch = pruneUndefined({ ...base, ...header });
+        await firebaseDB.child(empTsById(empId, tsId)).update(patch);
+        return patch;
     };
 
 
@@ -199,6 +208,7 @@ const DisplayTimeSheet = () => {
 
     // Use Auth Context
     const authContext = useAuth();
+    const { user: authUser } = useAuth();
 
 
     // ---- NEW STATE (add near other useState) ----
@@ -272,6 +282,48 @@ const DisplayTimeSheet = () => {
             ? `${startDate}_to_${endDate}`
             : (selectedMonth || '');
     };
+
+    // ---- Duplicate guards across ALL timesheets for an employee ----
+    const dateExistsInOtherTimesheets = async (empId, date, excludeTsId = null) => {
+        const tsSnap = await firebaseDB.child(empTsNode(empId)).get();
+        if (!tsSnap.exists()) return null;
+        const all = tsSnap.val() || {};
+        for (const [tsId] of Object.entries(all)) {
+            if (excludeTsId && tsId === excludeTsId) continue;
+            const eSnap = await firebaseDB.child(`${empTsById(empId, tsId)}/dailyEntries/${date}`).get();
+            if (eSnap.exists()) return { tsId, entry: eSnap.val() };
+        }
+        return null;
+    };
+
+    const findOverlapsInRange = async (empId, startISO, endISO, excludeTsId = null) => {
+        const overlaps = [];
+        const start = new Date(startISO);
+        const end = new Date(endISO);
+        for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+            const dateStr = d.toISOString().slice(0, 10);
+            const hit = await dateExistsInOtherTimesheets(empId, dateStr, excludeTsId);
+            if (hit) overlaps.push({ date: dateStr, ...hit });
+        }
+        return overlaps;
+    };
+
+    // Fast: load all dates that already exist in ANY timesheet for this employee (excluding one tsId if provided)
+    const preloadExistingDates = async (empId, excludeTsId = null) => {
+        const tsSnap = await firebaseDB.child(empTsNode(empId)).get();
+        const taken = new Set();
+        if (!tsSnap.exists()) return taken;
+
+        const all = tsSnap.val() || {};
+        for (const [tsId, header] of Object.entries(all)) {
+            if (excludeTsId && tsId === excludeTsId) continue;
+            if (!header?.dailyEntries) continue;
+            for (const d of Object.keys(header.dailyEntries)) taken.add(d);
+        }
+        return taken;
+    };
+
+
 
 
 
@@ -460,6 +512,16 @@ const DisplayTimeSheet = () => {
         }
     }, [dailyEntries, advances]);
 
+    // Auto-open Submit modal as soon as the sheet gets assigned (even if Assign came from elsewhere)
+    useEffect(() => {
+        if (pendingSubmitAfterAssign && timesheet?.assignedTo) {
+            setShowAssignModal(false);
+            setShowConfirmModal(true);
+            setPendingSubmitAfterAssign(false);
+        }
+    }, [pendingSubmitAfterAssign, timesheet?.assignedTo]);
+
+
     // Update the useEffect that sets current user
     useEffect(() => {
         const current = new Date().toISOString().slice(0, 7);
@@ -547,30 +609,43 @@ const DisplayTimeSheet = () => {
     };
     const handleAutoFill = async (tpl) => {
         const emp = employees.find(e => e.id === selectedEmployee);
-        if (!emp) { alert('Select employee first.'); return; }
+        if (!emp) return showModal('Error', 'Select employee first.', 'error');
 
-        // Build timesheetId from employee + tpl period
         const periodKey = makePeriodKey(tpl);
 
-        
- // 🔍 Check existing timesheet for that period; block if submitted/approved
- const dup = await checkDuplicateTimesheet(selectedEmployee, periodKey);
- if (dup.exists && dup.timesheet?.status && dup.timesheet.status !== 'draft') {
-   showModal(
-     'Timesheet Exists',
-     `A timesheet for ${periodKey} already exists with status: ${dup.timesheet.status}.`,
-     'warning',
-     dup.timesheet?.id
-       ? () => openPreviousTimesheet(dup.timesheet.id)
-       : null
-   );
-   return;
- }
-        const timesheetId = await buildTimesheetId(emp, periodKey);
+        // Derive range for the planned period
+        const [s, e] = periodKey.includes('_to_')
+            ? periodKey.split('_to_')
+            : [`${periodKey}-01`, `${periodKey}-31`];
+        const start = new Date(s);
+        const end = new Date(e);
 
-        // Create timesheet header in UI state (not in DB yet)
-        const newTimesheet = {
-            timesheetId,
+        // Load ALL existing dates once (across all timesheets for this employee)
+        const takenDates = await preloadExistingDates(selectedEmployee /* excludeTsId = null */);
+
+        // Collect any overlaps with the dates you’re about to create
+        const conflicts = [];
+        for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+            const ds = d.toISOString().slice(0, 10);
+            if (takenDates.has(ds)) conflicts.push(ds);
+        }
+
+        // 🚫 If any day already exists in ANY state, block creation and show message
+        if (conflicts.length) {
+            const preview = conflicts.slice(0, 5).join(', ');
+            showModal(
+                'Duplicate dates found',
+                `Cannot create a new timesheet. ${conflicts.length} day(s) in this period already exist: ${preview}${conflicts.length > 5 ? ' …' : ''}.`,
+                'warning'
+            );
+            return;
+        }
+
+        const tsId = await buildTimesheetId(emp, periodKey);
+
+        // --- Create base header ---
+        const header = {
+            timesheetId: tsId,
             periodKey,
             employeeId: selectedEmployee,
             employeeName: `${emp?.firstName || ''} ${emp?.lastName || ''}`.trim(),
@@ -584,24 +659,18 @@ const DisplayTimeSheet = () => {
             updatedAt: new Date().toISOString()
         };
 
-        setTimesheet(newTimesheet);
-        setCurrentTimesheetId(timesheetId);
+        setTimesheet(header);
+        setCurrentTimesheetId(tsId);
 
-        // Generate entries in UI state (not in DB yet)
-        const [s, e] = periodKey.includes('_to_') ? periodKey.split('_to_') : [`${periodKey}-01`, `${periodKey}-31`];
-        const start = new Date(s);
-        const end = new Date(e);
-        const rate = (Number(emp?.basicSalary) || 0) / 30;
+        // ✅ PRELOAD existing dates just once
 
-        const newEntries = [];
+        // --- Build entries in memory ---
         for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
             const dateStr = d.toISOString().slice(0, 10);
+            if (takenDates.has(dateStr)) continue;
 
             const status = (tpl.status || 'present').toLowerCase();
-            const isHalf = false;
-            const base = status === 'present' ? (isHalf ? rate / 2 : rate) : 0;
-            // In handleAutoFill function, replace the salary calculation part:
-            const dailySalary = salaryForEntry(emp, {
+            const entryLike = {
                 status: tpl.status || 'present',
                 isHalfDay: false,
                 isPublicHoliday: status === 'holiday',
@@ -609,23 +678,28 @@ const DisplayTimeSheet = () => {
                 manualDailyEnabled: tpl.manualDailyEnabled,
                 manualDailyAmount: tpl.manualDailyAmount,
                 editedBasicSalary: tpl.editedBasicSalary
-            });
+            };
+
+            const pay = salaryForEntry(emp, entryLike);
 
             const entry = {
                 date: dateStr,
                 status,
-                isHalfDay: isHalf,
+                isHalfDay: false,
                 isPublicHoliday: status === 'holiday',
                 isEmergency: false,
-                jobRole: tpl.jobRole === 'Others' ? (tpl.jobRoleCustom || '') : (tpl.jobRole || emp?.primarySkill || ''),
+                jobRole:
+                    tpl.jobRole === 'Others'
+                        ? tpl.jobRoleCustom || ''
+                        : tpl.jobRole || emp?.primarySkill || '',
                 clientId: tpl.clientId || 'DEFAULT',
                 clientName: tpl.clientName || 'Default Client',
                 periodKey,
-                timesheetId,
+                timesheetId: tsId,
                 employeeId: selectedEmployee,
                 employeeName: `${emp?.firstName || ''} ${emp?.lastName || ''}`.trim(),
                 basicSalary: Number(emp?.basicSalary) || 0,
-                dailySalary: Math.round(dailySalary),
+                dailySalary: Math.round(pay),
                 employeeId_date: `${selectedEmployee}_${dateStr}`,
                 createdBy: currentUser?.uid || 'admin',
                 createdByName: currentUser?.displayName || 'Admin',
@@ -635,13 +709,28 @@ const DisplayTimeSheet = () => {
                 updatedAt: new Date().toISOString()
             };
 
-            newEntries.push(entry);
+            // stage update paths
+            childUpdates[`${empTsById(selectedEmployee, tsId)}/dailyEntries/${dateStr}`] = entry;
+            newEntriesLocal.push(entry);
         }
 
-        setDailyEntries(newEntries);
-        setShowEntryModal(false);
-        showModal('Success', `Auto-fill completed for period ${periodKey}. Click "Submit Timesheet" to save to database.`, 'success');
+        // ✅ 1st: write header only
+        await firebaseDB.child(empTsById(selectedEmployee, tsId)).update({
+            ...(header || {}),
+            updatedAt: new Date().toISOString(),
+        });
+
+        // ✅ 2nd: write all entries in one go
+        await firebaseDB.update(childUpdates);
+
+        // update UI instantly
+        newEntriesLocal.sort((a, b) => a.date.localeCompare(b.date));
+        setDailyEntries(newEntriesLocal);
+        await calculateSummary(newEntriesLocal, advances);
+
+        showModal('Success', `Auto-fill completed for period ${periodKey}.`, 'success');
     };
+
 
 
     // Update the edit entry handler
@@ -1222,8 +1311,8 @@ const DisplayTimeSheet = () => {
             return;
         }
 
-  setEntryModalMode('autofill');
- setShowEntryModal(true);
+        setEntryModalMode('autofill');
+        setShowEntryModal(true);
     };
 
     // Add helper function to check existing entries
@@ -1370,31 +1459,44 @@ const DisplayTimeSheet = () => {
             const periodKey = getCurrentPeriodKey();
             const periodStr = useDateRange ? `${startDate} to ${endDate}` : selectedMonth;
 
-            // Ensure timesheet header exists in DB
-            await ensureTimesheetHeader(selectedEmployee, currentTimesheetId, {
-                ...timesheet,
-                period: periodStr,
-                periodKey: periodKey,
-                status: 'draft',
-                updatedAt: new Date().toISOString(),
-                updatedBy: currentUser?.uid || 'admin',
-                updatedByName: currentUser?.displayName || 'Admin'
-            });
+            // header first
+            const headerPatch = await ensureTimesheetHeader(
+                selectedEmployee,
+                currentTimesheetId,
+                pruneUndefined({
+                    period: periodStr,
+                    periodKey,
+                    status: 'draft',
+                    updatedAt: new Date().toISOString(),
+                    updatedBy: currentUser?.uid || 'admin',
+                    updatedByName: currentUser?.displayName || 'Admin'
+                })
+            );
 
-            // Save all entries to DB
+
+            // batch all entries
+            const updates = {};
             for (const entry of dailyEntries) {
-                await saveEntry(entry);
+                const path = `${empTsById(selectedEmployee, currentTimesheetId)}/dailyEntries/${entry.date}`;
+                updates[path] = {
+                    ...entry,
+                    timesheetId: currentTimesheetId,
+                    employeeId: selectedEmployee,
+                    updatedAt: new Date().toISOString(),
+                    updatedBy: currentUser?.uid || 'admin',
+                    updatedByName: currentUser?.displayName || 'Admin'
+                };
+                // optional: global index
+                // updates[`TimesheetEntries/${selectedEmployee}_${entry.date}`] = {
+                //   timesheetId: currentTimesheetId, employeeId: selectedEmployee, employeeId_date: `${selectedEmployee}_${entry.date}`, date: entry.date
+                // };
             }
+            await firebaseDB.update(updates);
 
-            await calculateSummary();
-            showModal('Success', 'Timesheet Saved Successfully', 'success');
-
-            // Refresh the data
+            await calculateSummary(); // once
             await loadPreviousTimesheets();
-
             setHasUnsavedChanges(false);
             showModal('Success', 'Timesheet Saved Successfully', 'success');
-
         } catch (error) {
             console.error('Error saving timesheet:', error);
             showModal('Error', 'Error saving timesheet. Please try again.', 'error');
@@ -1402,6 +1504,7 @@ const DisplayTimeSheet = () => {
             setIsSaving(false);
         }
     };
+
     // Save/Upsert one daily entry under the employee’s timesheet
     const saveEntry = async (entry) => {
         if (!selectedEmployee || !currentTimesheetId) return;
@@ -1514,6 +1617,16 @@ const DisplayTimeSheet = () => {
         setShowDeleteModal(true);
     };
 
+    // One confirm handler for both cases
+    const confirmDelete = async () => {
+        if (entryToDelete?.date) {
+            await deleteEntry();              // single-row delete
+        } else {
+            await deleteSelectedEntries();    // bulk delete
+        }
+    };
+
+
     // single delete
     const deleteEntry = async () => {
         try {
@@ -1593,6 +1706,8 @@ const DisplayTimeSheet = () => {
             console.error('Error deleting selected entries:', err);
             showModal('Error', 'Failed to delete selected entries. Please try again.', 'error');
         }
+
+        setShowDeleteModal()
     };
 
 
@@ -1605,6 +1720,21 @@ const DisplayTimeSheet = () => {
             if (!entryData.date && entryModalMode === 'single') {
                 return showModal('Error', 'Date is required for single entry.', 'error');
             }
+
+            // 🚫 Block duplicates across other timesheets (not just current one)
+            if (!isEditing) {
+                const crossHit = await dateExistsInOtherTimesheets(selectedEmployee, dateStr, tsId);
+                if (crossHit) {
+                    setDuplicateEntries([{
+                        ...crossHit.entry,
+                        date: dateStr,
+                        timesheetId: crossHit.tsId
+                    }]);
+                    setShowDuplicateWarning(true);
+                    return;
+                }
+            }
+
 
             const periodKey = getCurrentPeriodKey();
             const tsId = currentTimesheetId || await buildTimesheetId(emp, periodKey);
@@ -1737,61 +1867,100 @@ const DisplayTimeSheet = () => {
 
 
     const submitTimesheet = async () => {
-        if (dailyEntries.length === 0) {
-            showModal('Error', 'Cannot submit timesheet with no entries. Please add daily entries first.', 'error');
+        if (!dailyEntries?.length) {
+            showModal('Error', 'Cannot submit an empty timesheet. Please add entries first.', 'error');
             return;
         }
 
-        // Check if timesheet needs assignment
-        const needsAssignment = timesheet?.status === 'draft';
+        const alreadyAssigned = !!(timesheet?.assignedTo);
+        const chosenAssignee = assignTo || timesheet?.assignedTo || '';
 
-        if (needsAssignment) {
-            setShowAssignModal(true);
-        } else {
-            setShowConfirmModal(true);
+        if (!alreadyAssigned && !chosenAssignee) {
+            setPendingSubmitAfterAssign(true);   // 👈 remember we want to submit after assign
+            setShowAssignModal(true);            // show the old assign modal first
+            return;
         }
+
+        setShowConfirmModal(true);             // already assigned → go straight to submit modal
     };
 
-    // Update the submit function to include proper user info
-    const confirmSubmit = async () => {
-        // FIXED: Use timesheetId instead of currentTimesheetId for consistency
+    const confirmAssignAndProceed = async () => {
+        const assignee = assignTo || '';
+        if (!assignee) {
+            showModal('Select Assignee', 'Please choose a user to assign.', 'warning');
+            return;
+        }
         if (!selectedEmployee || !timesheet?.timesheetId) {
             showModal('Error', 'Timesheet context missing.', 'error');
             return;
         }
-
         try {
-            const headerData = {
+            const patch = pruneUndefined({
+                assignedTo: assignee,
+                assignedAt: new Date().toISOString(),
+                updatedAt: new Date().toISOString(),
+                updatedBy: currentUser?.uid || 'admin',
+                updatedByName: currentUser?.displayName || 'Admin',
+            });
+
+            await firebaseDB.child(empTsById(selectedEmployee, timesheet.timesheetId)).update(patch);
+
+            setTimesheet(prev => ({ ...(prev || {}), ...patch }));
+            setShowAssignModal(false);
+
+            // 👇 Open Submit modal automatically if this assign came from a submit attempt
+            if (pendingSubmitAfterAssign) {
+                setTimeout(() => setShowConfirmModal(true), 0); // ensure clean re-render
+                setPendingSubmitAfterAssign(false);
+            }
+        } catch (e) {
+            console.error('Error assigning timesheet:', e);
+            showModal('Error', 'Failed to assign. Please try again.', 'error');
+        }
+    };
+
+
+
+    const confirmSubmit = async () => {
+        await calculateSummary();
+        if (!selectedEmployee || !timesheet?.timesheetId) {
+            showModal('Error', 'Timesheet context missing.', 'error');
+            return;
+        }
+        if (!timesheet?.assignedTo) {
+            // Safety guard; should be set by the Assign step
+            showModal('Select Assignee', 'Please assign this timesheet before submitting.', 'warning');
+            setShowConfirmModal(false);
+            setShowAssignModal(true);
+            return;
+        }
+        try {
+            const finalHeader = pruneUndefined({
                 ...timesheet,
                 status: 'submitted',
                 submittedBy: currentUser?.uid || 'admin',
                 submittedByName: currentUser?.displayName || currentUser?.email || 'System User',
                 submittedAt: new Date().toISOString(),
                 submissionComment: submitComment || '',
-                assignedTo: assignTo || timesheet?.assignedTo,
-                assignedAt: assignTo ? new Date().toISOString() : timesheet?.assignedAt,
-                updatedAt: new Date().toISOString()
-            };
+                updatedAt: new Date().toISOString(),
+            });
 
-            // FIXED: Use timesheetId in the path
-            await firebaseDB.child(empTsById(selectedEmployee, timesheet.timesheetId)).set(headerData);
+            await firebaseDB.child(empTsById(selectedEmployee, timesheet.timesheetId)).update(finalHeader);
 
-            // Clear daily entries and timesheet after submission
+            setShowConfirmModal(false);
+            showModal('Success', 'Timesheet submitted successfully!', 'success');
+
+            await loadPreviousTimesheets();
             setDailyEntries([]);
             setTimesheet(null);
             setCurrentTimesheetId('');
-
-            setShowConfirmModal(false);
-            setShowAssignModal(false);
-
-            await loadPreviousTimesheets();
-            showModal('Success', 'Timesheet submitted successfully!', 'success');
-
-        } catch (error) {
-            console.error('Error submitting timesheet:', error);
+        } catch (e) {
+            console.error('Error submitting timesheet:', e);
             showModal('Error', 'Error submitting timesheet. Please try again.', 'error');
         }
     };
+
+
     const assignTimesheet = async () => {
         // FIXED: Use timesheetId instead of timesheet?.id
         if (!timesheet?.timesheetId || !selectedEmployee || !assignTo) {
@@ -1889,43 +2058,20 @@ const DisplayTimeSheet = () => {
             {/* Employee Search and Period Selection in Gray Card */}
             <div className="row mb-4">
                 <div className="col-12">
-                    <div className="card bg-secondary bg-opacity-10 border border-secondary">
-                        <div className="card-body">
-                            <div className="row g-3 align-items-end">
-                                <div className="col-md-4">
-                                    <label className="form-label text-warning mb-1">
-                                        <strong><i className="fas fa-search me-2"></i>Search Employee</strong>
-                                    </label>
-                                    <WorkerSearch
-                                        employees={employees}
-                                        onSelectEmployee={setSelectedEmployee}
-                                        selectedEmployee={selectedEmployee}
-                                    />
-                                </div>
-
-
-                                {/* Add this in the search section card, after the period selection */}
-                                <div className="col-md-2">
-                                    <label className="form-label text-warning mb-1">
-                                        <strong><i className="bi bi-clock-history me-2"></i>Previous Timesheets</strong>
-                                    </label>
-                                    <button
-                                        className="btn btn-outline-info w-100"
-                                        onClick={loadPreviousTimesheets}
-                                        disabled={!selectedEmployee}
-                                    >
-                                        <i className="bi bi-list-ul me-2"></i>
-                                        Show All Previous
-                                    </button>
-                                </div>
-                            </div>
+                    <div className="row g-3 align-items-end">
+                        <div className="col-md-4 m-auto">
+                            <label className="form-label text-warning mb-1">
+                                <strong><i className="fas fa-search me-2"></i>Search Employee</strong>
+                            </label>
+                            <WorkerSearch
+                                employees={employees}
+                                onSelectEmployee={setSelectedEmployee}
+                                selectedEmployee={selectedEmployee}
+                            />
                         </div>
                     </div>
                 </div>
             </div>
-
-
-
 
             {/* Previous Timesheets Table */}
             {loadingPrevious ? (
@@ -1987,7 +2133,7 @@ const DisplayTimeSheet = () => {
                                                         </span>
                                                     </td>
                                                     <td>
-                                                        <small>{ts.submittedByName || 'Not Submitted'}</small>
+                                                        <small>{authUser.name || 'Not Submitted'}</small>
                                                     </td>
                                                     <td>
                                                         <small className="text-muted">
@@ -1998,7 +2144,7 @@ const DisplayTimeSheet = () => {
                                                         <small>{ts.assignedToName || 'Not Assigned'}</small>
                                                     </td>
                                                     <td>
-                                                        <small>{ts.assignedByName || 'Not Assigned'}</small>
+                                                        <small>{authUser.name || 'Not Assigned'}</small>
                                                     </td>
                                                     <td>
                                                         <small className="text-muted">
@@ -2016,8 +2162,19 @@ const DisplayTimeSheet = () => {
                                                                     setSelectedEmployee(ts.employeeId);
                                                                     setTimesheet(ts);
                                                                     setCurrentTimesheetId(ts.timesheetId || ts.id);
+
+                                                                    // also mirror the UI period selection so filters match this sheet
+                                                                    if ((ts.periodKey || '').includes('_to_')) {
+                                                                        const [s, e] = (ts.periodKey || '').split('_to_');
+                                                                        setUseDateRange(true); setStartDate(s); setEndDate(e);
+                                                                    } else {
+                                                                        setUseDateRange(false);
+                                                                        setSelectedMonth(ts.periodKey || (ts.period ?? '').slice(0, 7));
+                                                                    }
+
                                                                     await loadDailyEntriesByTimesheetId(ts.employeeId, ts.timesheetId || ts.id);
                                                                 }}
+
                                                             >
                                                                 <i className="bi bi-folder2-open"></i>
                                                             </button>
@@ -2082,7 +2239,7 @@ const DisplayTimeSheet = () => {
                                     <i className="bi bi-search display-4 opacity-50"></i>
                                 </div>
                                 <h4 className="text-white mb-3 opacity-50">Welcome to Timesheet Management</h4>
-                                <p className="text-muted mb-4">
+                                <p className="text-muted mb-4 opacity-75">
                                     Please select an employee to view or manage their timesheet entries.
                                 </p>
                                 <div className="row justify-content-center">
@@ -2257,6 +2414,7 @@ const DisplayTimeSheet = () => {
                         <div className="col-lg-8">
                             <DailyEntriesTable
                                 entries={dailyEntries}
+                                timesheetId={timesheet?.timesheetId}
                                 onEdit={(entry) => {
                                     if (!timesheet) {
                                         showModal('Info', 'Please create a timesheet first.', 'info');
@@ -2415,7 +2573,7 @@ const DisplayTimeSheet = () => {
                                     <div className="list-group list-group-flush bg-transparent">
                                         <div className="list-group-item bg-transparent border-secondary d-flex justify-content-between align-items-center px-0">
                                             <span className="text-muted">Submitted By</span>
-                                            <span className="text-white">{currentUser?.displayName || currentUser?.email || 'Current User'}</span>
+                                            <span className="text-white">{authUser?.name || authUser?.email || 'Current User'}</span>
                                         </div>
                                         <div className="list-group-item bg-transparent border-secondary d-flex justify-content-between align-items-center px-0">
                                             <span className="text-muted">Working Days</span>
@@ -2479,7 +2637,7 @@ const DisplayTimeSheet = () => {
                                     <i className="fas fa-times me-1"></i>
                                     Cancel
                                 </button>
-                                <button type="button" className="btn btn-danger" onClick={deleteSelectedEntries}>
+                                <button type="button" className="btn btn-danger" onClick={confirmDelete}>
                                     <i className="bi bi-trash me-1"></i>
                                     Delete
                                 </button>
@@ -2735,8 +2893,8 @@ const DisplayTimeSheet = () => {
                                 )}
 
                                 <div className="alert alert-info bg-info bg-opacity-10 border-info">
-                                    <small>
-                                        <strong>Submitted by:</strong> {currentUser?.displayName || currentUser?.email || 'Current User'}
+                                    <small className='text-white opacity-50'>
+                                        <strong>Submitted by:</strong> {authUser?.name || authUser?.email || 'Current User'}
                                         <br />
                                         <strong>Timestamp:</strong> {new Date().toLocaleString('en-IN')}
                                     </small>
@@ -2878,6 +3036,7 @@ const DisplayTimeSheet = () => {
                                             for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
                                                 const dateStr = d.toISOString().slice(0, 10);
                                                 if (dailyEntries.some(e => e.date === dateStr)) continue;
+                                                await loadDailyEntriesByTimesheetId(selectedEmployee, currentTimesheetId);
 
                                                 await saveEntry({
                                                     date: dateStr,
@@ -2894,7 +3053,7 @@ const DisplayTimeSheet = () => {
                                                 });
                                             }
 
-                                            await loadDailyEntriesByTimesheetId(selectedEmployee, currentTimesheetId);
+
                                             setShowAutoFillModal(false);
                                         } catch (err) {
                                             console.error('Auto-fill failed:', err);

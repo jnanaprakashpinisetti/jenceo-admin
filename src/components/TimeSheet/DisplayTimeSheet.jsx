@@ -366,11 +366,11 @@ const DisplayTimeSheet = () => {
         return taken;
     };
 
-
-
-
-
-
+    // Read-only if Dashboard has marked it approved/rejected
+    const isReadOnly = React.useMemo(() => {
+        const s = String(timesheet?.status || '').toLowerCase();
+        return s === 'approved' || s === 'rejected';
+    }, [timesheet?.status]);
 
 
     // PATCH: delete an entire timesheet (no dual nodes)
@@ -2244,20 +2244,16 @@ const DisplayTimeSheet = () => {
                                                                 className="btn btn-outline-info"
                                                                 title="Open this timesheet"
                                                                 onClick={async () => {
-                                                                    setSelectedEmployee(ts.employeeId);
+                                                                    // Don’t change filters here; just open the sheet
+                                                                    if (ts.employeeId && ts.employeeId !== selectedEmployee) {
+                                                                        setSelectedEmployee(ts.employeeId); // guard: only if different
+                                                                    }
                                                                     setTimesheet(ts);
                                                                     setCurrentTimesheetId(ts.timesheetId || ts.id);
-
-                                                                    // also mirror the UI period selection so filters match this sheet
-                                                                    if ((ts.periodKey || '').includes('_to_')) {
-                                                                        const [s, e] = (ts.periodKey || '').split('_to_');
-                                                                        setUseDateRange(true); setStartDate(s); setEndDate(e);
-                                                                    } else {
-                                                                        setUseDateRange(false);
-                                                                        setSelectedMonth(ts.periodKey || (ts.period ?? '').slice(0, 7));
-                                                                    }
-
-                                                                    await loadDailyEntriesByTimesheetId(ts.employeeId, ts.timesheetId || ts.id);
+                                                                    await loadDailyEntriesByTimesheetId(
+                                                                        ts.employeeId || selectedEmployee,
+                                                                        ts.timesheetId || ts.id
+                                                                    );
                                                                 }}
 
                                                             >

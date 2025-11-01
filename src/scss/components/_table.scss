@@ -970,3 +970,9 @@ table {
 .tiny {
     font-size: 0.75rem;
 }
+
+.ts-readonly-row {
+    opacity: .6;
+    pointer-events: none;
+ 
+}

@@ -69,6 +69,67 @@ const monthParts = (yyyyMm) => {
 const pruneUndefined = (obj = {}) =>
     Object.fromEntries(Object.entries(obj).filter(([_, v]) => v !== undefined));
 
+// === READ-ONLY / STATUS / NAMES / HYDRATION HELPERS (PURE) ===
+
+// Timesheet is locked if approved or rejected
+const isSheetReadOnly = (ts) => {
+    const s = String(ts?.status || '').toLowerCase();
+    return s === 'approved' || s === 'rejected';
+};
+
+// Status → badge meta for UI badges (also used on rows)
+const statusMeta = (s) => {
+    const k = String(s || 'draft').toLowerCase();
+    const map = {
+        draft: { text: 'Draft', class: 'badge bg-secondary' },
+        assigned: { text: 'Assigned', class: 'badge bg-info' },
+        submitted: { text: 'Submitted', class: 'badge bg-primary' },
+        clarification: { text: 'Clarification', class: 'badge bg-warning text-dark' },
+        approved: { text: 'Approved', class: 'badge bg-success' },
+        rejected: { text: 'Rejected', class: 'badge bg-danger' },
+    };
+    return map[k] || map.draft;
+};
+
+// Format period for header display:
+// - Monthly: "Nov-25"
+// - Range:   "Nov-10 to Dec-10 '25"
+const monthShort = (yyyyMm) => {
+    if (!/^\d{4}-\d{2}$/.test(yyyyMm)) return yyyyMm || '';
+    const [y, m] = yyyyMm.split('-');
+    const month = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][parseInt(m, 10) - 1] || m;
+    return `${month}-${String(y).slice(-2)}`;
+};
+const formatPeriodLabel = (periodKey) => {
+    if (!periodKey) return '';
+    if (periodKey.includes('_to_')) {
+        const [s, e] = periodKey.split('_to_'); // YYYY-MM-DD
+        const [sy, sm, sd] = s.split('-');
+        const [ey, em, ed] = e.split('-');
+        const smon = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][parseInt(sm, 10) - 1];
+        const emon = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][parseInt(em, 10) - 1];
+        const yy = String(ey).slice(-2);
+        return `${smon}-${sd} to ${emon}-${ed} '${yy}`;
+    }
+    // monthly (YYYY-MM)
+    return monthShort(periodKey);
+};
+
+
+// Current user id/name pair for audit fields (pass currentUser)
+const who = (cu) => ({
+    uid: cu?.uid || 'admin',
+    name: cu?.displayName || cu?.email || 'Admin',
+});
+
+// Ensure each entry object has timesheetId + timesheetStatus for table rendering
+// Pass the final tsId and tsStatus explicitly
+const hydrateEntriesWithTsMeta = (rows, tsId, tsStatus) =>
+    (rows || []).map(r => ({
+        ...r,
+        timesheetId: r.timesheetId || tsId || '',
+        timesheetStatus: r.timesheetStatus || String(tsStatus || 'draft'),
+    }));
 
 
 const DisplayTimeSheet = () => {
@@ -126,6 +187,11 @@ const DisplayTimeSheet = () => {
     const newEntriesLocal = [];
     const childUpdates = {};
 
+    const [showClarifyReplyModal, setShowClarifyReplyModal] = useState(false);
+    const [clarifyCommentId, setClarifyCommentId] = useState('');
+    const [clarifyText, setClarifyText] = useState('');
+
+
 
 
 
@@ -160,7 +226,9 @@ const DisplayTimeSheet = () => {
     const ensureTimesheetHeader = async (empId, tsId, header = {}) => {
         const emp = employees.find(e => e.id === empId);
         const periodKey = getCurrentPeriodKey();
-        const periodStr = useDateRange ? `${startDate} to ${endDate}` : selectedMonth;
+        const rawKey = getCurrentPeriodKey();
+        const periodStr = formatPeriodLabel(rawKey);
+
 
         const base = {
             employeeId: empId,
@@ -170,7 +238,7 @@ const DisplayTimeSheet = () => {
             periodKey: periodKey || '',
             startDate: useDateRange ? startDate : `${selectedMonth}-01`,
             endDate: useDateRange ? endDate : `${selectedMonth}-31`,
-            status: 'draft',
+            status: header?.status ?? undefined,
             updatedAt: new Date().toISOString(),
             updatedBy: currentUser?.uid || 'admin',
             updatedByName: currentUser?.displayName || 'Admin',
@@ -226,7 +294,7 @@ const DisplayTimeSheet = () => {
 
 
     // Load entries by employee + timesheetId
-    const loadDailyEntriesByTimesheetId = async (empId, tsId) => {
+    const loadDailyEntriesByTimesheetId = async (empId, tsId, tsStatus = 'draft') => {
         const snap = await firebaseDB.child(`${empTsById(empId, tsId)}/dailyEntries`).get();
         const obj = snap.val() || {};
         const list = Object.keys(obj)
@@ -235,10 +303,32 @@ const DisplayTimeSheet = () => {
                 id: date,
                 _rowKey: `${empId}_${date}`,
                 ...obj[date],
-                date, // keep guaranteed
+                date,
             }));
+        // set rows
         setDailyEntries(list);
+        // hydrate with TS meta WITHOUT touching component vars here
+        setDailyEntries(prev => hydrateEntriesWithTsMeta(prev, tsId, tsStatus));
     };
+
+
+    const openClarifyReply = (commentId) => {
+        if (!commentId) return;
+        setClarifyCommentId(commentId);
+        setClarifyText('');
+        setShowClarifyReplyModal(true);
+    };
+    const submitClarifyReply = async () => {
+        if (!clarifyText.trim()) {
+            showModal('Write something', 'Please enter your reply.', 'warning');
+            return;
+        }
+        await handleReplyToClarification(clarifyCommentId, clarifyText);
+        setShowClarifyReplyModal(false);
+        setClarifyCommentId('');
+        setClarifyText('');
+    };
+
 
 
 
@@ -651,6 +741,11 @@ const DisplayTimeSheet = () => {
         return uid; // fallback to UID if no name found
     };
     const handleAutoFill = async (tpl) => {
+        if (isSheetReadOnly(timesheet)) {
+            showModal('Locked', `This timesheet is ${timesheet?.status}. Editing is disabled.`, 'warning');
+            return;
+        }
+
         const emp = employees.find(e => e.id === selectedEmployee);
         if (!emp) return showModal('Error', 'Select employee first.', 'error');
 
@@ -769,6 +864,12 @@ const DisplayTimeSheet = () => {
         // update UI instantly
         newEntriesLocal.sort((a, b) => a.date.localeCompare(b.date));
         setDailyEntries(newEntriesLocal);
+        setDailyEntries(prev => hydrateEntriesWithTsMeta(
+            prev,
+            tsId,
+            'draft'
+        ));
+
         await calculateSummary(newEntriesLocal, advances);
 
         showModal('Success', `Auto-fill completed for period ${periodKey}.`, 'success');
@@ -778,6 +879,8 @@ const DisplayTimeSheet = () => {
 
     // Update the edit entry handler
     const handleEditEntry = (entry) => {
+        if (isSheetReadOnly(timesheet)) { showModal('Locked', `This timesheet is ${timesheet?.status}. Editing is disabled.`, 'warning'); return; }
+
         if (!checkEditPermission(timesheet?.status)) {
             return;
         }
@@ -789,6 +892,8 @@ const DisplayTimeSheet = () => {
 
     // Update the add new entry handler
     const handleAddEntry = () => {
+        if (isSheetReadOnly(timesheet)) { showModal('Locked', `This timesheet is ${timesheet?.status}. Editing is disabled.`, 'warning'); return; }
+
         if (!selectedEmployee) {
             alert('Please select an employee first.');
             return;
@@ -946,6 +1051,40 @@ const DisplayTimeSheet = () => {
             setIsCreatingTimesheet(false);
         }
     };
+
+    // Create a reply under a clarification comment node for this timesheet
+    const postClarificationReply = async ({ empId, tsId, commentId, text }) => {
+        if (!text?.trim()) return;
+        const now = new Date().toISOString();
+        const { uid, name } = who(currentUser);
+
+        const reply = { text: text.trim(), by: uid, byName: name, at: now };
+        const basePath = `${empTsById(empId, tsId)}/clarifications/${commentId}`;
+        const key = firebaseDB.child(`${basePath}/replies`).push().key;
+
+        await firebaseDB.update({
+            [`${basePath}/replies/${key}`]: reply,
+            [`${basePath}/lastUpdatedAt`]: now,
+            [`${basePath}/lastUpdatedBy`]: uid,
+            [`${basePath}/lastUpdatedByName`]: name,
+        });
+    };
+
+    // Convenience wrapper for UI
+    const handleReplyToClarification = async (commentId, text) => {
+        if (!selectedEmployee || !timesheet?.timesheetId) {
+            showModal('Error', 'Timesheet context missing.', 'error');
+            return;
+        }
+        await postClarificationReply({
+            empId: selectedEmployee,
+            tsId: timesheet.timesheetId,
+            commentId,
+            text
+        });
+        showModal('Success', 'Reply posted.', 'success');
+    };
+
     // Alternative method to load timesheets from different paths
     const loadAlternativeTimesheets = async () => {
         if (!selectedEmployee) return;
@@ -1032,7 +1171,6 @@ const DisplayTimeSheet = () => {
     };
 
     // PATCH: jump to a selected previous timesheet and hydrate the live view
-    // Update the openPreviousTimesheet function
     const openPreviousTimesheet = async (tsId) => {
         if (!selectedEmployee || !tsId) return;
 
@@ -1054,6 +1192,7 @@ const DisplayTimeSheet = () => {
 
         setTimesheet(enhancedTs);
         setCurrentTimesheetId(tsId);
+        await loadDailyEntriesByTimesheetId(selectedEmployee, tsId, enhancedTs?.status || 'draft');
 
         // Load daily entries
         const entriesSnap = await firebaseDB.child(`${empTsById(selectedEmployee, tsId)}/dailyEntries`).get();
@@ -1068,6 +1207,13 @@ const DisplayTimeSheet = () => {
                 }))
                 .sort((a, b) => new Date(a.date) - new Date(b.date));
             setDailyEntries(entries);
+            setDailyEntries(prev => hydrateEntriesWithTsMeta(
+                prev,
+                tsId,
+                ts?.status || 'draft'
+            ));
+
+
         } else {
             setDailyEntries([]);
         }
@@ -1530,6 +1676,11 @@ const DisplayTimeSheet = () => {
 
     // Add save timesheet function
     const saveTimesheet = async () => {
+        if (isSheetReadOnly(timesheet)) {
+            showModal('Locked', `This timesheet is ${timesheet?.status}. Editing is disabled.`, 'warning');
+            return;
+        }
+
         if (!selectedEmployee || !currentTimesheetId) {
             showModal('Error', 'Please select an employee and ensure timesheet is loaded.', 'error');
             return;
@@ -1547,7 +1698,7 @@ const DisplayTimeSheet = () => {
                 pruneUndefined({
                     period: periodStr,
                     periodKey,
-                    status: 'draft',
+                    // status: 'draft',  // ← REMOVE THIS LINE
                     updatedAt: new Date().toISOString(),
                     updatedBy: currentUser?.uid || 'admin',
                     updatedByName: currentUser?.displayName || 'Admin'
@@ -1693,6 +1844,8 @@ const DisplayTimeSheet = () => {
 
 
     const confirmDeleteEntry = (entry) => {
+        if (isSheetReadOnly(timesheet)) { showModal('Locked', `This timesheet is ${timesheet?.status}. Editing is disabled.`, 'warning'); return; }
+
         // pass the whole entry or at least { date }
         setEntryToDelete(entry);
         setShowDeleteModal(true);
@@ -1710,6 +1863,8 @@ const DisplayTimeSheet = () => {
 
     // single delete
     const deleteEntry = async () => {
+        if (isSheetReadOnly(timesheet)) { showModal('Locked', `This timesheet is ${timesheet?.status}. Editing is disabled.`, 'warning'); return; }
+
         try {
             if (!entryToDelete?.date || !currentTimesheetId || !selectedEmployee) return;
 
@@ -1734,6 +1889,8 @@ const DisplayTimeSheet = () => {
     // bulk delete
     // ✅ Delete selected daily entries safely (no table flicker, no ESLint errors)
     const deleteSelectedEntries = async () => {
+        if (isSheetReadOnly(timesheet)) { showModal('Locked', `This timesheet is ${timesheet?.status}. Editing is disabled.`, 'warning'); return; }
+
         if (!selectedEntries?.length || !currentTimesheetId || !selectedEmployee) {
             showModal('Error', 'No entries selected or missing required data.', 'error');
             return;
@@ -1942,11 +2099,6 @@ const DisplayTimeSheet = () => {
         await loadPreviousTimesheets(); // so the summary row reflects totals
     };
 
-
-
-
-
-
     const submitTimesheet = async () => {
         if (!dailyEntries?.length) {
             showModal('Error', 'Cannot submit an empty timesheet. Please add entries first.', 'error');
@@ -1976,14 +2128,21 @@ const DisplayTimeSheet = () => {
             return;
         }
         try {
-            const patch = pruneUndefined({
-                assignedTo: assignee,
-                assignedAt: new Date().toISOString(),
-                updatedAt: new Date().toISOString(),
-                updatedBy: currentUser?.uid || 'admin',
-                updatedByName: currentUser?.displayName || 'Admin',
-            });
+            const { uid, name } = who(currentUser);
+            const assignedUserName = nameForUid(assignTo);
 
+            const patch = pruneUndefined({
+                assignedTo: assignTo,
+                assignedToName: assignedUserName,
+                assignedBy: uid,
+                assignedByName: name,
+                assignedAt: new Date().toISOString(),
+                status: 'assigned',
+                updatedAt: new Date().toISOString(),
+                updatedBy: uid,
+                updatedByName: name,
+            });
+            await firebaseDB.child(empTsById(selectedEmployee, timesheet.timesheetId)).update(patch);
             await firebaseDB.child(empTsById(selectedEmployee, timesheet.timesheetId)).update(patch);
 
             setTimesheet(prev => ({ ...(prev || {}), ...patch }));
@@ -2017,15 +2176,19 @@ const DisplayTimeSheet = () => {
             return;
         }
         try {
+            const { uid, name } = who(currentUser);
             const finalHeader = pruneUndefined({
                 ...timesheet,
                 status: 'submitted',
-                submittedBy: currentUser?.uid || 'admin',
-                submittedByName: currentUser?.displayName || currentUser?.email || 'System User',
+                submittedBy: uid,
+                submittedByName: name,
                 submittedAt: new Date().toISOString(),
                 submissionComment: submitComment || '',
                 updatedAt: new Date().toISOString(),
+                updatedBy: uid,
+                updatedByName: name,
             });
+            await firebaseDB.child(empTsById(selectedEmployee, timesheet.timesheetId)).update(finalHeader);
 
             await firebaseDB.child(empTsById(selectedEmployee, timesheet.timesheetId)).update(finalHeader);
             await settleAdvancesForActivePeriod(selectedEmployee, timesheet.timesheetId);
@@ -2045,43 +2208,61 @@ const DisplayTimeSheet = () => {
 
 
     const assignTimesheet = async () => {
-        // FIXED: Use timesheetId instead of timesheet?.id
+        // read-only guard
+        if (isSheetReadOnly(timesheet)) {
+            showModal('Locked', `This timesheet is ${timesheet?.status}. Editing is disabled.`, 'warning');
+            return;
+        }
+
+        // validate context
         if (!timesheet?.timesheetId || !selectedEmployee || !assignTo) {
             showModal('Error', 'Please select a user to assign.', 'error');
             return;
         }
 
         try {
+            // ⬇️ declare before using anywhere
             const assignedUser = allUsers.find(u => u.uid === assignTo);
             if (!assignedUser) {
                 showModal('Error', 'Selected user not found. Please try again.', 'error');
                 return;
             }
 
+            const { uid, name } = who(currentUser); // { uid, name } snapshot for audit
+
             const patch = {
                 assignedTo: assignTo,
-                assignedToName: assignedUser.displayName || assignedUser.email || 'Unknown User',
+                assignedToName: assignedUser.displayName || assignedUser.email || assignTo, // snapshot
                 assignedToRole: assignedUser.role || 'user',
-                assignedBy: currentUser?.uid,
-                assignedByName: currentUser?.displayName || currentUser?.email || 'System',
+                assignedBy: uid,
+                assignedByName: name, // snapshot
                 assignedAt: new Date().toISOString(),
                 status: 'assigned',
                 updatedAt: new Date().toISOString(),
+                updatedBy: uid,
+                updatedByName: name,
             };
 
-            // FIXED: Use timesheetId in the path
             await firebaseDB.child(empTsNode(selectedEmployee, timesheet.timesheetId)).update(patch);
+
             setTimesheet(prev => ({ ...(prev || {}), ...patch }));
             setShowAssignModal(false);
             setAssignTo('');
 
             showModal('Success', `Timesheet assigned to ${assignedUser.displayName || assignedUser.email}`, 'success');
             await loadPreviousTimesheets();
+
+            // If the assign came from a submit attempt, open submit modal now
+            if (pendingSubmitAfterAssign) {
+                setTimeout(() => setShowConfirmModal(true), 0);
+                setPendingSubmitAfterAssign(false);
+            }
         } catch (error) {
             console.error('Error assigning timesheet:', error);
             showModal('Error', 'Failed to assign timesheet. Please try again.', 'error');
         }
     };
+
     // Add this state
     const [showEditProtectedModal, setShowEditProtectedModal] = useState(false);
 
@@ -2201,11 +2382,16 @@ const DisplayTimeSheet = () => {
                                         </thead>
                                         <tbody>
                                             {previousTimesheets.map((ts) => (
-                                                <tr key={ts.timesheetId || ts.id}>
+                                                <tr key={ts.timesheetId || ts.id}
+                                                    className={`${isSheetReadOnly(ts) ? 'ts-readonly-row' : ''}`}
+                                                >
                                                     <td className="text-info fw-bold">
                                                         {ts.timesheetId || ts.id}
                                                     </td>
-                                                    <td>{ts.period || ts.periodKey}</td>
+                                                    <td>
+                                                        <strong>{timesheet?.period || formatPeriodLabel(timesheet?.periodKey)}</strong>
+
+                                                    </td>
                                                     <td>
                                                         <span className={
                                                             `badge ${ts.status === 'approved' ? 'bg-success' :
@@ -3127,6 +3313,8 @@ const DisplayTimeSheet = () => {
                                                     status: 'present',
                                                     isHalfDay: false,
                                                     isPublicHoliday: false,
+                                                    updatedBy: client.uid,
+                                                    updatedByName: client.name,
                                                     isEmergency: false,
                                                     notes: 'Auto-filled',
                                                     period: currentPeriod, // ✅ Use computed currentPeriod
@@ -3238,6 +3426,33 @@ const DisplayTimeSheet = () => {
                     </div>
                 </div>
             )}
+
+            {showClarifyReplyModal && (
+                <div className="modal d-block" tabIndex="-1" role="dialog">
+                    <div className="modal-dialog" role="document">
+                        <div className="modal-content">
+                            <div className="modal-header">
+                                <h5 className="modal-title">Reply to clarification</h5>
+                                <button type="button" className="btn-close" onClick={() => setShowClarifyReplyModal(false)} />
+                            </div>
+                            <div className="modal-body">
+                                <textarea
+                                    className="form-control"
+                                    rows={4}
+                                    value={clarifyText}
+                                    onChange={(e) => setClarifyText(e.target.value)}
+                                    placeholder="Type your reply..."
+                                />
+                            </div>
+                            <div className="modal-footer">
+                                <button className="btn btn-secondary" onClick={() => setShowClarifyReplyModal(false)}>Cancel</button>
+                                <button className="btn btn-primary" onClick={submitClarifyReply}>Post Reply</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
         </div>
     );
 };
@@ -3305,7 +3520,7 @@ const TimesheetSummary = ({ timesheet, advances, employee, currentUser }) => {
 
                             {/* Attendance Summary */}
                             <div className="col-lg-6 mb-4">
-                                <div className="card bg-dark border-info h-100">
+                                <div className="card bg-secondary bg-opacity-10 border-secondary h-100">
                                     <div className="card-header bg-info bg-opacity-10 border-info">
                                         <h6 className="mb-0 text-white">
                                             <i className="fas fa-calendar-check me-2"></i>
@@ -3350,6 +3565,15 @@ const TimesheetSummary = ({ timesheet, advances, employee, currentUser }) => {
                                                     <div className="text-white h4 mb-0">{timesheet.totalDays || 0}</div>
                                                 </div>
                                             </div>
+
+                                            <div className="col-12 mt-4 p-3 bg-primary bg-opacity-10 rounded border border-primary">
+                                                <div className="d-flex justify-content-between align-items-center">
+                                                    <div>
+                                                        <p className="text-white h6 mb-0">Comments:</p>
+                                                        <br />
+                                                    </div>
+                                                </div>
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
@@ -3357,7 +3581,7 @@ const TimesheetSummary = ({ timesheet, advances, employee, currentUser }) => {
 
                             {/* Salary Breakdown */}
                             <div className="col-lg-6 mb-4">
-                                <div className="card bg-dark border-success h-100">
+                                <div className="card bg-secondary bg-opacity-10 border-secondary h-100">
                                     <div className="card-header bg-success bg-opacity-10 border-success">
                                         <h6 className="mb-0 text-white">
                                             <i className="fas fa-money-bill-wave me-2"></i>
@@ -3393,7 +3617,7 @@ const TimesheetSummary = ({ timesheet, advances, employee, currentUser }) => {
                                         </div>
 
                                         {/* Net Payable Highlight */}
-                                        <div className="mt-4 p-3 bg-dark bg-opacity-25 rounded border border-warning">
+                                        <div className="mt-4 p-3 bg-warning bg-opacity-10 rounded border border-warning">
                                             <div className="d-flex justify-content-between align-items-center">
                                                 <div>
                                                     <span className="text-white h6 mb-0">Net Payable Amount</span>

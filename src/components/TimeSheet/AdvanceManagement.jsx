@@ -202,8 +202,8 @@ const AdvanceManagement = ({ employeeId, timesheetId, advances = [], onAdvanceAd
                     </div>
                   )}
                 </div>
-                <div className="col-md-12 bg-secondary bg-opacity-10 p-2">
-                   <div className="text-white opacity-90 small mb-2" style={{ lineHeight: '1.3' }}>
+                <div className="col-md-12 bg-secondary bg-opacity-10 p-2 rounded-2">
+                   <div className="text-white opacity-90 small mb-2" style={{ lineHeight: '1.3', opacity:.6 }}>
                     {advance.reason}
                   </div>
                 </div>

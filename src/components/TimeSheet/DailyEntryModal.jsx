@@ -1147,8 +1147,8 @@ const DailyEntryModal = ({ entry, isEditing, employee, onSave, onAutoFill, onClo
                 </div>
 
                 <div className="alert alert-info bg-info bg-opacity-10 border-info">
-                  <small>
-                    <strong>Employee:</strong> {entryDataToSave.employeeName} ({entryDataToSave.employeeId})
+                  <small className="text-info opacity-50">
+                    <strong>Employee:</strong> {entryDataToSave.employeeName}
                   </small>
                 </div>
               </div>

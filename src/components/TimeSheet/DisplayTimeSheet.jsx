@@ -241,7 +241,7 @@ const DisplayTimeSheet = () => {
             status: header?.status ?? undefined,
             updatedAt: new Date().toISOString(),
             updatedBy: currentUser?.uid || 'admin',
-            updatedByName: currentUser?.displayName || 'Admin',
+           updatedByName: snapshotName(currentUser?.uid, currentUser?.displayName || 'Admin'),
         };
 
         const patch = pruneUndefined({ ...base, ...header });
@@ -499,46 +499,10 @@ const DisplayTimeSheet = () => {
         }
     }, [selectedEmployee]);
 
-    // Initialize current month and get current user
-    useEffect(() => {
-        const current = new Date().toISOString().slice(0, 7);
-        setSelectedMonth(current);
+    const snapshotName = (uid, fallback) => (authUser?.name) || fallback || uid;
 
-        // Set default date range (current month)
-        const today = new Date();
-        const firstDay = new Date(today.getFullYear(), today.getMonth(), 1);
-        const lastDay = new Date(today.getFullYear(), today.getMonth() + 1, 0);
 
-        setStartDate(firstDay.toISOString().split('T')[0]);
-        setEndDate(lastDay.toISOString().split('T')[0]);
 
-        // Initialize Firebase Auth
-        const auth = getAuth();
-        const unsubscribe = onAuthStateChanged(auth, (user) => {
-            if (user) {
-                const userData = {
-                    uid: user.uid,
-                    displayName: user.displayName || user.email,
-                    email: user.email,
-                    photoURL: user.photoURL
-                };
-                setCurrentUser(userData);
-                // Store in localStorage for backup
-                localStorage.setItem('currentUser', JSON.stringify(userData));
-            } else {
-                // Use auth context if available
-                if (authContext && authContext.currentUser) {
-                    setCurrentUser(authContext.currentUser);
-                } else {
-                    console.log('No user logged in');
-                    // You can redirect to login page here
-                    // window.location.href = '/login';
-                }
-            }
-        });
-
-        return () => unsubscribe();
-    }, [authContext]);
 
     const [allUsers, setAllUsers] = useState([]);
     const [userSearch, setUserSearch] = useState("");
@@ -792,7 +756,7 @@ const DisplayTimeSheet = () => {
             startDate: periodKey.includes('_to_') ? periodKey.split('_to_')[0] : `${periodKey}-01`,
             endDate: periodKey.includes('_to_') ? periodKey.split('_to_')[1] : `${periodKey}-31`,
             createdBy: currentUser?.uid || 'admin',
-            createdByName: currentUser?.displayName || 'Admin',
+            createdByName: snapshotName(currentUser?.uid, currentUser?.displayName || 'Admin'),
             createdAt: new Date().toISOString(),
             updatedAt: new Date().toISOString()
         };
@@ -840,10 +804,10 @@ const DisplayTimeSheet = () => {
                 dailySalary: Math.round(pay),
                 employeeId_date: `${selectedEmployee}_${dateStr}`,
                 createdBy: currentUser?.uid || 'admin',
-                createdByName: currentUser?.displayName || 'Admin',
+                createdByName: snapshotName(currentUser?.uid, currentUser?.displayName || 'Admin'),
                 createdAt: new Date().toISOString(),
                 updatedBy: currentUser?.uid || 'admin',
-                updatedByName: currentUser?.displayName || 'Admin',
+               updatedByName: snapshotName(currentUser?.uid, currentUser?.displayName || 'Admin'),
                 updatedAt: new Date().toISOString()
             };
 
@@ -1383,7 +1347,7 @@ const DisplayTimeSheet = () => {
             advances: totalAdv,                                  // ← use period + first-sheet only
             netPayable: Math.round(totalSalary - totalAdv),      // ← recomputed
             updatedBy: currentUser?.uid || 'admin',
-            updatedByName: currentUser?.displayName || 'Admin',
+           updatedByName: snapshotName(currentUser?.uid, currentUser?.displayName || 'Admin'),
             updatedAt: new Date().toISOString(),
         };
 
@@ -1416,7 +1380,7 @@ const DisplayTimeSheet = () => {
             advances: 0,
             netPayable: 0,
             createdBy: currentUser?.uid || 'admin',
-            createdByName: currentUser?.displayName || 'Admin',
+            createdByName: snapshotName(currentUser?.uid, currentUser?.displayName || 'Admin'),
             createdAt: new Date().toISOString(),
             updatedAt: new Date().toISOString()
         };
@@ -1637,7 +1601,7 @@ const DisplayTimeSheet = () => {
                     dailySalary: dailyRate,
                     notes: 'Auto-filled',
                     createdBy: currentUser?.uid || 'admin',
-                    createdByName: currentUser?.displayName || 'Admin',
+                    createdByName: snapshotName(currentUser?.uid, currentUser?.displayName || 'Admin'),
                     createdAt: new Date().toISOString(),
                     updatedAt: new Date().toISOString()
                 };
@@ -1790,7 +1754,7 @@ const DisplayTimeSheet = () => {
 
             // audit
             updatedBy: currentUser?.uid || 'admin',
-            updatedByName: currentUser?.displayName || 'Admin',
+           updatedByName: snapshotName(currentUser?.uid, currentUser?.displayName || 'Admin'),
             updatedAt: now,
 
             // create audit if not present already (first set)
@@ -2029,7 +1993,7 @@ const DisplayTimeSheet = () => {
                     employeeId_date: `${selectedEmployee}_${dateStr}`,
                     dailySalary: computedSalary,
                     createdBy: currentUser?.uid || 'admin',
-                    createdByName: currentUser?.displayName || 'Admin',
+                    createdByName: snapshotName(currentUser?.uid, currentUser?.displayName || 'Admin'),
                     createdAt: new Date().toISOString(),
                     updatedAt: new Date().toISOString(),
                 });
@@ -2370,13 +2334,13 @@ const DisplayTimeSheet = () => {
                                                 <th>Period</th>
                                                 <th>Status</th>
                                                 <th>Submitted By</th>
-                                                <th>Submitted At</th>
                                                 <th>Assigned To</th>
                                                 <th>Assigned By</th>
-                                                <th>Assigned At</th>
                                                 <th>Working Days</th>
                                                 <th>Total Salary</th>
+                                                <th>Advance</th>
                                                 <th>Net Salary</th>
+                                                <th>Action By</th>
                                                 <th style={{ width: 120 }}>Actions</th>
                                             </tr>
                                         </thead>
@@ -2389,7 +2353,9 @@ const DisplayTimeSheet = () => {
                                                         {ts.timesheetId || ts.id}
                                                     </td>
                                                     <td>
-                                                        <strong>{timesheet?.period || formatPeriodLabel(timesheet?.periodKey)}</strong>
+                                                        <strong>
+                                                            {formatPeriodLabel(ts.periodKey) || ts.period}
+                                                        </strong>
 
                                                     </td>
                                                     <td>
@@ -2404,44 +2370,49 @@ const DisplayTimeSheet = () => {
                                                     </td>
                                                     <td>
                                                         <small>{authUser.name || 'Not Submitted'}</small>
-                                                    </td>
-                                                    <td>
+                                                        <br></br>
                                                         <small className="text-muted opacity-75">
                                                             {ts.submittedAt ? new Date(ts.submittedAt).toLocaleString('en-IN') : '-'}
                                                         </small>
                                                     </td>
+
                                                     <td>
                                                         <small>{ts.assignedToName || 'Not Assigned'}</small>
                                                     </td>
                                                     <td>
                                                         <small>{authUser.name || 'Not Assigned'}</small>
-                                                    </td>
-                                                    <td>
+                                                        <br></br>
                                                         <small className="text-muted opacity-75">
                                                             {ts.assignedAt ? new Date(ts.assignedAt).toLocaleString('en-IN') : '-'}
                                                         </small>
                                                     </td>
+
                                                     <td>{ts.workingDays ?? 0}</td>
                                                     <td>₹{Number(ts.totalSalary || 0).toFixed(0)}</td>
+                                                    <td>₹{Number(ts.advances || 0).toFixed(0)}</td>
                                                     <td className='text-warning'>₹{Number(ts.netPayable || 0).toFixed(0)}</td>
+                                                    <td>-</td>
                                                     <td>
                                                         <div className="btn-group btn-group-sm">
                                                             <button
                                                                 className="btn btn-outline-info"
                                                                 title="Open this timesheet"
                                                                 onClick={async () => {
-                                                                    // Don’t change filters here; just open the sheet
-                                                                    if (ts.employeeId && ts.employeeId !== selectedEmployee) {
-                                                                        setSelectedEmployee(ts.employeeId); // guard: only if different
+                                                                    if (
+                                                                        ts.employeeId &&
+                                                                        ts.employeeId !== selectedEmployee
+                                                                    ) {
+                                                                        setSelectedEmployee(ts.employeeId);
                                                                     }
                                                                     setTimesheet(ts);
-                                                                    setCurrentTimesheetId(ts.timesheetId || ts.id);
+                                                                    setCurrentTimesheetId(
+                                                                        ts.timesheetId || ts.id
+                                                                    );
                                                                     await loadDailyEntriesByTimesheetId(
                                                                         ts.employeeId || selectedEmployee,
                                                                         ts.timesheetId || ts.id
                                                                     );
                                                                 }}
-
                                                             >
                                                                 <i className="bi bi-folder2-open"></i>
                                                             </button>
@@ -2449,19 +2420,33 @@ const DisplayTimeSheet = () => {
                                                                 className="btn btn-outline-primary"
                                                                 title="Jump to period"
                                                                 onClick={() => {
-                                                                    if ((ts.periodKey || '').includes('_to_')) {
-                                                                        const [s, e] = (ts.periodKey || '').split('_to_');
+                                                                    if ((ts.periodKey || "").includes("_to_")) {
+                                                                        const [s, e] = (ts.periodKey || "").split(
+                                                                            "_to_"
+                                                                        );
                                                                         setUseDateRange(true);
                                                                         setStartDate(s);
                                                                         setEndDate(e);
                                                                     } else {
                                                                         setUseDateRange(false);
-                                                                        setSelectedMonth(ts.periodKey || (ts.period ?? '').slice(0, 7));
+                                                                        setSelectedMonth(
+                                                                            ts.periodKey ||
+                                                                            (ts.period ?? "").slice(0, 7)
+                                                                        );
                                                                     }
                                                                 }}
                                                             >
                                                                 <i className="bi bi-calendar-range"></i>
                                                             </button>
+                                                            {ts.status === "clarification" && (
+                                                                <button
+                                                                    className="btn btn-outline-warning ms-1"
+                                                                    title="Reply to Clarification"
+                                                                    onClick={() => openClarifyReply(ts.id)}
+                                                                >
+                                                                    <i className="bi bi-reply"></i>
+                                                                </button>
+                                                            )}
                                                         </div>
                                                     </td>
                                                 </tr>
@@ -2701,6 +2686,7 @@ const DisplayTimeSheet = () => {
                         </div>
                         <div className="col-lg-4">
                             <AdvanceManagement
+                                key={`${selectedEmployee}-${timesheet?.timesheetId || 'new'}`}
                                 employeeId={selectedEmployee}
                                 timesheetId={timesheet?.id || ''}
                                 advances={advances}
@@ -3487,12 +3473,6 @@ const TimesheetSummary = ({ timesheet, advances, employee, currentUser }) => {
                                 <h5 className="card-title mb-0 text-info">
                                     Timesheet Summary - {timesheet.employeeName}
                                 </h5>
-                                <small className="text-light">
-                                    {employee?.employeeId || employee?.idNo} • {employee?.primarySkill}
-                                </small>
-                                <small className="ms-2 text-warning">
-                                    Basic Salary:   {employee?.basicSalary}
-                                </small>
                             </div>
 
 
@@ -3566,14 +3546,16 @@ const TimesheetSummary = ({ timesheet, advances, employee, currentUser }) => {
                                                 </div>
                                             </div>
 
-                                            <div className="col-12 mt-4 p-3 bg-primary bg-opacity-10 rounded border border-primary">
-                                                <div className="d-flex justify-content-between align-items-center">
-                                                    <div>
-                                                        <p className="text-white h6 mb-0">Comments:</p>
-                                                        <br />
-                                                    </div>
-                                                </div>
+                                            <div className="mt-2">
+                                                <h6 className="text-white mb-1">
+                                                    <i className="bi bi-chat-left-text me-2"></i>
+                                                    Comments & Notes
+                                                </h6>
+                                                <textarea name="timesheet-comments" className="form-control bg-transparent border-primary text-white">
+
+                                                </textarea>
                                             </div>
+
                                         </div>
                                     </div>
                                 </div>
@@ -3642,13 +3624,15 @@ const TimesheetSummary = ({ timesheet, advances, employee, currentUser }) => {
 // Daily Entries Table Component with Checkboxes and Modified By
 const DailyEntriesTable = ({
     entries,
+    timesheetId,
+    timesheet,
     onEdit,
     onDelete,
     totalSalary,
     isDisabled,
     selectedEntries,
     onSelectEntry,
-    onSelectAllEntries
+    onSelectAllEntries,
 }) => {
     const { user: authUser } = useAuth(); // Get current logged-in user from auth context
 
@@ -3659,11 +3643,29 @@ const DailyEntriesTable = ({
     return (
         <div className="card bg-dark border-secondary">
             <div className="card-header bg-info bg-opacity-25 border-info d-flex justify-content-between align-items-center">
-                <h5 className="card-title mb-0 text-white">
-                    <i className="fas fa-calendar-day me-2"></i>
-                    Daily Entries ({entries.length})
-                </h5>
-
+                <div>
+                    <h5 className="card-title mb-0 text-white">
+                        <i className="fas fa-calendar-day me-2"></i>
+                        Daily Entries ({entries.length})
+                    </h5>
+                    {timesheetId && (
+                        <div className="mt-1">
+                            <small className="text-warning me-3">
+                                <strong>Timesheet ID:</strong> {timesheetId}
+                            </small>
+                            <small className="text-info">
+                                <strong>Status:</strong> {timesheet?.status || "draft"}
+                            </small>
+                        </div>
+                    )}
+                </div>
+                <div className="text-end">
+                    {selectedEntries.length > 0 && (
+                        <span className="badge bg-primary">
+                            {selectedEntries.length} selected
+                        </span>
+                    )}
+                </div>
             </div>
             <div className="card-body p-0">
                 <div className="table-responsive">
@@ -3674,12 +3676,13 @@ const DailyEntriesTable = ({
                                     <input
                                         className="form-check-input"
                                         type="checkbox"
-                                        checked={selectedEntries.length === entries.length && entries.length > 0}
+                                        checked={
+                                            selectedEntries.length === entries.length &&
+                                            entries.length > 0
+                                        }
                                         onChange={onSelectAllEntries}
                                         disabled={isDisabled}
                                     />
-
-
                                 </th>
                                 <th>Date</th>
                                 <th>Client ID</th>
@@ -3700,19 +3703,18 @@ const DailyEntriesTable = ({
                                             type="checkbox"
                                             className="form-check-input"
                                             checked={selectedEntries.includes(String(e.id || e.date))}
-                                            onChange={() => onSelectEntry(e)}              // ← pass the full entry
+                                            onChange={() => onSelectEntry(e)} // ← pass the full entry
                                             disabled={isDisabled}
                                             value={e.date}
                                         />
-
                                     </td>
                                     <td>
                                         <small className="text-info">
-                                            {new Date(e.date).toLocaleDateString('en-IN', {
-                                                weekday: 'short',
-                                                year: 'numeric',
-                                                month: 'short',
-                                                day: 'numeric'
+                                            {new Date(e.date).toLocaleDateString("en-IN", {
+                                                weekday: "short",
+                                                year: "numeric",
+                                                month: "short",
+                                                day: "numeric",
                                             })}
                                         </small>
                                     </td>
@@ -3724,14 +3726,21 @@ const DailyEntriesTable = ({
                                         <small className="text-muted">{e.jobRole}</small>
                                     </td>
                                     <td>
-                                        <span className={`badge ${e.isEmergency ? 'bg-danger' :
-                                            e.status === 'present' ? 'bg-success' :
-                                                e.status === 'leave' ? 'bg-warning' :
-                                                    e.status === 'absent' ? 'bg-info' :
-                                                        e.status === 'holiday' ? 'bg-primary' :
-                                                            'bg-secondary'
-                                            }`}>
-                                            {e.isEmergency ? 'Emergency' : e.status}
+                                        <span
+                                            className={`badge ${e.isEmergency
+                                                ? "bg-danger"
+                                                : e.status === "present"
+                                                    ? "bg-success"
+                                                    : e.status === "leave"
+                                                        ? "bg-warning"
+                                                        : e.status === "absent"
+                                                            ? "bg-info"
+                                                            : e.status === "holiday"
+                                                                ? "bg-primary"
+                                                                : "bg-secondary"
+                                                }`}
+                                        >
+                                            {e.isEmergency ? "Emergency" : e.status}
                                         </span>
                                         {e.isHalfDay && !e.isEmergency && (
                                             <span className="badge bg-info ms-1">½</span>
@@ -3740,22 +3749,28 @@ const DailyEntriesTable = ({
                                             <span className="badge bg-primary ms-1">Holiday</span>
                                         )}
                                     </td>
-                                    <td className={
-                                        e.dailySalary === 0 ? 'text-danger' :
-                                            e.isHalfDay ? 'text-warning' :
-                                                'text-success'
-                                    }>
+                                    <td
+                                        className={
+                                            e.dailySalary === 0
+                                                ? "text-danger"
+                                                : e.isHalfDay
+                                                    ? "text-warning"
+                                                    : "text-success"
+                                        }
+                                    >
                                         ₹{e.dailySalary?.toFixed(2)}
                                     </td>
                                     <td>
                                         <small className="text-muted">
-                                            {/* FIXED: Show current logged-in user's name for modifications */}
-                                            By {authUser?.name || authUser?.displayName || 'Current User'}
+                                            By {e.updatedByName || e.createdByName || "System"}
                                         </small>
-                                        <br></br>
+                                        <br />
                                         <small className="text-white opacity-50 small-text">
-                                            {e.updatedAt ? new Date(e.updatedAt).toLocaleString('en-IN') :
-                                                e.createdAt ? new Date(e.createdAt).toLocaleString('en-IN') : ''}
+                                            {e.updatedAt
+                                                ? new Date(e.updatedAt).toLocaleString("en-IN")
+                                                : e.createdAt
+                                                    ? new Date(e.createdAt).toLocaleString("en-IN")
+                                                    : ""}
                                         </small>
                                     </td>
                                     <td>
@@ -3771,7 +3786,6 @@ const DailyEntriesTable = ({
                                                 >
                                                     <i className="bi bi-chat-left-text"></i>
                                                 </button>
-
                                             </div>
                                         ) : (
                                             <span className="text-muted">—</span>
@@ -3787,7 +3801,11 @@ const DailyEntriesTable = ({
                                             >
                                                 <i className="bi bi-pencil"></i>
                                             </button>
-                                            <button className="btn btn-outline-danger btn-sm" onClick={() => onDelete(e.id)} disabled={isDisabled}>
+                                            <button
+                                                className="btn btn-outline-danger btn-sm"
+                                                onClick={() => onDelete(e.id)}
+                                                disabled={isDisabled}
+                                            >
                                                 <i className="bi bi-trash"></i>
                                             </button>
                                         </div>
@@ -3812,7 +3830,10 @@ const DailyEntriesTable = ({
 
             {/* Note Modal */}
             {showNoteModal && (
-                <div className="modal fade show" style={{ display: 'block', backgroundColor: 'rgba(0,0,0,0.8)' }}>
+                <div
+                    className="modal fade show"
+                    style={{ display: "block", backgroundColor: "rgba(0,0,0,0.8)" }}
+                >
                     <div className="modal-dialog modal-dialog-centered">
                         <div className="modal-content bg-dark border border-info">
                             <div className="modal-header border-info">
@@ -3827,7 +3848,7 @@ const DailyEntriesTable = ({
                                 ></button>
                             </div>
                             <div className="modal-body">
-                                <div className="text-white" style={{ whiteSpace: 'pre-wrap' }}>
+                                <div className="text-white" style={{ whiteSpace: "pre-wrap" }}>
                                     {currentNote}
                                 </div>
                             </div>

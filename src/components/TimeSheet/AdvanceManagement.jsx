@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import firebaseDB from '../../firebase';
 import { useAuth } from "../../context/AuthContext";
 
 const AdvanceManagement = ({ employeeId, timesheetId, advances = [], onAdvanceAdded, currentUser }) => {
+  const [localAdvances, setLocalAdvances] = useState(null); // null → means "not loaded yet"
   const [showAdvanceModal, setShowAdvanceModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [advanceToDelete, setAdvanceToDelete] = useState(null);
@@ -79,8 +80,8 @@ const AdvanceManagement = ({ employeeId, timesheetId, advances = [], onAdvanceAd
       setShowAdvanceModal(false);
       setEditingAdvance(null);
 
-      // Refresh advances list
-      onAdvanceAdded();
+        // Listener will auto-refresh; keep callback if parent still uses it
+     onAdvanceAdded && onAdvanceAdded();
     } catch (error) {
       console.error('Error saving advance:', error);
       alert('Error saving advance. Please try again.');
@@ -98,7 +99,7 @@ const AdvanceManagement = ({ employeeId, timesheetId, advances = [], onAdvanceAd
         await firebaseDB.child(`Advances/${advanceToDelete.id}`).remove();
         setShowDeleteModal(false);
         setAdvanceToDelete(null);
-        onAdvanceAdded(); // Refresh advances list
+        onAdvanceAdded && onAdvanceAdded();
       } catch (error) {
         console.error('Error deleting advance:', error);
         alert('Error deleting advance. Please try again.');
@@ -106,10 +107,29 @@ const AdvanceManagement = ({ employeeId, timesheetId, advances = [], onAdvanceAd
     }
   };
 
-  const totalAdvances = (advances || []).reduce((sum, advance) => sum + (parseFloat(advance.amount) || 0), 0);
+    // Live subscribe: reload whenever employeeId/timesheetId changes
+  useEffect(() => {
+    if (!employeeId || !timesheetId) {
+      setLocalAdvances([]);
+      return;
+    }
+    // Query by employeeId, then filter by timesheetId (RTDB can’t do AND)
+    const ref = firebaseDB.child('Advances').orderByChild('employeeId').equalTo(employeeId);
+    const handler = ref.on('value', snap => {
+      const data = snap.val() || {};
+      const list = Object.values(data).filter(a => a?.timesheetId === timesheetId);
+      setLocalAdvances(list);
+    });
+    return () => ref.off('value', handler);
+  }, [employeeId, timesheetId]);
 
-  // Sort advances by date (newest first)
-  const sortedAdvances = [...(advances || [])].sort((a, b) => new Date(b.date) - new Date(a.date));
+
+const effectiveAdvances = useMemo(
+    () => (localAdvances ?? advances ?? []),
+    [localAdvances, advances]
+  );
+  const totalAdvances = effectiveAdvances.reduce((sum, a) => sum + (parseFloat(a.amount) || 0), 0);
+  const sortedAdvances = [...effectiveAdvances].sort((a, b) => new Date(b.date) - new Date(a.date));
 
   return (
     <div className="card bg-dark border-warning">
@@ -169,7 +189,7 @@ const AdvanceManagement = ({ employeeId, timesheetId, advances = [], onAdvanceAd
                     <div className="col-12">
                       <small className="text-muted">
                         <i className="bi bi-clock me-1"></i>
-                        {new Date(advance.createdAt).toLocaleDateString('en-IN')}
+                        {advance?.createdAt ? new Date(advance.createdAt).toLocaleDateString('en-IN') : '-'}
                       </small>
                     </div>
                   </div>
@@ -215,7 +235,7 @@ const AdvanceManagement = ({ employeeId, timesheetId, advances = [], onAdvanceAd
           {(advances?.length === 0 || sortedAdvances.length === 0) && (
             <div className="text-center text-muted py-4">
               <i className="bi bi-wallet2 display-4 opacity-50 mb-2"></i>
-              <h6 className="text-white opacity-50 mb-2">No Advances Recorded</h6>
+              <h6 className="text-white opacity-50 mb-2 d-block">No Advances Recorded</h6>
               <p className="small opacity-50 mb-3">Add advances to track employee payments</p>
               <button
                 className="btn btn-outline-warning btn-sm"
@@ -235,7 +255,7 @@ const AdvanceManagement = ({ employeeId, timesheetId, advances = [], onAdvanceAd
           <div className="col-md-4">
             <div className="bg-warning bg-opacity-10 rounded p-2 border border-warning">
               <small className="text-muted d-block">Total Advances</small>
-              <div className="text-warning h5 mb-0 fw-bold">₹{totalAdvances.toFixed(2)}</div>
+              <div className="text-warning h5 mb-0 fw-bold">₹{totalAdvances.toFixed()}</div>
             </div>
           </div>
           <div className="col-md-4">
@@ -248,7 +268,7 @@ const AdvanceManagement = ({ employeeId, timesheetId, advances = [], onAdvanceAd
             <div className="bg-success bg-opacity-10 rounded p-2 border border-success">
               <small className="text-muted d-block">Average</small>
               <div className="text-success h5 mb-0 fw-bold">
-                ₹{sortedAdvances.length > 0 ? (totalAdvances / sortedAdvances.length).toFixed(2) : '0.00'}
+                ₹{sortedAdvances.length > 0 ? (totalAdvances / sortedAdvances.length).toFixed() : '0.00'}
               </div>
             </div>
           </div>

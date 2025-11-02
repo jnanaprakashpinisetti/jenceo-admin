@@ -65,6 +65,7 @@ import EnquiryExit from "../pages/EnquiryExit";
 
 import HospitalList from "../pages/HospitalList";
 import HospitalDeleteList from "../pages/HospitalDeleteList";
+import Agents from "../pages/Agents";
 
 import Expenses from "../pages/Expenses";
 import ExpenceDelete from "../pages/ExpenceDelete";
@@ -137,7 +138,8 @@ export default function LeftNav() {
   // Hospital
   const canHospitalList = hasPerm("Hospital List");
   const canHospitalDeleteList = hasPerm("Hospital List"); // Delete typically part of Hospital List
-
+  const canAgents = hasPerm("Hospital List");
+  
   // Expenses
   const canExpenses = hasPerm("Expenses");
   const canExpenceDelete = hasPerm("Expenses"); // Delete typically part of Expenses
@@ -604,7 +606,7 @@ export default function LeftNav() {
             )}
 
             {/* Hospital */}
-            {(canHospitalList || canHospitalDeleteList) && (
+            {(canHospitalList || canHospitalDeleteList || canAgents) && (
               <>
                 <li className="nav-item">
                   <button className="groupBtn btn btn-sm" onClick={() => toggleGroup("hospital")} type="button">
@@ -626,6 +628,13 @@ export default function LeftNav() {
                       <li className="nav-item">
                         <NavLink to="HospitalDeleteList" className="nav-link" title="Deleted Hospitals" onClick={onNavClick}>
                           <img src={HospitalDeleteIcon} alt="" /> <span className="ms-1">Deleted Hospitals</span>
+                        </NavLink>
+                      </li>
+                    )}
+                    {canAgents && (
+                      <li className="nav-item">
+                        <NavLink to="Agents" className="nav-link" title="Agents" onClick={onNavClick}>
+                          <img src={HospitalDeleteIcon} alt="" /> <span className="ms-1">Agents</span>
                         </NavLink>
                       </li>
                     )}
@@ -741,6 +750,7 @@ export default function LeftNav() {
         <Route path="Accounts" element={<PermRoute allowed={canAccounts}><Accounts /></PermRoute>} />
         <Route path="HospitalList" element={<PermRoute allowed={canHospitalList}><HospitalList /></PermRoute>} />
         <Route path="HospitalDeleteList" element={<PermRoute allowed={canHospitalDeleteList}><HospitalDeleteList /></PermRoute>} />
+        <Route path="Agents" element={<PermRoute allowed={canAgents}><Agents /></PermRoute>} />
         <Route path="search" element={<SearchResults />} />
         <Route path="Admin" element={<PermRoute allowed={canAdmin || isAdmin}><AdminUsers /></PermRoute>} />
         <Route path="profile" element={<Profile />} />

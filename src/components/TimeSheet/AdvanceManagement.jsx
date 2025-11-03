@@ -3,11 +3,12 @@ import firebaseDB from '../../firebase';
 import { useAuth } from "../../context/AuthContext";
 
 const AdvanceManagement = ({ employeeId, timesheetId, advances = [], onAdvanceAdded, currentUser }) => {
-  const [localAdvances, setLocalAdvances] = useState(null); // null → means "not loaded yet"
+  const [localAdvances, setLocalAdvances] = useState(null);
   const [showAdvanceModal, setShowAdvanceModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [advanceToDelete, setAdvanceToDelete] = useState(null);
   const [editingAdvance, setEditingAdvance] = useState(null);
+  const [employee, setEmployee] = useState(null);
   const [advanceForm, setAdvanceForm] = useState({
     amount: '',
     reason: '',
@@ -22,27 +23,9 @@ const AdvanceManagement = ({ employeeId, timesheetId, advances = [], onAdvanceAd
     setAdvanceForm({
       amount: '',
       reason: '',
-      date: ''
+      date: new Date().toISOString().split('T')[0] // Default to today
     });
     setShowAdvanceModal(true);
-  };
-
-  // Fix the getNameForUid function in AdvanceManagement.jsx
-  const getNameForUid = (uid) => {
-    if (!uid) return "";
-
-    // First check if it's the current user
-    if (uid === currentUser?.uid) {
-      return currentUser?.displayName || currentUser?.email || "Admin";
-    }
-
-    // Check if we have user data from props (passed from parent)
-    if (currentUser && typeof currentUser === 'object') {
-      return currentUser.displayName || currentUser.email || uid;
-    }
-
-    // Fallback to UID if no name found
-    return uid;
   };
 
   // Open edit modal with existing data
@@ -50,58 +33,99 @@ const AdvanceManagement = ({ employeeId, timesheetId, advances = [], onAdvanceAd
     setEditingAdvance(advance);
     setAdvanceForm({
       amount: advance.amount.toString(),
-      reason: advance.reason,
-      date: advance.date
+      reason: advance.reason || '',
+      date: advance.date || new Date().toISOString().split('T')[0]
     });
     setShowAdvanceModal(true);
   };
+  
 
   const handleSubmitAdvance = async (e) => {
     e.preventDefault();
-    if (!employeeId || !timesheetId) { alert('Missing employee or timesheet.'); return; }
-    if (!advanceForm.date) { alert('Please select a date.'); return; }
+    
+    // Validation
+    if (!employeeId) { 
+      alert('Missing employee.'); 
+      return; 
+    }
+    if (!timesheetId) { 
+      alert('Missing timesheet.'); 
+      return; 
+    }
+    if (!advanceForm.date) { 
+      alert('Please select a date.'); 
+      return; 
+    }
+    if (!advanceForm.amount || parseFloat(advanceForm.amount) <= 0) {
+      alert('Please enter a valid amount.');
+      return;
+    }
 
-    const a = {
-      uid: authUser?.uid || currentUser?.uid || 'system',
-      name: authUser?.name || currentUser?.displayName || currentUser?.email || 'System'
-    };
+    const { uid, name } = whoSafe();
     const now = new Date().toISOString();
 
     const advanceData = {
       employeeId,
       timesheetId,
-      amount: parseFloat(advanceForm.amount || 0),
+      amount: parseFloat(advanceForm.amount),
       reason: advanceForm.reason || '',
-      date: advanceForm.date,          // YYYY-MM-DD
+      date: advanceForm.date,
       status: 'approved',
       updatedAt: now,
-      updatedBy: a.uid,
-      updatedByName: a.name,
+      updatedBy: uid,
+      updatedByName: name,
     };
 
     try {
       if (editingAdvance?.id) {
+        // Update existing advance
+        console.log('Updating advance:', editingAdvance.id, advanceData);
         await firebaseDB.child(`Advances/${editingAdvance.id}`).update(advanceData);
       } else {
+        // Create new advance
         const ref = firebaseDB.child('Advances').push();
-        await ref.set({
+        const newAdvance = {
           ...advanceData,
           id: ref.key,
           createdAt: now,
-          createdBy: a.uid,
-          createdByName: a.name,
-        });
+          createdBy: uid,
+          createdByName: name,
+        };
+        console.log('Creating new advance:', newAdvance);
+        await ref.set(newAdvance);
       }
+      
+      // Reset form and close modal
       setAdvanceForm({ amount: '', reason: '', date: '' });
       setShowAdvanceModal(false);
       setEditingAdvance(null);
-      onAdvanceAdded && onAdvanceAdded();
+      
+      // Refresh advances list
+      if (onAdvanceAdded) {
+        onAdvanceAdded();
+      }
+      
     } catch (err) {
       console.error('Error saving advance:', err);
       alert('Error saving advance. Please try again.');
     }
   };
 
+  // Add the missing whoSafe function
+  const auth = useAuth();
+const whoSafe = () => {
+  
+  // Priority 1: Auth context user
+  if (auth?.user) {
+    return {
+      uid: auth.user.uid,
+      name: auth.user.displayName || auth.user.name || auth.user.email || 'Admin'
+    };
+  }
+
+  // Fallback
+  return { uid: "system", name: "System" };
+};
 
   const confirmDeleteAdvance = (advance) => {
     setAdvanceToDelete(advance);
@@ -109,12 +133,17 @@ const AdvanceManagement = ({ employeeId, timesheetId, advances = [], onAdvanceAd
   };
 
   const deleteAdvance = async () => {
-    if (advanceToDelete) {
+    if (advanceToDelete?.id) {
       try {
+        console.log('Deleting advance:', advanceToDelete.id);
         await firebaseDB.child(`Advances/${advanceToDelete.id}`).remove();
         setShowDeleteModal(false);
         setAdvanceToDelete(null);
-        onAdvanceAdded && onAdvanceAdded();
+        
+        // Refresh advances list
+        if (onAdvanceAdded) {
+          onAdvanceAdded();
+        }
       } catch (error) {
         console.error('Error deleting advance:', error);
         alert('Error deleting advance. Please try again.');
@@ -122,29 +151,71 @@ const AdvanceManagement = ({ employeeId, timesheetId, advances = [], onAdvanceAd
     }
   };
 
-  // Live subscribe: reload whenever employeeId/timesheetId changes
+  
+useEffect(() => {
+  if (!employeeId) {
+    setEmployee(null);
+    return;
+  }
+
+  const fetchEmployee = async () => {
+    try {
+      const snapshot = await firebaseDB.child(`EmployeeBioData/${employeeId}`).once('value');
+      if (snapshot.exists()) {
+        const employeeData = snapshot.val();
+        setEmployee({
+          id: employeeId,
+          ...employeeData,
+          displayName: `${employeeData.firstName || ''} ${employeeData.lastName || ''}`.trim() || employeeData.employeeId || 'Employee'
+        });
+      }
+    } catch (error) {
+      console.error('Error fetching employee data:', error);
+    }
+  };
+
+  fetchEmployee();
+}, [employeeId]);
+
+
+  // Load advances from Firebase
   useEffect(() => {
-    if (!employeeId || !timesheetId) {
+    if (!employeeId) {
       setLocalAdvances([]);
       return;
     }
-    // Query by employeeId, then filter by timesheetId (RTDB can’t do AND)
+
+    console.log('Loading advances for employee:', employeeId);
     const ref = firebaseDB.child('Advances').orderByChild('employeeId').equalTo(employeeId);
-    const handler = ref.on('value', snap => {
+    
+    const handler = ref.on('value', (snap) => {
       const data = snap.val() || {};
-      const list = Object.values(data).filter(a => a?.timesheetId === timesheetId);
+      console.log('Raw advances data:', data);
+      
+      const list = Object.entries(data).map(([key, value]) => ({
+        id: key,
+        ...value
+      })).filter(a => a?.timesheetId === timesheetId);
+      
+      console.log('Filtered advances:', list);
       setLocalAdvances(list);
+    }, (error) => {
+      console.error('Error loading advances:', error);
     });
+
     return () => ref.off('value', handler);
   }, [employeeId, timesheetId]);
 
-
   const effectiveAdvances = useMemo(
-    () => (localAdvances ?? advances ?? []),
+    () => (localAdvances !== null ? localAdvances : (advances || [])),
     [localAdvances, advances]
   );
+
   const totalAdvances = effectiveAdvances.reduce((sum, a) => sum + (parseFloat(a.amount) || 0), 0);
   const sortedAdvances = [...effectiveAdvances].sort((a, b) => new Date(b.date) - new Date(a.date));
+
+  console.log('Effective advances:', effectiveAdvances);
+  console.log('Total advances:', totalAdvances);
 
   return (
     <div className="card bg-dark border-warning">
@@ -160,12 +231,11 @@ const AdvanceManagement = ({ employeeId, timesheetId, advances = [], onAdvanceAd
         <button
           className="btn btn-warning btn-sm"
           onClick={openAddModal}
+          disabled={!employeeId || !timesheetId}
         >
           <i className="bi bi-plus-circle me-2"></i> Add Advance
         </button>
       </div>
-
-
 
       {/* Advances List */}
       <div className="card-body p-0">
@@ -174,14 +244,12 @@ const AdvanceManagement = ({ employeeId, timesheetId, advances = [], onAdvanceAd
             <div
               key={advance.id || index}
               className="border-bottom border-secondary p-3 hover-bg-gray-800 transition-all"
-
             >
               <div className="row g-2 align-items-start">
                 {/* Column 1: Amount & Status */}
                 <div className="col-md-3">
-                  <div className=" align-items-center mb-2">
+                  <div className="align-items-center mb-2">
                     <p className="text-warning fw-bold fs-5 mb-0">₹{advance.amount}</p>
-
                   </div>
                   <div className="text-info small">
                     <i className="bi bi-calendar me-1"></i>
@@ -192,7 +260,7 @@ const AdvanceManagement = ({ employeeId, timesheetId, advances = [], onAdvanceAd
                   </div>
                 </div>
 
-                {/* Column 2: Reason & Metadata - FIXED */}
+                {/* Column 2: Reason & Metadata */}
                 <div className="col-md-6 text-center">
                   <div className="row g-1">
                     <div className="col-12">
@@ -211,6 +279,7 @@ const AdvanceManagement = ({ employeeId, timesheetId, advances = [], onAdvanceAd
                     </div>
                   </div>
                 </div>
+
                 {/* Column 3: Actions */}
                 <div className="col-md-3">
                   <div className="d-flex justify-content-end gap-1">
@@ -238,9 +307,10 @@ const AdvanceManagement = ({ employeeId, timesheetId, advances = [], onAdvanceAd
                     </div>
                   )}
                 </div>
+
                 <div className="col-md-12 bg-secondary bg-opacity-10 p-2 rounded-2">
                   <div className="text-white opacity-90 small mb-2" style={{ lineHeight: '1.3', opacity: .6 }}>
-                    {advance.reason}
+                    {advance.reason || 'No reason provided'}
                   </div>
                 </div>
               </div>
@@ -248,7 +318,7 @@ const AdvanceManagement = ({ employeeId, timesheetId, advances = [], onAdvanceAd
           ))}
 
           {/* Empty State */}
-          {(advances?.length === 0 || sortedAdvances.length === 0) && (
+          {sortedAdvances.length === 0 && (
             <div className="text-center text-muted py-4">
               <i className="bi bi-wallet2 display-4 opacity-50 mb-2"></i>
               <h6 className="text-white opacity-50 mb-2 d-block">No Advances Recorded</h6>
@@ -256,6 +326,7 @@ const AdvanceManagement = ({ employeeId, timesheetId, advances = [], onAdvanceAd
               <button
                 className="btn btn-outline-warning btn-sm"
                 onClick={openAddModal}
+                disabled={!employeeId || !timesheetId}
               >
                 <i className="bi bi-plus-circle me-2"></i>
                 Add First Advance
@@ -265,13 +336,13 @@ const AdvanceManagement = ({ employeeId, timesheetId, advances = [], onAdvanceAd
         </div>
       </div>
 
-      {/* Total Summary - Compact */}
+      {/* Total Summary */}
       <div className="card-body py-3 border-bottom border-warning">
         <div className="row g-3 text-center">
           <div className="col-md-4">
             <div className="bg-warning bg-opacity-10 rounded p-2 border border-warning">
               <small className="text-muted d-block">Total Advances</small>
-              <div className="text-warning h5 mb-0 fw-bold">₹{totalAdvances.toFixed()}</div>
+              <div className="text-warning h5 mb-0 fw-bold">₹{totalAdvances.toFixed(0)}</div>
             </div>
           </div>
           <div className="col-md-4">
@@ -284,14 +355,14 @@ const AdvanceManagement = ({ employeeId, timesheetId, advances = [], onAdvanceAd
             <div className="bg-success bg-opacity-10 rounded p-2 border border-success">
               <small className="text-muted d-block">Average</small>
               <div className="text-success h5 mb-0 fw-bold">
-                ₹{sortedAdvances.length > 0 ? (totalAdvances / sortedAdvances.length).toFixed() : '0.00'}
+                ₹{sortedAdvances.length > 0 ? (totalAdvances / sortedAdvances.length).toFixed(0) : '0'}
               </div>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Advance Add/Edit Modal */}
+      {/* Add/Edit Modal */}
       {showAdvanceModal && (
         <div className="modal fade show" style={{ display: 'block', backgroundColor: 'rgba(0,0,0,0.8)' }} tabIndex="-1">
           <div className="modal-dialog modal-dialog-centered">
@@ -322,9 +393,9 @@ const AdvanceManagement = ({ employeeId, timesheetId, advances = [], onAdvanceAd
                           className="form-control bg-dark text-white border-secondary"
                           value={advanceForm.amount}
                           onChange={(e) => setAdvanceForm(prev => ({ ...prev, amount: e.target.value }))}
-                          min="0.01"
-                          step="0.01"
-                          placeholder="0.00"
+                          min="1"
+                          step="1"
+                          placeholder="0"
                           required
                         />
                       </div>
@@ -366,14 +437,14 @@ const AdvanceManagement = ({ employeeId, timesheetId, advances = [], onAdvanceAd
                     </div>
                   </div>
 
-                  {/* User Info */}
-                  <div className="alert alert-warning bg-warning bg-opacity-10 border-warning mt-3 py-2">
-                    <div className="d-flex align-items-center">
-                      <i className="bi bi-info-circle text-warning me-2"></i>
-                      <small>
-                        Recorded by: {currentUser?.displayName || currentUser?.email || 'Current User'}
-                      </small>
-                    </div>
+                  {/* Debug Info */}
+                  <div className="alert alert-info bg-info bg-opacity-10 border-info mt-3 py-2">
+                    <small className="text-info">
+                      <strong>Debug Info:</strong><br />
+                      <strong>Employee:</strong> <span className='text-warning'>{employee?.displayName || employeeId}</span><br />
+                      Timesheet: {timesheetId}<br />
+                      Mode: {editingAdvance ? 'Editing' : 'Creating'}
+                    </small>
                   </div>
                 </div>
                 <div className="modal-footer border-warning py-3">
@@ -406,7 +477,7 @@ const AdvanceManagement = ({ employeeId, timesheetId, advances = [], onAdvanceAd
                 </div>
               </div>
               <div className="modal-body">
-                <div className="alert alert-danger bg-danger bg-opacity-10 border-danger mb-3">
+                <div className="alert alert-danger bg-danger bg-opacity-10 border-danger">
                   <strong>Are you sure you want to delete this advance?</strong>
                 </div>
 
@@ -429,7 +500,7 @@ const AdvanceManagement = ({ employeeId, timesheetId, advances = [], onAdvanceAd
                       </div>
                       <div className="col-12">
                         <small className="text-muted">Reason</small>
-                        <div className="fw-bold text-info small">{advanceToDelete.reason}</div>
+                        <div className="fw-bold text-info small">{advanceToDelete.reason || 'No reason provided'}</div>
                       </div>
                     </div>
                   </div>

@@ -1406,53 +1406,49 @@ const DisplayTimeSheet = () => {
     };
 
     // Update calculateSummary to properly count half days
-    const calculateSummary = async (
+// Fix the calculateSummary function
+const calculateSummary = async (
+  entries = dailyEntries,
+  advancesData = advances
+) => {
+  if (!selectedEmployee || !currentTimesheetId) return;
 
-        entries = dailyEntries,
-        advancesData = advances
-    ) => {
-        if (!selectedEmployee || !currentTimesheetId) return;
+  const fullDays = entries.filter(e => e.status === 'present' && !e.isPublicHoliday && !e.isHalfDay).length;
+  const halfDays = entries.filter(e => e.status === 'present' && !e.isPublicHoliday && e.isHalfDay).length;
+  const workingDays = fullDays + (halfDays * 0.5);
+  const holidays = entries.filter(e => e.isPublicHoliday || e.status === 'holiday').length;
+  const emergencies = entries.filter(e => e.isEmergency).length;
+  const leaves = entries.filter(e => e.status === 'leave').length;
+  const absents = entries.filter(e => e.status === 'absent').length;
+  const totalSalary = entries.reduce((s, e) => s + (parseFloat(e.dailySalary) || 0), 0);
+  
+  // FIX: Always deduct advances for the current timesheet period
+  const advancesInPeriod = (advancesData || [])
+    .filter(a => isDateInActivePeriod(a.date) && (a.status || '').toLowerCase() !== 'settled');
 
-        const fullDays = entries.filter(e => e.status === 'present' && !e.isPublicHoliday && !e.isHalfDay).length;
-        const halfDays = entries.filter(e => e.status === 'present' && !e.isPublicHoliday && e.isHalfDay).length;
-        const workingDays = fullDays + (halfDays * 0.5);
-        const holidays = entries.filter(e => e.isPublicHoliday || e.status === 'holiday').length;
-        const emergencies = entries.filter(e => e.isEmergency).length;
-        const leaves = entries.filter(e => e.status === 'leave').length;
-        const absents = entries.filter(e => e.status === 'absent').length;
-        const totalSalary = entries.reduce((s, e) => s + (parseFloat(e.dailySalary) || 0), 0);
-        // 1) Only advances that fall in the ACTIVE period
-        const advancesInPeriod = (advancesData || [])
-            .filter(a => isDateInActivePeriod(a.date) && (a.status || '').toLowerCase() !== 'settled');
+  const totalAdv = advancesInPeriod.reduce((s, a) => s + (parseFloat(a.amount) || 0), 0);
 
-        // 2) Only the FIRST timesheet of the period actually deducts
-        const firstTsId = await getFirstTimesheetIdForActivePeriod(selectedEmployee);
-        const totalAdv = (currentTimesheetId === firstTsId)
-            ? advancesInPeriod.reduce((s, a) => s + (parseFloat(a.amount) || 0), 0)
-            : 0;
+  const { uid, name } = whoSafe();
 
-        const { uid, name } = whoSafe();
+  const patch = {
+    workingDays,
+    fullDays,
+    halfDays,
+    totalDays: entries.length,
+    leaves,
+    holidays,
+    emergencies,
+    absents,
+    totalSalary,
+    advances: totalAdv, // Always show advances for this period
+    netPayable: Math.round(totalSalary - totalAdv),
+    updatedByName: name,
+    updatedAt: new Date().toISOString(),
+  };
 
-        const patch = {
-            workingDays,
-            fullDays,
-            halfDays,
-            totalDays: entries.length,
-            leaves,
-            holidays,
-            emergencies,
-            absents,
-            totalSalary,
-            advances: totalAdv,                                  // ← use period + first-sheet only
-            netPayable: Math.round(totalSalary - totalAdv),      // ← recomputed
-            updatedByName: name,
-            updatedAt: new Date().toISOString(),
-        };
-
-        setTimesheet(prev => ({ ...(prev || { timesheetId: currentTimesheetId }), ...patch, timesheetId: currentTimesheetId }));
-        await firebaseDB.child(empTsById(selectedEmployee, currentTimesheetId)).update(patch);
-    };
-
+  setTimesheet(prev => ({ ...(prev || { timesheetId: currentTimesheetId }), ...patch, timesheetId: currentTimesheetId }));
+  await firebaseDB.child(empTsById(selectedEmployee, currentTimesheetId)).update(patch);
+};
     const createNewTimesheet = (timesheetId) => {
         const { uid, name } = whoSafe();
         const employee = employees.find(emp => emp.id === selectedEmployee);
@@ -2547,7 +2543,7 @@ const DisplayTimeSheet = () => {
 
                                                     <td>{ts.workingDays ?? 0}</td>
                                                     <td>₹{Number(ts.totalSalary || 0).toFixed(0)}</td>
-                                                    <td>₹{Number(ts.advances || 0).toFixed(0)}</td>
+                                                    <td className='text-danger'>₹{Number(ts.advances || 0).toFixed(0)}</td>
                                                     <td className='text-warning'>₹{Number(ts.netPayable || 0).toFixed(0)}</td>
                                                     <td>-</td>
                                                     <td>

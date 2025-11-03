@@ -278,7 +278,7 @@ const DisplayTimeSheet = () => {
             period: periodStr || '',
             periodKey: periodKey || '',
             startDate: useDateRange ? startDate : `${selectedMonth}-01`,
-            endDate: useDateRange ? endDate : `${selectedMonth}-31`,
+            endDate: useDateRange ? endDate : endOfMonth(selectedMonth),
             status: header?.status ?? undefined,
             updatedAt: new Date().toISOString(),
             updatedBy: uid,
@@ -331,6 +331,22 @@ const DisplayTimeSheet = () => {
         );
         return samePeriod[0].id;
     };
+
+    // True month-end for YYYY-MM  →  YYYY-MM-DD
+    const endOfMonth = (yyyyMm) => {
+        if (!/^\d{4}-\d{2}$/.test(yyyyMm)) return '';
+        const [y, m] = yyyyMm.split('-').map(Number);
+        const d = new Date(y, m, 0); // 0th of next month = last day of current
+        return `${yyyyMm}-${String(d.getDate()).padStart(2, '0')}`;
+    };
+
+    // Always return 30 days for any month — payroll logic
+    // const endOfMonth = (yyyyMm) => {
+    //   if (!/^\d{4}-\d{2}$/.test(yyyyMm)) return '';
+    //   // Always cap to 30 days even if Feb or 31-day months
+    //   return `${yyyyMm}-30`;
+    // };
+
 
 
 
@@ -799,7 +815,7 @@ const DisplayTimeSheet = () => {
         // Derive range for the planned period
         const [s, e] = periodKey.includes('_to_')
             ? periodKey.split('_to_')
-            : [`${periodKey}-01`, `${periodKey}-31`];
+            : [`${periodKey}-01`, endOfMonth(periodKey)];
         const start = new Date(s);
         const end = new Date(e);
 
@@ -1061,7 +1077,7 @@ const DisplayTimeSheet = () => {
                     status: 'draft',
                     period: useDateRange ? `${startDate} to ${endDate}` : selectedMonth,
                     startDate: useDateRange ? startDate : `${selectedMonth}-01`,
-                    endDate: useDateRange ? endDate : `${selectedMonth}-31`,
+                    endDate: useDateRange ? endDate : endOfMonth(selectedMonth),
                     useDateRange: useDateRange,
                     totalDays: 0,
                     workingDays: 0,
@@ -1200,7 +1216,7 @@ const DisplayTimeSheet = () => {
     const calculateTotalDaysInPeriod = () => {
         try {
             const start = new Date(useDateRange ? startDate : `${selectedMonth}-01`);
-            const end = new Date(useDateRange ? endDate : `${selectedMonth}-31`);
+            const end = new Date(useDateRange ? endDate : endOfMonth(selectedMonth));
 
             let totalDays = 0;
             for (let date = new Date(start); date <= end; date.setDate(date.getDate() + 1)) {
@@ -1449,7 +1465,7 @@ const DisplayTimeSheet = () => {
             employeeData: employee || null,
             period,
             startDate: useDateRange ? startDate : `${selectedMonth}-01`,
-            endDate: useDateRange ? endDate : `${selectedMonth}-31`,
+            endDate: useDateRange ? endDate : endOfMonth(selectedMonth),
             useDateRange,
             status: 'draft',
             totalDays: 0,
@@ -1649,7 +1665,7 @@ const DisplayTimeSheet = () => {
 
         try {
             const start = new Date(useDateRange ? startDate : `${selectedMonth}-01`);
-            const end = new Date(useDateRange ? endDate : `${selectedMonth}-31`);
+            const end = new Date(useDateRange ? endDate : endOfMonth(selectedMonth));
 
             const employee = employees.find(emp => emp.id === selectedEmployee);
             const defaultClient = clients[0] || { id: 'default', name: 'Default Client' };
@@ -3419,7 +3435,7 @@ const DisplayTimeSheet = () => {
                                         setIsAutoFilling(true);
                                         try {
                                             const start = new Date(useDateRange ? startDate : `${selectedMonth}-01`);
-                                            const end = new Date(useDateRange ? endDate : `${selectedMonth}-31`);
+                                            const end = new Date(useDateRange ? endDate : endOfMonth(selectedMonth));
                                             const employee = employees.find(emp => emp.id === selectedEmployee);
                                             const client = clients.find(c => c.id === selectedClientId) || clients[0];
                                             const emp = employees.find(e => e.id === selectedEmployee);

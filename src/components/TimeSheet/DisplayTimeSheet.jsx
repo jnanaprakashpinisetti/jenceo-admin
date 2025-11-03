@@ -1716,6 +1716,36 @@ const DisplayTimeSheet = () => {
         return 0;
     };
 
+    const validateSalaryLimit = (entries, employee) => {
+        const basicSalary = Number(employee?.basicSalary) || 0;
+        const totalCalculatedSalary = entries.reduce((sum, entry) => sum + (entry.dailySalary || 0), 0);
+
+        return totalCalculatedSalary <= basicSalary;
+    };
+
+
+    const checkSalaryLimit = async () => {
+        // Check salary limit
+        const employee = employees.find(e => e.id === selectedEmployee);
+        if (!validateSalaryLimit(dailyEntries, employee)) {
+            const basicSalary = Number(employee?.basicSalary) || 0;
+            const totalSalary = dailyEntries.reduce((sum, e) => sum + (parseFloat(e.dailySalary) || 0), 0);
+
+            showModal(
+                'Salary Limit Exceeded',
+                `Total salary (₹${totalSalary.toFixed(2)}) exceeds basic salary (₹${basicSalary.toFixed(2)}). Do you want to proceed?`,
+                'warning',
+                async () => {
+                    await proceedWithSave();
+                }
+            );
+            return;
+        }
+
+        await proceedWithSave();
+    }
+
+
     // Add save timesheet function
     const saveTimesheet = async () => {
         const { uid, name } = whoSafe();
@@ -1729,26 +1759,30 @@ const DisplayTimeSheet = () => {
             return;
         }
 
+        checkSalaryLimit()
+
+
+    };
+
+    // Separate the save logic
+    const proceedWithSave = async () => {
+        const { uid, name } = whoSafe();
         setIsSaving(true);
         try {
             const periodKey = getCurrentPeriodKey();
             const periodStr = useDateRange ? `${startDate} to ${endDate}` : selectedMonth;
 
-            // header first
             const headerPatch = await ensureTimesheetHeader(
                 selectedEmployee,
                 currentTimesheetId,
                 pruneUndefined({
                     period: periodStr,
                     periodKey,
-                    // status: 'draft',  // ← REMOVE THIS LINE
                     updatedAt: new Date().toISOString(),
                     updatedByName: name,
                 })
             );
 
-
-            // batch all entries
             const updates = {};
             for (const entry of dailyEntries) {
                 const path = `${empTsById(selectedEmployee, currentTimesheetId)}/dailyEntries/${entry.date}`;
@@ -1759,14 +1793,10 @@ const DisplayTimeSheet = () => {
                     updatedAt: new Date().toISOString(),
                     updatedByName: name,
                 };
-                // optional: global index
-                // updates[`TimesheetEntries/${selectedEmployee}_${entry.date}`] = {
-                //   timesheetId: currentTimesheetId, employeeId: selectedEmployee, employeeId_date: `${selectedEmployee}_${entry.date}`, date: entry.date
-                // };
             }
             await firebaseDB.update(updates);
 
-            await calculateSummary(); // once
+            await calculateSummary();
             await loadPreviousTimesheets();
             setHasUnsavedChanges(false);
             showModal('Success', 'Timesheet Saved Successfully', 'success');
@@ -2143,6 +2173,8 @@ const DisplayTimeSheet = () => {
     };
 
     const submitTimesheet = async () => {
+        // TO DO Need to close the Assign timesheet modal if it clacel
+        checkSalaryLimit()
         if (!dailyEntries?.length) {
             showModal('Error', 'Cannot submit an empty timesheet. Please add entries first.', 'error');
             return;

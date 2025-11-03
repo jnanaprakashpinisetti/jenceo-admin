@@ -2173,8 +2173,35 @@ const DisplayTimeSheet = () => {
     };
 
     const submitTimesheet = async () => {
-        // TO DO Need to close the Assign timesheet modal if it clacel
-        checkSalaryLimit()
+        // First check salary limit
+        const employee = employees.find(e => e.id === selectedEmployee);
+        if (!validateSalaryLimit(dailyEntries, employee)) {
+            const basicSalary = Number(employee?.basicSalary) || 0;
+            const totalSalary = dailyEntries.reduce((sum, e) => sum + (parseFloat(e.dailySalary) || 0), 0);
+
+            showModal(
+                'Salary Limit Exceeded',
+                `Total salary (₹${totalSalary.toFixed(2)}) exceeds basic salary (₹${basicSalary.toFixed(2)}). Do you want to proceed?`,
+                'warning',
+                async () => {
+                    // Proceed with assignment check after user confirms
+                    proceedToAssignmentCheck();
+                },
+                () => {
+                    // User cancelled - close everything
+                    setShowConfirmModal(false);
+                    setShowAssignModal(false);
+                    setPendingSubmitAfterAssign(false);
+                }
+            );
+            return;
+        }
+
+        // If salary is within limit, proceed directly to assignment check
+        proceedToAssignmentCheck();
+    };
+
+    const proceedToAssignmentCheck = () => {
         if (!dailyEntries?.length) {
             showModal('Error', 'Cannot submit an empty timesheet. Please add entries first.', 'error');
             return;
@@ -2184,12 +2211,12 @@ const DisplayTimeSheet = () => {
         const chosenAssignee = assignTo || timesheet?.assignedTo || '';
 
         if (!alreadyAssigned && !chosenAssignee) {
-            setPendingSubmitAfterAssign(true);   // 👈 remember we want to submit after assign
-            setShowAssignModal(true);            // show the old assign modal first
+            setPendingSubmitAfterAssign(true);
+            setShowAssignModal(true);
             return;
         }
 
-        setShowConfirmModal(true);             // already assigned → go straight to submit modal
+        setShowConfirmModal(true);
     };
 
     const confirmAssignAndProceed = async () => {

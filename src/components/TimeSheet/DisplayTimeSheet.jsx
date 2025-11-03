@@ -2509,16 +2509,11 @@ const DisplayTimeSheet = () => {
                                                                 className="btn btn-outline-info"
                                                                 title="Open this timesheet"
                                                                 onClick={async () => {
-                                                                    if (
-                                                                        ts.employeeId &&
-                                                                        ts.employeeId !== selectedEmployee
-                                                                    ) {
+                                                                    if (ts.employeeId && ts.employeeId !== selectedEmployee) {
                                                                         setSelectedEmployee(ts.employeeId);
                                                                     }
                                                                     setTimesheet(ts);
-                                                                    setCurrentTimesheetId(
-                                                                        ts.timesheetId || ts.id
-                                                                    );
+                                                                    setCurrentTimesheetId(ts.timesheetId || ts.id);
                                                                     await loadDailyEntriesByTimesheetId(
                                                                         ts.employeeId || selectedEmployee,
                                                                         ts.timesheetId || ts.id
@@ -2532,23 +2527,30 @@ const DisplayTimeSheet = () => {
                                                                 title="Jump to period"
                                                                 onClick={() => {
                                                                     if ((ts.periodKey || "").includes("_to_")) {
-                                                                        const [s, e] = (ts.periodKey || "").split(
-                                                                            "_to_"
-                                                                        );
+                                                                        const [s, e] = (ts.periodKey || "").split("_to_");
                                                                         setUseDateRange(true);
                                                                         setStartDate(s);
                                                                         setEndDate(e);
                                                                     } else {
                                                                         setUseDateRange(false);
-                                                                        setSelectedMonth(
-                                                                            ts.periodKey ||
-                                                                            (ts.period ?? "").slice(0, 7)
-                                                                        );
+                                                                        setSelectedMonth(ts.periodKey || (ts.period ?? "").slice(0, 7));
                                                                     }
                                                                 }}
                                                             >
                                                                 <i className="bi bi-calendar-range"></i>
                                                             </button>
+
+                                                            {/* Delete Button - Only show for non-approved timesheets */}
+                                                            {(ts.status === 'draft' || ts.status === 'submitted' || ts.status === 'rejected') && (
+                                                                <button
+                                                                    className="btn btn-outline-danger"
+                                                                    title="Delete Timesheet"
+                                                                    onClick={() => openPrevTsDelete(ts)}
+                                                                >
+                                                                    <i className="bi bi-trash"></i>
+                                                                </button>
+                                                            )}
+
                                                             {ts.status === "clarification" && (
                                                                 <button
                                                                     className="btn btn-outline-warning ms-1"
@@ -2839,9 +2841,9 @@ const DisplayTimeSheet = () => {
                             </div>
                             <div className="modal-body">
                                 <div className="alert alert-danger bg-danger bg-opacity-10 border-danger">
-                                    <strong>
-                                        Delete timesheet <span className="text-info">{prevTsToDelete?.period}</span> for
-                                        &nbsp;<span className="text-info">{prevTsToDelete?.employeeName}</span>?
+                                    <strong className='text-white'>
+                                        Delete timesheet <span className="text-warning">&nbsp; {prevTsToDelete?.period} </span> &nbsp; for
+                                        &nbsp; <span className="text-warning"> {prevTsToDelete?.employeeName}</span>?
                                     </strong>
                                 </div>
                                 <p className="text-white mb-0">This will also delete all its daily entries.</p>

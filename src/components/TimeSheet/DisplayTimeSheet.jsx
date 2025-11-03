@@ -509,18 +509,21 @@ const DisplayTimeSheet = () => {
         if (!prevTsToDelete?.id || !selectedEmployee) return;
 
         try {
+            // Delete the entire timesheet node which includes dailyEntries
             await firebaseDB.child(empTsNode(selectedEmployee, prevTsToDelete.id)).remove();
 
             // If it was currently open, clear it
             if (timesheet?.id === prevTsToDelete.id) {
                 setTimesheet(null);
                 setDailyEntries([]);
+                setCurrentTimesheetId('');
             }
 
             await loadPreviousTimesheets();
+            showModal('Success', 'Timesheet deleted successfully!', 'success');
         } catch (e) {
             console.error('Error deleting previous timesheet:', e);
-            alert('Delete failed. Try again.');
+            showModal('Error', 'Delete failed. Try again.', 'error');
         } finally {
             setShowPrevTsDelete(false);
             setPrevTsToDelete(null);

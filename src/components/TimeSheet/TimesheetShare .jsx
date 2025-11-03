@@ -224,6 +224,8 @@ const TimesheetShare = ({ timesheet, dailyEntries, advances, employee, previousT
             align-items: center;
             gap: 12px;
         }
+        
+        /* Desktop Table Styles */
         .timesheet-table {
             width: 100%;
             border-collapse: collapse;
@@ -233,6 +235,7 @@ const TimesheetShare = ({ timesheet, dailyEntries, advances, employee, previousT
             overflow: hidden;
             box-shadow: 0 8px 25px rgba(0,0,0,0.1);
             font-size: 14px;
+            display: table;
         }
         .timesheet-table th {
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
@@ -258,6 +261,67 @@ const TimesheetShare = ({ timesheet, dailyEntries, advances, employee, previousT
         .timesheet-table tr:last-child td {
             border-bottom: none;
         }
+        
+        /* Mobile Card Styles */
+        .timesheet-cards {
+            display: none;
+            flex-direction: column;
+            gap: 15px;
+            margin-bottom: 40px;
+        }
+        .timesheet-card {
+            background: white;
+            border-radius: 15px;
+            padding: 20px;
+            box-shadow: 0 8px 25px rgba(0,0,0,0.1);
+            border-left: 5px solid #667eea;
+            transition: all 0.3s ease;
+        }
+        .timesheet-card:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 12px 30px rgba(0,0,0,0.15);
+        }
+        .card-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+            padding-bottom: 12px;
+            border-bottom: 1px solid #f1f3f4;
+        }
+        .card-row:last-child {
+            margin-bottom: 0;
+            padding-bottom: 0;
+            border-bottom: none;
+        }
+        .card-label {
+            font-weight: 600;
+            color: #636e72;
+            font-size: 13px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            min-width: 100px;
+        }
+        .card-value {
+            flex: 1;
+            text-align: right;
+            font-weight: 500;
+            color: #2d3436;
+        }
+        .card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+            padding-bottom: 15px;
+            border-bottom: 2px solid #f1f3f4;
+        }
+        .card-date {
+            font-weight: 700;
+            font-size: 16px;
+            color: #2d3436;
+        }
+        
         .status-present { 
             background: linear-gradient(135deg, #00b894 0%, #00a085 100%);
             color: white;
@@ -417,6 +481,8 @@ const TimesheetShare = ({ timesheet, dailyEntries, advances, employee, previousT
             background: #e17055;
             color: white;
         }
+        
+        /* Responsive Design */
         @media (max-width: 768px) {
             .header-section {
                 flex-direction: column;
@@ -433,14 +499,22 @@ const TimesheetShare = ({ timesheet, dailyEntries, advances, employee, previousT
                 grid-template-columns: 1fr;
             }
             .timesheet-table {
-                font-size: 12px;
+                display: none;
             }
-            .timesheet-table th,
-            .timesheet-table td {
-                padding: 12px 15px;
+            .timesheet-cards {
+                display: flex;
             }
             .main-content {
                 padding: 25px;
+            }
+        }
+        
+        @media (min-width: 769px) {
+            .timesheet-table {
+                display: table;
+            }
+            .timesheet-cards {
+                display: none;
             }
         }
     </style>
@@ -476,6 +550,7 @@ const TimesheetShare = ({ timesheet, dailyEntries, advances, employee, previousT
         <div class="main-content">
             <h3 class="section-title">📅 Daily Timesheet Entries</h3>
             ${validDailyEntries.length > 0 ? `
+            <!-- Desktop Table -->
             <table class="timesheet-table">
                 <thead>
                     <tr>
@@ -517,6 +592,51 @@ const TimesheetShare = ({ timesheet, dailyEntries, advances, employee, previousT
                     }).join('')}
                 </tbody>
             </table>
+            
+            <!-- Mobile Cards -->
+            <div class="timesheet-cards">
+                ${validDailyEntries.map(entry => {
+                    const date = entry.date ? new Date(entry.date).toLocaleDateString('en-IN', { 
+                        day: '2-digit', 
+                        month: 'short', 
+                        year: 'numeric' 
+                    }) : 'Invalid Date';
+                    
+                    const salary = parseFloat(entry.dailySalary) || parseFloat(entry.salary) || 0;
+                    const status = entry.status || entry.attendanceStatus || 'unknown';
+                    
+                    return `
+                    <div class="timesheet-card">
+                        <div class="card-header">
+                            <div class="card-date">${date}</div>
+                            <div>
+                                <span class="status-${status}">
+                                    ${status.charAt(0).toUpperCase() + status.slice(1)}
+                                    ${entry.isHalfDay ? '<span class="badge badge-halfday">½ Day</span>' : ''}
+                                    ${entry.isEmergency ? '<span class="badge badge-emergency">Emergency</span>' : ''}
+                                </span>
+                            </div>
+                        </div>
+                        <div class="card-row">
+                            <div class="card-label">Client</div>
+                            <div class="card-value">${entry.clientName || entry.client || '-'}</div>
+                        </div>
+                        <div class="card-row">
+                            <div class="card-label">Job Role</div>
+                            <div class="card-value">${entry.jobRole || entry.role || '-'}</div>
+                        </div>
+                        <div class="card-row">
+                            <div class="card-label">Salary</div>
+                            <div class="card-value"><strong>₹${salary.toFixed(2)}</strong></div>
+                        </div>
+                        <div class="card-row">
+                            <div class="card-label">Comments</div>
+                            <div class="card-value"><em>${entry.notes || entry.comments || '-'}</em></div>
+                        </div>
+                    </div>
+                    `;
+                }).join('')}
+            </div>
             ` : `
             <div style="text-align: center; padding: 60px; background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%); border-radius: 15px; border: 2px dashed #dee2e6;">
                 <div style="font-size: 48px; margin-bottom: 20px;">📊</div>
@@ -638,7 +758,7 @@ const TimesheetShare = ({ timesheet, dailyEntries, advances, employee, previousT
                                         Share Timesheet
                                     </h2>
                                     <p className="mb-0 opacity-75">
-                                        Share and export timesheet for {employeeData.firstName} {employeeData.lastName}
+                                        Share and export timesheet for ${employeeData.firstName} ${employeeData.lastName}
                                     </p>
                                 </div>
                                 <button 

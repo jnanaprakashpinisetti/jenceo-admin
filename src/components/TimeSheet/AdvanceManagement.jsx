@@ -38,23 +38,22 @@ const AdvanceManagement = ({ employeeId, timesheetId, advances = [], onAdvanceAd
     });
     setShowAdvanceModal(true);
   };
-  
 
   const handleSubmitAdvance = async (e) => {
     e.preventDefault();
-    
+
     // Validation
-    if (!employeeId) { 
-      alert('Missing employee.'); 
-      return; 
+    if (!employeeId) {
+      alert('Missing employee.');
+      return;
     }
-    if (!timesheetId) { 
-      alert('Missing timesheet.'); 
-      return; 
+    if (!timesheetId) {
+      alert('Missing timesheet.');
+      return;
     }
-    if (!advanceForm.date) { 
-      alert('Please select a date.'); 
-      return; 
+    if (!advanceForm.date) {
+      alert('Please select a date.');
+      return;
     }
     if (!advanceForm.amount || parseFloat(advanceForm.amount) <= 0) {
       alert('Please enter a valid amount.');
@@ -65,8 +64,6 @@ const AdvanceManagement = ({ employeeId, timesheetId, advances = [], onAdvanceAd
     const now = new Date().toISOString();
 
     const advanceData = {
-      employeeId,
-      timesheetId,
       amount: parseFloat(advanceForm.amount),
       reason: advanceForm.reason || '',
       date: advanceForm.date,
@@ -78,54 +75,56 @@ const AdvanceManagement = ({ employeeId, timesheetId, advances = [], onAdvanceAd
 
     try {
       if (editingAdvance?.id) {
-        // Update existing advance
-        console.log('Updating advance:', editingAdvance.id, advanceData);
-        await firebaseDB.child(`Advances/${editingAdvance.id}`).update(advanceData);
+        // UPDATE existing advance
+        await firebaseDB
+          .child(`EmployeeBioData/${employeeId}/timesheets/${timesheetId}/advances/${editingAdvance.id}`)
+          .update(advanceData);
       } else {
-        // Create new advance
-        const ref = firebaseDB.child('Advances').push();
+        // CREATE new advance - ensure we're writing to the correct path
+        const advancesRef = firebaseDB.child(`EmployeeBioData/${employeeId}/timesheets/${timesheetId}/advances`);
+        const newAdvanceRef = advancesRef.push();
+
         const newAdvance = {
           ...advanceData,
-          id: ref.key,
+          id: newAdvanceRef.key,
           createdAt: now,
           createdBy: uid,
           createdByName: name,
         };
-        console.log('Creating new advance:', newAdvance);
-        await ref.set(newAdvance);
+
+        await newAdvanceRef.set(newAdvance);
       }
-      
+
       // Reset form and close modal
       setAdvanceForm({ amount: '', reason: '', date: '' });
       setShowAdvanceModal(false);
       setEditingAdvance(null);
-      
+
       // Refresh advances list
       if (onAdvanceAdded) {
         onAdvanceAdded();
       }
-      
+
     } catch (err) {
-      console.error('Error saving advance:', err);
+
       alert('Error saving advance. Please try again.');
+
     }
   };
 
   // Add the missing whoSafe function
   const auth = useAuth();
-const whoSafe = () => {
-  
-  // Priority 1: Auth context user
-  if (auth?.user) {
-    return {
-      uid: auth.user.uid,
-      name: auth.user.displayName || auth.user.name || auth.user.email || 'Admin'
-    };
-  }
-
-  // Fallback
-  return { uid: "system", name: "System" };
-};
+  const whoSafe = () => {
+    // Priority 1: Auth context user
+    if (auth?.user) {
+      return {
+        uid: auth.user.uid,
+        name: auth.user.displayName || auth.user.name || auth.user.email || 'Admin'
+      };
+    }
+    // Fallback
+    return { uid: "system", name: "System" };
+  };
 
   const confirmDeleteAdvance = (advance) => {
     setAdvanceToDelete(advance);
@@ -135,76 +134,54 @@ const whoSafe = () => {
   const deleteAdvance = async () => {
     if (advanceToDelete?.id) {
       try {
-        console.log('Deleting advance:', advanceToDelete.id);
-        await firebaseDB.child(`Advances/${advanceToDelete.id}`).remove();
+        await firebaseDB.child(`EmployeeBioData/${employeeId}/timesheets/${timesheetId}/advances/${advanceToDelete.id}`).remove();
         setShowDeleteModal(false);
         setAdvanceToDelete(null);
-        
+
         // Refresh advances list
         if (onAdvanceAdded) {
           onAdvanceAdded();
         }
       } catch (error) {
-        console.error('Error deleting advance:', error);
         alert('Error deleting advance. Please try again.');
       }
     }
   };
 
-  
-useEffect(() => {
-  if (!employeeId) {
-    setEmployee(null);
-    return;
-  }
-
-  const fetchEmployee = async () => {
-    try {
-      const snapshot = await firebaseDB.child(`EmployeeBioData/${employeeId}`).once('value');
-      if (snapshot.exists()) {
-        const employeeData = snapshot.val();
-        setEmployee({
-          id: employeeId,
-          ...employeeData,
-          displayName: `${employeeData.firstName || ''} ${employeeData.lastName || ''}`.trim() || employeeData.employeeId || 'Employee'
-        });
-      }
-    } catch (error) {
-      console.error('Error fetching employee data:', error);
-    }
-  };
-
-  fetchEmployee();
-}, [employeeId]);
-
-
-  // Load advances from Firebase
+  // SINGLE useEffect for loading advances - ONLY from timesheet path
   useEffect(() => {
-    if (!employeeId) {
+    if (!employeeId || !timesheetId) {
       setLocalAdvances([]);
       return;
     }
 
-    console.log('Loading advances for employee:', employeeId);
-    const ref = firebaseDB.child('Advances').orderByChild('employeeId').equalTo(employeeId);
-    
+    const ref = firebaseDB.child(`EmployeeBioData/${employeeId}/timesheets/${timesheetId}/advances`);
+
     const handler = ref.on('value', (snap) => {
       const data = snap.val() || {};
-      console.log('Raw advances data:', data);
-      
-      const list = Object.entries(data).map(([key, value]) => ({
-        id: key,
-        ...value
-      })).filter(a => a?.timesheetId === timesheetId);
-      
-      console.log('Filtered advances:', list);
+      // Handle different data structures safely
+      let list = [];
+
+      if (data && typeof data === 'object' && !Array.isArray(data)) {
+        // Normal case: object with advance IDs as keys
+        list = Object.entries(data).map(([key, value]) => ({
+          id: key,
+          ...value
+        }));
+      } else if (Array.isArray(data)) {
+        // Array case (shouldn't happen but handle it)
+        list = data.filter(item => item && typeof item === 'object');
+      }
+      // If data is a primitive (number, string, etc.), list remains empty
+
       setLocalAdvances(list);
     }, (error) => {
-      console.error('Error loading advances:', error);
     });
 
     return () => ref.off('value', handler);
   }, [employeeId, timesheetId]);
+
+
 
   const effectiveAdvances = useMemo(
     () => (localAdvances !== null ? localAdvances : (advances || [])),
@@ -213,9 +190,6 @@ useEffect(() => {
 
   const totalAdvances = effectiveAdvances.reduce((sum, a) => sum + (parseFloat(a.amount) || 0), 0);
   const sortedAdvances = [...effectiveAdvances].sort((a, b) => new Date(b.date) - new Date(a.date));
-
-  console.log('Effective advances:', effectiveAdvances);
-  console.log('Total advances:', totalAdvances);
 
   return (
     <div className="card bg-dark border-warning">

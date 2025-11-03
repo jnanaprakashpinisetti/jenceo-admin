@@ -217,7 +217,8 @@ const DisplayTimeSheet = () => {
                 };
             }
         } catch (e) {
-            console.warn('Error reading stored user:', e);
+
+            showModal('Error reading stored user:', e);
         }
 
         // Priority 4: Component state currentUser
@@ -387,6 +388,11 @@ const DisplayTimeSheet = () => {
         setClarifyText('');
     };
 
+    // Build the advances path under a specific employee + timesheet
+    const advancesNode = (empId, tsId) =>
+        `EmployeeBioData/${empId}/timesheets/${tsId}/advances`;
+
+
 
 
 
@@ -461,7 +467,8 @@ const DisplayTimeSheet = () => {
             });
             setYearPrevTimesheets(withDisplay);
         } catch (e) {
-            console.error('loadYearTimesheets error', e);
+
+            showModal('loadYearTimesheets error', e);
             setYearPrevTimesheets([]);
         }
     };
@@ -539,7 +546,7 @@ const DisplayTimeSheet = () => {
             await loadPreviousTimesheets();
             showModal('Success', 'Timesheet deleted successfully!', 'success');
         } catch (e) {
-            console.error('Error deleting previous timesheet:', e);
+
             showModal('Error', 'Delete failed. Try again.', 'error');
         } finally {
             setShowPrevTsDelete(false);
@@ -610,7 +617,8 @@ const DisplayTimeSheet = () => {
                     }
                 });
             } catch (error) {
-                console.warn(`Error loading users from ${p}:`, error);
+
+                showModal(`Error loading users from ${p}:`, error);
             }
         }
 
@@ -738,7 +746,8 @@ const DisplayTimeSheet = () => {
                 if (authContext && authContext.currentUser) {
                     setCurrentUser(authContext.currentUser);
                 } else {
-                    console.log('No user logged in');
+
+                    showModal('No user logged in');
                     // Fallback to localStorage
                     const storedUser = localStorage.getItem('currentUser');
                     if (storedUser) {
@@ -762,6 +771,26 @@ const DisplayTimeSheet = () => {
             setEmployees(employeesData);
         }
     };
+
+    useEffect(() => {
+        if (!selectedEmployee || !timesheet?.timesheetId) {
+            setAdvances([]);
+            return;
+        }
+        const ref = firebaseDB.child(
+            `EmployeeBioData/${selectedEmployee}/timesheets/${timesheet.timesheetId}/advances`
+        );
+        const handler = ref.on('value', (snap) => {
+            const obj = snap.val() || {};
+            const list = Object.entries(obj).map(([id, v]) => ({ id, ...v }));
+            setAdvances(list);
+            calculateSummary(dailyEntries, list);
+        }, console.error);
+
+        return () => ref.off('value', handler);
+    }, [selectedEmployee, timesheet?.timesheetId]);
+
+
 
     // PATCH: timesheet path helpers — single source of truth
     const empTsNode = (empId, tsId = '') =>
@@ -1105,7 +1134,6 @@ const DisplayTimeSheet = () => {
             }
 
         } catch (error) {
-            console.error('Error loading timesheet:', error);
             showModal('Error', 'Error loading timesheet', 'error');
         } finally {
             setIsCreatingTimesheet(false);
@@ -1186,7 +1214,7 @@ const DisplayTimeSheet = () => {
                         allTimesheets = [...allTimesheets, ...timesheetsFromPath];
                     }
                 } catch (error) {
-                    console.warn(`Error loading from ${path}:`, error);
+                    showModal('Error', 'Error loading timesheet', 'error');
                 }
             }
 
@@ -1201,11 +1229,9 @@ const DisplayTimeSheet = () => {
 
             setPreviousTimesheets(uniqueTimesheets);
 
-            if (uniqueTimesheets.length === 0) {
-                console.log('No timesheets found in any location for employee:', selectedEmployee);
-            }
+
         } catch (err) {
-            console.error('Error in alternative timesheet loading:', err);
+            showModal('Error in alternative timesheet loading:', err);
         } finally {
             setLoadingPrevious(false);
         }
@@ -1225,7 +1251,7 @@ const DisplayTimeSheet = () => {
             }
             return totalDays;
         } catch (error) {
-            console.error('Error calculating total days:', error);
+            showModal('Error calculating total days:', error);
             return 0;
         }
     };
@@ -1343,7 +1369,8 @@ const DisplayTimeSheet = () => {
 
             setPreviousTimesheets(list);
         } catch (error) {
-            console.error('Error loading previous timesheets:', error);
+
+            showModal('Error loading previous timesheets:', error);
             setPreviousTimesheets([]);
         } finally {
             setPreviousTimesheetsLoading(false);
@@ -1405,50 +1432,58 @@ const DisplayTimeSheet = () => {
         return isHalf ? rate / 2 : rate;
     };
 
-    // Update calculateSummary to properly count half days
-// Fix the calculateSummary function
-const calculateSummary = async (
-  entries = dailyEntries,
-  advancesData = advances
-) => {
-  if (!selectedEmployee || !currentTimesheetId) return;
+    const calculateSummary = async (
+        entries = dailyEntries,
+        advancesData = advances,
+    ) => {
+        if (!selectedEmployee || !currentTimesheetId) return;
 
-  const fullDays = entries.filter(e => e.status === 'present' && !e.isPublicHoliday && !e.isHalfDay).length;
-  const halfDays = entries.filter(e => e.status === 'present' && !e.isPublicHoliday && e.isHalfDay).length;
-  const workingDays = fullDays + (halfDays * 0.5);
-  const holidays = entries.filter(e => e.isPublicHoliday || e.status === 'holiday').length;
-  const emergencies = entries.filter(e => e.isEmergency).length;
-  const leaves = entries.filter(e => e.status === 'leave').length;
-  const absents = entries.filter(e => e.status === 'absent').length;
-  const totalSalary = entries.reduce((s, e) => s + (parseFloat(e.dailySalary) || 0), 0);
-  
-  // FIX: Always deduct advances for the current timesheet period
-  const advancesInPeriod = (advancesData || [])
-    .filter(a => isDateInActivePeriod(a.date) && (a.status || '').toLowerCase() !== 'settled');
+        const fullDays = entries.filter(e => e.status === 'present' && !e.isPublicHoliday && !e.isHalfDay).length;
+        const halfDays = entries.filter(e => e.status === 'present' && !e.isPublicHoliday && e.isHalfDay).length;
+        const workingDays = fullDays + (halfDays * 0.5);
+        const holidays = entries.filter(e => e.isPublicHoliday || e.status === 'holiday').length;
+        const emergencies = entries.filter(e => e.isEmergency).length;
+        const leaves = entries.filter(e => e.status === 'leave').length;
+        const absents = entries.filter(e => e.status === 'absent').length;
+        const totalSalary = entries.reduce((s, e) => s + (parseFloat(e.dailySalary) || 0), 0);
 
-  const totalAdv = advancesInPeriod.reduce((s, a) => s + (parseFloat(a.amount) || 0), 0);
+        // FIX: Always deduct advances for the current timesheet period
+        const advancesInPeriod = (advancesData || [])
+            .filter(a => isDateInActivePeriod(a.date) && (a.status || '').toLowerCase() !== 'settled');
 
-  const { uid, name } = whoSafe();
+        const normalizeAdvances = (adv) => {
+            if (Array.isArray(adv)) return adv;
+            if (adv && typeof adv === 'object') return Object.values(adv);
+            return [];
+        };
 
-  const patch = {
-    workingDays,
-    fullDays,
-    halfDays,
-    totalDays: entries.length,
-    leaves,
-    holidays,
-    emergencies,
-    absents,
-    totalSalary,
-    advances: totalAdv, // Always show advances for this period
-    netPayable: Math.round(totalSalary - totalAdv),
-    updatedByName: name,
-    updatedAt: new Date().toISOString(),
-  };
 
-  setTimesheet(prev => ({ ...(prev || { timesheetId: currentTimesheetId }), ...patch, timesheetId: currentTimesheetId }));
-  await firebaseDB.child(empTsById(selectedEmployee, currentTimesheetId)).update(patch);
-};
+        const list = normalizeAdvances(advancesData);
+
+        const totalAdv = advancesInPeriod.reduce((sum, a) => sum + (parseFloat(a?.amount) || 0), 0);
+
+
+        const { uid, name } = whoSafe();
+
+        const patch = {
+            workingDays,
+            fullDays,
+            halfDays,
+            totalDays: entries.length,
+            leaves,
+            holidays,
+            emergencies,
+            absents,
+            totalSalary,
+            advancesTotal: totalAdv, // Always show advances for this period
+            netPayable: Math.round(totalSalary - totalAdv),
+            updatedByName: name,
+            updatedAt: new Date().toISOString(),
+        };
+
+        setTimesheet(prev => ({ ...(prev || { timesheetId: currentTimesheetId }), ...patch, timesheetId: currentTimesheetId }));
+        await firebaseDB.child(empTsById(selectedEmployee, currentTimesheetId)).update(patch);
+    };
     const createNewTimesheet = (timesheetId) => {
         const { uid, name } = whoSafe();
         const employee = employees.find(emp => emp.id === selectedEmployee);
@@ -1472,7 +1507,7 @@ const calculateSummary = async (
             emergencies: 0,
             absents: 0,
             totalSalary: 0,
-            advances: 0,
+            advancesTotal: 0,
             netPayable: 0,
             createdBy: uid,
             createdAt: new Date().toISOString(),
@@ -1485,33 +1520,33 @@ const calculateSummary = async (
     };
 
     // Settle all advances for the active period so they won't deduct again
-    const settleAdvancesForActivePeriod = async (empId, tsId) => {
-        // load employee's advances
-        const snap = await firebaseDB.child('Advances')
-            .orderByChild('employeeId')
-            .equalTo(empId)
-            .once('value');
+    // const settleAdvancesForActivePeriod = async (empId, tsId) => {
+    //     // load employee's advances
+    //     const snap = await firebaseDB.child('Advances')
+    //         .orderByChild('employeeId')
+    //         .equalTo(empId)
+    //         .once('value');
 
-        if (!snap.exists()) return;
+    //     if (!snap.exists()) return;
 
-        const updates = {};
-        const now = new Date().toISOString();
+    //     const updates = {};
+    //     const now = new Date().toISOString();
 
-        Object.entries(snap.val() || {}).forEach(([advId, adv]) => {
-            // Only settle those inside current period and not already settled
-            if (isDateInActivePeriod(adv?.date) && String(adv?.status || '').toLowerCase() !== 'settled') {
-                updates[`Advances/${advId}/status`] = 'settled';
-                updates[`Advances/${advId}/settledAt`] = now;
-                updates[`Advances/${advId}/settledBy`] = currentUser?.uid || 'admin';
-                updates[`Advances/${advId}/settledByName`] = currentUser?.displayName || currentUser?.email || 'Admin';
-                updates[`Advances/${advId}/settledTimesheetId`] = tsId;
-            }
-        });
+    //     Object.entries(snap.val() || {}).forEach(([advId, adv]) => {
+    //         // Only settle those inside current period and not already settled
+    //         if (isDateInActivePeriod(adv?.date) && String(adv?.status || '').toLowerCase() !== 'settled') {
+    //             updates[`Advances/${advId}/status`] = 'settled';
+    //             updates[`Advances/${advId}/settledAt`] = now;
+    //             updates[`Advances/${advId}/settledBy`] = currentUser?.uid || 'admin';
+    //             updates[`Advances/${advId}/settledByName`] = currentUser?.displayName || currentUser?.email || 'Admin';
+    //             updates[`Advances/${advId}/settledTimesheetId`] = tsId;
+    //         }
+    //     });
 
-        if (Object.keys(updates).length) {
-            await firebaseDB.update(updates);
-        }
-    };
+    //     if (Object.keys(updates).length) {
+    //         await firebaseDB.update(updates);
+    //     }
+    // };
 
     const loadDailyEntries = async (periodKeyParam) => {
         const periodKey = periodKeyParam || getCurrentPeriodKey();
@@ -1529,18 +1564,35 @@ const calculateSummary = async (
         }
     };
 
-    const loadAdvances = async () => {
-        const snapshot = await firebaseDB.child(`Advances`)
-            .orderByChild('employeeId')
-            .equalTo(selectedEmployee)
-            .once('value');
+    // In DisplayTimeSheet.jsx - Update the loadAdvances function:
 
-        if (snapshot.exists()) {
-            const advancesData = Object.values(snapshot.val());
-            setAdvances(advancesData);
-            // Trigger immediate summary recalculation
-            calculateSummary(dailyEntries, advancesData);
-        } else {
+    const loadAdvances = async () => {
+        if (!selectedEmployee || !timesheet?.timesheetId) {
+            setAdvances([]);
+            calculateSummary(dailyEntries, []);
+            return;
+        }
+
+        try {
+            const snap = await firebaseDB
+                .child(`EmployeeBioData/${selectedEmployee}/timesheets/${timesheet.timesheetId}/advances`)
+                .once('value');
+
+            const data = snap.val();
+            let arr = [];
+
+            // Safe handling of data structure
+            if (data && typeof data === 'object' && !Array.isArray(data)) {
+                arr = Object.entries(data).map(([id, v]) => ({ id, ...v }));
+            } else if (typeof data === 'number' || typeof data === 'string') {
+
+                showModal('Error', 'Delete failed. Try again.', 'error');
+                arr = []; // Reset to empty array
+            }
+
+            setAdvances(arr);
+            calculateSummary(dailyEntries, arr);
+        } catch (error) {
             setAdvances([]);
             calculateSummary(dailyEntries, []);
         }
@@ -1566,7 +1618,8 @@ const calculateSummary = async (
             }
             return false;
         } catch (error) {
-            console.error('Error checking duplicates:', error);
+
+            showModal('Error checking duplicates:', error);
             return false;
         }
     };
@@ -1584,7 +1637,8 @@ const calculateSummary = async (
             }
             return { exists: false };
         } catch (error) {
-            console.error('Error checking duplicate timesheet:', error);
+
+            showModal('Error checking duplicate timesheet:', error);
             return { exists: false };
         }
     };
@@ -1617,7 +1671,8 @@ const calculateSummary = async (
             }
             return { exists: false };
         } catch (error) {
-            console.error('Error checking existing entries:', error);
+
+            showModal('Error checking existing entries:', error);
             return { exists: false };
         }
     };
@@ -1705,7 +1760,8 @@ const calculateSummary = async (
 
             await loadDailyEntries();
         } catch (error) {
-            console.error('Error in auto-fill:', error);
+
+            showModal('Error in auto-fill:', error);
         } finally {
             setIsAutoFilling(false);
         }
@@ -1817,7 +1873,7 @@ const calculateSummary = async (
             setHasUnsavedChanges(false);
             showModal('Success', 'Timesheet Saved Successfully', 'success');
         } catch (error) {
-            console.error('Error saving timesheet:', error);
+
             showModal('Error', 'Error saving timesheet. Please try again.', 'error');
         } finally {
             setIsSaving(false);
@@ -1970,7 +2026,6 @@ const calculateSummary = async (
             await calculateSummary();
             await loadPreviousTimesheets();
         } catch (e) {
-            console.error(e);
             showModal('Error', 'Delete failed. Please try again.', 'error');
         }
     };
@@ -2030,7 +2085,6 @@ const calculateSummary = async (
                 'success'
             );
         } catch (err) {
-            console.error('Error deleting selected entries:', err);
             showModal('Error', 'Failed to delete selected entries. Please try again.', 'error');
         }
 
@@ -2134,7 +2188,7 @@ const calculateSummary = async (
 
             showModal('Success', 'Entry saved successfully!', 'success');
         } catch (err) {
-            console.error('handleSaveEntry error:', err);
+
             showModal('Error', 'Save failed. Please try again.', 'error');
         } finally {
             setShowEntryModal(false);
@@ -2272,7 +2326,7 @@ const calculateSummary = async (
                 setPendingSubmitAfterAssign(false);
             }
         } catch (e) {
-            console.error('Error assigning timesheet:', e);
+
             showModal('Error', 'Failed to assign. Please try again.', 'error');
         }
     };
@@ -2309,7 +2363,7 @@ const calculateSummary = async (
             await firebaseDB.child(empTsById(selectedEmployee, timesheet.timesheetId)).update(finalHeader);
 
             await firebaseDB.child(empTsById(selectedEmployee, timesheet.timesheetId)).update(finalHeader);
-            await settleAdvancesForActivePeriod(selectedEmployee, timesheet.timesheetId);
+            // await settleAdvancesForActivePeriod(selectedEmployee, timesheet.timesheetId);
 
             setShowConfirmModal(false);
             showModal('Success', 'Timesheet submitted successfully!', 'success');
@@ -2319,7 +2373,7 @@ const calculateSummary = async (
             setTimesheet(null);
             setCurrentTimesheetId('');
         } catch (e) {
-            console.error('Error submitting timesheet:', e);
+
             showModal('Error', 'Error submitting timesheet. Please try again.', 'error');
         }
     };
@@ -2375,7 +2429,7 @@ const calculateSummary = async (
                 setPendingSubmitAfterAssign(false);
             }
         } catch (error) {
-            console.error('Error assigning timesheet:', error);
+
             showModal('Error', 'Failed to assign timesheet. Please try again.', 'error');
         }
     };
@@ -2543,7 +2597,21 @@ const calculateSummary = async (
 
                                                     <td>{ts.workingDays ?? 0}</td>
                                                     <td>₹{Number(ts.totalSalary || 0).toFixed(0)}</td>
-                                                    <td className='text-danger'>₹{Number(ts.advances || 0).toFixed(0)}</td>
+                                                    <td className='text-danger'>
+                                                        ₹{(function () {
+                                                            const advances = ts.advances || ts.advancesTotal || 0;
+
+                                                            // If advances is an object, sum all amounts
+                                                            if (advances && typeof advances === 'object') {
+                                                                return Object.values(advances).reduce((sum, advance) => {
+                                                                    return sum + (parseFloat(advance?.amount) || 0);
+                                                                }, 0).toFixed(0);
+                                                            }
+
+                                                            // If it's already a number, use it directly
+                                                            return Number(advances || 0).toFixed(0);
+                                                        })()}
+                                                    </td>
                                                     <td className='text-warning'>₹{Number(ts.netPayable || 0).toFixed(0)}</td>
                                                     <td>-</td>
                                                     <td>
@@ -3109,8 +3177,7 @@ const calculateSummary = async (
                                             setTsToDelete(null);
                                             await loadPreviousTimesheets();
                                         } catch (err) {
-                                            console.error('Delete timesheet failed:', err);
-                                            alert('Failed to delete. Please try again.');
+                                            showModal('Failed to delete. Please try again.');
                                         }
                                     }}
                                 >
@@ -3467,8 +3534,7 @@ const calculateSummary = async (
 
                                             setShowAutoFillModal(false);
                                         } catch (err) {
-                                            console.error('Auto-fill failed:', err);
-                                            alert('Auto-fill failed. Please try again.');
+                                            showModal('Auto-fill failed. Please try again.');
                                         } finally {
                                             setIsAutoFilling(false);
                                         }
@@ -3749,7 +3815,19 @@ const TimesheetSummary = ({ timesheet, advances, employee, currentUser }) => {
                                             <div className="col-md-6">
                                                 <div className="bg-danger bg-opacity-10 rounded p-3 border border-danger text-center">
                                                     <small className="text-muted d-block">Advances</small>
-                                                    <div className="text-danger h5 mb-0">₹{timesheet.advances}</div>
+                                                    <div className="text-danger h5 mb-0">
+                                                        ₹{(function () {
+                                                            const advances = timesheet.advances || timesheet.advancesTotal || 0;
+
+                                                            if (advances && typeof advances === 'object') {
+                                                                return Object.values(advances).reduce((sum, advance) => {
+                                                                    return sum + (parseFloat(advance?.amount) || 0);
+                                                                }, 0);
+                                                            }
+
+                                                            return Number(advances || 0);
+                                                        })().toFixed(0)}
+                                                    </div>
                                                 </div>
                                             </div>
                                         </div>

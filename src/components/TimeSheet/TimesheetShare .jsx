@@ -2,17 +2,98 @@ import React from 'react';
 
 const TimesheetShare = ({ timesheet, dailyEntries, advances, employee, previousTimesheets, onClose }) => {
     
+    // Enhanced debug logging
+    console.log('=== TIMESHEET SHARE DEBUG ===');
+    console.log('Timesheet:', timesheet);
+    console.log('Daily Entries:', dailyEntries);
+    console.log('Employee:', employee);
+    console.log('Advances:', advances);
+    console.log('Previous Timesheets:', previousTimesheets);
+    console.log('============================');
+
+    // Enhanced employee data extraction
+    const getEmployeeData = () => {
+        console.log('=== EMPLOYEE DATA EXTRACTION ===');
+        console.log('Raw employee:', employee);
+        console.log('Raw timesheet:', timesheet);
+        
+        let extractedData = {
+            photo: '',
+            firstName: 'Employee',
+            lastName: '',
+            designation: 'Employee',
+            employeeId: 'N/A',
+            basicSalary: 0,
+            dailyRate: 0
+        };
+
+        // Try to get data from employee object first
+        if (employee && typeof employee === 'object') {
+            console.log('Using employee object data');
+            extractedData = {
+                photo: employee.employeePhotoUrl || employee.photo || employee.profilePicture || '',
+                firstName: employee.firstName || employee.basicInfo?.firstName || 'Employee',
+                lastName: employee.lastName || employee.basicInfo?.lastName || '',
+                designation: employee.designation || employee.jobRole || employee.primarySkill || employee.position || 'Employee',
+                employeeId: employee.employeeId || employee.idNo || employee.empId || employee.basicInfo?.employeeId || 'N/A',
+                basicSalary: employee.basicSalary || employee.salary || employee.salaryInfo?.basicSalary || 0,
+                dailyRate: Math.round((employee.basicSalary || employee.salary || employee.salaryInfo?.basicSalary || 0) / 30)
+            };
+        }
+        // Fallback to timesheet data
+        else if (timesheet) {
+            console.log('Using timesheet data as fallback');
+            const nameParts = (timesheet.employeeName || '').split(' ');
+            extractedData = {
+                photo: '',
+                firstName: nameParts[0] || 'Employee',
+                lastName: nameParts.slice(1).join(' ') || '',
+                designation: timesheet.designation || timesheet.jobRole || 'Employee',
+                employeeId: timesheet.employeeId || 'N/A',
+                basicSalary: timesheet.basicSalary || 0,
+                dailyRate: Math.round((timesheet.basicSalary || 0) / 30)
+            };
+        }
+
+        console.log('Extracted employee data:', extractedData);
+        return extractedData;
+    };
+
+    const employeeData = getEmployeeData();
+    
+    // Check data availability
+    const hasValidData = dailyEntries && dailyEntries.length > 0;
+    const hasEmployeeData = employeeData.firstName !== 'Employee' || employeeData.employeeId !== 'N/A';
+
+    console.log('Data Status:', {
+        hasValidData,
+        hasEmployeeData,
+        dailyEntriesCount: dailyEntries?.length,
+        employeeData
+    });
+
     const generateWhatsAppHTML = () => {
-        const totalSalary = dailyEntries.reduce((sum, entry) => sum + (entry.dailySalary || 0), 0);
-        const totalAdvances = advances.reduce((sum, advance) => sum + (parseFloat(advance.amount) || 0), 0);
+        const totalSalary = dailyEntries?.reduce((sum, entry) => sum + (parseFloat(entry.dailySalary) || 0), 0) || 0;
+        const totalAdvances = advances?.reduce((sum, advance) => sum + (parseFloat(advance.amount) || 0), 0) || 0;
         const netPayable = totalSalary - totalAdvances;
 
         // Calculate summary statistics
-        const presentDays = dailyEntries.filter(entry => entry.status === 'present').length;
-        const absentDays = dailyEntries.filter(entry => entry.status === 'absent').length;
-        const leaveDays = dailyEntries.filter(entry => entry.status === 'leave').length;
-        const holidayDays = dailyEntries.filter(entry => entry.status === 'holiday').length;
-        const totalDays = dailyEntries.length;
+        const presentDays = dailyEntries?.filter(entry => entry.status === 'present').length || 0;
+        const absentDays = dailyEntries?.filter(entry => entry.status === 'absent').length || 0;
+        const leaveDays = dailyEntries?.filter(entry => entry.status === 'leave').length || 0;
+        const holidayDays = dailyEntries?.filter(entry => entry.status === 'holiday' || entry.isPublicHoliday).length || 0;
+        const totalDays = dailyEntries?.length || 0;
+
+        console.log('Generated HTML with stats:', {
+            totalSalary,
+            totalAdvances,
+            netPayable,
+            presentDays,
+            absentDays,
+            leaveDays,
+            holidayDays,
+            totalDays
+        });
 
         return `
 <!DOCTYPE html>
@@ -20,7 +101,7 @@ const TimesheetShare = ({ timesheet, dailyEntries, advances, employee, previousT
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Timesheet - ${timesheet?.employeeName || 'Employee'}</title>
+    <title>Timesheet - ${timesheet?.employeeName || employeeData.firstName}</title>
     <style>
         * {
             box-sizing: border-box;
@@ -57,6 +138,18 @@ const TimesheetShare = ({ timesheet, dailyEntries, advances, employee, previousT
             border: 4px solid white;
             object-fit: cover;
             background: #ecf0f1;
+        }
+        .photo-placeholder {
+            width: 100px;
+            height: 100px;
+            border-radius: 50%;
+            border: 4px solid white;
+            background: #ecf0f1;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            color: #7f8c8d;
+            font-size: 12px;
         }
         .employee-info {
             flex: 1;
@@ -286,16 +379,26 @@ const TimesheetShare = ({ timesheet, dailyEntries, advances, employee, previousT
     <div class="timesheet-container">
         <!-- Header Section with Employee Photo and Basic Info -->
         <div class="header-section">
-            <img src="${employee?.photo || 'https://via.placeholder.com/100x100?text=Photo'}" 
-                 alt="Employee Photo" 
-                 class="employee-photo">
+            ${employeeData.photo ? `
+                <img src="${employeeData.photo}" 
+                     alt="Employee Photo" 
+                     class="employee-photo"
+                     onerror="this.style.display='none'; document.getElementById('photo-placeholder').style.display='flex';">
+                <div id="photo-placeholder" class="photo-placeholder" style="display: none;">
+                    <span>No Photo</span>
+                </div>
+            ` : `
+                <div class="photo-placeholder">
+                    <span>No Photo</span>
+                </div>
+            `}
             <div class="employee-info">
-                <div class="employee-name">${employee?.firstName || ''} ${employee?.lastName || ''}</div>
-                <div class="employee-designation">${employee?.designation || 'Employee'}</div>
+                <div class="employee-name">${employeeData.firstName} ${employeeData.lastName}</div>
+                <div class="employee-designation">${employeeData.designation}</div>
                 <div class="employee-details">
-                    <div class="detail-item">ID: ${employee?.employeeId || 'N/A'}</div>
-                    <div class="detail-item">Basic Salary: ₹${employee?.basicSalary || 0}</div>
-                    <div class="detail-item">Daily Rate: ₹${employee?.dailyRate || 0}</div>
+                    <div class="detail-item">ID: ${employeeData.employeeId}</div>
+                    <div class="detail-item">Basic Salary: ₹${employeeData.basicSalary}</div>
+                    <div class="detail-item">Daily Rate: ₹${employeeData.dailyRate}</div>
                     <div class="detail-item">Period: ${timesheet?.period || 'N/A'}</div>
                 </div>
             </div>
@@ -303,7 +406,8 @@ const TimesheetShare = ({ timesheet, dailyEntries, advances, employee, previousT
 
         <div class="main-content">
             <!-- Timesheet Table -->
-            <h3 class="section-title">📅 Daily Timesheet Entries for the month of </h3>
+            <h3 class="section-title">📅 Daily Timesheet Entries</h3>
+            ${dailyEntries && dailyEntries.length > 0 ? `
             <table class="timesheet-table">
                 <thead>
                     <tr>
@@ -311,13 +415,14 @@ const TimesheetShare = ({ timesheet, dailyEntries, advances, employee, previousT
                         <th>Client Name</th>
                         <th>Job Role</th>
                         <th>Status</th>
+                        <th>Salary</th>
                         <th>Comments</th>
                     </tr>
                 </thead>
                 <tbody>
                     ${dailyEntries.map(entry => `
                         <tr>
-                            <td><strong>${new Date(entry.date).toLocaleDateString('en-IN')}</strong></td>
+                            <td><strong>${new Date(entry.date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}</strong></td>
                             <td>${entry.clientName || '-'}</td>
                             <td>${entry.jobRole || '-'}</td>
                             <td>
@@ -327,11 +432,18 @@ const TimesheetShare = ({ timesheet, dailyEntries, advances, employee, previousT
                                     ${entry.isEmergency ? '<span class="badge badge-emergency">Emergency</span>' : ''}
                                 </span>
                             </td>
+                            <td>₹${(entry.dailySalary || 0).toFixed(2)}</td>
                             <td>${entry.notes || '-'}</td>
                         </tr>
                     `).join('')}
                 </tbody>
             </table>
+            ` : `
+            <div style="text-align: center; padding: 40px; background: #f8f9fa; border-radius: 10px;">
+                <h4 style="color: #6c757d;">No Daily Entries Found</h4>
+                <p style="color: #6c757d;">There are no timesheet entries to display.</p>
+            </div>
+            `}
 
             <!-- Summary Section -->
             <div class="summary-section">
@@ -372,11 +484,11 @@ const TimesheetShare = ({ timesheet, dailyEntries, advances, employee, previousT
                     <div class="financial-stats">
                         <div class="financial-item">
                             <div class="financial-label">Basic Salary</div>
-                            <div class="financial-value">₹${employee?.basicSalary || 0}</div>
+                            <div class="financial-value">₹${employeeData.basicSalary}</div>
                         </div>
                         <div class="financial-item">
                             <div class="financial-label">Daily Rate</div>
-                            <div class="financial-value">₹${employee?.dailyRate || 0}</div>
+                            <div class="financial-value">₹${employeeData.dailyRate}</div>
                         </div>
                         <div class="financial-item total">
                             <div class="financial-label">Total Salary</div>
@@ -405,29 +517,45 @@ const TimesheetShare = ({ timesheet, dailyEntries, advances, employee, previousT
         `;
     };
 
-    const downloadHTMLFile = () => {
-        const htmlContent = generateWhatsAppHTML();
-        const blob = new Blob([htmlContent], { type: 'text/html' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `timesheet-${timesheet?.employeeName || 'employee'}-${new Date().toISOString().split('T')[0]}.html`;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
-    };
-
-    const shareViaWhatsApp = () => {
-        const htmlContent = generateWhatsAppHTML();
-        const blob = new Blob([htmlContent], { type: 'text/html' });
-        const url = URL.createObjectURL(blob);
-        
-        const message = `Timesheet for ${timesheet?.employeeName} - Period: ${timesheet?.period}`;
-        const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(message + '\n\nDownload HTML file: ' + url)}`;
-        
-        window.open(whatsappUrl, '_blank');
-    };
+    // Enhanced debug info component
+    const DebugInfo = () => (
+        <div className="card mb-3 bg-warning bg-opacity-10">
+            <div className="card-body">
+                <h6 className="text-warning">🔧 Debug Information</h6>
+                <div className="row small">
+                    <div className="col-md-4">
+                        <strong>Employee Data:</strong><br/>
+                        Name: {employeeData.firstName} {employeeData.lastName}<br/>
+                        ID: {employeeData.employeeId}<br/>
+                        Designation: {employeeData.designation}<br/>
+                        Salary: ₹{employeeData.basicSalary}
+                    </div>
+                    <div className="col-md-4">
+                        <strong>Timesheet Data:</strong><br/>
+                        Entries: {dailyEntries?.length || 0}<br/>
+                        Advances: {advances?.length || 0}<br/>
+                        Timesheet ID: {timesheet?.timesheetId || 'None'}<br/>
+                        Period: {timesheet?.period || 'N/A'}
+                    </div>
+                    <div className="col-md-4">
+                        <strong>Data Status:</strong><br/>
+                        Has Employee: {!!employee}<br/>
+                        Has Timesheet: {!!timesheet}<br/>
+                        Has Entries: {hasValidData ? 'Yes' : 'No'}<br/>
+                        Entries Count: {dailyEntries?.length || 0}
+                    </div>
+                </div>
+                {dailyEntries && dailyEntries.length > 0 && (
+                    <div className="mt-2">
+                        <strong>First Entry Sample:</strong> 
+                        <pre className="small bg-dark text-white p-2 mt-1" style={{fontSize: '10px', maxHeight: '100px', overflow: 'auto'}}>
+                            {JSON.stringify(dailyEntries[0], null, 2)}
+                        </pre>
+                    </div>
+                )}
+            </div>
+        </div>
+    );
 
     return (
         <div className="container-fluid p-4">
@@ -444,6 +572,31 @@ const TimesheetShare = ({ timesheet, dailyEntries, advances, employee, previousT
                         </button>
                     </div>
 
+                    <DebugInfo />
+
+                    {/* Action Buttons */}
+                    <div className="card mb-4">
+                        <div className="card-body">
+                            <div className="d-flex gap-3">
+                                <button 
+                                    className="btn btn-success"
+                                    // onClick={downloadHTMLFile}
+                                    disabled={!dailyEntries || dailyEntries.length === 0}
+                                >
+                                    <i className="bi bi-download me-2"></i>
+                                    Download HTML
+                                </button>
+                                <button 
+                                    className="btn btn-success"
+                                    // onClick={shareViaWhatsApp}
+                                    disabled={!dailyEntries || dailyEntries.length === 0}
+                                >
+                                    <i className="bi bi-whatsapp me-2"></i>
+                                    Share via WhatsApp
+                                </button>
+                            </div>
+                        </div>
+                    </div>
                   
                     {/* Preview Section */}
                     <div className="card">

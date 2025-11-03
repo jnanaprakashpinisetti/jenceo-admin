@@ -5,6 +5,7 @@ import AdvanceManagement from './AdvanceManagement';
 import WorkerSearch from './WorkerSearch';
 import { getAuth, onAuthStateChanged, signOut } from 'firebase/auth';
 import { useAuth } from "../../context/AuthContext";
+import TimesheetShare from './TimesheetShare ';
 
 
 
@@ -3793,6 +3794,12 @@ const DailyEntriesTable = ({
     onSelectEntry,
     onSelectAllEntries,
 }) => {
+    const [showShareView, setShowShareView] = useState(false);
+    const [employees, setEmployees] = useState([]);
+    const [selectedEmployee, setSelectedEmployee] = useState('');
+    const [dailyEntries, setDailyEntries] = useState([]);
+    const [advances, setAdvances] = useState([]);
+    const [previousTimesheets, setPreviousTimesheets] = useState([])
     const { user: authUser } = useAuth(); // Get current logged-in user from auth context
 
     // Add these state variables inside the DailyEntriesTable component
@@ -3825,6 +3832,14 @@ const DailyEntriesTable = ({
                         </span>
                     )}
                 </div>
+
+                <button
+                    className="btn btn-info ms-2"
+                    onClick={() => setShowShareView(true)}
+                >
+                    <i className="bi bi-share me-2"></i>
+                    Share Timesheet
+                </button>
             </div>
             <div className="card-body p-0">
                 <div className="table-responsive">
@@ -4019,6 +4034,36 @@ const DailyEntriesTable = ({
                                 >
                                     Close
                                 </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {showShareView && (
+                <div className="modal fade show" style={{ display: 'block', backgroundColor: 'rgba(0,0,0,0.9)' }}>
+                    <div className="modal-dialog modal-fullscreen">
+                        <div className="modal-content bg-light">
+                            <div className="modal-header bg-primary text-white">
+                                <h5 className="modal-title">
+                                    <i className="bi bi-share me-2"></i>
+                                    Share Timesheet - {timesheet?.employeeName}
+                                </h5>
+                                <button
+                                    type="button"
+                                    className="btn-close btn-close-white"
+                                    onClick={() => setShowShareView(false)}
+                                ></button>
+                            </div>
+                            <div className="modal-body p-0">
+                                <TimesheetShare
+                                    timesheet={timesheet}
+                                    dailyEntries={dailyEntries}
+                                    advances={advances}
+                                    employee={employees.find(emp => emp.id === selectedEmployee)}
+                                    previousTimesheets={previousTimesheets}
+                                    onClose={() => setShowShareView(false)}
+                                />
                             </div>
                         </div>
                     </div>

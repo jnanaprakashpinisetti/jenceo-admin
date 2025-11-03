@@ -11,7 +11,7 @@ const AdvanceManagement = ({ employeeId, timesheetId, advances = [], onAdvanceAd
   const [advanceForm, setAdvanceForm] = useState({
     amount: '',
     reason: '',
-    date: new Date().toISOString().split('T')[0]
+    date: '',
   });
 
   const { user: authUser } = useAuth();
@@ -22,9 +22,27 @@ const AdvanceManagement = ({ employeeId, timesheetId, advances = [], onAdvanceAd
     setAdvanceForm({
       amount: '',
       reason: '',
-      date: new Date().toISOString().split('T')[0]
+      date: ''
     });
     setShowAdvanceModal(true);
+  };
+
+  // Fix the getNameForUid function in AdvanceManagement.jsx
+  const getNameForUid = (uid) => {
+    if (!uid) return "";
+
+    // First check if it's the current user
+    if (uid === currentUser?.uid) {
+      return currentUser?.displayName || currentUser?.email || "Admin";
+    }
+
+    // Check if we have user data from props (passed from parent)
+    if (currentUser && typeof currentUser === 'object') {
+      return currentUser.displayName || currentUser.email || uid;
+    }
+
+    // Fallback to UID if no name found
+    return uid;
   };
 
   // Open edit modal with existing data
@@ -40,53 +58,50 @@ const AdvanceManagement = ({ employeeId, timesheetId, advances = [], onAdvanceAd
 
   const handleSubmitAdvance = async (e) => {
     e.preventDefault();
+    if (!employeeId || !timesheetId) { alert('Missing employee or timesheet.'); return; }
+    if (!advanceForm.date) { alert('Please select a date.'); return; }
 
-    const timestamp = new Date().toISOString();
-    const userData = {
-      updatedBy: currentUser?.uid || 'admin',
-      updatedByName: currentUser?.displayName || 'Admin',
-      updatedAt: timestamp
+    const a = {
+      uid: authUser?.uid || currentUser?.uid || 'system',
+      name: authUser?.name || currentUser?.displayName || currentUser?.email || 'System'
     };
+    const now = new Date().toISOString();
 
     const advanceData = {
       employeeId,
       timesheetId,
-      amount: parseFloat(advanceForm.amount),
-      reason: advanceForm.reason,
-      date: advanceForm.date,
+      amount: parseFloat(advanceForm.amount || 0),
+      reason: advanceForm.reason || '',
+      date: advanceForm.date,          // YYYY-MM-DD
       status: 'approved',
-      ...userData
+      updatedAt: now,
+      updatedBy: a.uid,
+      updatedByName: a.name,
     };
 
     try {
-      if (editingAdvance) {
-        // Update existing advance
+      if (editingAdvance?.id) {
         await firebaseDB.child(`Advances/${editingAdvance.id}`).update(advanceData);
       } else {
-        // Create new advance
-        const newRef = firebaseDB.child('Advances').push();
-        const newAdvance = {
+        const ref = firebaseDB.child('Advances').push();
+        await ref.set({
           ...advanceData,
-          id: newRef.key,
-          createdBy: currentUser?.uid || 'admin',
-          createdByName: currentUser?.displayName || 'Admin',
-          createdAt: timestamp
-        };
-        await newRef.set(newAdvance);
+          id: ref.key,
+          createdAt: now,
+          createdBy: a.uid,
+          createdByName: a.name,
+        });
       }
-
-      // Reset form and close modal
-      setAdvanceForm({ amount: '', reason: '', date: new Date().toISOString().split('T')[0] });
+      setAdvanceForm({ amount: '', reason: '', date: '' });
       setShowAdvanceModal(false);
       setEditingAdvance(null);
-
-        // Listener will auto-refresh; keep callback if parent still uses it
-     onAdvanceAdded && onAdvanceAdded();
-    } catch (error) {
-      console.error('Error saving advance:', error);
+      onAdvanceAdded && onAdvanceAdded();
+    } catch (err) {
+      console.error('Error saving advance:', err);
       alert('Error saving advance. Please try again.');
     }
   };
+
 
   const confirmDeleteAdvance = (advance) => {
     setAdvanceToDelete(advance);
@@ -107,7 +122,7 @@ const AdvanceManagement = ({ employeeId, timesheetId, advances = [], onAdvanceAd
     }
   };
 
-    // Live subscribe: reload whenever employeeId/timesheetId changes
+  // Live subscribe: reload whenever employeeId/timesheetId changes
   useEffect(() => {
     if (!employeeId || !timesheetId) {
       setLocalAdvances([]);
@@ -124,7 +139,7 @@ const AdvanceManagement = ({ employeeId, timesheetId, advances = [], onAdvanceAd
   }, [employeeId, timesheetId]);
 
 
-const effectiveAdvances = useMemo(
+  const effectiveAdvances = useMemo(
     () => (localAdvances ?? advances ?? []),
     [localAdvances, advances]
   );
@@ -166,7 +181,7 @@ const effectiveAdvances = useMemo(
                 <div className="col-md-3">
                   <div className=" align-items-center mb-2">
                     <p className="text-warning fw-bold fs-5 mb-0">₹{advance.amount}</p>
-                   
+
                   </div>
                   <div className="text-info small">
                     <i className="bi bi-calendar me-1"></i>
@@ -177,13 +192,15 @@ const effectiveAdvances = useMemo(
                   </div>
                 </div>
 
-                {/* Column 2: Reason & Metadata */}
+                {/* Column 2: Reason & Metadata - FIXED */}
                 <div className="col-md-6 text-center">
                   <div className="row g-1">
                     <div className="col-12">
                       <small className="text-muted">
                         <i className="bi bi-person me-1"></i>
-                        By: <span className="text-info">{authUser?.name || authUser?.displayName || 'Current User'}</span>
+                        By: <span className="text-info">
+                          {advance.createdByName || advance.updatedByName || 'System'}
+                        </span>
                       </small>
                     </div>
                     <div className="col-12">
@@ -194,7 +211,6 @@ const effectiveAdvances = useMemo(
                     </div>
                   </div>
                 </div>
-
                 {/* Column 3: Actions */}
                 <div className="col-md-3">
                   <div className="d-flex justify-content-end gap-1">
@@ -223,7 +239,7 @@ const effectiveAdvances = useMemo(
                   )}
                 </div>
                 <div className="col-md-12 bg-secondary bg-opacity-10 p-2 rounded-2">
-                   <div className="text-white opacity-90 small mb-2" style={{ lineHeight: '1.3', opacity:.6 }}>
+                  <div className="text-white opacity-90 small mb-2" style={{ lineHeight: '1.3', opacity: .6 }}>
                     {advance.reason}
                   </div>
                 </div>
@@ -355,7 +371,7 @@ const effectiveAdvances = useMemo(
                     <div className="d-flex align-items-center">
                       <i className="bi bi-info-circle text-warning me-2"></i>
                       <small>
-                        <strong>Recorded by:</strong> {currentUser?.displayName} ({currentUser?.email})
+                        Recorded by: {currentUser?.displayName || currentUser?.email || 'Current User'}
                       </small>
                     </div>
                   </div>

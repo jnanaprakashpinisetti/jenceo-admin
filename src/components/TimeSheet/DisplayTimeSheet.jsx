@@ -116,13 +116,10 @@ const formatPeriodLabel = (periodKey) => {
 };
 
 
-// Current user id/name pair for audit fields (pass currentUser)
-const who = (cu) => ({
-    uid: cu?.uid || 'admin',
-    name: cu?.displayName || cu?.email || 'Admin',
-});
+const snapshotUserName = (u) =>
+    u?.displayName || u?.name || u?.email || 'Admin';
 
-// Ensure each entry object has timesheetId + timesheetStatus for table rendering
+
 // Pass the final tsId and tsStatus explicitly
 const hydrateEntriesWithTsMeta = (rows, tsId, tsStatus) =>
     (rows || []).map(r => ({
@@ -192,6 +189,49 @@ const DisplayTimeSheet = () => {
     const [clarifyText, setClarifyText] = useState('');
 
 
+    const whoSafe = () => {
+        // Priority 1: Auth context user
+        if (authContext?.user) {
+            return {
+                uid: authContext.user.uid,
+                name: authContext.user.displayName || authContext.user.name || authContext.user.email || 'Admin'
+            };
+        }
+
+        // Priority 2: Firebase auth user
+        if (authUser) {
+            return {
+                uid: authUser.uid,
+                name: authUser.displayName || authUser.name || authUser.email || 'Admin'
+            };
+        }
+
+        // Priority 3: Local storage
+        try {
+            const stored = JSON.parse(localStorage.getItem("currentUser") || "null");
+            if (stored) {
+                return {
+                    uid: stored.uid,
+                    name: stored.displayName || stored.name || stored.email || 'Admin'
+                };
+            }
+        } catch (e) {
+            console.warn('Error reading stored user:', e);
+        }
+
+        // Priority 4: Component state currentUser
+        if (currentUser) {
+            return {
+                uid: currentUser.uid,
+                name: currentUser.displayName || currentUser.name || currentUser.email || 'Admin'
+            };
+        }
+
+        // Fallback
+        return { uid: "admin", name: "Admin" };
+    };
+
+
 
 
 
@@ -224,6 +264,7 @@ const DisplayTimeSheet = () => {
 
 
     const ensureTimesheetHeader = async (empId, tsId, header = {}) => {
+        const { uid, name } = whoSafe();
         const emp = employees.find(e => e.id === empId);
         const periodKey = getCurrentPeriodKey();
         const rawKey = getCurrentPeriodKey();
@@ -240,8 +281,8 @@ const DisplayTimeSheet = () => {
             endDate: useDateRange ? endDate : `${selectedMonth}-31`,
             status: header?.status ?? undefined,
             updatedAt: new Date().toISOString(),
-            updatedBy: currentUser?.uid || 'admin',
-           updatedByName: snapshotName(currentUser?.uid, currentUser?.displayName || 'Admin'),
+            updatedBy: uid,
+            updatedByName: name,
         };
 
         const patch = pruneUndefined({ ...base, ...header });
@@ -517,23 +558,34 @@ const DisplayTimeSheet = () => {
 
     // Update fetchUsers function to filter by role
     const fetchUsers = async () => {
-        const paths = ['Users', 'JenCeo-DataBase/Users', 'AppUsers'];
+        const paths = ['Users', 'JenCeo-DataBase/Users', 'AppUsers', 'employees', 'EmployeeBioData'];
         const tmp = [];
 
         for (const p of paths) {
             try {
                 const snap = await firebaseDB.child(p).once('value');
                 if (!snap.exists()) continue;
+
                 const obj = snap.val() || {};
                 Object.entries(obj).forEach(([uid, val]) => {
-                    // Only include admin, manager, superadmin roles
-                    const userRole = val.role?.toLowerCase() || '';
-                    if (['admin', 'manager', 'superadmin', 'super_admin'].includes(userRole)) {
+                    // Skip if it's employee data without user properties
+                    if (val.firstName && val.lastName && !val.email && !val.displayName) {
+                        // This is likely employee data, not user data
+                        return;
+                    }
+
+                    const userRole = (val.role || '').toLowerCase();
+                    const shouldInclude = ['admin', 'manager', 'superadmin', 'super_admin', 'user', 'employee'].includes(userRole);
+
+                    if (shouldInclude || val.email || val.displayName) {
                         tmp.push({
-                            uid,
-                            displayName: val.displayName || val.name || val.email || uid,
+                            uid: uid,
+                            id: uid,
+                            displayName: val.displayName || val.name || `${val.firstName || ''} ${val.lastName || ''}`.trim() || val.email || uid,
                             email: val.email || '',
-                            role: val.role || 'user'
+                            role: val.role || 'user',
+                            firstName: val.firstName,
+                            lastName: val.lastName
                         });
                     }
                 });
@@ -551,25 +603,41 @@ const DisplayTimeSheet = () => {
                 uniq.push(u);
             }
         });
-        setAllUsers(uniq);
-    };
 
+        setAllUsers(uniq);
+        return uniq;
+    };
     {
-        filteredUsers.map(u => (
-            <div
-                key={u.uid}
-                className={`p-2 rounded ${assignTo === u.uid ? 'bg-primary' : 'hover-bg-gray-700'}`}
-                onClick={() => setAssignTo(u.uid)}
-                style={{ cursor: 'pointer' }}
-            >
-                <div className="fw-bold text-white">{u.displayName}</div>
-                <div className="text-info small">Role: {u.role || 'user'}</div>
-                <div className="text-muted small">{u.email}</div>
-            </div>
-        ))
+        {
+            filteredUsers.map(u => (
+                <div
+                    key={u.uid}
+                    className={`p-2 rounded ${assignTo === u.uid ? 'bg-primary' : 'hover-bg-gray-700'}`}
+                    onClick={() => {
+                        setAssignTo(u.uid);
+                        setUserSearch(u.displayName); // Show the actual display name
+                    }}
+                    style={{ cursor: 'pointer' }}
+                >
+                    <div className="fw-bold text-white">{u.displayName}</div>
+                    <div className="text-info small">Role: {u.role || 'user'}</div>
+                    <div className="text-muted small">{u.email}</div>
+                </div>
+            ))
+        }
     }
 
-    useEffect(() => { fetchUsers(); }, []);
+    // Add this useEffect to refresh users when the component mounts or auth changes
+    useEffect(() => {
+        fetchUsers();
+    }, [authContext?.user, authUser]);
+
+    // Also refresh when assign modal opens
+    useEffect(() => {
+        if (showAssignModal) {
+            fetchUsers();
+        }
+    }, [showAssignModal]);
 
 
     // Fetch employees and clients
@@ -687,24 +755,34 @@ const DisplayTimeSheet = () => {
         if (!uid) return 'N/A';
 
         // Check if it's current user first
-        if (uid === currentUser?.uid) {
-            return currentUser?.displayName || currentUser?.email || 'Current User';
+        const { uid: currentUid, name: currentName } = whoSafe();
+        if (uid === currentUid) {
+            return currentName;
         }
 
         // Check allUsers array
-        const user = allUsers.find(u => u.uid === uid);
+        const user = allUsers.find(u => u.uid === uid || u.id === uid);
         if (user) {
-            return user.displayName || user.email || uid;
+            return user.displayName || user.name || user.email || uid;
         }
 
-        // Try to get from auth context if available
-        if (authContext && authContext.user && authContext.user.uid === uid) {
-            return authContext.user.displayName || authContext.user.email || 'Auth User';
+        // Try auth context
+        if (authContext?.user?.uid === uid) {
+            return authContext.user.displayName || authContext.user.name || authContext.user.email || 'Auth User';
+        }
+
+        // Try stored users in various paths
+        const storedUser = Object.values(allUsers || {}).find(u =>
+            u.uid === uid || u.id === uid
+        );
+        if (storedUser) {
+            return storedUser.displayName || storedUser.name || storedUser.email || uid;
         }
 
         return uid; // fallback to UID if no name found
     };
     const handleAutoFill = async (tpl) => {
+        const { uid, name } = whoSafe();
         if (isSheetReadOnly(timesheet)) {
             showModal('Locked', `This timesheet is ${timesheet?.status}. Editing is disabled.`, 'warning');
             return;
@@ -755,8 +833,7 @@ const DisplayTimeSheet = () => {
             period: /^\d{4}-\d{2}$/.test(periodKey) ? periodKey : periodKey.replace('_to_', ' to '),
             startDate: periodKey.includes('_to_') ? periodKey.split('_to_')[0] : `${periodKey}-01`,
             endDate: periodKey.includes('_to_') ? periodKey.split('_to_')[1] : `${periodKey}-31`,
-            createdBy: currentUser?.uid || 'admin',
-            createdByName: snapshotName(currentUser?.uid, currentUser?.displayName || 'Admin'),
+            createdBy: uid,
             createdAt: new Date().toISOString(),
             updatedAt: new Date().toISOString()
         };
@@ -803,11 +880,10 @@ const DisplayTimeSheet = () => {
                 basicSalary: Number(emp?.basicSalary) || 0,
                 dailySalary: Math.round(pay),
                 employeeId_date: `${selectedEmployee}_${dateStr}`,
-                createdBy: currentUser?.uid || 'admin',
-                createdByName: snapshotName(currentUser?.uid, currentUser?.displayName || 'Admin'),
+                createdBy: uid,
                 createdAt: new Date().toISOString(),
-                updatedBy: currentUser?.uid || 'admin',
-               updatedByName: snapshotName(currentUser?.uid, currentUser?.displayName || 'Admin'),
+                updatedBy: uid,
+                updatedByName: name,
                 updatedAt: new Date().toISOString()
             };
 
@@ -910,6 +986,7 @@ const DisplayTimeSheet = () => {
 
     // Update the loadTimesheet function to properly set timesheet state
     const loadTimesheet = async (createIfMissing = false) => {
+        const { uid, name } = whoSafe();
         if (!selectedEmployee) {
             setTimesheet(null);
             setCurrentTimesheetId('');
@@ -992,8 +1069,7 @@ const DisplayTimeSheet = () => {
                     totalSalary: 0,
                     advances: 0,
                     netPayable: 0,
-                    createdBy: currentUser?.uid || 'admin',
-                    createdByName: currentUser?.displayName || currentUser?.email || 'Admin',
+                    createdBy: uid,
                     createdAt: new Date().toISOString(),
                     updatedAt: new Date().toISOString()
                 };
@@ -1020,7 +1096,7 @@ const DisplayTimeSheet = () => {
     const postClarificationReply = async ({ empId, tsId, commentId, text }) => {
         if (!text?.trim()) return;
         const now = new Date().toISOString();
-        const { uid, name } = who(currentUser);
+        const { uid, name } = whoSafe();
 
         const reply = { text: text.trim(), by: uid, byName: name, at: now };
         const basePath = `${empTsById(empId, tsId)}/clarifications/${commentId}`;
@@ -1311,6 +1387,7 @@ const DisplayTimeSheet = () => {
 
     // Update calculateSummary to properly count half days
     const calculateSummary = async (
+
         entries = dailyEntries,
         advancesData = advances
     ) => {
@@ -1334,6 +1411,8 @@ const DisplayTimeSheet = () => {
             ? advancesInPeriod.reduce((s, a) => s + (parseFloat(a.amount) || 0), 0)
             : 0;
 
+        const { uid, name } = whoSafe();
+
         const patch = {
             workingDays,
             fullDays,
@@ -1346,8 +1425,7 @@ const DisplayTimeSheet = () => {
             totalSalary,
             advances: totalAdv,                                  // ← use period + first-sheet only
             netPayable: Math.round(totalSalary - totalAdv),      // ← recomputed
-            updatedBy: currentUser?.uid || 'admin',
-           updatedByName: snapshotName(currentUser?.uid, currentUser?.displayName || 'Admin'),
+            updatedByName: name,
             updatedAt: new Date().toISOString(),
         };
 
@@ -1356,6 +1434,7 @@ const DisplayTimeSheet = () => {
     };
 
     const createNewTimesheet = (timesheetId) => {
+        const { uid, name } = whoSafe();
         const employee = employees.find(emp => emp.id === selectedEmployee);
         const fullName = `${employee?.firstName || ''} ${employee?.lastName || ''}`.trim() || 'Employee';
         const period = useDateRange ? `${startDate} to ${endDate}` : `${selectedMonth}`;
@@ -1379,8 +1458,7 @@ const DisplayTimeSheet = () => {
             totalSalary: 0,
             advances: 0,
             netPayable: 0,
-            createdBy: currentUser?.uid || 'admin',
-            createdByName: snapshotName(currentUser?.uid, currentUser?.displayName || 'Admin'),
+            createdBy: uid,
             createdAt: new Date().toISOString(),
             updatedAt: new Date().toISOString()
         };
@@ -1561,6 +1639,7 @@ const DisplayTimeSheet = () => {
 
     // Auto-fill for date range with proper date calculation - INCLUDES ALL DAYS (no weekend skipping)
     const autoFillPeriod = async () => {
+        const { uid, name } = whoSafe();
         if (!timesheet || !selectedEmployee) return;
 
         setIsAutoFilling(true);
@@ -1600,8 +1679,7 @@ const DisplayTimeSheet = () => {
                     isHalfDay: false,
                     dailySalary: dailyRate,
                     notes: 'Auto-filled',
-                    createdBy: currentUser?.uid || 'admin',
-                    createdByName: snapshotName(currentUser?.uid, currentUser?.displayName || 'Admin'),
+                    createdBy: uid,
                     createdAt: new Date().toISOString(),
                     updatedAt: new Date().toISOString()
                 };
@@ -1640,6 +1718,7 @@ const DisplayTimeSheet = () => {
 
     // Add save timesheet function
     const saveTimesheet = async () => {
+        const { uid, name } = whoSafe();
         if (isSheetReadOnly(timesheet)) {
             showModal('Locked', `This timesheet is ${timesheet?.status}. Editing is disabled.`, 'warning');
             return;
@@ -1664,8 +1743,7 @@ const DisplayTimeSheet = () => {
                     periodKey,
                     // status: 'draft',  // ← REMOVE THIS LINE
                     updatedAt: new Date().toISOString(),
-                    updatedBy: currentUser?.uid || 'admin',
-                    updatedByName: currentUser?.displayName || 'Admin'
+                    updatedByName: name,
                 })
             );
 
@@ -1679,8 +1757,7 @@ const DisplayTimeSheet = () => {
                     timesheetId: currentTimesheetId,
                     employeeId: selectedEmployee,
                     updatedAt: new Date().toISOString(),
-                    updatedBy: currentUser?.uid || 'admin',
-                    updatedByName: currentUser?.displayName || 'Admin'
+                    updatedByName: name,
                 };
                 // optional: global index
                 // updates[`TimesheetEntries/${selectedEmployee}_${entry.date}`] = {
@@ -1703,6 +1780,7 @@ const DisplayTimeSheet = () => {
 
     // Save/Upsert one daily entry under the employee’s timesheet
     const saveEntry = async (entry) => {
+        const { uid, name } = whoSafe();
         if (!selectedEmployee || !currentTimesheetId) return;
         if (!entry?.date) return;
 
@@ -1753,13 +1831,13 @@ const DisplayTimeSheet = () => {
             dailySalary: toPay,
 
             // audit
-            updatedBy: currentUser?.uid || 'admin',
-           updatedByName: snapshotName(currentUser?.uid, currentUser?.displayName || 'Admin'),
+            updatedBy: uid,
+            updatedByName: name,
             updatedAt: now,
 
             // create audit if not present already (first set)
             createdBy: entry.createdBy || currentUser?.uid || 'admin',
-            createdByName: entry.createdByName || currentUser?.displayName || 'Admin',
+            createdBy: uid,
             createdAt: entry.createdAt || now,
         });
 
@@ -1767,6 +1845,7 @@ const DisplayTimeSheet = () => {
     };
     // PATCH: ensure the target timesheet exists and has core metadata
     const ensureTimesheet = async (empId, tsId, periodLabel, startDate, endDate) => {
+        const { uid, name } = whoSafe();
         const ref = firebaseDB.child(empTsNode(empId, tsId));
         const snap = await ref.once('value');
         if (!snap.exists()) {
@@ -1794,7 +1873,7 @@ const DisplayTimeSheet = () => {
                 netPayable: 0,
                 createdAt: new Date().toISOString(),
                 createdBy: currentUser?.uid,
-                createdByName: currentUser?.displayName || authContext?.user?.name || 'System',
+                createdBy: uid,
                 updatedAt: new Date().toISOString(),
             };
 
@@ -1915,6 +1994,7 @@ const DisplayTimeSheet = () => {
 
 
     const handleSaveEntry = async (entryData) => {
+        const { uid, name } = whoSafe();
         try {
             const emp = employees.find(e => e.id === selectedEmployee);
             if (!emp) return showModal('Error', 'Select employee first.', 'error');
@@ -1979,7 +2059,7 @@ const DisplayTimeSheet = () => {
                     dailySalary: computedSalary,
                     updatedAt: new Date().toISOString(),
                     updatedBy: currentUser?.uid,
-                    updatedByName: currentUser?.displayName,
+                    updatedByName: name,
                 };
             } else {
                 updatedEntries.push({
@@ -1992,8 +2072,7 @@ const DisplayTimeSheet = () => {
                     employeeName: `${emp?.firstName || ''} ${emp?.lastName || ''}`.trim(),
                     employeeId_date: `${selectedEmployee}_${dateStr}`,
                     dailySalary: computedSalary,
-                    createdBy: currentUser?.uid || 'admin',
-                    createdByName: snapshotName(currentUser?.uid, currentUser?.displayName || 'Admin'),
+                    createdBy: uid,
                     createdAt: new Date().toISOString(),
                     updatedAt: new Date().toISOString(),
                 });
@@ -2092,7 +2171,7 @@ const DisplayTimeSheet = () => {
             return;
         }
         try {
-            const { uid, name } = who(currentUser);
+            const { uid, name } = whoSafe();
             const assignedUserName = nameForUid(assignTo);
 
             const patch = pruneUndefined({
@@ -2140,7 +2219,7 @@ const DisplayTimeSheet = () => {
             return;
         }
         try {
-            const { uid, name } = who(currentUser);
+            const { uid, name } = whoSafe();
             const finalHeader = pruneUndefined({
                 ...timesheet,
                 status: 'submitted',
@@ -2185,21 +2264,20 @@ const DisplayTimeSheet = () => {
         }
 
         try {
-            // ⬇️ declare before using anywhere
             const assignedUser = allUsers.find(u => u.uid === assignTo);
             if (!assignedUser) {
                 showModal('Error', 'Selected user not found. Please try again.', 'error');
                 return;
             }
 
-            const { uid, name } = who(currentUser); // { uid, name } snapshot for audit
+            const { uid, name } = whoSafe();
 
             const patch = {
                 assignedTo: assignTo,
-                assignedToName: assignedUser.displayName || assignedUser.email || assignTo, // snapshot
+                assignedToName: assignedUser.displayName, // Use the actual display name
                 assignedToRole: assignedUser.role || 'user',
                 assignedBy: uid,
-                assignedByName: name, // snapshot
+                assignedByName: name,
                 assignedAt: new Date().toISOString(),
                 status: 'assigned',
                 updatedAt: new Date().toISOString(),
@@ -2247,9 +2325,10 @@ const DisplayTimeSheet = () => {
 
     // Enhanced save with audit trail
     const saveEntryWithAudit = async (entryData, isNew = false) => {
+        const { uid, name } = whoSafe();
         const auditTrail = {
             updatedBy: currentUser?.uid,
-            updatedByName: currentUser?.displayName || 'System',
+            updatedByName: name,
             updatedAt: new Date().toISOString(),
             updateReason: isNew ? 'created' : 'modified'
         };
@@ -2369,7 +2448,7 @@ const DisplayTimeSheet = () => {
                                                         </span>
                                                     </td>
                                                     <td>
-                                                        <small>{authUser.name || 'Not Submitted'}</small>
+                                                        <small>{ts.submittedByName || (ts.submittedBy ? nameForUid(ts.submittedBy) : 'Not Submitted')}</small>
                                                         <br></br>
                                                         <small className="text-muted opacity-75">
                                                             {ts.submittedAt ? new Date(ts.submittedAt).toLocaleString('en-IN') : '-'}
@@ -2380,7 +2459,7 @@ const DisplayTimeSheet = () => {
                                                         <small>{ts.assignedToName || 'Not Assigned'}</small>
                                                     </td>
                                                     <td>
-                                                        <small>{authUser.name || 'Not Assigned'}</small>
+                                                        <small>{ts.assignedByName || (ts.assignedBy ? nameForUid(ts.assignedBy) : 'Not Assigned')}</small>
                                                         <br></br>
                                                         <small className="text-muted opacity-75">
                                                             {ts.assignedAt ? new Date(ts.assignedAt).toLocaleString('en-IN') : '-'}
@@ -2688,7 +2767,7 @@ const DisplayTimeSheet = () => {
                             <AdvanceManagement
                                 key={`${selectedEmployee}-${timesheet?.timesheetId || 'new'}`}
                                 employeeId={selectedEmployee}
-                                timesheetId={timesheet?.id || ''}
+                                timesheetId={timesheet?.timesheetId || ''}
                                 advances={advances}
                                 onAdvanceAdded={loadAdvances}
                                 currentUser={currentUser}
@@ -3202,13 +3281,12 @@ const DisplayTimeSheet = () => {
                                                 <input
                                                     type="text"
                                                     className="form-control bg-dark text-white border-secondary"
-                                                    placeholder="Search client by name or ID..."
-                                                    value={clientSearch}
+                                                    placeholder="Search user by name or email..."
+                                                    value={userSearch}
                                                     onChange={(e) => {
-                                                        setClientSearch(e.target.value);
-                                                        setClientDropdownOpen(true);
+                                                        setUserSearch(e.target.value);
+                                                        setAssignTo(''); // Clear selection when searching
                                                     }}
-                                                    onFocus={() => setClientDropdownOpen(true)}
                                                 />
                                                 {selectedClientId && (
                                                     <span className="input-group-text bg-success text-dark border-success">
@@ -3288,6 +3366,7 @@ const DisplayTimeSheet = () => {
 
                                             for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
                                                 const dateStr = d.toISOString().slice(0, 10);
+                                                const { uid, name } = whoSafe();
                                                 if (dailyEntries.some(e => e.date === dateStr)) continue;
                                                 await loadDailyEntriesByTimesheetId(selectedEmployee, currentTimesheetId);
 
@@ -3299,8 +3378,8 @@ const DisplayTimeSheet = () => {
                                                     status: 'present',
                                                     isHalfDay: false,
                                                     isPublicHoliday: false,
-                                                    updatedBy: client.uid,
-                                                    updatedByName: client.name,
+                                                    updatedBy: uid,
+                                                    updatedByName: name,
                                                     isEmergency: false,
                                                     notes: 'Auto-filled',
                                                     period: currentPeriod, // ✅ Use computed currentPeriod

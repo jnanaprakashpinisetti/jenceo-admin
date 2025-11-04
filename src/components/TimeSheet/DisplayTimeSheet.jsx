@@ -75,22 +75,22 @@ const pruneUndefined = (obj = {}) =>
 // Enhanced read-only check that considers current user and assignment
 // Only assignee (or admin/superadmin) can edit when status is submitted/assigned
 const isSheetReadOnly = (ts, currentUserId, authContext) => {
-  if (!ts) return false;
-  const s = String(ts.status || '').toLowerCase();
+    if (!ts) return false;
+    const s = String(ts.status || '').toLowerCase();
 
-  // Approved/Rejected ⇒ locked for everyone
-  if (s === 'approved' || s === 'rejected') return true;
+    // Approved/Rejected ⇒ locked for everyone
+    if (s === 'approved' || s === 'rejected') return true;
 
-  // Submitted/Assigned ⇒ only assignee (or admin/super admin) can edit
-  if (s === 'submitted' || s === 'assigned') {
-    const isAssignedUser = ts.assignedTo && ts.assignedTo === currentUserId;
-    const role = (authContext?.user?.role || '').toLowerCase();
-    const isAdmin = role === 'admin' || role === 'superadmin' || role === 'super_admin';
-    return !(isAssignedUser || isAdmin);
-  }
+    // Submitted/Assigned ⇒ only assignee (or admin/super admin) can edit
+    if (s === 'submitted' || s === 'assigned') {
+        const isAssignedUser = ts.assignedTo && ts.assignedTo === currentUserId;
+        const role = (authContext?.user?.role || '').toLowerCase();
+        const isAdmin = role === 'admin' || role === 'superadmin' || role === 'super_admin';
+        return !(isAssignedUser || isAdmin);
+    }
 
-  // Draft ⇒ editable
-  return false;
+    // Draft ⇒ editable
+    return false;
 };
 
 
@@ -542,10 +542,10 @@ const DisplayTimeSheet = () => {
     };
 
     // Enhanced read-only check considering current user
-const isReadOnly = React.useMemo(() => {
-  const { uid } = whoSafe();              // ← ALWAYS resolve a uid
-  return isSheetReadOnly(timesheet, uid, authContext);
-}, [timesheet, authContext]);
+    const isReadOnly = React.useMemo(() => {
+        const { uid } = whoSafe();              // ← ALWAYS resolve a uid
+        return isSheetReadOnly(timesheet, uid, authContext);
+    }, [timesheet, authContext]);
 
     // PATCH: delete an entire timesheet (no dual nodes)
     const deletePreviousTimesheet = async () => {
@@ -1143,7 +1143,7 @@ const isReadOnly = React.useMemo(() => {
                         }))
                         .sort((a, b) => new Date(a.date) - new Date(b.date));
 
-                   
+
                     setDailyEntries(rows);
                 } else {
                     showModal('No daily entries found');
@@ -1544,36 +1544,6 @@ const isReadOnly = React.useMemo(() => {
         setDailyEntries([]);
 
     };
-
-    // Settle all advances for the active period so they won't deduct again
-    // const settleAdvancesForActivePeriod = async (empId, tsId) => {
-    //     // load employee's advances
-    //     const snap = await firebaseDB.child('Advances')
-    //         .orderByChild('employeeId')
-    //         .equalTo(empId)
-    //         .once('value');
-
-    //     if (!snap.exists()) return;
-
-    //     const updates = {};
-    //     const now = new Date().toISOString();
-
-    //     Object.entries(snap.val() || {}).forEach(([advId, adv]) => {
-    //         // Only settle those inside current period and not already settled
-    //         if (isDateInActivePeriod(adv?.date) && String(adv?.status || '').toLowerCase() !== 'settled') {
-    //             updates[`Advances/${advId}/status`] = 'settled';
-    //             updates[`Advances/${advId}/settledAt`] = now;
-    //             updates[`Advances/${advId}/settledBy`] = currentUser?.uid || 'admin';
-    //             updates[`Advances/${advId}/settledByName`] = currentUser?.displayName || currentUser?.email || 'Admin';
-    //             updates[`Advances/${advId}/settledTimesheetId`] = tsId;
-    //         }
-    //     });
-
-    //     if (Object.keys(updates).length) {
-    //         await firebaseDB.update(updates);
-    //     }
-    // };
-
     const loadDailyEntries = async (periodKeyParam) => {
         const periodKey = periodKeyParam || getCurrentPeriodKey();
         const ref = firebaseDB.child(entryNode(selectedEmployee, periodKey, '')); // will not exist
@@ -2919,31 +2889,31 @@ const isReadOnly = React.useMemo(() => {
                     {/* Daily Entries and Advances - show even when no timesheet but allow creation */}
                     <div className="row">
                         <div className="col-lg-8">
-                        <DailyEntriesTable
-    entries={dailyEntries}
-    timesheetId={timesheet?.timesheetId}
-    timesheet={timesheet} // This should be passed as 'timesheet' not 'currentTimesheet'
-    onEdit={(entry) => {
-        if (!timesheet) {
-            showModal('Info', 'Please create a timesheet first.', 'info');
-            return;
-        }
-        setCurrentEntry(entry);
-        setIsEditing(true);
-        setShowEntryModal(true);
-    }}
-    onDelete={confirmDeleteEntry}
-    totalSalary={totalSalary}
-    isDisabled={!timesheet || showSubmittedError}
-    isReadOnly={isReadOnly}
-    selectedEntries={selectedEntries}
-    onSelectEntry={handleSelectEntry}
-    onSelectAllEntries={handleSelectAllEntries}
-    employees={employees}
-    selectedEmployee={selectedEmployee}
-    advances={advances}
-    previousTimesheets={previousTimesheets}
-/>
+                            <DailyEntriesTable
+                                entries={dailyEntries}
+                                timesheetId={timesheet?.timesheetId}
+                                timesheet={timesheet} // This should be passed as 'timesheet' not 'currentTimesheet'
+                                onEdit={(entry) => {
+                                    if (!timesheet) {
+                                        showModal('Info', 'Please create a timesheet first.', 'info');
+                                        return;
+                                    }
+                                    setCurrentEntry(entry);
+                                    setIsEditing(true);
+                                    setShowEntryModal(true);
+                                }}
+                                onDelete={confirmDeleteEntry}
+                                totalSalary={totalSalary}
+                                isDisabled={!timesheet || showSubmittedError}
+                                isReadOnly={isReadOnly}
+                                selectedEntries={selectedEntries}
+                                onSelectEntry={handleSelectEntry}
+                                onSelectAllEntries={handleSelectAllEntries}
+                                employees={employees}
+                                selectedEmployee={selectedEmployee}
+                                advances={advances}
+                                previousTimesheets={previousTimesheets}
+                            />
                         </div>
                         <div className="col-lg-4">
                             <AdvanceManagement
@@ -3940,9 +3910,9 @@ const DailyEntriesTable = ({
             setIsShareDataReady(false);
         }
     }, [entries, timesheet]);
-    
 
-      return (
+
+    return (
         <div className="card bg-dark border-secondary">
             <div className="card-header bg-info bg-opacity-25 border-info d-flex justify-content-between align-items-center">
                 <div>

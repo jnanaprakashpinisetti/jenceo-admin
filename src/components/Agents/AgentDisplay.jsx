@@ -363,7 +363,7 @@ export default function AgentDisplay() {
             </div>
 
             {/* Table */}
-            <div className="table-responsive border rounded">
+            <div className="table-responsive border-secondary rounded">
                 <table className="table table-dark table-hover align-middle mb-0">
                     <thead>
                         <tr className="text-uppercase small">

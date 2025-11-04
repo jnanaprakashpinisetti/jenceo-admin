@@ -86,10 +86,10 @@ const AgentForm = ({
     agentType: initialData.agentType || "worker",
     idNo: initialData.idNo || "",
     agentName: initialData.agentName || "",
+    gender: initialData.gender || "",
     mobile: initialData.mobile || "",
     altMobile: initialData.altMobile || "",
     upiNo: initialData.upiNo || "",
-    email: initialData.email || "",
     commission: initialData.commission || "",
     rating: initialData.rating || 0,
     workingPlace: initialData.workingPlace || "",
@@ -199,6 +199,7 @@ const AgentForm = ({
     else if (!/^(AW|AC)[1-9]\d{0,3}$/i.test(toStr(formData.idNo)))
       e.idNo = "ID must be AW1/AW9999 or AC1/AC9999";
     if (!toStr(formData.agentName).trim()) e.agentName = "Agent Name is required.";
+    if (!toStr(formData.gender).trim()) e.gender = "Gender is required.";
     if (!toStr(formData.mobile).trim()) e.mobile = "Mobile is required.";
     else if (!/^\d{10}$/.test(toStr(formData.mobile)))
       e.mobile = "Enter 10 digit mobile number.";
@@ -512,6 +513,21 @@ const AgentForm = ({
                       <input name="agentName" type="text" className={`form-control ${errors.agentName ? "is-invalid" : ""}`} value={formData.agentName} onChange={handleChange} placeholder="Enter full name" />
                       {errors.agentName && <div className="invalid-feedback">{errors.agentName}</div>}
                     </div>
+                    <div className="col-md-6">
+                      <label className="form-label">Gender <span className="text-danger">*</span></label>
+                      <select
+                        name="gender"
+                        className={`form-select ${errors.gender ? "is-invalid" : ""}`}
+                        value={formData.gender}
+                        onChange={handleChange}
+                      >
+                        <option value="">Select gender</option>
+                        <option value="Male">Male</option>
+                        <option value="Female">Female</option>
+                        <option value="Other">Other</option>
+                      </select>
+                      {errors.gender && <div className="invalid-feedback">{errors.gender}</div>}
+                    </div>
 
                     <div className="col-md-6">
                       <label className="form-label">Mobile No <span className="text-danger">*</span></label>
@@ -527,11 +543,6 @@ const AgentForm = ({
                     <div className="col-md-6">
                       <label className="form-label">UPI No</label>
                       <input name="upiNo" type="text" className="form-control" value={formData.upiNo} onChange={handleChange} placeholder="UPI ID for payments" />
-                    </div>
-
-                    <div className="col-md-6">
-                      <label className="form-label">Email</label>
-                      <input name="email" type="email" className="form-control" value={formData.email} onChange={handleChange} placeholder="example@domain.com" />
                     </div>
 
                     <div className="col-md-6">

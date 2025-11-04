@@ -45,11 +45,11 @@ const TimesheetShare = ({ timesheet, dailyEntries, advances, employee, previousT
     };
 
     const employeeData = getEmployeeData();
-    
+
     const getValidDailyEntries = () => {
         if (!dailyEntries) return [];
         if (Array.isArray(dailyEntries)) {
-            return dailyEntries.filter(entry => 
+            return dailyEntries.filter(entry =>
                 entry && typeof entry === 'object' && entry.date
             );
         }
@@ -64,29 +64,29 @@ const TimesheetShare = ({ timesheet, dailyEntries, advances, employee, previousT
             const salary = parseFloat(entry.dailySalary) || parseFloat(entry.salary) || 0;
             return sum + salary;
         }, 0);
-        
-        const totalAdvances = advances && Array.isArray(advances) 
-            ? advances.reduce((sum, advance) => sum + (parseFloat(advance.amount) || 0), 0) 
+
+        const totalAdvances = advances && Array.isArray(advances)
+            ? advances.reduce((sum, advance) => sum + (parseFloat(advance.amount) || 0), 0)
             : 0;
-            
+
         const netPayable = totalSalary - totalAdvances;
 
-        const presentDays = validDailyEntries.filter(entry => 
+        const presentDays = validDailyEntries.filter(entry =>
             entry.status === 'present' || entry.attendanceStatus === 'present'
         ).length;
-        
-        const absentDays = validDailyEntries.filter(entry => 
+
+        const absentDays = validDailyEntries.filter(entry =>
             entry.status === 'absent' || entry.attendanceStatus === 'absent'
         ).length;
-        
-        const leaveDays = validDailyEntries.filter(entry => 
+
+        const leaveDays = validDailyEntries.filter(entry =>
             entry.status === 'leave' || entry.attendanceStatus === 'leave'
         ).length;
-        
-        const holidayDays = validDailyEntries.filter(entry => 
+
+        const holidayDays = validDailyEntries.filter(entry =>
             entry.status === 'holiday' || entry.isPublicHoliday || entry.attendanceStatus === 'holiday'
         ).length;
-        
+
         const totalDays = validDailyEntries.length;
 
         return {
@@ -569,16 +569,16 @@ const TimesheetShare = ({ timesheet, dailyEntries, advances, employee, previousT
                 </thead>
                 <tbody>
                     ${validDailyEntries.map(entry => {
-                        const date = entry.date ? new Date(entry.date).toLocaleDateString('en-IN', { 
-                            day: '2-digit', 
-                            month: 'short', 
-                            year: 'numeric' 
-                        }) : 'Invalid Date';
-                        
-                        const salary = parseFloat(entry.dailySalary) || parseFloat(entry.salary) || 0;
-                        const status = entry.status || entry.attendanceStatus || 'unknown';
-                        
-                        return `
+            const date = entry.date ? new Date(entry.date).toLocaleDateString('en-IN', {
+                day: '2-digit',
+                month: 'short',
+                year: 'numeric'
+            }) : 'Invalid Date';
+
+            const salary = parseFloat(entry.dailySalary) || parseFloat(entry.salary) || 0;
+            const status = entry.status || entry.attendanceStatus || 'unknown';
+
+            return `
                         <tr>
                             <td><strong>${date}</strong></td>
                             <td>${entry.clientName || entry.client || '-'}</td>
@@ -594,23 +594,23 @@ const TimesheetShare = ({ timesheet, dailyEntries, advances, employee, previousT
                             <td><em>${entry.notes || entry.comments || '-'}</em></td>
                         </tr>
                         `;
-                    }).join('')}
+        }).join('')}
                 </tbody>
             </table>
             
             <!-- Mobile Cards -->
             <div class="timesheet-cards">
                 ${validDailyEntries.map(entry => {
-                    const date = entry.date ? new Date(entry.date).toLocaleDateString('en-IN', { 
-                        day: '2-digit', 
-                        month: 'short', 
-                        year: 'numeric' 
-                    }) : 'Invalid Date';
-                    
-                    const salary = parseFloat(entry.dailySalary) || parseFloat(entry.salary) || 0;
-                    const status = entry.status || entry.attendanceStatus || 'unknown';
-                    
-                    return `
+            const date = entry.date ? new Date(entry.date).toLocaleDateString('en-IN', {
+                day: '2-digit',
+                month: 'short',
+                year: 'numeric'
+            }) : 'Invalid Date';
+
+            const salary = parseFloat(entry.dailySalary) || parseFloat(entry.salary) || 0;
+            const status = entry.status || entry.attendanceStatus || 'unknown';
+
+            return `
                     <div class="timesheet-card">
                         <div class="card-header">
                             <div class="card-date">${date}</div>
@@ -640,7 +640,7 @@ const TimesheetShare = ({ timesheet, dailyEntries, advances, employee, previousT
                         </div>
                     </div>
                     `;
-                }).join('')}
+        }).join('')}
             </div>
             ` : `
             <div style="text-align: center; padding: 60px; background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%); border-radius: 15px; border: 2px dashed #dee2e6;">
@@ -736,15 +736,15 @@ const TimesheetShare = ({ timesheet, dailyEntries, advances, employee, previousT
         const htmlContent = generateWhatsAppHTML();
         const blob = new Blob([htmlContent], { type: 'text/html' });
         const url = URL.createObjectURL(blob);
-        
+
         const message = `📊 Timesheet Summary for ${employeeData.firstName} ${employeeData.lastName}\n\n` +
-                       `👤 Employee: ${employeeData.firstName} ${employeeData.lastName}\n` +
-                       `🆔 ID: ${employeeData.employeeId}\n` +
-                       `💼 Designation: ${employeeData.designation}\n` +
-                       `📅 Period: ${timesheet?.period || 'N/A'}\n` +
-                       `💰 Net Payable: ₹${summary.netPayable.toFixed(2)}\n\n` +
-                       `Download full timesheet: ${url}`;
-        
+            `👤 Employee: ${employeeData.firstName} ${employeeData.lastName}\n` +
+            `🆔 ID: ${employeeData.employeeId}\n` +
+            `💼 Designation: ${employeeData.designation}\n` +
+            `📅 Period: ${timesheet?.period || 'N/A'}\n` +
+            `💰 Net Payable: ₹${summary.netPayable.toFixed(2)}\n\n` +
+            `Download full timesheet: ${url}`;
+
         const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(message)}`;
         window.open(whatsappUrl, '_blank');
     };
@@ -753,74 +753,37 @@ const TimesheetShare = ({ timesheet, dailyEntries, advances, employee, previousT
         <div className="container-fluid p-4 bg-light min-vh-100">
             <div className="row justify-content-center">
                 <div className="col-12">
-                    {/* Header */}
-                    <div className="card border-0 shadow-lg mb-4">
-                        <div className="card-header bg-gradient-primary text-white py-4">
-                            <div className="d-flex justify-content-between align-items-center">
-                                <div>
-                                    <h2 className="mb-1">
-                                        <i className="bi bi-share-fill me-3"></i>
-                                        Share Timesheet
-                                    </h2>
-                                    <p className="mb-0 opacity-75">
-                                        Share and export timesheet for ${employeeData.firstName} ${employeeData.lastName}
-                                    </p>
-                                </div>
-                                <button 
-                                    className="btn btn-light btn-sm"
-                                    onClick={onClose}
-                                >
-                                    <i className="bi bi-x-lg me-2"></i>
-                                    Close
-                                </button>
-                            </div>
+                    {/* Simple Header with Actions */}
+                    <div className="d-flex justify-content-between align-items-center mb-3 p-3 rounded border bg-secondary bg-opacity-10">
+                        <div>
+                            <h6 className="mb-0 text-dark">
+                                <i className="bi bi-share me-2"></i>
+                                Share Timesheet: {employeeData.firstName} {employeeData.lastName}
+                            </h6>
                         </div>
-                    </div>
-
-                    {/* Action Cards */}
-                    <div className="row mb-4">
-                        <div className="col-md-6 mb-3">
-                            <div className="card border-0 shadow-sm h-100">
-                                <div className="card-body text-center p-4">
-                                    <div className="text-success mb-3">
-                                        <i className="bi bi-file-earmark-arrow-down display-4"></i>
-                                    </div>
-                                    <h5 className="card-title">Download HTML</h5>
-                                    <p className="card-text text-muted">
-                                        Download timesheet as a beautiful HTML file
-                                    </p>
-                                    <button 
-                                        className="btn btn-success px-4"
-                                        onClick={downloadHTMLFile}
-                                        disabled={!hasValidData}
-                                    >
-                                        <i className="bi bi-download me-2"></i>
-                                        Download
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-                        
-                        <div className="col-md-6 mb-3">
-                            <div className="card border-0 shadow-sm h-100">
-                                <div className="card-body text-center p-4">
-                                    <div className="text-success mb-3">
-                                        <i className="bi bi-whatsapp display-4"></i>
-                                    </div>
-                                    <h5 className="card-title">Share via WhatsApp</h5>
-                                    <p className="card-text text-muted">
-                                        Share timesheet summary via WhatsApp
-                                    </p>
-                                    <button 
-                                        className="btn btn-success px-4"
-                                        onClick={shareViaWhatsApp}
-                                        disabled={!hasValidData}
-                                    >
-                                        <i className="bi bi-whatsapp me-2"></i>
-                                        Share
-                                    </button>
-                                </div>
-                            </div>
+                        <div className="d-flex gap-2">
+                            <button
+                                className="btn btn-primary btn-sm"
+                                onClick={downloadHTMLFile}
+                                disabled={!hasValidData}
+                            >
+                                <i className="bi bi-download me-1"></i>
+                                Download
+                            </button>
+                            <button
+                                className="btn btn-success btn-sm"
+                                onClick={shareViaWhatsApp}
+                                disabled={!hasValidData}
+                            >
+                                <i className="bi bi-whatsapp me-1"></i>
+                                WhatsApp
+                            </button>
+                            <button
+                                className="btn btn-danger btn-sm"
+                                onClick={onClose}
+                            >
+                                <i className="bi bi-x"></i>
+                            </button>
                         </div>
                     </div>
 
@@ -833,12 +796,12 @@ const TimesheetShare = ({ timesheet, dailyEntries, advances, employee, previousT
                             </h5>
                         </div>
                         <div className="card-body p-0">
-                            <div 
-                                dangerouslySetInnerHTML={{ 
-                                    __html: generateWhatsAppHTML() 
-                                }} 
-                                style={{ 
-                                    maxHeight: '70vh', 
+                            <div
+                                dangerouslySetInnerHTML={{
+                                    __html: generateWhatsAppHTML()
+                                }}
+                                style={{
+                                    maxHeight: '70vh',
                                     overflow: 'auto',
                                     borderRadius: '0 0 8px 8px'
                                 }}

@@ -4651,17 +4651,6 @@ const DailyEntriesTable = ({
                 <div className="modal fade show" style={{ display: 'block', backgroundColor: 'rgba(0,0,0,0.9)' }}>
                     <div className="modal-dialog modal-fullscreen">
                         <div className="modal-content bg-light">
-                            <div className="modal-header bg-primary text-white">
-                                <h5 className="modal-title">
-                                    <i className="bi bi-share me-2"></i>
-                                    Share Timesheet - {timesheet?.employeeName}
-                                </h5>
-                                <button
-                                    type="button"
-                                    className="btn-close btn-close-white"
-                                    onClick={() => setShowShareView(false)}
-                                ></button>
-                            </div>
                             <div className="modal-body p-0">
                                 <TimesheetShare
                                     timesheet={timesheet}

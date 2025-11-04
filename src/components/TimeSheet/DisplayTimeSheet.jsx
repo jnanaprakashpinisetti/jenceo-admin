@@ -3022,7 +3022,7 @@ const isReadOnly = React.useMemo(() => {
                                 </h5>
                             </div>
                             <div className="modal-body">
-                                <div className="alert alert-warning bg-warning bg-opacity-10 border-warning">
+                                <div className="alert alert-warning bg-warning bg-opacity-10 border-warning text-white">
                                     <strong>An entry already exists for {newDate}!</strong>
                                 </div>
                                 <p className="text-white">
@@ -3240,7 +3240,7 @@ const isReadOnly = React.useMemo(() => {
                                 </h5>
                             </div>
                             <div className="modal-body">
-                                <div className="alert alert-warning bg-warning bg-opacity-10 border-warning">
+                                <div className="alert alert-warning bg-warning bg-opacity-10 border-warning text-white">
                                     <strong>An entry already exists for this date!</strong>
                                 </div>
 
@@ -3598,7 +3598,7 @@ const isReadOnly = React.useMemo(() => {
                                 </h5>
                             </div>
                             <div className="modal-body">
-                                <div className="alert alert-warning bg-warning bg-opacity-10 border-warning">
+                                <div className="alert alert-warning bg-warning bg-opacity-10 border-warning text-white">
                                     <strong>This timesheet has been approved and cannot be edited.</strong>
                                 </div>
                                 <p className="text-white">
@@ -4224,7 +4224,7 @@ const DailyEntriesTable = ({
                                 </h5>
                             </div>
                             <div className="modal-body">
-                                <div className="alert alert-warning bg-warning bg-opacity-10 border-warning">
+                                <div className="alert alert-warning bg-warning bg-opacity-10 border-warning text-white">
                                     <strong>This timesheet is {timesheet?.status} and cannot be edited.</strong>
                                 </div>
                                 <p className="text-white">

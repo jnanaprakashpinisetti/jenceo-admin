@@ -1,4 +1,3 @@
-
 import React, { useEffect, useMemo, useState } from "react";
 import firebaseDB from "../../firebase";
 import AgentModal from "./AgentModal";
@@ -20,101 +19,166 @@ const Avatar = ({ src, alt }) => (
 );
 
 export default function AgentDisplay() {
-    const [tab, setTab] = useState("worker"); // "worker" | "client"
+    const [tab, setTab] = useState("worker");
     const [workerAgents, setWorkerAgents] = useState([]);
     const [clientAgents, setClientAgents] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
-
     const [search, setSearch] = useState("");
 
     // Modal state
     const [showModal, setShowModal] = useState(false);
-    const [modalMode, setModalMode] = useState("view"); // "view" | "edit" | "add"
-    const [modalData, setModalData] = useState(null);   // current agent row
+    const [modalMode, setModalMode] = useState("view");
+    const [modalData, setModalData] = useState(null);
 
-    
-  // Resolve correct DB roots by probing both with a one-time read
-  const [workerBase, setWorkerBase] = useState("JenCeo-DataBase/AgentData/WorkerAgent");
-  const [clientBase, setClientBase] = useState("JenCeo-DataBase/AgentData/ClientAgent");
-
-  useEffect(() => {
-    let mounted = true;
-    (async () => {
-      try {
-        const tryPaths = async (candidates) => {
-          for (const path of candidates) {
+    // Load agents data
+    useEffect(() => {
+        const loadAgents = async () => {
             try {
-              const snap = await firebaseDB.child(path).once("value");
-              if (snap && (snap.exists?.() || (snap.val?.() != null))) return path;
-            } catch (e) {
-              // ignore and try next
+                setLoading(true);
+                setError("");
+
+                console.log("Loading agents from Firebase...");
+
+                // Try multiple possible paths
+                const paths = [
+                    "JenCeo-DataBase/AgentData/WorkerAgent",
+                    "AgentData/WorkerAgent",
+                    "WorkerAgent"
+                ];
+
+                let workerData = null;
+                let clientData = null;
+
+                // Try each path for worker agents
+                for (const path of paths) {
+                    try {
+                        const snapshot = await firebaseDB.child(path).once('value');
+                        if (snapshot.exists()) {
+                            workerData = snapshot.val();
+                            console.log(`Found worker agents at: ${path}`, workerData);
+                            break;
+                        }
+                    } catch (err) {
+                        console.log(`Path ${path} failed:`, err.message);
+                    }
+                }
+
+                // Try each path for client agents
+                for (const path of paths) {
+                    try {
+                        const snapshot = await firebaseDB.child(path.replace('Worker', 'Client')).once('value');
+                        if (snapshot.exists()) {
+                            clientData = snapshot.val();
+                            console.log(`Found client agents at: ${path.replace('Worker', 'Client')}`, clientData);
+                            break;
+                        }
+                    } catch (err) {
+                        console.log(`Path ${path.replace('Worker', 'Client')} failed:`, err.message);
+                    }
+                }
+
+                // Process worker agents
+                const workerList = [];
+                if (workerData && typeof workerData === 'object') {
+                    Object.entries(workerData).forEach(([key, value]) => {
+                        if (value && typeof value === 'object') {
+                            workerList.push({
+                                id: key,
+                                agentType: "worker",
+                                ...value
+                            });
+                        }
+                    });
+                }
+                console.log("Processed worker agents:", workerList);
+                setWorkerAgents(sortByIdNo(workerList));
+
+                // Process client agents
+                const clientList = [];
+                if (clientData && typeof clientData === 'object') {
+                    Object.entries(clientData).forEach(([key, value]) => {
+                        if (value && typeof value === 'object') {
+                            clientList.push({
+                                id: key,
+                                agentType: "client",
+                                ...value
+                            });
+                        }
+                    });
+                }
+                console.log("Processed client agents:", clientList);
+                setClientAgents(sortByIdNo(clientList));
+
+                if (workerList.length === 0 && clientList.length === 0) {
+                    setError("No agent data found. Please check Firebase database structure.");
+                }
+
+            } catch (err) {
+                console.error('Error loading agents:', err);
+                setError('Failed to load agents: ' + (err?.message || String(err)));
+            } finally {
+                setLoading(false);
             }
-          }
-          return candidates[0];
         };
 
-        const w = await tryPaths([
-          "JenCeo-DataBase/AgentData/WorkerAgent",
-          "AgentData/WorkerAgent",
-        ]);
-        const c = await tryPaths([
-          "JenCeo-DataBase/AgentData/ClientAgent",
-          "AgentData/ClientAgent",
-        ]);
+        loadAgents();
+    }, []);
 
-        if (!mounted) return;
-        setWorkerBase(w);
-        setClientBase(c);
-      } catch (e) {
-        if (mounted) setError(e?.message || String(e));
-      } finally {
-        if (mounted) setLoading(false);
-      }
-    })();
-    return () => { mounted = false; };
-  }, []);
+    // Real-time listeners after initial load
+    useEffect(() => {
+        if (workerAgents.length === 0 && clientAgents.length === 0) return;
 
-  // Live subscriptions once bases are known
-  useEffect(() => {
-    if (!workerBase || !clientBase) return;
-    setError("");
+        console.log("Setting up real-time listeners...");
 
-    const workerRef = firebaseDB.child(workerBase);
-    const clientRef = firebaseDB.child(clientBase);
+        const workerRef = firebaseDB.child("AgentData/WorkerAgent");
+        const clientRef = firebaseDB.child("AgentData/ClientAgent");
 
-    const onWorker = workerRef.on("value", (snap) => {
-      const list = [];
-      if (snap && snap.exists && snap.exists()) {
-        snap.forEach((child) => list.push({ id: child.key, agentType: "worker", ...child.val() }));
-      } else {
-        const v = snap?.val?.();
-        if (v && typeof v === "object") {
-          Object.entries(v).forEach(([k, val]) => list.push({ id: k, agentType: "worker", ...(val || {}) }));
-        }
-      }
-      setWorkerAgents(sortByIdNo(list));
-    }, (err) => setError(err?.message || String(err)));
+        const onWorker = workerRef.on("value", (snap) => {
+            if (snap.exists()) {
+                const data = snap.val();
+                const list = [];
+                if (data && typeof data === 'object') {
+                    Object.entries(data).forEach(([key, value]) => {
+                        if (value && typeof value === 'object') {
+                            list.push({
+                                id: key,
+                                agentType: "worker",
+                                ...value
+                            });
+                        }
+                    });
+                }
+                console.log("Real-time worker update:", list.length);
+                setWorkerAgents(sortByIdNo(list));
+            }
+        });
 
-    const onClient = clientRef.on("value", (snap) => {
-      const list = [];
-      if (snap && snap.exists && snap.exists()) {
-        snap.forEach((child) => list.push({ id: child.key, agentType: "client", ...child.val() }));
-      } else {
-        const v = snap?.val?.();
-        if (v && typeof v === "object") {
-          Object.entries(v).forEach(([k, val]) => list.push({ id: k, agentType: "client", ...(val || {}) }));
-        }
-      }
-      setClientAgents(sortByIdNo(list));
-    }, (err) => setError(err?.message || String(err)));
+        const onClient = clientRef.on("value", (snap) => {
+            if (snap.exists()) {
+                const data = snap.val();
+                const list = [];
+                if (data && typeof data === 'object') {
+                    Object.entries(data).forEach(([key, value]) => {
+                        if (value && typeof value === 'object') {
+                            list.push({
+                                id: key,
+                                agentType: "client",
+                                ...value
+                            });
+                        }
+                    });
+                }
+                console.log("Real-time client update:", list.length);
+                setClientAgents(sortByIdNo(list));
+            }
+        });
 
-    return () => {
-      workerRef.off("value", onWorker);
-      clientRef.off("value", onClient);
-    };
-  }, [workerBase, clientBase]);
-
+        return () => {
+            workerRef.off("value", onWorker);
+            clientRef.off("value", onClient);
+        };
+    }, []);
 
     const sortByIdNo = (arr) => {
         const safeNum = (id) => {
@@ -122,7 +186,6 @@ export default function AgentDisplay() {
             const m = String(id).match(/(\d+)/);
             return m ? Number(m[1]) : -1;
         };
-        // Highest number first
         return [...arr].sort((a, b) => safeNum(b?.idNo) - safeNum(a?.idNo));
     };
 
@@ -170,7 +233,7 @@ export default function AgentDisplay() {
             alert("Missing record id");
             return;
         }
-        const base = (row.agentType === "client" || tab === "client") ? clientBase : workerBase;
+        const base = `AgentData/${row.agentType === "client" ? "ClientAgent" : "WorkerAgent"}`;
         if (!window.confirm(`Delete ${row.agentName || "this agent"} (${row.idNo})?`)) return;
         try {
             await firebaseDB.child(`${base}/${row.id}`).remove();
@@ -179,8 +242,68 @@ export default function AgentDisplay() {
         }
     };
 
+    const refreshData = async () => {
+        setLoading(true);
+        try {
+            // Reload both worker and client agents
+            const workerSnap = await firebaseDB.child("AgentData/WorkerAgent").once('value');
+            const clientSnap = await firebaseDB.child("AgentData/ClientAgent").once('value');
+            
+            const workerList = [];
+            const clientList = [];
+
+            if (workerSnap.exists()) {
+                const data = workerSnap.val();
+                if (data && typeof data === 'object') {
+                    Object.entries(data).forEach(([key, value]) => {
+                        if (value && typeof value === 'object') {
+                            workerList.push({
+                                id: key,
+                                agentType: "worker",
+                                ...value
+                            });
+                        }
+                    });
+                }
+            }
+
+            if (clientSnap.exists()) {
+                const data = clientSnap.val();
+                if (data && typeof data === 'object') {
+                    Object.entries(data).forEach(([key, value]) => {
+                        if (value && typeof value === 'object') {
+                            clientList.push({
+                                id: key,
+                                agentType: "client",
+                                ...value
+                            });
+                        }
+                    });
+                }
+            }
+
+            setWorkerAgents(sortByIdNo(workerList));
+            setClientAgents(sortByIdNo(clientList));
+            
+            console.log("Refreshed - Workers:", workerList.length, "Clients:", clientList.length);
+        } catch (err) {
+            console.error('Refresh failed:', err);
+            setError('Refresh failed: ' + (err?.message || String(err)));
+        } finally {
+            setLoading(false);
+        }
+    };
+
     if (loading) return <div className="text-center py-5">Loading agents…</div>;
-    if (error) return <div className="alert alert-danger my-3">Error: {error}</div>;
+    
+    if (error) return (
+        <div className="alert alert-danger my-3">
+            <strong>Error:</strong> {error}
+            <button className="btn btn-sm btn-outline-danger ms-2" onClick={refreshData}>
+                Retry
+            </button>
+        </div>
+    );
 
     return (
         <div className="container-fluid px-0">
@@ -192,7 +315,7 @@ export default function AgentDisplay() {
                             className={`nav-link ${tab === "worker" ? "active" : ""}`}
                             onClick={() => setTab("worker")}
                         >
-                            Worker Agents
+                            Worker Agents ({workerAgents.length})
                         </button>
                     </li>
                     <li className="nav-item">
@@ -200,7 +323,7 @@ export default function AgentDisplay() {
                             className={`nav-link ${tab === "client" ? "active" : ""}`}
                             onClick={() => setTab("client")}
                         >
-                            Client Agents
+                            Client Agents ({clientAgents.length})
                         </button>
                     </li>
                 </ul>
@@ -224,6 +347,21 @@ export default function AgentDisplay() {
                 </div>
             </div>
 
+            {/* Debug info */}
+            <div className="alert alert-info d-flex align-items-center gap-2 mb-3">
+                <small className="flex-grow-1">
+                    <strong>Data Status:</strong> Worker Agents: {workerAgents.length} | Client Agents: {clientAgents.length} | 
+                    Showing: {filtered.length} | Search: "{search}"
+                </small>
+                <button 
+                    className="btn btn-sm btn-outline-info" 
+                    onClick={refreshData}
+                    disabled={loading}
+                >
+                    {loading ? 'Refreshing...' : 'Refresh Data'}
+                </button>
+            </div>
+
             {/* Table */}
             <div className="table-responsive border rounded">
                 <table className="table table-dark table-hover align-middle mb-0">
@@ -242,7 +380,10 @@ export default function AgentDisplay() {
                         {filtered.length === 0 && (
                             <tr>
                                 <td colSpan={7} className="text-center py-4 text-muted">
-                                    No agents found.
+                                    {activeList.length === 0 ? 
+                                        `No ${tab} agents found in database.` : 
+                                        'No agents match your search criteria.'
+                                    }
                                 </td>
                             </tr>
                         )}
@@ -292,7 +433,6 @@ export default function AgentDisplay() {
                     setModalMode("view");
                 }}
                 onSaved={() => {
-                    // nothing to do; listeners refresh the list automatically
                     setShowModal(false);
                     setModalData(null);
                     setModalMode("view");

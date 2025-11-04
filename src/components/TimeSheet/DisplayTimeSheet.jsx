@@ -8,7 +8,6 @@ import { useAuth } from "../../context/AuthContext";
 import TimesheetShare from './TimesheetShare ';
 
 
-
 // Build human ID like JW1-01-25 or JW1-01-25-2
 const buildTimesheetId = async (emp, periodKey) => {
     const base = shortEmpCode(
@@ -70,26 +69,75 @@ const monthParts = (yyyyMm) => {
 const pruneUndefined = (obj = {}) =>
     Object.fromEntries(Object.entries(obj).filter(([_, v]) => v !== undefined));
 
+const norm = (s) => String(s || '').trim().toLowerCase();
+const isSubmittedLike = (s) => ['submitted', 'submit', 'assigned'].includes(norm(s));
+
+
 // === READ-ONLY / STATUS / NAMES / HYDRATION HELPERS (PURE) ===
 
-// Enhanced read-only check that considers current user and assignment
-// Only assignee (or admin/superadmin) can edit when status is submitted/assigned
 const isSheetReadOnly = (ts, currentUserId, authContext) => {
     if (!ts) return false;
-    const s = String(ts.status || '').toLowerCase();
+    const s = norm(ts.status);
 
     // Approved/Rejected ⇒ locked for everyone
     if (s === 'approved' || s === 'rejected') return true;
 
-    // Submitted/Assigned ⇒ only assignee (or admin/super admin) can edit
-    if (s === 'submitted' || s === 'assigned') {
+    // Submitted/Assigned ⇒ only assignee can edit (not the creator)
+    if (isSubmittedLike(s)) {
         const isAssignedUser = ts.assignedTo && ts.assignedTo === currentUserId;
-        const role = (authContext?.user?.role || '').toLowerCase();
+        const role = norm(authContext?.user?.role);
         const isAdmin = role === 'admin' || role === 'superadmin' || role === 'super_admin';
+
+        // Only assignee or admin can edit submitted/assigned timesheets
         return !(isAssignedUser || isAdmin);
     }
 
-    // Draft ⇒ editable
+    // Draft ⇒ editable by creator and admin
+    const isCreator = ts.createdBy === currentUserId;
+    const role = norm(authContext?.user?.role);
+    const isAdmin = role === 'admin' || role === 'superadmin' || role === 'super_admin';
+
+    return !(isCreator || isAdmin);
+};
+
+
+
+// Checks if assignedTo/* matches any of the current user's ids
+const isAssigneeMatch = (ts, idSet, allUsers) => {
+    if (!ts) return false;
+
+
+
+    // 1) Direct match with any ID in the set
+    const assignedTo = ts.assignedTo;
+    if (assignedTo && idSet.has(String(assignedTo))) {
+        return true;
+    }
+
+    // 2) Try to find the assigned user in allUsers and match by any identifier
+    if (allUsers && assignedTo) {
+        const assignedUser = allUsers.find(u =>
+            u.uid === assignedTo ||
+            u.id === assignedTo ||
+            (u.email && idSet.has(u.email)) ||
+            (u.displayName && idSet.has(u.displayName))
+        );
+
+        if (assignedUser) {
+            // Check if current user matches the assigned user by any identifier
+            const matches = Array.from(idSet).some(myId =>
+                myId === assignedUser.uid ||
+                myId === assignedUser.id ||
+                myId === assignedUser.email ||
+                myId === assignedUser.displayName
+            );
+
+            if (matches) {
+                return true;
+            }
+        }
+    }
+
     return false;
 };
 
@@ -205,32 +253,40 @@ const DisplayTimeSheet = () => {
     const [clarifyCommentId, setClarifyCommentId] = useState('');
     const [clarifyText, setClarifyText] = useState('');
 
+    const [showEditConfirmModal, setShowEditConfirmModal] = useState(false);
+    const [pendingEditAction, setPendingEditAction] = useState(null);
+    const [showReadOnlyModal, setShowReadOnlyModal] = useState(false);
 
+    const [allUsers, setAllUsers] = useState([]);
 
     const whoSafe = () => {
         // Priority 1: Auth context user
-        if (authContext?.user) {
+        if (authContext?.user?.uid) {
+            const user = authContext.user;
             return {
-                uid: authContext.user.uid,
-                name: authContext.user.displayName || authContext.user.name || authContext.user.email || 'Admin',
-                role: authContext.user.role || 'user'
+                uid: user.uid,
+                name: user.displayName || user.name || user.email || 'Admin',
+                email: user.email || '',
+                role: user.role || 'user'
             };
         }
 
         // Priority 2: Firebase auth user
-        if (authUser) {
+        if (authUser?.uid) {
             return {
                 uid: authUser.uid,
                 name: authUser.displayName || authUser.name || authUser.email || 'Admin',
+                email: authUser.email || '',
                 role: authUser.role || 'user'
             };
         }
 
         // Priority 3: Component state currentUser
-        if (currentUser) {
+        if (currentUser?.uid) {
             return {
                 uid: currentUser.uid,
                 name: currentUser.displayName || currentUser.name || currentUser.email || 'Admin',
+                email: currentUser.email || '',
                 role: currentUser.role || 'user'
             };
         }
@@ -238,21 +294,177 @@ const DisplayTimeSheet = () => {
         // Priority 4: Local storage fallback
         try {
             const stored = JSON.parse(localStorage.getItem("currentUser") || "null");
-            if (stored) {
+            if (stored?.uid) {
                 return {
                     uid: stored.uid,
                     name: stored.displayName || stored.name || stored.email || 'Admin',
+                    email: stored.email || '',
                     role: stored.role || 'user'
                 };
             }
         } catch (e) {
-            showModal('Error', 'reading stored user', e);
+            console.error('Error reading stored user:', e);
         }
 
         // Final fallback - ensure we always return a valid object
-        return { uid: "unknown", name: "Unknown User", role: "user" };
+        return { uid: "unknown", name: "Unknown User", email: "", role: "user" };
     };
 
+    // Build a Set of all IDs that can represent the current user (Y)
+    const currentUserIdSet = (authContext, authUser, currentUser, allUsers) => {
+        const ids = new Set();
+        try {
+            const who = whoSafe();
+            [who?.uid, authContext?.user?.uid, authContext?.user?.id, authUser?.uid, currentUser?.uid, currentUser?.id]
+                .filter(Boolean)
+                .forEach(v => ids.add(String(v)));
+        } catch (error) {
+        }
+
+        // Also add email and displayName if available
+        const who = whoSafe();
+        [who?.email, authContext?.user?.email, authUser?.email, currentUser?.email]
+            .filter(Boolean)
+            .forEach(v => ids.add(String(v)));
+
+        [who?.name, who?.displayName, authContext?.user?.displayName, authUser?.displayName, currentUser?.displayName]
+            .filter(Boolean)
+            .forEach(v => ids.add(String(v)));
+
+        // Legacy localStorage
+        try {
+            const stored = JSON.parse(localStorage.getItem('currentUser') || 'null');
+            [stored?.uid, stored?.id, stored?.email, stored?.displayName].filter(Boolean).forEach(v => ids.add(String(v)));
+        } catch { }
+
+        return ids;
+    };
+
+    // Use Auth Context
+    const authContext = useAuth();
+    const { user: authUser } = useAuth();
+    const canUserEditTimesheet = (ts, _currentUserId, authContext) => {
+        if (!ts) return false;
+
+        const status = norm(ts.status);
+
+
+        // Lock for everyone - approved/rejected cannot be edited by anyone
+        if (status === 'approved' || status === 'rejected') {
+            return false;
+        }
+
+        // Collect all possible IDs for the current user
+        const idSet = currentUserIdSet(authContext, authUser, currentUser, allUsers);
+
+        // Draft → creator OR admin can edit
+        if (!status || status === 'draft') {
+            const role = norm(authContext?.user?.role);
+            const isAdmin = role === 'admin' || role === 'superadmin' || role === 'super_admin';
+            const isCreator = ts.createdBy && idSet.has(String(ts.createdBy));
+
+            return Boolean(isCreator || isAdmin);
+        }
+
+        // Submitted / Assigned / Clarification → ONLY the assignee can edit
+        if (status === 'submitted' || status === 'assigned' || status === 'clarification') {
+            // If allUsers is not loaded yet, we can't determine if current user is assignee
+            // So we'll do a direct comparison first, then try with allUsers if available
+            const assignedTo = ts.assignedTo;
+
+            // 1. Direct comparison with current user IDs
+            if (assignedTo && idSet.has(String(assignedTo))) {
+                return true;
+            }
+
+            // 2. If allUsers is loaded, try to resolve the assigned user
+            if (allUsers && allUsers.length > 0) {
+                const isAssignedUser = isAssigneeMatch(ts, idSet, allUsers);
+
+                return isAssignedUser;
+            } else {
+                // 3. If allUsers is not loaded yet, we can't determine - assume no permission temporarily
+                return false;
+            }
+        }
+
+
+        return false;
+    };
+
+
+
+    const isSheetReadOnly = (ts, _currentUserId, authContext) => !canUserEditTimesheet(ts, _currentUserId, authContext);
+
+
+    // Enhanced read-only check considering current user
+    const isReadOnly = useMemo(() => {
+        const { uid } = whoSafe();
+
+
+        if (!uid || uid === "unknown") {
+            const role = norm(authContext?.user?.role);
+            const isAdmin = role === 'admin' || role === 'superadmin' || role === 'super_admin';
+
+            return !isAdmin;
+        }
+
+        // If allUsers is not loaded yet, we can't accurately determine read-only status
+        // So we'll be conservative and assume read-only until we have all the data
+        if (!allUsers || allUsers.length === 0) {
+
+            return true;
+        }
+
+        const readOnly = isSheetReadOnly(timesheet, uid, authContext);
+        return readOnly;
+    }, [timesheet, authContext, allUsers, currentUser]);
+
+    useEffect(() => {
+        const loadUsers = async () => {
+            await fetchUsers();
+        };
+        loadUsers();
+    }, [authContext?.user, authUser]);
+
+    // Also update the useEffect for when assign modal opens to ensure users are loaded
+    useEffect(() => {
+        if (showAssignModal) {
+            const loadUsersForAssign = async () => {
+                await fetchUsers();
+            };
+            loadUsersForAssign();
+        }
+    }, [showAssignModal]);
+
+    // Add a loading state for users
+    const [usersLoading, setUsersLoading] = useState(false);
+
+    const { uid: currentUid } = whoSafe();
+    const isAssignee = Boolean(timesheet?.assignedTo && timesheet.assignedTo === currentUid);
+    const submittedLikeNow = isSubmittedLike(timesheet?.status);
+
+    const onEditClick = (entry) => {
+        const uid = whoSafe().uid;
+        const canEdit = canUserEditTimesheet(timesheet, uid, authContext);
+        if (!canEdit) {
+            setShowReadOnlyModal(true);
+            return;
+        }
+        setCurrentEntry(entry);
+        setIsEditing(true);
+        setEntryModalMode('single');
+        setShowEntryModal(true);
+    };
+
+    const uid = whoSafe().uid;
+    const isAssigneeLocal = timesheet?.assignedTo === uid;
+    const submittedLikeNowLocal = isSubmittedLike(timesheet?.status);
+    const uidRow = whoSafe().uid;
+    const isAssigneeRow = timesheet?.assignedTo === uidRow;
+    const submittedLikeRow = isSubmittedLike(timesheet?.status);
+    const rowDeleteDisabled = submittedLikeRow || isReadOnly;
+    const canOpenEdit = !isReadOnly || (submittedLikeRow && isAssigneeRow);
 
 
 
@@ -291,6 +503,10 @@ const DisplayTimeSheet = () => {
         const periodKey = getCurrentPeriodKey();
         const rawKey = getCurrentPeriodKey();
         const periodStr = formatPeriodLabel(rawKey);
+        const _isAssignee = Boolean(timesheet?.assignedTo && timesheet.assignedTo === uid);
+        const _submittedLikeNow = isSubmittedLike(timesheet?.status);
+        const _rowDeleteDisabled = _submittedLikeNow || isReadOnly;
+        const _canOpenEdit = !isReadOnly || (_submittedLikeNow && _isAssignee);
 
 
         const base = {
@@ -423,9 +639,7 @@ const DisplayTimeSheet = () => {
         setShowPrevTsDelete(true);
     };
 
-    // Use Auth Context
-    const authContext = useAuth();
-    const { user: authUser } = useAuth();
+
 
 
     // ---- NEW STATE (add near other useState) ----
@@ -494,6 +708,8 @@ const DisplayTimeSheet = () => {
     };
 
 
+
+
     // Period key used everywhere: "YYYY-MM" or "YYYY-MM-DD_to_YYYY-MM-DD"
     const getCurrentPeriodKey = () => {
         return useDateRange && startDate && endDate
@@ -541,11 +757,6 @@ const DisplayTimeSheet = () => {
         return taken;
     };
 
-    // Enhanced read-only check considering current user
-    const isReadOnly = React.useMemo(() => {
-        const { uid } = whoSafe();              // ← ALWAYS resolve a uid
-        return isSheetReadOnly(timesheet, uid, authContext);
-    }, [timesheet, authContext]);
 
     // PATCH: delete an entire timesheet (no dual nodes)
     const deletePreviousTimesheet = async () => {
@@ -591,7 +802,7 @@ const DisplayTimeSheet = () => {
 
 
 
-    const [allUsers, setAllUsers] = useState([]);
+
     const [userSearch, setUserSearch] = useState("");
     const filteredUsers = useMemo(() => {
         const q = (userSearch || "").toLowerCase();
@@ -604,6 +815,7 @@ const DisplayTimeSheet = () => {
 
     // Update fetchUsers function to filter by role
     const fetchUsers = async () => {
+        setUsersLoading(true);
         const paths = ['Users', 'JenCeo-DataBase/Users', 'AppUsers', 'employees', 'EmployeeBioData'];
         const tmp = [];
 
@@ -636,8 +848,6 @@ const DisplayTimeSheet = () => {
                     }
                 });
             } catch (error) {
-
-                showModal(`Error loading users from ${p}:`, error);
             }
         }
 
@@ -652,8 +862,26 @@ const DisplayTimeSheet = () => {
         });
 
         setAllUsers(uniq);
+        setUsersLoading(false);
+
         return uniq;
     };
+
+    // Add a retry mechanism for user loading
+    const retryUserLoading = async () => {
+
+        await fetchUsers();
+    };
+
+    // You can also add a temporary loading indicator in your UI
+    {
+        usersLoading && (
+            <div className="alert alert-info">
+                <i className="bi bi-arrow-repeat spinner me-2"></i>
+                Loading user data...
+            </div>
+        )
+    }
     {
         {
             filteredUsers.map(u => (
@@ -856,7 +1084,7 @@ const DisplayTimeSheet = () => {
     };
     const handleAutoFill = async (tpl) => {
         const { uid, name } = whoSafe();
-        if (isSheetReadOnly(isReadOnly)) {
+        if (isReadOnly) {
             showModal('Locked', `This timesheet is ${timesheet?.status}. Editing is disabled.`, 'warning');
             return;
         }
@@ -990,48 +1218,19 @@ const DisplayTimeSheet = () => {
 
 
 
-    // Update the edit entry handler
-    const handleEditEntry = (entry) => {
-        if (isReadOnly) {
-            const currentUserId = whoSafe().uid;
-            const isAssignedUser = timesheet?.assignedTo === currentUserId;
 
-            if (isAssignedUser) {
-                // Assigned user can edit even if submitted
-                setCurrentEntry(entry);
-                setIsEditing(true);
-                setEntryModalMode('single');
-                setShowEntryModal(true);
-            } else {
-                showModal(
-                    'Locked',
-                    `This timesheet is ${timesheet?.status}. Only the assigned user (${timesheet?.assignedToName || timesheet?.assignedTo}) can make modifications.`,
-                    'warning'
-                );
-            }
-            return;
-        }
 
-        // For draft timesheets, allow editing
-        setCurrentEntry(entry);
-        setIsEditing(true);
-        setEntryModalMode('single');
-        setShowEntryModal(true);
-    };
+
     // Update the add new entry handler
     const handleAddEntry = () => {
-        if (isReadOnly) {
-            const currentUserId = whoSafe().uid;
-            const isAssignedUser = timesheet?.assignedTo === currentUserId;
-
-            if (!isAssignedUser) {
-                showModal(
-                    'Locked',
-                    `This timesheet is ${timesheet?.status}. Only the assigned user (${timesheet?.assignedToName || timesheet?.assignedTo}) can add new entries.`,
-                    'warning'
-                );
-                return;
-            }
+        const uid = whoSafe().uid;
+        if (!canUserEditTimesheet(timesheet, uid, authContext)) {
+            showModal(
+                'Locked',
+                `This timesheet is ${timesheet?.status}. Only the assigned user (${timesheet?.assignedToName || timesheet?.assignedTo}) can add or edit.`,
+                'warning'
+            );
+            return;
         }
 
         if (!selectedEmployee) {
@@ -1791,6 +1990,69 @@ const DisplayTimeSheet = () => {
         return totalCalculatedSalary <= basicSalary;
     };
 
+    // Update the edit entry handler
+    const handleEditEntry = (entry) => {
+        const { uid } = whoSafe();
+        const canEdit = canUserEditTimesheet(timesheet, uid, authContext);
+
+        if (!canEdit) {
+            setShowReadOnlyModal(true);
+            return;
+        }
+
+        // If we can edit, proceed with edit action
+        if (isSubmittedLike(timesheet?.status)) {
+
+            setPendingEditAction({ type: 'edit', entry });
+            setShowEditConfirmModal(true);
+        } else {
+
+            // Direct edit - open the modal
+            setCurrentEntry(entry);
+            setIsEditing(true);
+            setEntryModalMode('single');
+            setShowEntryModal(true);
+        }
+    };
+
+
+    // Fix the delete entry handler in DailyEntriesTable
+    // Fix the delete handler
+    const handleDeleteEntry = (entry) => {
+
+
+        const { uid } = whoSafe();
+        const canDelete = canUserEditTimesheet(timesheet, uid, authContext);
+
+
+
+        if (!canDelete) {
+            setShowReadOnlyModal(true);
+            return;
+        }
+
+        // If we can delete, proceed with delete action
+        if (isSubmittedLike(timesheet?.status)) {
+            setPendingEditAction({ type: 'delete', entry });
+            setShowEditConfirmModal(true);
+        } else {
+            confirmDeleteEntry(entry);
+        }
+    };
+
+    // Handle confirmed edit action
+    const handleConfirmedEdit = (entry) => {
+        setCurrentEntry(entry);
+        setIsEditing(true);
+        setEntryModalMode('single');
+        setShowEntryModal(true);
+    };
+
+    // Handle confirmed delete action  
+    const handleConfirmedDelete = (entry) => {
+        setEntryToDelete(entry);
+        setShowDeleteModal(true);
+    };
 
     const checkSalaryLimit = async () => {
         // Check salary limit
@@ -1817,7 +2079,7 @@ const DisplayTimeSheet = () => {
     // Add save timesheet function
     const saveTimesheet = async () => {
         const { uid, name } = whoSafe();
-        if (isSheetReadOnly(isReadOnly)) {
+        if (isReadOnly) {
             showModal('Locked', `This timesheet is ${timesheet?.status}. Editing is disabled.`, 'warning');
             return;
         }
@@ -1984,10 +2246,24 @@ const DisplayTimeSheet = () => {
     };
 
 
-    const confirmDeleteEntry = (entry) => {
-        if (isSheetReadOnly(isReadOnly)) { showModal('Locked', `This timesheet is ${timesheet?.status}. Editing is disabled.`, 'warning'); return; }
 
-        // pass the whole entry or at least { date }
+
+
+
+    const confirmDeleteEntry = (entry) => {
+
+
+        const { uid } = whoSafe();
+        const canDelete = canUserEditTimesheet(timesheet, uid, authContext);
+
+
+
+        if (!canDelete) {
+            setShowReadOnlyModal(true);
+            return;
+        }
+
+
         setEntryToDelete(entry);
         setShowDeleteModal(true);
     };
@@ -2004,7 +2280,7 @@ const DisplayTimeSheet = () => {
 
     // single delete
     const deleteEntry = async () => {
-        if (isSheetReadOnly(isReadOnly)) { showModal('Locked', `This timesheet is ${timesheet?.status}. Editing is disabled.`, 'warning'); return; }
+        if (isReadOnly) { showModal('Locked', `This timesheet is ${timesheet?.status}. Editing is disabled.`, 'warning'); return; }
 
         try {
             if (!entryToDelete?.date || !currentTimesheetId || !selectedEmployee) return;
@@ -2026,10 +2302,30 @@ const DisplayTimeSheet = () => {
         }
     };
 
+    // Fix the bulk delete handler
+    const handleBulkDelete = () => {
+
+
+        const { uid } = whoSafe();
+        const canDelete = canUserEditTimesheet(timesheet, uid, authContext);
+
+        if (!canDelete) {
+            setShowReadOnlyModal(true);
+            return;
+        }
+
+        if (selectedEntries.length === 0) {
+            showModal('Warning', 'Please select entries to delete.', 'warning');
+            return;
+        }
+
+        setShowDeleteModal(true);
+    };
+
     // bulk delete
     // ✅ Delete selected daily entries safely (no table flicker, no ESLint errors)
     const deleteSelectedEntries = async () => {
-        if (isSheetReadOnly(isReadOnly)) { showModal('Locked', `This timesheet is ${timesheet?.status}. Editing is disabled.`, 'warning'); return; }
+        if (isReadOnly) { showModal('Locked', `This timesheet is ${timesheet?.status}. Editing is disabled.`, 'warning'); return; }
 
         if (!selectedEntries?.length || !currentTimesheetId || !selectedEmployee) {
             showModal('Error', 'No entries selected or missing required data.', 'error');
@@ -2327,6 +2623,29 @@ const DisplayTimeSheet = () => {
         }
     };
 
+    // Add this helper function to check if current user can modify
+    const canModifyTimesheet = () => {
+        if (isReadOnly) return false;
+
+        const { uid } = whoSafe();
+        const isAssignedUser = timesheet?.assignedTo === uid;
+        const isCreator = timesheet?.createdBy === uid;
+        const submittedLike = isSubmittedLike(timesheet?.status);
+
+        if (submittedLike) {
+            return isAssignedUser || authContext?.user?.role === 'admin';
+        } else {
+            return isCreator || authContext?.user?.role === 'admin';
+        }
+    };
+
+
+
+
+
+
+
+
 
 
     const confirmSubmit = async () => {
@@ -2375,9 +2694,10 @@ const DisplayTimeSheet = () => {
     };
 
 
+
     const assignTimesheet = async () => {
         // read-only guard
-        if (isSheetReadOnly(isReadOnly)) {
+        if (isReadOnly) {
             showModal('Locked', `This timesheet is ${timesheet?.status}. Editing is disabled.`, 'warning');
             return;
         }
@@ -2652,7 +2972,8 @@ const DisplayTimeSheet = () => {
                                                                 <button
                                                                     className="btn btn-outline-danger"
                                                                     title="Delete Timesheet"
-                                                                    onClick={() => openPrevTsDelete(ts)}
+                                                                    onClick={() => { if (!isReadOnly) return; openPrevTsDelete(ts); }}
+                                                                    disabled={!isReadOnly}
                                                                 >
                                                                     <i className="bi bi-trash"></i>
                                                                 </button>
@@ -2807,24 +3128,128 @@ const DisplayTimeSheet = () => {
 
                             {timesheet && (
                                 <>
+                                    {/* Fix the bulk delete button */}
                                     {selectedEntries.length > 0 && (
-                                        <>
-                                            <button
-                                                className="btn btn-outline-danger me-2"
-                                                onClick={deleteSelectedEntries}
-                                                disabled={isReadOnly}
-                                            >
-                                                <i className="bi bi-trash me-2"></i>
-                                                Delete Selected ({selectedEntries.length})
-                                            </button>
-                                            <button
-                                                className="btn btn-outline-secondary me-2"
-                                                onClick={() => setSelectedEntries([])}
-                                            >
-                                                <i className="fas fa-times me-2"></i>
-                                                Clear Selection
-                                            </button>
-                                        </>
+                                        <button
+                                            className="btn btn-outline-danger me-2"
+                                            onClick={handleBulkDelete}
+                                            disabled={isReadOnly}
+                                        >
+                                            <i className="bi bi-trash me-2"></i>
+                                            Delete Selected ({selectedEntries.length})
+                                        </button>
+                                    )}
+
+
+
+                                    {/* Add missing modal handlers */}
+                                    {showReadOnlyModal && (
+                                        <div className="modal fade show" style={{ display: 'block', backgroundColor: 'rgba(0,0,0,0.8)' }}>
+                                            <div className="modal-dialog modal-dialog-centered">
+                                                <div className="modal-content bg-dark border border-warning">
+                                                    <div className="modal-header border-warning">
+                                                        <h5 className="modal-title text-warning">
+                                                            <i className="fas fa-lock me-2"></i>
+                                                            Action Restricted
+                                                        </h5>
+                                                        <button
+                                                            type="button"
+                                                            className="btn-close btn-close-white"
+                                                            onClick={() => setShowReadOnlyModal(false)}
+                                                        ></button>
+                                                    </div>
+                                                    <div className="modal-body">
+                                                        <div className="alert alert-warning bg-warning bg-opacity-10 border-warning text-white">
+                                                            <strong>This action is not permitted for your role.</strong>
+                                                        </div>
+                                                        <p className="text-white">
+                                                            {timesheet?.status === 'approved' || timesheet?.status === 'rejected' ? (
+                                                                <>This timesheet has been <strong>{timesheet.status}</strong> and cannot be modified by anyone.</>
+                                                            ) : timesheet?.status === 'submitted' || timesheet?.status === 'assigned' ? (
+                                                                <>This timesheet is <strong>{timesheet.status}</strong>. Only <strong>{timesheet.assignedToName || 'the assigned user'}</strong> can make modifications.</>
+                                                            ) : (
+                                                                <>This timesheet is in <strong>draft</strong> status. Only <strong>{timesheet.createdByName || 'the creator'}</strong> can make modifications.</>
+                                                            )}
+                                                        </p>
+                                                    </div>
+                                                    <div className="modal-footer">
+                                                        <button
+                                                            type="button"
+                                                            className="btn btn-secondary"
+                                                            onClick={() => setShowReadOnlyModal(false)}
+                                                        >
+                                                            <i className="fas fa-times me-1"></i>
+                                                            Close
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {/* Edit Confirmation Modal for Submitted Timesheets */}
+                                    {showEditConfirmModal && pendingEditAction && (
+                                        <div className="modal fade show" style={{ display: 'block', backgroundColor: 'rgba(0,0,0,0.8)' }}>
+                                            <div className="modal-dialog modal-dialog-centered">
+                                                <div className="modal-content bg-dark border border-warning">
+                                                    <div className="modal-header border-warning">
+                                                        <h5 className="modal-title text-warning">
+                                                            <i className="fas fa-exclamation-triangle me-2"></i>
+                                                            Confirm Action
+                                                        </h5>
+                                                        <button
+                                                            type="button"
+                                                            className="btn-close btn-close-white"
+                                                            onClick={() => {
+                                                                setShowEditConfirmModal(false);
+                                                                setPendingEditAction(null);
+                                                            }}
+                                                        ></button>
+                                                    </div>
+                                                    <div className="modal-body">
+                                                        <div className="alert alert-warning bg-warning bg-opacity-10 border-warning text-white">
+                                                            <strong>This timesheet is {timesheet?.status}.</strong>
+                                                        </div>
+                                                        <p className="text-white">
+                                                            Are you sure you want to {pendingEditAction.type} this entry?
+                                                            This action will be recorded in the audit trail.
+                                                        </p>
+                                                        {pendingEditAction.entry && (
+                                                            <div className="bg-dark border border-secondary rounded p-2">
+                                                                <small className="text-muted">Entry Date: {pendingEditAction.entry.date}</small>
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                    <div className="modal-footer">
+                                                        <button
+                                                            type="button"
+                                                            className="btn btn-secondary"
+                                                            onClick={() => {
+                                                                setShowEditConfirmModal(false);
+                                                                setPendingEditAction(null);
+                                                            }}
+                                                        >
+                                                            Cancel
+                                                        </button>
+                                                        <button
+                                                            type="button"
+                                                            className="btn btn-warning"
+                                                            onClick={() => {
+                                                                if (pendingEditAction.type === 'edit') {
+                                                                    handleConfirmedEdit(pendingEditAction.entry);
+                                                                } else if (pendingEditAction.type === 'delete') {
+                                                                    handleConfirmedDelete(pendingEditAction.entry);
+                                                                }
+                                                                setShowEditConfirmModal(false);
+                                                                setPendingEditAction(null);
+                                                            }}
+                                                        >
+                                                            Confirm {pendingEditAction.type === 'edit' ? 'Edit' : 'Delete'}
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
                                     )}
 
                                     <button
@@ -2892,17 +3317,9 @@ const DisplayTimeSheet = () => {
                             <DailyEntriesTable
                                 entries={dailyEntries}
                                 timesheetId={timesheet?.timesheetId}
-                                timesheet={timesheet} // This should be passed as 'timesheet' not 'currentTimesheet'
-                                onEdit={(entry) => {
-                                    if (!timesheet) {
-                                        showModal('Info', 'Please create a timesheet first.', 'info');
-                                        return;
-                                    }
-                                    setCurrentEntry(entry);
-                                    setIsEditing(true);
-                                    setShowEntryModal(true);
-                                }}
-                                onDelete={confirmDeleteEntry}
+                                timesheet={timesheet}
+                                onEdit={handleEditEntry}  // Use the fixed handler
+                                onDelete={handleDeleteEntry} // Use the fixed handler
                                 totalSalary={totalSalary}
                                 isDisabled={!timesheet || showSubmittedError}
                                 isReadOnly={isReadOnly}
@@ -2913,17 +3330,28 @@ const DisplayTimeSheet = () => {
                                 selectedEmployee={selectedEmployee}
                                 advances={advances}
                                 previousTimesheets={previousTimesheets}
+                                whoSafe={whoSafe}
+                                authContext={authContext}
+                                canUserEditTimesheet={canUserEditTimesheet}
+                                setPendingEditAction={setPendingEditAction}
+                                setShowEditConfirmModal={setShowEditConfirmModal}
+                                isSubmittedLike={isSubmittedLike}
+                                setShowReadOnlyModal={setShowReadOnlyModal} // Add this
+                                showReadOnlyModal={showReadOnlyModal}
                             />
                         </div>
                         <div className="col-lg-4">
                             <AdvanceManagement
-                                key={`${selectedEmployee}-${timesheet?.timesheetId || 'new'}`}
                                 employeeId={selectedEmployee}
                                 timesheetId={timesheet?.timesheetId || ''}
                                 advances={advances}
                                 onAdvanceAdded={loadAdvances}
                                 currentUser={currentUser}
-                                isDisabled={!timesheet || showSubmittedError || isReadOnly} // Add isReadOnly here
+                                isDisabled={!timesheet || showSubmittedError || isReadOnly}
+                                isReadOnly={isReadOnly}
+                                // NEW
+                                isAssignee={isAssignee}
+                                submittedLike={submittedLikeNow}
                             />
                         </div>
                     </div>
@@ -3875,12 +4303,14 @@ const TimesheetSummary = ({ timesheet, advances, employee, currentUser, isReadOn
     );
 };
 
+
+
 // Daily Entries Table Component with Checkboxes and Modified By
 const DailyEntriesTable = ({
     entries,
     timesheetId,
     timesheet,
-    onEdit,
+    onEdit, // Make sure this is included
     onDelete,
     totalSalary,
     isDisabled,
@@ -3888,11 +4318,17 @@ const DailyEntriesTable = ({
     selectedEntries,
     onSelectEntry,
     onSelectAllEntries,
-    // New props - use these directly instead of redeclaring as state
     employees = [],
     selectedEmployee = '',
     advances = [],
     previousTimesheets = [],
+    whoSafe,
+    authContext,
+    canUserEditTimesheet,
+    setPendingEditAction,
+    setShowEditConfirmModal,
+    isSubmittedLike,
+
 }) => {
     const [showShareView, setShowShareView] = useState(false);
     const { user: authUser } = useAuth(); // Get current logged-in user from auth context
@@ -3903,6 +4339,7 @@ const DailyEntriesTable = ({
     const [currentNote, setCurrentNote] = useState('');
     const [isShareDataReady, setIsShareDataReady] = useState(false);
 
+
     useEffect(() => {
         if (entries?.length > 0 && timesheet) { // Changed from dailyEntries and currentTimesheet
             setIsShareDataReady(true);
@@ -3911,6 +4348,14 @@ const DailyEntriesTable = ({
         }
     }, [entries, timesheet]);
 
+    // Helper to check if current user can edit a specific entry
+    const canEditEntry = () => {
+        if (!isReadOnly) return true;
+        const { uid } = whoSafe();
+        return timesheet?.assignedTo === uid; // assignee can edit
+    };
+    const canEditNow = canUserEditTimesheet(timesheet, whoSafe().uid, authContext);
+    const rowDeleteDisabled = !canEditNow;
 
     return (
         <div className="card bg-dark border-secondary">
@@ -3928,6 +4373,11 @@ const DailyEntriesTable = ({
                             <small className="text-info">
                                 <strong>Status:</strong> {timesheet?.status || "draft"}
                             </small>
+                            {isReadOnly && timesheet?.assignedTo && (
+                                <small className="text-warning ms-3">
+                                    <strong>Assigned To:</strong> {timesheet.assignedToName || timesheet.assignedTo}
+                                </small>
+                            )}
                         </div>
                     )}
                 </div>
@@ -3963,7 +4413,7 @@ const DailyEntriesTable = ({
                                             entries.length > 0
                                         }
                                         onChange={onSelectAllEntries}
-                                        disabled={isDisabled}
+                                        disabled={isDisabled || isReadOnly}
                                     />
                                 </th>
                                 <th>Date</th>
@@ -3985,8 +4435,17 @@ const DailyEntriesTable = ({
                                             type="checkbox"
                                             className="form-check-input"
                                             checked={selectedEntries.includes(String(e.id || e.date))}
-                                            onChange={() => onSelectEntry(e)}
-                                            disabled={isDisabled}
+                                            onChange={() => {
+                                                const { uid } = whoSafe();
+                                                const canEdit = canUserEditTimesheet(timesheet, uid, authContext);
+
+                                                if (!canEdit) {
+                                                    setShowReadOnlyModal(true);
+                                                    return;
+                                                }
+                                                onSelectEntry(e);
+                                            }}
+                                            disabled={isDisabled || (isReadOnly && !canEditEntry(e))}
                                             value={e.date}
                                         />
                                     </td>
@@ -4075,23 +4534,58 @@ const DailyEntriesTable = ({
                                     </td>
                                     <td>
                                         <div className="btn-group btn-group-sm">
+                                            {/* EDIT Button */}
                                             <button
-                                                className="btn btn-outline-info"
+                                                className="btn btn-outline-warning btn-sm"
                                                 onClick={() => {
-                                                    if (isReadOnly) {
+                                                    const { uid } = whoSafe();
+                                                    const canEdit = canUserEditTimesheet(timesheet, uid, authContext);
+
+                                                    if (!canEdit) {
                                                         setShowReadOnlyModal(true);
                                                         return;
                                                     }
-                                                    onEdit(e);
+
+                                                    // If we can edit, proceed with edit action
+                                                    if (isSubmittedLike(timesheet?.status)) {
+                                                        // Show confirmation modal for submitted timesheets
+                                                        setPendingEditAction({ type: 'edit', entry: e });
+                                                        setShowEditConfirmModal(true);
+                                                    } else {
+                                                        // Direct edit for draft timesheets
+                                                        onEdit(e);
+                                                    }
                                                 }}
-                                                title={isReadOnly ? "Read Only - Click for details" : "Edit Entry"}
+                                                title="Edit Entry"
                                             >
                                                 <i className="bi bi-pencil"></i>
                                             </button>
+
+                                            {/* DELETE Button */}
                                             <button
                                                 className="btn btn-outline-danger btn-sm"
-                                                onClick={() => onDelete(e)}
-                                                disabled={isDisabled || isReadOnly}
+                                                onClick={() => {
+                                                    const { uid } = whoSafe();
+                                                    const canDelete = canUserEditTimesheet(timesheet, uid, authContext);
+
+                                                    if (!canDelete) {
+                                                        setShowReadOnlyModal(true);
+                                                        return;
+                                                    }
+
+                                                    // If we can delete, proceed with delete action
+                                                    if (isSubmittedLike(timesheet?.status)) {
+                                                        // Show confirmation modal for submitted timesheets
+                                                        setPendingEditAction({ type: 'delete', entry: e });
+                                                        setShowEditConfirmModal(true);
+                                                    } else {
+                                                        // Direct delete for draft timesheets
+                                                        onDelete(e);
+                                                    }
+                                                }}
+                                                disabled={timesheet?.status === 'approved' || timesheet?.status === 'rejected'}
+                                                title={timesheet?.status === 'approved' || timesheet?.status === 'rejected' ?
+                                                    'Cannot delete approved/rejected timesheet' : 'Delete Entry'}
                                             >
                                                 <i className="bi bi-trash"></i>
                                             </button>
@@ -4183,6 +4677,7 @@ const DailyEntriesTable = ({
                 </div>
             )}
 
+
             {showReadOnlyModal && (
                 <div className="modal fade show" style={{ display: 'block', backgroundColor: 'rgba(0,0,0,0.8)' }}>
                     <div className="modal-dialog modal-dialog-centered">
@@ -4190,33 +4685,38 @@ const DailyEntriesTable = ({
                             <div className="modal-header border-warning">
                                 <h5 className="modal-title text-warning">
                                     <i className="fas fa-lock me-2"></i>
-                                    Read Only Mode
+                                    Action Restricted
                                 </h5>
                             </div>
                             <div className="modal-body">
                                 <div className="alert alert-warning bg-warning bg-opacity-10 border-warning text-white">
-                                    <strong>This timesheet is {timesheet?.status} and cannot be edited.</strong>
+                                    <strong>This action is not permitted for your role.</strong>
                                 </div>
                                 <p className="text-white">
-                                    {timesheet?.status === 'submitted' || timesheet?.status === 'assigned' ? (
-                                        <>
-                                            This timesheet is currently {timesheet.status}.
-                                            {timesheet.assignedToName ? (
-                                                <> Only <strong>{timesheet.assignedToName}</strong> can make modifications.</>
-                                            ) : (
-                                                <> Only the assigned user can make modifications.</>
-                                            )}
-                                        </>
+                                    {timesheet?.status === 'approved' || timesheet?.status === 'rejected' ? (
+                                        <>This timesheet has been <strong>{timesheet.status}</strong> and cannot be modified by anyone.</>
+                                    ) : timesheet?.status === 'submitted' || timesheet?.status === 'assigned' ? (
+                                        <>This timesheet is <strong>{timesheet.status}</strong>. Only <strong>{timesheet.assignedToName || 'the assigned user'}</strong> can make modifications.</>
                                     ) : (
-                                        <>Only administrators can modify {timesheet?.status} timesheets.</>
+                                        <>This timesheet is in <strong>draft</strong> status. Only <strong>{timesheet.createdByName || 'the creator'}</strong> can make modifications.</>
                                     )}
                                 </p>
-                                {timesheet?.assignedTo && (
+                                {timesheet?.assignedTo && (timesheet.status === 'submitted' || timesheet.status === 'assigned') && (
                                     <div className="mt-3 p-2 bg-dark border border-secondary rounded">
                                         <small className="text-muted">
                                             <strong>Assigned To:</strong> {timesheet.assignedToName || timesheet.assignedTo}
                                             {timesheet.assignedAt && (
                                                 <> on {new Date(timesheet.assignedAt).toLocaleString('en-IN')}</>
+                                            )}
+                                        </small>
+                                    </div>
+                                )}
+                                {timesheet?.createdBy && timesheet.status === 'draft' && (
+                                    <div className="mt-3 p-2 bg-dark border border-secondary rounded">
+                                        <small className="text-muted">
+                                            <strong>Created By:</strong> {timesheet.createdByName || timesheet.createdBy}
+                                            {timesheet.createdAt && (
+                                                <> on {new Date(timesheet.createdAt).toLocaleString('en-IN')}</>
                                             )}
                                         </small>
                                     </div>
@@ -4236,6 +4736,7 @@ const DailyEntriesTable = ({
                     </div>
                 </div>
             )}
+
         </div>
     );
 };

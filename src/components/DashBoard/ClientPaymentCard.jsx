@@ -11,7 +11,7 @@ async function importFirebaseDB() {
     if (a && a.firebaseDB) return a.firebaseDB;
   } catch (e) { }
   try {
-    const b = await import("../firebase");
+    const b = await import("../../firebase");
     if (b && b.default) return b.default;
     if (b && b.firebaseDB) return b.firebaseDB;
   } catch (e) { }

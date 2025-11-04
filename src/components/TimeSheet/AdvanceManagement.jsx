@@ -2,7 +2,18 @@ import React, { useEffect, useMemo, useState } from 'react';
 import firebaseDB from '../../firebase';
 import { useAuth } from "../../context/AuthContext";
 
-const AdvanceManagement = ({ employeeId, timesheetId, advances = [], onAdvanceAdded, currentUser }) => {
+const AdvanceManagement = ({ 
+   employeeId,
+  timesheetId,
+  advances = [],
+  onAdvanceAdded,
+  currentUser,
+  isDisabled,
+  isReadOnly,
+  // NEW: pass from parent
+  isAssignee = false,
+  submittedLike = false,
+}) => {
   const [localAdvances, setLocalAdvances] = useState(null);
   const [showAdvanceModal, setShowAdvanceModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
@@ -112,6 +123,9 @@ const AdvanceManagement = ({ employeeId, timesheetId, advances = [], onAdvanceAd
     }
   };
 
+ const canEditAdvance = submittedLike ? isAssignee : !isReadOnly;
+  const canDeleteAdvance = !submittedLike && !isReadOnly;
+
   // Add the missing whoSafe function
   const auth = useAuth();
   const whoSafe = () => {
@@ -204,8 +218,15 @@ const AdvanceManagement = ({ employeeId, timesheetId, advances = [], onAdvanceAd
         </div>
         <button
           className="btn btn-warning btn-sm"
-          onClick={openAddModal}
-          disabled={!employeeId || !timesheetId}
+          onClick={() => {
+            if (!canEditAdvance) {
+              alert('This timesheet is submitted/assigned or locked. Only the assignee can add advances.');
+              return;
+            }
+            openAddModal();
+          }}
+          disabled={!employeeId || !timesheetId || !canEditAdvance}
+          title={!canEditAdvance ? "Adding disabled" : "Add Advance"}
         >
           <i className="bi bi-plus-circle me-2"></i> Add Advance
         </button>
@@ -259,15 +280,27 @@ const AdvanceManagement = ({ employeeId, timesheetId, advances = [], onAdvanceAd
                   <div className="d-flex justify-content-end gap-1">
                     <button
                       className="btn btn-outline-warning btn-sm"
-                      onClick={() => openEditModal(advance)}
-                      title="Edit Advance"
+                      onClick={() => {
+                        if (!canEditAdvance) {
+                          alert('Editing advances is disabled. Only the assignee can edit while submitted/assigned.');
+                          return;
+                        }
+                        openEditModal(advance);
+                      }}
+                      disabled={!canEditAdvance}
+                      title={!canEditAdvance ? "Editing disabled" : "Edit Advance"}
                     >
                       <i className="bi bi-pencil"></i>
                     </button>
+
                     <button
                       className="btn btn-outline-danger btn-sm"
-                      onClick={() => confirmDeleteAdvance(advance)}
-                      title="Delete Advance"
+                      onClick={() => {
+                        if (!canDeleteAdvance) return; // hard stop
+                        confirmDeleteAdvance(advance);
+                      }}
+                      disabled={!canDeleteAdvance}
+                      title={!canDeleteAdvance ? "Delete disabled for submitted/assigned or locked" : "Delete Advance"}
                     >
                       <i className="bi bi-trash"></i>
                     </button>
@@ -298,12 +331,18 @@ const AdvanceManagement = ({ employeeId, timesheetId, advances = [], onAdvanceAd
               <h6 className="text-white opacity-50 mb-2 d-block">No Advances Recorded</h6>
               <p className="small opacity-50 mb-3">Add advances to track employee payments</p>
               <button
-                className="btn btn-outline-warning btn-sm"
-                onClick={openAddModal}
-                disabled={!employeeId || !timesheetId}
+                className="btn btn-warning btn-sm"
+                onClick={() => {
+                  if (!canEditAdvance) {
+                    alert('This timesheet is submitted/assigned or locked. Only the assignee can add advances.');
+                    return;
+                  }
+                  openAddModal();
+                }}
+                disabled={!employeeId || !timesheetId || !canEditAdvance}
+                title={!canEditAdvance ? "Adding disabled" : "Add Advance"}
               >
-                <i className="bi bi-plus-circle me-2"></i>
-                Add First Advance
+                <i className="bi bi-plus-circle me-2"></i> Add Advance
               </button>
             </div>
           )}
@@ -422,7 +461,15 @@ const AdvanceManagement = ({ employeeId, timesheetId, advances = [], onAdvanceAd
                   </div>
                 </div>
                 <div className="modal-footer border-warning py-3">
-                  <button type="button" className="btn btn-secondary btn-sm" onClick={() => setShowAdvanceModal(false)}>
+                  <button type="button" className="btn btn-secondary btn-sm" 
+                  onClick={() => {
+                      if (!canEditAdvance) {
+                        alert('This timesheet is submitted/assigned or locked. Only the assignee can add advances.');
+                        return;
+                      }
+                      openAddModal();
+                    }}
+                    disabled={!employeeId || !timesheetId || !canEditAdvance}>
                     <i className="bi bi-x-circle me-1"></i>
                     Cancel
                   </button>
@@ -455,7 +502,7 @@ const AdvanceManagement = ({ employeeId, timesheetId, advances = [], onAdvanceAd
                   <strong>Are you sure you want to delete this advance?</strong>
                 </div>
 
-                {advanceToDelete && (
+                {/* {advanceToDelete && (
                   <div className="border border-secondary rounded p-3 mb-3 bg-dark bg-opacity-50">
                     <div className="row g-3">
                       <div className="col-md-6">
@@ -478,8 +525,17 @@ const AdvanceManagement = ({ employeeId, timesheetId, advances = [], onAdvanceAd
                       </div>
                     </div>
                   </div>
-                )}
+                )} */}
 
+                {advanceToDelete && (
+                  <div className="border border-secondary rounded p-3 mb-3 bg-dark bg-opacity-50">
+                    <div className="text-white small">
+                      <div><strong>Amount:</strong> ₹{advanceToDelete.amount}</div>
+                      <div><strong>Date:</strong> {advanceToDelete.date}</div>
+                      <div><strong>Reason:</strong> {advanceToDelete.reason || '—'}</div>
+                    </div>
+                  </div>
+                )}
                 <p className="text-white text-center mb-0 small">
                   <i className="bi bi-exclamation-circle text-warning me-2"></i>
                   This action cannot be undone.
@@ -490,9 +546,19 @@ const AdvanceManagement = ({ employeeId, timesheetId, advances = [], onAdvanceAd
                   <i className="bi bi-x-circle me-1"></i>
                   Cancel
                 </button>
-                <button type="button" className="btn btn-danger btn-sm" onClick={deleteAdvance}>
-                  <i className="bi bi-trash me-1"></i>
-                  Delete Advance
+                {/* <button
+                  className="btn btn-outline-danger btn-sm"
+                  onClick={() => {
+                    if (!canDeleteAdvance) return; // hard stop
+                    confirmDeleteAdvance(advance);
+                  }}
+                  disabled={!canDeleteAdvance}
+                  title={!canDeleteAdvance ? "Delete disabled for submitted/assigned or locked" : "Delete Advance"}
+                >
+                  <i className="bi bi-trash"></i>
+                </button> */}
+                <button className="btn btn-danger" onClick={deleteAdvance}>
+                  Delete
                 </button>
               </div>
             </div>

@@ -103,6 +103,20 @@ const TimesheetShare = ({ timesheet, dailyEntries, advances, employee, previousT
 
     const summary = calculateSummary();
 
+    const buildHtmlBlobAndFile = () => {
+        const htmlContent = generateWhatsAppHTML();
+        const blob = new Blob([htmlContent], { type: 'text/html' });
+        const filename = `timesheet-${employeeData.employeeId || 'employee'}-${(timesheet?.period || '').replace(/\s+/g,'_') || new Date().toISOString().split('T')[0]}.html`;
+        try {
+            const file = new File([blob], filename, { type: 'text/html' });
+            return { blob, file, filename };
+        } catch {
+            // Safari < 14 doesn't support File constructor; fallback to Blob only.
+            return { blob, file: null, filename };
+        }
+    };
+
+
     const generateWhatsAppHTML = () => {
         return `
 <!DOCTYPE html>
@@ -732,22 +746,71 @@ const TimesheetShare = ({ timesheet, dailyEntries, advances, employee, previousT
         URL.revokeObjectURL(url);
     };
 
-    const shareViaWhatsApp = () => {
-        const htmlContent = generateWhatsAppHTML();
-        const blob = new Blob([htmlContent], { type: 'text/html' });
+    
+    const shareViaWhatsApp = async () => {
+        const { blob, file, filename } = buildHtmlBlobAndFile();
+
+        const text = `📊 Timesheet Summary for ${employeeData.firstName} ${employeeData.lastName}
+
+` +
+            `👤 Employee: ${employeeData.firstName} ${employeeData.lastName}
+` +
+            `🆔 ID: ${employeeData.employeeId}
+` +
+            `💼 Designation: ${employeeData.designation}
+` +
+            `📅 Period: ${timesheet?.period || 'N/A'}
+` +
+            `💰 Net Payable: ₹${summary.netPayable.toFixed(2)}
+
+` +
+            `Attached: ${filename}`;
+
+        // Preferred: Web Share API with files (Android Chrome/Edge/Brave, some desktop)
+        if (navigator?.canShare && file && navigator.canShare({ files: [file] })) {
+            try {
+                await navigator.share({
+                    files: [file],
+                    title: `Timesheet – ${employeeData.firstName} ${employeeData.lastName}`,
+                    text
+                });
+                return;
+            } catch (e) {
+                console.warn('navigator.share failed, falling back to download + WhatsApp text', e);
+            }
+        }
+
+        // Fallback 1: try Web Share without files (rarely useful for WhatsApp)
+        if (navigator?.share) {
+            try {
+                await navigator.share({
+                    title: `Timesheet – ${employeeData.firstName} ${employeeData.lastName}`,
+                    text
+                });
+                return;
+            } catch (e) {
+                console.warn('navigator.share (no files) failed', e);
+            }
+        }
+
+        // Fallback 2: force a local download of the HTML and open WhatsApp with instructions
         const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
 
-        const message = `📊 Timesheet Summary for ${employeeData.firstName} ${employeeData.lastName}\n\n` +
-            `👤 Employee: ${employeeData.firstName} ${employeeData.lastName}\n` +
-            `🆔 ID: ${employeeData.employeeId}\n` +
-            `💼 Designation: ${employeeData.designation}\n` +
-            `📅 Period: ${timesheet?.period || 'N/A'}\n` +
-            `💰 Net Payable: ₹${summary.netPayable.toFixed(2)}\n\n` +
-            `Download full timesheet: ${url}`;
+        // Open WhatsApp with a short instruction to attach the just-downloaded HTML
+        const msg = text + `
 
-        const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(message)}`;
+📎 Please attach the downloaded HTML file (${filename}) in WhatsApp.`;
+        const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(msg)}`;
         window.open(whatsappUrl, '_blank');
     };
+
 
     return (
         <div className="container-fluid p-4 bg-light min-vh-100">

@@ -2919,7 +2919,6 @@ const isReadOnly = React.useMemo(() => {
                     {/* Daily Entries and Advances - show even when no timesheet but allow creation */}
                     <div className="row">
                         <div className="col-lg-8">
-                        // Find this section and update the DailyEntriesTable component props
                         <DailyEntriesTable
     entries={dailyEntries}
     timesheetId={timesheet?.timesheetId}

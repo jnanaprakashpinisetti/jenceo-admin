@@ -261,6 +261,9 @@ const TimesheetShare = ({ timesheet, dailyEntries, advances, employee, previousT
         .timesheet-table tr:last-child td {
             border-bottom: none;
         }
+            .timesheet-table tr:nth-child(even) td {
+            background-color:#ebf2fd
+            }
         
         /* Mobile Card Styles */
         .timesheet-cards {
@@ -484,6 +487,8 @@ const TimesheetShare = ({ timesheet, dailyEntries, advances, employee, previousT
         
         /* Responsive Design */
         @media (max-width: 768px) {
+        .summary-card {
+        width:100%}
             .header-section {
                 flex-direction: column;
                 text-align: center;
@@ -652,8 +657,8 @@ const TimesheetShare = ({ timesheet, dailyEntries, advances, employee, previousT
                     </div>
                     <div class="stats-grid">
                         <div class="stat-item">
-                            <div class="stat-value">${summary.presentDays}</div>
-                            <div class="stat-label">Present</div>
+                        <div class="stat-value">${summary.totalDays}</div>
+                            <div class="stat-label">DAYS</div>
                         </div>
                         <div class="stat-item">
                             <div class="stat-value">${summary.absentDays}</div>
@@ -667,9 +672,9 @@ const TimesheetShare = ({ timesheet, dailyEntries, advances, employee, previousT
                             <div class="stat-value">${summary.holidayDays}</div>
                             <div class="stat-label">Holidays</div>
                         </div>
-                        <div class="stat-item" style="grid-column: span 2;">
-                            <div class="stat-value">${summary.totalDays}</div>
-                            <div class="stat-label">Total Days</div>
+                        <div class="stat-item " style="grid-column: span 2;">
+                        <div class="stat-value text-info">${summary.presentDays}</div>
+                            <div class="stat-label">Working Days</div>
                         </div>
                     </div>
                 </div>
@@ -679,11 +684,11 @@ const TimesheetShare = ({ timesheet, dailyEntries, advances, employee, previousT
                         💰 Financial Summary
                     </div>
                     <div class="financial-stats">
-                        <div class="financial-item">
+                        <div class="financial-item text-black">
                             <div class="financial-label">Basic Salary</div>
                             <div class="financial-value">₹${employeeData.basicSalary}</div>
                         </div>
-                        <div class="financial-item">
+                        <div class="financial-item text-black">
                             <div class="financial-label">Daily Rate</div>
                             <div class="financial-value">₹${employeeData.dailyRate}</div>
                         </div>

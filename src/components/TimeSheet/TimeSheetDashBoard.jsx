@@ -120,7 +120,8 @@ export default function TimeSheetDashBoard() {
                 timesheet.employeeName?.toLowerCase().includes(term) ||
                 timesheet.employeeData?.employeeId?.toLowerCase().includes(term) ||
                 timesheet.employeeData?.idNo?.toLowerCase().includes(term) ||
-                timesheet.period?.toLowerCase().includes(term)
+                timesheet.period?.toLowerCase().includes(term) ||
+                timesheet.id?.toLowerCase().includes(term)
             );
         }
 
@@ -360,6 +361,15 @@ export default function TimeSheetDashBoard() {
         setCurrentPage(1);
     };
 
+    // Get card active state
+    const getCardActiveState = (status) => {
+        if (status === 'all' && statusFilter === 'all') return 'border-primary bg-primary bg-opacity-10';
+        if (status === 'approved' && statusFilter === 'approved') return 'border-primary bg-primary bg-opacity-10';
+        if (status === 'submitted' && (statusFilter === 'submitted' || statusFilter === 'clarification' || statusFilter === 'assigned')) return 'border-primary bg-primary bg-opacity-10';
+        if (status === 'rejected' && statusFilter === 'rejected') return 'border-primary bg-primary bg-opacity-10';
+        return '';
+    };
+
     // Pagination logic
     const indexOfLastItem = currentPage * itemsPerPage;
     const indexOfFirstItem = indexOfLastItem - itemsPerPage;
@@ -470,7 +480,7 @@ export default function TimeSheetDashBoard() {
                                             <input
                                                 type="text"
                                                 className="form-control bg-dark text-white border-secondary"
-                                                placeholder="Search by employee name, ID, or period..."
+                                                placeholder="Search by employee name, ID, period, or timesheet ID..."
                                                 value={searchTerm}
                                                 onChange={(e) => setSearchTerm(e.target.value)}
                                             />
@@ -526,11 +536,11 @@ export default function TimeSheetDashBoard() {
                     </div>
                 </div>
 
-                {/* Statistics Cards - Now Clickable */}
+                {/* Statistics Cards - Now Clickable with Active State */}
                 <div className="row mb-4">
                     <div className="col-xl-2 col-md-4 col-6 mb-3">
                         <div
-                            className={`card ${statusFilter === 'all' ? 'border-primary' : 'border-info'} cursor-pointer`}
+                            className={`card border-info cursor-pointer ${getCardActiveState('all')}`}
                             style={{ cursor: 'pointer' }}
                             onClick={() => handleCardClick('all')}
                         >
@@ -543,7 +553,7 @@ export default function TimeSheetDashBoard() {
                     </div>
                     <div className="col-xl-2 col-md-4 col-6 mb-3">
                         <div
-                            className={`card ${statusFilter === 'approved' ? 'border-primary' : 'border-success'} cursor-pointer`}
+                            className={`card border-success cursor-pointer ${getCardActiveState('approved')}`}
                             style={{ cursor: 'pointer' }}
                             onClick={() => handleCardClick('approved')}
                         >
@@ -558,7 +568,7 @@ export default function TimeSheetDashBoard() {
                     </div>
                     <div className="col-xl-2 col-md-4 col-6 mb-3">
                         <div
-                            className={`card ${statusFilter === 'submitted' || statusFilter === 'clarification' || statusFilter === 'assigned' ? 'border-primary' : 'border-warning'} cursor-pointer`}
+                            className={`card border-warning cursor-pointer ${getCardActiveState('submitted')}`}
                             style={{ cursor: 'pointer' }}
                             onClick={() => handleCardClick('submitted')}
                         >
@@ -573,7 +583,7 @@ export default function TimeSheetDashBoard() {
                     </div>
                     <div className="col-xl-2 col-md-4 col-6 mb-3">
                         <div
-                            className={`card ${statusFilter === 'rejected' ? 'border-primary' : 'border-danger'} cursor-pointer`}
+                            className={`card border-danger cursor-pointer ${getCardActiveState('rejected')}`}
                             style={{ cursor: 'pointer' }}
                             onClick={() => handleCardClick('rejected')}
                         >
@@ -640,10 +650,10 @@ export default function TimeSheetDashBoard() {
                                             <thead>
                                                 <tr>
                                                     <th className="border-secondary">S.No</th>
+                                                    <th className="border-secondary">Timesheet ID</th>
                                                     <th className="border-secondary">Phone</th>
                                                     <th className="border-secondary">Name</th>
                                                     <th className="border-secondary">Period</th>
-                                                    <th className="border-secondary text-center">Days</th>
                                                     <th className="border-secondary text-end">Amount</th>
                                                     <th className="border-secondary">Status</th>
                                                     <th className="border-secondary">Submitted</th>
@@ -656,6 +666,12 @@ export default function TimeSheetDashBoard() {
                                                     <tr key={timesheet.id} className={timesheet.status === 'approved' ? 'table-success' : timesheet.status === 'rejected' ? 'table-danger' : ''}>
                                                         <td className="border-secondary text-center">
                                                             {indexOfFirstItem + index + 1}
+                                                        </td>
+                                                        <td className="border-secondary">
+                                                            <small className="text-info font-monospace">
+                                                                {timesheet.id}
+                                                            </small>
+                                                            
                                                         </td>
                                                         <td className="border-secondary">
                                                             <div className="text-center">
@@ -674,38 +690,27 @@ export default function TimeSheetDashBoard() {
                                                                         <i className="bi bi-person text-white"></i>
                                                                     </div>
                                                                 )}
-
                                                             </div>
                                                         </td>
-
                                                         <td className="border-secondary">
-
-                                                            <div className="fw-bold text-white opacity-75">{timesheet.employeeName}</div>
-                                                            <small className="text-muted">
+                                                            <div className="fw-bold text-white opacity-50">{timesheet.employeeName}</div>
+                                                            <small className="text-muted opacity-50">
                                                                 {timesheet.employeeData?.employeeId || timesheet.employeeData?.idNo}
                                                             </small>
                                                         </td>
                                                         <td className="border-secondary">
                                                             <small className="text-info">{formatPeriod(timesheet)}</small>
                                                             <br />
-                                                            <small className="text-muted">
+                                                            <small className="text-muted opacity-50">
                                                                 {timesheet.useDateRange ? 'Custom Range' : 'Monthly'}
                                                             </small>
                                                         </td>
-                                                        <td className="border-secondary text-center">
-                                                            <div>
-                                                                <span className="fw-bold text-white opacity-75">{timesheet.totalDays || 0}</span>
-                                                                <br />
-                                                                <small className="text-muted">
-                                                                    W: {timesheet.workingDays || 0} | L: {timesheet.leaves || 0}
-                                                                </small>
-                                                            </div>
-                                                        </td>
+                                                        
                                                         <td className="border-secondary text-end">
                                                             <div>
                                                                 <strong className="text-success">₹{(timesheet.totalSalary || 0).toLocaleString()}</strong>
                                                                 <br />
-                                                                <small className="text-muted">
+                                                                <small className="text-muted opacity-50">
                                                                     Net: ₹{(timesheet.netPayable || 0).toLocaleString()}
                                                                 </small>
                                                             </div>
@@ -737,7 +742,7 @@ export default function TimeSheetDashBoard() {
                                                                     {timesheet.updatedAt ? new Date(timesheet.updatedAt).toLocaleDateString('en-IN') : 'N/A'}
                                                                 </small>
                                                                 <br />
-                                                                <small className="text-muted">
+                                                                <small className="text-muted opacity-50">
                                                                     {timesheet.updatedByName || 'N/A'}
                                                                 </small>
                                                             </div>
@@ -756,7 +761,7 @@ export default function TimeSheetDashBoard() {
                                                 ))}
                                                 {filteredTimesheets.length === 0 && (
                                                     <tr>
-                                                        <td colSpan="9" className="text-center py-4 text-muted border-secondary">
+                                                        <td colSpan="11" className="text-center py-4 text-muted border-secondary">
                                                             <i className="bi bi-inbox display-4 d-block mb-2 opacity-75"></i>
                                                             No timesheets found for the selected criteria.
                                                             <br />
@@ -827,6 +832,7 @@ export default function TimeSheetDashBoard() {
                                     <h5 className="modal-title text-info">
                                         <i className="bi bi-file-text me-2"></i>
                                         Timesheet Details - {selectedTimesheet.employeeName}
+                                        <small className="text-muted ms-2">ID: {selectedTimesheet.id}</small>
                                     </h5>
                                     <button
                                         type="button"
@@ -839,7 +845,7 @@ export default function TimeSheetDashBoard() {
                                     {/* Header Summary */}
                                     <div className="row mb-4">
                                         <div className="col-md-4">
-                                            <div className="card  border-secondary bg-secondary bg-opacity-10 h-100">
+                                            <div className="card border-secondary bg-secondary bg-opacity-10 h-100">
                                                 <div className="card-body text-center">
                                                     {selectedTimesheet.employeeData?.employeePhotoUrl ? (
                                                         <img
@@ -864,6 +870,11 @@ export default function TimeSheetDashBoard() {
                                                     <div className="mt-2">
                                                         <small className="text-warning">
                                                             Basic: ₹{selectedTimesheet.employeeData?.basicSalary || 'N/A'}
+                                                        </small>
+                                                    </div>
+                                                    <div className="mt-1">
+                                                        <small className="text-info">
+                                                            Timesheet ID: {selectedTimesheet.id}
                                                         </small>
                                                     </div>
                                                 </div>
@@ -923,7 +934,7 @@ export default function TimeSheetDashBoard() {
                                         </div>
                                     </div>
 
-                                    {/* Daily Entries Table */}
+                                    {/* Daily Entries Table with Modified By Details */}
                                     <div className="row mb-4">
                                         <div className="col-12">
                                             <div className="p-3 bg-secondary bg-opacity-10 rounded-4">
@@ -941,6 +952,8 @@ export default function TimeSheetDashBoard() {
                                                                 <th>Status</th>
                                                                 <th className="text-end">Salary</th>
                                                                 <th>Notes</th>
+                                                                <th>Modified By</th>
+                                                                <th>Last Updated</th>
                                                             </tr>
                                                         </thead>
                                                         <tbody>
@@ -988,6 +1001,21 @@ export default function TimeSheetDashBoard() {
                                                                             <span className="text-muted">-</span>
                                                                         )}
                                                                     </td>
+                                                                    <td>
+                                                                        <small className="text-info">
+                                                                            {entry.updatedByName || entry.createdByName || 'N/A'}
+                                                                        </small>
+                                                                    </td>
+                                                                    <td>
+                                                                        <small className="text-muted">
+                                                                            {entry.updatedAt ? 
+                                                                                new Date(entry.updatedAt).toLocaleDateString('en-IN') : 
+                                                                                entry.createdAt ? 
+                                                                                    new Date(entry.createdAt).toLocaleDateString('en-IN') : 
+                                                                                    'N/A'
+                                                                            }
+                                                                        </small>
+                                                                    </td>
                                                                 </tr>
                                                             ))}
                                                         </tbody>
@@ -997,19 +1025,29 @@ export default function TimeSheetDashBoard() {
                                         </div>
                                     </div>
 
-                                    {/* User Activity Log */}
+                                    {/* Enhanced User Activity Log */}
                                     <div className="row mb-4">
                                         <div className="col-12">
                                             <div className="card bg-dark border-secondary">
                                                 <div className="card-header border-secondary">
                                                     <h6 className="mb-0 text-info">
                                                         <i className="bi bi-clock-history me-2"></i>
-                                                        Activity Log
+                                                        Complete Activity Log
                                                     </h6>
                                                 </div>
                                                 <div className="card-body">
                                                     <div className="row">
-                                                        <div className="col-md-4 mb-3">
+                                                        <div className="col-md-3 mb-3">
+                                                            <small className="text-muted d-block">Created By</small>
+                                                            <div className="text-white">
+                                                                {selectedTimesheet.createdByName || 'N/A'}
+                                                                <br />
+                                                                <small className="text-muted">
+                                                                    {selectedTimesheet.createdAt ? new Date(selectedTimesheet.createdAt).toLocaleString('en-IN') : 'N/A'}
+                                                                </small>
+                                                            </div>
+                                                        </div>
+                                                        <div className="col-md-3 mb-3">
                                                             <small className="text-muted d-block">Submitted By</small>
                                                             <div className="text-white">
                                                                 {selectedTimesheet.submittedByName || 'N/A'}
@@ -1019,7 +1057,7 @@ export default function TimeSheetDashBoard() {
                                                                 </small>
                                                             </div>
                                                         </div>
-                                                        <div className="col-md-4 mb-3">
+                                                        <div className="col-md-3 mb-3">
                                                             <small className="text-muted d-block">Approved By</small>
                                                             <div className="text-white">
                                                                 {selectedTimesheet.approvedByName || 'N/A'}
@@ -1029,7 +1067,7 @@ export default function TimeSheetDashBoard() {
                                                                 </small>
                                                             </div>
                                                         </div>
-                                                        <div className="col-md-4 mb-3">
+                                                        <div className="col-md-3 mb-3">
                                                             <small className="text-muted d-block">Rejected By</small>
                                                             <div className="text-white">
                                                                 {selectedTimesheet.rejectedByName || 'N/A'}
@@ -1039,8 +1077,8 @@ export default function TimeSheetDashBoard() {
                                                                 </small>
                                                             </div>
                                                         </div>
-                                                        <div className="col-12">
-                                                            <small className="text-muted d-block">Last Updated</small>
+                                                        <div className="col-md-6 mb-3">
+                                                            <small className="text-muted d-block">Last Modified By</small>
                                                             <div className="text-white">
                                                                 {selectedTimesheet.updatedByName || 'N/A'}
                                                                 <br />
@@ -1049,70 +1087,59 @@ export default function TimeSheetDashBoard() {
                                                                 </small>
                                                             </div>
                                                         </div>
+                                                        <div className="col-md-6 mb-3">
+                                                            <small className="text-muted d-block">Reviewed By</small>
+                                                            <div className="text-white">
+                                                                {selectedTimesheet.reviewedByName || 'N/A'}
+                                                                <br />
+                                                                <small className="text-muted">
+                                                                    {selectedTimesheet.reviewedAt ? new Date(selectedTimesheet.reviewedAt).toLocaleString('en-IN') : 'N/A'}
+                                                                </small>
+                                                            </div>
+                                                        </div>
+                                                        {selectedTimesheet.clarificationRequest && (
+                                                            <div className="col-12 mt-3">
+                                                                <div className="card bg-warning bg-opacity-10 border-warning">
+                                                                    <div className="card-body">
+                                                                        <h6 className="text-warning mb-3">
+                                                                            <i className="bi bi-question-circle me-2"></i>
+                                                                            Clarification History
+                                                                        </h6>
+                                                                        <div className="row">
+                                                                            <div className="col-md-6">
+                                                                                <small className="text-muted d-block">Requested By</small>
+                                                                                <div className="text-white">
+                                                                                    {selectedTimesheet.clarificationRequest.requestedByName || 'N/A'}
+                                                                                    <br />
+                                                                                    <small className="text-muted">
+                                                                                        {selectedTimesheet.clarificationRequest.requestedAt ?
+                                                                                            new Date(selectedTimesheet.clarificationRequest.requestedAt).toLocaleString('en-IN') : 'N/A'
+                                                                                        }
+                                                                                    </small>
+                                                                                </div>
+                                                                            </div>
+                                                                            <div className="col-md-6">
+                                                                                <small className="text-muted d-block">Resolution</small>
+                                                                                <div className="text-white">
+                                                                                    {selectedTimesheet.clarificationRequest.resolvedByName || 'Pending'}
+                                                                                    <br />
+                                                                                    <small className="text-muted">
+                                                                                        {selectedTimesheet.clarificationRequest.resolvedAt ?
+                                                                                            new Date(selectedTimesheet.clarificationRequest.resolvedAt).toLocaleString('en-IN') : 'Not resolved'
+                                                                                        }
+                                                                                    </small>
+                                                                                </div>
+                                                                            </div>
+                                                                        </div>
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                        )}
                                                     </div>
                                                 </div>
                                             </div>
                                         </div>
                                     </div>
-
-                                    {/* Clarification Section */}
-                                    {selectedTimesheet.clarificationRequest && (
-                                        <div className="row mb-4">
-                                            <div className="col-12">
-                                                <div className="card bg-warning bg-opacity-10 border-warning">
-                                                    <div className="card-header border-warning">
-                                                        <h6 className="mb-0 text-warning">
-                                                            <i className="bi bi-question-circle me-2"></i>
-                                                            Clarification Request
-                                                        </h6>
-                                                    </div>
-                                                    <div className="card-body">
-                                                        <div className="row">
-                                                            <div className="col-md-6">
-                                                                <small className="text-muted d-block">Requested By</small>
-                                                                <div className="text-white">
-                                                                    {selectedTimesheet.clarificationRequest.requestedByName || 'N/A'}
-                                                                    <br />
-                                                                    <small className="text-muted">
-                                                                        {selectedTimesheet.clarificationRequest.requestedAt ?
-                                                                            new Date(selectedTimesheet.clarificationRequest.requestedAt).toLocaleString('en-IN') : 'N/A'
-                                                                        }
-                                                                    </small>
-                                                                </div>
-                                                            </div>
-                                                            <div className="col-md-6">
-                                                                <small className="text-muted d-block">Status</small>
-                                                                <div>
-                                                                    <span className={`badge ${selectedTimesheet.clarificationRequest.resolved ? 'bg-success' : 'bg-warning'}`}>
-                                                                        {selectedTimesheet.clarificationRequest.resolved ? 'Resolved' : 'Pending'}
-                                                                    </span>
-                                                                    {selectedTimesheet.clarificationRequest.resolved && (
-                                                                        <div className="mt-1">
-                                                                            <small className="text-muted">
-                                                                                Resolved by: {selectedTimesheet.clarificationRequest.resolvedByName}
-                                                                            </small>
-                                                                            <br />
-                                                                            <small className="text-muted">
-                                                                                {selectedTimesheet.clarificationRequest.resolvedAt ?
-                                                                                    new Date(selectedTimesheet.clarificationRequest.resolvedAt).toLocaleString('en-IN') : ''
-                                                                                }
-                                                                            </small>
-                                                                        </div>
-                                                                    )}
-                                                                </div>
-                                                            </div>
-                                                            <div className="col-12 mt-3">
-                                                                <small className="text-muted d-block">Request Details</small>
-                                                                <div className="text-white p-3 bg-dark rounded">
-                                                                    {selectedTimesheet.clarificationRequest.text}
-                                                                </div>
-                                                            </div>
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    )}
                                 </div>
                                 <div className="modal-footer border-secondary">
                                     {showClarificationInput ? (

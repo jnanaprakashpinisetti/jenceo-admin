@@ -1,5 +1,7 @@
 import React, { useState } from 'react'
 import AgentForm from '../components/Agents/AgentForm'
+import AgentDisplay from '../components/Agents/AgentDisplay'
+
 
 export default function Agents() {
   const [showAgentForm, setShowAgentForm] = useState(false)
@@ -31,6 +33,8 @@ export default function Agents() {
           }}
         />
       </div>
+      <hr></hr>
+      <AgentDisplay />
     </div>
   )
 }

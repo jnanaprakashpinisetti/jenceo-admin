@@ -89,6 +89,7 @@ export default function ShopForm({ onClose }) {
         const newErrors = {};
         if (!formData.mainCategory) newErrors.mainCategory = "ప్రధాన కేటగిరీ తప్పనిసరి";
         if (!formData.subCategory) newErrors.subCategory = "ఉప కేటగిరీ తప్పనిసరి";
+        if (!formData.date) newErrors.date = "తేదీ తప్పనిసరి";
         if (!formData.quantity) newErrors.quantity = "మొత్తం తప్పనిసరి";
         if (!formData.price) newErrors.price = "ధర తప్పనిసరి";
         setErrors(newErrors);
@@ -187,9 +188,21 @@ export default function ShopForm({ onClose }) {
 
                     <div className="modal-body bg-dark text-light p-4">
                         <form onSubmit={handleSubmit}>
-                            {/* Category */}
+                            {/* Date Input */}
                             <div className="row">
-                                <div className="col-md-6  mb-3">
+                                <div className="col-md-6 mb-3">
+                                    <label className="form-label">తేదీ</label>
+                                    <input
+                                        name="date"
+                                        type="date"
+                                        className="form-control"
+                                        value={formData.date}
+                                        onChange={handleChange}
+                                    />
+                                    {errors.date && <div className="text-danger small">{errors.date}</div>}
+                                </div>
+
+                                <div className="col-md-6 mb-3">
                                     <label className="form-label">ప్రధాన కేటగిరీ</label>
                                     <select
                                         name="mainCategory"
@@ -202,8 +215,15 @@ export default function ShopForm({ onClose }) {
                                             <option key={cat}>{cat}</option>
                                         ))}
                                     </select>
+                                    {errors.mainCategory && <div className="text-danger small">{errors.mainCategory}</div>}
                                 </div>
-                                <div className="col-md-6  mb-3">
+                                
+                           
+
+                            {/* Category */}
+                            
+                                
+                                <div className="col-md-6 mb-3">
                                     <label className="form-label">ఉప కేటగిరీ</label>
                                     <select
                                         name="subCategory"
@@ -217,12 +237,13 @@ export default function ShopForm({ onClose }) {
                                                 <option key={v}>{v}</option>
                                             ))}
                                     </select>
+                                    {errors.subCategory && <div className="text-danger small">{errors.subCategory}</div>}
                                 </div>
-                            </div>
+                            
 
                             {/* Inputs */}
-                            <div className="row  ">
-                                <div className="col-md-4  mb-3">
+                            
+                                <div className="col-md-6 mb-3">
                                     <label className="form-label">మొత్తం (K.G)</label>
                                     <input
                                         name="quantity"
@@ -230,9 +251,11 @@ export default function ShopForm({ onClose }) {
                                         className="form-control"
                                         value={formData.quantity}
                                         onChange={handleChange}
+                                        step="0.01"
                                     />
+                                    {errors.quantity && <div className="text-danger small">{errors.quantity}</div>}
                                 </div>
-                                <div className="col-md-4  mb-3">
+                                <div className="col-md-6 mb-3">
                                     <label className="form-label">ధర</label>
                                     <input
                                         name="price"
@@ -240,9 +263,15 @@ export default function ShopForm({ onClose }) {
                                         className="form-control"
                                         value={formData.price}
                                         onChange={handleChange}
+                                        step="0.01"
                                     />
+                                    {errors.price && <div className="text-danger small">{errors.price}</div>}
                                 </div>
-                                <div className="col-md-4  mb-3">
+                            
+
+                            {/* Total and Comments */}
+                           
+                                <div className="col-md-6 mb-3">
                                     <label className="form-label">మొత్తం</label>
                                     <input
                                         name="total"
@@ -252,20 +281,23 @@ export default function ShopForm({ onClose }) {
                                         disabled
                                     />
                                 </div>
+                                
                             </div>
 
-                            <div className="mb-3">
-                                <label className="form-label">కామెంట్స్</label>
-                                <textarea
-                                    name="comments"
-                                    rows="2"
-                                    className="form-control"
-                                    value={formData.comments}
-                                    onChange={handleChange}
-                                ></textarea>
+                            <div className="row">
+                                <div className="col-12 mb-3">
+                                    <label className="form-label">కామెంట్స్</label>
+                                    <textarea
+                                        name="comments"
+                                        rows="2"
+                                        className="form-control"
+                                        value={formData.comments}
+                                        onChange={handleChange}
+                                    ></textarea>
+                                </div>
                             </div>
 
-                            <div className="text-end mb-5">
+                            <div className="text-end mb-3">
                                 <button className="btn btn-success" disabled={isSubmitting}>
                                     {isSubmitting ? "Submitting..." : "Submit"}
                                 </button>
@@ -283,6 +315,7 @@ export default function ShopForm({ onClose }) {
                     savedPurchase ? (
                         <>
                             <p><strong>{savedPurchase.subCategory}</strong> జోడించబడింది!</p>
+                            <p>తేదీ: {savedPurchase.date}</p>
                             <p>ధర ₹{savedPurchase.price}</p>
                             <p>మొత్తం ₹{savedPurchase.total}</p>
                         </>
@@ -317,6 +350,11 @@ export default function ShopForm({ onClose }) {
                                         </tr>
                                     </thead>
                                     <tbody>
+                                        <tr>
+                                            <td>తేదీ</td>
+                                            <td className="text-info">{existingRow?.date}</td>
+                                            <td className="text-warning">{pendingPayload?.date}</td>
+                                        </tr>
                                         <tr>
                                             <td>కొన్నవి</td>
                                             <td className="text-info">{existingRow?.quantity}</td>

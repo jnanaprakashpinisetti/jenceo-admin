@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import firebaseDB from '../../firebase';
+import { getAuth } from 'firebase/auth';
 
 export default function TimeSheetDashBoard() {
     // State declarations
@@ -24,17 +25,48 @@ export default function TimeSheetDashBoard() {
 
     // Initialize current user and years
     useEffect(() => {
-        const user = JSON.parse(localStorage.getItem('currentUser')) || {
-            uid: 'admin',
-            displayName: 'Admin User',
-            email: 'admin@system.com',
-            role: 'admin'
-        };
-        setCurrentUser(user);
+        const initializeUser = async () => {
+            try {
+                const auth = getAuth();
+                const user = auth.currentUser;
+                
+                if (user) {
+                    // Use Firebase Auth user
+                    setCurrentUser({
+                        uid: user.uid,
+                        displayName: user.displayName || 'Admin User',
+                        email: user.email || 'admin@system.com',
+                        role: 'admin'
+                    });
+                } else {
+                    // Fallback to localStorage
+                    const storedUser = JSON.parse(localStorage.getItem('currentUser')) || {
+                        uid: 'admin',
+                        displayName: 'Admin User',
+                        email: 'admin@system.com',
+                        role: 'admin'
+                    };
+                    setCurrentUser(storedUser);
+                }
 
-        // Set current year
-        const current = new Date();
-        setSelectedYear(current.getFullYear().toString());
+                // Set current year
+                const current = new Date();
+                setSelectedYear(current.getFullYear().toString());
+            } catch (error) {
+                console.error('Error initializing user:', error);
+                // Fallback to default user
+                setCurrentUser({
+                    uid: 'admin',
+                    displayName: 'Admin User',
+                    email: 'admin@system.com',
+                    role: 'admin'
+                });
+                const current = new Date();
+                setSelectedYear(current.getFullYear().toString());
+            }
+        };
+
+        initializeUser();
     }, []);
 
     // Fetch all timesheets from EmployeeBioData path - ONLY SUBMITTED
@@ -292,11 +324,25 @@ export default function TimeSheetDashBoard() {
 
         setLoading(true);
         try {
+            // Get current user details from Firebase Auth or state
+            let userName = currentUser?.displayName || 'Admin User';
+            
+            // Try to get from Firebase Auth first
+            try {
+                const auth = getAuth();
+                if (auth.currentUser) {
+                    userName = auth.currentUser.displayName || auth.currentUser.email || userName;
+                }
+            } catch (authError) {
+                console.log('Using stored user details');
+            }
+
             const updateData = {
                 status,
                 updatedBy: currentUser?.uid,
-                updatedByName: currentUser?.displayName,
-                updatedAt: new Date().toISOString()
+                updatedByName: userName,
+                updatedAt: new Date().toISOString(),
+                lastModified: new Date().toISOString() // Add last modified timestamp
             };
 
             // Add clarification data if needed
@@ -304,15 +350,15 @@ export default function TimeSheetDashBoard() {
                 updateData.clarificationRequest = {
                     text: comment,
                     requestedBy: currentUser?.uid,
-                    requestedByName: currentUser?.displayName,
+                    requestedByName: userName,
                     requestedAt: new Date().toISOString(),
                     resolved: false
                 };
             } else if (status === 'approved') {
                 updateData.reviewedBy = currentUser?.uid;
-                updateData.reviewedByName = currentUser?.displayName;
+                updateData.reviewedByName = userName;
                 updateData.reviewedAt = new Date().toISOString();
-                updateData.approvedBy = currentUser?.displayName;
+                updateData.approvedBy = userName; // Use authenticated user name
                 updateData.approvedAt = new Date().toISOString();
 
                 // Clear clarification if exists
@@ -321,15 +367,15 @@ export default function TimeSheetDashBoard() {
                         ...selectedTimesheet.clarificationRequest,
                         resolved: true,
                         resolvedBy: currentUser?.uid,
-                        resolvedByName: currentUser?.displayName,
+                        resolvedByName: userName,
                         resolvedAt: new Date().toISOString()
                     };
                 }
             } else if (status === 'rejected') {
                 updateData.reviewedBy = currentUser?.uid;
-                updateData.reviewedByName = currentUser?.displayName;
+                updateData.reviewedByName = userName;
                 updateData.reviewedAt = new Date().toISOString();
-                updateData.rejectedBy = currentUser?.displayName;
+                updateData.rejectedBy = userName; // Use authenticated user name
                 updateData.rejectedAt = new Date().toISOString();
                 updateData.rejectionComment = comment;
 
@@ -339,7 +385,7 @@ export default function TimeSheetDashBoard() {
                         ...selectedTimesheet.clarificationRequest,
                         resolved: true,
                         resolvedBy: currentUser?.uid,
-                        resolvedByName: currentUser?.displayName,
+                        resolvedByName: userName,
                         resolvedAt: new Date().toISOString()
                     };
                 }
@@ -422,6 +468,55 @@ export default function TimeSheetDashBoard() {
     const indexOfFirstItem = indexOfLastItem - itemsPerPage;
     const currentItems = filteredTimesheets.slice(indexOfFirstItem, indexOfLastItem);
     const totalPages = Math.ceil(filteredTimesheets.length / itemsPerPage);
+
+    // Generate pagination items with ellipsis
+    const getPaginationItems = () => {
+        const items = [];
+        const maxVisiblePages = 5;
+        
+        if (totalPages <= maxVisiblePages) {
+            // Show all pages if total pages is less than max visible
+            for (let i = 1; i <= totalPages; i++) {
+                items.push(i);
+            }
+        } else {
+            // Always show first page
+            items.push(1);
+            
+            // Calculate start and end of visible pages
+            let start = Math.max(2, currentPage - 1);
+            let end = Math.min(totalPages - 1, currentPage + 1);
+            
+            // Adjust if at the beginning
+            if (currentPage <= 2) {
+                end = 4;
+            }
+            // Adjust if at the end
+            if (currentPage >= totalPages - 1) {
+                start = totalPages - 3;
+            }
+            
+            // Add ellipsis after first page if needed
+            if (start > 2) {
+                items.push('...');
+            }
+            
+            // Add middle pages
+            for (let i = start; i <= end; i++) {
+                items.push(i);
+            }
+            
+            // Add ellipsis before last page if needed
+            if (end < totalPages - 1) {
+                items.push('...');
+            }
+            
+            // Always show last page
+            items.push(totalPages);
+        }
+        
+        return items;
+    };
 
     const statistics = getStatistics();
 
@@ -729,7 +824,7 @@ export default function TimeSheetDashBoard() {
                                             </thead>
                                             <tbody>
                                                 {currentItems.map((timesheet, index) => (
-                                                    <tr key={timesheet.id} className={timesheet.status === 'approved' ? 'table-success' : timesheet.status === 'rejected' ? 'table-danger' : ''}>
+                                                    <tr key={timesheet.id}>
                                                         <td className="border-secondary text-center">
                                                             {indexOfFirstItem + index + 1}
                                                         </td>
@@ -744,8 +839,8 @@ export default function TimeSheetDashBoard() {
                                                                     <img
                                                                         src={timesheet.employeeData.employeePhotoUrl}
                                                                         alt="Employee"
-                                                                        className="rounded-circle me-2"
-                                                                        style={{ width: '40px', height: '40px', objectFit: 'cover' }}
+                                                                        className=" me-2"
+                                                                        style={{ width: '40px', height: '40px', objectFit: 'cover', borderRadius:"5px", border:"1px solid" }}
                                                                     />
                                                                 ) : (
                                                                     <div
@@ -804,7 +899,7 @@ export default function TimeSheetDashBoard() {
                                                         <td className="border-secondary">
                                                             <div>
                                                                 <small className="text-white">
-                                                                    {formatTimestamp(timesheet.updatedAt)}
+                                                                    {formatTimestamp(timesheet.lastModified || timesheet.updatedAt)}
                                                                 </small>
                                                                 <br />
                                                                 <small className="text-muted">
@@ -840,7 +935,7 @@ export default function TimeSheetDashBoard() {
                                 )}
                             </div>
 
-                            {/* Pagination */}
+                            {/* Enhanced Pagination with Icons */}
                             {filteredTimesheets.length > 0 && (
                                 <div className="card-footer border-secondary">
                                     <div className="d-flex justify-content-between align-items-center m-auto">
@@ -849,34 +944,67 @@ export default function TimeSheetDashBoard() {
                                         </small>
                                         <nav style={{backgroundColor:"transparent"}}>
                                             <ul className="pagination pagination-sm mb-0">
+                                                {/* First Page */}
+                                                <li className={`page-item ${currentPage === 1 ? 'disabled' : ''}`}>
+                                                    <button
+                                                        className="page-link bg-dark border-secondary text-white"
+                                                        onClick={() => setCurrentPage(1)}
+                                                        disabled={currentPage === 1}
+                                                        title="First Page"
+                                                    >
+                                                        <i className="bi bi-chevron-double-left"></i>
+                                                    </button>
+                                                </li>
+
+                                                {/* Previous Page */}
                                                 <li className={`page-item ${currentPage === 1 ? 'disabled' : ''}`}>
                                                     <button
                                                         className="page-link bg-dark border-secondary text-white"
                                                         onClick={() => setCurrentPage(currentPage - 1)}
                                                         disabled={currentPage === 1}
+                                                        title="Previous Page"
                                                     >
-                                                        Previous
+                                                        <i className="bi bi-chevron-left"></i>
                                                     </button>
                                                 </li>
 
-                                                {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => (
-                                                    <li key={page} className={`page-item ${currentPage === page ? 'active' : ''}`}>
-                                                        <button
-                                                            className="page-link bg-dark border-secondary text-white"
-                                                            onClick={() => setCurrentPage(page)}
-                                                        >
-                                                            {page}
-                                                        </button>
+                                                {/* Page Numbers */}
+                                                {getPaginationItems().map((page, index) => (
+                                                    <li key={index} className={`page-item ${currentPage === page ? 'active' : ''} ${page === '...' ? 'disabled' : ''}`}>
+                                                        {page === '...' ? (
+                                                            <span className="page-link bg-dark border-secondary text-muted">...</span>
+                                                        ) : (
+                                                            <button
+                                                                className="page-link bg-dark border-secondary text-white"
+                                                                onClick={() => setCurrentPage(page)}
+                                                            >
+                                                                {page}
+                                                            </button>
+                                                        )}
                                                     </li>
                                                 ))}
 
+                                                {/* Next Page */}
                                                 <li className={`page-item ${currentPage === totalPages ? 'disabled' : ''}`}>
                                                     <button
                                                         className="page-link bg-dark border-secondary text-white"
                                                         onClick={() => setCurrentPage(currentPage + 1)}
                                                         disabled={currentPage === totalPages}
+                                                        title="Next Page"
                                                     >
-                                                        Next
+                                                        <i className="bi bi-chevron-right"></i>
+                                                    </button>
+                                                </li>
+
+                                                {/* Last Page */}
+                                                <li className={`page-item ${currentPage === totalPages ? 'disabled' : ''}`}>
+                                                    <button
+                                                        className="page-link bg-dark border-secondary text-white"
+                                                        onClick={() => setCurrentPage(totalPages)}
+                                                        disabled={currentPage === totalPages}
+                                                        title="Last Page"
+                                                    >
+                                                        <i className="bi bi-chevron-double-right"></i>
                                                     </button>
                                                 </li>
                                             </ul>
@@ -990,7 +1118,8 @@ export default function TimeSheetDashBoard() {
                                                         <div className="col-12 text-center">
                                                             <small className="text-muted">
                                                                 Period: {formatPeriod(selectedTimesheet)} |
-                                                                Total Amount: <strong className="text-success">₹{selectedTimesheet.totalSalary || 0}</strong>
+                                                                Total Amount: <strong className="text-warning">₹{selectedTimesheet.totalSalary || 0}</strong> |
+                                                                Last Modified: {formatTimestamp(selectedTimesheet.lastModified || selectedTimesheet.updatedAt)}
                                                             </small>
                                                         </div>
                                                     </div>

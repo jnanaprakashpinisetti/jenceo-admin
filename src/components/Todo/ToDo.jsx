@@ -863,18 +863,19 @@ export default function ToDo() {
     if (!backendOK || !files || files.length === 0) return;
     const task = tasks.find((t) => t.id === taskId);
     if (!task) return;
-
+  
     try {
       setAttaching(true);
       setAttachProgress(0);
-
+  
       const storage = getStorage();
       let i = 0;
-
+  
       for (const file of Array.from(files)) {
         i += 1;
         const now = Date.now();
         const attId = `${now}-${Math.random().toString(36).slice(2, 8)}`;
+        
         const meta = {
           name: file.name,
           size: file.size,
@@ -883,39 +884,46 @@ export default function ToDo() {
           uploadedByName: myName,
           uploadedAt: now,
         };
-
+  
         let url = "";
-
-        if (storage?.ref || storage?.refFromURL) {
-          // Firebase Storage available (v8 style)
-          const path = `ToDoAttachments/${taskId}/${now}_${file.name}`;
-          const ref = storage.ref
-            ? storage.ref(path)
-            : storage.refFromURL(path);
-          if (ref.put) {
-            // v8
-            const snap = await ref.put(file);
-            url = await snap.ref.getDownloadURL();
-          } else if (ref.putString) {
-            // fallback (rare)
-            const dataUrl = await readFileAsDataURL(file);
-            const snap = await ref.putString(dataUrl, "data_url");
-            url = await snap.ref.getDownloadURL();
-          }
-        } else {
-          // Fallback: store dataURL right in RTDB (good for small screenshots)
+  
+        // For very small files (< 1MB), store directly in RTDB as dataURL
+        if (file.size < 1024 * 1024 && file.type.startsWith('image/')) {
           const dataUrl = await readFileAsDataURL(file);
           url = dataUrl;
+          meta.storageType = 'dataURL';
+        } else {
+          // Use Firebase Storage for larger files
+          if (storage?.ref || storage?.refFromURL) {
+            const safeName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
+            const path = `ToDoAttachments/${taskId}/${now}_${safeName}`;
+            const ref = storage.ref ? storage.ref(path) : storage.refFromURL(path);
+            
+            if (ref.put) {
+              const snap = await ref.put(file);
+              url = await snap.ref.getDownloadURL();
+              meta.storageType = 'firebase';
+            } else {
+              // Fallback to dataURL if put method not available
+              const dataUrl = await readFileAsDataURL(file);
+              url = dataUrl;
+              meta.storageType = 'dataURL';
+            }
+          } else {
+            // Final fallback to dataURL
+            const dataUrl = await readFileAsDataURL(file);
+            url = dataUrl;
+            meta.storageType = 'dataURL';
+          }
         }
-
+  
         await getRef(`ToDo/${taskId}/attachments/${attId}`).set({
           ...meta,
           url,
         });
-
-        // update progress visually (simple linear per file)
+  
         setAttachProgress(Math.round((i / files.length) * 100));
-
+  
         await pushHistory(taskId, {
           action: "attachment_added",
           field: "attachment",
@@ -923,10 +931,10 @@ export default function ToDo() {
           to: meta.name,
         });
       }
-
+  
       notify("Attachment(s) added");
     } catch (e) {
-      console.error(e);
+      console.error("Attachment error:", e);
       notify("Failed to add attachment(s)", "error");
     } finally {
       setAttaching(false);
@@ -1827,96 +1835,162 @@ export default function ToDo() {
                   </div>
 
                   {/* Attachments */}
-                  <div className="panel-soft mb-3">
-                    <div className="d-flex justify-content-between align-items-center mb-2">
-                      <h6 className="text-white-90 mb-0">Attachments</h6>
-                      <div className="d-flex align-items-center gap-2">
-                        {attaching && (
-                          <span className="tiny text-muted-300">
-                            Uploading… {attachProgress}%
-                          </span>
-                        )}
-                        <label
-                          className="btn btn-sm btn-outline-primary mb-0"
-                          htmlFor="file-input-attach"
-                        >
-                          + Add
-                        </label>
-                        <input
-                          id="file-input-attach"
-                          type="file"
-                          accept="image/*"
-                          multiple
-                          style={{ display: "none" }}
-                          onChange={(e) => {
-                            const files = e.target.files;
-                            if (files && files.length) {
-                              attachFiles(selectedTask.id, files);
-                              e.target.value = "";
+                  {/* Attachments */}
+<div className="panel-soft mb-3">
+  <div className="d-flex justify-content-between align-items-center mb-2">
+    <h6 className="text-white-90 mb-0">Attachments</h6>
+    <div className="d-flex align-items-center gap-2">
+      {attaching && (
+        <span className="tiny text-muted-300">
+          Uploading… {attachProgress}%
+        </span>
+      )}
+      <label
+        className="btn btn-sm btn-outline-primary mb-0"
+        htmlFor="file-input-attach"
+      >
+        + Add
+      </label>
+      <input
+        id="file-input-attach"
+        type="file"
+        accept="image/*, .pdf, .doc, .docx, .txt"
+        multiple
+        style={{ display: "none" }}
+        onChange={(e) => {
+          const files = e.target.files;
+          if (files && files.length) {
+            attachFiles(selectedTask.id, files);
+            e.target.value = "";
+          }
+        }}
+      />
+    </div>
+  </div>
+
+  {/* Attachment grid */}
+  {selectedTask.attachments ? (
+    <div className="att-grid">
+      {Object.entries(selectedTask.attachments).map(([id, a]) => (
+        <div key={id} className="att-item">
+          {/* Improved attachment preview */}
+          <div className="att-preview-wrapper">
+            {String(a.type || "").startsWith("image/") ? (
+              <div 
+                className="att-preview-image"
+                onClick={() => {
+                  // Open image in a proper modal instead of new tab
+                  const newWindow = window.open('', '_blank');
+                  if (newWindow) {
+                    newWindow.document.write(`
+                      <!DOCTYPE html>
+                      <html>
+                        <head>
+                          <title>${a.name || 'Attachment'}</title>
+                          <style>
+                            body { 
+                              margin: 0; 
+                              padding: 20px; 
+                              background: #0f172a; 
+                              display: flex; 
+                              justify-content: center; 
+                              align-items: center; 
+                              min-height: 100vh;
                             }
-                          }}
-                        />
-                      </div>
-                    </div>
+                            img { 
+                              max-width: 90vw; 
+                              max-height: 90vh; 
+                              border-radius: 8px;
+                              box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+                            }
+                            .close-btn {
+                              position: fixed;
+                              top: 20px;
+                              right: 20px;
+                              background: #ef4444;
+                              color: white;
+                              border: none;
+                              padding: 10px 15px;
+                              border-radius: 5px;
+                              cursor: pointer;
+                              z-index: 1000;
+                            }
+                          </style>
+                        </head>
+                        <body>
+                          <button class="close-btn" onclick="window.close()">Close</button>
+                          <img src="${a.url}" alt="${a.name || 'Attachment'}" />
+                        </body>
+                      </html>
+                    `);
+                  }
+                }}
+              >
+                <img
+                  src={a.url}
+                  alt={a.name}
+                  className="att-thumb"
+                  onError={(e) => {
+                    // Fallback if image fails to load
+                    e.target.style.display = 'none';
+                    e.target.nextSibling.style.display = 'block';
+                  }}
+                />
+                <div className="att-fallback" style={{display: 'none'}}>
+                  📄 {a.name || 'File'}
+                </div>
+              </div>
+            ) : (
+              <div 
+                className="att-file-fallback"
+                onClick={() => {
+                  // For non-image files, open in new tab with proper handling
+                  window.open(a.url, '_blank', 'noopener,noreferrer');
+                }}
+              >
+                📄 {a.name || 'File'}
+              </div>
+            )}
+          </div>
+          
+          <div className="att-meta">
+            <div 
+              className="text-white-80 small text-truncate" 
+              title={a.name}
+            >
+              {a.name}
+            </div>
+            <div className="tiny text-muted-300">
+              {fmtDT(a.uploadedAt)}
+            </div>
+            {a.size && (
+              <div className="tiny text-muted-300">
+                {(a.size / 1024).toFixed(1)} KB
+              </div>
+            )}
+          </div>
 
-                    {/* grid */}
-                    {selectedTask.attachments ? (
-                      <div className="att-grid">
-                        {Object.entries(selectedTask.attachments).map(
-                          ([id, a]) => (
-                            <div key={id} className="att-item">
-                              <a
-                                href={a.url}
-                                target="_blank"
-                                rel="noreferrer"
-                                title={a.name}
-                                className="att-thumb-wrap"
-                              >
-                                {String(a.type || "").startsWith("image/") ? (
-                                  <img
-                                    src={a.url}
-                                    alt={a.name}
-                                    className="att-thumb"
-                                  />
-                                ) : (
-                                  <div className="att-file-fallback">
-                                    {a.name || "file"}
-                                  </div>
-                                )}
-                              </a>
-                              <div className="att-meta">
-                                <div
-                                  className="text-white-80 small text-truncate"
-                                  title={a.name}
-                                >
-                                  {a.name}
-                                </div>
-                                <div className="tiny text-muted-300">
-                                  {fmtDT(a.uploadedAt)}
-                                </div>
-                              </div>
-
-                              {canDeleteAttachment(selectedTask) && (
-                                <button
-                                  className="btn btn-sm btn-outline-danger att-del"
-                                  title="Remove"
-                                  onClick={() =>
-                                    removeAttachment(selectedTask.id, id)
-                                  }
-                                >
-                                  🗑
-                                </button>
-                              )}
-                            </div>
-                          )
-                        )}
-                      </div>
-                    ) : (
-                      <div className="text-muted-400 small">
-                        No attachments yet.
-                      </div>
-                    )}
-                  </div>
+          {canDeleteAttachment(selectedTask) && (
+            <button
+              className="btn btn-sm btn-outline-danger att-del"
+              title="Remove"
+              onClick={(e) => {
+                e.stopPropagation();
+                removeAttachment(selectedTask.id, id);
+              }}
+            >
+              🗑
+            </button>
+          )}
+        </div>
+      ))}
+    </div>
+  ) : (
+    <div className="text-muted-400 small">
+      No attachments yet.
+    </div>
+  )}
+</div>
 
                   {/* Linked Subtasks (JIRA-like list of real child tasks) */}
                   <div className="panel-soft mb-3">

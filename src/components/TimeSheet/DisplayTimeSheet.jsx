@@ -398,27 +398,32 @@ const DisplayTimeSheet = () => {
 
 
     // Enhanced read-only check considering current user
-    const isReadOnly = useMemo(() => {
-        const { uid } = whoSafe();
+const isReadOnly = useMemo(() => {
+    const { uid } = whoSafe();
+    
+    // If no timesheet exists, it's not read-only (we can create)
+    if (!timesheet) return false;
 
+    if (!uid || uid === "unknown") {
+        const role = norm(authContext?.user?.role);
+        const isAdmin = role === 'admin' || role === 'superadmin' || role === 'super_admin';
+        return !isAdmin;
+    }
 
-        if (!uid || uid === "unknown") {
-            const role = norm(authContext?.user?.role);
-            const isAdmin = role === 'admin' || role === 'superadmin' || role === 'super_admin';
-
-            return !isAdmin;
+    // If allUsers is not loaded yet, we can't accurately determine read-only status
+    // So we'll check basic conditions first
+    if (!allUsers || allUsers.length === 0) {
+        // For draft timesheets, allow editing until we have user data
+        if (timesheet?.status === 'draft' && timesheet?.createdBy === uid) {
+            return false;
         }
+        // Be conservative for other statuses
+        return timesheet?.status !== 'draft';
+    }
 
-        // If allUsers is not loaded yet, we can't accurately determine read-only status
-        // So we'll be conservative and assume read-only until we have all the data
-        if (!allUsers || allUsers.length === 0) {
-
-            return true;
-        }
-
-        const readOnly = isSheetReadOnly(timesheet, uid, authContext);
-        return readOnly;
-    }, [timesheet, authContext, allUsers, currentUser]);
+    const readOnly = isSheetReadOnly(timesheet, uid, authContext);
+    return readOnly;
+}, [timesheet, authContext, allUsers, currentUser]);
 
     useEffect(() => {
         const loadUsers = async () => {
@@ -3120,10 +3125,10 @@ const DisplayTimeSheet = () => {
                             <button
                                 className="btn btn-outline-info me-2"
                                 onClick={handleAddTimesheet}
-                                disabled={!selectedEmployee || isReadOnly}
+                                disabled={!selectedEmployee} // Only disable if no employee selected
                             >
                                 <i className="bi bi-plus-lg me-2"></i>
-                                {timesheet ? 'Create New' : 'Create Timesheet'}
+                                {timesheet ? 'Create New Timesheet' : 'Create Timesheet'}
                             </button>
 
                             {timesheet && (

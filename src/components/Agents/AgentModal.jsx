@@ -6,7 +6,7 @@ import { useAuth } from "../../context/AuthContext";
 export default function AgentModal({ show, onClose, data, mode = "view", onSaved }) {
     const authCtx = useAuth() || {};
     const { currentUser, user, dbUser, profile } = authCtx;
-    
+
     const signedInName = dbUser?.name || user?.name || profile?.name || currentUser?.displayName || "Admin";
     const signedInUid = currentUser?.uid || user?.uid || dbUser?.uid || null;
 
@@ -32,10 +32,10 @@ export default function AgentModal({ show, onClose, data, mode = "view", onSaved
     const [showPaymentForm, setShowPaymentForm] = useState(false);
     const [uploadingPhoto, setUploadingPhoto] = useState(false);
     const [uploadingProof, setUploadingProof] = useState(false);
-    
+
     const fileInputRef = useRef(null);
     const proofInputRef = useRef(null);
-    
+
     React.useEffect(() => {
         setLocalOpen(!!show);
         setLocalMode(mode);
@@ -74,10 +74,10 @@ export default function AgentModal({ show, onClose, data, mode = "view", onSaved
         try {
             // Simulate upload - you'll need to implement actual Firebase Storage upload
             await new Promise(resolve => setTimeout(resolve, 1000));
-            
+
             // Return a mock URL - replace with actual Firebase Storage URL
             const mockUrl = `https://firebasestorage.googleapis.com/v0/b/jenceo-admin.firebasestorage.app/o/agent-photos%2F${Date.now()}-${file.name}`;
-            
+
             return mockUrl;
         } catch (error) {
             console.error('Error uploading photo:', error);
@@ -93,10 +93,10 @@ export default function AgentModal({ show, onClose, data, mode = "view", onSaved
         try {
             // Simulate upload - you'll need to implement actual Firebase Storage upload
             await new Promise(resolve => setTimeout(resolve, 1000));
-            
+
             // Return a mock URL - replace with actual Firebase Storage URL
             const mockUrl = `https://firebasestorage.googleapis.com/v0/b/jenceo-admin.firebasestorage.app/o/agent-proofs%2F${Date.now()}-${file.name}`;
-            
+
             return mockUrl;
         } catch (error) {
             console.error('Error uploading proof:', error);
@@ -127,7 +127,7 @@ export default function AgentModal({ show, onClose, data, mode = "view", onSaved
 
         const handlePaymentSubmit = async (e) => {
             e.preventDefault();
-            
+
             const newPayment = {
                 ...localPaymentData,
                 amount: parseFloat(localPaymentData.amount) || 0,
@@ -140,7 +140,7 @@ export default function AgentModal({ show, onClose, data, mode = "view", onSaved
 
             try {
                 const updatedPayments = [...payments, newPayment];
-                
+
                 if (isEditing) {
                     onEditDataChange('payments', updatedPayments);
                 } else {
@@ -161,7 +161,7 @@ export default function AgentModal({ show, onClose, data, mode = "view", onSaved
                     remarks: ''
                 });
                 setLocalShowPaymentForm(false);
-                
+
             } catch (error) {
                 console.error('Error adding payment:', error);
                 alert('Failed to add payment: ' + error.message);
@@ -184,10 +184,10 @@ export default function AgentModal({ show, onClose, data, mode = "view", onSaved
 
         const deletePayment = async (index) => {
             if (!window.confirm('Are you sure you want to delete this payment?')) return;
-            
+
             try {
                 const updatedPayments = payments.filter((_, i) => i !== index);
-                
+
                 if (isEditing) {
                     onEditDataChange('payments', updatedPayments);
                 } else {
@@ -206,8 +206,8 @@ export default function AgentModal({ show, onClose, data, mode = "view", onSaved
                 {/* Add Payment Button */}
                 <div className="d-flex justify-content-between align-items-center mb-3">
                     <h6 className="mb-0">Payment Records ({payments.length})</h6>
-                    <button 
-                        className="btn btn-primary btn-sm"
+                    <button
+                        className="btn btn-info btn-sm"
                         onClick={handleAddPayment}
                         type="button"
                     >
@@ -219,11 +219,11 @@ export default function AgentModal({ show, onClose, data, mode = "view", onSaved
                 {/* Payment Form */}
                 {localShowPaymentForm && (
                     <div className="card border-primary mb-4">
-                        <div className="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+                        <div className="card-header bg-dark text-white d-flex justify-content-between align-items-center">
                             <h6 className="mb-0">Add New Payment</h6>
-                            <button 
-                                type="button" 
-                                className="btn-close btn-close-white" 
+                            <button
+                                type="button"
+                                className="btn-close btn-close-white"
                                 onClick={handlePaymentCancel}
                             ></button>
                         </div>
@@ -236,7 +236,7 @@ export default function AgentModal({ show, onClose, data, mode = "view", onSaved
                                             type="date"
                                             className="form-control"
                                             value={localPaymentData.date}
-                                            onChange={(e) => setLocalPaymentData({...localPaymentData, date: e.target.value})}
+                                            onChange={(e) => setLocalPaymentData({ ...localPaymentData, date: e.target.value })}
                                             required
                                         />
                                     </div>
@@ -247,7 +247,7 @@ export default function AgentModal({ show, onClose, data, mode = "view", onSaved
                                             className="form-control"
                                             placeholder="Enter amount"
                                             value={localPaymentData.amount}
-                                            onChange={(e) => setLocalPaymentData({...localPaymentData, amount: e.target.value})}
+                                            onChange={(e) => setLocalPaymentData({ ...localPaymentData, amount: e.target.value })}
                                             required
                                             step="0.01"
                                         />
@@ -257,7 +257,7 @@ export default function AgentModal({ show, onClose, data, mode = "view", onSaved
                                         <select
                                             className="form-select"
                                             value={localPaymentData.paymentMode}
-                                            onChange={(e) => setLocalPaymentData({...localPaymentData, paymentMode: e.target.value})}
+                                            onChange={(e) => setLocalPaymentData({ ...localPaymentData, paymentMode: e.target.value })}
                                         >
                                             <option value="cash">Cash</option>
                                             <option value="online">Online</option>
@@ -272,7 +272,7 @@ export default function AgentModal({ show, onClose, data, mode = "view", onSaved
                                             className="form-control"
                                             placeholder="Client charges"
                                             value={localPaymentData.charges}
-                                            onChange={(e) => setLocalPaymentData({...localPaymentData, charges: e.target.value})}
+                                            onChange={(e) => setLocalPaymentData({ ...localPaymentData, charges: e.target.value })}
                                             step="0.01"
                                         />
                                     </div>
@@ -283,7 +283,7 @@ export default function AgentModal({ show, onClose, data, mode = "view", onSaved
                                             className="form-control"
                                             placeholder="Client name"
                                             value={localPaymentData.clientName}
-                                            onChange={(e) => setLocalPaymentData({...localPaymentData, clientName: e.target.value})}
+                                            onChange={(e) => setLocalPaymentData({ ...localPaymentData, clientName: e.target.value })}
                                         />
                                     </div>
                                     <div className="col-md-6">
@@ -293,7 +293,7 @@ export default function AgentModal({ show, onClose, data, mode = "view", onSaved
                                             className="form-control"
                                             placeholder="Client ID"
                                             value={localPaymentData.clientId}
-                                            onChange={(e) => setLocalPaymentData({...localPaymentData, clientId: e.target.value})}
+                                            onChange={(e) => setLocalPaymentData({ ...localPaymentData, clientId: e.target.value })}
                                         />
                                     </div>
                                     <div className="col-md-6">
@@ -303,7 +303,7 @@ export default function AgentModal({ show, onClose, data, mode = "view", onSaved
                                             className="form-control"
                                             placeholder="Receipt number"
                                             value={localPaymentData.receiptNo}
-                                            onChange={(e) => setLocalPaymentData({...localPaymentData, receiptNo: e.target.value})}
+                                            onChange={(e) => setLocalPaymentData({ ...localPaymentData, receiptNo: e.target.value })}
                                         />
                                     </div>
                                     <div className="col-md-6">
@@ -313,13 +313,13 @@ export default function AgentModal({ show, onClose, data, mode = "view", onSaved
                                             className="form-control"
                                             placeholder="Remarks"
                                             value={localPaymentData.remarks}
-                                            onChange={(e) => setLocalPaymentData({...localPaymentData, remarks: e.target.value})}
+                                            onChange={(e) => setLocalPaymentData({ ...localPaymentData, remarks: e.target.value })}
                                         />
                                     </div>
                                     <div className="col-12">
                                         <div className="d-flex gap-2 justify-content-end">
-                                            <button 
-                                                type="button" 
+                                            <button
+                                                type="button"
                                                 className="btn btn-secondary"
                                                 onClick={handlePaymentCancel}
                                             >
@@ -339,7 +339,7 @@ export default function AgentModal({ show, onClose, data, mode = "view", onSaved
                 {/* Payments Table */}
                 <div className="table-responsive">
                     <table className="table table-hover table-striped">
-                        <thead className="table-dark">
+                        <thead className="table-secondary">
                             <tr>
                                 <th>Date</th>
                                 <th>Amount</th>
@@ -358,11 +358,10 @@ export default function AgentModal({ show, onClose, data, mode = "view", onSaved
                                         <td>{new Date(payment.date).toLocaleDateString()}</td>
                                         <td className="text-success fw-bold">₹{payment.amount}</td>
                                         <td>
-                                            <span className={`badge ${
-                                                payment.type === 'cash' ? 'bg-success' : 
-                                                payment.type === 'online' ? 'bg-primary' :
-                                                payment.type === 'check' ? 'bg-info' : 'bg-warning'
-                                            }`}>
+                                            <span className={`badge ${payment.type === 'cash' ? 'bg-success' :
+                                                    payment.type === 'online' ? 'bg-primary' :
+                                                        payment.type === 'check' ? 'bg-info' : 'bg-warning'
+                                                }`}>
                                                 {payment.type}
                                             </span>
                                         </td>
@@ -371,17 +370,17 @@ export default function AgentModal({ show, onClose, data, mode = "view", onSaved
                                         <td>
                                             <small>
                                                 {payment.addedBy} <br />
-                                                <span className="text-muted">
+                                                <span className="small-text">
                                                     {payment.timestamp ? new Date(payment.timestamp).toLocaleString() : 'N/A'}
                                                 </span>
                                             </small>
                                         </td>
                                         <td>
-                                            <small className="text-muted">{payment.remarks || '-'}</small>
+                                            <small className="small-text">{payment.remarks || '-'}</small>
                                         </td>
                                         {isEditing && (
                                             <td>
-                                                <button 
+                                                <button
                                                     className="btn btn-sm btn-outline-danger"
                                                     onClick={() => deletePayment(index)}
                                                     type="button"
@@ -394,7 +393,7 @@ export default function AgentModal({ show, onClose, data, mode = "view", onSaved
                                 ))
                             ) : (
                                 <tr>
-                                    <td colSpan={isEditing ? "8" : "7"} className="text-center text-muted py-4">
+                                    <td colSpan={isEditing ? "8" : "7"} className="text-center small-text py-4">
                                         <i className="bi bi-receipt me-2"></i>
                                         No payment records found
                                     </td>
@@ -403,199 +402,17 @@ export default function AgentModal({ show, onClose, data, mode = "view", onSaved
                         </tbody>
                     </table>
                 </div>
+
+                    <style jsx>{`
+                 table tr:nth-child(even) td {
+                 background-color:#e5edf9
+                 }
+            `}</style>
             </div>
         );
     };
 
-    // Pay Info Component
-    const PayInfo = ({ editData, onEditDataChange, isEditing }) => {
-        const payRecords = editData?.payRecords || [];
-        
-        const addPayRecord = () => {
-            const newRecord = {
-                date: new Date().toISOString().split('T')[0],
-                clientName: '',
-                clientId: '',
-                charges: 0,
-                amount: 0,
-                type: 'salary',
-                remarks: ''
-            };
-            onEditDataChange('payRecords', [...payRecords, newRecord]);
-        };
 
-        const updatePayRecord = (index, field, value) => {
-            const updated = [...payRecords];
-            updated[index] = { ...updated[index], [field]: value };
-            onEditDataChange('payRecords', updated);
-        };
-
-        const deletePayRecord = (index) => {
-            const updated = payRecords.filter((_, i) => i !== index);
-            onEditDataChange('payRecords', updated);
-        };
-
-        return (
-            <div className="pay-info">
-                <div className="d-flex justify-content-between align-items-center mb-3">
-                    <h6 className="mb-0">Pay Records ({payRecords.length})</h6>
-                    {isEditing && (
-                        <button className="btn btn-primary btn-sm" onClick={addPayRecord} type="button">
-                            <i className="bi bi-plus-circle me-1"></i>
-                            Add Record
-                        </button>
-                    )}
-                </div>
-
-                <div className="table-responsive">
-                    <table className="table table-hover">
-                        <thead className="table-primary">
-                            <tr>
-                                <th>Date</th>
-                                <th>Client</th>
-                                <th>Charges</th>
-                                <th>Amount</th>
-                                <th>Type</th>
-                                <th>Remarks</th>
-                                {isEditing && <th>Action</th>}
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {payRecords.length > 0 ? (
-                                payRecords.map((record, index) => (
-                                    <tr key={index}>
-                                        <td>
-                                            {isEditing ? (
-                                                <input
-                                                    type="date"
-                                                    className="form-control form-control-sm"
-                                                    value={record.date}
-                                                    onChange={(e) => updatePayRecord(index, 'date', e.target.value)}
-                                                />
-                                            ) : (
-                                                <span className="fw-semibold">
-                                                    {new Date(record.date).toLocaleDateString('en-IN')}
-                                                </span>
-                                            )}
-                                        </td>
-                                        <td>
-                                            {isEditing ? (
-                                                <div>
-                                                    <input
-                                                        type="text"
-                                                        className="form-control form-control-sm mb-1"
-                                                        placeholder="Client Name"
-                                                        value={record.clientName}
-                                                        onChange={(e) => updatePayRecord(index, 'clientName', e.target.value)}
-                                                    />
-                                                    <input
-                                                        type="text"
-                                                        className="form-control form-control-sm"
-                                                        placeholder="Client ID"
-                                                        value={record.clientId}
-                                                        onChange={(e) => updatePayRecord(index, 'clientId', e.target.value)}
-                                                    />
-                                                </div>
-                                            ) : (
-                                                <div>
-                                                    <div className="fw-bold text-dark">{record.clientName}</div>
-                                                    <small className="text-muted">{record.clientId}</small>
-                                                </div>
-                                            )}
-                                        </td>
-                                        <td>
-                                            {isEditing ? (
-                                                <input
-                                                    type="number"
-                                                    className="form-control form-control-sm"
-                                                    value={record.charges || 0}
-                                                    onChange={(e) => updatePayRecord(index, 'charges', parseFloat(e.target.value) || 0)}
-                                                    step="0.01"
-                                                />
-                                            ) : (
-                                                <span className="text-info fw-bold">₹{record.charges || 0}</span>
-                                            )}
-                                        </td>
-                                        <td>
-                                            {isEditing ? (
-                                                <input
-                                                    type="number"
-                                                    className="form-control form-control-sm"
-                                                    value={record.amount}
-                                                    onChange={(e) => updatePayRecord(index, 'amount', parseFloat(e.target.value) || 0)}
-                                                    step="0.01"
-                                                />
-                                            ) : (
-                                                <span className="text-success fw-bold">₹{record.amount}</span>
-                                            )}
-                                        </td>
-                                        <td>
-                                            {isEditing ? (
-                                                <select
-                                                    className="form-select form-select-sm"
-                                                    value={record.type}
-                                                    onChange={(e) => updatePayRecord(index, 'type', e.target.value)}
-                                                >
-                                                    <option value="salary">Salary</option>
-                                                    <option value="commission">Commission</option>
-                                                    <option value="bonus">Bonus</option>
-                                                    <option value="advance">Advance</option>
-                                                    <option value="other">Other</option>
-                                                </select>
-                                            ) : (
-                                                <span className={`badge ${
-                                                    record.type === 'salary' ? 'bg-success' : 
-                                                    record.type === 'commission' ? 'bg-primary' :
-                                                    record.type === 'bonus' ? 'bg-warning' :
-                                                    record.type === 'advance' ? 'bg-danger' : 'bg-secondary'
-                                                }`}>
-                                                    {record.type}
-                                                </span>
-                                            )}
-                                        </td>
-                                        <td>
-                                            {isEditing ? (
-                                                <input
-                                                    type="text"
-                                                    className="form-control form-control-sm"
-                                                    value={record.remarks || ''}
-                                                    onChange={(e) => updatePayRecord(index, 'remarks', e.target.value)}
-                                                    placeholder="Remarks"
-                                                />
-                                            ) : (
-                                                <small className="text-muted">{record.remarks || '-'}</small>
-                                            )}
-                                        </td>
-                                        {isEditing && (
-                                            <td>
-                                                <button 
-                                                    className="btn btn-sm btn-outline-danger"
-                                                    onClick={() => deletePayRecord(index)}
-                                                    type="button"
-                                                >
-                                                    <i className="bi bi-trash"></i>
-                                                </button>
-                                            </td>
-                                        )}
-                                    </tr>
-                                ))
-                            ) : (
-                                <tr>
-                                    <td colSpan={isEditing ? "7" : "6"} className="text-center text-muted py-5">
-                                        <div className="py-3">
-                                            <i className="bi bi-wallet2 display-6 text-muted mb-3"></i>
-                                            <h6 className="text-muted">No pay records found</h6>
-                                            <small>Payment records will appear here</small>
-                                        </div>
-                                    </td>
-                                </tr>
-                            )}
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-        );
-    };
 
     // Enhanced View Card with Tabs
     const ViewCard = () => {
@@ -610,11 +427,11 @@ export default function AgentModal({ show, onClose, data, mode = "view", onSaved
                             src={editData?.agentPhotoUrl || photo}
                             alt="agent"
                             className="agent-photo img-fluid"
-                            style={{ 
-                                width: 140, 
-                                height: 140, 
-                                objectFit: "cover", 
-                                borderRadius: "12px", 
+                            style={{
+                                width: 140,
+                                height: 140,
+                                objectFit: "cover",
+                                borderRadius: "12px",
                                 border: "3px solid #e9ecef",
                                 boxShadow: "0 4px 12px rgba(0,0,0,0.1)"
                             }}
@@ -624,8 +441,8 @@ export default function AgentModal({ show, onClose, data, mode = "view", onSaved
                             }}
                         />
                         <div className="photo-placeholder" style={{
-                            width: 140, 
-                            height: 140, 
+                            width: 140,
+                            height: 140,
                             borderRadius: "12px",
                             background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
                             display: "none",
@@ -636,7 +453,7 @@ export default function AgentModal({ show, onClose, data, mode = "view", onSaved
                         }}>
                             👤
                         </div>
-                        
+
                         {isEditing && (
                             <div className="mt-3">
                                 <input
@@ -667,15 +484,14 @@ export default function AgentModal({ show, onClose, data, mode = "view", onSaved
                             </div>
                         )}
                     </div>
-                    
+
                     <div className="mt-3">
                         <div className="rating-stars">
                             {[1, 2, 3, 4, 5].map((star) => (
-                                <i 
+                                <i
                                     key={star}
-                                    className={`bi ${
-                                        star <= (editData?.rating || 0) ? "bi-star-fill text-warning" : "bi-star text-muted"
-                                    }`}
+                                    className={`bi ${star <= (editData?.rating || 0) ? "bi-star-fill text-warning" : "bi-star text-muted"
+                                        }`}
                                     style={{ fontSize: "1.2rem", margin: "0 2px" }}
                                 />
                             ))}
@@ -683,12 +499,12 @@ export default function AgentModal({ show, onClose, data, mode = "view", onSaved
                         </div>
                     </div>
                 </div>
-                
+
                 <div className="col-md-8">
                     <div className="row g-3">
                         <div className="col-sm-6">
                             <div className="detail-item border rounded p-3 bg-light">
-                                <label className="text-muted small mb-1">ID No</label>
+                                <label className="small-text small mb-1">ID No</label>
                                 {isEditing ? (
                                     <input
                                         type="text"
@@ -703,7 +519,7 @@ export default function AgentModal({ show, onClose, data, mode = "view", onSaved
                         </div>
                         <div className="col-sm-6">
                             <div className="detail-item border rounded p-3 bg-light">
-                                <label className="text-muted small mb-1">Agent Name</label>
+                                <label className="small-text small mb-1">Agent Name</label>
                                 {isEditing ? (
                                     <input
                                         type="text"
@@ -718,7 +534,7 @@ export default function AgentModal({ show, onClose, data, mode = "view", onSaved
                         </div>
                         <div className="col-sm-6">
                             <div className="detail-item border rounded p-3 bg-light">
-                                <label className="text-muted small mb-1">Gender</label>
+                                <label className="small-text small mb-1">Gender</label>
                                 {isEditing ? (
                                     <select
                                         className="form-select"
@@ -737,7 +553,7 @@ export default function AgentModal({ show, onClose, data, mode = "view", onSaved
                         </div>
                         <div className="col-sm-6">
                             <div className="detail-item border rounded p-3 bg-light">
-                                <label className="text-muted small mb-1">Mobile</label>
+                                <label className="small-text small mb-1">Mobile</label>
                                 {isEditing ? (
                                     <input
                                         type="text"
@@ -755,7 +571,7 @@ export default function AgentModal({ show, onClose, data, mode = "view", onSaved
                         </div>
                         <div className="col-sm-6">
                             <div className="detail-item border rounded p-3 bg-light">
-                                <label className="text-muted small mb-1">UPI</label>
+                                <label className="small-text small mb-1">UPI</label>
                                 {isEditing ? (
                                     <input
                                         type="text"
@@ -773,7 +589,7 @@ export default function AgentModal({ show, onClose, data, mode = "view", onSaved
                         </div>
                         <div className="col-sm-6">
                             <div className="detail-item border rounded p-3 bg-light">
-                                <label className="text-muted small mb-1">Commission</label>
+                                <label className="small-text small mb-1">Commission</label>
                                 {isEditing ? (
                                     <input
                                         type="number"
@@ -789,7 +605,7 @@ export default function AgentModal({ show, onClose, data, mode = "view", onSaved
                         </div>
                         <div className="col-sm-6">
                             <div className="detail-item border rounded p-3 bg-light">
-                                <label className="text-muted small mb-1">Status</label>
+                                <label className="small-text small mb-1">Status</label>
                                 {isEditing ? (
                                     <select
                                         className="form-select"
@@ -803,10 +619,9 @@ export default function AgentModal({ show, onClose, data, mode = "view", onSaved
                                     </select>
                                 ) : (
                                     <div className="fw-semibold">
-                                        <span className={`badge ${
-                                            editData?.status === 'active' ? 'bg-success' : 
-                                            editData?.status === 'inactive' ? 'bg-secondary' : 'bg-warning'
-                                        }`}>
+                                        <span className={`badge ${editData?.status === 'active' ? 'bg-success' :
+                                                editData?.status === 'inactive' ? 'bg-secondary' : 'bg-warning'
+                                            }`}>
                                             {D("status", "Active")}
                                         </span>
                                     </div>
@@ -815,7 +630,7 @@ export default function AgentModal({ show, onClose, data, mode = "view", onSaved
                         </div>
                         <div className="col-sm-6">
                             <div className="detail-item border rounded p-3 bg-light">
-                                <label className="text-muted small mb-1">Rating</label>
+                                <label className="small-text small mb-1">Rating</label>
                                 {isEditing ? (
                                     <input
                                         type="number"
@@ -840,7 +655,7 @@ export default function AgentModal({ show, onClose, data, mode = "view", onSaved
             <div className="row g-3">
                 <div className="col-md-6">
                     <div className="detail-item border rounded p-3 bg-light">
-                        <label className="text-muted small mb-1">Village / Town</label>
+                        <label className="small-text small mb-1">Village / Town</label>
                         {isEditing ? (
                             <input
                                 type="text"
@@ -855,7 +670,7 @@ export default function AgentModal({ show, onClose, data, mode = "view", onSaved
                 </div>
                 <div className="col-md-6">
                     <div className="detail-item border rounded p-3 bg-light">
-                        <label className="text-muted small mb-1">Mandal</label>
+                        <label className="small-text small mb-1">Mandal</label>
                         {isEditing ? (
                             <input
                                 type="text"
@@ -870,7 +685,7 @@ export default function AgentModal({ show, onClose, data, mode = "view", onSaved
                 </div>
                 <div className="col-md-6">
                     <div className="detail-item border rounded p-3 bg-light">
-                        <label className="text-muted small mb-1">District</label>
+                        <label className="small-text small mb-1">District</label>
                         {isEditing ? (
                             <input
                                 type="text"
@@ -885,7 +700,7 @@ export default function AgentModal({ show, onClose, data, mode = "view", onSaved
                 </div>
                 <div className="col-md-6">
                     <div className="detail-item border rounded p-3 bg-light">
-                        <label className="text-muted small mb-1">State</label>
+                        <label className="small-text small mb-1">State</label>
                         {isEditing ? (
                             <input
                                 type="text"
@@ -900,7 +715,7 @@ export default function AgentModal({ show, onClose, data, mode = "view", onSaved
                 </div>
                 <div className="col-md-6">
                     <div className="detail-item border rounded p-3 bg-light">
-                        <label className="text-muted small mb-1">Working Place</label>
+                        <label className="small-text small mb-1">Working Place</label>
                         {isEditing ? (
                             <input
                                 type="text"
@@ -915,7 +730,7 @@ export default function AgentModal({ show, onClose, data, mode = "view", onSaved
                 </div>
                 <div className="col-md-6">
                     <div className="detail-item border rounded p-3 bg-light">
-                        <label className="text-muted small mb-1">Proficiency</label>
+                        <label className="small-text small mb-1">Proficiency</label>
                         {isEditing ? (
                             <input
                                 type="text"
@@ -930,7 +745,7 @@ export default function AgentModal({ show, onClose, data, mode = "view", onSaved
                 </div>
                 <div className="col-md-6">
                     <div className="detail-item border rounded p-3 bg-light">
-                        <label className="text-muted small mb-1">Experience</label>
+                        <label className="small-text small mb-1">Experience</label>
                         {isEditing ? (
                             <input
                                 type="number"
@@ -946,7 +761,7 @@ export default function AgentModal({ show, onClose, data, mode = "view", onSaved
                 </div>
                 <div className="col-md-6">
                     <div className="detail-item border rounded p-3 bg-light">
-                        <label className="text-muted small mb-1">Emergency Contact</label>
+                        <label className="small-text small mb-1">Emergency Contact</label>
                         {isEditing ? (
                             <input
                                 type="text"
@@ -961,7 +776,7 @@ export default function AgentModal({ show, onClose, data, mode = "view", onSaved
                 </div>
                 <div className="col-12">
                     <div className="detail-item border rounded p-3 bg-light">
-                        <label className="text-muted small mb-1">Address</label>
+                        <label className="small-text small mb-1">Address</label>
                         {isEditing ? (
                             <div className="row g-2">
                                 <div className="col-12">
@@ -999,11 +814,11 @@ export default function AgentModal({ show, onClose, data, mode = "view", onSaved
                         )}
                     </div>
                 </div>
-                
+
                 {/* Proof Documents Section */}
                 <div className="col-12">
                     <div className="detail-item border rounded p-3 bg-light">
-                        <label className="text-muted small mb-1">Proof Documents</label>
+                        <label className="small-text small mb-1">Proof Documents</label>
                         {isEditing ? (
                             <div>
                                 <input
@@ -1036,7 +851,7 @@ export default function AgentModal({ show, onClose, data, mode = "view", onSaved
                                 >
                                     {uploadingProof ? 'Uploading...' : 'Add Proof Document'}
                                 </button>
-                                
+
                                 {editData?.proofDocuments?.map((proof, index) => (
                                     <div key={index} className="d-flex justify-content-between align-items-center border rounded p-2 mb-1">
                                         <span>{proof.name}</span>
@@ -1068,7 +883,7 @@ export default function AgentModal({ show, onClose, data, mode = "view", onSaved
                                         </div>
                                     ))
                                 ) : (
-                                    <div className="text-muted">No proof documents uploaded</div>
+                                    <div className="small-text">No proof documents uploaded</div>
                                 )}
                             </div>
                         )}
@@ -1078,7 +893,7 @@ export default function AgentModal({ show, onClose, data, mode = "view", onSaved
                 {D("notes") && (
                     <div className="col-12">
                         <div className="detail-item border rounded p-3 bg-light">
-                            <label className="text-muted small mb-1">Notes</label>
+                            <label className="small-text small mb-1">Notes</label>
                             {isEditing ? (
                                 <textarea
                                     className="form-control"
@@ -1103,23 +918,22 @@ export default function AgentModal({ show, onClose, data, mode = "view", onSaved
                     return renderFullDetails({ editData, onEditDataChange, isEditing });
                 case "payments":
                     return <PaymentHistory editData={editData} onEditDataChange={onEditDataChange} isEditing={isEditing} />;
-                case "payinfo":
-                    return <PayInfo editData={editData} onEditDataChange={onEditDataChange} isEditing={isEditing} />;
+
                 default:
                     return null;
             }
         };
 
         return (
-            <div className="modal d-block" tabIndex="-1" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }} onClick={close}>
+            <div className="modal d-block" tabIndex="-1" style={{ backgroundColor: 'rgba(0,0,0,0.8)' }} onClick={close}>
                 <div className="modal-dialog modal-lg modal-dialog-centered" onClick={(e) => e.stopPropagation()}>
                     <div className="modal-content border-0 shadow-lg">
                         {/* Header */}
-                        <div className="modal-header bg-primary text-white">
+                        <div className="modal-header bg-secondary text-white justify-content-between">
                             <div className="d-flex align-items-center gap-3">
-                                <div style={{ 
-                                    width: 50, 
-                                    height: 50, 
+                                <div style={{
+                                    width: 50,
+                                    height: 50,
                                     borderRadius: "8px",
                                     background: "rgba(255,255,255,0.2)",
                                     display: "flex",
@@ -1136,8 +950,8 @@ export default function AgentModal({ show, onClose, data, mode = "view", onSaved
                                     </small>
                                 </div>
                             </div>
-                            <div className="d-flex gap-2">
-                                <button className="btn btn-sm btn-light" onClick={handleEdit}>
+                            <div className="d-flex gap-2 align-items-center">
+                                <button className="btn btn-sm btn-warning" onClick={handleEdit}>
                                     <i className="bi bi-pencil me-1"></i>Edit
                                 </button>
                                 <button type="button" className="btn-close btn-close-white" onClick={close}></button>
@@ -1148,7 +962,7 @@ export default function AgentModal({ show, onClose, data, mode = "view", onSaved
                         <div className="modal-body p-0">
                             <ul className="nav nav-tabs nav-justified">
                                 <li className="nav-item">
-                                    <button 
+                                    <button
                                         className={`nav-link ${activeTab === "basic" ? "active" : ""}`}
                                         onClick={() => setActiveTab("basic")}
                                         type="button"
@@ -1157,7 +971,7 @@ export default function AgentModal({ show, onClose, data, mode = "view", onSaved
                                     </button>
                                 </li>
                                 <li className="nav-item">
-                                    <button 
+                                    <button
                                         className={`nav-link ${activeTab === "full" ? "active" : ""}`}
                                         onClick={() => setActiveTab("full")}
                                         type="button"
@@ -1166,7 +980,7 @@ export default function AgentModal({ show, onClose, data, mode = "view", onSaved
                                     </button>
                                 </li>
                                 <li className="nav-item">
-                                    <button 
+                                    <button
                                         className={`nav-link ${activeTab === "payments" ? "active" : ""}`}
                                         onClick={() => setActiveTab("payments")}
                                         type="button"
@@ -1174,20 +988,12 @@ export default function AgentModal({ show, onClose, data, mode = "view", onSaved
                                         <i className="bi bi-credit-card me-2"></i>Payments
                                     </button>
                                 </li>
-                                <li className="nav-item">
-                                    <button 
-                                        className={`nav-link ${activeTab === "payinfo" ? "active" : ""}`}
-                                        onClick={() => setActiveTab("payinfo")}
-                                        type="button"
-                                    >
-                                        <i className="bi bi-wallet2 me-2"></i>Pay Info
-                                    </button>
-                                </li>
+
                             </ul>
 
                             {/* Tab Content */}
                             <div className="p-4" style={{ maxHeight: '60vh', overflowY: 'auto' }}>
-                                {renderTabContent(safeData, () => {}, false)}
+                                {renderTabContent(safeData, () => { }, false)}
                             </div>
                         </div>
                     </div>
@@ -1226,11 +1032,11 @@ export default function AgentModal({ show, onClose, data, mode = "view", onSaved
                                         src={editData?.agentPhotoUrl || safeData?.agentPhotoUrl}
                                         alt="agent"
                                         className="agent-photo img-fluid"
-                                        style={{ 
-                                            width: 140, 
-                                            height: 140, 
-                                            objectFit: "cover", 
-                                            borderRadius: "12px", 
+                                        style={{
+                                            width: 140,
+                                            height: 140,
+                                            objectFit: "cover",
+                                            borderRadius: "12px",
                                             border: "3px solid #e9ecef",
                                             boxShadow: "0 4px 12px rgba(0,0,0,0.1)"
                                         }}
@@ -1240,8 +1046,8 @@ export default function AgentModal({ show, onClose, data, mode = "view", onSaved
                                         }}
                                     />
                                     <div className="photo-placeholder" style={{
-                                        width: 140, 
-                                        height: 140, 
+                                        width: 140,
+                                        height: 140,
                                         borderRadius: "12px",
                                         background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
                                         display: "none",
@@ -1252,7 +1058,7 @@ export default function AgentModal({ show, onClose, data, mode = "view", onSaved
                                     }}>
                                         👤
                                     </div>
-                                    
+
                                     <div className="mt-3">
                                         <input
                                             type="file"
@@ -1281,7 +1087,7 @@ export default function AgentModal({ show, onClose, data, mode = "view", onSaved
                                         </button>
                                     </div>
                                 </div>
-                                
+
                                 <div className="mt-3">
                                     <label className="form-label">Rating</label>
                                     <input
@@ -1295,7 +1101,7 @@ export default function AgentModal({ show, onClose, data, mode = "view", onSaved
                                     />
                                 </div>
                             </div>
-                            
+
                             <div className="col-md-8">
                                 <div className="row g-3">
                                     <div className="col-sm-6">
@@ -1510,7 +1316,7 @@ export default function AgentModal({ show, onClose, data, mode = "view", onSaved
                                     >
                                         {uploadingProof ? 'Uploading...' : 'Add Proof Document'}
                                     </button>
-                                    
+
                                     {editData?.proofDocuments?.map((proof, index) => (
                                         <div key={index} className="d-flex justify-content-between align-items-center border rounded p-2 mb-1">
                                             <span>{proof.name}</span>
@@ -1541,8 +1347,7 @@ export default function AgentModal({ show, onClose, data, mode = "view", onSaved
                     );
                 case "payments":
                     return <PaymentHistory editData={editData} onEditDataChange={handleEditDataChange} isEditing={true} />;
-                case "payinfo":
-                    return <PayInfo editData={editData} onEditDataChange={handleEditDataChange} isEditing={true} />;
+
                 default:
                     return null;
             }
@@ -1552,13 +1357,13 @@ export default function AgentModal({ show, onClose, data, mode = "view", onSaved
             <div className="modal d-block" tabIndex="-1" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }} onClick={close}>
                 <div className="modal-dialog modal-lg modal-dialog-centered" onClick={(e) => e.stopPropagation()}>
                     <div className="modal-content border-0 shadow-lg">
-                        <div className="modal-header bg-warning text-dark">
+                        <div className="modal-header bg-secondary text-white justify-content-between">
                             <h5 className="modal-title">Edit Agent - {editData?.agentName}</h5>
                             <div className="d-flex gap-2">
                                 <button className="btn btn-sm btn-success" onClick={handleSaveEdit}>
                                     <i className="bi bi-check-lg me-1"></i>Save
                                 </button>
-                                <button className="btn btn-sm btn-secondary" onClick={handleCancelEdit}>
+                                <button className="btn btn-sm btn-danger" onClick={handleCancelEdit}>
                                     <i className="bi bi-x-lg me-1"></i>Cancel
                                 </button>
                             </div>
@@ -1568,7 +1373,7 @@ export default function AgentModal({ show, onClose, data, mode = "view", onSaved
                         <div className="modal-body p-0">
                             <ul className="nav nav-tabs nav-justified">
                                 <li className="nav-item">
-                                    <button 
+                                    <button
                                         className={`nav-link ${activeTab === "basic" ? "active" : ""}`}
                                         onClick={() => setActiveTab("basic")}
                                         type="button"
@@ -1577,7 +1382,7 @@ export default function AgentModal({ show, onClose, data, mode = "view", onSaved
                                     </button>
                                 </li>
                                 <li className="nav-item">
-                                    <button 
+                                    <button
                                         className={`nav-link ${activeTab === "full" ? "active" : ""}`}
                                         onClick={() => setActiveTab("full")}
                                         type="button"
@@ -1586,7 +1391,7 @@ export default function AgentModal({ show, onClose, data, mode = "view", onSaved
                                     </button>
                                 </li>
                                 <li className="nav-item">
-                                    <button 
+                                    <button
                                         className={`nav-link ${activeTab === "payments" ? "active" : ""}`}
                                         onClick={() => setActiveTab("payments")}
                                         type="button"
@@ -1594,15 +1399,7 @@ export default function AgentModal({ show, onClose, data, mode = "view", onSaved
                                         <i className="bi bi-credit-card me-2"></i>Payments
                                     </button>
                                 </li>
-                                <li className="nav-item">
-                                    <button 
-                                        className={`nav-link ${activeTab === "payinfo" ? "active" : ""}`}
-                                        onClick={() => setActiveTab("payinfo")}
-                                        type="button"
-                                    >
-                                        <i className="bi bi-wallet2 me-2"></i>Pay Info
-                                    </button>
-                                </li>
+
                             </ul>
 
                             <div className="p-4" style={{ maxHeight: '60vh', overflowY: 'auto' }}>

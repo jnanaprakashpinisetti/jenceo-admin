@@ -16,15 +16,15 @@ const Avatar = ({ src, alt, size = "md" }) => {
         md: { width: 44, height: 44 },
         lg: { width: 60, height: 60 }
     };
-    
+
     return (
         <img
             src={src || DEFAULT_PHOTO}
             alt={alt || "photo"}
-            style={{ 
-                ...sizes[size], 
-                borderRadius: '8px', 
-                objectFit: "cover", 
+            style={{
+                ...sizes[size],
+                borderRadius: '8px',
+                objectFit: "cover",
                 border: "2px solid #374151",
                 boxShadow: "0 2px 8px rgba(0,0,0,0.2)"
             }}
@@ -36,14 +36,14 @@ const Avatar = ({ src, alt, size = "md" }) => {
 const Pagination = ({ currentPage, totalPages, onPageChange, className = "" }) => {
     const pages = [];
     const maxVisiblePages = 5;
-    
+
     let startPage = Math.max(1, currentPage - Math.floor(maxVisiblePages / 2));
     let endPage = Math.min(totalPages, startPage + maxVisiblePages - 1);
-    
+
     if (endPage - startPage + 1 < maxVisiblePages) {
         startPage = Math.max(1, endPage - maxVisiblePages + 1);
     }
-    
+
     for (let i = startPage; i <= endPage; i++) {
         pages.push(
             <button
@@ -55,7 +55,7 @@ const Pagination = ({ currentPage, totalPages, onPageChange, className = "" }) =
             </button>
         );
     }
-    
+
     return (
         <div className={`d-flex justify-content-center align-items-center gap-2 ${className}`}>
             <button
@@ -72,7 +72,7 @@ const Pagination = ({ currentPage, totalPages, onPageChange, className = "" }) =
             >
                 ◀ Previous
             </button>
-            
+
             {startPage > 1 && (
                 <>
                     <button
@@ -84,9 +84,9 @@ const Pagination = ({ currentPage, totalPages, onPageChange, className = "" }) =
                     {startPage > 2 && <span className="text-muted">...</span>}
                 </>
             )}
-            
+
             {pages}
-            
+
             {endPage < totalPages && (
                 <>
                     {endPage < totalPages - 1 && <span className="text-muted">...</span>}
@@ -98,7 +98,7 @@ const Pagination = ({ currentPage, totalPages, onPageChange, className = "" }) =
                     </button>
                 </>
             )}
-            
+
             <button
                 className="btn btn-sm btn-outline-info"
                 onClick={() => onPageChange(currentPage + 1)}
@@ -124,15 +124,15 @@ export default function AgentDisplay() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
     const [search, setSearch] = useState("");
-    
+
     // Pagination state
     const [currentPage, setCurrentPage] = useState(1);
     const [rowsPerPage, setRowsPerPage] = useState(10);
-    
+
     // Sorting state
     const [sortField, setSortField] = useState("idNo");
     const [sortDirection, setSortDirection] = useState("desc");
-    
+
     // Modal state
     const [showModal, setShowModal] = useState(false);
     const [modalMode, setModalMode] = useState("view");
@@ -314,18 +314,18 @@ export default function AgentDisplay() {
         const sorted = [...activeList].sort((a, b) => {
             let aVal = a[sortField] || "";
             let bVal = b[sortField] || "";
-            
+
             // Handle numeric sorting for idNo
             if (sortField === "idNo") {
                 const aNum = String(aVal).match(/(\d+)/)?.[1] || -1;
                 const bNum = String(bVal).match(/(\d+)/)?.[1] || -1;
                 return sortDirection === "asc" ? aNum - bNum : bNum - aNum;
             }
-            
+
             // String sorting for other fields
             aVal = String(aVal).toLowerCase();
             bVal = String(bVal).toLowerCase();
-            
+
             if (aVal < bVal) return sortDirection === "asc" ? -1 : 1;
             if (aVal > bVal) return sortDirection === "asc" ? 1 : -1;
             return 0;
@@ -396,7 +396,7 @@ export default function AgentDisplay() {
             // Reload both worker and client agents
             const workerSnap = await firebaseDB.child("AgentData/WorkerAgent").once('value');
             const clientSnap = await firebaseDB.child("AgentData/ClientAgent").once('value');
-            
+
             const workerList = [];
             const clientList = [];
 
@@ -432,7 +432,7 @@ export default function AgentDisplay() {
 
             setWorkerAgents(sortByIdNo(workerList));
             setClientAgents(sortByIdNo(clientList));
-            
+
             console.log("Refreshed - Workers:", workerList.length, "Clients:", clientList.length);
         } catch (err) {
             console.error('Refresh failed:', err);
@@ -455,7 +455,7 @@ export default function AgentDisplay() {
             <div className="mt-2">Loading agents...</div>
         </div>
     );
-    
+
     if (error) return (
         <div className="alert alert-danger my-3">
             <strong>Error:</strong> {error}
@@ -468,62 +468,38 @@ export default function AgentDisplay() {
     return (
         <div className="container-fluid px-0">
             {/* Header row */}
-            <div className="card bg-dark border-secondary mb-4">
-                <div className="card-body">
-                    <div className="d-flex flex-wrap align-items-center gap-3">
-                        <div className="d-flex align-items-center gap-2">
-                            <h4 className="mb-0 text-primary">Agent Management</h4>
-                            <span className="badge bg-primary fs-6">{activeList.length} Total</span>
-                        </div>
-
-                        <ul className="nav nav-pills ms-auto">
-                            <li className="nav-item">
-                                <button
-                                    className={`nav-link ${tab === "worker" ? "active bg-primary" : "text-light"}`}
-                                    onClick={() => setTab("worker")}
-                                >
-                                    👷 Worker Agents ({workerAgents.length})
-                                </button>
-                            </li>
-                            <li className="nav-item">
-                                <button
-                                    className={`nav-link ${tab === "client" ? "active bg-success" : "text-light"}`}
-                                    onClick={() => setTab("client")}
-                                >
-                                    👨‍💼 Client Agents ({clientAgents.length})
-                                </button>
-                            </li>
-                        </ul>
-
-                        <div className="d-flex align-items-center gap-2">
-                            <div className="input-group" style={{ width: 360 }}>
-                                <span className="input-group-text bg-dark border-secondary text-light">
-                                    🔍
-                                </span>
-                                <input
-                                    className="form-control bg-dark border-secondary text-light"
-                                    placeholder="Search by ID, name, gender, location, status..."
-                                    value={search}
-                                    onChange={(e) => setSearch(e.target.value)}
-                                />
-                            </div>
-
-                            
-                        </div>
+            <div className="card-body border-secondary mb-4 p-3 bg-secondary rounded-4 bg-opacity-10">
+                <div className="d-flex flex-wrap align-items-center gap-3 justify-content-between">
+                    <div className="d-flex align-items-center gap-2">
+                        <h4 className="mb-0 text-primary">Agent Management</h4>
+                        <span className="badge bg-primary fs-6">{activeList.length} Total</span>
                     </div>
-                </div>
-            </div>
 
-            {/* Stats and Controls */}
-            <div className="row mb-3">
-                <div className="col-md-8">
+
+
+                    <div className="d-flex align-items-center gap-2">
+                        <div className="input-group" style={{ width: 360 }}>
+                            <span className="input-group-text bg-dark border-secondary text-light">
+                                🔍
+                            </span>
+                            <input
+                                className="form-control bg-dark border-secondary text-light"
+                                placeholder="Search by ID, name, gender, location, status..."
+                                value={search}
+                                onChange={(e) => setSearch(e.target.value)}
+                            />
+                        </div>
+
+
+                    </div>
+
                     <div className="d-flex align-items-center gap-3">
                         <div className="text-warning small">
                             Showing <strong>{startIndex + 1}-{endIndex}</strong> of <strong>{totalItems}</strong> agents
                             {search && <span> for "<strong>{search}</strong>"</span>}
                         </div>
-                        
-                        <select 
+
+                        <select
                             className="form-select form-select-sm bg-dark border-secondary text-light"
                             style={{ width: 'auto' }}
                             value={rowsPerPage}
@@ -536,8 +512,8 @@ export default function AgentDisplay() {
                             <option value={100}>100 per page</option>
                         </select>
 
-                        <button 
-                            className="btn btn-sm btn-outline-info d-flex align-items-center gap-1" 
+                        <button
+                            className="btn btn-sm btn-outline-info d-flex align-items-center gap-1"
                             onClick={refreshData}
                             disabled={loading}
                         >
@@ -545,7 +521,33 @@ export default function AgentDisplay() {
                         </button>
                     </div>
                 </div>
-                
+            </div>
+
+            <ul className="nav nav-pills ms-auto justify-content-center gap-3">
+                <li className="nav-item">
+                    <button
+                        className={`nav-link text-dark ${tab === "worker" ? "active bg-warning" : "bg-secondary"}`}
+                        onClick={() => setTab("worker")}
+                    >
+                        👷 Worker Agents ({workerAgents.length})
+                    </button>
+                </li>
+                <li className="nav-item">
+                    <button
+                        className={`nav-link text-dark ${tab === "client" ? "active bg-warning" : "bg-secondary"}`}
+                        onClick={() => setTab("client")}
+                    >
+                        👨‍💼 Client Agents ({clientAgents.length})
+                    </button>
+                </li>
+            </ul>
+
+            {/* Stats and Controls */}
+            <div className="row mb-3">
+                <div className="col-md-8">
+
+                </div>
+
                 <div className="col-md-4 text-end">
                     <div className="text-light small">
                         Sorted by: <strong>{sortField}</strong> ({sortDirection === 'asc' ? 'Ascending' : 'Descending'})
@@ -583,8 +585,8 @@ export default function AgentDisplay() {
                                 <tr>
                                     <td colSpan={7} className="text-center py-5 text-muted">
                                         <div className="py-4">
-                                            {activeList.length === 0 ? 
-                                                `No ${tab} agents found in database.` : 
+                                            {activeList.length === 0 ?
+                                                `No ${tab} agents found in database.` :
                                                 'No agents match your search criteria.'
                                             }
                                         </div>
@@ -600,11 +602,11 @@ export default function AgentDisplay() {
                                         "Active": "success",
                                         "Inactive": "danger"
                                     }[status] || "dark";
-                                    
+
                                     return (
-                                        <tr 
-                                            key={row?.id || row?.idNo} 
-                                            onClick={() => handleRowClick(row)} 
+                                        <tr
+                                            key={row?.id || row?.idNo}
+                                            onClick={() => handleRowClick(row)}
                                             style={{ cursor: "pointer" }}
                                             className="hover-highlight"
                                         >
@@ -632,22 +634,22 @@ export default function AgentDisplay() {
                                             </td>
                                             <td onClick={stop}>
                                                 <div className="d-flex justify-content-center gap-1">
-                                                    <button 
-                                                        className="btn btn-sm btn-outline-info d-flex align-items-center gap-1" 
+                                                    <button
+                                                        className="btn btn-sm btn-outline-info d-flex align-items-center gap-1"
                                                         onClick={() => openView(row)}
                                                         title="View Details"
                                                     >
                                                         👁
                                                     </button>
-                                                    <button 
-                                                        className="btn btn-sm btn-outline-warning d-flex align-items-center gap-1" 
+                                                    <button
+                                                        className="btn btn-sm btn-outline-warning d-flex align-items-center gap-1"
                                                         onClick={() => openEdit(row)}
                                                         title="Edit"
                                                     >
                                                         ✏️
                                                     </button>
-                                                    <button 
-                                                        className="btn btn-sm btn-outline-danger d-flex align-items-center gap-1" 
+                                                    <button
+                                                        className="btn btn-sm btn-outline-danger d-flex align-items-center gap-1"
                                                         onClick={() => handleDelete(row)}
                                                         title="Delete"
                                                     >
@@ -671,8 +673,8 @@ export default function AgentDisplay() {
                         <div className="row align-items-center">
                             <div className="col-md-6">
                                 <div className="text-warning small">
-                                    Page <strong>{currentPage}</strong> of <strong>{totalPages}</strong> • 
-                                    Showing <strong>{paginatedData.length}</strong> agents • 
+                                    Page <strong>{currentPage}</strong> of <strong>{totalPages}</strong> •
+                                    Showing <strong>{paginatedData.length}</strong> agents •
                                     Total: <strong>{totalItems}</strong> agents
                                 </div>
                             </div>
@@ -710,8 +712,8 @@ export default function AgentDisplay() {
                     cursor: pointer;
                     user-select: none;
                 }
-                .sortable:hover {
-                    background-color: rgba(255, 255, 255, 0.1) !important;
+                // .sortable:hover {
+                //     background-color: rgba(255, 255, 255, 0.1) !important;
                 }
                 .hover-highlight:hover {
                     background-color: rgba(255, 255, 255, 0.05) !important;

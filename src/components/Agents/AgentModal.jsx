@@ -15,6 +15,7 @@ export default function AgentModal({ show, onClose, data, mode = "view", onSaved
     const isView = mode === "view";
 
     const title = isAdd ? "Add New Agent" : isEdit ? "Edit Agent" : "Agent Details";
+    const editDataRef = useRef({});
 
     const [localOpen, setLocalOpen] = useState(!!show);
     const [activeTab, setActiveTab] = useState("basic");
@@ -65,6 +66,10 @@ export default function AgentModal({ show, onClose, data, mode = "view", onSaved
     };
 
     const handleCancelEdit = () => {
+        if (JSON.stringify(editDataRef.current || {}) !== JSON.stringify(data || {})) {
+            if (!window.confirm("Discard unsaved changes?")) return;
+        }
+
         setLocalMode("view");
     };
 
@@ -80,8 +85,7 @@ export default function AgentModal({ show, onClose, data, mode = "view", onSaved
 
             return mockUrl;
         } catch (error) {
-            console.error('Error uploading photo:', error);
-            throw error;
+throw error;
         } finally {
             setUploadingPhoto(false);
         }
@@ -99,8 +103,7 @@ export default function AgentModal({ show, onClose, data, mode = "view", onSaved
 
             return mockUrl;
         } catch (error) {
-            console.error('Error uploading proof:', error);
-            throw error;
+throw error;
         } finally {
             setUploadingProof(false);
         }
@@ -144,7 +147,7 @@ export default function AgentModal({ show, onClose, data, mode = "view", onSaved
                 if (isEditing) {
                     onEditDataChange('payments', updatedPayments);
                 } else {
-                    const agentRef = firebaseDB.child(`AgentData/${safeData.agentType === "client" ? "ClientAgent" : "WorkerAgent"}/${safeData.id}`);
+                    const agentRef = firebaseDB.child(`JenCeo-DataBase/AgentData/${safeData.agentType === "client" ? "ClientAgent" : "WorkerAgent"}/${safeData.id}`);
                     await agentRef.update({ payments: updatedPayments });
                     onSaved && onSaved();
                 }
@@ -163,8 +166,7 @@ export default function AgentModal({ show, onClose, data, mode = "view", onSaved
                 setLocalShowPaymentForm(false);
 
             } catch (error) {
-                console.error('Error adding payment:', error);
-                alert('Failed to add payment: ' + error.message);
+alert('Failed to add payment: ' + error.message);
             }
         };
 
@@ -191,13 +193,12 @@ export default function AgentModal({ show, onClose, data, mode = "view", onSaved
                 if (isEditing) {
                     onEditDataChange('payments', updatedPayments);
                 } else {
-                    const agentRef = firebaseDB.child(`AgentData/${safeData.agentType === "client" ? "ClientAgent" : "WorkerAgent"}/${safeData.id}`);
+                    const agentRef = firebaseDB.child(`JenCeo-DataBase/AgentData/${safeData.agentType === "client" ? "ClientAgent" : "WorkerAgent"}/${safeData.id}`);
                     await agentRef.update({ payments: updatedPayments });
                     onSaved && onSaved();
                 }
             } catch (error) {
-                console.error('Error deleting payment:', error);
-                alert('Failed to delete payment: ' + error.message);
+alert('Failed to delete payment: ' + error.message);
             }
         };
 
@@ -359,8 +360,8 @@ export default function AgentModal({ show, onClose, data, mode = "view", onSaved
                                         <td className="text-success fw-bold">₹{payment.amount}</td>
                                         <td>
                                             <span className={`badge ${payment.type === 'cash' ? 'bg-success' :
-                                                    payment.type === 'online' ? 'bg-primary' :
-                                                        payment.type === 'check' ? 'bg-info' : 'bg-warning'
+                                                payment.type === 'online' ? 'bg-primary' :
+                                                    payment.type === 'check' ? 'bg-info' : 'bg-warning'
                                                 }`}>
                                                 {payment.type}
                                             </span>
@@ -403,7 +404,7 @@ export default function AgentModal({ show, onClose, data, mode = "view", onSaved
                     </table>
                 </div>
 
-                    <style jsx>{`
+                <style jsx>{`
                  table tr:nth-child(even) td {
                  background-color:#e5edf9
                  }
@@ -620,7 +621,7 @@ export default function AgentModal({ show, onClose, data, mode = "view", onSaved
                                 ) : (
                                     <div className="fw-semibold">
                                         <span className={`badge ${editData?.status === 'active' ? 'bg-success' :
-                                                editData?.status === 'inactive' ? 'bg-secondary' : 'bg-warning'
+                                            editData?.status === 'inactive' ? 'bg-secondary' : 'bg-warning'
                                             }`}>
                                             {D("status", "Active")}
                                         </span>
@@ -1016,8 +1017,7 @@ export default function AgentModal({ show, onClose, data, mode = "view", onSaved
                 await agentRef.update(editData);
                 handleSave();
             } catch (error) {
-                console.error('Error updating agent:', error);
-                alert('Failed to update agent: ' + error.message);
+alert('Failed to update agent: ' + error.message);
             }
         };
 
@@ -1183,6 +1183,34 @@ export default function AgentModal({ show, onClose, data, mode = "view", onSaved
                 case "full":
                     return (
                         <div className="row g-3">
+                            <div className="col-6">
+                                <label className="form-label">D.No</label>
+                                <input
+                                    type="text"
+                                    className="form-control"
+                                    value={editData.address1 || ''}
+                                    onChange={(e) => handleEditDataChange('address1', e.target.value)}
+                                />
+                            </div>
+                            <div className="col-md-6">
+                                <label className="form-label">Street Name</label>
+                                <input
+                                    type="text"
+                                    className="form-control"
+                                    value={editData.streetName || ''}
+                                    onChange={(e) => handleEditDataChange('streetName', e.target.value)}
+                                />
+                            </div>
+                            <div className="col-md-6">
+                                <label className="form-label">Land Mark</label>
+                                <input
+                                    type="text"
+                                    className="form-control"
+                                    value={editData.landMark || ''}
+                                    onChange={(e) => handleEditDataChange('landMark', e.target.value)}
+                                />
+                            </div>
+
                             <div className="col-md-6">
                                 <label className="form-label">Village/Town</label>
                                 <input
@@ -1216,6 +1244,15 @@ export default function AgentModal({ show, onClose, data, mode = "view", onSaved
                                     type="text"
                                     className="form-control"
                                     value={editData.state || ''}
+                                    onChange={(e) => handleEditDataChange('state', e.target.value)}
+                                />
+                            </div>
+                            <div className="col-md-6">
+                                <label className="form-label">PIN Code</label>
+                                <input
+                                    type="text"
+                                    className="form-control"
+                                    value={editData.pinCode || ''}
                                     onChange={(e) => handleEditDataChange('state', e.target.value)}
                                 />
                             </div>
@@ -1254,33 +1291,6 @@ export default function AgentModal({ show, onClose, data, mode = "view", onSaved
                                     className="form-control"
                                     value={editData.emergencyContact || ''}
                                     onChange={(e) => handleEditDataChange('emergencyContact', e.target.value)}
-                                />
-                            </div>
-                            <div className="col-12">
-                                <label className="form-label">Address 1</label>
-                                <input
-                                    type="text"
-                                    className="form-control"
-                                    value={editData.address1 || ''}
-                                    onChange={(e) => handleEditDataChange('address1', e.target.value)}
-                                />
-                            </div>
-                            <div className="col-md-6">
-                                <label className="form-label">Street Name</label>
-                                <input
-                                    type="text"
-                                    className="form-control"
-                                    value={editData.streetName || ''}
-                                    onChange={(e) => handleEditDataChange('streetName', e.target.value)}
-                                />
-                            </div>
-                            <div className="col-md-6">
-                                <label className="form-label">Land Mark</label>
-                                <input
-                                    type="text"
-                                    className="form-control"
-                                    value={editData.landMark || ''}
-                                    onChange={(e) => handleEditDataChange('landMark', e.target.value)}
                                 />
                             </div>
                             <div className="col-12">

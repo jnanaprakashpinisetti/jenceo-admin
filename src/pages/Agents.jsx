@@ -33,7 +33,6 @@ export default function Agents() {
           }}
         />
       </div>
-      <hr></hr>
       <AgentDisplay />
     </div>
   )

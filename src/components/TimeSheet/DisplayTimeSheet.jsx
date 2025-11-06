@@ -1661,6 +1661,9 @@ const DisplayTimeSheet = () => {
 
         const { uid, name } = whoSafe();
 
+        // FIX: Allow negative values for netPayable
+        const netPayable = Math.round(totalSalary - totalAdv); // Remove Math.max(0, ...)
+
         const patch = {
             workingDays,
             fullDays,
@@ -1671,8 +1674,8 @@ const DisplayTimeSheet = () => {
             emergencies,
             absents,
             totalSalary,
-            advancesTotal: totalAdv, // Always show advances for this period
-            netPayable: Math.max(0, Math.round(totalSalary - totalAdv)), // Ensure non-negative
+            advancesTotal: totalAdv,
+            netPayable: netPayable, // This can now be negative
             updatedByName: name,
             updatedAt: new Date().toISOString(),
         };
@@ -2928,7 +2931,43 @@ const DisplayTimeSheet = () => {
                                                             return Number(advances || 0).toFixed(0);
                                                         })()}
                                                     </td>
-                                                    <td className='text-warning'>₹{Number(ts.netPayable || 0).toFixed(0)}</td>
+                                                    <td className={(() => {
+                                                        const totalSalary = Number(ts.totalSalary || 0);
+                                                        let totalAdvances = 0;
+
+                                                        // Calculate advances properly
+                                                        if (ts.advances && typeof ts.advances === 'object') {
+                                                            totalAdvances = Object.values(ts.advances).reduce((sum, advance) => {
+                                                                return sum + (parseFloat(advance?.amount) || 0);
+                                                            }, 0);
+                                                        } else if (ts.advancesTotal) {
+                                                            totalAdvances = Number(ts.advancesTotal || 0);
+                                                        } else if (ts.advances) {
+                                                            totalAdvances = Number(ts.advances || 0);
+                                                        }
+
+                                                        const netPayable = totalSalary - totalAdvances;
+                                                        return netPayable < 0 ? 'text-danger' : 'text-warning';
+                                                    })()}>
+                                                        ₹{(function () {
+                                                            const totalSalary = Number(ts.totalSalary || 0);
+                                                            let totalAdvances = 0;
+
+                                                            // Calculate advances properly
+                                                            if (ts.advances && typeof ts.advances === 'object') {
+                                                                totalAdvances = Object.values(ts.advances).reduce((sum, advance) => {
+                                                                    return sum + (parseFloat(advance?.amount) || 0);
+                                                                }, 0);
+                                                            } else if (ts.advancesTotal) {
+                                                                totalAdvances = Number(ts.advancesTotal || 0);
+                                                            } else if (ts.advances) {
+                                                                totalAdvances = Number(ts.advances || 0);
+                                                            }
+
+                                                            const netPayable = totalSalary - totalAdvances;
+                                                            return netPayable.toFixed(0);
+                                                        })()}
+                                                    </td>
                                                     <td>-</td>
                                                     <td>
                                                         <div className="btn-group btn-group-sm">
@@ -4302,6 +4341,7 @@ const TimesheetSummary = ({ timesheet, advances, employee, currentUser, isReadOn
                                         </div>
 
                                         {/* Net Payable Highlight - FIXED with proper calculation */}
+                                    // In TimesheetSummary component, update the net payable section:
                                         <div className="mt-4 p-3 bg-warning bg-opacity-10 rounded border border-warning">
                                             <div className="d-flex justify-content-between align-items-center">
                                                 <div>
@@ -4309,8 +4349,18 @@ const TimesheetSummary = ({ timesheet, advances, employee, currentUser, isReadOn
                                                     <br />
                                                     <small className="text-muted">Total Salary - Advances</small>
                                                 </div>
-                                                <span className="text-warning h4 mb-0">₹{Math.max(0, netPayable).toFixed(0)}</span>
+                                                <span className={netPayable < 0 ? 'text-danger h4 mb-0' : 'text-warning h4 mb-0'}>
+                                                    ₹{netPayable.toFixed(0)}
+                                                </span>
                                             </div>
+                                            {netPayable < 0 && (
+                                                <div className="mt-2 alert alert-danger bg-danger bg-opacity-10 border-danger py-1">
+                                                    <small className="text-danger">
+                                                        <i className="bi bi-exclamation-triangle me-1"></i>
+                                                        Negative balance: Employee owes money
+                                                    </small>
+                                                </div>
+                                            )}
                                         </div>
                                     </div>
                                 </div>

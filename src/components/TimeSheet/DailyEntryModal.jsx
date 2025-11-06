@@ -40,18 +40,21 @@ const DailyEntryModal = ({ entry, isEditing, employee, onSave, onAutoFill, onClo
   const tsPreviewId = useMemo(() => {
     const base = shortEmpCode(employee);
     if (!base) return '';
+
     if (tsMode === 'month' && tsMonth) {
-      if (tsMode === 'range' && tsStart && tsEnd) {
-        const { yy, mm } = monthParts((tsStart || '').slice(0, 7));
-        if (!yy || !mm) return '';
-        return `${base}-${mm}-${yy}`;
-      }
-      return '';
+      const { yy, mm } = monthParts(tsMonth);
+      if (!yy || !mm) return '';
+      return `${base}-${mm}-${yy}`;
     }
-    const { yy, mm } = monthParts((tsStart || '').slice(0, 7));
-    if (!yy || !mm) return '';
-    return `${base}-${mm}-${yy}`;
-  }, [employee, tsMode, tsMonth, tsStart, tsEnd]);
+
+    if (tsMode === 'range' && tsStart) {
+      const { yy, mm } = monthParts(tsStart.slice(0, 7));
+      if (!yy || !mm) return '';
+      return `${base}-${mm}-${yy}`;
+    }
+  
+  return '';
+}, [employee, tsMode, tsMonth, tsStart, tsEnd]);
 
 
   // Main form data
@@ -280,33 +283,42 @@ const DailyEntryModal = ({ entry, isEditing, employee, onSave, onAutoFill, onClo
 
   // ========= DUPLICATE CHECK =========
 
-  const checkDuplicate = async (employeeId, date, excludeId = null) => {
-    if (!employeeId || !date) return false;
+const checkDuplicate = async (employeeId, date, excludeId = null) => {
+  if (!employeeId || !date) return false;
 
-    try {
-      const snapshot = await firebaseDB
-        .child("TimesheetEntries")
-        .orderByChild("employeeId_date")
-        .equalTo(`${employeeId}_${date}`)
-        .once("value");
+  try {
+    // Check across ALL timesheets for this employee
+    const allTsSnap = await firebaseDB.child(`EmployeeBioData/${employeeId}/timesheets`).get();
+    if (!allTsSnap.exists()) return false;
 
-      if (snapshot.exists()) {
-        const entries = Object.entries(snapshot.val()).map(([id, data]) => ({ id, ...data }));
-        const duplicates = excludeId ? entries.filter((entry) => entry.id !== excludeId) : entries;
+    const allTimesheets = allTsSnap.val() || {};
+    const duplicates = [];
 
-        if (duplicates.length > 0) {
-          setDupList(duplicates);
-          setDupModalOpen(true);
-          return true;
-        }
+    // Check every timesheet for this employee
+    for (const [tsId, timesheet] of Object.entries(allTimesheets)) {
+      if (!timesheet.dailyEntries) continue;
+      
+      const entry = timesheet.dailyEntries[date];
+      if (entry && (!excludeId || entry.id !== excludeId)) {
+        duplicates.push({
+          id: `${tsId}_${date}`,
+          ...entry,
+          timesheetId: tsId
+        });
       }
-    } catch (error) {
-      console.error("Duplicate check error:", error);
     }
 
-    return false;
-  };
+    if (duplicates.length > 0) {
+      setDupList(duplicates);
+      setDupModalOpen(true);
+      return true;
+    }
+  } catch (error) {
+    console.error("Duplicate check error:", error);
+  }
 
+  return false;
+};
   // ========= SALARY CALCULATION - FIXED =========
 
   const calculateFinalDailySalary = () => {

@@ -84,6 +84,7 @@ const norm = (s) => String(s || '').trim().toLowerCase();
 const isSubmittedLike = (s) => ['submitted', 'submit', 'assigned'].includes(norm(s));
 
 
+
 // === READ-ONLY / STATUS / NAMES / HYDRATION HELPERS (PURE) ===
 
 const isSheetReadOnly = (ts, currentUserId, authContext) => {
@@ -517,8 +518,7 @@ const DisplayTimeSheet = () => {
         const { uid, name } = whoSafe();
         const emp = employees.find(e => e.id === empId);
         const periodKey = getCurrentPeriodKey();
-        const rawKey = getCurrentPeriodKey();
-        const periodStr = formatPeriodLabel(rawKey);
+        const periodStr = formatPeriodLabel(periodKey)
         const _isAssignee = Boolean(timesheet?.assignedTo && timesheet.assignedTo === uid);
         const _submittedLikeNow = isSubmittedLike(timesheet?.status);
         const _rowDeleteDisabled = _submittedLikeNow || isReadOnly;
@@ -529,10 +529,14 @@ const DisplayTimeSheet = () => {
             employeeId: empId,
             timesheetId: tsId,
             employeeName: `${emp?.firstName || ''} ${emp?.lastName || ''}`.trim(),
-            period: periodStr || '',
-            periodKey: periodKey || '',
-            startDate: useDateRange ? startDate : `${selectedMonth}-01`,
-            endDate: useDateRange ? endDate : endOfMonth(selectedMonth),
+            period: periodStr || '',               // human label
+            periodKey: periodKey || '',            // machine key
+            startDate: useDateRange
+                ? startDate
+                : `${(selectedMonth || new Date().toISOString().slice(0, 7))}-01`,
+            endDate: useDateRange
+                ? endDate
+                : endOfMonth(selectedMonth || new Date().toISOString().slice(0, 7)),
             status: header?.status ?? undefined,
             updatedAt: new Date().toISOString(),
             updatedBy: uid,
@@ -732,6 +736,9 @@ const DisplayTimeSheet = () => {
             ? `${startDate}_to_${endDate}`
             : (selectedMonth || '');
     };
+
+    const periodKey = getCurrentPeriodKey();
+
 
     // ---- Duplicate guards across ALL timesheets for an employee ----
     const dateExistsInOtherTimesheets = async (empId, date, excludeTsId = null) => {
@@ -1306,7 +1313,6 @@ const DisplayTimeSheet = () => {
         setIsCreatingTimesheet(true);
 
         try {
-            const periodKey = getCurrentPeriodKey();
             const employee = employees.find(emp => emp.id === selectedEmployee);
 
             if (!employee) {
@@ -2063,7 +2069,6 @@ const DisplayTimeSheet = () => {
         const { uid, name } = whoSafe();
         setIsSaving(true);
         try {
-            const periodKey = getCurrentPeriodKey();
             const periodStr = useDateRange ? `${startDate} to ${endDate}` : selectedMonth;
 
             const headerPatch = await ensureTimesheetHeader(
@@ -2113,7 +2118,6 @@ const DisplayTimeSheet = () => {
         const now = new Date().toISOString();
 
         // Derive period from the current search selection
-        const periodKey = getCurrentPeriodKey();
         const periodStr = useDateRange ? `${startDate} to ${endDate}` : selectedMonth;
 
         await ensureTimesheetHeader(empId, tsId, {
@@ -2374,7 +2378,6 @@ const DisplayTimeSheet = () => {
             }
 
 
-            const periodKey = getCurrentPeriodKey();
             const tsId = currentTimesheetId || await buildTimesheetId(emp, periodKey);
             const dateStr = entryData.date;
 
@@ -3891,7 +3894,6 @@ const DisplayTimeSheet = () => {
 
                                             // Get current period information
                                             const currentPeriod = useDateRange ? `${startDate} to ${endDate}` : selectedMonth;
-                                            const periodKey = getCurrentPeriodKey();
 
                                             for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
                                                 const dateStr = d.toISOString().slice(0, 10);
@@ -4053,228 +4055,228 @@ const DisplayTimeSheet = () => {
 // Timesheet Summary Component with Employee Photo - FIXED
 // Timesheet Summary Component with Employee Photo - FIXED
 const TimesheetSummary = ({ timesheet, advances, employee, currentUser, isReadOnly }) => {
-  // Calculate total advances properly
-  const calculateTotalAdvances = () => {
-    if (!timesheet) return 0;
-    
-    const advancesData = timesheet.advances || timesheet.advancesTotal || 0;
-    
-    if (advancesData && typeof advancesData === 'object') {
-      return Object.values(advancesData).reduce((sum, advance) => {
-        return sum + (parseFloat(advance?.amount) || 0);
-      }, 0);
-    }
-    
-    return Number(advancesData || 0);
-  };
+    // Calculate total advances properly
+    const calculateTotalAdvances = () => {
+        if (!timesheet) return 0;
 
-  const totalAdvances = calculateTotalAdvances();
-  const totalSalary = Number(timesheet.totalSalary || 0);
-  const netPayable = totalSalary - totalAdvances;
+        const advancesData = timesheet.advances || timesheet.advancesTotal || 0;
 
-  // Format period properly - use timesheet's actual period data
-  const formatDisplayPeriod = () => {
-    if (!timesheet) return '';
-    
-    // Priority 1: Use periodKey if available
-    if (timesheet.periodKey) {
-      if (timesheet.periodKey.includes('_to_')) {
-        const [s, e] = timesheet.periodKey.split('_to_');
-        const [sy, sm, sd] = s.split('-');
-        const [ey, em, ed] = e.split('-');
-        const smon = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][parseInt(sm, 10) - 1];
-        const emon = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][parseInt(em, 10) - 1];
-        const yy = String(ey).slice(-2);
-        return `${smon}-${sd} to ${emon}-${ed} '${yy}`;
-      } else {
-        // Monthly format (YYYY-MM)
-        return monthShort(timesheet.periodKey);
-      }
-    }
-    
-    // Priority 2: Use period field
-    if (timesheet.period) {
-      return timesheet.period;
-    }
-    
-    // Fallback: Use startDate and endDate
-    if (timesheet.startDate && timesheet.endDate) {
-      const start = new Date(timesheet.startDate);
-      const end = new Date(timesheet.endDate);
-      const smon = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][start.getMonth()];
-      const emon = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][end.getMonth()];
-      const yy = String(end.getFullYear()).slice(-2);
-      return `${smon}-${start.getDate()} to ${emon}-${end.getDate()} '${yy}`;
-    }
-    
-    return 'Period not specified';
-  };
+        if (advancesData && typeof advancesData === 'object') {
+            return Object.values(advancesData).reduce((sum, advance) => {
+                return sum + (parseFloat(advance?.amount) || 0);
+            }, 0);
+        }
 
-  const monthShort = (yyyyMm) => {
-    if (!/^\d{4}-\d{2}$/.test(yyyyMm)) return yyyyMm || '';
-    const [y, m] = yyyyMm.split('-');
-    const month = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][parseInt(m, 10) - 1] || m;
-    return `${month}-${String(y).slice(-2)}`;
-  };
+        return Number(advancesData || 0);
+    };
 
-  const displayPeriod = formatDisplayPeriod();
+    const totalAdvances = calculateTotalAdvances();
+    const totalSalary = Number(timesheet.totalSalary || 0);
+    const netPayable = totalSalary - totalAdvances;
 
-  return (
-    <div className="row mb-4">
-      <div className="col-12">
-        <div className="card bg-dark border-primary">
-          <div className="card-header bg-primary bg-opacity-25 border-primary d-flex justify-content-between align-items-center">
-            <div className="d-flex align-items-center">
-              {/* Employee Photo */}
-              {employee?.employeePhotoUrl ? (
-                <img
-                  src={employee.employeePhotoUrl}
-                  alt="Employee"
-                  className="rounded-circle me-3"
-                  style={{ width: '60px', height: '60px', objectFit: 'cover' }}
-                  onError={(e) => {
-                    e.target.style.display = 'none';
-                    const fallback = e.target.nextSibling;
-                    if (fallback) fallback.style.display = 'flex';
-                  }}
-                />
-              ) : null}
+    // Format period properly - use timesheet's actual period data
+    const formatDisplayPeriod = () => {
+        if (!timesheet) return '';
 
-              <div>
-                <h5 className="card-title mb-0 text-info">
-                  Timesheet Summary - {timesheet.employeeName}
-                </h5>
-                <small className="text-warning">
-                  <strong>Period:</strong> {displayPeriod}
-                </small>
-              </div>
-            </div>
+        // Priority 1: Use periodKey if available
+        if (timesheet.periodKey) {
+            if (timesheet.periodKey.includes('_to_')) {
+                const [s, e] = timesheet.periodKey.split('_to_');
+                const [sy, sm, sd] = s.split('-');
+                const [ey, em, ed] = e.split('-');
+                const smon = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][parseInt(sm, 10) - 1];
+                const emon = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][parseInt(em, 10) - 1];
+                const yy = String(ey).slice(-2);
+                return `${smon}-${sd} to ${emon}-${ed} '${yy}`;
+            } else {
+                // Monthly format (YYYY-MM)
+                return monthShort(timesheet.periodKey);
+            }
+        }
 
-            <div className="mb-2 text-center">
-              <small className="text-muted me-3">Timesheet ID:</small>
-              <br />
-              <span className="badge bg-warning">{timesheet.timesheetId || timesheet.id}</span>
-            </div>
-            <span className={`badge ${timesheet.status === 'draft' ? 'bg-warning' :
-              timesheet.status === 'submitted' ? 'bg-info' :
-                timesheet.status === 'approved' ? 'bg-success' : 'bg-secondary'
-              }`}>
-              {timesheet.status?.toUpperCase()}
-            </span>
-          </div>
+        // Priority 2: Use period field
+        if (timesheet.period) {
+            return timesheet.period;
+        }
 
-          <div className="card-body">
-            {/* Detailed Breakdown - Salary & Attendance */}
-            <div className="row">
-              {/* Attendance Summary */}
-              <div className="col-lg-6 mb-4">
-                <div className="card bg-secondary bg-opacity-10 border-secondary h-100">
-                  <div className="card-header bg-info bg-opacity-10 border-info">
-                    <h6 className="mb-0 text-white">
-                      <i className="fas fa-calendar-check me-2"></i>
-                      Attendance Summary
-                    </h6>
-                  </div>
-                  <div className="card-body">
-                    <div className="row g-3">
-                      <div className="col-md-4 col-6">
-                        <div className="bg-success bg-opacity-10 rounded p-3 border border-success text-center">
-                          <small className="text-muted d-block">Working Days</small>
-                          <div className="text-success h4 mb-0">{timesheet.workingDays || 0}</div>
+        // Fallback: Use startDate and endDate
+        if (timesheet.startDate && timesheet.endDate) {
+            const start = new Date(timesheet.startDate);
+            const end = new Date(timesheet.endDate);
+            const smon = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][start.getMonth()];
+            const emon = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][end.getMonth()];
+            const yy = String(end.getFullYear()).slice(-2);
+            return `${smon}-${start.getDate()} to ${emon}-${end.getDate()} '${yy}`;
+        }
+
+        return 'Period not specified';
+    };
+
+    const monthShort = (yyyyMm) => {
+        if (!/^\d{4}-\d{2}$/.test(yyyyMm)) return yyyyMm || '';
+        const [y, m] = yyyyMm.split('-');
+        const month = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][parseInt(m, 10) - 1] || m;
+        return `${month}-${String(y).slice(-2)}`;
+    };
+
+    const displayPeriod = formatDisplayPeriod();
+
+    return (
+        <div className="row mb-4">
+            <div className="col-12">
+                <div className="card bg-dark border-primary">
+                    <div className="card-header bg-primary bg-opacity-25 border-primary d-flex justify-content-between align-items-center">
+                        <div className="d-flex align-items-center">
+                            {/* Employee Photo */}
+                            {employee?.employeePhotoUrl ? (
+                                <img
+                                    src={employee.employeePhotoUrl}
+                                    alt="Employee"
+                                    className="rounded-circle me-3"
+                                    style={{ width: '60px', height: '60px', objectFit: 'cover' }}
+                                    onError={(e) => {
+                                        e.target.style.display = 'none';
+                                        const fallback = e.target.nextSibling;
+                                        if (fallback) fallback.style.display = 'flex';
+                                    }}
+                                />
+                            ) : null}
+
+                            <div>
+                                <h5 className="card-title mb-0 text-info">
+                                    Timesheet Summary - {timesheet.employeeName}
+                                </h5>
+                                <small className="text-warning">
+                                    <strong>Period:</strong> {displayPeriod}
+                                </small>
+                            </div>
                         </div>
-                      </div>
-                      <div className="col-md-4 col-6">
-                        <div className="bg-warning bg-opacity-10 rounded p-3 border border-warning text-center">
-                          <small className="text-muted d-block">Leaves</small>
-                          <div className="text-warning h4 mb-0">{timesheet.leaves || 0}</div>
+
+                        <div className="mb-2 text-center">
+                            <small className="text-muted me-3">Timesheet ID:</small>
+                            <br />
+                            <span className="badge bg-warning">{timesheet.timesheetId || timesheet.id}</span>
                         </div>
-                      </div>
-                      <div className="col-md-4 col-6">
-                        <div className="bg-primary bg-opacity-10 rounded p-3 border border-primary text-center">
-                          <small className="text-muted d-block">Holidays</small>
-                          <div className="text-primary h4 mb-0">{timesheet.holidays || 0}</div>
-                        </div>
-                      </div>
-                      <div className="col-md-4 col-6">
-                        <div className="bg-info bg-opacity-10 rounded p-3 border border-info text-center">
-                          <small className="text-muted d-block">Emergencies</small>
-                          <div className="text-info h4 mb-0">{timesheet.emergencies || 0}</div>
-                        </div>
-                      </div>
-                      <div className="col-md-4 col-6">
-                        <div className="bg-danger bg-opacity-10 rounded p-3 border border-danger text-center">
-                          <small className="text-muted d-block">Absents</small>
-                          <div className="text-danger h4 mb-0">{timesheet.absents || 0}</div>
-                        </div>
-                      </div>
-                      <div className="col-md-4 col-6">
-                        <div className="bg-secondary bg-opacity-10 rounded p-3 border border-secondary text-center">
-                          <small className="text-muted d-block">Total Days</small>
-                          <div className="text-white h4 mb-0">{timesheet.totalDays || 0}</div>
-                        </div>
-                      </div>
+                        <span className={`badge ${timesheet.status === 'draft' ? 'bg-warning' :
+                            timesheet.status === 'submitted' ? 'bg-info' :
+                                timesheet.status === 'approved' ? 'bg-success' : 'bg-secondary'
+                            }`}>
+                            {timesheet.status?.toUpperCase()}
+                        </span>
                     </div>
-                  </div>
+
+                    <div className="card-body">
+                        {/* Detailed Breakdown - Salary & Attendance */}
+                        <div className="row">
+                            {/* Attendance Summary */}
+                            <div className="col-lg-6 mb-4">
+                                <div className="card bg-secondary bg-opacity-10 border-secondary h-100">
+                                    <div className="card-header bg-info bg-opacity-10 border-info">
+                                        <h6 className="mb-0 text-white">
+                                            <i className="fas fa-calendar-check me-2"></i>
+                                            Attendance Summary
+                                        </h6>
+                                    </div>
+                                    <div className="card-body">
+                                        <div className="row g-3">
+                                            <div className="col-md-4 col-6">
+                                                <div className="bg-success bg-opacity-10 rounded p-3 border border-success text-center">
+                                                    <small className="text-muted d-block">Working Days</small>
+                                                    <div className="text-success h4 mb-0">{timesheet.workingDays || 0}</div>
+                                                </div>
+                                            </div>
+                                            <div className="col-md-4 col-6">
+                                                <div className="bg-warning bg-opacity-10 rounded p-3 border border-warning text-center">
+                                                    <small className="text-muted d-block">Leaves</small>
+                                                    <div className="text-warning h4 mb-0">{timesheet.leaves || 0}</div>
+                                                </div>
+                                            </div>
+                                            <div className="col-md-4 col-6">
+                                                <div className="bg-primary bg-opacity-10 rounded p-3 border border-primary text-center">
+                                                    <small className="text-muted d-block">Holidays</small>
+                                                    <div className="text-primary h4 mb-0">{timesheet.holidays || 0}</div>
+                                                </div>
+                                            </div>
+                                            <div className="col-md-4 col-6">
+                                                <div className="bg-info bg-opacity-10 rounded p-3 border border-info text-center">
+                                                    <small className="text-muted d-block">Emergencies</small>
+                                                    <div className="text-info h4 mb-0">{timesheet.emergencies || 0}</div>
+                                                </div>
+                                            </div>
+                                            <div className="col-md-4 col-6">
+                                                <div className="bg-danger bg-opacity-10 rounded p-3 border border-danger text-center">
+                                                    <small className="text-muted d-block">Absents</small>
+                                                    <div className="text-danger h4 mb-0">{timesheet.absents || 0}</div>
+                                                </div>
+                                            </div>
+                                            <div className="col-md-4 col-6">
+                                                <div className="bg-secondary bg-opacity-10 rounded p-3 border border-secondary text-center">
+                                                    <small className="text-muted d-block">Total Days</small>
+                                                    <div className="text-white h4 mb-0">{timesheet.totalDays || 0}</div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Salary Breakdown - FIXED with proper advance deduction */}
+                            <div className="col-lg-6 mb-4">
+                                <div className="card bg-secondary bg-opacity-10 border-secondary h-100">
+                                    <div className="card-header bg-success bg-opacity-10 border-success">
+                                        <h6 className="mb-0 text-white">
+                                            <i className="fas fa-money-bill-wave me-2"></i>
+                                            Salary Breakdown
+                                        </h6>
+                                    </div>
+                                    <div className="card-body">
+                                        <div className="row g-3">
+                                            <div className="col-md-6">
+                                                <div className="bg-dark bg-opacity-50 rounded p-3 border border-secondary text-center">
+                                                    <small className="text-muted d-block">Basic Salary</small>
+                                                    <div className="text-white h5 mb-0">₹{employee?.basicSalary || 0}</div>
+                                                </div>
+                                            </div>
+                                            <div className="col-md-6">
+                                                <div className="bg-dark bg-opacity-50 rounded p-3 border border-secondary text-center">
+                                                    <small className="text-muted d-block">Daily Rate</small>
+                                                    <div className="text-white h5 mb-0">₹{Math.round((employee?.basicSalary || 0) / 30)}</div>
+                                                </div>
+                                            </div>
+                                            <div className="col-md-6">
+                                                <div className="bg-success bg-opacity-10 rounded p-3 border border-success text-center">
+                                                    <small className="text-muted d-block">Total Salary</small>
+                                                    <div className="text-success h5 mb-0">₹{totalSalary.toFixed(2)}</div>
+                                                </div>
+                                            </div>
+                                            <div className="col-md-6">
+                                                <div className="bg-danger bg-opacity-10 rounded p-3 border border-danger text-center">
+                                                    <small className="text-muted d-block">Advances</small>
+                                                    <div className="text-danger h5 mb-0">₹{totalAdvances.toFixed(0)}</div>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        {/* Net Payable Highlight - FIXED with proper calculation */}
+                                        <div className="mt-4 p-3 bg-warning bg-opacity-10 rounded border border-warning">
+                                            <div className="d-flex justify-content-between align-items-center">
+                                                <div>
+                                                    <span className="text-white h6 mb-0">Net Payable Amount</span>
+                                                    <br />
+                                                    <small className="text-muted">Total Salary - Advances</small>
+                                                </div>
+                                                <span className="text-warning h4 mb-0">₹{Math.max(0, netPayable).toFixed(0)}</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
-              </div>
-
-              {/* Salary Breakdown - FIXED with proper advance deduction */}
-              <div className="col-lg-6 mb-4">
-                <div className="card bg-secondary bg-opacity-10 border-secondary h-100">
-                  <div className="card-header bg-success bg-opacity-10 border-success">
-                    <h6 className="mb-0 text-white">
-                      <i className="fas fa-money-bill-wave me-2"></i>
-                      Salary Breakdown
-                    </h6>
-                  </div>
-                  <div className="card-body">
-                    <div className="row g-3">
-                      <div className="col-md-6">
-                        <div className="bg-dark bg-opacity-50 rounded p-3 border border-secondary text-center">
-                          <small className="text-muted d-block">Basic Salary</small>
-                          <div className="text-white h5 mb-0">₹{employee?.basicSalary || 0}</div>
-                        </div>
-                      </div>
-                      <div className="col-md-6">
-                        <div className="bg-dark bg-opacity-50 rounded p-3 border border-secondary text-center">
-                          <small className="text-muted d-block">Daily Rate</small>
-                          <div className="text-white h5 mb-0">₹{Math.round((employee?.basicSalary || 0) / 30)}</div>
-                        </div>
-                      </div>
-                      <div className="col-md-6">
-                        <div className="bg-success bg-opacity-10 rounded p-3 border border-success text-center">
-                          <small className="text-muted d-block">Total Salary</small>
-                          <div className="text-success h5 mb-0">₹{totalSalary.toFixed(2)}</div>
-                        </div>
-                      </div>
-                      <div className="col-md-6">
-                        <div className="bg-danger bg-opacity-10 rounded p-3 border border-danger text-center">
-                          <small className="text-muted d-block">Advances</small>
-                          <div className="text-danger h5 mb-0">₹{totalAdvances.toFixed(0)}</div>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Net Payable Highlight - FIXED with proper calculation */}
-                    <div className="mt-4 p-3 bg-warning bg-opacity-10 rounded border border-warning">
-                      <div className="d-flex justify-content-between align-items-center">
-                        <div>
-                          <span className="text-white h6 mb-0">Net Payable Amount</span>
-                          <br />
-                          <small className="text-muted">Total Salary - Advances</small>
-                        </div>
-                        <span className="text-warning h4 mb-0">₹{Math.max(0, netPayable).toFixed(0)}</span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
             </div>
-          </div>
         </div>
-      </div>
-    </div>
-  );
+    );
 };
 
 

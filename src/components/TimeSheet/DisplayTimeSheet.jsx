@@ -4341,7 +4341,6 @@ const TimesheetSummary = ({ timesheet, advances, employee, currentUser, isReadOn
                                         </div>
 
                                         {/* Net Payable Highlight - FIXED with proper calculation */}
-                                    // In TimesheetSummary component, update the net payable section:
                                         <div className="mt-4 p-3 bg-warning bg-opacity-10 rounded border border-warning">
                                             <div className="d-flex justify-content-between align-items-center">
                                                 <div>

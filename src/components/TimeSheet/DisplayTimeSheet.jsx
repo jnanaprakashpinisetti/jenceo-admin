@@ -38,18 +38,12 @@ const buildTimesheetId = async (emp, periodKey) => {
 };
 
 // --- PATH HELPERS (Employee-scoped only) ---
-const empPath = (empId) => `EmployeeBioData/${empId}`;
-const empTsById = (empId, tsId) => `${empPath(empId)}/timesheets/${tsId}`;
-const empEntryById = (empId, tsId, dateStr) =>
-    `${empTsById(empId, tsId)}/dailyEntries/${dateStr}`;
+// Single source of truth for timesheet paths
+const empTsNode = (empId, tsId = '') =>
+    `EmployeeBioData/${empId}/timesheets${tsId ? `/${tsId}` : ''}`;
 
-// Compat helpers for older calls (so no-undef goes away)
-const tsNode = (empId, tsKeyOrId) =>
-    `${empTsById(empId, tsKeyOrId)}`;
-const entryNode = (empId, tsKeyOrId, dateStr = "") =>
-    `${tsNode(empId, tsKeyOrId)}/dailyEntries${dateStr ? `/${dateStr}` : ""}`;
-const entryNodeByDate = (empId, tsKeyOrId, dateStr) =>
-    `${tsNode(empId, tsKeyOrId)}/dailyEntries/${dateStr}`;
+const empTsEntriesNode = (empId, tsId, dateStr = '') =>
+    `${empTsNode(empId, tsId)}/dailyEntries${dateStr ? `/${dateStr}` : ''}`;
 
 // Build period key from modal fields
 const makePeriodKey = ({ tsMode, tsMonth, tsStart, tsEnd }) =>
@@ -65,6 +59,23 @@ const monthParts = (yyyyMm) => {
     const [y, m] = (yyyyMm || "").split("-");
     return { mm: m || "01", yy: (y || "").slice(-2) };
 };
+
+
+
+// --- PATH HELPERS (Employee-scoped only) ---
+// Single source of truth for timesheet paths
+const empPath = (empId) => `EmployeeBioData/${empId}`;
+
+
+
+const empTsById = (empId, tsId) =>
+    `EmployeeBioData/${empId}/timesheets/${tsId}`;
+
+const empEntryById = (empId, tsId, dateStr) =>
+    `${empTsById(empId, tsId)}/dailyEntries/${dateStr}`;
+
+const entryNodeByDate = (empId, tsId, dateStr) =>
+    `${empTsById(empId, tsId)}/dailyEntries/${dateStr}`;
 
 const pruneUndefined = (obj = {}) =>
     Object.fromEntries(Object.entries(obj).filter(([_, v]) => v !== undefined));
@@ -398,32 +409,32 @@ const DisplayTimeSheet = () => {
 
 
     // Enhanced read-only check considering current user
-const isReadOnly = useMemo(() => {
-    const { uid } = whoSafe();
-    
-    // If no timesheet exists, it's not read-only (we can create)
-    if (!timesheet) return false;
+    const isReadOnly = useMemo(() => {
+        const { uid } = whoSafe();
 
-    if (!uid || uid === "unknown") {
-        const role = norm(authContext?.user?.role);
-        const isAdmin = role === 'admin' || role === 'superadmin' || role === 'super_admin';
-        return !isAdmin;
-    }
+        // If no timesheet exists, it's not read-only (we can create)
+        if (!timesheet) return false;
 
-    // If allUsers is not loaded yet, we can't accurately determine read-only status
-    // So we'll check basic conditions first
-    if (!allUsers || allUsers.length === 0) {
-        // For draft timesheets, allow editing until we have user data
-        if (timesheet?.status === 'draft' && timesheet?.createdBy === uid) {
-            return false;
+        if (!uid || uid === "unknown") {
+            const role = norm(authContext?.user?.role);
+            const isAdmin = role === 'admin' || role === 'superadmin' || role === 'super_admin';
+            return !isAdmin;
         }
-        // Be conservative for other statuses
-        return timesheet?.status !== 'draft';
-    }
 
-    const readOnly = isSheetReadOnly(timesheet, uid, authContext);
-    return readOnly;
-}, [timesheet, authContext, allUsers, currentUser]);
+        // If allUsers is not loaded yet, we can't accurately determine read-only status
+        // So we'll check basic conditions first
+        if (!allUsers || allUsers.length === 0) {
+            // For draft timesheets, allow editing until we have user data
+            if (timesheet?.status === 'draft' && timesheet?.createdBy === uid) {
+                return false;
+            }
+            // Be conservative for other statuses
+            return timesheet?.status !== 'draft';
+        }
+
+        const readOnly = isSheetReadOnly(timesheet, uid, authContext);
+        return readOnly;
+    }, [timesheet, authContext, allUsers, currentUser]);
 
     useEffect(() => {
         const loadUsers = async () => {
@@ -821,7 +832,7 @@ const isReadOnly = useMemo(() => {
     // Update fetchUsers function to filter by role
     const fetchUsers = async () => {
         setUsersLoading(true);
-        const paths = ['Users', 'JenCeo-DataBase/Users', 'AppUsers', 'employees', 'EmployeeBioData'];
+        const paths = ['Users', 'EmployeeBioData',];
         const tmp = [];
 
         for (const p of paths) {
@@ -1049,12 +1060,6 @@ const isReadOnly = useMemo(() => {
 
 
 
-    // PATCH: timesheet path helpers — single source of truth
-    const empTsNode = (empId, tsId = '') =>
-        `EmployeeBioData/${empId}/timesheets${tsId ? `/${tsId}` : ''}`;
-
-    const empTsEntriesNode = (empId, tsId) =>
-        `${empTsNode(empId, tsId)}/dailyEntries`;
 
 
     const nameForUid = (uid) => {
@@ -1256,7 +1261,7 @@ const isReadOnly = useMemo(() => {
     };
     // Keep your fetchClients, but guarantee name/clientId fields exist:
     const fetchClients = async () => {
-        const paths = ['Clients', 'ClientData', 'JenCeo-DataBase/ClientData', 'JenCeo-DataBase/Clients'];
+        const paths = ['ClientData'];
         const combined = [];
         for (const p of paths) {
             try {
@@ -1403,69 +1408,6 @@ const isReadOnly = useMemo(() => {
         showModal('Success', 'Reply posted.', 'success');
     };
 
-    // Alternative method to load timesheets from different paths
-    const loadAlternativeTimesheets = async () => {
-        if (!selectedEmployee) return;
-
-        setLoadingPrevious(true);
-        try {
-            // Try multiple paths to find timesheets
-            const paths = [
-                `EmployeeBioData/${selectedEmployee}/timesheets`,
-                'Timesheets' // Fallback to root Timesheets collection
-            ];
-
-            let allTimesheets = [];
-
-            for (const path of paths) {
-                try {
-                    const snap = await firebaseDB.child(path).get();
-                    if (snap.exists()) {
-                        const data = snap.val() || {};
-
-                        // Handle different data structures
-                        const timesheetsFromPath = Object.entries(data)
-                            .map(([id, tsData]) => {
-                                // If this is the root Timesheets collection, filter by employeeId
-                                if (path === 'Timesheets' && tsData.employeeId !== selectedEmployee) {
-                                    return null;
-                                }
-
-                                return {
-                                    id,
-                                    timesheetId: id,
-                                    ...tsData,
-                                    employeeId: selectedEmployee,
-                                    employeeName: tsData.employeeName || 'Unknown Employee'
-                                };
-                            })
-                            .filter(ts => ts !== null);
-
-                        allTimesheets = [...allTimesheets, ...timesheetsFromPath];
-                    }
-                } catch (error) {
-                    showModal('Error', 'Error loading timesheet', 'error');
-                }
-            }
-
-            // Remove duplicates and sort
-            const uniqueTimesheets = allTimesheets.filter((ts, index, self) =>
-                index === self.findIndex(t => t.id === ts.id)
-            ).sort((a, b) => {
-                const dateA = new Date(a.updatedAt || a.createdAt || 0);
-                const dateB = new Date(b.updatedAt || b.createdAt || 0);
-                return dateB - dateA;
-            }).slice(0, 12);
-
-            setPreviousTimesheets(uniqueTimesheets);
-
-
-        } catch (err) {
-            showModal('Error in alternative timesheet loading:', err);
-        } finally {
-            setLoadingPrevious(false);
-        }
-    };
 
 
 
@@ -1750,8 +1692,17 @@ const isReadOnly = useMemo(() => {
     };
     const loadDailyEntries = async (periodKeyParam) => {
         const periodKey = periodKeyParam || getCurrentPeriodKey();
-        const ref = firebaseDB.child(entryNode(selectedEmployee, periodKey, '')); // will not exist
-        const snap = await firebaseDB.child(tsNode(selectedEmployee, periodKey) + '/dailyEntries').get();
+
+        // Use the proper employee-scoped path
+        if (!selectedEmployee || !currentTimesheetId) {
+            setDailyEntries([]);
+            calculateSummary([]);
+            return;
+        }
+
+        const snap = await firebaseDB.child(
+            `${empTsById(selectedEmployee, currentTimesheetId)}/dailyEntries`
+        ).get();
 
         if (snap.exists()) {
             const obj = snap.val() || {};
@@ -1800,26 +1751,34 @@ const isReadOnly = useMemo(() => {
     // Check for duplicate entries
     const checkDuplicateEntries = async (employeeId, date, excludeEntryId = null) => {
         try {
-            const snapshot = await firebaseDB.child('TimesheetEntries')
-                .orderByChild('employeeId_date')
-                .equalTo(`${employeeId}_${date}`)
-                .once('value');
+            // Check across all timesheets for this employee
+            const allTsSnap = await firebaseDB.child(empTsNode(employeeId)).get();
+            if (!allTsSnap.exists()) return false;
 
-            if (snapshot.exists()) {
-                const duplicates = Object.entries(snapshot.val())
-                    .map(([id, data]) => ({ id, ...data }))
-                    .filter(entry => entry.id !== excludeEntryId); // Exclude current entry when editing
+            const allTimesheets = allTsSnap.val() || {};
+            const duplicates = [];
 
-                if (duplicates.length > 0) {
-                    setDuplicateEntries(duplicates);
-                    setShowDuplicateWarning(true);
-                    return true;
+            for (const [tsId, timesheet] of Object.entries(allTimesheets)) {
+                if (!timesheet.dailyEntries) continue;
+
+                const entry = timesheet.dailyEntries[date];
+                if (entry && (!excludeEntryId || entry.id !== excludeEntryId)) {
+                    duplicates.push({
+                        id: `${tsId}_${date}`,
+                        ...entry,
+                        timesheetId: tsId
+                    });
                 }
+            }
+
+            if (duplicates.length > 0) {
+                setDuplicateEntries(duplicates);
+                setShowDuplicateWarning(true);
+                return true;
             }
             return false;
         } catch (error) {
-
-            showModal('Error checking duplicates:', error);
+            console.error('Error checking duplicates:', error);
             return false;
         }
     };
@@ -3592,20 +3551,6 @@ const isReadOnly = useMemo(() => {
                                         try {
                                             const id = tsToDelete?.id;
                                             if (!id) { alert('Timesheet id missing.'); return; }
-
-                                            // 1) remove the timesheet
-                                            await firebaseDB.child(`Timesheets/${id}`).remove();
-
-                                            // 2) remove its entries (with a defined id)
-                                            const snap = await firebaseDB.child('TimesheetEntries')
-                                                .orderByChild('timesheetId')
-                                                .equalTo(id).once('value');
-                                            if (snap.exists()) {
-                                                const obj = snap.val() || {};
-                                                await Promise.all(Object.keys(obj).map(k =>
-                                                    firebaseDB.child(`TimesheetEntries/${k}`).remove()
-                                                ));
-                                            }
 
                                             // 3) if the deleted one is the one on screen, clear view
                                             if (timesheet?.id === id) {

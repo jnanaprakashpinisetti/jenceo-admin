@@ -551,13 +551,25 @@ const DisplayTimeSheet = () => {
     // --- ADVANCE DEDUCTION HELPERS ---
 
     // true if a yyyy-mm-dd date is inside the currently selected period
+    // true if a yyyy-mm-dd date is inside the currently selected period
     const isDateInActivePeriod = (yyyyMmDd) => {
         if (!yyyyMmDd) return false;
-        if (useDateRange && startDate && endDate) {
-            return yyyyMmDd >= startDate && yyyyMmDd <= endDate;
+
+        try {
+            if (useDateRange && startDate && endDate) {
+                return yyyyMmDd >= startDate && yyyyMmDd <= endDate;
+            }
+
+            // month mode - check if date falls within the month
+            if (selectedMonth) {
+                return yyyyMmDd.startsWith(selectedMonth);
+            }
+
+            return false;
+        } catch (error) {
+            console.error('Error checking date in period:', error);
+            return false;
         }
-        // month mode
-        return (selectedMonth && yyyyMmDd.slice(0, 7) === selectedMonth);
     };
 
     // get the first (earliest) timesheet id for the active period
@@ -1625,21 +1637,27 @@ const DisplayTimeSheet = () => {
         const absents = entries.filter(e => e.status === 'absent').length;
         const totalSalary = entries.reduce((s, e) => s + (parseFloat(e.dailySalary) || 0), 0);
 
-        // FIX: Always deduct advances for the current timesheet period
-        const advancesInPeriod = (advancesData || [])
-            .filter(a => isDateInActivePeriod(a.date) && (a.status || '').toLowerCase() !== 'settled');
-
+        // FIX: Proper advance calculation for current period
         const normalizeAdvances = (adv) => {
+            if (!adv) return [];
             if (Array.isArray(adv)) return adv;
-            if (adv && typeof adv === 'object') return Object.values(adv);
+            if (typeof adv === 'object') return Object.values(adv);
             return [];
         };
 
+        const advancesList = normalizeAdvances(advancesData);
 
-        const list = normalizeAdvances(advancesData);
+        // Filter advances for current period and non-settled status
+        const advancesInPeriod = advancesList.filter(a => {
+            const isInPeriod = isDateInActivePeriod(a.date);
+            const isNotSettled = (a.status || '').toLowerCase() !== 'settled';
+            return isInPeriod && isNotSettled;
+        });
 
-        const totalAdv = advancesInPeriod.reduce((sum, a) => sum + (parseFloat(a?.amount) || 0), 0);
-
+        const totalAdv = advancesInPeriod.reduce((sum, a) => {
+            const amount = parseFloat(a?.amount) || 0;
+            return sum + amount;
+        }, 0);
 
         const { uid, name } = whoSafe();
 
@@ -1654,12 +1672,14 @@ const DisplayTimeSheet = () => {
             absents,
             totalSalary,
             advancesTotal: totalAdv, // Always show advances for this period
-            netPayable: Math.round(totalSalary - totalAdv),
+            netPayable: Math.max(0, Math.round(totalSalary - totalAdv)), // Ensure non-negative
             updatedByName: name,
             updatedAt: new Date().toISOString(),
         };
 
         setTimesheet(prev => ({ ...(prev || { timesheetId: currentTimesheetId }), ...patch, timesheetId: currentTimesheetId }));
+
+        // Update Firebase
         await firebaseDB.child(empTsById(selectedEmployee, currentTimesheetId)).update(patch);
     };
     const createNewTimesheet = (timesheetId) => {
@@ -1736,20 +1756,26 @@ const DisplayTimeSheet = () => {
                 .once('value');
 
             const data = snap.val();
-            let arr = [];
+            let advancesList = [];
 
-            // Safe handling of data structure
-            if (data && typeof data === 'object' && !Array.isArray(data)) {
-                arr = Object.entries(data).map(([id, v]) => ({ id, ...v }));
-            } else if (typeof data === 'number' || typeof data === 'string') {
-
-                showModal('Error', 'Delete failed. Try again.', 'error');
-                arr = []; // Reset to empty array
+            // Properly handle different data structures
+            if (data) {
+                if (Array.isArray(data)) {
+                    advancesList = data;
+                } else if (typeof data === 'object') {
+                    advancesList = Object.entries(data).map(([id, v]) => ({
+                        id,
+                        ...v,
+                        // Ensure amount is properly parsed
+                        amount: parseFloat(v?.amount) || 0
+                    }));
+                }
             }
 
-            setAdvances(arr);
-            calculateSummary(dailyEntries, arr);
+            setAdvances(advancesList);
+            calculateSummary(dailyEntries, advancesList);
         } catch (error) {
+            console.error('Error loading advances:', error);
             setAdvances([]);
             calculateSummary(dailyEntries, []);
         }
@@ -2659,6 +2685,13 @@ const DisplayTimeSheet = () => {
             showModal('Error', 'Error submitting timesheet. Please try again.', 'error');
         }
     };
+
+    // Refresh calculations when advances change
+    useEffect(() => {
+        if (timesheet && advances.length >= 0) {
+            calculateSummary(dailyEntries, advances);
+        }
+    }, [advances]);
 
 
 
@@ -4057,9 +4090,18 @@ const DisplayTimeSheet = () => {
 const TimesheetSummary = ({ timesheet, advances, employee, currentUser, isReadOnly }) => {
     // Calculate total advances properly
     const calculateTotalAdvances = () => {
-        if (!timesheet) return 0;
+        if (!timesheet && !advances) return 0;
 
-        const advancesData = timesheet.advances || timesheet.advancesTotal || 0;
+        // Use advances prop if available (preferred)
+        if (advances && advances.length > 0) {
+            return advances.reduce((sum, advance) => {
+                const amount = parseFloat(advance?.amount) || 0;
+                return sum + amount;
+            }, 0);
+        }
+
+        // Fallback to timesheet data
+        const advancesData = timesheet?.advances || timesheet?.advancesTotal || 0;
 
         if (advancesData && typeof advancesData === 'object') {
             return Object.values(advancesData).reduce((sum, advance) => {
@@ -4069,6 +4111,8 @@ const TimesheetSummary = ({ timesheet, advances, employee, currentUser, isReadOn
 
         return Number(advancesData || 0);
     };
+
+
 
     const totalAdvances = calculateTotalAdvances();
     const totalSalary = Number(timesheet.totalSalary || 0);

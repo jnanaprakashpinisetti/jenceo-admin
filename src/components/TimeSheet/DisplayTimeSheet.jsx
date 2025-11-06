@@ -4051,206 +4051,230 @@ const DisplayTimeSheet = () => {
 };
 
 // Timesheet Summary Component with Employee Photo - FIXED
+// Timesheet Summary Component with Employee Photo - FIXED
 const TimesheetSummary = ({ timesheet, advances, employee, currentUser, isReadOnly }) => {
-
-    {
-        timesheet && (timesheet.status === 'submitted' || timesheet.status === 'assigned') && (
-            <div className="alert alert-info bg-info bg-opacity-10 border-info mt-2">
-                <small>
-                    <strong>Editing Status:</strong> {
-                        isReadOnly
-                            ? `Read-only - Only ${timesheet.assignedToName || timesheet.assignedTo} can modify`
-                            : `You can edit this timesheet (Assigned to you)`
-                    }
-                </small>
-            </div>
-        )
+  // Calculate total advances properly
+  const calculateTotalAdvances = () => {
+    if (!timesheet) return 0;
+    
+    const advancesData = timesheet.advances || timesheet.advancesTotal || 0;
+    
+    if (advancesData && typeof advancesData === 'object') {
+      return Object.values(advancesData).reduce((sum, advance) => {
+        return sum + (parseFloat(advance?.amount) || 0);
+      }, 0);
     }
+    
+    return Number(advancesData || 0);
+  };
 
-    return (
-        <div className="row mb-4">
-            <div className="col-12">
-                <div className="card bg-dark border-primary">
-                    <div className="card-header bg-primary bg-opacity-25 border-primary d-flex justify-content-between align-items-center">
-                        <div className="d-flex align-items-center justify-content-between">
-                            {/* Employee Photo - FIXED: Using employee photo instead of current user */}
-                            {employee?.employeePhotoUrl ? (
-                                <img
-                                    src={employee.employeePhotoUrl}
-                                    alt="Employee"
-                                    className="rounded-circle me-3"
-                                    style={{ width: '60px', height: '60px', objectFit: 'cover' }}
-                                    onError={(e) => {
-                                        e.target.style.display = 'none';
-                                        // Show fallback if image fails to load
-                                        const fallback = e.target.nextSibling;
-                                        if (fallback) fallback.style.display = 'flex';
-                                    }}
-                                />
-                            ) : null}
+  const totalAdvances = calculateTotalAdvances();
+  const totalSalary = Number(timesheet.totalSalary || 0);
+  const netPayable = totalSalary - totalAdvances;
 
-                            <div>
-                                <h5 className="card-title mb-0 text-info">
-                                    Timesheet Summary - {timesheet.employeeName}
-                                </h5>
-                            </div>
+  // Format period properly - use timesheet's actual period data
+  const formatDisplayPeriod = () => {
+    if (!timesheet) return '';
+    
+    // Priority 1: Use periodKey if available
+    if (timesheet.periodKey) {
+      if (timesheet.periodKey.includes('_to_')) {
+        const [s, e] = timesheet.periodKey.split('_to_');
+        const [sy, sm, sd] = s.split('-');
+        const [ey, em, ed] = e.split('-');
+        const smon = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][parseInt(sm, 10) - 1];
+        const emon = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][parseInt(em, 10) - 1];
+        const yy = String(ey).slice(-2);
+        return `${smon}-${sd} to ${emon}-${ed} '${yy}`;
+      } else {
+        // Monthly format (YYYY-MM)
+        return monthShort(timesheet.periodKey);
+      }
+    }
+    
+    // Priority 2: Use period field
+    if (timesheet.period) {
+      return timesheet.period;
+    }
+    
+    // Fallback: Use startDate and endDate
+    if (timesheet.startDate && timesheet.endDate) {
+      const start = new Date(timesheet.startDate);
+      const end = new Date(timesheet.endDate);
+      const smon = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][start.getMonth()];
+      const emon = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][end.getMonth()];
+      const yy = String(end.getFullYear()).slice(-2);
+      return `${smon}-${start.getDate()} to ${emon}-${end.getDate()} '${yy}`;
+    }
+    
+    return 'Period not specified';
+  };
 
+  const monthShort = (yyyyMm) => {
+    if (!/^\d{4}-\d{2}$/.test(yyyyMm)) return yyyyMm || '';
+    const [y, m] = yyyyMm.split('-');
+    const month = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][parseInt(m, 10) - 1] || m;
+    return `${month}-${String(y).slice(-2)}`;
+  };
 
-                        </div>
+  const displayPeriod = formatDisplayPeriod();
 
-                        <div className="mb-2 text-center">
-                            <small className="text-muted me-3">Timesheet ID:</small>
-                            <br></br>
-                            <span className="badge bg-warning">{timesheet.timesheetId || timesheet.id}</span>
-                        </div>
-                        <span className={`badge ${timesheet.status === 'draft' ? 'bg-warning' :
-                            timesheet.status === 'submitted' ? 'bg-info' :
-                                timesheet.status === 'approved' ? 'bg-success' : 'bg-secondary'
-                            }`}>
-                            {timesheet.status?.toUpperCase()}
-                        </span>
-                    </div>
-                    {/* Rest of the component remains same */}
-                    <div className="card-body">
+  return (
+    <div className="row mb-4">
+      <div className="col-12">
+        <div className="card bg-dark border-primary">
+          <div className="card-header bg-primary bg-opacity-25 border-primary d-flex justify-content-between align-items-center">
+            <div className="d-flex align-items-center">
+              {/* Employee Photo */}
+              {employee?.employeePhotoUrl ? (
+                <img
+                  src={employee.employeePhotoUrl}
+                  alt="Employee"
+                  className="rounded-circle me-3"
+                  style={{ width: '60px', height: '60px', objectFit: 'cover' }}
+                  onError={(e) => {
+                    e.target.style.display = 'none';
+                    const fallback = e.target.nextSibling;
+                    if (fallback) fallback.style.display = 'flex';
+                  }}
+                />
+              ) : null}
 
-
-
-                        {/* Detailed Breakdown - Salary & Attendance */}
-                        <div className="row">
-
-                            {/* Attendance Summary */}
-                            <div className="col-lg-6 mb-4">
-                                <div className="card bg-secondary bg-opacity-10 border-secondary h-100">
-                                    <div className="card-header bg-info bg-opacity-10 border-info">
-                                        <h6 className="mb-0 text-white">
-                                            <i className="fas fa-calendar-check me-2"></i>
-                                            Attendance Summary
-                                        </h6>
-                                    </div>
-                                    <div className="card-body">
-                                        <div className="row g-3">
-                                            <div className="col-md-4 col-6">
-                                                <div className="bg-success bg-opacity-10 rounded p-3 border border-success text-center">
-                                                    <small className="text-muted d-block">Working Days</small>
-                                                    <div className="text-success h4 mb-0">{timesheet.workingDays}</div>
-                                                </div>
-                                            </div>
-                                            <div className="col-md-4 col-6">
-                                                <div className="bg-warning bg-opacity-10 rounded p-3 border border-warning text-center">
-                                                    <small className="text-muted d-block">Leaves</small>
-                                                    <div className="text-warning h4 mb-0">{timesheet.leaves || 0}</div>
-                                                </div>
-                                            </div>
-                                            <div className="col-md-4 col-6">
-                                                <div className="bg-primary bg-opacity-10 rounded p-3 border border-primary text-center">
-                                                    <small className="text-muted d-block">Holidays</small>
-                                                    <div className="text-primary h4 mb-0">{timesheet.holidays || 0}</div>
-                                                </div>
-                                            </div>
-                                            <div className="col-md-4 col-6">
-                                                <div className="bg-info bg-opacity-10 rounded p-3 border border-info text-center">
-                                                    <small className="text-muted d-block">Emergencies</small>
-                                                    <div className="text-info h4 mb-0">{timesheet.emergencies || 0}</div>
-                                                </div>
-                                            </div>
-                                            <div className="col-md-4 col-6">
-                                                <div className="bg-danger bg-opacity-10 rounded p-3 border border-danger text-center">
-                                                    <small className="text-muted d-block">Absents</small>
-                                                    <div className="text-danger h4 mb-0">{timesheet.absents || 0}</div>
-                                                </div>
-                                            </div>
-                                            <div className="col-md-4 col-6">
-                                                <div className="bg-secondary bg-opacity-10 rounded p-3 border border-secondary text-center">
-                                                    <small className="text-muted d-block">Total Days</small>
-                                                    <div className="text-white h4 mb-0">{timesheet.totalDays || 0}</div>
-                                                </div>
-                                            </div>
-
-                                            <div className="mt-2">
-                                                <h6 className="text-white mb-1">
-                                                    <i className="bi bi-chat-left-text me-2"></i>
-                                                    Comments & Notes
-                                                </h6>
-                                                <textarea name="timesheet-comments" className="form-control bg-transparent border-primary text-white">
-
-                                                </textarea>
-                                            </div>
-
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-
-                            {/* Salary Breakdown */}
-                            <div className="col-lg-6 mb-4">
-                                <div className="card bg-secondary bg-opacity-10 border-secondary h-100">
-                                    <div className="card-header bg-success bg-opacity-10 border-success">
-                                        <h6 className="mb-0 text-white">
-                                            <i className="fas fa-money-bill-wave me-2"></i>
-                                            Salary Breakdown
-                                        </h6>
-                                    </div>
-                                    <div className="card-body">
-                                        <div className="row g-3">
-                                            <div className="col-md-6">
-                                                <div className="bg-dark bg-opacity-50 rounded p-3 border border-secondary text-center">
-                                                    <small className="text-muted d-block">Basic Salary</small>
-                                                    <div className="text-white h5 mb-0">₹{employee?.basicSalary || 0}</div>
-                                                </div>
-                                            </div>
-                                            <div className="col-md-6">
-                                                <div className="bg-dark bg-opacity-50 rounded p-3 border border-secondary text-center">
-                                                    <small className="text-muted d-block">Daily Rate</small>
-                                                    <div className="text-white h5 mb-0">₹{Math.round((employee?.basicSalary || 0) / 30)}</div>
-                                                </div>
-                                            </div>
-                                            <div className="col-md-6">
-                                                <div className="bg-success bg-opacity-10 rounded p-3 border border-success text-center">
-                                                    <small className="text-muted d-block">Total Salary</small>
-                                                    <div className="text-success h5 mb-0">₹{timesheet.totalSalary?.toFixed(2)}</div>
-                                                </div>
-                                            </div>
-                                            <div className="col-md-6">
-                                                <div className="bg-danger bg-opacity-10 rounded p-3 border border-danger text-center">
-                                                    <small className="text-muted d-block">Advances</small>
-                                                    <div className="text-danger h5 mb-0">
-                                                        ₹{(function () {
-                                                            const advances = timesheet.advances || timesheet.advancesTotal || 0;
-
-                                                            if (advances && typeof advances === 'object') {
-                                                                return Object.values(advances).reduce((sum, advance) => {
-                                                                    return sum + (parseFloat(advance?.amount) || 0);
-                                                                }, 0);
-                                                            }
-
-                                                            return Number(advances || 0);
-                                                        })().toFixed(0)}
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </div>
-
-                                        {/* Net Payable Highlight */}
-                                        <div className="mt-4 p-3 bg-warning bg-opacity-10 rounded border border-warning">
-                                            <div className="d-flex justify-content-between align-items-center">
-                                                <div>
-                                                    <span className="text-white h6 mb-0">Net Payable Amount</span>
-                                                    <br />
-                                                    <small className="text-muted">Total Salary - Advances</small>
-                                                </div>
-                                                <span className="text-warning h4 mb-0">₹{Math.round(timesheet.netPayable || 0)}</span>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-
-                        </div>
-                    </div>
-                </div>
+              <div>
+                <h5 className="card-title mb-0 text-info">
+                  Timesheet Summary - {timesheet.employeeName}
+                </h5>
+                <small className="text-warning">
+                  <strong>Period:</strong> {displayPeriod}
+                </small>
+              </div>
             </div>
+
+            <div className="mb-2 text-center">
+              <small className="text-muted me-3">Timesheet ID:</small>
+              <br />
+              <span className="badge bg-warning">{timesheet.timesheetId || timesheet.id}</span>
+            </div>
+            <span className={`badge ${timesheet.status === 'draft' ? 'bg-warning' :
+              timesheet.status === 'submitted' ? 'bg-info' :
+                timesheet.status === 'approved' ? 'bg-success' : 'bg-secondary'
+              }`}>
+              {timesheet.status?.toUpperCase()}
+            </span>
+          </div>
+
+          <div className="card-body">
+            {/* Detailed Breakdown - Salary & Attendance */}
+            <div className="row">
+              {/* Attendance Summary */}
+              <div className="col-lg-6 mb-4">
+                <div className="card bg-secondary bg-opacity-10 border-secondary h-100">
+                  <div className="card-header bg-info bg-opacity-10 border-info">
+                    <h6 className="mb-0 text-white">
+                      <i className="fas fa-calendar-check me-2"></i>
+                      Attendance Summary
+                    </h6>
+                  </div>
+                  <div className="card-body">
+                    <div className="row g-3">
+                      <div className="col-md-4 col-6">
+                        <div className="bg-success bg-opacity-10 rounded p-3 border border-success text-center">
+                          <small className="text-muted d-block">Working Days</small>
+                          <div className="text-success h4 mb-0">{timesheet.workingDays || 0}</div>
+                        </div>
+                      </div>
+                      <div className="col-md-4 col-6">
+                        <div className="bg-warning bg-opacity-10 rounded p-3 border border-warning text-center">
+                          <small className="text-muted d-block">Leaves</small>
+                          <div className="text-warning h4 mb-0">{timesheet.leaves || 0}</div>
+                        </div>
+                      </div>
+                      <div className="col-md-4 col-6">
+                        <div className="bg-primary bg-opacity-10 rounded p-3 border border-primary text-center">
+                          <small className="text-muted d-block">Holidays</small>
+                          <div className="text-primary h4 mb-0">{timesheet.holidays || 0}</div>
+                        </div>
+                      </div>
+                      <div className="col-md-4 col-6">
+                        <div className="bg-info bg-opacity-10 rounded p-3 border border-info text-center">
+                          <small className="text-muted d-block">Emergencies</small>
+                          <div className="text-info h4 mb-0">{timesheet.emergencies || 0}</div>
+                        </div>
+                      </div>
+                      <div className="col-md-4 col-6">
+                        <div className="bg-danger bg-opacity-10 rounded p-3 border border-danger text-center">
+                          <small className="text-muted d-block">Absents</small>
+                          <div className="text-danger h4 mb-0">{timesheet.absents || 0}</div>
+                        </div>
+                      </div>
+                      <div className="col-md-4 col-6">
+                        <div className="bg-secondary bg-opacity-10 rounded p-3 border border-secondary text-center">
+                          <small className="text-muted d-block">Total Days</small>
+                          <div className="text-white h4 mb-0">{timesheet.totalDays || 0}</div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Salary Breakdown - FIXED with proper advance deduction */}
+              <div className="col-lg-6 mb-4">
+                <div className="card bg-secondary bg-opacity-10 border-secondary h-100">
+                  <div className="card-header bg-success bg-opacity-10 border-success">
+                    <h6 className="mb-0 text-white">
+                      <i className="fas fa-money-bill-wave me-2"></i>
+                      Salary Breakdown
+                    </h6>
+                  </div>
+                  <div className="card-body">
+                    <div className="row g-3">
+                      <div className="col-md-6">
+                        <div className="bg-dark bg-opacity-50 rounded p-3 border border-secondary text-center">
+                          <small className="text-muted d-block">Basic Salary</small>
+                          <div className="text-white h5 mb-0">₹{employee?.basicSalary || 0}</div>
+                        </div>
+                      </div>
+                      <div className="col-md-6">
+                        <div className="bg-dark bg-opacity-50 rounded p-3 border border-secondary text-center">
+                          <small className="text-muted d-block">Daily Rate</small>
+                          <div className="text-white h5 mb-0">₹{Math.round((employee?.basicSalary || 0) / 30)}</div>
+                        </div>
+                      </div>
+                      <div className="col-md-6">
+                        <div className="bg-success bg-opacity-10 rounded p-3 border border-success text-center">
+                          <small className="text-muted d-block">Total Salary</small>
+                          <div className="text-success h5 mb-0">₹{totalSalary.toFixed(2)}</div>
+                        </div>
+                      </div>
+                      <div className="col-md-6">
+                        <div className="bg-danger bg-opacity-10 rounded p-3 border border-danger text-center">
+                          <small className="text-muted d-block">Advances</small>
+                          <div className="text-danger h5 mb-0">₹{totalAdvances.toFixed(0)}</div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Net Payable Highlight - FIXED with proper calculation */}
+                    <div className="mt-4 p-3 bg-warning bg-opacity-10 rounded border border-warning">
+                      <div className="d-flex justify-content-between align-items-center">
+                        <div>
+                          <span className="text-white h6 mb-0">Net Payable Amount</span>
+                          <br />
+                          <small className="text-muted">Total Salary - Advances</small>
+                        </div>
+                        <span className="text-warning h4 mb-0">₹{Math.max(0, netPayable).toFixed(0)}</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
-    );
+      </div>
+    </div>
+  );
 };
 
 

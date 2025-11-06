@@ -2,15 +2,14 @@ import React, { useEffect, useMemo, useState } from 'react';
 import firebaseDB from '../../firebase';
 import { useAuth } from "../../context/AuthContext";
 
-const AdvanceManagement = ({ 
-   employeeId,
+const AdvanceManagement = ({
+  employeeId,
   timesheetId,
   advances = [],
   onAdvanceAdded,
   currentUser,
   isDisabled,
   isReadOnly,
-  // NEW: pass from parent
   isAssignee = false,
   submittedLike = false,
 }) => {
@@ -27,6 +26,35 @@ const AdvanceManagement = ({
   });
 
   const { user: authUser } = useAuth();
+
+  // Load employee data
+  // Load employee data
+  useEffect(() => {
+    if (!employeeId) {
+      setEmployee(null);
+      return;
+    }
+
+    const loadEmployee = async () => {
+      try {
+        const snapshot = await firebaseDB.child(`EmployeeBioData/${employeeId}`).once('value');
+        if (snapshot.exists()) {
+          const employeeData = snapshot.val();
+          setEmployee({
+            id: employeeId,
+            ...employeeData,
+            displayName: `${employeeData.firstName || ''} ${employeeData.lastName || ''}`.trim() || employeeData.employeeId || 'Employee',
+            // Make sure we get the actual employee ID, not the Firebase key
+            actualEmployeeId: employeeData.employeeId || employeeData.idNo || employeeData.id || 'N/A'
+          });
+        }
+      } catch (error) {
+        console.error('Error loading employee:', error);
+      }
+    };
+
+    loadEmployee();
+  }, [employeeId]);
 
   // Reset form when opening modal
   const openAddModal = () => {
@@ -117,13 +145,11 @@ const AdvanceManagement = ({
       }
 
     } catch (err) {
-
       alert('Error saving advance. Please try again.');
-
     }
   };
 
- const canEditAdvance = submittedLike ? isAssignee : !isReadOnly;
+  const canEditAdvance = submittedLike ? isAssignee : !isReadOnly;
   const canDeleteAdvance = !submittedLike && !isReadOnly;
 
   // Add the missing whoSafe function
@@ -190,12 +216,11 @@ const AdvanceManagement = ({
 
       setLocalAdvances(list);
     }, (error) => {
+      console.error('Error loading advances:', error);
     });
 
     return () => ref.off('value', handler);
   }, [employeeId, timesheetId]);
-
-
 
   const effectiveAdvances = useMemo(
     () => (localAdvances !== null ? localAdvances : (advances || [])),
@@ -208,12 +233,15 @@ const AdvanceManagement = ({
   return (
     <div className="card bg-dark border-warning">
       {/* Header */}
+      {/* Header */}
       <div className="card-header bg-warning bg-opacity-10 border-warning d-flex justify-content-between align-items-center py-3">
         <div className="d-flex align-items-center">
           <i className="bi bi-wallet2 text-warning fs-4 me-3"></i>
           <div>
             <h5 className="card-title mb-0 text-white">Advance Management</h5>
-            <small className="text-muted">Manage employee advances</small>
+            <small className="text-muted">
+              {employee ? `Advances for ${employee.displayName} (${employee.actualEmployeeId || employee.employeeId || 'N/A'})` : 'Manage employee advances'}
+            </small>
           </div>
         </div>
         <button
@@ -261,17 +289,29 @@ const AdvanceManagement = ({
                     <div className="col-12">
                       <small className="text-muted">
                         <i className="bi bi-person me-1"></i>
-                        By: <span className="text-info">
+                        Created by: <span className="text-info">
                           {advance.createdByName || advance.updatedByName || 'System'}
                         </span>
                       </small>
                     </div>
                     <div className="col-12">
                       <small className="text-muted">
-                        <i className="bi bi-clock me-1"></i>
-                        {advance?.createdAt ? new Date(advance.createdAt).toLocaleDateString('en-IN') : '-'}
+                        <i className="bi bi-calendar me-1"></i>
+                        {advance.createdAt ? new Date(advance.createdAt).toLocaleDateString('en-IN', {
+                          day: '2-digit',
+                          month: 'short',
+                          year: 'numeric'
+                        }) : '-'}
                       </small>
                     </div>
+                    {advance.updatedByName && advance.updatedAt !== advance.createdAt && (
+                      <div className="col-12">
+                        <small className="text-muted">
+                          <i className="bi bi-pencil me-1"></i>
+                          Updated by: {advance.updatedByName} on {advance.updatedAt ? new Date(advance.updatedAt).toLocaleDateString('en-IN') : '-'}
+                        </small>
+                      </div>
+                    )}
                   </div>
                 </div>
 
@@ -296,7 +336,7 @@ const AdvanceManagement = ({
                     <button
                       className="btn btn-outline-danger btn-sm"
                       onClick={() => {
-                        if (!canDeleteAdvance) return; // hard stop
+                        if (!canDeleteAdvance) return;
                         confirmDeleteAdvance(advance);
                       }}
                       disabled={!canDeleteAdvance}
@@ -305,14 +345,6 @@ const AdvanceManagement = ({
                       <i className="bi bi-trash"></i>
                     </button>
                   </div>
-                  {advance.updatedByName && advance.updatedAt !== advance.createdAt && (
-                    <div className="text-end mt-2">
-                      <small className="text-muted">
-                        <i className="bi bi-arrow-clockwise me-1"></i>
-                        Updated
-                      </small>
-                    </div>
-                  )}
                 </div>
 
                 <div className="col-md-12 bg-secondary bg-opacity-10 p-2 rounded-2">
@@ -329,7 +361,9 @@ const AdvanceManagement = ({
             <div className="text-center text-muted py-4">
               <i className="bi bi-wallet2 display-4 opacity-50 mb-2"></i>
               <h6 className="text-white opacity-50 mb-2 d-block">No Advances Recorded</h6>
-              <p className="small opacity-50 mb-3">Add advances to track employee payments</p>
+              <p className="small opacity-50 mb-3">
+                {employee ? `No advances for ${employee.displayName} yet` : 'Add advances to track employee payments'}
+              </p>
               <button
                 className="btn btn-warning btn-sm"
                 onClick={() => {
@@ -450,26 +484,27 @@ const AdvanceManagement = ({
                     </div>
                   </div>
 
-                  {/* Debug Info */}
+                  {/* Employee Info - Clean version */}
+                  {/* Employee Info - Clean version */}
                   <div className="alert alert-info bg-info bg-opacity-10 border-info mt-3 py-2">
-                    <small className="text-info">
-                      <strong>Debug Info:</strong><br />
-                      <strong>Employee:</strong> <span className='text-warning'>{employee?.displayName || employeeId}</span><br />
-                      Timesheet: {timesheetId}<br />
-                      Mode: {editingAdvance ? 'Editing' : 'Creating'}
-                    </small>
+                    <div className="row g-2">
+                      <div className="col-md-6">
+                        <small className="text-info">
+                          <strong>Employee:</strong><br />
+                          <span className="text-warning">{employee?.displayName || 'Loading...'}</span>
+                        </small>
+                      </div>
+                      <div className="col-md-6">
+                        <small className="text-info">
+                          <strong>Employee ID:</strong><br />
+                          <span className="text-warning">{employee?.actualEmployeeId || employee?.employeeId || 'N/A'}</span>
+                        </small>
+                      </div>
+                    </div>
                   </div>
                 </div>
                 <div className="modal-footer border-warning py-3">
-                  <button type="button" className="btn btn-secondary btn-sm" 
-                  onClick={() => {
-                      if (!canEditAdvance) {
-                        alert('This timesheet is submitted/assigned or locked. Only the assignee can add advances.');
-                        return;
-                      }
-                      openAddModal();
-                    }}
-                    disabled={!employeeId || !timesheetId || !canEditAdvance}>
+                  <button type="button" className="btn btn-secondary btn-sm" onClick={() => setShowAdvanceModal(false)}>
                     <i className="bi bi-x-circle me-1"></i>
                     Cancel
                   </button>
@@ -502,37 +537,13 @@ const AdvanceManagement = ({
                   <strong>Are you sure you want to delete this advance?</strong>
                 </div>
 
-                {/* {advanceToDelete && (
-                  <div className="border border-secondary rounded p-3 mb-3 bg-dark bg-opacity-50">
-                    <div className="row g-3">
-                      <div className="col-md-6">
-                        <small className="text-muted">Amount</small>
-                        <div className="fw-bold text-warning fs-5">₹{advanceToDelete.amount}</div>
-                      </div>
-                      <div className="col-md-6">
-                        <small className="text-muted">Date</small>
-                        <div className="fw-bold text-white">
-                          {new Date(advanceToDelete.date).toLocaleDateString('en-IN', {
-                            day: '2-digit',
-                            month: 'short',
-                            year: 'numeric'
-                          })}
-                        </div>
-                      </div>
-                      <div className="col-12">
-                        <small className="text-muted">Reason</small>
-                        <div className="fw-bold text-info small">{advanceToDelete.reason || 'No reason provided'}</div>
-                      </div>
-                    </div>
-                  </div>
-                )} */}
-
                 {advanceToDelete && (
                   <div className="border border-secondary rounded p-3 mb-3 bg-dark bg-opacity-50">
                     <div className="text-white small">
                       <div><strong>Amount:</strong> ₹{advanceToDelete.amount}</div>
                       <div><strong>Date:</strong> {advanceToDelete.date}</div>
                       <div><strong>Reason:</strong> {advanceToDelete.reason || '—'}</div>
+                      <div><strong>Created by:</strong> {advanceToDelete.createdByName || 'System'}</div>
                     </div>
                   </div>
                 )}
@@ -546,17 +557,6 @@ const AdvanceManagement = ({
                   <i className="bi bi-x-circle me-1"></i>
                   Cancel
                 </button>
-                {/* <button
-                  className="btn btn-outline-danger btn-sm"
-                  onClick={() => {
-                    if (!canDeleteAdvance) return; // hard stop
-                    confirmDeleteAdvance(advance);
-                  }}
-                  disabled={!canDeleteAdvance}
-                  title={!canDeleteAdvance ? "Delete disabled for submitted/assigned or locked" : "Delete Advance"}
-                >
-                  <i className="bi bi-trash"></i>
-                </button> */}
                 <button className="btn btn-danger" onClick={deleteAdvance}>
                   Delete
                 </button>

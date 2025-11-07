@@ -357,52 +357,33 @@ const DisplayTimeSheet = () => {
     const { user: authUser } = useAuth();
     const canUserEditTimesheet = (ts, _currentUserId, authContext) => {
         if (!ts) return false;
-
-        const status = norm(ts.status);
-
-
-        // Lock for everyone - approved/rejected cannot be edited by anyone
-        if (status === 'approved' || status === 'rejected') {
-            return false;
-        }
-
-        // Collect all possible IDs for the current user
+      
+        const status = (String(ts.status || '')).toLowerCase();
         const idSet = currentUserIdSet(authContext, authUser, currentUser, allUsers);
-
-        // Draft → creator OR admin can edit
-        if (!status || status === 'draft') {
-            const role = norm(authContext?.user?.role);
-            const isAdmin = role === 'admin' || role === 'superadmin' || role === 'super_admin';
-            const isCreator = ts.createdBy && idSet.has(String(ts.createdBy));
-
-            return Boolean(isCreator || isAdmin);
+        const role = (authContext?.user?.role || '').toLowerCase();
+        const isAdmin = role === 'admin' || role === 'superadmin' || role === 'super_admin';
+        const isCreator = ts.createdBy && idSet.has(String(ts.createdBy));
+        const isAssignee = ts.assignedTo && idSet.has(String(ts.assignedTo));
+      
+        // ✅ Rejected → allow editing for creator or admin (optionally assignee)
+        if (status === 'rejected') {
+          return Boolean(isCreator || isAdmin /* || isAssignee */);
         }
-
-        // Submitted / Assigned / Clarification → ONLY the assignee can edit
+      
+        // Approved → locked for everyone
+        if (status === 'approved') {
+          return false;
+        }
+      
+        // Submitted / Assigned / Clarification → only assignee or admin
         if (status === 'submitted' || status === 'assigned' || status === 'clarification') {
-            // If allUsers is not loaded yet, we can't determine if current user is assignee
-            // So we'll do a direct comparison first, then try with allUsers if available
-            const assignedTo = ts.assignedTo;
-
-            // 1. Direct comparison with current user IDs
-            if (assignedTo && idSet.has(String(assignedTo))) {
-                return true;
-            }
-
-            // 2. If allUsers is loaded, try to resolve the assigned user
-            if (allUsers && allUsers.length > 0) {
-                const isAssignedUser = isAssigneeMatch(ts, idSet, allUsers);
-
-                return isAssignedUser;
-            } else {
-                // 3. If allUsers is not loaded yet, we can't determine - assume no permission temporarily
-                return false;
-            }
+          return Boolean(isAssignee || isAdmin);
         }
-
-
-        return false;
-    };
+      
+        // Draft / New → creator or admin
+        return Boolean(isCreator || isAdmin);
+      };
+      
 
 
 

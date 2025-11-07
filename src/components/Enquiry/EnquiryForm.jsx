@@ -375,8 +375,20 @@ const EnquiryForm = ({ show, onClose, title = "Enquiry Form" }) => {
       // Save to Firebase under EnquiryData
       const ref = firebaseDB.child("EnquiryData").push();
       const nowIso = new Date().toISOString();
+      const initialComments =
+        (formData.comments && formData.comments.trim())
+          ? [{
+              text: formData.comments.trim(),
+              enteredAt: nowIso,
+              date: nowIso,
+              user: effectiveUserName,            // ← who submitted the form
+              id: Date.now()
+            }]
+          : [];
+
       await ref.set({
         ...formData,
+        comments: initialComments,  
         id: ref.key,
         createdById: effectiveUserId,
         createdByName: effectiveUserName,

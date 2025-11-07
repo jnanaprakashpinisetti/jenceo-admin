@@ -283,7 +283,7 @@ const DailyEntryModal = ({ entry, isEditing, employee, onSave, onAutoFill, onClo
 
   // ========= DUPLICATE CHECK =========
 
-const checkDuplicate = async (employeeId, date, excludeId = null) => {
+  const checkDuplicate = async (employeeId, date, excludeTsId = null) => {
   if (!employeeId || !date) return false;
 
   try {
@@ -297,9 +297,12 @@ const checkDuplicate = async (employeeId, date, excludeId = null) => {
     // Check every timesheet for this employee
     for (const [tsId, timesheet] of Object.entries(allTimesheets)) {
       if (!timesheet.dailyEntries) continue;
+
+      // Skip the current timesheet so editing doesn't flag itself
+     if (excludeTsId && tsId === excludeTsId) continue;
       
-      const entry = timesheet.dailyEntries[date];
-      if (entry && (!excludeId || entry.id !== excludeId)) {
+     const entry = timesheet.dailyEntries[date];
+         if (entry) {
         duplicates.push({
           id: `${tsId}_${date}`,
           ...entry,
@@ -364,13 +367,14 @@ const checkDuplicate = async (employeeId, date, excludeId = null) => {
     }
 
     // Duplicate check only for SINGLE mode (we check exact day)
-    if (mode === 'single' && isEditing && formData.date) {
-      const hasDuplicate = await checkDuplicate(
-        employeeId,
-        formData.date,
-        isEditing ? entry?.id : null
-      );
-      if (hasDuplicate) return;
+    // Duplicate check ONLY if the date was changed during edit.
+if (mode === 'single' && isEditing && formData.date && formData.date !== entry?.date) {
+    const hasDuplicate = await checkDuplicate(
+      employeeId,
+      formData.date,
+      timesheetId || null   // exclude the current timesheet
+    );
+    if (hasDuplicate) return;
     }
 
     // Defaults if no client selected

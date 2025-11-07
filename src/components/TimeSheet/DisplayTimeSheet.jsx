@@ -2873,7 +2873,8 @@ const DisplayTimeSheet = () => {
                                                             `badge ${ts.status === 'approved' ? 'bg-success' :
                                                                     ts.status === 'assigned' ? 'bg-primary' :
                                                                     ts.status === 'rejected' ? 'bg-danger' : 
-                                                                    ts.status === 'submitted' ? 'bg-warning' : 'bg-secondary'
+                                                                    ts.status === 'clarification' ? 'bg-warning' : 
+                                                                    ts.status === 'submitted' ? 'bg-info' : 'bg-secondary'
                                                             }`}
                                                         >
                                                             {ts.status || 'draft'}

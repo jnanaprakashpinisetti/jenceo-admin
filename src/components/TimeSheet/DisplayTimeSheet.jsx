@@ -2867,9 +2867,12 @@ const DisplayTimeSheet = () => {
 
                                                     </td>
                                                     <td>
-                                                        <span className={
+                                                        <span style={{textTransform:'capitalize'}}
+                                                        
+                                                        className={
                                                             `badge ${ts.status === 'approved' ? 'bg-success' :
-                                                                ts.status === 'assigned' ? 'bg-primary' :
+                                                                    ts.status === 'assigned' ? 'bg-primary' :
+                                                                    ts.status === 'rejected' ? 'bg-danger' : 
                                                                     ts.status === 'submitted' ? 'bg-warning' : 'bg-secondary'
                                                             }`}
                                                         >

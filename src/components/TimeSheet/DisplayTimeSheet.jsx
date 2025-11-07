@@ -442,6 +442,10 @@ const DisplayTimeSheet = () => {
     const isAssignee = Boolean(timesheet?.assignedTo && timesheet.assignedTo === currentUid);
     const submittedLikeNow = isSubmittedLike(timesheet?.status);
 
+    const [clarifyAdminText, setClarifyAdminText] = useState('');
+    const [clarifyRequestedByName, setClarifyRequestedByName] = useState('');
+    const [clarifyTsId, setClarifyTsId] = useState('');
+
     const onEditClick = (entry) => {
         const uid = whoSafe().uid;
         const canEdit = canUserEditTimesheet(timesheet, uid, authContext);
@@ -620,22 +624,82 @@ const DisplayTimeSheet = () => {
     };
 
 
-    const openClarifyReply = (commentId) => {
-        if (!commentId) return;
-        setClarifyCommentId(commentId);
-        setClarifyText('');
-        setShowClarifyReplyModal(true);
-    };
-    const submitClarifyReply = async () => {
-        if (!clarifyText.trim()) {
-            showModal('Write something', 'Please enter your reply.', 'warning');
-            return;
+    const openClarifyReply = async (tsIdFromRow) => {
+        if (!selectedEmployee || !tsIdFromRow) {
+          return;
         }
-        await handleReplyToClarification(clarifyCommentId, clarifyText);
-        setShowClarifyReplyModal(false);
-        setClarifyCommentId('');
+      
+        setClarifyTsId(tsIdFromRow);
         setClarifyText('');
-    };
+        setClarifyAdminText('');
+        setClarifyRequestedByName('');
+      
+        const base = `${empTsById(selectedEmployee, tsIdFromRow)}/clarificationRequest`;
+        try {
+          const textSnap = await firebaseDB.child(`${base}/text`).get();
+          const askNameSnap = await firebaseDB.child(`${base}/requestedByName`).get();
+          const askBySnap = await firebaseDB.child(`${base}/requestedBy`).get();
+      
+          const adminText = textSnap.exists() ? (textSnap.val() || '') : '';
+          // Prefer requestedByName; fall back to resolving requestedBy UID via your helper
+          const askedByName =
+            (askNameSnap.exists() && askNameSnap.val()) ||
+            (askBySnap.exists() ? nameForUid(askBySnap.val()) : '');
+      
+          setClarifyAdminText(adminText);
+          setClarifyRequestedByName(askedByName || 'Unknown');
+      
+        } catch (err) {
+        }
+      
+        setShowClarifyReplyModal(true);
+      };
+      
+      
+      const submitClarifyReply = async () => {
+        const reply = (clarifyText || '').trim();
+        if (!reply) {
+          showModal('Write something', 'Please enter your reply.', 'warning');
+          return;
+        }
+        if (!selectedEmployee || !clarifyTsId) {
+          showModal('Error', 'Timesheet context missing.', 'error');
+          console.log('[Clarify] missing context on submit', { selectedEmployee, clarifyTsId, reply });
+          return;
+        }
+      
+        const now = new Date().toISOString();
+        const { uid, name } = whoSafe();
+        const base = `${empTsById(selectedEmployee, clarifyTsId)}/clarificationRequest`;
+      
+        console.log('[Clarify] submitClarifyReply -> writing', {
+          employeeId: selectedEmployee,
+          timesheetId: clarifyTsId,
+          replyPath: `${base}/replyText`,
+          reply,
+          repliedBy: uid,
+          repliedByName: name,
+          repliedAt: now,
+        });
+      
+        try {
+          await firebaseDB.update({
+            [`${base}/replyText`]: reply,
+            [`${base}/repliedBy`]: uid,
+            [`${base}/repliedByName`]: name,
+            [`${base}/repliedAt`]: now,
+          });
+      
+          showModal('Success', 'Reply posted.', 'success');
+          setShowClarifyReplyModal(false);
+          setClarifyCommentId('');
+          setClarifyText('');
+        } catch (e) {
+          showModal('Error', 'Could not post reply. Try again.', 'error');
+        }
+      };
+      
+      
 
     // Build the advances path under a specific employee + timesheet
     const advancesNode = (empId, tsId) =>
@@ -4079,31 +4143,43 @@ const DisplayTimeSheet = () => {
                 </div>
             )}
 
-            {showClarifyReplyModal && (
-                <div className="modal d-block" tabIndex="-1" role="dialog">
-                    <div className="modal-dialog" role="document">
-                        <div className="modal-content">
-                            <div className="modal-header">
-                                <h5 className="modal-title">Reply to clarification</h5>
-                                <button type="button" className="btn-close" onClick={() => setShowClarifyReplyModal(false)} />
-                            </div>
-                            <div className="modal-body">
-                                <textarea
-                                    className="form-control"
-                                    rows={4}
-                                    value={clarifyText}
-                                    onChange={(e) => setClarifyText(e.target.value)}
-                                    placeholder="Type your reply..."
-                                />
-                            </div>
-                            <div className="modal-footer">
-                                <button className="btn btn-secondary" onClick={() => setShowClarifyReplyModal(false)}>Cancel</button>
-                                <button className="btn btn-primary" onClick={submitClarifyReply}>Post Reply</button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            )}
+            {/* Clarification Modal */}
+{showClarifyReplyModal && (
+  <div className="modal fade show" style={{ display: 'block', backgroundColor: 'rgba(0,0,0,0.85)' }}>
+    <div className="modal-dialog modal-md modal-dialog-centered">
+      <div className="modal-content bg-dark border border-warning">
+        <div className="modal-header border-warning">
+          <h5 className="modal-title text-warning">
+            <i className="bi bi-question-diamond me-2"></i>
+            Clarification
+          </h5>
+          <button className="btn-close btn-close-white" onClick={() => setShowClarifyReplyModal(false)} />
+        </div>
+        <div className="modal-body">
+          <label className="form-label text-info">Admin’s note</label>
+          <div className="form-control bg-secondary bg-opacity-20 text-white mb-3" style={{ minHeight: 80, whiteSpace: 'pre-wrap' }}>
+            {clarifyAdminText || '—'}
+            <p>{}</p>
+          </div>
+
+          <label className="form-label text-white">Your reply</label>
+          <textarea
+            className="form-control bg-secondary bg-opacity-20 text-white"
+            rows={4}
+            value={clarifyText}
+            onChange={(e) => setClarifyText(e.target.value)}
+            placeholder="Type your reply."
+          />
+        </div>
+        <div className="modal-footer">
+          <button className="btn btn-secondary" onClick={() => setShowClarifyReplyModal(false)}>Cancel</button>
+          <button className="btn btn-primary" onClick={submitClarifyReply}>Post Reply</button>
+        </div>
+      </div>
+    </div>
+  </div>
+)}
+
 
         </div>
     );

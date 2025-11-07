@@ -290,7 +290,6 @@ const ErrorModal = ({ show, message, onClose }) => {
                             type="button"
                             className="btn btn-danger"
                             onClick={() => {
-                                console.error("Agent Display Error:", message);
                                 onClose();
                             }}
                         >
@@ -585,18 +584,12 @@ export default function AgentDisplay() {
         loadAgents();
     }, []);
 
-    useEffect(() => {
-        console.log("🧭 AgentDisplay Mounted");
-      }, []);
+ 
       
       useEffect(() => {
-        console.log("✅ Worker Agents Loaded:", workerAgents.length);
-        console.log(workerAgents.slice(0, 2)); // print first 2 for inspection
       }, [workerAgents]);
       
       useEffect(() => {
-        console.log("✅ Client Agents Loaded:", clientAgents.length);
-        console.log(clientAgents.slice(0, 2));
       }, [clientAgents]);
       
       
@@ -1192,9 +1185,8 @@ export default function AgentDisplay() {
         setModalMode("view");
     }}
     onSaved={(updatedAgent) => {
-        console.log('Agent saved:', updatedAgent);
         // Just refresh the data without closing modal
-        refreshData();
+        // refreshData();
     }}
 />
 

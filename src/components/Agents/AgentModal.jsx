@@ -562,7 +562,7 @@ function EditCardBody({
                                             className="form-control"
                                             placeholder="Client Name"
                                             value={localPaymentData.clientName}
-                                            onChange={(e) => setLocalclientName({ ...localPaymentclientName, clientclientName: e.target.value })}
+                                            onChange={(e) => setLocalPaymentData({ ...localPaymentData, clientName: e.target.value })}
                                         />
                                     </div>
                                     <div className="col-md-6">

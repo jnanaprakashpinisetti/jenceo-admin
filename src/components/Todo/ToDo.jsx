@@ -2,6 +2,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import firebaseDB from "../../firebase";
 import { useAuth } from "../../context/AuthContext";
+import RichTextEditor from "./RichTextEditor";
 
 // ---------- tiny helpers ----------
 const cn = (...xs) => xs.filter(Boolean).join(" ");
@@ -124,17 +125,17 @@ export default function ToDo() {
       JSON.parse(localStorage.getItem("JenCeo:user")) ||
       JSON.parse(localStorage.getItem("authUser")) ||
       JSON.parse(localStorage.getItem("user"));
-  } catch {}
+  } catch { }
 
   const mergedAuth = authFromCtx ||
     authFromWin ||
     authFromStorage || {
-      uid: "guest",
-      dbId: "guest",
-      name: "Guest",
-      role: "user",
-      photoURL: "",
-    };
+    uid: "guest",
+    dbId: "guest",
+    name: "Guest",
+    role: "user",
+    photoURL: "",
+  };
 
   const myId = mergedAuth?.dbId || mergedAuth?.uid || "guest";
   const myName = mergedAuth?.name || mergedAuth?.displayName || "Guest";
@@ -252,7 +253,7 @@ export default function ToDo() {
         } else {
           ref.once?.("value", (s) => handle(s));
         }
-      } catch {}
+      } catch { }
     });
     return () => unsubs.forEach((u) => u?.());
   }, [backendOK, myId]);
@@ -352,7 +353,7 @@ export default function ToDo() {
         } else {
           ref.once?.("value", cb);
         }
-      } catch {}
+      } catch { }
     });
 
     return () => unsubs.forEach((u) => u?.());
@@ -392,7 +393,7 @@ export default function ToDo() {
         return () => {
           try {
             ref.off("value", cb);
-          } catch {}
+          } catch { }
         };
       }
       ref.once?.("value", (s) => cb(s));
@@ -545,7 +546,7 @@ export default function ToDo() {
           return next;
         });
         return next;
-      } catch {}
+      } catch { }
     }
     try {
       const snap = await ref.get?.();
@@ -739,7 +740,7 @@ export default function ToDo() {
     if (!backendOK) return;
     try {
       await updateTaskStatus(childId, checked ? "Done" : "To Do");
-    } catch {}
+    } catch { }
   };
 
   // ---------- add task ----------
@@ -863,19 +864,19 @@ export default function ToDo() {
     if (!backendOK || !files || files.length === 0) return;
     const task = tasks.find((t) => t.id === taskId);
     if (!task) return;
-  
+
     try {
       setAttaching(true);
       setAttachProgress(0);
-  
+
       const storage = getStorage();
       let i = 0;
-  
+
       for (const file of Array.from(files)) {
         i += 1;
         const now = Date.now();
         const attId = `${now}-${Math.random().toString(36).slice(2, 8)}`;
-        
+
         const meta = {
           name: file.name,
           size: file.size,
@@ -884,9 +885,9 @@ export default function ToDo() {
           uploadedByName: myName,
           uploadedAt: now,
         };
-  
+
         let url = "";
-  
+
         // For very small files (< 1MB), store directly in RTDB as dataURL
         if (file.size < 1024 * 1024 && file.type.startsWith('image/')) {
           const dataUrl = await readFileAsDataURL(file);
@@ -898,7 +899,7 @@ export default function ToDo() {
             const safeName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
             const path = `ToDoAttachments/${taskId}/${now}_${safeName}`;
             const ref = storage.ref ? storage.ref(path) : storage.refFromURL(path);
-            
+
             if (ref.put) {
               const snap = await ref.put(file);
               url = await snap.ref.getDownloadURL();
@@ -916,14 +917,14 @@ export default function ToDo() {
             meta.storageType = 'dataURL';
           }
         }
-  
+
         await getRef(`ToDo/${taskId}/attachments/${attId}`).set({
           ...meta,
           url,
         });
-  
+
         setAttachProgress(Math.round((i / files.length) * 100));
-  
+
         await pushHistory(taskId, {
           action: "attachment_added",
           field: "attachment",
@@ -931,7 +932,7 @@ export default function ToDo() {
           to: meta.name,
         });
       }
-  
+
       notify("Attachment(s) added");
     } catch (e) {
       console.error("Attachment error:", e);
@@ -1097,7 +1098,7 @@ export default function ToDo() {
                         >
                           <div className="d-flex align-items-center gap-2">
                             {users[t.assignedTo]?.photoURL ||
-                            t.assignedToAvatar ? (
+                              t.assignedToAvatar ? (
                               <img
                                 src={
                                   users[t.assignedTo]?.photoURL ||
@@ -1329,18 +1330,18 @@ export default function ToDo() {
                           <span className="task-id text-muted-300 small">
                             {ticket}
                           </span>
-                           {/* Parent link if SubTask */}
-                      {task.issueType === "SubTask" && task.parentTicket && (
-                        <div className="tiny text-info">
-                          Parent:{" "}
-                          <span className="badge bg-dark">
-                            {task.parentTicket}
-                          </span>
-                        </div>
-                      )}
+                          {/* Parent link if SubTask */}
+                          {task.issueType === "SubTask" && task.parentTicket && (
+                            <div className="tiny text-info">
+                              Parent:{" "}
+                              <span className="badge bg-dark">
+                                {task.parentTicket}
+                              </span>
+                            </div>
+                          )}
                         </div>
                         <div className="d-flex align-items-center gap-1">
-                          
+
                           <span
                             className="badge priority-badge"
                             style={{ background: PRIORITIES[task.priority] }}
@@ -1354,7 +1355,7 @@ export default function ToDo() {
                       <div className="d-flex justify-content-between align-items-center mb-2">
                         <div className="d-flex align-items-center gap-2">
                           {users[task.assignedTo]?.photoURL ||
-                          task.assignedToAvatar ? (
+                            task.assignedToAvatar ? (
                             <img
                               src={
                                 users[task.assignedTo]?.photoURL ||
@@ -1417,7 +1418,7 @@ export default function ToDo() {
                         )}
                       </div>
 
-                     
+
 
                       {/* Labels */}
                       {task.labels && task.labels.length > 0 && (
@@ -1437,10 +1438,7 @@ export default function ToDo() {
 
                       {/* Footer: created by + quick actions */}
                       <div className="action-btns">
-                        <div
-                          className="btn-group btn-group-sm w-100 mb-2"
-                          onClick={(e) => e.stopPropagation()}
-                        >
+                        <div className="btn-group btn-group-sm w-100 mb-2" onClick={(e) => e.stopPropagation()}>
                           <button
                             className={cn(
                               "btn",
@@ -1464,6 +1462,20 @@ export default function ToDo() {
                             }
                           >
                             In Progress
+                          </button>
+                          {/* Add this Review button */}
+                          <button
+                            className={cn(
+                              "btn",
+                              task.status === "In Review"
+                                ? "btn-warning"
+                                : "btn-outline-warning"
+                            )}
+                            onClick={() =>
+                              updateTaskStatus(task.id, "In Review")
+                            }
+                          >
+                            In Review
                           </button>
                           <button
                             className={cn(
@@ -1493,7 +1505,7 @@ export default function ToDo() {
 
                         <div className="d-flex align-items-center gap-2">
                           {users[task.createdById]?.photoURL ||
-                          task.createdByAvatar ? (
+                            task.createdByAvatar ? (
                             <img
                               src={
                                 users[task.createdById]?.photoURL ||
@@ -1602,14 +1614,12 @@ export default function ToDo() {
                       <label className="form-label text-muted-200">
                         Description
                       </label>
-                      <textarea
-                        className="form-control dark-input"
-                        rows={4}
+                      <RichTextEditor
                         value={newTask.description}
-                        onChange={(e) => {
+                        onChange={(html) => {
                           setNewTask((p) => ({
                             ...p,
-                            description: e.target.value,
+                            description: html,
                           }));
                           setDirty(true);
                         }}
@@ -1829,60 +1839,63 @@ export default function ToDo() {
                 <div className="col-md-8">
                   <div className="panel-soft">
                     <h6 className="text-white-90 mb-2">Description</h6>
-                    <div className="text-white-80">
-                      {selectedTask.description || "No description provided."}
-                    </div>
+                    <div
+                      className="text-white-80 rich-text-content"
+                      dangerouslySetInnerHTML={{
+                        __html: selectedTask.description || "No description provided."
+                      }}
+                    />
                   </div>
 
                   {/* Attachments */}
                   {/* Attachments */}
-<div className="panel-soft mb-3">
-  <div className="d-flex justify-content-between align-items-center mb-2">
-    <h6 className="text-white-90 mb-0">Attachments</h6>
-    <div className="d-flex align-items-center gap-2">
-      {attaching && (
-        <span className="tiny text-muted-300">
-          Uploading… {attachProgress}%
-        </span>
-      )}
-      <label
-        className="btn btn-sm btn-outline-primary mb-0"
-        htmlFor="file-input-attach"
-      >
-        + Add
-      </label>
-      <input
-        id="file-input-attach"
-        type="file"
-        accept="image/*, .pdf, .doc, .docx, .txt"
-        multiple
-        style={{ display: "none" }}
-        onChange={(e) => {
-          const files = e.target.files;
-          if (files && files.length) {
-            attachFiles(selectedTask.id, files);
-            e.target.value = "";
-          }
-        }}
-      />
-    </div>
-  </div>
+                  <div className="panel-soft mb-3">
+                    <div className="d-flex justify-content-between align-items-center mb-2">
+                      <h6 className="text-white-90 mb-0">Attachments</h6>
+                      <div className="d-flex align-items-center gap-2">
+                        {attaching && (
+                          <span className="tiny text-muted-300">
+                            Uploading… {attachProgress}%
+                          </span>
+                        )}
+                        <label
+                          className="btn btn-sm btn-outline-primary mb-0"
+                          htmlFor="file-input-attach"
+                        >
+                          + Add
+                        </label>
+                        <input
+                          id="file-input-attach"
+                          type="file"
+                          accept="image/*, .pdf, .doc, .docx, .txt"
+                          multiple
+                          style={{ display: "none" }}
+                          onChange={(e) => {
+                            const files = e.target.files;
+                            if (files && files.length) {
+                              attachFiles(selectedTask.id, files);
+                              e.target.value = "";
+                            }
+                          }}
+                        />
+                      </div>
+                    </div>
 
-  {/* Attachment grid */}
-  {selectedTask.attachments ? (
-    <div className="att-grid">
-      {Object.entries(selectedTask.attachments).map(([id, a]) => (
-        <div key={id} className="att-item">
-          {/* Improved attachment preview */}
-          <div className="att-preview-wrapper">
-            {String(a.type || "").startsWith("image/") ? (
-              <div 
-                className="att-preview-image"
-                onClick={() => {
-                  // Open image in a proper modal instead of new tab
-                  const newWindow = window.open('', '_blank');
-                  if (newWindow) {
-                    newWindow.document.write(`
+                    {/* Attachment grid */}
+                    {selectedTask.attachments ? (
+                      <div className="att-grid">
+                        {Object.entries(selectedTask.attachments).map(([id, a]) => (
+                          <div key={id} className="att-item">
+                            {/* Improved attachment preview */}
+                            <div className="att-preview-wrapper">
+                              {String(a.type || "").startsWith("image/") ? (
+                                <div
+                                  className="att-preview-image"
+                                  onClick={() => {
+                                    // Open image in a proper modal instead of new tab
+                                    const newWindow = window.open('', '_blank');
+                                    if (newWindow) {
+                                      newWindow.document.write(`
                       <!DOCTYPE html>
                       <html>
                         <head>
@@ -1923,74 +1936,74 @@ export default function ToDo() {
                         </body>
                       </html>
                     `);
-                  }
-                }}
-              >
-                <img
-                  src={a.url}
-                  alt={a.name}
-                  className="att-thumb"
-                  onError={(e) => {
-                    // Fallback if image fails to load
-                    e.target.style.display = 'none';
-                    e.target.nextSibling.style.display = 'block';
-                  }}
-                />
-                <div className="att-fallback" style={{display: 'none'}}>
-                  📄 {a.name || 'File'}
-                </div>
-              </div>
-            ) : (
-              <div 
-                className="att-file-fallback"
-                onClick={() => {
-                  // For non-image files, open in new tab with proper handling
-                  window.open(a.url, '_blank', 'noopener,noreferrer');
-                }}
-              >
-                📄 {a.name || 'File'}
-              </div>
-            )}
-          </div>
-          
-          <div className="att-meta">
-            <div 
-              className="text-white-80 small text-truncate" 
-              title={a.name}
-            >
-              {a.name}
-            </div>
-            <div className="tiny text-muted-300">
-              {fmtDT(a.uploadedAt)}
-            </div>
-            {a.size && (
-              <div className="tiny text-muted-300">
-                {(a.size / 1024).toFixed(1)} KB
-              </div>
-            )}
-          </div>
+                                    }
+                                  }}
+                                >
+                                  <img
+                                    src={a.url}
+                                    alt={a.name}
+                                    className="att-thumb"
+                                    onError={(e) => {
+                                      // Fallback if image fails to load
+                                      e.target.style.display = 'none';
+                                      e.target.nextSibling.style.display = 'block';
+                                    }}
+                                  />
+                                  <div className="att-fallback" style={{ display: 'none' }}>
+                                    📄 {a.name || 'File'}
+                                  </div>
+                                </div>
+                              ) : (
+                                <div
+                                  className="att-file-fallback"
+                                  onClick={() => {
+                                    // For non-image files, open in new tab with proper handling
+                                    window.open(a.url, '_blank', 'noopener,noreferrer');
+                                  }}
+                                >
+                                  📄 {a.name || 'File'}
+                                </div>
+                              )}
+                            </div>
 
-          {canDeleteAttachment(selectedTask) && (
-            <button
-              className="btn btn-sm btn-outline-danger att-del"
-              title="Remove"
-              onClick={(e) => {
-                e.stopPropagation();
-                removeAttachment(selectedTask.id, id);
-              }}
-            >
-              🗑
-            </button>
-          )}
-        </div>
-      ))}
-    </div>
-  ) : (
-    <div className="text-muted-400 small">
-      No attachments yet.
-    </div>
-  )}
-</div>
+                            <div className="att-meta">
+                              <div
+                                className="text-white-80 small text-truncate"
+                                title={a.name}
+                              >
+                                {a.name}
+                              </div>
+                              <div className="tiny text-muted-300">
+                                {fmtDT(a.uploadedAt)}
+                              </div>
+                              {a.size && (
+                                <div className="tiny text-muted-300">
+                                  {(a.size / 1024).toFixed(1)} KB
+                                </div>
+                              )}
+                            </div>
+
+                            {canDeleteAttachment(selectedTask) && (
+                              <button
+                                className="btn btn-sm btn-outline-danger att-del"
+                                title="Remove"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  removeAttachment(selectedTask.id, id);
+                                }}
+                              >
+                                🗑
+                              </button>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="text-muted-400 small">
+                        No attachments yet.
+                      </div>
+                    )}
+                  </div>
 
                   {/* Linked Subtasks (JIRA-like list of real child tasks) */}
                   <div className="panel-soft mb-3">
@@ -2060,7 +2073,7 @@ export default function ToDo() {
                   <div className="panel-soft">
                     <h6 className="text-white-90 mb-2">Activity & Comments</h6>
                     {selectedTask.comments &&
-                    Object.values(selectedTask.comments).length > 0 ? (
+                      Object.values(selectedTask.comments).length > 0 ? (
                       Object.values(selectedTask.comments)
                         .sort((a, b) => b.timestamp - a.timestamp)
                         .map((c, i) => (
@@ -2107,20 +2120,21 @@ export default function ToDo() {
                         No comments yet.
                       </div>
                     )}
-                    <div className="d-flex gap-2 mt-3">
-                      <input
-                        className="form-control dark-input"
-                        placeholder="Add a comment..."
-                        value={comments[selectedTask.id] || ""}
-                        onChange={(e) =>
-                          setComments((p) => ({
-                            ...p,
-                            [selectedTask.id]: e.target.value,
-                          }))
-                        }
-                      />
+                    <div className="d-flex gap-2 mt-3 flex-wrap">
+                      <div className="flex-grow-1 w-100">
+                        <RichTextEditor
+                          value={comments[selectedTask.id] || ""}
+                          onChange={(html) =>
+                            setComments((p) => ({
+                              ...p,
+                              [selectedTask.id]: html,
+                            }))
+                          }
+                          placeholder="Add a comment..."
+                        />
+                      </div>
                       <button
-                        className="btn btn-outline-primary"
+                        className="btn btn-outline-primary align-self-start"
                         onClick={() =>
                           addComment(selectedTask.id, comments[selectedTask.id])
                         }
@@ -2187,7 +2201,7 @@ export default function ToDo() {
                       <h6 className="text-white-90 mb-2">Assignee</h6>
                       <div className="d-flex align-items-center gap-2">
                         {users[selectedTask.assignedTo]?.photoURL ||
-                        selectedTask.assignedToAvatar ? (
+                          selectedTask.assignedToAvatar ? (
                           <img
                             src={
                               users[selectedTask.assignedTo]?.photoURL ||
@@ -2505,5 +2519,5 @@ export default function ToDo() {
   );
 
   // no-op to satisfy earlier reference; hoisted function declaration
-  function theUsersFix() {}
+  function theUsersFix() { }
 }

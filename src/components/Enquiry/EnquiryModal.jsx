@@ -203,17 +203,31 @@ export default function EnquiryModal({
 
   // Load existing comments when enquiry changes
   useEffect(() => {
-    if (enquiry) {
-      setFormData(enquiry);
-
-      // Normalize and set comments from enquiry data
-      const normalizedComments = normalizeComments(enquiry.comments);
-      setComments(normalizedComments);
-
-      // Reset dirty state when new enquiry loads
-      setIsDirty(false);
+    if (!enquiry) return;
+  
+    setFormData(enquiry);
+  
+    let normalized = normalizeComments(enquiry.comments);
+  
+    // If the form saved a plain string earlier, upgrade it here using createdAt & "added by"
+    if (
+      typeof enquiry.comments === "string" &&
+      enquiry.comments.trim() &&
+      !normalized.length
+    ) {
+      normalized = [{
+        text: enquiry.comments.trim(),
+        enteredAt: enquiry.createdAt || enquiry.timestamp || null,
+        date: enquiry.createdAt || enquiry.timestamp || null,
+        user: resolveAddedBy(enquiry, usersMap) || "System",
+        id: Date.now()
+      }];
     }
-  }, [enquiry]);
+  
+    setComments(normalized);
+    setIsDirty(false);
+  }, [enquiry, usersMap]);
+  
 
   // Also reset when modal opens/closes
   useEffect(() => {
@@ -311,44 +325,9 @@ export default function EnquiryModal({
               background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)"
             }}>
               <div className="d-flex flex-column w-100">
-                <div className="d-flex justify-content-between align-items-start w-100">
-                  <div>
+                <div className="d-flex justify-content-between align-items-center w-100">
                     <h5 className="modal-title mb-1 fw-bold">{localMode === "edit" ? "✏️ Edit Enquiry" : "👁️ View Enquiry"}</h5>
-                    {formData?.name && (
-                      <div className="d-flex align-items-center gap-3 mt-2">
-                        <h6 className="mb-0 fw-semibold">
-                          <i className="fas fa-user me-2"></i>
-                          {formData.name}
-                        </h6>
-                        {formData?.mobile && (
-                          <div className="d-flex align-items-center gap-2">
-                            <h6 className="mb-0 fw-semibold">
-                              <i className="fas fa-phone me-2"></i>
-                              {formData.mobile}
-                            </h6>
-                            <div className="d-flex gap-1">
-                              <a
-                                className="btn btn-light btn-sm p-1 d-flex align-items-center justify-content-center"
-                                href={`tel:${formData.mobile}`}
-                                title="Call"
-                              >
-                                Call
-                              </a>
-                              <a
-                                className="btn btn-light btn-sm p-1 d-flex align-items-center justify-content-center"
-                                href={`https://wa.me/91${String(formData.mobile).replace(/\D/g, "")}`}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                title="WhatsApp"
-                              >
-                                WAP
-                              </a>
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    )}
-                  </div>
+                    
                   <div className="d-flex align-items-center gap-2">
                     {/* {formData?.status && (
                       <span className={`badge fw-normal ${badgeForStatus}`} style={{ fontSize: "0.75rem" }}>

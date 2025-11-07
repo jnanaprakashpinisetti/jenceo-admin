@@ -506,9 +506,8 @@ export default function AgentDisplay() {
 
                 // Try multiple possible paths
                 const paths = [
-                    "JenCeo-DataBase/AgentData/WorkerAgent",
                     "AgentData/WorkerAgent",
-                    "WorkerAgent"
+                    "AgentData/ClientAgent",
                 ];
 
                 let workerData = null;
@@ -585,6 +584,22 @@ export default function AgentDisplay() {
 
         loadAgents();
     }, []);
+
+    useEffect(() => {
+        console.log("🧭 AgentDisplay Mounted");
+      }, []);
+      
+      useEffect(() => {
+        console.log("✅ Worker Agents Loaded:", workerAgents.length);
+        console.log(workerAgents.slice(0, 2)); // print first 2 for inspection
+      }, [workerAgents]);
+      
+      useEffect(() => {
+        console.log("✅ Client Agents Loaded:", clientAgents.length);
+        console.log(clientAgents.slice(0, 2));
+      }, [clientAgents]);
+      
+      
 
     // Real-time listeners after initial load
     useEffect(() => {
@@ -1104,30 +1119,35 @@ export default function AgentDisplay() {
                                                 <ReminderBadge reminderDate={row?.reminderDate} />
                                             </td>
                                             <td onClick={stop}>
-                                                <div className="d-flex justify-content-center gap-1">
-                                                    <button
-                                                        className="btn btn-sm btn-outline-info d-flex align-items-center gap-1"
-                                                        onClick={() => openView(row)}
-                                                        title="View Details"
-                                                    >
-                                                        <i className="bi bi-eye"></i>
-                                                    </button>
-                                                    <button
-                                                        className="btn btn-sm btn-outline-warning d-flex align-items-center gap-1"
-                                                        onClick={() => openEdit(row)}
-                                                        title="Edit"
-                                                    >
-                                                        <i className="bi bi-pencil"></i>
-                                                    </button>
-                                                    <button
-                                                        className="btn btn-sm btn-outline-danger d-flex align-items-center gap-1"
-                                                        onClick={() => handleDelete(row)}
-                                                        title="Delete"
-                                                    >
-                                                        <i className="bi bi-trash"></i>
-                                                    </button>
-                                                </div>
-                                            </td>
+    <div className="d-flex justify-content-center gap-1">
+        <button
+            type="button"
+            className="btn btn-sm btn-outline-info d-flex align-items-center gap-1"
+            onClick={() => openView(row)}
+            title="View Details"
+        >
+            <i className="bi bi-eye"></i>
+        </button>
+
+        <button
+            type="button"
+            className="btn btn-sm btn-outline-warning d-flex align-items-center gap-1"
+            onClick={() => openEdit(row)}
+            title="Edit Agent"
+        >
+            <i className="bi bi-pencil"></i>
+        </button>
+
+        <button
+            type="button"
+            className="btn btn-sm btn-outline-danger d-flex align-items-center gap-1"
+            onClick={() => handleDelete(row)}
+            title="Delete Agent"
+        >
+            <i className="bi bi-trash"></i>
+        </button>
+    </div>
+</td>
                                         </tr>
                                     );
                                 })
@@ -1163,20 +1183,20 @@ export default function AgentDisplay() {
 
             {/* Modals */}
             <AgentModal
-                show={showModal}
-                mode={modalMode}
-                data={modalData}
-                onClose={() => {
-                    setShowModal(false);
-                    setModalData(null);
-                    setModalMode("view");
-                }}
-                onSaved={() => {
-                    setShowModal(false);
-                    setModalData(null);
-                    setModalMode("view");
-                }}
-            />
+    show={showModal}
+    mode={modalMode}
+    data={modalData}
+    onClose={() => {
+        setShowModal(false);
+        setModalData(null);
+        setModalMode("view");
+    }}
+    onSaved={(updatedAgent) => {
+        console.log('Agent saved:', updatedAgent);
+        // Just refresh the data without closing modal
+        refreshData();
+    }}
+/>
 
             <ErrorModal
                 show={showErrorModal}
@@ -1184,7 +1204,7 @@ export default function AgentDisplay() {
                 onClose={() => setShowErrorModal(false)}
             />
 
-            <style jsx>{`
+            <style>{`
         .sortable {
           cursor: pointer;
           user-select: none;

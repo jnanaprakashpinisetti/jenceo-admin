@@ -1680,11 +1680,11 @@ const ClientModal = ({
                         </div>
                         <div className="col-md-6 mb-3">
                           <label className="form-label"><strong>About Care Recipient</strong></label>
-                          <input className="form-control" name="aboutPatent" value={formData.aboutPatent || ""} onChange={handleChange} disabled={!editMode} />
+                          <textarea className="form-control" name="aboutPatent" value={formData.aboutPatent || ""} onChange={handleChange} disabled={!editMode} />
                         </div>
                         <div className="col-md-6 mb-3">
                           <label className="form-label"><strong>About Work</strong></label>
-                          <input className="form-control" name="aboutWork" value={formData.aboutWork || ""} onChange={handleChange} disabled={!editMode} />
+                          <textarea className="form-control" name="aboutWork" value={formData.aboutWork || ""} onChange={handleChange} disabled={!editMode} />
                         </div>
                       </div>
                     ) : (

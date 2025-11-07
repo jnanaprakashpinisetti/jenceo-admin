@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import firebaseDB from "../../firebase";
 import SuccessModal from "../common/SuccessModal";
 import { useAuth } from "../../context/AuthContext";
+import { input } from "framer-motion/client";
 
 /* ---------------- Helpers ---------------- */
 const norm = (s) => String(s || "").trim().toLowerCase();
@@ -23,7 +24,7 @@ const categoryMap = {
     "4 అరటి పళ్ళు": ["కర్పూరం", "పచ్చ చేక్కరకేళి", "ఎర్ర చేక్కరకేళి", "అమృతపాణి", "ట్రే అరిటి పళ్ళు"],
     "5 పువ్వులు": ["బంతి పువ్వులు", "పసుపు చామంతి", "తెల్ల చామంతి", "గులాబీ", "మలబార్", "మల్లె పువ్వులు", "మల్లె పూలదండ", "సన్నజాజులు", "సన్నజాజుల దండ"],
     "6 కొబ్బరిబొండాలు": ["కేరళ బొండాలు", "కేరళ నెంబర్ కాయ", "కేరళ గ్రేడ్ కాయ", "ఆంధ్ర బొండాలు", "ఆంధ్ర నెంబర్ కాయ", "ఆంధ్ర గ్రేడ్ కాయ"],
-    "7 ఇతర వస్తువులు": ["కొబ్బరికాయలు", "బెల్లం", "తేనే పాకం"],
+    "7 ఇతర వస్తువులు": ["కొబ్బరికాయలు", "బెల్లం", "తేనే పాకం", input],
 };
 
 export default function ShopForm({ onClose }) {
@@ -62,6 +63,8 @@ export default function ShopForm({ onClose }) {
 
     const [errors, setErrors] = useState({});
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const isOtherSelected = formData.mainCategory === "7 ఇతర వస్తువులు";
+
 
     // Success modal
     const [showSuccessModal, setShowSuccessModal] = useState(false);
@@ -223,22 +226,47 @@ export default function ShopForm({ onClose }) {
                             {/* Category */}
                             
                                 
-                                <div className="col-md-6 mb-3">
-                                    <label className="form-label">ఉప కేటగిరీ</label>
-                                    <select
-                                        name="subCategory"
-                                        className="form-select"
-                                        value={formData.subCategory}
-                                        onChange={handleChange}
-                                    >
-                                        <option value="">ఎంచుకోండి</option>
-                                        {formData.mainCategory &&
-                                            categoryMap[formData.mainCategory]?.map((v) => (
-                                                <option key={v}>{v}</option>
-                                            ))}
-                                    </select>
-                                    {errors.subCategory && <div className="text-danger small">{errors.subCategory}</div>}
-                                </div>
+                            <div className="col-md-6 mb-3">
+  <label className="form-label">ఉప కేటగిరీ</label>
+
+  {isOtherSelected ? (
+    <>
+      <input
+        name="subCategory"
+        type="text"
+        className="form-control"
+        value={formData.subCategory}
+        onChange={handleChange}
+        placeholder="ఇతర వస్తువు పేరు టైప్ చేయండి"
+        list="other-suggestions"
+      />
+      {/* optional suggestions pulled from your map */}
+      <datalist id="other-suggestions">
+        {(categoryMap["7 ఇతర వస్తువులు"] || []).map((v) => (
+          <option key={v} value={v} />
+        ))}
+      </datalist>
+    </>
+  ) : (
+    <select
+      name="subCategory"
+      className="form-select"
+      value={formData.subCategory}
+      onChange={handleChange}
+    >
+      <option value="">ఎంచుకోండి</option>
+      {formData.mainCategory &&
+        (categoryMap[formData.mainCategory] || []).map((v) => (
+          <option key={v} value={v}>{v}</option>
+        ))}
+    </select>
+  )}
+
+  {errors.subCategory && (
+    <div className="text-danger small">{errors.subCategory}</div>
+  )}
+</div>
+
                             
 
                             {/* Inputs */}

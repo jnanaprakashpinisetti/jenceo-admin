@@ -23,6 +23,25 @@ export default function TimeSheetDashBoard() {
     const [currentPage, setCurrentPage] = useState(1);
     const [itemsPerPage, setItemsPerPage] = useState(10);
 
+        // Merge two advance arrays and de-dupe by id or (date+amount+desc) fallback
+    const mergeAdvances = (a = [], b = []) => {
+        const key = (x) => x.id || `${x.date}|${x.amount}|${x.description || ''}`;
+        const map = new Map();
+        [...a, ...b].forEach((x) => map.set(key(x), x));
+        return Array.from(map.values());
+    };
+    
+    // Sum only approved (default) or all
+    const sumAdvances = (list = [], { approvedOnly = true } = {}) => {
+        return list.reduce((acc, it) => {
+        const valid =
+            !approvedOnly ? true : (it.status ? it.status === 'approved' : true);
+        const amt = Number(it.amount) || 0;
+        return acc + (valid ? amt : 0);
+        }, 0);
+    };
+  
+
     // Initialize current user and years
     useEffect(() => {
         const initializeUser = async () => {
@@ -284,15 +303,55 @@ export default function TimeSheetDashBoard() {
                 }
 
                 // Fetch advances
-                const advancesSnapshot = await firebaseDB.child('Advances')
+                // --- Fetch advances from two places and merge ---
+                let advancesGlobal = [];
+                let advancesUnderTs = [];
+
+                // 1) Global /Advances by timesheetId (legacy)
+                try {
+                const advSnapGlobal = await firebaseDB
+                    .child('Advances')
                     .orderByChild('timesheetId')
                     .equalTo(timesheetId)
                     .once('value');
 
-                let advances = [];
-                if (advancesSnapshot.exists()) {
-                    advances = Object.values(advancesSnapshot.val());
+                if (advSnapGlobal.exists()) {
+                    advancesGlobal = Object.values(advSnapGlobal.val());
                 }
+                } catch (e) {
+                console.warn('Global advances fetch failed', e);
+                }
+
+                // 2) Under this timesheet path: EmployeeBioData/{emp}/timesheets/{ts}/advances
+                try {
+                const advSnapTs = await firebaseDB
+                    .child(`EmployeeBioData/${employeeId}/timesheets/${timesheetId}/advances`)
+                    .once('value');
+
+                if (advSnapTs.exists()) {
+                    const raw = advSnapTs.val();
+                    // entries may be an object keyed by an id
+                    advancesUnderTs = Object.entries(raw).map(([id, v]) => ({ id, ...v }));
+                }
+                } catch (e) {
+                console.warn('Timesheet-path advances fetch failed', e);
+                }
+
+                // Merge and normalize
+                const advances = mergeAdvances(advancesGlobal, advancesUnderTs).map((a) => ({
+                ...a,
+                amount: Number(a.amount) || 0,
+                status: a.status || 'approved', // default to approved if not set
+                }));
+
+                // Compute totals
+                const advancesApprovedTotal = sumAdvances(advances, { approvedOnly: true });
+                const advancesAllTotal = sumAdvances(advances, { approvedOnly: false });
+
+                // Recompute net payable if missing or stale
+                const totalSalary = Number(timesheetData.totalSalary) || 0;
+                const recomputedNet = totalSalary - advancesApprovedTotal;
+
 
                 // Fetch employee data
                 const employeeSnapshot = await firebaseDB.child(`EmployeeBioData/${employeeId}`).once('value');
@@ -304,7 +363,12 @@ export default function TimeSheetDashBoard() {
                     employeeData: employeeData,
                     ...timesheetData,
                     dailyEntries,
-                    advances
+                    advances,
+                    advancesApprovedTotal,
+                    advancesAllTotal,
+                    // prefer existing netPayable, else computed
+                    netPayable: Number(timesheetData.netPayable ?? recomputedNet),
+                      
                 });
                 setShowDetailModal(true);
                 setShowClarificationInput(false);
@@ -1103,16 +1167,17 @@ export default function TimeSheetDashBoard() {
                                                         </div>
                                                         <div className="col-4 mb-3">
                                                             <div className="border border-danger rounded p-2 h-100">
-                                                                <h6 className="text-danger d-block">Advances</h6>
-                                                                <p className="h4 text-white">₹{selectedTimesheet.advances || 0}</p>
+                                                                <h6 className="text-danger d-block">Advances (Approved)</h6>
+                                                                <p className="h4 text-white">₹{(selectedTimesheet.advancesApprovedTotal || 0).toLocaleString()}</p>
                                                             </div>
-                                                        </div>
-                                                        <div className="col-4 mb-3">
+                                                            </div>
+                                                            <div className="col-4 mb-3">
                                                             <div className="border border-success rounded p-2 h-100">
                                                                 <h6 className="text-success d-block">Net Payable</h6>
-                                                                <p className="h4 text-warning">₹{selectedTimesheet.netPayable || 0}</p>
+                                                                <p className="h4 text-warning">₹{(selectedTimesheet.netPayable || 0).toLocaleString()}</p>
                                                             </div>
-                                                        </div>
+                                                            </div>
+
                                                     </div>
                                                     <div className="row mt-3">
                                                         <div className="col-12 text-center">

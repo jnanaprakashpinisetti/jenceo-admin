@@ -4,6 +4,15 @@ import firebaseDB from "../../firebase";
 import { useAuth } from "../../context/AuthContext";
 import RichTextEditor from "./RichTextEditor";
 
+// Add after existing imports
+import { useProjects } from "./hooks/useProjects";
+import { useTasks } from "./hooks/useTasks";
+import HeaderActions from "./components/HeaderActions";
+import DeletedTaskCard from "./components/DeletedTaskCard";
+import CreateProjectModal from "./components/CreateProjectModal";
+
+
+
 // ---------- tiny helpers ----------
 const cn = (...xs) => xs.filter(Boolean).join(" ");
 const safeVal = (v, d = "") => (v === null || v === undefined ? d : v);
@@ -18,6 +27,7 @@ const fmtDT = (ts) => {
     return "Recent";
   }
 };
+
 
 const todayYMD = () => {
   const d = new Date();
@@ -107,6 +117,7 @@ const TABS = [
   { id: "In Progress", label: "In Progress" },
   { id: "In Review", label: "In Review" },
   { id: "Done", label: "Done" },
+  { id: "Deleted", label: "Deleted" }, // NEW: Added Deleted tab
 ];
 
 const TICKET_KEYS = ["JEN", "OPS", "CRM", "FIN", "HR"];
@@ -181,6 +192,8 @@ export default function ToDo() {
   const [showDiscard, setShowDiscard] = useState(false);
   const [selectedTask, setSelectedTask] = useState(null);
 
+
+
   const [toasts, setToasts] = useState([]);
   const notify = (text, variant = "success") => {
     const id = Date.now() + Math.random();
@@ -206,10 +219,27 @@ export default function ToDo() {
     ticketKey: "JEN",
   });
 
+ 
+
+  // ---------- Current User ----------
+  const currentUser = {
+    id: myId,
+    name: myName,
+    role: myRole,
+    photoURL: mergedAuth?.photoURL || ""
+  };
+
+
   const [showDelete, setShowDelete] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState(null);
 
-  const isAdmin = ["admin", "super admin", "superadmin"].includes(myRole); // stricter than isPrivileged
+  const [showCreateProject, setShowCreateProject] = useState(false);
+  const [projectId, setProjectId] = useState("ALL");
+  const [lastUsedProject, setLastUsedProject] = useState(null);
+
+  const [projects, setProjects] = useState([]);
+
+  const isAdmin = ["admin", "super admin", "superadmin"].includes(myRole);
 
   const [comments, setComments] = useState({});
   const [newSubtaskTitle, setNewSubtaskTitle] = useState("");
@@ -218,45 +248,95 @@ export default function ToDo() {
   const backendOK = !!hasRTDB;
 
   // ---------- subscribe USERS (robust: try both DB locations & merge) ----------
-  useEffect(() => {
-    if (!backendOK) return;
-    const refs = [
-      getRef("JenCeo-DataBase/Users"),
-      getRef("Users"),
-      getRef("JenCeo/Users"),
-    ].filter(Boolean);
+useEffect(() => {
+  if (!backendOK) return;
+  
+  const ref = getRef("Projects");
+  const cb = (snap) => {
+    const val = snap.val?.() ?? snap;
+    const obj = val || {};
+    const list = Object.entries(obj).map(([id, v]) => ({
+      id,
+      ...v,
+    }));
+    list.sort((a, b) => (b.updatedAt || b.createdAt || 0) - (a.updatedAt || a.createdAt || 0));
+    setProjects(list);
+  };
 
-    const accum = {};
-    const handle = (snap) => {
-      const raw = snap.val?.() ?? snap;
-      const obj = raw || {};
-      Object.entries(obj).forEach(([k, v]) => {
-        if (v && typeof v === "object") {
-          accum[k] = {
-            name: v.name || v.displayName || v.username || k,
-            role: (v.role || v.userRole || "user").toLowerCase(),
-            photoURL: v.photoURL || v.avatar || "",
-          };
-        }
-      });
-      setUsers({ ...accum });
-      setNewTask((p) => ({ ...p, assignedTo: p.assignedTo || myId }));
+  try {
+    if (isFn(ref.on)) {
+      ref.on("value", cb);
+      return () => {
+        try {
+          ref.off("value", cb);
+        } catch {}
+      };
+    }
+    ref.once?.("value", (s) => cb(s));
+  } catch (error) {
+    console.error("Failed to load projects:", error);
+  }
+}, [backendOK]);
+
+const createProject = async (projectData) => {
+  if (!backendOK) {
+    notify("Firebase not configured", "error");
+    return;
+  }
+  
+  try {
+    const now = Date.now();
+    const ref = getRef("Projects");
+    const project = {
+      ...projectData,
+      createdAt: now,
+      updatedAt: now,
+      sequence: 0,
     };
 
-    const unsubs = [];
-    refs.forEach((ref) => {
-      try {
-        if (isFn(ref.on)) {
-          const cb = (s) => handle(s);
-          ref.on("value", cb);
-          unsubs.push(() => ref.off("value", cb));
-        } else {
-          ref.once?.("value", (s) => handle(s));
-        }
-      } catch { }
-    });
-    return () => unsubs.forEach((u) => u?.());
-  }, [backendOK, myId]);
+    let projectId;
+    if (isFn(ref.push)) {
+      const res = await ref.push(project);
+      projectId = res.key;
+    } else {
+      projectId = String(now);
+      await getRef(`Projects/${projectId}`).set(project);
+    }
+
+    notify("Project created successfully");
+    return projectId;
+  } catch (error) {
+    console.error("Failed to create project:", error);
+    notify("Failed to create project", "error");
+    throw error;
+  }
+};
+
+const incrementProjectSeq = async (projectId) => {
+  if (!backendOK) return 1;
+  
+  try {
+    const ref = getRef(`Projects/${projectId}/sequence`);
+    let nextSeq = 1;
+    
+    if (isFn(ref.transaction)) {
+      await ref.transaction((curr) => {
+        nextSeq = (curr || 0) + 1;
+        return nextSeq;
+      });
+    } else {
+      const snap = await ref.get?.();
+      const curr = snap?.val?.() ?? snap?.val ?? 0;
+      nextSeq = (Number(curr) || 0) + 1;
+      await ref.set(nextSeq);
+    }
+    
+    return nextSeq;
+  } catch (error) {
+    console.error("Failed to increment project sequence:", error);
+    return 1;
+  }
+};
 
   // ---------- subscribe USERS (robust: merge + filter system + dedupe) ----------
   useEffect(() => {
@@ -441,13 +521,19 @@ export default function ToDo() {
       );
     }
 
-    if (activeTab !== "all") list = list.filter((t) => t.status === activeTab);
+    // Handle Deleted tab separately
+    if (activeTab === "Deleted") {
+      list = list.filter(t => t.deleted === true);
+    } else {
+      list = list.filter(t => !t.deleted); // Exclude deleted tasks from other tabs
+      if (activeTab !== "all") list = list.filter((t) => t.status === activeTab);
+    }
+
     if (cat !== "ALL") list = list.filter((t) => t.category === cat);
     if (prio !== "ALL") list = list.filter((t) => t.priority === prio);
-    if (assignee !== "ALL")
-      list = list.filter((t) => t.assignedTo === assignee);
-    if (issueType !== "ALL")
-      list = list.filter((t) => t.issueType === issueType);
+    if (assignee !== "ALL") list = list.filter((t) => t.assignedTo === assignee);
+    if (issueType !== "ALL") list = list.filter((t) => t.issueType === issueType);
+    if (projectId !== "ALL") list = list.filter((t) => t.projectId === projectId); // NEW: Project filter
     if (qtext.trim()) {
       const q = qtext.toLowerCase();
       list = list.filter(
@@ -459,32 +545,38 @@ export default function ToDo() {
           (t.labels && t.labels.some((l) => l.toLowerCase().includes(q)))
       );
     }
+
     const [key, dir] = sort.split("_");
     list.sort((a, b) => {
-      const av =
-        key === "createdAt"
-          ? a.createdAt || 0
-          : safeVal(a[key], "").toString().toLowerCase();
-      const bv =
-        key === "createdAt"
-          ? b.createdAt || 0
-          : safeVal(b[key], "").toString().toLowerCase();
+      const av = key === "createdAt" ? a.createdAt || 0 : safeVal(a[key], "").toString().toLowerCase();
+      const bv = key === "createdAt" ? b.createdAt || 0 : safeVal(b[key], "").toString().toLowerCase();
       if (av === bv) return 0;
       return dir === "asc" ? (av > bv ? 1 : -1) : av < bv ? 1 : -1;
     });
     return list;
   }, [
-    tasks,
-    isPrivileged,
-    myId,
-    activeTab,
-    cat,
-    prio,
-    assignee,
-    issueType,
-    qtext,
-    sort,
+    tasks, isPrivileged, myId, activeTab, cat, prio, assignee, issueType, projectId, qtext, sort // UPDATED: added projectId
   ]);
+
+  // ---------- Soft Delete Task ----------
+  const softDeleteTask = async (taskId, user) => {
+    if (!backendOK) return;
+    try {
+      const now = Date.now();
+      const ref = getRef(`ToDo/${taskId}`);
+      await ref.update({
+        deleted: true,
+        deletedAt: now,
+        deletedBy: user.id,
+        deletedByName: user.name,
+        updatedAt: now,
+      });
+      notify("Task moved to deleted items");
+    } catch (error) {
+      console.error("Failed to soft delete task:", error);
+      notify("Failed to delete task", "error");
+    }
+  };
 
   // ---------- notifications (localStorage + outside click + close btn) ----------
   const relevantToMe = (t) => t.assignedTo === myId || t.createdById === myId;
@@ -750,6 +842,10 @@ export default function ToDo() {
       setError("Please enter a task title.");
       return;
     }
+    if (!newTask.projectId && projects.length > 0) {
+      setError("Please select a project.");
+      return;
+    }
     if (!backendOK) {
       setError("Firebase not configured. Cannot add task.");
       return;
@@ -758,8 +854,22 @@ export default function ToDo() {
     setError("");
 
     const now = Date.now();
-    const nextSeq = await nextTicketSeq(newTask.ticketKey || "JEN");
-    const ticketSeq = String(nextSeq);
+
+    // NEW: Get ticket sequence from project
+    let ticketSeq = "1";
+    let finalTicketKey = newTask.ticketKey || "TASK";
+
+    if (newTask.projectId) {
+      try {
+        const nextSeq = await incrementProjectSeq(newTask.projectId);
+        ticketSeq = String(nextSeq);
+        finalTicketKey = `${newTask.projectKey}-${String(nextSeq).padStart(2, "0")}`;
+      } catch (err) {
+        setError("Failed to generate ticket number. Please try again.");
+        setLoading(false);
+        return;
+      }
+    }
     const assUser = users[newTask.assignedTo] || {};
     const payload = {
       title: newTask.title.trim(),
@@ -775,7 +885,11 @@ export default function ToDo() {
       storyPoints: newTask.storyPoints || 1,
       labels: newTask.labels || [],
       parentTask: newTask.parentTask || "",
-      ticketKey: newTask.ticketKey || "JEN",
+      // NEW: Project fields
+      projectId: newTask.projectId,
+      projectKey: newTask.projectKey,
+      projectTitle: newTask.projectTitle,
+      ticketKey: finalTicketKey,
       ticketSeq,
       createdById: myId,
       createdBy: myName,
@@ -988,6 +1102,7 @@ export default function ToDo() {
     setAssignee("ALL");
     setIssueType("ALL");
     setSort("createdAt_desc");
+    setProjectId("ALL")
   };
 
   const ticketLabel = (task) => {
@@ -1026,6 +1141,7 @@ export default function ToDo() {
     assignee,
     issueType,
     sort,
+    projectId,
   };
   const filtersDirty = anyFilterActive(filtersState);
 
@@ -1145,13 +1261,12 @@ export default function ToDo() {
               )}
             </div>
 
-            <button
-              className="btn btn-warning"
-              onClick={() => setShowAdd(true)}
-              disabled={!backendOK}
-            >
-              + Create Task
-            </button>
+            <HeaderActions
+              backendOK={backendOK}
+              setShowAdd={setShowAdd}
+              setShowCreateProject={setShowCreateProject}
+              projects={projects}
+            />
           </div>
         </div>
 
@@ -1233,15 +1348,20 @@ export default function ToDo() {
             ))}
           </select>
 
-          <div className="input-group input-group-sm" style={{ maxWidth: 360 }}>
-            <span className="input-group-text dark-input">🔎</span>
-            <input
-              className="form-control dark-input"
-              placeholder="Search tasks, labels..."
-              value={qtext}
-              onChange={(e) => setQtext(e.target.value)}
-            />
-          </div>
+          {/* Add this after the Issue Type filter */}
+          <select
+            className="form-select form-select-sm dark-input"
+            style={{ width: 180 }}
+            value={projectId}
+            onChange={(e) => setProjectId(e.target.value)}
+          >
+            <option value="ALL">All Projects</option>
+            {projects.map((proj) => (
+              <option key={proj.id} value={proj.id}>
+                {proj.emoji} {proj.title} ({proj.projectKey})
+              </option>
+            ))}
+          </select>
 
           <select
             className="form-select form-select-sm dark-input"
@@ -1257,6 +1377,52 @@ export default function ToDo() {
             <option value="priority_asc">Priority Low→High</option>
           </select>
 
+          <div className="input-group input-group-sm" style={{ maxWidth: 360 }}>
+            <span className="input-group-text dark-input">🔎</span>
+            <input
+              className="form-control dark-input"
+              placeholder="Search tasks, labels..."
+              value={qtext}
+              onChange={(e) => setQtext(e.target.value)}
+            />
+          </div>
+
+
+
+          {/* Add this row after the Task Type field */}
+          <div className="col-md-2">
+
+            <select
+              className="form-select dark-input"
+              value={newTask.projectId || lastUsedProject?.id || ""}
+              onChange={(e) => {
+                const selectedProject = projects.find(p => p.id === e.target.value);
+                setNewTask((p) => ({
+                  ...p,
+                  projectId: e.target.value,
+                  projectKey: selectedProject?.projectKey,
+                  projectTitle: selectedProject?.title,
+                  ticketKey: selectedProject?.projectKey // Will be updated with sequence
+                }));
+                setLastUsedProject(selectedProject);
+                setDirty(true);
+              }}
+              required={projects.length > 0}
+            >
+              <option value="">Select a project...</option>
+              {projects.map((proj) => (
+                <option key={proj.id} value={proj.id}>
+                  {proj.emoji} {proj.title} ({proj.projectKey})
+                </option>
+              ))}
+            </select>
+            {projects.length === 0 && (
+              <div className="form-text text-warning">
+                No projects found. <a href="#" onClick={(e) => { e.preventDefault(); setShowCreateProject(true); }}>Create a project first</a>.
+              </div>
+            )}
+          </div>
+
           {/* Reset Filters button with animation when active */}
           <button
             className={cn(
@@ -1270,6 +1436,8 @@ export default function ToDo() {
           </button>
         </div>
       </div>
+
+
 
       {/* Task list */}
       {loading && tasks.length === 0 ? (
@@ -1493,9 +1661,14 @@ export default function ToDo() {
                             <button
                               className="btn btn-outline-danger"
                               title="Delete task"
-                              onClick={() => {
-                                setDeleteTarget(task);
-                                setShowDelete(true);
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (window.confirm(`Move "${task.title}" to deleted items?`)) {
+                                  softDeleteTask(task.id, {
+                                    id: myId,
+                                    name: myName
+                                  });
+                                }
                               }}
                             >
                               🗑
@@ -1542,7 +1715,7 @@ export default function ToDo() {
         </div>
       )}
 
-      {/* Create Issue Modal */}
+      {/* Create Task Modal */}
       {showAdd && (
         <div
           className="modal fade show"
@@ -1784,6 +1957,20 @@ export default function ToDo() {
             </div>
           </div>
         </div>
+      )}
+
+
+      {/* Create Project Modal */}
+      {showCreateProject && (
+        <CreateProjectModal
+          showCreateProject={showCreateProject}
+          setShowCreateProject={setShowCreateProject}
+          users={users}
+          currentUser={currentUser}
+          createProject={createProject}
+          notify={notify}
+          projects={projects}
+        />
       )}
 
       {/* Detail Modal */}

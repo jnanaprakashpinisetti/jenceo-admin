@@ -20,8 +20,39 @@ const convertPaymentsToArray = (payments) => {
     }));
 };
 
+// Success Modal Component
+const SuccessModal = ({ show, title, message, onClose }) => {
+    if (!show) return null;
+
+    return (
+        <div className="modal fade show" style={{ display: "block", background: "rgba(0,0,0,0.6)" }}>
+            <div className="modal-dialog modal-dialog-centered">
+                <div className="modal-content">
+                    <div className="modal-header bg-success text-white justify-content-between">
+                        <h5 className="modal-title">{title}</h5>
+                        <button type="button" className="btn-close btn-close-white" onClick={onClose}></button>
+                    </div>
+                    <div className="modal-body">
+                        <div className="d-flex align-items-center gap-3">
+                            <i className="bi bi-check-circle-fill text-success" style={{ fontSize: "2rem" }}></i>
+                            <div>
+                                <p className="mb-0">{message}</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div className="modal-footer">
+                        <button type="button" className="btn btn-success" onClick={onClose}>
+                            OK
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+};
+
 // Confirmation Modal Component
-const ConfirmationModal = ({ show, title, message, onConfirm, onCancel }) => {
+const ConfirmationModal = ({ show, title, message, onConfirm, onCancel, confirmText = "Confirm", cancelText = "Cancel" }) => {
     if (!show) return null;
 
     return (
@@ -33,14 +64,53 @@ const ConfirmationModal = ({ show, title, message, onConfirm, onCancel }) => {
                         <button type="button" className="btn-close" onClick={onCancel}></button>
                     </div>
                     <div className="modal-body">
-                        <p className="mb-0">{message}</p>
+                        <div className="d-flex align-items-center gap-3">
+                            <i className="bi bi-exclamation-triangle-fill text-warning" style={{ fontSize: "2rem" }}></i>
+                            <div>
+                                <p className="mb-0">{message}</p>
+                            </div>
+                        </div>
                     </div>
                     <div className="modal-footer">
                         <button type="button" className="btn btn-secondary" onClick={onCancel}>
-                            Cancel
+                            {cancelText}
                         </button>
                         <button type="button" className="btn btn-warning" onClick={onConfirm}>
-                            Confirm
+                            {confirmText}
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+};
+
+// Discard Changes Modal Component
+const DiscardModal = ({ show, onConfirm, onCancel }) => {
+    if (!show) return null;
+
+    return (
+        <div className="modal fade show" style={{ display: "block", background: "rgba(0,0,0,0.6)" }}>
+            <div className="modal-dialog modal-dialog-centered">
+                <div className="modal-content">
+                    <div className="modal-header bg-danger text-white justify-content-between">
+                        <h5 className="modal-title">Discard Changes?</h5>
+                        <button type="button" className="btn-close btn-close-white" onClick={onCancel}></button>
+                    </div>
+                    <div className="modal-body">
+                        <div className="d-flex align-items-center gap-3">
+                            <i className="bi bi-x-circle-fill text-danger" style={{ fontSize: "2rem" }}></i>
+                            <div>
+                                <p className="mb-0">You have unsaved changes. Are you sure you want to discard them?</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div className="modal-footer">
+                        <button type="button" className="btn btn-secondary" onClick={onCancel}>
+                            Continue Editing
+                        </button>
+                        <button type="button" className="btn btn-danger" onClick={onConfirm}>
+                            Discard Changes
                         </button>
                     </div>
                 </div>
@@ -226,7 +296,9 @@ function EditCardBody({
     handleCancelEdit,
     showError,
     showConfirm,
-    setLocalMode
+    setLocalMode,
+    hasUnsavedChanges,
+    setHasUnsavedChanges
 }) {
     const authCtx = useAuth() || {};
     const { currentUser, user, dbUser, profile } = authCtx;
@@ -243,10 +315,12 @@ function EditCardBody({
 
     React.useEffect(() => {
         setEditData(safeData || {});
-    }, [safeData]);
+        setHasUnsavedChanges(false);
+    }, [safeData, setHasUnsavedChanges]);
 
     const handleEditDataChange = (field, value) => {
         setEditData(prev => ({ ...prev, [field]: value }));
+        setHasUnsavedChanges(true);
     };
 
     // Real photo upload
@@ -312,6 +386,9 @@ function EditCardBody({
             // Use update to save changes
             await agentRef.update(updateData);
             
+            // Reset unsaved changes flag
+            setHasUnsavedChanges(false);
+            
             // Call onSaved to refresh parent component
             if (onSaved) {
                 onSaved({
@@ -321,8 +398,10 @@ function EditCardBody({
                 });
             }
 
+            return true; // Success
         } catch (error) {
             showError('Failed to save changes: ' + error.message);
+            return false; // Failure
         } finally {
             setSaving(false);
         }
@@ -335,7 +414,9 @@ function EditCardBody({
             showConfirm(
                 "Save Changes?",
                 "Are you sure you want to save the changes made to this agent?",
-                handleSaveChanges
+                handleSaveChanges,
+                "Save",
+                "Cancel"
             );
         } else {
             // No changes, just switch back to view mode
@@ -397,6 +478,7 @@ function EditCardBody({
                 });
                 
                 handleEditDataChange('payments', paymentsObject);
+                setHasUnsavedChanges(true);
 
                 // Reset form
                 setLocalPaymentData({
@@ -450,6 +532,7 @@ function EditCardBody({
                         });
                         
                         handleEditDataChange('payments', paymentsObject);
+                        setHasUnsavedChanges(true);
                     } catch (error) {
                         showError('Failed to delete payment: ' + error.message);
                     }
@@ -740,6 +823,7 @@ function EditCardBody({
                                             updatedBy: signedInName,
                                             updatedById: signedInUid
                                         });
+                                        setHasUnsavedChanges(true);
                                     } catch (error) {
                                         showError('Failed to upload photo: ' + error.message);
                                     }
@@ -992,6 +1076,7 @@ function EditCardBody({
                                         updatedBy: signedInName,
                                         updatedById: signedInUid
                                     });
+                                    setHasUnsavedChanges(true);
                                 } catch (error) {
                                     showError('Failed to upload proof: ' + error.message);
                                 }
@@ -1029,6 +1114,7 @@ function EditCardBody({
                                         updatedBy: signedInName,
                                         updatedById: signedInUid
                                     });
+                                    setHasUnsavedChanges(true);
                                 }}
                                 type="button"
                             >
@@ -1080,13 +1166,19 @@ export default function AgentModal({ show, onClose, data, mode = "view", onSaved
     
     // Modal states
     const [showConfirmModal, setShowConfirmModal] = useState(false);
+    const [showSuccessModal, setShowSuccessModal] = useState(false);
+    const [showDiscardModal, setShowDiscardModal] = useState(false);
+    const [showErrorModal, setShowErrorModal] = useState(false);
+    const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+    
     const [confirmModalConfig, setConfirmModalConfig] = useState({
         title: "",
         message: "",
         onConfirm: null,
-        onCancel: null
+        onCancel: null,
+        confirmText: "Confirm",
+        cancelText: "Cancel"
     });
-    const [showErrorModal, setShowErrorModal] = useState(false);
     const [errorMessage, setErrorMessage] = useState("");
     const [liveAgent, setLiveAgent] = useState(data || {});
 
@@ -1105,6 +1197,7 @@ export default function AgentModal({ show, onClose, data, mode = "view", onSaved
     React.useEffect(() => {
         setLocalOpen(!!show);
         setLocalMode(mode);
+        setHasUnsavedChanges(false);
         if (show) {
             setActiveTab("basic");
         }
@@ -1113,9 +1206,14 @@ export default function AgentModal({ show, onClose, data, mode = "view", onSaved
     if (!localOpen) return null;
 
     const close = () => {
-        setLocalOpen(false);
-        setLocalMode("view");
-        onClose && onClose();
+        if (localMode === "edit" && hasUnsavedChanges) {
+            // Show discard confirmation before closing
+            setShowDiscardModal(true);
+        } else {
+            setLocalOpen(false);
+            setLocalMode("view");
+            onClose && onClose();
+        }
     };
 
     const showError = (message) => {
@@ -1123,7 +1221,7 @@ export default function AgentModal({ show, onClose, data, mode = "view", onSaved
         setShowErrorModal(true);
     };
 
-    const showConfirm = (title, message, onConfirm, onCancel = () => {}) => {
+    const showConfirm = (title, message, onConfirm, confirmText = "Confirm", cancelText = "Cancel") => {
         setConfirmModalConfig({
             title,
             message,
@@ -1133,8 +1231,9 @@ export default function AgentModal({ show, onClose, data, mode = "view", onSaved
             },
             onCancel: () => {
                 setShowConfirmModal(false);
-                onCancel();
-            }
+            },
+            confirmText,
+            cancelText
         });
         setShowConfirmModal(true);
     };
@@ -1143,8 +1242,9 @@ export default function AgentModal({ show, onClose, data, mode = "view", onSaved
         setLocalMode("edit");
     };
 
-    const handleSave = (updatedData) => {
-        setLocalMode("view");
+    const handleSave = async (updatedData) => {
+        // Show success modal after save
+        setShowSuccessModal(true);
         
         // Call parent's onSaved to refresh the parent component
         if (onSaved) {
@@ -1153,11 +1253,29 @@ export default function AgentModal({ show, onClose, data, mode = "view", onSaved
     };
 
     const handleCancelEdit = () => {
-        setLocalMode("view");
+        if (hasUnsavedChanges) {
+            // Show discard confirmation before canceling edit
+            setShowDiscardModal(true);
+        } else {
+            setLocalMode("view");
+        }
     };
 
     const handleSaveFromHeader = () => {
         document.getElementById("agent-edit-save-btn")?.click();
+    };
+
+    const handleDiscardConfirm = () => {
+        setShowDiscardModal(false);
+        setHasUnsavedChanges(false);
+        setLocalMode("view");
+    };
+
+    const handleSuccessClose = () => {
+        setShowSuccessModal(false);
+        setLocalOpen(false);
+        setLocalMode("view");
+        onClose && onClose();
     };
 
     return (
@@ -1182,14 +1300,14 @@ export default function AgentModal({ show, onClose, data, mode = "view", onSaved
                                     {localMode === "edit" ? (
                                         <>
                                             <button
-                                                className="btn btn-sm btn-dark"
+                                                className="btn btn-sm bg-success text-white"
                                                 onClick={handleSaveFromHeader}
                                             >
-                                                <i className="bi bi-check-lg me-1"></i>Save
+                                                <i className="bi bi-check-lg me-1 "></i>Save
                                             </button>
-                                            <button className="btn btn-sm btn-secondary" onClick={handleCancelEdit}>
+                                            {/* <button className="btn btn-sm btn-secondary" onClick={handleCancelEdit}>
                                                 <i className="bi bi-x me-1"></i>Cancel
-                                            </button>
+                                            </button> */}
                                         </>
                                     ) : (
                                         <button className="btn btn-sm btn-warning" onClick={handleEdit}>
@@ -1260,6 +1378,8 @@ export default function AgentModal({ show, onClose, data, mode = "view", onSaved
                                         showError={showError}
                                         showConfirm={showConfirm}
                                         setLocalMode={setLocalMode}
+                                        hasUnsavedChanges={hasUnsavedChanges}
+                                        setHasUnsavedChanges={setHasUnsavedChanges}
                                     />
                                 )}
                             </div>
@@ -1268,6 +1388,14 @@ export default function AgentModal({ show, onClose, data, mode = "view", onSaved
                 </div>
             )}
 
+            {/* Success Modal */}
+            <SuccessModal
+                show={showSuccessModal}
+                title="Changes Saved Successfully!"
+                message="Your changes have been saved successfully. The agent information has been updated."
+                onClose={handleSuccessClose}
+            />
+
             {/* Confirmation Modal */}
             <ConfirmationModal
                 show={showConfirmModal}
@@ -1275,6 +1403,15 @@ export default function AgentModal({ show, onClose, data, mode = "view", onSaved
                 message={confirmModalConfig.message}
                 onConfirm={confirmModalConfig.onConfirm}
                 onCancel={confirmModalConfig.onCancel}
+                confirmText={confirmModalConfig.confirmText}
+                cancelText={confirmModalConfig.cancelText}
+            />
+
+            {/* Discard Changes Modal */}
+            <DiscardModal
+                show={showDiscardModal}
+                onConfirm={handleDiscardConfirm}
+                onCancel={() => setShowDiscardModal(false)}
             />
 
             {/* Error Modal */}

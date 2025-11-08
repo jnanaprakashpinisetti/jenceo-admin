@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import firebaseDB from '../../firebase';
 import { getAuth } from 'firebase/auth';
+import { useAuth } from "../../context/AuthContext";
 
 export default function TimeSheetDashBoard() {
     // State declarations
@@ -23,70 +24,138 @@ export default function TimeSheetDashBoard() {
     const [currentPage, setCurrentPage] = useState(1);
     const [itemsPerPage, setItemsPerPage] = useState(10);
 
-        // Merge two advance arrays and de-dupe by id or (date+amount+desc) fallback
+    // Merge two advance arrays and de-dupe by id or (date+amount+desc) fallback
     const mergeAdvances = (a = [], b = []) => {
         const key = (x) => x.id || `${x.date}|${x.amount}|${x.description || ''}`;
         const map = new Map();
         [...a, ...b].forEach((x) => map.set(key(x), x));
         return Array.from(map.values());
     };
-    
+
     // Sum only approved (default) or all
     const sumAdvances = (list = [], { approvedOnly = true } = {}) => {
         return list.reduce((acc, it) => {
-        const valid =
-            !approvedOnly ? true : (it.status ? it.status === 'approved' : true);
-        const amt = Number(it.amount) || 0;
-        return acc + (valid ? amt : 0);
+            const valid =
+                !approvedOnly ? true : (it.status ? it.status === 'approved' : true);
+            const amt = Number(it.amount) || 0;
+            return acc + (valid ? amt : 0);
         }, 0);
     };
-  
+
+    // Auth context (PRIMARY source of truth)
+    const authCtx = useAuth();
+    const authUserCtx = authCtx?.user || null;
+
+
+
+    const prettyName = (u) =>
+        u?.displayName || u?.name || u?.dbName || u?.fullName || u?.username || u?.email || null;
+
+    // Pull a user profile by UID from known locations
+    const getUserProfileByUid = async (uid) => {
+        if (!uid) return null;
+        // /Users/{uid}
+        try {
+            const direct = await firebaseDB.child(`Users/${uid}`).get();
+            if (direct.exists()) return { ...direct.val(), _source: 'Users/{uid}' };
+        } catch { }
+        // scan /Users
+        try {
+            const all = await firebaseDB.child('Users').get();
+            if (all.exists()) {
+                const obj = all.val() || {};
+                for (const [id, u] of Object.entries(obj)) {
+                    if (id === uid || u?.uid === uid || u?.authUid === uid) {
+                        return { id, ...u, _source: 'Users scan' };
+                    }
+                }
+            }
+        } catch { }
+        return null;
+    };
+
+    // Resolve acting user: AuthContext → Firebase Auth → localStorage → Users index → DB
+    const resolveActor = async (usersIdx) => {
+        try {
+            const auth = getAuth();
+            const authUser = auth?.currentUser || null;
+
+            // 1) AuthContext (PRIMARY like DisplayTimeSheet)
+            const fromCtx = authUserCtx ? {
+                uid: authUserCtx.uid,
+                displayName: prettyName(authUserCtx),
+                email: authUserCtx.email,
+                role: authUserCtx.role
+            } : null;
+
+            // 2) Firebase Auth
+            const fromAuth = authUser ? {
+                uid: authUser.uid,
+                displayName: prettyName(authUser),
+                email: authUser.email
+            } : null;
+
+            // 3) LocalStorage
+            const lsCurrentUser = (() => { try { return JSON.parse(localStorage.getItem('currentUser')); } catch { return null; } })();
+            const fromLS = lsCurrentUser ? {
+                uid: lsCurrentUser.uid,
+                displayName: prettyName(lsCurrentUser),
+                email: lsCurrentUser.email
+            } : null;
+
+            let base = fromCtx || fromAuth || fromLS || { uid: 'admin', displayName: null, email: null };
+
+            // 4) If name missing, try the Users index / DB
+            if (!base.displayName || base.displayName === 'Admin User') {
+                let profile =
+                    usersIdx.byUid[base.uid] ||
+                    usersIdx.byAuthUid[base.uid] ||
+                    usersIdx.byId[base.uid] || null;
+
+                if (!profile) profile = await getUserProfileByUid(base.uid);
+
+                if (profile) {
+                    base = {
+                        ...base,
+                        displayName: prettyName(profile) || 'Admin User',
+                        role: profile.role || base.role,
+                        photoURL: profile.photoURL || base.photoURL,
+                        _nameSource: profile._source || 'usersIndex',
+                    };
+                } else {
+                    base.displayName = 'Admin User';
+                    base._nameSource = 'no-profile-fallback';
+                }
+            } else {
+                base._nameSource = fromCtx ? 'authContext' : (fromAuth ? 'firebaseAuth' : 'localStorage');
+            }
+
+            return base;
+        } catch (e) {
+            console.log('[TS][resolveActor][error]', e);
+            return { uid: 'admin', displayName: 'Admin User', email: null, _nameSource: 'error-fallback' };
+        }
+    };
+
+    const [usersIndex, setUsersIndex] = useState({
+        byId: {},      // key = db node id
+        byUid: {},     // key = user.uid
+        byAuthUid: {}, // key = user.authUid
+    });
+
+
 
     // Initialize current user and years
     useEffect(() => {
         const initializeUser = async () => {
-            try {
-                const auth = getAuth();
-                const user = auth.currentUser;
-                
-                if (user) {
-                    // Use Firebase Auth user
-                    setCurrentUser({
-                        uid: user.uid,
-                        displayName: user.displayName || 'Admin User',
-                        email: user.email || 'admin@system.com',
-                        role: 'admin'
-                    });
-                } else {
-                    // Fallback to localStorage
-                    const storedUser = JSON.parse(localStorage.getItem('currentUser')) || {
-                        uid: 'admin',
-                        displayName: 'Admin User',
-                        email: 'admin@system.com',
-                        role: 'admin'
-                    };
-                    setCurrentUser(storedUser);
-                }
-
-                // Set current year
-                const current = new Date();
-                setSelectedYear(current.getFullYear().toString());
-            } catch (error) {
-                console.error('Error initializing user:', error);
-                // Fallback to default user
-                setCurrentUser({
-                    uid: 'admin',
-                    displayName: 'Admin User',
-                    email: 'admin@system.com',
-                    role: 'admin'
-                });
-                const current = new Date();
-                setSelectedYear(current.getFullYear().toString());
-            }
+            const picked = await resolveActor(usersIndex);
+            setCurrentUser(picked);
+            const current = new Date();
+            setSelectedYear(current.getFullYear().toString());
         };
-
         initializeUser();
-    }, []);
+    }, [usersIndex, authUserCtx]);
+
 
     // Fetch all timesheets from EmployeeBioData path - ONLY SUBMITTED
     useEffect(() => {
@@ -258,13 +327,13 @@ export default function TimeSheetDashBoard() {
     // Format timestamp with time if available
     const formatTimestamp = (timestamp) => {
         if (!timestamp) return 'N/A';
-        
+
         const date = new Date(timestamp);
         if (isNaN(date.getTime())) return 'N/A';
-        
+
         // Check if time component exists (not midnight)
         const hasTime = date.getHours() !== 0 || date.getMinutes() !== 0 || date.getSeconds() !== 0;
-        
+
         if (hasTime) {
             return date.toLocaleString('en-IN', {
                 day: '2-digit',
@@ -309,39 +378,39 @@ export default function TimeSheetDashBoard() {
 
                 // 1) Global /Advances by timesheetId (legacy)
                 try {
-                const advSnapGlobal = await firebaseDB
-                    .child('Advances')
-                    .orderByChild('timesheetId')
-                    .equalTo(timesheetId)
-                    .once('value');
+                    const advSnapGlobal = await firebaseDB
+                        .child('Advances')
+                        .orderByChild('timesheetId')
+                        .equalTo(timesheetId)
+                        .once('value');
 
-                if (advSnapGlobal.exists()) {
-                    advancesGlobal = Object.values(advSnapGlobal.val());
-                }
+                    if (advSnapGlobal.exists()) {
+                        advancesGlobal = Object.values(advSnapGlobal.val());
+                    }
                 } catch (e) {
-                console.warn('Global advances fetch failed', e);
+                    console.warn('Global advances fetch failed', e);
                 }
 
                 // 2) Under this timesheet path: EmployeeBioData/{emp}/timesheets/{ts}/advances
                 try {
-                const advSnapTs = await firebaseDB
-                    .child(`EmployeeBioData/${employeeId}/timesheets/${timesheetId}/advances`)
-                    .once('value');
+                    const advSnapTs = await firebaseDB
+                        .child(`EmployeeBioData/${employeeId}/timesheets/${timesheetId}/advances`)
+                        .once('value');
 
-                if (advSnapTs.exists()) {
-                    const raw = advSnapTs.val();
-                    // entries may be an object keyed by an id
-                    advancesUnderTs = Object.entries(raw).map(([id, v]) => ({ id, ...v }));
-                }
+                    if (advSnapTs.exists()) {
+                        const raw = advSnapTs.val();
+                        // entries may be an object keyed by an id
+                        advancesUnderTs = Object.entries(raw).map(([id, v]) => ({ id, ...v }));
+                    }
                 } catch (e) {
-                console.warn('Timesheet-path advances fetch failed', e);
+                    console.warn('Timesheet-path advances fetch failed', e);
                 }
 
                 // Merge and normalize
                 const advances = mergeAdvances(advancesGlobal, advancesUnderTs).map((a) => ({
-                ...a,
-                amount: Number(a.amount) || 0,
-                status: a.status || 'approved', // default to approved if not set
+                    ...a,
+                    amount: Number(a.amount) || 0,
+                    status: a.status || 'approved', // default to approved if not set
                 }));
 
                 // Compute totals
@@ -368,7 +437,7 @@ export default function TimeSheetDashBoard() {
                     advancesAllTotal,
                     // prefer existing netPayable, else computed
                     netPayable: Number(timesheetData.netPayable ?? recomputedNet),
-                      
+
                 });
                 setShowDetailModal(true);
                 setShowClarificationInput(false);
@@ -386,11 +455,15 @@ export default function TimeSheetDashBoard() {
     const updateTimesheetStatus = async (status, comment = '') => {
         if (!selectedTimesheet) return;
 
+        const actor = await resolveActor(usersIndex);
+        const userId = actor.uid || 'admin';
+        const userName = actor.displayName || 'Admin User';
+
         setLoading(true);
         try {
             // Get current user details from Firebase Auth or state
             let userName = currentUser?.displayName || 'Admin User';
-            
+
             // Try to get from Firebase Auth first
             try {
                 const auth = getAuth();
@@ -537,7 +610,7 @@ export default function TimeSheetDashBoard() {
     const getPaginationItems = () => {
         const items = [];
         const maxVisiblePages = 5;
-        
+
         if (totalPages <= maxVisiblePages) {
             // Show all pages if total pages is less than max visible
             for (let i = 1; i <= totalPages; i++) {
@@ -546,11 +619,11 @@ export default function TimeSheetDashBoard() {
         } else {
             // Always show first page
             items.push(1);
-            
+
             // Calculate start and end of visible pages
             let start = Math.max(2, currentPage - 1);
             let end = Math.min(totalPages - 1, currentPage + 1);
-            
+
             // Adjust if at the beginning
             if (currentPage <= 2) {
                 end = 4;
@@ -559,26 +632,26 @@ export default function TimeSheetDashBoard() {
             if (currentPage >= totalPages - 1) {
                 start = totalPages - 3;
             }
-            
+
             // Add ellipsis after first page if needed
             if (start > 2) {
                 items.push('...');
             }
-            
+
             // Add middle pages
             for (let i = start; i <= end; i++) {
                 items.push(i);
             }
-            
+
             // Add ellipsis before last page if needed
             if (end < totalPages - 1) {
                 items.push('...');
             }
-            
+
             // Always show last page
             items.push(totalPages);
         }
-        
+
         return items;
     };
 
@@ -589,18 +662,18 @@ export default function TimeSheetDashBoard() {
             <div className="container-fluid py-4">
                 {/* Header */}
                 <div className="row mb-4">
-                <div className="col-md-12 text-center mb-3">
-                                        <h4 className="text-warning mb-0">
-                                            <i className="bi bi-speedometer2 me-2 text-warning"></i>
-                                            JenCeo Timesheet Dashboard
-                                        </h4>
-                                        <small className="text-muted">Manage and review employee timesheets</small>
-                                    </div>
+                    <div className="col-md-12 text-center mb-3">
+                        <h4 className="text-warning mb-0">
+                            <i className="bi bi-speedometer2 me-2 text-warning"></i>
+                            JenCeo Timesheet Dashboard
+                        </h4>
+                        <small className="text-muted">Manage and review employee timesheets</small>
+                    </div>
                     <div className="col-12">
                         <div className="card bg-dark border-secondary">
                             <div className="card-body">
                                 <div className="row align-items-center">
-                                    
+
                                     <div className="col-md-12 text-end">
                                         <div className="row">
                                             <div className="col-md-10 text-center">
@@ -904,7 +977,7 @@ export default function TimeSheetDashBoard() {
                                                                         src={timesheet.employeeData.employeePhotoUrl}
                                                                         alt="Employee"
                                                                         className=" me-2"
-                                                                        style={{ width: '40px', height: '40px', objectFit: 'cover', borderRadius:"5px", border:"1px solid" }}
+                                                                        style={{ width: '40px', height: '40px', objectFit: 'cover', borderRadius: "5px", border: "1px solid" }}
                                                                     />
                                                                 ) : (
                                                                     <div
@@ -929,7 +1002,7 @@ export default function TimeSheetDashBoard() {
                                                                 {timesheet.useDateRange ? 'Custom Range' : 'Monthly'}
                                                             </small>
                                                         </td>
-                                                        
+
                                                         <td className="border-secondary text-end">
                                                             <div>
                                                                 <strong className="text-success">₹{(timesheet.totalSalary || 0).toLocaleString()}</strong>
@@ -1006,7 +1079,7 @@ export default function TimeSheetDashBoard() {
                                         <small className="text-muted">
                                             Showing {indexOfFirstItem + 1} to {Math.min(indexOfLastItem, filteredTimesheets.length)} of {filteredTimesheets.length} entries
                                         </small>
-                                        <nav style={{backgroundColor:"transparent"}}>
+                                        <nav style={{ backgroundColor: "transparent" }}>
                                             <ul className="pagination pagination-sm mb-0">
                                                 {/* First Page */}
                                                 <li className={`page-item ${currentPage === 1 ? 'disabled' : ''}`}>
@@ -1101,7 +1174,7 @@ export default function TimeSheetDashBoard() {
                                 <div className="modal-body">
                                     {/* Header Summary */}
                                     <div className="row mb-4">
-                                    <div className="col-md-4">
+                                        <div className="col-md-4">
                                             <div className="card border-secondary bg-secondary bg-opacity-10 h-100">
                                                 <div className="card-body text-center">
                                                     {selectedTimesheet.employeeData?.employeePhotoUrl ? (
@@ -1138,7 +1211,7 @@ export default function TimeSheetDashBoard() {
                                             </div>
                                         </div>
                                         <div className="col-md-8">
-                                        <div className="card bg-dark border-secondary h-100">
+                                            <div className="card bg-dark border-secondary h-100">
                                                 <div className="card-body">
                                                     <div className="row text-center">
                                                         <div className="col-4 mb-3">
@@ -1170,13 +1243,13 @@ export default function TimeSheetDashBoard() {
                                                                 <h6 className="text-danger d-block">Advances (Approved)</h6>
                                                                 <p className="h4 text-white">₹{(selectedTimesheet.advancesApprovedTotal || 0).toLocaleString()}</p>
                                                             </div>
-                                                            </div>
-                                                            <div className="col-4 mb-3">
+                                                        </div>
+                                                        <div className="col-4 mb-3">
                                                             <div className="border border-success rounded p-2 h-100">
                                                                 <h6 className="text-success d-block">Net Payable</h6>
                                                                 <p className="h4 text-warning">₹{(selectedTimesheet.netPayable || 0).toLocaleString()}</p>
                                                             </div>
-                                                            </div>
+                                                        </div>
 
                                                     </div>
                                                     <div className="row mt-3">
@@ -1209,7 +1282,7 @@ export default function TimeSheetDashBoard() {
                                                                     {selectedTimesheet.status === 'approved' ? 'Approved By' : 'Rejected By'}
                                                                 </label>
                                                                 <div className="text-white">
-                                                                    {selectedTimesheet.status === 'approved' 
+                                                                    {selectedTimesheet.status === 'approved'
                                                                         ? selectedTimesheet.approvedBy || selectedTimesheet.reviewedByName || 'N/A'
                                                                         : selectedTimesheet.rejectedBy || selectedTimesheet.reviewedByName || 'N/A'
                                                                     }
@@ -1372,10 +1445,10 @@ export default function TimeSheetDashBoard() {
                                                                     </td>
                                                                     <td>
                                                                         <small className="text-muted">
-                                                                            {entry.updatedAt ? 
-                                                                                new Date(entry.updatedAt).toLocaleDateString('en-IN') : 
-                                                                                entry.createdAt ? 
-                                                                                    new Date(entry.createdAt).toLocaleDateString('en-IN') : 
+                                                                            {entry.updatedAt ?
+                                                                                new Date(entry.updatedAt).toLocaleDateString('en-IN') :
+                                                                                entry.createdAt ?
+                                                                                    new Date(entry.createdAt).toLocaleDateString('en-IN') :
                                                                                     'N/A'
                                                                             }
                                                                         </small>

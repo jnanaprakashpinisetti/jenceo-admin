@@ -168,6 +168,39 @@ export default function TimeSheetDashBoard() {
         setCurrentPage(1); // Reset to first page when filters change
     }, [timesheets, selectedYear, selectedMonth, searchTerm, statusFilter]);
 
+    const pushClarifyLog = async (employeeId, tsId, entry) => {
+        const base = `EmployeeBioData/${employeeId}/timesheets/${tsId}/clarificationRequest`;
+        const logRef = firebaseDB.child(`${base}/log`).push();
+
+        // Robust id—always use the push() key; fall back if any issue.
+        const id = logRef.key || `k_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+        const payload = { id, ...entry };
+
+        // 1) Actually create a new child under /log/<id>
+        await logRef.set(payload);
+
+        // 2) Update "latest" convenience fields without touching the object
+        const latest = {};
+        if (entry.type === 'request') {
+            latest[`${base}/text`] = entry.text;
+            latest[`${base}/requestedById`] = entry.byId;
+            latest[`${base}/requestedByName`] = entry.byName;
+            latest[`${base}/requestedAt`] = entry.at;
+            latest[`${base}/resolved`] = false;
+        } else if (entry.type === 'reply') {
+            latest[`${base}/replyText`] = entry.text;
+            latest[`${base}/repliedBy`] = entry.byId;
+            latest[`${base}/repliedByName`] = entry.byName;
+            latest[`${base}/repliedAt`] = entry.at;
+        }
+        await firebaseDB.update(latest);
+
+        // Debug
+        console.log('[clarify.log][pushed]', { base, id, payload });
+    };
+
+
+
     // Fetch timesheets from EmployeeBioData structure - ONLY SUBMITTED
     const fetchTimesheets = async () => {
         setLoading(true);
@@ -426,6 +459,11 @@ export default function TimeSheetDashBoard() {
                 const employeeSnapshot = await firebaseDB.child(`EmployeeBioData/${employeeId}`).once('value');
                 const employeeData = employeeSnapshot.exists() ? employeeSnapshot.val() : {};
 
+                const logObj = timesheetData?.clarificationRequest?.log || {};
+                const clarificationLog = Object.values(logObj)
+                    .map(x => ({ ...x, at: x.at || x.requestedAt || x.repliedAt || x.date || null }))
+                    .sort((a, b) => (new Date(a.at || 0)) - (new Date(b.at || 0)));
+
                 setSelectedTimesheet({
                     id: timesheetId,
                     employeeId: employeeId,
@@ -437,6 +475,7 @@ export default function TimeSheetDashBoard() {
                     advancesAllTotal,
                     // prefer existing netPayable, else computed
                     netPayable: Number(timesheetData.netPayable ?? recomputedNet),
+                    clarificationLog,
 
                 });
                 setShowDetailModal(true);
@@ -455,83 +494,86 @@ export default function TimeSheetDashBoard() {
     const updateTimesheetStatus = async (status, comment = '') => {
         if (!selectedTimesheet) return;
 
-        const actor = await resolveActor(usersIndex);
-        const userId = actor.uid || 'admin';
-        const userName = actor.displayName || 'Admin User';
-
         setLoading(true);
         try {
-            // Get current user details from Firebase Auth or state
-            let userName = currentUser?.displayName || 'Admin User';
+            // Resolve the actor (you already have resolveActor + usersIndex)
+            const actor = await resolveActor(usersIndex);
+            const userId = actor.uid || 'admin';
+            const userName = actor.displayName || 'Admin User';
+            const now = new Date().toISOString();
 
-            // Try to get from Firebase Auth first
-            try {
-                const auth = getAuth();
-                if (auth.currentUser) {
-                    userName = auth.currentUser.displayName || auth.currentUser.email || userName;
-                }
-            } catch (authError) {
-                console.log('Using stored user details');
-            }
-
-            const updateData = {
+            // --- header: always safe audit fields (no clarificationRequest here) ---
+            const header = {
                 status,
-                updatedBy: currentUser?.uid,
+                updatedBy: userId,
                 updatedByName: userName,
-                updatedAt: new Date().toISOString(),
-                lastModified: new Date().toISOString() // Add last modified timestamp
+                updatedAt: now,
+                lastModified: now,
             };
 
-            // Add clarification data if needed
+            // Build a single multi-path update to avoid races AND avoid object overwrite
+            const baseHeaderPath = `EmployeeBioData/${selectedTimesheet.employeeId}/timesheets/${selectedTimesheet.id}`;
+            const clarBase = `${baseHeaderPath}/clarificationRequest`;
+
+            const updates = {
+                // header fields
+                [`${baseHeaderPath}/status`]: header.status,
+                [`${baseHeaderPath}/updatedBy`]: header.updatedBy,
+                [`${baseHeaderPath}/updatedByName`]: header.updatedByName,
+                [`${baseHeaderPath}/updatedAt`]: header.updatedAt,
+                [`${baseHeaderPath}/lastModified`]: header.lastModified,
+            };
+
             if (status === 'clarification') {
-                updateData.clarificationRequest = {
-                    text: comment,
-                    requestedBy: currentUser?.uid,
-                    requestedByName: userName,
-                    requestedAt: new Date().toISOString(),
-                    resolved: false
-                };
+                const at = now;
+
+                // 1) append to /clarificationRequest/log/<pushId>
+                const logRef = firebaseDB.child(`${clarBase}/log`).push();
+                const id = logRef.key || `k_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+                const entry = { id, type: 'request', text: comment, byId: userId, byName: userName, at };
+                await logRef.set(entry);
+
+                // 2) update ONLY leaf fields for the “latest” view (do NOT assign the object)
+                updates[`${clarBase}/text`] = comment;
+                updates[`${clarBase}/requestedById`] = userId;
+                updates[`${clarBase}/requestedByName`] = userName;
+                updates[`${clarBase}/requestedAt`] = at;
+                updates[`${clarBase}/resolved`] = false;
+
             } else if (status === 'approved') {
-                updateData.reviewedBy = currentUser?.uid;
-                updateData.reviewedByName = userName;
-                updateData.reviewedAt = new Date().toISOString();
-                updateData.approvedBy = userName; // Use authenticated user name
-                updateData.approvedAt = new Date().toISOString();
+                updates[`${baseHeaderPath}/reviewedBy`] = userId;
+                updates[`${baseHeaderPath}/reviewedByName`] = userName;
+                updates[`${baseHeaderPath}/reviewedAt`] = now;
+                updates[`${baseHeaderPath}/approvedById`] = userId;
+                updates[`${baseHeaderPath}/approvedByName`] = userName;
+                updates[`${baseHeaderPath}/approvedAt`] = now;
 
-                // Clear clarification if exists
-                if (selectedTimesheet.clarificationRequest) {
-                    updateData.clarificationRequest = {
-                        ...selectedTimesheet.clarificationRequest,
-                        resolved: true,
-                        resolvedBy: currentUser?.uid,
-                        resolvedByName: userName,
-                        resolvedAt: new Date().toISOString()
-                    };
-                }
+                // mark clarification resolved without touching log
+                updates[`${clarBase}/resolved`] = true;
+                updates[`${clarBase}/resolvedById`] = userId;
+                updates[`${clarBase}/resolvedByName`] = userName;
+                updates[`${clarBase}/resolvedAt`] = now;
+
             } else if (status === 'rejected') {
-                updateData.reviewedBy = currentUser?.uid;
-                updateData.reviewedByName = userName;
-                updateData.reviewedAt = new Date().toISOString();
-                updateData.rejectedBy = userName; // Use authenticated user name
-                updateData.rejectedAt = new Date().toISOString();
-                updateData.rejectionComment = comment;
+                updates[`${baseHeaderPath}/reviewedBy`] = userId;
+                updates[`${baseHeaderPath}/reviewedByName`] = userName;
+                updates[`${baseHeaderPath}/reviewedAt`] = now;
+                updates[`${baseHeaderPath}/rejectedById`] = userId;
+                updates[`${baseHeaderPath}/rejectedByName`] = userName;
+                updates[`${baseHeaderPath}/rejectedAt`] = now;
+                updates[`${baseHeaderPath}/rejectionComment`] = comment;
 
-                // Clear clarification if exists
-                if (selectedTimesheet.clarificationRequest) {
-                    updateData.clarificationRequest = {
-                        ...selectedTimesheet.clarificationRequest,
-                        resolved: true,
-                        resolvedBy: currentUser?.uid,
-                        resolvedByName: userName,
-                        resolvedAt: new Date().toISOString()
-                    };
-                }
+                // mark clarification resolved without touching log
+                updates[`${clarBase}/resolved`] = true;
+                updates[`${clarBase}/resolvedById`] = userId;
+                updates[`${clarBase}/resolvedByName`] = userName;
+                updates[`${clarBase}/resolvedAt`] = now;
             }
 
-            // Update in EmployeeBioData path
-            await firebaseDB.child(`EmployeeBioData/${selectedTimesheet.employeeId}/timesheets/${selectedTimesheet.id}`).update(updateData);
+            // 🔒 Single atomic update – no overwriting of clarificationRequest object
+            await firebaseDB.update(updates);
 
-            // Refresh data
+            // refresh UI
             await fetchTimesheets();
             setShowDetailModal(false);
             setSelectedTimesheet(null);
@@ -539,7 +581,6 @@ export default function TimeSheetDashBoard() {
             setRejectionText('');
             setShowClarificationInput(false);
             setShowRejectionInput(false);
-
         } catch (error) {
             console.error('Error updating timesheet status:', error);
         } finally {
@@ -1320,35 +1361,51 @@ export default function TimeSheetDashBoard() {
                                                     <div className="card-body">
                                                         <h6 className="text-warning">
                                                             <i className="bi bi-question-circle me-2"></i>
-                                                            Clarification Request
+                                                            Clarification
                                                         </h6>
-                                                        <div className="row">
-                                                            <div className="col-md-6">
-                                                                <label className="form-label text-info mb-1">Requested By</label>
-                                                                <div className="text-white">
-                                                                    {selectedTimesheet.clarificationRequest.requestedByName || 'N/A'}
-                                                                </div>
-                                                                <small className="text-muted">
-                                                                    {formatTimestamp(selectedTimesheet.clarificationRequest.requestedAt)}
-                                                                </small>
-                                                            </div>
-                                                            <div className="col-md-6">
-                                                                <label className="form-label text-info mb-1">Status</label>
-                                                                <div>
-                                                                    {selectedTimesheet.clarificationRequest.resolved ? (
-                                                                        <span className="badge bg-success">Resolved</span>
-                                                                    ) : (
-                                                                        <span className="badge bg-warning text-dark">Pending</span>
-                                                                    )}
-                                                                </div>
-                                                            </div>
+
+                                                        {/* Status pill */}
+                                                        <div className="mb-3">
+                                                            {selectedTimesheet.clarificationRequest.resolved ? (
+                                                                <span className="badge bg-success">Resolved</span>
+                                                            ) : (
+                                                                <span className="badge bg-warning text-dark">Pending</span>
+                                                            )}
                                                         </div>
-                                                        <div className="mt-3">
-                                                            <label className="form-label text-info mb-1">Request Details</label>
-                                                            <div className="text-white bg-dark p-3 rounded border border-warning">
-                                                                {selectedTimesheet.clarificationRequest.text}
-                                                            </div>
+
+                                                        {/* Thread */}
+                                                        <div className="list-group">
+                                                            {/* First “latest” request for backward compatibility */}
+                                                            {selectedTimesheet.clarificationRequest.text && !selectedTimesheet.clarificationLog?.length && (
+                                                                <div className="list-group-item bg-dark text-white border-secondary">
+                                                                    <div className="d-flex justify-content-between">
+                                                                        <span><span className="badge bg-warning me-2">Request</span>{selectedTimesheet.clarificationRequest.text}</span>
+                                                                        <small className="text-muted">{formatTimestamp(selectedTimesheet.clarificationRequest.requestedAt)}</small>
+                                                                    </div>
+                                                                    <div className="small text-info mt-1">
+                                                                        by {selectedTimesheet.clarificationRequest.requestedByName || 'Unknown'}
+                                                                    </div>
+                                                                </div>
+                                                            )}
+
+                                                            {/* Render full log when present */}
+                                                            {selectedTimesheet.clarificationLog?.map(item => (
+                                                                <div key={item.id} className="list-group-item bg-dark text-white border-secondary">
+                                                                    <div className="d-flex justify-content-between">
+                                                                        <span>
+                                                                            <span className={`badge me-2 ${item.type === 'request' ? 'bg-warning text-dark' : 'bg-info'}`}>
+                                                                                {item.type === 'request' ? 'Request' : 'Reply'}
+                                                                            </span>
+                                                                            {item.text}
+                                                                        </span>
+                                                                        <small className="text-muted">{formatTimestamp(item.at)}</small>
+                                                                    </div>
+                                                                    <div className="small text-info mt-1">by {item.byName || 'Unknown'}</div>
+                                                                </div>
+                                                            ))}
                                                         </div>
+
+                                                        {/* Resolved info (unchanged) */}
                                                         {selectedTimesheet.clarificationRequest.resolved && (
                                                             <div className="row mt-3">
                                                                 <div className="col-md-6">
@@ -1370,6 +1427,7 @@ export default function TimeSheetDashBoard() {
                                             </div>
                                         </div>
                                     )}
+
 
                                     {/* Daily Entries */}
                                     <div className="row mb-4">

@@ -270,6 +270,7 @@ const DisplayTimeSheet = () => {
     const [showReadOnlyModal, setShowReadOnlyModal] = useState(false);
 
     const [allUsers, setAllUsers] = useState([]);
+    const [clarifyThread, setClarifyThread] = useState([]);
 
     const whoSafe = () => {
         // Priority 1: Auth context user
@@ -357,33 +358,33 @@ const DisplayTimeSheet = () => {
     const { user: authUser } = useAuth();
     const canUserEditTimesheet = (ts, _currentUserId, authContext) => {
         if (!ts) return false;
-      
+
         const status = (String(ts.status || '')).toLowerCase();
         const idSet = currentUserIdSet(authContext, authUser, currentUser, allUsers);
         const role = (authContext?.user?.role || '').toLowerCase();
         const isAdmin = role === 'admin' || role === 'superadmin' || role === 'super_admin';
         const isCreator = ts.createdBy && idSet.has(String(ts.createdBy));
         const isAssignee = ts.assignedTo && idSet.has(String(ts.assignedTo));
-      
+
         // ✅ Rejected → allow editing for creator or admin (optionally assignee)
         if (status === 'rejected') {
-          return Boolean(isCreator || isAdmin /* || isAssignee */);
+            return Boolean(isCreator || isAdmin /* || isAssignee */);
         }
-      
+
         // Approved → locked for everyone
         if (status === 'approved') {
-          return false;
+            return false;
         }
-      
+
         // Submitted / Assigned / Clarification → only assignee or admin
         if (status === 'submitted' || status === 'assigned' || status === 'clarification') {
-          return Boolean(isAssignee || isAdmin);
+            return Boolean(isAssignee || isAdmin);
         }
-      
+
         // Draft / New → creator or admin
         return Boolean(isCreator || isAdmin);
-      };
-      
+    };
+
 
 
 
@@ -625,81 +626,84 @@ const DisplayTimeSheet = () => {
 
 
     const openClarifyReply = async (tsIdFromRow) => {
-        if (!selectedEmployee || !tsIdFromRow) {
-          return;
-        }
-      
+        if (!selectedEmployee || !tsIdFromRow) return;
+
         setClarifyTsId(tsIdFromRow);
         setClarifyText('');
         setClarifyAdminText('');
         setClarifyRequestedByName('');
-      
+        setClarifyThread([]); // reset
+
         const base = `${empTsById(selectedEmployee, tsIdFromRow)}/clarificationRequest`;
         try {
-          const textSnap = await firebaseDB.child(`${base}/text`).get();
-          const askNameSnap = await firebaseDB.child(`${base}/requestedByName`).get();
-          const askBySnap = await firebaseDB.child(`${base}/requestedBy`).get();
-      
-          const adminText = textSnap.exists() ? (textSnap.val() || '') : '';
-          // Prefer requestedByName; fall back to resolving requestedBy UID via your helper
-          const askedByName =
-            (askNameSnap.exists() && askNameSnap.val()) ||
-            (askBySnap.exists() ? nameForUid(askBySnap.val()) : '');
-      
-          setClarifyAdminText(adminText);
-          setClarifyRequestedByName(askedByName || 'Unknown');
-      
+            // Load the latest request text and who asked
+            const [textSnap, askNameSnap, askBySnap] = await Promise.all([
+                firebaseDB.child(`${base}/text`).get(),
+                firebaseDB.child(`${base}/requestedByName`).get(),
+                firebaseDB.child(`${base}/requestedBy`).get(),
+            ]);
+
+            const adminText = textSnap.exists() ? (textSnap.val() || '') : '';
+            const askedByName =
+                (askNameSnap.exists() && askNameSnap.val()) ||
+                (askBySnap.exists() ? nameForUid(askBySnap.val()) : '');
+
+            setClarifyAdminText(adminText);
+            setClarifyRequestedByName(askedByName || 'Unknown');
+
+            // 👇 NEW: load the whole conversation log
+            const logSnap = await firebaseDB.child(`${base}/log`).get();
+            const logObj = logSnap.exists() ? (logSnap.val() || {}) : {};
+
+            const thread = Object.values(logObj)
+                .map(x => ({
+                    id: x.id || `${x.type}_${x.at}`,
+                    type: x.type,            // 'request' | 'reply'
+                    text: x.text || '',
+                    byId: x.byId || x.by,
+                    byName: x.byName || nameForUid(x.byId || x.by) || 'Unknown',
+                    at: x.at || x.requestedAt || x.repliedAt || null,
+                }))
+                .sort((a, b) => new Date(a.at || 0) - new Date(b.at || 0));
+
+            setClarifyThread(thread);
         } catch (err) {
+            console.error('[clarify.open][error]', err);
         }
-      
+
         setShowClarifyReplyModal(true);
-      };
-      
-      
-      const submitClarifyReply = async () => {
+    };
+
+
+
+    const submitClarifyReply = async () => {
         const reply = (clarifyText || '').trim();
-        if (!reply) {
-          showModal('Write something', 'Please enter your reply.', 'warning');
-          return;
-        }
-        if (!selectedEmployee || !clarifyTsId) {
-          showModal('Error', 'Timesheet context missing.', 'error');
-          console.log('[Clarify] missing context on submit', { selectedEmployee, clarifyTsId, reply });
-          return;
-        }
-      
+        if (!reply) { showModal('Write something', 'Please enter your reply.', 'warning'); return; }
+
         const now = new Date().toISOString();
         const { uid, name } = whoSafe();
         const base = `${empTsById(selectedEmployee, clarifyTsId)}/clarificationRequest`;
-      
-        console.log('[Clarify] submitClarifyReply -> writing', {
-          employeeId: selectedEmployee,
-          timesheetId: clarifyTsId,
-          replyPath: `${base}/replyText`,
-          reply,
-          repliedBy: uid,
-          repliedByName: name,
-          repliedAt: now,
-        });
-      
-        try {
-          await firebaseDB.update({
+        const logRef = firebaseDB.child(`${base}/log`).push();
+        const id = logRef.key || `k_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+
+        // 1) Append to the log
+        const newKey = firebaseDB.child(`${base}/log`).push().key;
+        const entry = { id: newKey, type: 'reply', text: reply, byId: uid, byName: name, at: now };
+        await logRef.set(entry);
+        await firebaseDB.update({
             [`${base}/replyText`]: reply,
             [`${base}/repliedBy`]: uid,
             [`${base}/repliedByName`]: name,
             [`${base}/repliedAt`]: now,
-          });
-      
-          showModal('Success', 'Reply posted.', 'success');
-          setShowClarifyReplyModal(false);
-          setClarifyCommentId('');
-          setClarifyText('');
-        } catch (e) {
-          showModal('Error', 'Could not post reply. Try again.', 'error');
-        }
-      };
-      
-      
+        });
+
+        showModal('Success', 'Reply posted.', 'success');
+        setShowClarifyReplyModal(false);
+        setClarifyText('');
+    };
+
+
+
 
     // Build the advances path under a specific employee + timesheet
     const advancesNode = (empId, tsId) =>
@@ -2931,15 +2935,15 @@ const DisplayTimeSheet = () => {
 
                                                     </td>
                                                     <td>
-                                                        <span style={{textTransform:'capitalize'}}
-                                                        
-                                                        className={
-                                                            `badge ${ts.status === 'approved' ? 'bg-success' :
+                                                        <span style={{ textTransform: 'capitalize' }}
+
+                                                            className={
+                                                                `badge ${ts.status === 'approved' ? 'bg-success' :
                                                                     ts.status === 'assigned' ? 'bg-primary' :
-                                                                    ts.status === 'rejected' ? 'bg-danger' : 
-                                                                    ts.status === 'clarification' ? 'bg-warning' : 
-                                                                    ts.status === 'submitted' ? 'bg-info' : 'bg-secondary'
-                                                            }`}
+                                                                        ts.status === 'rejected' ? 'bg-danger' :
+                                                                            ts.status === 'clarification' ? 'bg-warning' :
+                                                                                ts.status === 'submitted' ? 'bg-info' : 'bg-secondary'
+                                                                }`}
                                                         >
                                                             {ts.status || 'draft'}
                                                         </span>
@@ -4144,41 +4148,63 @@ const DisplayTimeSheet = () => {
             )}
 
             {/* Clarification Modal */}
-{showClarifyReplyModal && (
-  <div className="modal fade show" style={{ display: 'block', backgroundColor: 'rgba(0,0,0,0.85)' }}>
-    <div className="modal-dialog modal-md modal-dialog-centered">
-      <div className="modal-content bg-dark border border-warning">
-        <div className="modal-header border-warning">
-          <h5 className="modal-title text-warning">
-            <i className="bi bi-question-diamond me-2"></i>
-            Clarification
-          </h5>
-          <button className="btn-close btn-close-white" onClick={() => setShowClarifyReplyModal(false)} />
-        </div>
-        <div className="modal-body">
-          <label className="form-label text-info">Admin’s note</label>
-          <div className="form-control bg-secondary bg-opacity-20 text-white mb-3" style={{ minHeight: 80, whiteSpace: 'pre-wrap' }}>
-            {clarifyAdminText || '—'}
-            <p>{}</p>
-          </div>
+            {showClarifyReplyModal && (
+                <div className="modal fade show" style={{ display: 'block', backgroundColor: 'rgba(0,0,0,0.85)' }}>
+                    <div className="modal-dialog modal-md modal-dialog-centered">
+                        <div className="modal-content bg-dark border border-warning">
+                            <div className="modal-header border-warning">
+                                <h5 className="modal-title text-warning">
+                                    <i className="bi bi-question-diamond me-2"></i>
+                                    Clarification
+                                </h5>
+                                <button className="btn-close btn-close-white" onClick={() => setShowClarifyReplyModal(false)} />
+                            </div>
+                            {clarifyThread.length === 0 ? (
+                                <div className="small text-muted">No previous messages yet.</div>
+                            ) : (
+                                <div className="list-group">
+                                    {clarifyThread.map(item => (
+                                        <div key={item.id} className="list-group-item bg-dark text-white border-secondary">
+                                            <div className="d-flex justify-content-between">
+                                                <span>
+                                                    <span className={`badge me-2 ${item.type === 'request' ? 'bg-warning text-dark' : 'bg-info'}`}>
+                                                        {item.type === 'request' ? 'Request' : 'Reply'}
+                                                    </span>
+                                                    {item.text}
+                                                </span>
+                                                <small className="text-muted">
+                                                    {item.at ? new Date(item.at).toLocaleString() : ''}
+                                                </small>
+                                            </div>
+                                            <div className="small text-info mt-1">by {item.byName || 'Unknown'}</div>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                            <div className="modal-body">
+                                <label className="form-label text-info">Admin’s note</label>
+                                <div className="form-control bg-secondary bg-opacity-20 text-white mb-3" style={{ minHeight: 80, whiteSpace: 'pre-wrap' }}>
+                                    {clarifyAdminText || '—'}
+                                    <p>{ }</p>
+                                </div>
 
-          <label className="form-label text-white">Your reply</label>
-          <textarea
-            className="form-control bg-secondary bg-opacity-20 text-white"
-            rows={4}
-            value={clarifyText}
-            onChange={(e) => setClarifyText(e.target.value)}
-            placeholder="Type your reply."
-          />
-        </div>
-        <div className="modal-footer">
-          <button className="btn btn-secondary" onClick={() => setShowClarifyReplyModal(false)}>Cancel</button>
-          <button className="btn btn-primary" onClick={submitClarifyReply}>Post Reply</button>
-        </div>
-      </div>
-    </div>
-  </div>
-)}
+                                <label className="form-label text-white">Your reply</label>
+                                <textarea
+                                    className="form-control bg-secondary bg-opacity-20 text-white"
+                                    rows={4}
+                                    value={clarifyText}
+                                    onChange={(e) => setClarifyText(e.target.value)}
+                                    placeholder="Type your reply."
+                                />
+                            </div>
+                            <div className="modal-footer">
+                                <button className="btn btn-secondary" onClick={() => setShowClarifyReplyModal(false)}>Cancel</button>
+                                <button className="btn btn-primary" onClick={submitClarifyReply}>Post Reply</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
 
 
         </div>

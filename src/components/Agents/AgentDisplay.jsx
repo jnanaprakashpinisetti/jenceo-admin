@@ -1186,7 +1186,7 @@ export default function AgentDisplay() {
     }}
     onSaved={(updatedAgent) => {
         // Just refresh the data without closing modal
-        // refreshData();
+        refreshData();
     }}
 />
 

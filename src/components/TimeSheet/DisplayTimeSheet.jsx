@@ -272,6 +272,10 @@ const DisplayTimeSheet = () => {
     const [allUsers, setAllUsers] = useState([]);
     const [clarifyThread, setClarifyThread] = useState([]);
 
+    // --- Reject Message Modal ---
+    const [showRejectMsgModal, setShowRejectMsgModal] = useState(false);
+    const [rejectMsg, setRejectMsg] = useState({ text: '', by: '', at: '' });
+
     const whoSafe = () => {
         // Priority 1: Auth context user
         if (authContext?.user?.uid) {
@@ -352,6 +356,65 @@ const DisplayTimeSheet = () => {
 
         return ids;
     };
+
+    // helper already in your file; keep it or add it if missing
+    const preferName = (...vals) => {
+        for (const v of vals) {
+            const s = String(v || '').trim();
+            if (s && s.toLowerCase() !== 'admin user' && s.toLowerCase() !== 'unknown') return s;
+        }
+        return '';
+    };
+
+    const openRejectMsg = async (tsId) => {
+        if (!selectedEmployee || !tsId) return;
+
+        const base = empTsById(selectedEmployee, tsId);
+        try {
+            const snap = await firebaseDB.child(base).once('value');
+            const ts = snap.val() || {};
+
+            // 1) Pick best text
+            const text =
+                ts.rejectionComment ||
+                ts.rejectComment ||
+                ts.rejectionMessage ||
+                ts.rejectMessage ||
+                ts.rejectionReason ||
+                ts.comment ||
+                '';
+
+            // 2) Pick best "by" — prefer real name stored in `rejectedBy` if `rejectedByName` is the fallback
+            //    Order: rejectedByName → rejectedBy → reviewedByName → updatedByName
+            let by = preferName(ts.rejectedByName, ts.rejectedBy, ts.reviewedByName, ts.updatedByName);
+
+            // 3) If still empty, resolve from any available UID: rejectedById → reviewedBy → updatedBy
+            if (!by) {
+                const uidCand = preferName(ts.rejectedById, ts.reviewedBy, ts.updatedBy);
+                if (uidCand) {
+                    // nameForUid in this file is async — await it
+                    const resolved = await nameForUid(uidCand);
+                    if (resolved && resolved.toLowerCase() !== 'admin user') by = resolved;
+                }
+            }
+
+            // Final fallback
+            if (!by) by = 'Unknown';
+
+            // 4) Timestamp: prefer rejectedAt
+            const at = ts.rejectedAt || ts.reviewedAt || ts.updatedAt || '';
+
+
+            setRejectMsg({ text, by, at });
+            setShowRejectMsgModal(true);
+        } catch (e) {
+            showModal('Failed to load rejection message', String(e?.message || e), 'error');
+        }
+    };
+
+
+
+
 
     // Use Auth Context
     const authContext = useAuth();
@@ -3059,6 +3122,27 @@ const DisplayTimeSheet = () => {
                                                                 <i className="bi bi-calendar-range"></i>
                                                             </button>
 
+                                                            {/* Inside each previous timesheet row’s actions cell */}
+                                                            {ts.status === 'rejected' ? (
+                                                                <button
+                                                                    className="btn btn-sm btn-outline-warning"
+                                                                    title="View rejection message"
+                                                                    onClick={() => openRejectMsg(ts.id)}
+                                                                >
+                                                                    <i className="bi bi-chat-quote"></i>
+                                                                </button>
+                                                            ) : (
+                                                                // existing jump/open button for non-rejected rows:
+                                                                <button
+                                                                    className="btn btn-sm btn-outline-info"
+                                                                    title="Open timesheet"
+                                                                    onClick={() => openPreviousTimesheet(ts.id)}
+                                                                >
+                                                                    <i className="bi bi-arrow-right-square"></i>
+                                                                </button>
+                                                            )}
+
+
                                                             {/* Delete Button - Only show for non-approved timesheets */}
                                                             {(ts.status === 'draft' || ts.status === 'submitted' || ts.status === 'rejected') && (
                                                                 <button
@@ -4200,6 +4284,56 @@ const DisplayTimeSheet = () => {
                             <div className="modal-footer">
                                 <button className="btn btn-secondary" onClick={() => setShowClarifyReplyModal(false)}>Cancel</button>
                                 <button className="btn btn-primary" onClick={submitClarifyReply}>Post Reply</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+            {showRejectMsgModal && (
+                <div className="modal fade show" style={{ display: 'block', backgroundColor: 'rgba(0,0,0,0.6)' }}>
+                    <div className="modal-dialog modal-md">
+                        <div className="modal-content bg-dark text-white border border-danger">
+                            <div className="modal-header border-0 bg-danger bg-opacity-10">
+                                <h5 className="modal-title text-danger">
+                                    <i className="bi bi-x-circle me-2"></i>
+                                    Rejection Details
+                                </h5>
+                                <button className="btn-close btn-close-white" onClick={() => setShowRejectMsgModal(false)} />
+                            </div>
+                            <div className="modal-body">
+                                {rejectMsg?.text ? (
+                                    <>
+                                        <div className="row mb-3">
+                                            <div className="col-6">
+                                                <div className="mb-2 small text-muted">Rejected by</div>
+                                                <div className="fw-semibold text-warning">{rejectMsg.by || 'Unknown'}</div>
+                                            </div>
+                                            <div className="col-6">
+                                                <div className="mb-2 small text-muted">Rejected at</div>
+                                                <div className="fw-semibold">
+                                                    {rejectMsg.at ? new Date(rejectMsg.at).toLocaleString('en-IN') : 'Not specified'}
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <div className="mb-2 small text-muted">Rejection Reason</div>
+                                        <div className="p-3 bg-black rounded border border-secondary" style={{ whiteSpace: 'pre-wrap', minHeight: '100px' }}>
+                                            {rejectMsg.text}
+                                        </div>
+                                    </>
+                                ) : (
+                                    <div className="text-center py-4">
+                                        <i className="bi bi-info-circle text-warning display-4 mb-3"></i>
+                                        <div className="text-warning">No rejection comment found.</div>
+                                        <small className="text-muted">The timesheet was rejected but no reason was provided.</small>
+                                    </div>
+                                )}
+                            </div>
+                            <div className="modal-footer border-0">
+                                <button className="btn btn-danger" onClick={() => setShowRejectMsgModal(false)}>
+                                    <i className="bi bi-x-lg me-1"></i>
+                                    Close
+                                </button>
                             </div>
                         </div>
                     </div>

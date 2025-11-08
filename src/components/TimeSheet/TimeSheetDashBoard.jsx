@@ -194,9 +194,7 @@ export default function TimeSheetDashBoard() {
             latest[`${base}/repliedAt`] = entry.at;
         }
         await firebaseDB.update(latest);
-
-        // Debug
-        console.log('[clarify.log][pushed]', { base, id, payload });
+ 
     };
 
 

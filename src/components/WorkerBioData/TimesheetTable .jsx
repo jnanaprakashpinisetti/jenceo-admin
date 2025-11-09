@@ -245,6 +245,8 @@ const TimesheetTable = ({ employee }) => {
     }
   };
 
+  const sumAdvancesList = (list) => (list || []).reduce((s, a) => s + (parseFloat(a?.amount) || 0), 0);
+
   const filterTimesheets = () => {
     if (!selectedYear || allTimesheets.length === 0) {
       setFilteredTimesheets([]);
@@ -437,8 +439,6 @@ const TimesheetTable = ({ employee }) => {
     return 0;
   };
 
-  const sumAdvancesList = (list) =>
-    (list || []).reduce((s, a) => s + (parseFloat(a?.amount) || 0), 0);
   // Format period for display
   const formatPeriodLabel = (periodKey) => {
     if (!periodKey) return '';
@@ -749,36 +749,36 @@ const TimesheetTable = ({ employee }) => {
                 {/* Timesheet Summary */}
                 <div className="row mb-4">
                   <div className="col-12">
-                    <div className="card bg-dark border-info">
+                    <div className="card bg-primary  bg-opacity-10 border-info">
                       <div className="card-header bg-info bg-opacity-25 border-info">
                         <h6 className="mb-0 text-white">Timesheet Summary</h6>
                       </div>
                       <div className="card-body">
                         <div className="row">
-                          <div className="col-md-3">
-                            <strong className="text-info">Period:</strong>
+                          <div className="col-md-2 text-center">
+                            <strong className="text-info">Period</strong>
                             <div className="text-white">{formatPeriodLabel(selectedTimesheet.periodKey)}</div>
                           </div>
-                          <div className="col-md-3">
-                            <strong className="text-info">Status:</strong>
+                          <div className="col-md-2 text-center">
+                            <strong className="text-info">Status</strong>
                             <div>{getStatusBadge(selectedTimesheet.status)}</div>
                           </div>
-                          <div className="col-md-3">
+                          <div className="col-md-2 text-center">
                             <strong className="text-info">Working Days:</strong>
                             <div className="text-success">{selectedTimesheet.workingDays || 0}</div>
                           </div>
-                          <div className="col-md-3">
-                            <strong className="text-info">Total Salary:</strong>
+                          <div className="col-md-2 text-center">
+                            <strong className="text-info">Total Salary</strong>
                             <div className="text-success">₹{selectedTimesheet.totalSalary || 0}</div>
                           </div>
 
-                          <div className="col-md-3">
-                            <strong className="text-info">Advance:</strong>
-                            <div className="text-success">₹{sumAdvancesList(timesheetAdvances)}</div>
+                          <div className="col-md-2 text-center ">
+                            <strong className="text-info">Advance</strong>
+                            <div className="text-danger">₹{sumAdvancesList(timesheetAdvances)}</div>
                           </div>
 
-                          <div className="col-md-3">
-                            <strong className="text-info">Net Pay:</strong>
+                          <div className="col-md-2 text-center">
+                            <strong className="text-info">Net Pay</strong>
                             <div className="text-success">
                               ₹{(Number(selectedTimesheet.totalSalary || 0) - sumAdvancesList(timesheetAdvances)).toFixed(0)}
                             </div>

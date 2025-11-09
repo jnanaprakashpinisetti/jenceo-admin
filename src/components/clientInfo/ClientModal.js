@@ -353,8 +353,8 @@ const ClientModal = ({
 
 
   useEffect(() => {
-    // Load from your real path first (as you noted): JenCeo-DataBase/Users
-    const primary = firebaseDB.child("JenCeo-DataBase/Users");
+    // Load from your real path first (as you noted): Users
+    const primary = firebaseDB.child("Users");
     const offPrimary = primary.on("value", (snap) => {
       const val = snap.val() || {};
       if (Object.keys(val).length) {
@@ -530,7 +530,7 @@ const ClientModal = ({
 
       // write the shallow fields under the same index in payments
       await firebaseDB
-        .child(`JenCeo-DataBase/ClientData/${key}/payments/${rowIndex}`)
+        .child(`ClientData/${key}/payments/${rowIndex}`)
         .update({
           reminderDays: row.reminderDays ?? "",
           reminderDate: row.reminderDate ?? "",
@@ -555,7 +555,7 @@ const ClientModal = ({
       const idx = (Array.isArray(formData?.payments) ? formData.payments.length : 0);
 
       await firebaseDB
-        .child(`JenCeo-DataBase/ClientData/${key}/payments/${idx}/reminderDate`)
+        .child(`ClientData/${key}/payments/${idx}/reminderDate`)
         .remove();
     } catch (e) {
       console.warn("Failed to remove reminderDate for new payment:", e);
@@ -575,7 +575,7 @@ const ClientModal = ({
 
       // Remove only the date field, keep other payment fields untouched
       await firebaseDB
-        .child(`JenCeo-DataBase/ClientData/${key}/payments/${rowIndex}/reminderDate`)
+        .child(`ClientData/${key}/payments/${rowIndex}/reminderDate`)
         .remove();
 
       // Reflect locally so UI updates immediately
@@ -675,7 +675,7 @@ const ClientModal = ({
     };
   };
 
-  // Look up a user's display name from JenCeo-DataBase/Users
+  // Look up a user's display name from Users
   const resolveAddedByFromUsers = (obj, users) => {
     if (!obj || !users) return "";
 
@@ -709,7 +709,7 @@ const ClientModal = ({
   useEffect(() => setEditMode(Boolean(isEditMode)), [isEditMode]);
 
   useEffect(() => {
-    const ref = firebaseDB.child("JenCeo-DataBase/Users"); // adjust path if needed
+    const ref = firebaseDB.child("Users"); // adjust path if needed
     const handler = ref.on("value", (snap) => setUsersMap(snap.val() || {}));
     return () => ref.off("value", handler);
   }, []);
@@ -905,13 +905,13 @@ const ClientModal = ({
       for (let i = 0; i < count; i += 1) {
         tasks.push(
           firebaseDB
-            .child(`JenCeo-DataBase/ClientData/${key}/payments/${i}/reminderDate`)
+            .child(`ClientData/${key}/payments/${i}/reminderDate`)
             .remove()
             .catch(() => { }),
         );
         tasks.push(
           firebaseDB
-            .child(`JenCeo-DataBase/ClientData/${key}/payments/${i}/remindeDate`)
+            .child(`ClientData/${key}/payments/${i}/remindeDate`)
             .remove()
             .catch(() => { }),
         );
@@ -1113,7 +1113,7 @@ const ClientModal = ({
         formData?.id || formData?.recordId || formData?.clientId;
 
       if (key) {
-        await firebaseDB.child(`JenCeo-DataBase/ClientData/${key}/payments`)
+        await firebaseDB.child(`ClientData/${key}/payments`)
           .set(payload.payments.map(({ __locked, ...row }) => row));
       }
 

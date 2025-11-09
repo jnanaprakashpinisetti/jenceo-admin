@@ -1036,7 +1036,7 @@ export default function TimeSheetDashBoard() {
                                                                 )}
                                                             </div>
                                                         </td>
-                                                        <td className="border-secondary">
+                                                        <td className="border-secondary opacity-75">
                                                             <div className="fw-bold text-white">{timesheet.employeeName}</div>
                                                             <small className="text-muted">
                                                                 {timesheet.employeeData?.employeeId || timesheet.employeeData?.idNo}
@@ -1068,13 +1068,15 @@ export default function TimeSheetDashBoard() {
                                                         <td className="border-secondary">
                                                             {timesheet.submittedAt ? (
                                                                 <div>
-                                                                    <small className="text-white">
-                                                                        {formatTimestamp(timesheet.submittedAt)}
-                                                                    </small>
-                                                                    <br />
-                                                                    <small className="text-muted">
+                                                                    <small className="">
                                                                         {timesheet.submittedByName || 'Unknown'}
                                                                     </small>
+                                                                    <br />
+                                                                    <small className="text-muted opacity-50">
+                                                                        {formatTimestamp(timesheet.submittedAt)}
+                                                                    </small>
+
+
                                                                 </div>
                                                             ) : (
                                                                 <span className="text-muted">Not submitted</span>
@@ -1082,13 +1084,15 @@ export default function TimeSheetDashBoard() {
                                                         </td>
                                                         <td className="border-secondary">
                                                             <div>
-                                                                <small className="text-white">
-                                                                    {formatTimestamp(timesheet.lastModified || timesheet.updatedAt)}
+
+                                                                <small className="">
+                                                                    {timesheet.updatedByName || 'N/A'}
                                                                 </small>
                                                                 <br />
                                                                 <small className="text-muted">
-                                                                    {timesheet.updatedByName || 'N/A'}
+                                                                    {formatTimestamp(timesheet.lastModified || timesheet.updatedAt)}
                                                                 </small>
+
                                                             </div>
                                                         </td>
                                                         <td className="border-secondary text-center">
@@ -1121,13 +1125,14 @@ export default function TimeSheetDashBoard() {
 
                             {/* Enhanced Pagination with Icons */}
                             {filteredTimesheets.length > 0 && (
-                                <div className="card-footer border-secondary">
-                                    <div className="d-flex justify-content-between align-items-center m-auto">
-                                        <small className="text-muted">
-                                            Showing {indexOfFirstItem + 1} to {Math.min(indexOfLastItem, filteredTimesheets.length)} of {filteredTimesheets.length} entries
-                                        </small>
-                                        <nav style={{ backgroundColor: "transparent" }}>
-                                            <ul className="pagination pagination-sm mb-0">
+                                <>
+                                    <p className="text-muted mb-0 mt-2 text-warning text-center">
+                                        Showing {indexOfFirstItem + 1} to {Math.min(indexOfLastItem, filteredTimesheets.length)} of {filteredTimesheets.length} entries
+                                    </p>
+                                    <div className="card-footer justify-content-center">
+
+                                        <nav style={{ backgroundColor: "transparent", padding: 0 }}>
+                                            <ul className="pagination pagination-sm mb-0 justify-content-center">
                                                 {/* First Page */}
                                                 <li className={`page-item ${currentPage === 1 ? 'disabled' : ''}`}>
                                                     <button
@@ -1194,7 +1199,7 @@ export default function TimeSheetDashBoard() {
                                             </ul>
                                         </nav>
                                     </div>
-                                </div>
+                                </>
                             )}
                         </div>
                     </div>

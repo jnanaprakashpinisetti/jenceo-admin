@@ -2604,70 +2604,6 @@ export default function ToDo() {
                     )}
                   </div>
 
-                  {/* Linked Subtasks */}
-                  <div className="panel-soft mb-3">
-                    <h6 className="text-white-90 mb-2">Subtasks</h6>
-                    {linkedChildren(selectedTask.id).length === 0 ? (
-                      <div className="text-muted-400 small">
-                        No subtasks yet.
-                      </div>
-                    ) : (
-                      linkedChildren(selectedTask.id).map((child) => (
-                        <div
-                          key={child.id}
-                          className="subtask-item d-flex align-items-center justify-content-between gap-2 mb-2"
-                        >
-                          <div className="d-flex align-items-center gap-2">
-                            <input
-                              type="checkbox"
-                              checked={child.status === "Done"}
-                              onChange={(e) =>
-                                toggleChildDone(child.id, e.target.checked)
-                              }
-                              className="form-check-input"
-                            />
-                            <span
-                              className={
-                                child.status === "Done"
-                                  ? "text-muted-300 text-decoration-line-through"
-                                  : "text-white-80"
-                              }
-                            >
-                              {child.title}
-                            </span>
-                          </div>
-                          <div className="d-flex align-items-center gap-2">
-                            <span className="tiny badge bg-dark">
-                              {ticketLabel(child)}
-                            </span>
-                            <button
-                              className="btn btn-sm btn-outline-light"
-                              onClick={() => setSelectedTask(child)}
-                            >
-                              Open
-                            </button>
-                          </div>
-                        </div>
-                      ))
-                    )}
-                    <div className="d-flex gap-2 mt-2">
-                      <input
-                        className="form-control form-control-sm dark-input"
-                        placeholder="Add subtask..."
-                        value={newSubtaskTitle}
-                        onChange={(e) => setNewSubtaskTitle(e.target.value)}
-                      />
-                      <button
-                        className="btn btn-sm btn-outline-primary"
-                        onClick={() =>
-                          addSubtask(selectedTask.id, newSubtaskTitle)
-                        }
-                      >
-                        Add
-                      </button>
-                    </div>
-                  </div>
-
                   {/* Comments */}
                   <div className="panel-soft">
                     <h6 className="text-white-90 mb-2">Activity & Comments</h6>
@@ -2854,6 +2790,69 @@ export default function ToDo() {
                         ))}
                       </select>
                     </div>
+                                      {/* Linked Subtasks */}
+                  <div className="panel-soft mb-3">
+                    <h6 className="text-warning mb-2">Subtasks</h6>
+                    {linkedChildren(selectedTask.id).length === 0 ? (
+                      <div className="text-muted-400 small">
+                        No subtasks yet.
+                      </div>
+                    ) : (
+                      linkedChildren(selectedTask.id).map((child) => (
+                        <div
+                          key={child.id}
+                          className="subtask-item d-flex align-items-center justify-content-between gap-2 mb-2"
+                        >
+                          <div className="d-flex align-items-center gap-2">
+                            <input
+                              type="checkbox"
+                              checked={child.status === "Done"}
+                              onChange={(e) =>
+                                toggleChildDone(child.id, e.target.checked)
+                              }
+                              className="form-check-input"
+                            />
+                            <span
+                              className={
+                                child.status === "Done"
+                                  ? "text-muted-300 text-decoration-line-through"
+                                  : "text-white-80"
+                              }
+                            >
+                              {child.title}
+                            </span>
+                          </div>
+                          <div className="d-flex align-items-center gap-2">
+                            <span className="tiny badge bg-dark">
+                              {ticketLabel(child)}
+                            </span>
+                            <button
+                              className="btn btn-sm btn-outline-light"
+                              onClick={() => setSelectedTask(child)}
+                            >
+                              Open
+                            </button>
+                          </div>
+                        </div>
+                      ))
+                    )}
+                    <div className="d-flex gap-2 mt-2">
+                      <input
+                        className="form-control form-control-sm dark-input"
+                        placeholder="Add subtask..."
+                        value={newSubtaskTitle}
+                        onChange={(e) => setNewSubtaskTitle(e.target.value)}
+                      />
+                      <button
+                        className="btn btn-sm btn-outline-warning"
+                        onClick={() =>
+                          addSubtask(selectedTask.id, newSubtaskTitle)
+                        }
+                      >
+                        Add
+                      </button>
+                    </div>
+                  </div>
 
                     {/* Status */}
                     <div className="panel-soft mb-3">

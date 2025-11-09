@@ -195,6 +195,11 @@ export default function ToDo() {
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [showCreateProject, setShowCreateProject] = useState(false);
 
+  // NEW: Team selection modal
+  const [showTeamSelect, setShowTeamSelect] = useState(false);
+  const [selectedTeamMembers, setSelectedTeamMembers] = useState([]);
+  const [currentProjectTeam, setCurrentProjectTeam] = useState([]);
+
   const [toasts, setToasts] = useState([]);
   const notify = (text, variant = "success") => {
     const id = Date.now() + Math.random();
@@ -270,6 +275,85 @@ export default function ToDo() {
     }
   }, [backendOK]);
 
+  // NEW: Update project team
+  const updateProjectTeam = async (projectId, teamMembers) => {
+    if (!backendOK) {
+      notify("Firebase not configured", "error");
+      return;
+    }
+    
+    try {
+      const ref = getRef(`Projects/${projectId}/teamMembers`);
+      await ref.set(teamMembers);
+      
+      // Also update the project's updatedAt
+      await getRef(`Projects/${projectId}`).update({
+        updatedAt: Date.now()
+      });
+      
+      notify("Team updated successfully");
+    } catch (error) {
+      console.error("Failed to update project team:", error);
+      notify("Failed to update team", "error");
+    }
+  };
+
+  // NEW: Update project status
+  const updateProjectStatus = async (projectId, status) => {
+    if (!backendOK) {
+      notify("Firebase not configured", "error");
+      return;
+    }
+    
+    try {
+      await getRef(`Projects/${projectId}`).update({
+        status: status,
+        updatedAt: Date.now()
+      });
+      
+      notify(`Project marked as ${status}`);
+    } catch (error) {
+      console.error("Failed to update project status:", error);
+      notify("Failed to update project status", "error");
+    }
+  };
+
+  // NEW: Delete project
+  const deleteProject = async (projectId) => {
+    if (!backendOK) {
+      notify("Firebase not configured", "error");
+      return;
+    }
+    
+    try {
+      // First, check if there are any tasks in this project
+      const projectTasks = tasks.filter(task => task.projectId === projectId && !task.deleted);
+      
+      if (projectTasks.length > 0) {
+        if (!window.confirm(`This project has ${projectTasks.length} active tasks. Are you sure you want to delete it? This will move all tasks to "Unknown Project".`)) {
+          return;
+        }
+        
+        // Move all tasks to unknown project
+        for (const task of projectTasks) {
+          await getRef(`ToDo/${task.id}`).update({
+            projectId: "",
+            projectKey: "",
+            projectTitle: "",
+            updatedAt: Date.now()
+          });
+        }
+      }
+      
+      await getRef(`Projects/${projectId}`).remove();
+      setProjectId("ALL");
+      notify("Project deleted successfully");
+    } catch (error) {
+      console.error("Failed to delete project:", error);
+      notify("Failed to delete project", "error");
+    }
+  };
+
   const createProject = async (projectData) => {
     if (!backendOK) {
       notify("Firebase not configured", "error");
@@ -284,6 +368,8 @@ export default function ToDo() {
         createdAt: now,
         updatedAt: now,
         sequence: 0,
+        status: "active", // NEW: Default status
+        teamMembers: {}, // NEW: Empty team by default
       };
 
       let projectId;
@@ -475,6 +561,16 @@ export default function ToDo() {
     const fresh = tasks.find((t) => t.id === selectedTask.id);
     if (fresh) setSelectedTask(fresh);
   }, [tasks]);
+
+  // NEW: Load team members when project is selected
+  useEffect(() => {
+    if (projectId !== "ALL" && projectId) {
+      const currentProject = projects.find(p => p.id === projectId);
+      if (currentProject) {
+        setCurrentProjectTeam(currentProject.teamMembers || {});
+      }
+    }
+  }, [projectId, projects]);
 
   // ---------- computed maps ----------
   const tabCounts = useMemo(() => {
@@ -1148,6 +1244,43 @@ export default function ToDo() {
       .filter((t) => t.parentTask === parentId)
       .sort((a, b) => (a.childSeq || 0) - (b.childSeq || 0));
 
+  // NEW: Team selection handlers
+  const handleOpenTeamSelect = () => {
+    const currentProject = projects.find(p => p.id === projectId);
+    if (currentProject) {
+      setSelectedTeamMembers(Object.keys(currentProject.teamMembers || {}));
+      setShowTeamSelect(true);
+    }
+  };
+
+  const handleTeamMemberToggle = (userId) => {
+    setSelectedTeamMembers(prev => 
+      prev.includes(userId) 
+        ? prev.filter(id => id !== userId)
+        : [...prev, userId]
+    );
+  };
+
+  const handleSaveTeam = async () => {
+    if (!projectId || projectId === "ALL") return;
+    
+    const teamMembers = {};
+    selectedTeamMembers.forEach(userId => {
+      teamMembers[userId] = true;
+    });
+    
+    await updateProjectTeam(projectId, teamMembers);
+    setShowTeamSelect(false);
+  };
+
+  const handleSelectAllTeam = () => {
+    setSelectedTeamMembers(Object.keys(users));
+  };
+
+  const handleClearTeam = () => {
+    setSelectedTeamMembers([]);
+  };
+
   // ---------- render ----------
   const filtersState = {
     activeTab,
@@ -1161,6 +1294,8 @@ export default function ToDo() {
   };
   const filtersDirty = anyFilterActive(filtersState);
   const isAdmin = ["admin", "super admin", "superadmin"].includes(myRole);
+
+  const currentProject = projectId !== "ALL" ? projects.find(p => p.id === projectId) : null;
 
   return (
     <div className="todo-wrap">
@@ -1288,27 +1423,94 @@ export default function ToDo() {
         </div>
 
         {/* Project Header */}
-        {projectId !== "ALL" && projects.find(p => p.id === projectId) && (
+        {currentProject && (
           <div className="project-header neo-card p-3 mb-3 mt-3">
             <div className="d-flex justify-content-between align-items-center">
-              <div>
-                <h4 className="text-info mb-1">
-                  {projects.find(p => p.id === projectId)?.emoji} 
-                  {projects.find(p => p.id === projectId)?.title}
-                </h4>
-                <p className="text-muted mb-0">
-                  {projects.find(p => p.id === projectId)?.description}
+              <div className="flex-grow-1">
+                <div className="d-flex align-items-center gap-3 mb-2">
+                  <h4 className="text-info mb-0">
+                    {currentProject.emoji} 
+                    {currentProject.title}
+                  </h4>
+                  <span className={`badge ${
+                    currentProject.status === 'active' ? 'bg-success' :
+                    currentProject.status === 'inactive' ? 'bg-secondary' :
+                    currentProject.status === 'done' ? 'bg-primary' : 'bg-warning'
+                  }`}>
+                    {currentProject.status?.toUpperCase() || 'ACTIVE'}
+                  </span>
+                </div>
+                <p className="text-muted mb-2">
+                  {currentProject.description}
                 </p>
+                <div className="d-flex align-items-center gap-2 text-muted small">
+                  <span>Team: {Object.keys(currentProject.teamMembers || {}).length} members</span>
+                  <span>•</span>
+                  <span>Created: {fmtDT(currentProject.createdAt)}</span>
+                  <span>•</span>
+                  <span>Key: {currentProject.projectKey}</span>
+                </div>
               </div>
-              <div className="d-flex gap-2">
+              <div className="d-flex gap-2 flex-wrap">
                 <button 
                   className="btn btn-primary"
                   onClick={() => setShowAdd(true)}
                 >
-                  + Create Task in {projects.find(p => p.id === projectId)?.projectKey}
+                  + Create Task
                 </button>
                 <button 
-                  className="btn btn-outline-warning"
+                  className="btn btn-outline-info"
+                  onClick={handleOpenTeamSelect}
+                >
+                  👥 Select Team
+                </button>
+                <div className="btn-group">
+                  <button 
+                    className="btn btn-outline-warning dropdown-toggle"
+                    type="button"
+                    data-bs-toggle="dropdown"
+                  >
+                    Status
+                  </button>
+                  <ul className="dropdown-menu dropdown-menu-dark">
+                    <li>
+                      <button 
+                        className="dropdown-item"
+                        onClick={() => updateProjectStatus(projectId, 'active')}
+                      >
+                        🟢 Active
+                      </button>
+                    </li>
+                    <li>
+                      <button 
+                        className="dropdown-item"
+                        onClick={() => updateProjectStatus(projectId, 'inactive')}
+                      >
+                        ⚪ Inactive
+                      </button>
+                    </li>
+                    <li>
+                      <button 
+                        className="dropdown-item"
+                        onClick={() => updateProjectStatus(projectId, 'done')}
+                      >
+                        🔵 Done
+                      </button>
+                    </li>
+                  </ul>
+                </div>
+                <button 
+                  className="btn btn-outline-danger"
+                  onClick={() => {
+                    if (window.confirm(`Are you sure you want to delete project "${currentProject.title}"?`)) {
+                      deleteProject(projectId);
+                    }
+                  }}
+                >
+                  🗑 Delete
+                </button>
+                <button 
+                  className="btn btn-outline-light"
                   onClick={() => setProjectId("ALL")}
                 >
                   View All Projects
@@ -1448,6 +1650,101 @@ export default function ToDo() {
         </div>
       </div>
 
+      {/* Team Selection Modal */}
+      {showTeamSelect && currentProject && (
+        <div className="modal-overlay" onClick={() => setShowTeamSelect(false)}>
+          <div className="modal-modern modal-lg" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header bg-primary text-white">
+              <h6 className="mb-0">
+                Select Team for: {currentProject.emoji} {currentProject.title}
+              </h6>
+              <button
+                className="btn btn-sm btn-light"
+                onClick={() => setShowTeamSelect(false)}
+              >
+                Close
+              </button>
+            </div>
+            <div className="modal-body p-3" style={{ background: "#0f172a", maxHeight: '70vh', overflowY: 'auto' }}>
+              <div className="d-flex justify-content-between align-items-center mb-3">
+                <div className="text-white-80">
+                  Selected: {selectedTeamMembers.length} members
+                </div>
+                <div className="d-flex gap-2">
+                  <button
+                    className="btn btn-sm btn-outline-info"
+                    onClick={handleSelectAllTeam}
+                  >
+                    Select All
+                  </button>
+                  <button
+                    className="btn btn-sm btn-outline-secondary"
+                    onClick={handleClearTeam}
+                  >
+                    Clear All
+                  </button>
+                </div>
+              </div>
+
+              <div className="row g-2">
+                {Object.entries(users).map(([userId, user]) => (
+                  <div key={userId} className="col-md-6">
+                    <div className="team-member-item d-flex align-items-center gap-3 p-2 rounded bg-dark bg-opacity-50">
+                      <input
+                        type="checkbox"
+                        className="form-check-input"
+                        checked={selectedTeamMembers.includes(userId)}
+                        onChange={() => handleTeamMemberToggle(userId)}
+                      />
+                      {user.photoURL ? (
+                        <img
+                          src={user.photoURL}
+                          alt={user.name}
+                          className="avatar avatar-sm"
+                          style={{ objectFit: "cover" }}
+                        />
+                      ) : (
+                        <span className="avatar avatar-sm avatar-fallback">
+                          {(user.name || "U")
+                            .split(" ")
+                            .map((s) => s[0])
+                            .join("")
+                            .slice(0, 2)
+                            .toUpperCase()}
+                        </span>
+                      )}
+                      <div className="flex-grow-1">
+                        <div className="text-white-90">{user.name}</div>
+                        <div className="small text-muted-300">{user.role || "user"}</div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <div className="d-flex justify-content-end gap-2 mt-4">
+                <button
+                  className="btn btn-light"
+                  onClick={() => setShowTeamSelect(false)}
+                >
+                  Cancel
+                </button>
+                <button
+                  className="btn btn-primary"
+                  onClick={handleSaveTeam}
+                >
+                  Save Team
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Rest of the component remains the same... */}
+      {/* (Task list, Create Task Modal, Detail Modal, etc.) */}
+
+      {/* The rest of your existing JSX remains unchanged */}
       {/* Task list */}
       {loading && tasks.length === 0 ? (
         <div className="alert alert-info">Loading tasks…</div>

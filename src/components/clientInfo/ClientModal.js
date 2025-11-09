@@ -1767,12 +1767,12 @@ const ClientModal = ({
                                 </div>
                                 <div className="col-md-4 mb-3">
                                   <label className="form-label"><strong>Ending Date</strong></label>
-                                  <input type="date" data-idx={i} className="form-control" name="endingDate" value={w.endingDate || ""} onChange={(e) => handleChange(e, "workers", i)} disabled={w.__locked || !editMode} />
+                                  <input type="date" data-idx={i} className="form-control" name="endingDate" value={w.endingDate || ""} onChange={(e) => handleChange(e, "workers", i)} disabled={!editMode} />
                                 </div>
 
                                 <div className="col-md-4 mb-3">
                                   <label className="form-label"><strong>Total Days</strong></label>
-                                  <input type="tel" maxLength={2} data-idx={i} className="form-control" name="totalDays" value={w.totalDays || ""} onChange={(e) => handleChange(e, "workers", i)} disabled={w.__locked || !editMode} />
+                                  <input type="tel" maxLength={2} data-idx={i} className="form-control" name="totalDays" value={w.totalDays || ""} onChange={(e) => handleChange(e, "workers", i)} disabled={!editMode} />
                                 </div>
 
                               </div>
@@ -1780,7 +1780,7 @@ const ClientModal = ({
                               <div className="row mt-2">
                                 <div className="col-12">
                                   <label className="form-label"><strong>Remarks</strong></label>
-                                  <textarea className="form-control" name="remarks" rows="2" value={w.remarks || ""} onChange={(e) => handleChange(e, "workers", i)} disabled={w.__locked || !editMode} />
+                                  <textarea className="form-control" name="remarks" rows="2" value={w.remarks || ""} onChange={(e) => handleChange(e, "workers", i)} disabled={!editMode} />
                                 </div>
                               </div>
 

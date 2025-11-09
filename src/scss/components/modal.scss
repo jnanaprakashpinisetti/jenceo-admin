@@ -56,6 +56,10 @@
     .form-select {
         background-color: transparent !important;
         border: none;
+        &.yearDroopDown {
+            background-color: #212529 !important;
+            color: #fff;
+        }
     }
 
 }

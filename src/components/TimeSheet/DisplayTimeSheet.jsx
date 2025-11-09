@@ -4256,25 +4256,25 @@ const DisplayTimeSheet = () => {
                                                     </span>
                                                     {item.text}
                                                 </span>
-                                                <small className="text-muted">
-                                                    {item.at ? new Date(item.at).toLocaleString() : ''}
-                                                </small>
                                             </div>
-                                            <div className="small text-info mt-1">by {item.byName || 'Unknown'}</div>
+                                            <div className="small-text text-info mt-1">By {item.byName || 'Unknown'} -  <small className="small-text text-white-50">
+                                                    {item.at ? new Date(item.at).toLocaleString() : ''}
+                                                </small></div>
+                                              
                                         </div>
                                     ))}
                                 </div>
                             )}
                             <div className="modal-body">
-                                <label className="form-label text-info">Admin’s note</label>
-                                <div className="form-control bg-secondary bg-opacity-20 text-white mb-3" style={{ minHeight: 80, whiteSpace: 'pre-wrap' }}>
+                                {/* <label className="form-label text-info">Admin’s note</label>
+                                <div className="form-control bg-warning bg-opacity-10 text-white mb-3" style={{ minHeight: 80, whiteSpace: 'pre-wrap' }}>
                                     {clarifyAdminText || '—'}
                                     <p>{ }</p>
-                                </div>
+                                </div> */}
 
                                 <label className="form-label text-white">Your reply</label>
                                 <textarea
-                                    className="form-control bg-secondary bg-opacity-20 text-white"
+                                    className="form-control bg-info bg-opacity-10 text-white"
                                     rows={4}
                                     value={clarifyText}
                                     onChange={(e) => setClarifyText(e.target.value)}
@@ -4293,8 +4293,8 @@ const DisplayTimeSheet = () => {
                 <div className="modal fade show" style={{ display: 'block', backgroundColor: 'rgba(0,0,0,0.6)' }}>
                     <div className="modal-dialog modal-md">
                         <div className="modal-content bg-dark text-white border border-danger">
-                            <div className="modal-header border-0 bg-danger bg-opacity-10">
-                                <h5 className="modal-title text-danger">
+                            <div className="modal-header border-0 bg-danger bg-opacity-50">
+                                <h5 className="modal-title text-white">
                                     <i className="bi bi-x-circle me-2"></i>
                                     Rejection Details
                                 </h5>
@@ -4317,7 +4317,7 @@ const DisplayTimeSheet = () => {
                                         </div>
 
                                         <div className="mb-2 small text-muted">Rejection Reason</div>
-                                        <div className="p-3 bg-black rounded border border-secondary" style={{ whiteSpace: 'pre-wrap', minHeight: '100px' }}>
+                                        <div className="p-3 bg-danger rounded border border-secondary bg-opacity-10" style={{ whiteSpace: 'pre-wrap', minHeight: '100px' }}>
                                             {rejectMsg.text}
                                         </div>
                                     </>

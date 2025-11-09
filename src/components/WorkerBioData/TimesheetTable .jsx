@@ -361,37 +361,18 @@ const TimesheetTable = ({ employee }) => {
     <div className="timesheet-table-container">
       {/* Debug Info */}
       <div className="alert alert-dark bg-dark text-light border-secondary mb-3">
-        <div className="d-flex justify-content-between align-items-start">
-          <div>
-            <small>
-              <strong>Debug Info:</strong> {debugInfo}
-            </small>
-            <br />
-            <small className="text-warning">
-              <strong>Employee ID:</strong> {employee?.id} | 
-              <strong> Total Timesheets:</strong> {allTimesheets.length}
-            </small>
-          </div>
-          <button 
-            className="btn btn-sm btn-outline-warning"
-            onClick={fetchTimesheetsFromCorrectPath}
-          >
-            Refresh
-          </button>
-        </div>
-      </div>
-
-      {/* Year Selection */}
-      <div className="row mb-4">
+          {/* Year Selection */}
+      <div className="row">
         <div className="col-md-6">
           <div className="bg-secondary rounded p-3 bg-opacity-10">
             <label className="form-label text-white">
               <strong>Select Year</strong>
             </label>
             <select 
-              className="form-select bg-dark text-white border-secondary"
+              className="form-select bg-dark text-white border-secondary p-3"
               value={selectedYear}
               onChange={(e) => setSelectedYear(e.target.value)}
+              style={{background:"#000"}}
             >
               <option value="">Select Year</option>
               {getAvailableYears().map(year => (
@@ -414,10 +395,13 @@ const TimesheetTable = ({ employee }) => {
           </div>
         </div>
       </div>
+      </div>
+
+    
 
       {/* Month Buttons with Counts */}
       {selectedYear && (
-        <div className="row mb-4">
+        <div className="row mb-4 border-0">
           <div className="col-12">
             <label className="form-label text-info mb-3">
               <strong>Select Month ({getAvailableYears().length > 0 ? `${selectedYear} Data` : 'No Data'})</strong>
@@ -475,15 +459,11 @@ const TimesheetTable = ({ employee }) => {
               <th className="border-secondary text-center">Month</th>
               <th className="border-secondary text-center">Timesheet ID</th>
               <th className="border-secondary text-center">Period</th>
-              <th className="border-secondary text-center">Total Days</th>
-              <th className="border-secondary text-center">Working Days</th>
-              <th className="border-secondary text-center">Leaves</th>
-              <th className="border-secondary text-center">Holidays</th>
               <th className="border-secondary text-center">Advances</th>
               <th className="border-secondary text-center">Total Salary</th>
               <th className="border-secondary text-center">Net Payable</th>
               <th className="border-secondary text-center">Status</th>
-              <th className="border-secondary text-center">Last Updated</th>
+              <th className="border-secondary text-center">Paid ?</th>
               <th className="border-secondary text-center">Actions</th>
             </tr>
           </thead>
@@ -517,18 +497,6 @@ const TimesheetTable = ({ employee }) => {
                     </td>
                     <td className="border-secondary">
                       <small className="text-white">{formatPeriodLabel(timesheet.periodKey) || timesheet.period || 'N/A'}</small>
-                    </td>
-                    <td className="border-secondary text-center">
-                      <span className="fw-bold text-white">{timesheet.totalDays || 0}</span>
-                    </td>
-                    <td className="border-secondary text-center">
-                      <span className="fw-bold text-success">{timesheet.workingDays || 0}</span>
-                    </td>
-                    <td className="border-secondary text-center">
-                      <span className="fw-bold text-warning">{timesheet.leaves || 0}</span>
-                    </td>
-                    <td className="border-secondary text-center">
-                      <span className="fw-bold text-primary">{timesheet.holidays || 0}</span>
                     </td>
                     <td className="border-secondary text-center">
                     <span className="fw-bold text-danger">₹{getAdvanceAmount(timesheet)}</span>
@@ -590,18 +558,6 @@ const TimesheetTable = ({ employee }) => {
               <tr>
                 <td colSpan="3" className="text-end fw-bold border-secondary text-dark">
                   {selectedMonth === 'all' ? `Year ${selectedYear} Total:` : `Month Total:`}
-                </td>
-                <td className="text-center fw-bold border-secondary text-dark">
-                  {totals.totalDays}
-                </td>
-                <td className="text-center fw-bold border-secondary text-dark">
-                  {totals.workingDays}
-                </td>
-                <td className="text-center fw-bold border-secondary text-dark">
-                  {totals.leaves}
-                </td>
-                <td className="text-center fw-bold border-secondary text-dark">
-                  {totals.holidays}
                 </td>
                 <td className="text-center fw-bold border-secondary text-dark">
                   ₹{totals.advances}
@@ -831,50 +787,59 @@ const TimesheetTable = ({ employee }) => {
       {/* Summary Cards */}
       {filteredTimesheets.length > 0 && (
         <div className="row mt-4">
+          <h4 className='text-info opacity-75'>Total Summary</h4>
           <div className="col-xl-2 col-md-4 col-6 mb-3">
             <div className="card bg-dark border-info text-center">
               <div className="card-body py-3">
-                <h6 className="text-info mb-1">Total Timesheets</h6>
+                <h6 className="text-info d-block mb-1">Timesheets</h6>
                 <h4 className="text-white mb-0">{filteredTimesheets.length}</h4>
               </div>
             </div>
           </div>
-          <div className="col-xl-2 col-md-4 col-6 mb-3">
+          <div className="col-xl-2 col-md-3 col-6 mb-3">
             <div className="card bg-dark border-success text-center">
               <div className="card-body py-3">
-                <h6 className="text-success mb-1">Working Days</h6>
+                <h6 className="text-success d-block mb-1">Working Days</h6>
                 <h4 className="text-white mb-0">{totals.workingDays}</h4>
               </div>
             </div>
           </div>
-          <div className="col-xl-2 col-md-4 col-6 mb-3">
+          <div className="col-xl-2 col-md-3 col-6 mb-3">
             <div className="card bg-dark border-warning text-center">
               <div className="card-body py-3">
-                <h6 className="text-warning mb-1">Total Leaves</h6>
+                <h6 className="text-warning d-block mb-1">Leaves</h6>
                 <h4 className="text-white mb-0">{totals.leaves}</h4>
               </div>
             </div>
           </div>
-          <div className="col-xl-2 col-md-4 col-6 mb-3">
+          <div className="col-xl-2 col-md-3 col-6 mb-3">
             <div className="card bg-dark border-primary text-center">
               <div className="card-body py-3">
-                <h6 className="text-primary mb-1">Total Holidays</h6>
+                <h6 className="text-primary d-block mb-1">Holidays</h6>
                 <h4 className="text-white mb-0">{totals.holidays}</h4>
               </div>
             </div>
           </div>
-          <div className="col-xl-2 col-md-4 col-6 mb-3">
+          <div className="col-xl-2 col-md-3 col-6 mb-3">
             <div className="card bg-dark border-danger text-center">
               <div className="card-body py-3">
-                <h6 className="text-danger mb-1">Total Advances</h6>
+                <h6 className="text-danger d-block mb-1">Advances</h6>
                 <h4 className="text-white mb-0">₹{totals.advances}</h4>
               </div>
             </div>
           </div>
-          <div className="col-xl-2 col-md-4 col-6 mb-3">
-            <div className="card bg-dark border-success text-center">
+          <div className="col-xl-2 col-md-3 col-6 mb-3">
+            <div className="card bg-dark border-warning text-center">
               <div className="card-body py-3">
-                <h6 className="text-success mb-1">Net Payable</h6>
+                <h6 className="text-warning d-block mb-1">Salary</h6>
+                <h4 className="text-white mb-0">₹{totals.totalSalary}</h4>
+              </div>
+            </div>
+          </div>
+          <div className="col-md-12 col-12 mb-3">
+            <div className="card bg-warning bg-opacity-50 border-success text-center">
+              <div className="card-body py-3">
+                <h6 className="text-white text-center d-block mb-1">Net Payable</h6>
                 <h4 className="text-white mb-0">₹{totals.netPayable}</h4>
               </div>
             </div>

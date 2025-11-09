@@ -24,6 +24,8 @@ export default function TimeSheetDashBoard() {
     const [currentPage, setCurrentPage] = useState(1);
     const [itemsPerPage, setItemsPerPage] = useState(10);
 
+    const PENDING_STATUSES = ['submitted', 'clarification', 'assigned'];
+
     // Merge two advance arrays and de-dupe by id or (date+amount+desc) fallback
     const mergeAdvances = (a = [], b = []) => {
         const key = (x) => x.id || `${x.date}|${x.amount}|${x.description || ''}`;
@@ -194,7 +196,7 @@ export default function TimeSheetDashBoard() {
             latest[`${base}/repliedAt`] = entry.at;
         }
         await firebaseDB.update(latest);
- 
+
     };
 
 
@@ -282,9 +284,15 @@ export default function TimeSheetDashBoard() {
         }
 
         // Filter by status
+        // Filter by status
         if (statusFilter !== 'all') {
-            filtered = filtered.filter(timesheet => timesheet.status === statusFilter);
+            if (statusFilter === 'pending') {
+                filtered = filtered.filter(ts => PENDING_STATUSES.includes(ts.status));
+            } else {
+                filtered = filtered.filter(ts => ts.status === statusFilter);
+            }
         }
+
 
         setFilteredTimesheets(filtered);
     };
@@ -472,7 +480,7 @@ export default function TimeSheetDashBoard() {
                     advancesApprovedTotal,
                     advancesAllTotal,
                     // prefer existing netPayable, else computed
-                    netPayable: Number(timesheetData.netPayable ?? recomputedNet),
+                    netPayable: recomputedNet,
                     clarificationLog,
 
                 });
@@ -634,7 +642,7 @@ export default function TimeSheetDashBoard() {
     const getCardActiveState = (status) => {
         if (status === 'all' && statusFilter === 'all') return 'border-primary bg-primary bg-opacity-10';
         if (status === 'approved' && statusFilter === 'approved') return 'border-primary bg-primary bg-opacity-10';
-        if (status === 'submitted' && (statusFilter === 'submitted' || statusFilter === 'clarification' || statusFilter === 'assigned')) return 'border-primary bg-primary bg-opacity-10';
+        if (status === 'pending' && (statusFilter === 'pending')) return 'border-primary bg-primary bg-opacity-10';
         if (status === 'rejected' && statusFilter === 'rejected') return 'border-primary bg-primary bg-opacity-10';
         return '';
     };
@@ -889,7 +897,7 @@ export default function TimeSheetDashBoard() {
                         <div
                             className={`card border-warning cursor-pointer ${getCardActiveState('submitted')}`}
                             style={{ cursor: 'pointer' }}
-                            onClick={() => handleCardClick('submitted')}
+                            onClick={() => handleCardClick('pending')}
                         >
                             <div className="card-body text-center">
                                 <h6 className="text-warning d-block">Pending</h6>
@@ -1253,39 +1261,45 @@ export default function TimeSheetDashBoard() {
                                             <div className="card bg-dark border-secondary h-100">
                                                 <div className="card-body">
                                                     <div className="row text-center">
-                                                        <div className="col-4 mb-3">
+                                                        <div className="col-3 mb-3">
                                                             <div className="border rounded border-info p-2 h-100">
                                                                 <h6 className="text-info d-block">Total Days</h6>
                                                                 <p className="h4 text-white">{selectedTimesheet.totalDays || 0}</p>
                                                             </div>
                                                         </div>
-                                                        <div className="col-4 mb-3">
+                                                        <div className="col-3 mb-3">
                                                             <div className="border border-success rounded p-2 h-100">
                                                                 <h6 className="text-success d-block">Working Days</h6>
                                                                 <p className="h4 text-white">{selectedTimesheet.workingDays || 0}</p>
                                                             </div>
                                                         </div>
-                                                        <div className="col-4 mb-3">
+                                                        <div className="col-3 mb-3">
                                                             <div className="border border-warning rounded p-2 h-100">
                                                                 <h6 className="text-warning d-block">Leaves</h6>
                                                                 <p className="h4 text-white">{selectedTimesheet.leaves || 0}</p>
                                                             </div>
                                                         </div>
-                                                        <div className="col-4 mb-3">
+                                                        <div className="col-3 mb-3">
                                                             <div className="border border-primary rounded p-2 h-100">
                                                                 <h6 className="text-primary d-block">Holidays</h6>
                                                                 <p className="h4 text-white">{selectedTimesheet.holidays || 0}</p>
                                                             </div>
                                                         </div>
                                                         <div className="col-4 mb-3">
-                                                            <div className="border border-danger rounded p-2 h-100">
-                                                                <h6 className="text-danger d-block">Advances (Approved)</h6>
+                                                            <div className="bg-warning bg-opacity-50 rounded p-2 h-100">
+                                                                <h6 className="text-white d-block">Total Salary</h6>
+                                                                <p className="h4 text-white">₹{(selectedTimesheet.totalSalary || 0).toLocaleString()}</p>
+                                                            </div>
+                                                        </div>
+                                                        <div className="col-4 mb-3">
+                                                            <div className="bg-danger bg-opacity-50 rounded p-2 h-100">
+                                                                <h6 className="text-white d-block">Advances (Approved)</h6>
                                                                 <p className="h4 text-white">₹{(selectedTimesheet.advancesApprovedTotal || 0).toLocaleString()}</p>
                                                             </div>
                                                         </div>
                                                         <div className="col-4 mb-3">
-                                                            <div className="border border-success rounded p-2 h-100">
-                                                                <h6 className="text-success d-block">Net Payable</h6>
+                                                            <div className="bg-success bg-opacity-50 rounded p-2 h-100">
+                                                                <h6 className="text-white d-block">Net Payable</h6>
                                                                 <p className="h4 text-warning">₹{(selectedTimesheet.netPayable || 0).toLocaleString()}</p>
                                                             </div>
                                                         </div>
@@ -1294,8 +1308,7 @@ export default function TimeSheetDashBoard() {
                                                     <div className="row mt-3">
                                                         <div className="col-12 text-center">
                                                             <small className="text-muted">
-                                                                Period: {formatPeriod(selectedTimesheet)} |
-                                                                Total Amount: <strong className="text-warning">₹{selectedTimesheet.totalSalary || 0}</strong> |
+                                                                Period: <span className="text-warning">{formatPeriod(selectedTimesheet)}</span> |
                                                                 Last Modified: {formatTimestamp(selectedTimesheet.lastModified || selectedTimesheet.updatedAt)}
                                                             </small>
                                                         </div>
@@ -1464,7 +1477,7 @@ export default function TimeSheetDashBoard() {
                                                                     <td>
                                                                         <div>
                                                                             <div>{entry.clientName}</div>
-                                                                            <small className="text-muted">{entry.clientId}</small>
+                                                                            <small className="text-muted opacity-50">{entry.clientId}</small>
                                                                         </div>
                                                                     </td>
                                                                     <td>{entry.jobRole}</td>
@@ -1495,12 +1508,12 @@ export default function TimeSheetDashBoard() {
                                                                         )}
                                                                     </td>
                                                                     <td>
-                                                                        <small className="text-info">
+                                                                        <small className="text-info opacity-50">
                                                                             {entry.updatedByName || entry.createdByName || 'N/A'}
                                                                         </small>
                                                                     </td>
                                                                     <td>
-                                                                        <small className="text-muted">
+                                                                        <small className="text-muted opacity-50">
                                                                             {entry.updatedAt ?
                                                                                 new Date(entry.updatedAt).toLocaleDateString('en-IN') :
                                                                                 entry.createdAt ?

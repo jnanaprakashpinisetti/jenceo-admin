@@ -13,6 +13,9 @@ const TimesheetTable = ({ employee }) => {
   const [timesheetEntries, setTimesheetEntries] = useState([]);
   const [timesheetAdvances, setTimesheetAdvances] = useState([]);
 
+  const [paidInputs, setPaidInputs] = useState({});   // { [timesheetId]: "1234" }
+  const [savingPaid, setSavingPaid] = useState({});   // { [timesheetId]: true }
+
   // Months array with colors
   const months = [
     { number: '01', name: 'Jan', color: 'btn-outline-warning' },
@@ -54,16 +57,15 @@ const TimesheetTable = ({ employee }) => {
   const fetchTimesheetsFromCorrectPath = async () => {
     try {
       setLoading(true);
-      
+
       if (!employee) {
         setAllTimesheets([]);
         setDebugInfo('No employee data provided');
         return;
       }
 
-      // Get the correct Firebase key
       const employeeKey = employee.id;
-      
+
       if (!employeeKey) {
         setAllTimesheets([]);
         setDebugInfo('No employee key found');
@@ -72,7 +74,6 @@ const TimesheetTable = ({ employee }) => {
 
       setDebugInfo(`Searching for employee: ${employeeKey}`);
 
-      // Try both paths - with and without JenCeo-DataBase prefix
       const paths = [
         `JenCeo-DataBase/EmployeeBioData/${employeeKey}/timesheets`,
         `EmployeeBioData/${employeeKey}/timesheets`
@@ -84,18 +85,43 @@ const TimesheetTable = ({ employee }) => {
       for (const path of paths) {
         try {
           const snapshot = await firebaseDB.child(path).once('value');
-          
+
           if (snapshot.exists()) {
             const data = snapshot.val();
             successfulPath = path;
 
-            // Convert to array
+            // Convert to array and fetch advances for each timesheet
             if (typeof data === 'object') {
-              foundTimesheets = Object.entries(data).map(([id, tsData]) => ({
-                id,
-                timesheetId: id,
-                ...tsData
-              }));
+              const timesheetPromises = Object.entries(data).map(async ([id, tsData]) => {
+                const timesheet = {
+                  id,
+                  timesheetId: id,
+                  ...tsData
+                };
+
+                // Fetch advances for this timesheet
+                try {
+                  const advancesPath = `EmployeeBioData/${employeeKey}/timesheets/${id}/advances`;
+                  const advancesSnapshot = await firebaseDB.child(advancesPath).once('value');
+
+                  if (advancesSnapshot.exists()) {
+                    const advancesData = advancesSnapshot.val();
+                    const advancesList = Object.entries(advancesData).map(([advId, advanceData]) => ({
+                      id: advId,
+                      ...advanceData
+                    }));
+                    timesheet.detailedAdvances = advancesList;
+                  } else {
+                    timesheet.detailedAdvances = [];
+                  }
+                } catch (advanceError) {
+                  timesheet.detailedAdvances = [];
+                }
+
+                return timesheet;
+              });
+
+              foundTimesheets = await Promise.all(timesheetPromises);
             }
             break;
           }
@@ -106,7 +132,7 @@ const TimesheetTable = ({ employee }) => {
 
       if (foundTimesheets.length > 0) {
         setAllTimesheets(foundTimesheets);
-        setDebugInfo(`Found ${foundTimesheets.length} timesheets`);
+        setDebugInfo(`Found ${foundTimesheets.length} timesheets with advances data`);
       } else {
         setAllTimesheets([]);
         setDebugInfo('No timesheets found');
@@ -120,18 +146,71 @@ const TimesheetTable = ({ employee }) => {
     }
   };
 
+  const getLocalUser = () => {
+    try {
+      const u = JSON.parse(localStorage.getItem('currentUser') || 'null');
+      if (u) return { uid: u.uid || 'unknown', name: u.displayName || u.name || u.email || 'Admin' };
+    } catch { }
+    return { uid: 'unknown', name: 'Admin' };
+  };
+
+  const handlePaidChange = (tsId, val) => {
+    setPaidInputs(prev => ({ ...prev, [tsId]: val }));
+  };
+
+  const savePaidStatus = async (timesheet) => {
+    if (!employee?.id || !timesheet?.timesheetId) return;
+    const tsId = timesheet.timesheetId;
+    const raw = paidInputs[tsId];
+    const amount = parseFloat(raw);
+
+    // Allow empty -> treat as 0; block NaN
+    if (Number.isNaN(amount)) {
+      setDebugInfo(`Invalid amount for ${tsId}. Enter a number.`);
+      return;
+    }
+
+    const { uid, name } = getLocalUser();
+    const path = `EmployeeBioData/${employee.id}/timesheets/${tsId}/payedStatus`;
+
+    try {
+      setSavingPaid(p => ({ ...p, [tsId]: true }));
+      const payload = {
+        amount: amount || 0,
+        updatedAt: new Date().toISOString(),
+        updatedById: uid,
+        updatedByName: name,
+      };
+      await firebaseDB.child(path).set(payload);
+
+      // reflect in UI immediately
+      setAllTimesheets(prev =>
+        prev.map(ts => ts.timesheetId === tsId ? { ...ts, payedStatus: payload } : ts)
+      );
+      setDebugInfo(`Saved Paid amount for ${tsId}`);
+    } catch (e) {
+      setDebugInfo(`Save failed for ${tsId}: ${e?.message || e}`);
+    } finally {
+      setSavingPaid(p => ({ ...p, [tsId]: false }));
+    }
+  };
+
+  const isPaidFinalized = (ts) => {
+    return ts?.payedStatus?.amount !== undefined && ts?.payedStatus?.amount !== null;
+  };
+
   // Load detailed timesheet data for modal
   const loadTimesheetDetails = async (timesheet) => {
     if (!employee?.id || !timesheet?.timesheetId) return;
-    
+
     try {
       setSelectedTimesheet(timesheet);
-      
+
       // Load daily entries
       const entriesSnapshot = await firebaseDB
         .child(`EmployeeBioData/${employee.id}/timesheets/${timesheet.timesheetId}/dailyEntries`)
         .once('value');
-      
+
       if (entriesSnapshot.exists()) {
         const entriesData = entriesSnapshot.val();
         const entriesList = Object.entries(entriesData).map(([date, entryData]) => ({
@@ -148,7 +227,7 @@ const TimesheetTable = ({ employee }) => {
       const advancesSnapshot = await firebaseDB
         .child(`EmployeeBioData/${employee.id}/timesheets/${timesheet.timesheetId}/advances`)
         .once('value');
-      
+
       if (advancesSnapshot.exists()) {
         const advancesData = advancesSnapshot.val();
         const advancesList = Object.entries(advancesData).map(([id, advanceData]) => ({
@@ -174,7 +253,7 @@ const TimesheetTable = ({ employee }) => {
 
     let filtered = allTimesheets.filter(timesheet => {
       let sheetYear = '';
-      
+
       if (timesheet.periodKey && timesheet.periodKey.includes('-')) {
         if (timesheet.periodKey.includes('_to_')) {
           sheetYear = timesheet.periodKey.split('_to_')[0].split('-')[0];
@@ -198,7 +277,7 @@ const TimesheetTable = ({ employee }) => {
     if (selectedMonth !== 'all') {
       filtered = filtered.filter(timesheet => {
         let sheetMonth = '';
-        
+
         if (timesheet.periodKey && timesheet.periodKey.includes('-')) {
           if (timesheet.periodKey.includes('_to_')) {
             sheetMonth = timesheet.periodKey.split('_to_')[0].split('-')[1];
@@ -232,7 +311,7 @@ const TimesheetTable = ({ employee }) => {
     return allTimesheets.filter(timesheet => {
       let sheetYear = '';
       let sheetMonth = '';
-      
+
       if (timesheet.periodKey && timesheet.periodKey.includes('-')) {
         if (timesheet.periodKey.includes('_to_')) {
           sheetYear = timesheet.periodKey.split('_to_')[0].split('-')[0];
@@ -256,10 +335,10 @@ const TimesheetTable = ({ employee }) => {
   // Get available years from all timesheets
   const getAvailableYears = () => {
     const years = new Set();
-    
+
     allTimesheets.forEach(timesheet => {
       let sheetYear = '';
-      
+
       if (timesheet.periodKey && timesheet.periodKey.includes('-')) {
         if (timesheet.periodKey.includes('_to_')) {
           sheetYear = timesheet.periodKey.split('_to_')[0].split('-')[0];
@@ -282,11 +361,17 @@ const TimesheetTable = ({ employee }) => {
     return Array.from(years).sort((a, b) => b - a);
   };
 
+  // Sum advances from object/array/number
   const getAdvanceAmount = (ts) => {
+    // If we have detailed advances data (from modal), use that
+    if (ts === selectedTimesheet && timesheetAdvances.length > 0) {
+      return sumAdvancesList(timesheetAdvances);
+    }
+
+    // Otherwise use the summary data
     if (typeof ts?.advancesTotal === 'number') return ts.advancesTotal;
     if (typeof ts?.advances === 'number') return ts.advances;
     if (ts?.advances && typeof ts.advances === 'object') {
-      // Sum amounts from the advances object
       return Object.values(ts.advances).reduce((sum, a) => {
         const amt = typeof a === 'object' ? a.amount : a;
         return sum + (parseFloat(amt) || 0);
@@ -294,6 +379,16 @@ const TimesheetTable = ({ employee }) => {
     }
     return 0;
   };
+
+
+
+  // Compute live net pay per row
+  const getNetPayable = (ts) => {
+    const total = parseFloat(ts?.totalSalary) || 0;
+    const adv = getAdvanceAmount(ts);
+    return total - adv;
+  };
+
 
   const getStatusBadge = (status) => {
     const statusConfig = {
@@ -304,30 +399,46 @@ const TimesheetTable = ({ employee }) => {
       assigned: { class: 'bg-primary', text: 'Assigned' },
       clarification: { class: 'bg-warning', text: 'Clarification' }
     };
-    
+
     const config = statusConfig[status?.toLowerCase()] || { class: 'bg-secondary', text: status || 'Unknown' };
     return <span className={`badge ${config.class}`}>{config.text}</span>;
   };
 
   // Calculate totals
-  const totals = filteredTimesheets.reduce((acc, ts) => ({
-    totalDays: acc.totalDays + (parseFloat(ts.totalDays) || 0),
-    workingDays: acc.workingDays + (parseFloat(ts.workingDays) || 0),
-    leaves: acc.leaves + (parseFloat(ts.leaves) || 0),
-    holidays: acc.holidays + (parseFloat(ts.holidays) || 0),
-    advances: acc.advances + getAdvanceAmount(ts),
-    netPayable: acc.netPayable + (parseFloat(ts.netPayable) || 0),
-    totalSalary: acc.totalSalary + (parseFloat(ts.totalSalary) || 0)
-  }), {
-    totalDays: 0,
-    workingDays: 0,
-    leaves: 0,
-    holidays: 0,
-    advances: 0,
-    netPayable: 0,
-    totalSalary: 0
-  });
+  const totals = filteredTimesheets.reduce((acc, ts) => {
+    const adv = getAdvanceAmount(ts);
+    const sal = parseFloat(ts.totalSalary) || 0;
+    return {
+      totalDays: acc.totalDays + (parseFloat(ts.totalDays) || 0),
+      workingDays: acc.workingDays + (parseFloat(ts.workingDays) || 0),
+      leaves: acc.leaves + (parseFloat(ts.leaves) || 0),
+      holidays: acc.holidays + (parseFloat(ts.holidays) || 0),
+      advances: acc.advances + adv,
+      totalSalary: acc.totalSalary + sal,
+      netPayable: acc.netPayable + (sal - adv),
+    };
+  }, { totalDays: 0, workingDays: 0, leaves: 0, holidays: 0, advances: 0, totalSalary: 0, netPayable: 0 });
 
+  const getTableAdvanceAmount = (timesheet) => {
+    // First try to get from detailed advances if available
+    if (timesheet.detailedAdvances) {
+      return sumAdvancesList(timesheet.detailedAdvances);
+    }
+
+    // Then try the various advance fields
+    if (typeof timesheet?.advancesTotal === 'number') return timesheet.advancesTotal;
+    if (typeof timesheet?.advances === 'number') return timesheet.advances;
+    if (timesheet?.advances && typeof timesheet.advances === 'object') {
+      return Object.values(timesheet.advances).reduce((sum, a) => {
+        const amt = typeof a === 'object' ? a.amount : a;
+        return sum + (parseFloat(amt) || 0);
+      }, 0);
+    }
+    return 0;
+  };
+
+  const sumAdvancesList = (list) =>
+    (list || []).reduce((s, a) => s + (parseFloat(a?.amount) || 0), 0);
   // Format period for display
   const formatPeriodLabel = (periodKey) => {
     if (!periodKey) return '';
@@ -361,43 +472,42 @@ const TimesheetTable = ({ employee }) => {
     <div className="timesheet-table-container">
       {/* Debug Info */}
       <div className="alert alert-dark bg-dark text-light border-secondary mb-3">
-          {/* Year Selection */}
-      <div className="row">
-        <div className="col-md-6">
-          <div className="bg-secondary rounded p-3 bg-opacity-10">
-            <label className="form-label text-white">
-              <strong>Select Year</strong>
-            </label>
-            <select 
-              className="form-select bg-dark text-white border-secondary p-3"
-              value={selectedYear}
-              onChange={(e) => setSelectedYear(e.target.value)}
-              style={{background:"#000"}}
-            >
-              <option value="">Select Year</option>
-              {getAvailableYears().map(year => (
-                <option key={year} value={year}>{year}</option>
-              ))}
-            </select>
+        {/* Year Selection */}
+        <div className="row">
+          <div className="col-md-6">
+            <div className="bg-secondary rounded p-3 bg-opacity-10">
+              <label className="form-label text-white">
+                <strong>Select Year</strong>
+              </label>
+              <select
+                className="form-select yearDroopDown p-3"
+                value={selectedYear}
+                onChange={(e) => setSelectedYear(e.target.value)}
+              >
+                <option value="">Select Year</option>
+                {getAvailableYears().map(year => (
+                  <option key={year} value={year}>{year}</option>
+                ))}
+              </select>
+            </div>
           </div>
-        </div>
-        <div className="col-md-6">
-          <div className="bg-secondary rounded p-3 bg-opacity-10"> 
-            <label className="form-label text-white">
-              <strong>Current Selection</strong>
-            </label>
-            <div className="alert alert-info bg-dark mb-0 text-white">
-              <strong>
-                {selectedYear} - {selectedMonth === 'all' ? 'All Months' : months.find(m => m.number === selectedMonth)?.name}
-                {selectedYear && ` (${filteredTimesheets.length} timesheets)`}
-              </strong>
+          <div className="col-md-6">
+            <div className="bg-secondary rounded p-3 bg-opacity-10">
+              <label className="form-label text-white">
+                <strong>Current Selection</strong>
+              </label>
+              <div className="alert alert-info bg-dark mb-0 text-white">
+                <strong>
+                  {selectedYear} - {selectedMonth === 'all' ? 'All Months' : months.find(m => m.number === selectedMonth)?.name}
+                  {selectedYear && ` (${filteredTimesheets.length} timesheets)`}
+                </strong>
+              </div>
             </div>
           </div>
         </div>
       </div>
-      </div>
 
-    
+
 
       {/* Month Buttons with Counts */}
       {selectedYear && (
@@ -428,7 +538,7 @@ const TimesheetTable = ({ employee }) => {
               {months.map(month => {
                 const count = getTimesheetCountForMonth(month.number);
                 const isActive = month.number === selectedMonth;
-                
+
                 return (
                   <button
                     key={month.number}
@@ -472,7 +582,7 @@ const TimesheetTable = ({ employee }) => {
               filteredTimesheets.map(timesheet => {
                 let sheetMonth = '';
                 let sheetYear = '';
-                
+
                 if (timesheet.periodKey && timesheet.periodKey.includes('-')) {
                   if (timesheet.periodKey.includes('_to_')) {
                     sheetYear = timesheet.periodKey.split('_to_')[0].split('-')[0];
@@ -484,7 +594,7 @@ const TimesheetTable = ({ employee }) => {
                 }
 
                 const monthInfo = months.find(m => m.number === sheetMonth);
-                
+
                 return (
                   <tr key={timesheet.id}>
                     <td className="border-secondary text-center">
@@ -499,25 +609,60 @@ const TimesheetTable = ({ employee }) => {
                       <small className="text-white">{formatPeriodLabel(timesheet.periodKey) || timesheet.period || 'N/A'}</small>
                     </td>
                     <td className="border-secondary text-center">
-                    <span className="fw-bold text-danger">₹{getAdvanceAmount(timesheet)}</span>
+                      <span className="fw-bold text-danger"> ₹{getTableAdvanceAmount(timesheet)}</span>
+
                     </td>
                     <td className="border-secondary text-center">
                       <span className="fw-bold text-success">₹{timesheet.totalSalary || 0}</span>
                     </td>
                     <td className="border-secondary text-center">
-                      <span className="fw-bold text-success">₹{timesheet.netPayable || 0}</span>
+                      <span className="fw-bold text-success"> ₹{(parseFloat(timesheet.totalSalary) || 0) - getTableAdvanceAmount(timesheet)}</span>
                     </td>
                     <td className="border-secondary text-center">
                       {getStatusBadge(timesheet.status)}
                     </td>
-                    <td className="border-secondary">
-                      <small className="text-muted">
-                        {timesheet.updatedAt ? 
-                          new Date(timesheet.updatedAt).toLocaleDateString('en-IN') : 
-                          'N/A'
-                        }
-                      </small>
+                    <td className="border-secondary" style={{ maxWidth: "150px" }}>
+                      <div className="d-flex gap-2 align-items-center justify-content-center">
+                        <input
+                          type="number"
+                          className={`form-control form-control-sm bg-dark text-warning border-secondary mb-0 ${isPaidFinalized(timesheet) ? 'opacity-50' : ''}`}
+                          style={{ maxWidth: 110, textAlign: "right" }}
+                          value={
+                            paidInputs[timesheet.timesheetId] !== undefined
+                              ? paidInputs[timesheet.timesheetId]
+                              : (timesheet?.payedStatus?.amount ?? '')
+                          }
+                          placeholder="Amount"
+                          onChange={(e) => handlePaidChange(timesheet.timesheetId, e.target.value)}
+                          disabled={isPaidFinalized(timesheet) || savingPaid[timesheet.timesheetId]}
+                        />
+                        <button
+                          className={`btn btn-sm mb-0 ${isPaidFinalized(timesheet)
+                            ? 'btn-outline-secondary'
+                            : 'btn-outline-success'
+                            }`}
+                          disabled={isPaidFinalized(timesheet) || savingPaid[timesheet.timesheetId]}
+                          onClick={() => savePaidStatus(timesheet)}
+                          title={isPaidFinalized(timesheet) ? 'Already saved' : 'Save paid amount'}
+                        >
+                          {isPaidFinalized(timesheet) ? (
+                            <i className="bi bi-check-circle-fill text-success"></i>
+                          ) : savingPaid[timesheet.timesheetId] ? (
+                            <i className="spinner-border spinner-border-sm text-light"></i>
+                          ) : (
+                            <i className="bi bi-save2-fill"></i>
+                          )}
+                        </button>
+                      </div>
+                      {typeof timesheet?.payedStatus?.updatedAt === 'string' && (
+                        <div className="small-text text-info mt-1 text-center opacity-50">
+                          <i className="bi bi-clock"></i>{' '}
+                          {new Date(timesheet.payedStatus.updatedAt).toLocaleString()}
+                        </div>
+                      )}
                     </td>
+
+
                     <td className="border-secondary text-center">
                       <button
                         className="btn btn-sm btn-outline-info"
@@ -551,7 +696,7 @@ const TimesheetTable = ({ employee }) => {
               </tr>
             )}
           </tbody>
-          
+
           {/* Footer with Totals */}
           {filteredTimesheets.length > 0 && (
             <tfoot className="table-warning">
@@ -589,8 +734,8 @@ const TimesheetTable = ({ employee }) => {
                   <i className="fas fa-file-invoice me-2"></i>
                   Timesheet Details - {selectedTimesheet.timesheetId}
                 </h5>
-                <button 
-                  type="button" 
+                <button
+                  type="button"
                   className="btn-close btn-close-white"
                   onClick={() => {
                     setShowTimesheetModal(false);
@@ -626,6 +771,19 @@ const TimesheetTable = ({ employee }) => {
                             <strong className="text-info">Total Salary:</strong>
                             <div className="text-success">₹{selectedTimesheet.totalSalary || 0}</div>
                           </div>
+
+                          <div className="col-md-3">
+                            <strong className="text-info">Advance:</strong>
+                            <div className="text-success">₹{sumAdvancesList(timesheetAdvances)}</div>
+                          </div>
+
+                          <div className="col-md-3">
+                            <strong className="text-info">Net Pay:</strong>
+                            <div className="text-success">
+                              ₹{(Number(selectedTimesheet.totalSalary || 0) - sumAdvancesList(timesheetAdvances)).toFixed(0)}
+                            </div>
+                          </div>
+
                         </div>
                       </div>
                     </div>
@@ -671,13 +829,12 @@ const TimesheetTable = ({ employee }) => {
                                     <small className="text-muted">{entry.jobRole}</small>
                                   </td>
                                   <td>
-                                    <span className={`badge ${
-                                      entry.isEmergency ? "bg-danger" :
+                                    <span className={`badge ${entry.isEmergency ? "bg-danger" :
                                       entry.status === "present" ? "bg-success" :
-                                      entry.status === "leave" ? "bg-warning" :
-                                      entry.status === "absent" ? "bg-info" :
-                                      entry.status === "holiday" ? "bg-primary" : "bg-secondary"
-                                    }`}>
+                                        entry.status === "leave" ? "bg-warning" :
+                                          entry.status === "absent" ? "bg-info" :
+                                            entry.status === "holiday" ? "bg-primary" : "bg-secondary"
+                                      }`}>
                                       {entry.isEmergency ? "Emergency" : entry.status}
                                     </span>
                                     {entry.isHalfDay && !entry.isEmergency && (
@@ -686,7 +843,7 @@ const TimesheetTable = ({ employee }) => {
                                   </td>
                                   <td className={
                                     entry.dailySalary === 0 ? "text-danger" :
-                                    entry.isHalfDay ? "text-warning" : "text-success"
+                                      entry.isHalfDay ? "text-warning" : "text-success"
                                   }>
                                     ₹{entry.dailySalary?.toFixed(2)}
                                   </td>
@@ -748,9 +905,8 @@ const TimesheetTable = ({ employee }) => {
                                       <small>{advance.reason || '—'}</small>
                                     </td>
                                     <td>
-                                      <span className={`badge ${
-                                        advance.status === 'settled' ? 'bg-success' : 'bg-warning'
-                                      }`}>
+                                      <span className={`badge ${advance.status === 'settled' ? 'bg-success' : 'bg-warning'
+                                        }`}>
                                         {advance.status || 'pending'}
                                       </span>
                                     </td>
@@ -766,8 +922,8 @@ const TimesheetTable = ({ employee }) => {
                 )}
               </div>
               <div className="modal-footer">
-                <button 
-                  type="button" 
+                <button
+                  type="button"
                   className="btn btn-secondary"
                   onClick={() => {
                     setShowTimesheetModal(false);

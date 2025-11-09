@@ -361,7 +361,7 @@ const WorkerModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode }
         amount: "",
         balanceAmount: "",
         typeOfPayment: "",
-        bookNo: "",
+        timesheetID: "",
         status: "",
         receiptNo: "",
         remarks: "",
@@ -2026,7 +2026,7 @@ const WorkerModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode }
                                                                 <img
                                                                     src={formData.employeePhotoUrl}
                                                                     alt="Employee"
-                                                                    style={{ maxWidth: "300px", maxHeight: "300px", objectFit: "cover" }}
+                                                                    style={{ maxWidth: "300px", maxHeight: "300px", objectFit: "cover"}}
                                                                     className="rounded img-fluid "
                                                                 />
                                                             ) : (
@@ -2934,19 +2934,19 @@ const WorkerModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode }
 
                                                             <div className="col-md-4 mb-2">
                                                                 <label className="form-label">
-                                                                    <strong>Book No</strong>
+                                                                    <strong>Timesheet ID</strong>
                                                                 </label>
                                                                 {canEdit ? (
                                                                     <input
                                                                         type="tel"
                                                                         className="form-control form-control-sm"
-                                                                        value={p.bookNo || ""}
-                                                                        onChange={(e) => handleArrayChange("payments", i, "bookNo", e.target.value)}
+                                                                        value={p.timesheetID || ""}
+                                                                        onChange={(e) => handleArrayChange("payments", i, "timesheetID", e.target.value)}
                                                                         disabled={locked}
-                                                                        maxLength={3}
+                                                                        maxLength={9}
                                                                     />
                                                                 ) : (
-                                                                    <div className="form-control form-control-sm bg-light">{p.bookNo || "N/A"}</div>
+                                                                    <div className="form-control form-control-sm bg-light">{p.timesheetID || "N/A"}</div>
                                                                 )}
                                                             </div>
                                                         </div>

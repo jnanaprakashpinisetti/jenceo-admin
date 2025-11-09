@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import firebaseDB, { storageRef, uploadFile, getDownloadURL } from "../../firebase";
 import { useAuth } from "../../context/AuthContext";
-import TimesheetTable  from "./TimesheetTable ";
+import TimesheetTable from "./TimesheetTable ";
 
 const SKILL_OPTIONS = [
     "Nursing",
@@ -500,6 +500,125 @@ const WorkerModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode }
     }, [idModalOpen]);
 
 
+    // --- Inline add forms visibility + draft rows ---
+    const [showPaymentForm, setShowPaymentForm] = useState(false);
+    const [showWorkForm, setShowWorkForm] = useState(false);
+
+    const [newPayment, setNewPayment] = useState(blankPayment());
+    const [newWork, setNewWork] = useState(blankWork());
+
+    const resetPaymentDraft = () => setNewPayment(blankPayment());
+    const resetWorkDraft = () => setNewWork(blankWork());
+
+    // local change handlers for the small “add” forms
+    const updateNewPayment = (field, val) =>
+        setNewPayment((p) => ({ ...p, [field]: val }));
+
+    const updateNewWork = (field, val) =>
+        setNewWork((w) => ({ ...w, [field]: val }));
+
+    // minimal validation for the add forms (uses your date limits)
+    const validateNewPayment = () => {
+        const e = {};
+        if (!newPayment.date) e.date = "Date is required";
+        else {
+            const iso = toISO(new Date(newPayment.date));
+            if (iso < PAY_MIN || iso > PAY_MAX) e.date = "Payment must be within last 1 year";
+        }
+        if (!newPayment.clientName) e.clientName = "Client name is required";
+        if (!newPayment.days || Number(newPayment.days) <= 0) e.days = "Days is required";
+        if (!String(newPayment.amount || "").replace(/\D/g, "")) e.amount = "Amount is required";
+        if (!newPayment.typeOfPayment) e.typeOfPayment = "Type is required";
+        if (!newPayment.status) e.status = "Payment For is required";
+        return e;
+    };
+
+    const validateNewWork = () => {
+        const e = {};
+        if (!newWork.clientId) e.clientId = "Client ID required";
+        if (!newWork.clientName) e.clientName = "Client name required";
+        // if (!newWork.days || Number(newWork.days) <= 0) e.days = "Days required";
+        if (!newWork.fromDate) e.fromDate = "From date required";
+        // if (!newWork.toDate) e.toDate = "To date required";
+        if (newWork.fromDate && newWork.toDate && new Date(newWork.fromDate) > new Date(newWork.toDate)) {
+            e.toDate = "To date must be after From date";
+        }
+        if (!newWork.serviceType) e.serviceType = "Service type required";
+        return e;
+    };
+
+    // commit add forms into arrays
+    const addPaymentFromForm = () => {
+        const errs = validateNewPayment();
+        if (Object.keys(errs).length) {
+            openAlert("Fix Payment Form", <ul className="mb-0">{Object.values(errs).map((m, i) => <li key={i}>{m}</li>)}</ul>, "danger");
+            return;
+        }
+        const row = stampAuthorOnRow(newPayment);
+        setFormData((prev) => ({
+            ...prev,
+            payments: [...(prev.payments || []), { ...row }]
+        }));
+        setHasUnsavedChanges(true);
+        setShowPaymentForm(false);
+        resetPaymentDraft();
+    };
+
+    const addWorkFromForm = () => {
+        const errs = validateNewWork();
+        if (Object.keys(errs).length) {
+            openAlert("Fix Work Form", <ul className="mb-0">{Object.values(errs).map((m, i) => <li key={i}>{m}</li>)}</ul>, "danger");
+            return;
+        }
+        const row = stampAuthorOnRow(newWork);
+        setFormData((prev) => ({
+            ...prev,
+            workDetails: [...(prev.workDetails || []), { ...row }]
+        }));
+        setHasUnsavedChanges(true);
+        setShowWorkForm(false);
+        resetWorkDraft();
+    };
+
+    // --- inline edit for Working rows (only To date, Days, Remarks) ---
+    const [editingWorkIndex, setEditingWorkIndex] = useState(null);
+    const [editWorkDraft, setEditWorkDraft] = useState({ toDate: "", days: "", remarks: "" });
+
+    const startEditWork = (idx) => {
+        const w = (formData.workDetails || [])[idx] || {};
+        setEditWorkDraft({
+            toDate: w.toDate || "",
+            days: (w.days ?? "").toString(),
+            remarks: w.remarks || ""
+        });
+        setEditingWorkIndex(idx);
+    };
+
+    const cancelEditWork = () => {
+        setEditingWorkIndex(null);
+        setEditWorkDraft({ toDate: "", days: "", remarks: "" });
+    };
+
+    const saveEditWork = () => {
+        if (editingWorkIndex == null) return;
+        setFormData(prev => {
+            const arr = [...(prev.workDetails || [])];
+            const w = { ...arr[editingWorkIndex] };
+
+            // Only update the allowed fields; days/toDate are optional (blank = keep existing)
+            if (editWorkDraft.toDate !== "") w.toDate = editWorkDraft.toDate;
+            if (editWorkDraft.days !== "") w.days = editWorkDraft.days.replace(/\D/g, "");
+
+            // Remarks allowed empty; overwrite with whatever is in the draft
+            w.remarks = editWorkDraft.remarks;
+
+            arr[editingWorkIndex] = w;
+            return { ...prev, workDetails: arr };
+        });
+        setHasUnsavedChanges?.(true);
+        cancelEditWork();
+    };
+
 
 
 
@@ -531,9 +650,9 @@ const WorkerModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode }
     useEffect(() => {
         if (employee) {
             const paymentsInit =
-                Array.isArray(employee.payments) && employee.payments.length ? lockIfFilled(employee.payments) : [blankPayment()];
+                Array.isArray(employee.payments) && employee.payments.length ? lockIfFilled(employee.payments) : [];
             const workInit =
-                Array.isArray(employee.workDetails) && employee.workDetails.length ? lockIfFilled(employee.workDetails) : [blankWork()];
+                Array.isArray(employee.workDetails) && employee.workDetails.length ? lockIfFilled(employee.workDetails) : [];
 
             // SAFER DEFAULTS so edited values persist and load correctly
             setFormData({
@@ -545,7 +664,7 @@ const WorkerModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode }
                 allowance: employee.allowance ?? "",
                 pageNo: employee.pageNo ?? "",
                 basicSalary: employee.basicSalary ?? "",
-                payments: paymentsInit.map((p) => ({ balanceAmount: "", receiptNo: "", ...p })), // add new keys if missing
+                payments: paymentsInit.map((p) => ({ balanceAmount: "", receiptNo: "", ...p })),
                 workDetails: workInit,
                 // preview URL for UI
                 employeePhotoUrl: employee.employeePhoto || null,
@@ -561,10 +680,12 @@ const WorkerModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode }
                 workingSkills: [],
                 healthIssues: [],
                 otherIssues: "",
-                payments: [blankPayment()],
-                workDetails: [blankWork()],
+                payments: [],
+                workDetails: [],
             });
             setStatus("On Duty");
+            setPaymentErrors([{}]);
+            setWorkErrors([{}]);
             setPaymentErrors([{}]);
             setWorkErrors([{}]);
         }
@@ -2026,7 +2147,7 @@ const WorkerModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode }
                                                                 <img
                                                                     src={formData.employeePhotoUrl}
                                                                     alt="Employee"
-                                                                    style={{ maxWidth: "300px", maxHeight: "300px", objectFit: "cover"}}
+                                                                    style={{ maxWidth: "300px", maxHeight: "300px", objectFit: "cover" }}
                                                                     className="rounded img-fluid "
                                                                 />
                                                             ) : (
@@ -2736,456 +2857,433 @@ const WorkerModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode }
 
                                 {/* Payment */}
                                 {activeTab === "payment" && (
-                                    <div className="modal-card ">
-                                        <div className="modal-card-header">
-                                            <h4 className="mb-0">Payment</h4>
-                                        </div>
-                                        <div className="modal-card-body">
-                                            {(formData.payments || []).map((p, i) => {
-                                                const locked = !!p.__locked;
-                                                const invalidClass = (field) => (paymentErrors[i]?.[field] ? " is-invalid" : "");
-                                                return (
-                                                    <div key={i} className="border rounded paymentSection p-3 ">
-                                                        <div className="d-flex justify-content-between align-items-center mb-2">
-                                                            <h6 className="mb-0">
-                                                                Payment #{i + 1} {locked && <span className="badge bg-secondary ms-2">Locked</span>}
-                                                            </h6>
-                                                            {canEdit && !locked && (
-                                                                <button className="btn btn-outline-danger btn-sm" onClick={() => removePaymentSection(i)}>
-                                                                    Remove
-                                                                </button>
-                                                            )}
-                                                        </div>
+                                    <>
+                                        {/* === PAYMENTS TAB === */}
+                                        <div className="modal-card">
+                                            <div className="modal-card-header d-flex justify-content-between align-items-center">
+                                                <strong>Payments</strong>
+                                                {canEdit && (
+                                                    <button
+                                                        type="button"
+                                                        className="btn btn-outline-primary btn-sm"
+                                                        onClick={() => setShowPaymentForm((s) => !s)}
+                                                    >
+                                                        {showPaymentForm ? "Close" : "+ Add Payment"}
+                                                    </button>
+                                                )}
+                                            </div>
 
+                                            <div className="modal-card-body">
+                                                {/* Inline small add form (hidden until button clicked) */}
+                                                {canEdit && showPaymentForm && (
+                                                    <div className="border rounded p-3 mb-3 bg-light">
                                                         <div className="row">
-                                                            <div className="col-md-4 mb-2">
-                                                                <label className="form-label">
-                                                                    <strong>Date</strong>
-                                                                    <span className="star">*</span>
-                                                                </label>
-                                                                {canEdit ? (
-                                                                    <input
-                                                                        type="date"
-                                                                        className={`form-control form-control-sm${invalidClass("date")}`}
-                                                                        value={p.date || ""}
-                                                                        min={PAY_MIN}
-                                                                        max={PAY_MAX}
-                                                                        onChange={(e) => handleArrayChange("payments", i, "date", e.target.value)}
-                                                                        disabled={locked}
-                                                                    />
-                                                                ) : (
-                                                                    <div className="form-control form-control-sm bg-light">{p.date || "N/A"}</div>
-                                                                )}
-                                                                <Err msg={paymentErrors[i]?.date} />
+                                                            <div className="col-md-3 mb-2">
+                                                                <label className="form-label"><strong>Date</strong><span className="star">*</span></label>
+                                                                <input
+                                                                    type="date"
+                                                                    className="form-control form-control-sm"
+                                                                    value={newPayment.date || ""}
+                                                                    min={PAY_MIN}
+                                                                    max={PAY_MAX}
+                                                                    onChange={(e) => updateNewPayment("date", e.target.value)}
+                                                                />
                                                             </div>
-
-                                                            <div className="col-md-4 mb-2">
-                                                                <label className="form-label">
-                                                                    <strong>Amount</strong>
-                                                                    <span className="star">*</span>
-                                                                </label>
-                                                                {canEdit ? (
-                                                                    <input
-                                                                        type="tel"
-                                                                        inputMode="numeric"
-                                                                        maxLength={5}
-                                                                        pattern="^[0-9]{1,5}$"
-                                                                        className={`form-control form-control-sm${invalidClass("amount")}`}
-                                                                        value={p.amount || ""}
-                                                                        onChange={(e) => handleArrayChange("payments", i, "amount", e.target.value)}
-                                                                        disabled={locked}
-                                                                    />
-                                                                ) : (
-                                                                    <div className="form-control form-control-sm bg-light">{p.amount || "N/A"}</div>
-                                                                )}
-                                                                <Err msg={paymentErrors[i]?.amount} />
+                                                            <div className="col-md-3 mb-2">
+                                                                <label className="form-label"><strong>Client Name</strong><span className="star">*</span></label>
+                                                                <input
+                                                                    type="text"
+                                                                    className="form-control form-control-sm"
+                                                                    value={newPayment.clientName || ""}
+                                                                    onChange={(e) => updateNewPayment("clientName", e.target.value)}
+                                                                />
                                                             </div>
-
-                                                            <div className="col-md-4 mb-2">
-                                                                <label className="form-label">
-                                                                    <strong>Balance Amount</strong>
-                                                                </label>
-                                                                {canEdit ? (
-                                                                    <input
-                                                                        type="tel"
-                                                                        inputMode="numeric"
-                                                                        pattern="^[0-9]+$"
-                                                                        className={`form-control form-control-sm${invalidClass("balanceAmount")}`}
-                                                                        value={p.balanceAmount || ""}
-                                                                        onChange={(e) => handleArrayChange("payments", i, "balanceAmount", e.target.value)}
-                                                                        disabled={locked}
-                                                                        maxLength={5}
-                                                                    />
-                                                                ) : (
-                                                                    <div className="form-control form-control-sm bg-light">{p.balanceAmount || "N/A"}</div>
-                                                                )}
-                                                                <Err msg={paymentErrors[i]?.balanceAmount} />
+                                                            <div className="col-md-2 mb-2">
+                                                                <label className="form-label"><strong>Days</strong><span className="star">*</span></label>
+                                                                <input
+                                                                    type="tel"
+                                                                    className="form-control form-control-sm"
+                                                                    maxLength={2}
+                                                                    value={newPayment.days || ""}
+                                                                    onChange={(e) => updateNewPayment("days", e.target.value.replace(/\D/g, ""))}
+                                                                />
+                                                            </div>
+                                                            <div className="col-md-2 mb-2">
+                                                                <label className="form-label"><strong>Amount</strong><span className="star">*</span></label>
+                                                                <input
+                                                                    type="tel"
+                                                                    className="form-control form-control-sm"
+                                                                    maxLength={5}
+                                                                    value={newPayment.amount || ""}
+                                                                    onChange={(e) => updateNewPayment("amount", e.target.value.replace(/\D/g, ""))}
+                                                                />
+                                                            </div>
+                                                            <div className="col-md-2 mb-2">
+                                                                <label className="form-label"><strong>Balance</strong></label>
+                                                                <input
+                                                                    type="tel"
+                                                                    className="form-control form-control-sm"
+                                                                    value={newPayment.balanceAmount || ""}
+                                                                    onChange={(e) => updateNewPayment("balanceAmount", e.target.value.replace(/\D/g, ""))}
+                                                                />
                                                             </div>
                                                         </div>
 
                                                         <div className="row">
-                                                            <div className="col-md-4 mb-2">
-                                                                <label className="form-label">
-                                                                    <strong>Type of payment</strong>
-                                                                    <span className="star">*</span>
-                                                                </label>
-                                                                {canEdit ? (
-                                                                    <select
-                                                                        className={`form-select ${invalidClass("typeOfPayment")}`}
-                                                                        value={p.typeOfPayment || ""}
-                                                                        onChange={(e) => handleArrayChange("payments", i, "typeOfPayment", e.target.value)}
-                                                                        disabled={locked}
-                                                                    >
-                                                                        <option value="">Select</option>
-                                                                        <option value="cash">Cash</option>
-                                                                        <option value="online">Online</option>
-                                                                        <option value="cheque">Cheque</option>
-                                                                    </select>
-                                                                ) : (
-                                                                    <div className="form-control form-control-sm bg-light">{p.typeOfPayment || "N/A"}</div>
-                                                                )}
-                                                                <Err msg={paymentErrors[i]?.typeOfPayment} />
+                                                            <div className="col-md-3 mb-2">
+                                                                <label className="form-label"><strong>Type of payment</strong><span className="star">*</span></label>
+                                                                <select
+                                                                    className="form-select form-select-sm"
+                                                                    value={newPayment.typeOfPayment || ""}
+                                                                    onChange={(e) => updateNewPayment("typeOfPayment", e.target.value)}
+                                                                >
+                                                                    <option value="">Select</option>
+                                                                    <option value="cash">Cash</option>
+                                                                    <option value="online">Online</option>
+                                                                    <option value="cheque">Cheque</option>
+                                                                </select>
                                                             </div>
-
-                                                            <div className="col-md-4 mb-2">
-                                                                <label className="form-label">
-                                                                    <strong>Payment For</strong>
-                                                                    <span className="star">*</span>
-                                                                </label>
-                                                                {canEdit ? (
-                                                                    <select
-                                                                        className={`form-select ${invalidClass("status")}`}
-                                                                        value={p.status || ""}
-                                                                        onChange={(e) => handleArrayChange("payments", i, "status", e.target.value)}
-                                                                        disabled={locked}
-                                                                    >
-                                                                        <option value="" disabled>
-                                                                            Select
-                                                                        </option>
-                                                                        <option value="salary">Salary</option>
-                                                                        <option value="advance">Advance</option>
-                                                                        <option value="commition">Commition</option>
-                                                                        <option value="bonus">Bonus</option>
-                                                                    </select>
-                                                                ) : (
-                                                                    <div className="form-control form-control-sm bg-light">{p.status || "N/A"}</div>
-                                                                )}
-                                                                <Err msg={paymentErrors[i]?.status} />
+                                                            <div className="col-md-3 mb-2">
+                                                                <label className="form-label"><strong>Payment For</strong><span className="star">*</span></label>
+                                                                <select
+                                                                    className="form-select form-select-sm"
+                                                                    value={newPayment.status || ""}
+                                                                    onChange={(e) => updateNewPayment("status", e.target.value)}
+                                                                >
+                                                                    <option value="" disabled>Select</option>
+                                                                    <option value="salary">Salary</option>
+                                                                    <option value="advance">Advance</option>
+                                                                    <option value="commition">Commition</option>
+                                                                    <option value="bonus">Bonus</option>
+                                                                </select>
                                                             </div>
-
-                                                            <div className="col-md-4 mb-2">
-                                                                <label className="form-label">
-                                                                    <strong>Receipt No</strong>
-                                                                </label>
-                                                                {canEdit ? (
-                                                                    <input
-                                                                        type="tel"
-                                                                        className="form-control form-control-sm"
-                                                                        value={p.receiptNo || ""}
-                                                                        onChange={(e) => handleArrayChange("payments", i, "receiptNo", e.target.value)}
-                                                                        disabled={locked}
-                                                                        maxLength={5}
-                                                                    />
-                                                                ) : (
-                                                                    <div className="form-control form-control-sm bg-light">{p.receiptNo || "N/A"}</div>
-                                                                )}
+                                                            <div className="col-md-3 mb-2">
+                                                                <label className="form-label"><strong>Receipt No</strong></label>
+                                                                <input
+                                                                    className="form-control form-control-sm"
+                                                                    value={newPayment.receiptNo || ""}
+                                                                    onChange={(e) => updateNewPayment("receiptNo", e.target.value)}
+                                                                    maxLength={12}
+                                                                />
+                                                            </div>
+                                                            <div className="col-md-3 mb-2">
+                                                                <label className="form-label"><strong>Timesheet ID</strong></label>
+                                                                <input
+                                                                    className="form-control form-control-sm"
+                                                                    value={newPayment.timesheetID || ""}
+                                                                    onChange={(e) => updateNewPayment("timesheetID", e.target.value)}
+                                                                    maxLength={12}
+                                                                />
                                                             </div>
                                                         </div>
 
-                                                        <div className="row">
-                                                            <div className="col-md-4 mb-2">
-                                                                <label className="form-label">
-                                                                    <strong>Client Name</strong>
-                                                                    <span className="star">*</span>
-                                                                </label>
-                                                                {canEdit ? (
-                                                                    <input
-                                                                        type="text"
-                                                                        className={`form-control form-control-sm${invalidClass("clientName")}`}
-                                                                        value={p.clientName || ""}
-                                                                        onChange={(e) => handleArrayChange("payments", i, "clientName", e.target.value)}
-                                                                        disabled={locked}
-                                                                    />
-                                                                ) : (
-                                                                    <div className="form-control form-control-sm bg-light">{p.clientName || "N/A"}</div>
-                                                                )}
-                                                                <Err msg={paymentErrors[i]?.clientName} />
-                                                            </div>
-
-                                                            <div className="col-md-4 mb-2">
-                                                                <label className="form-label">
-                                                                    <strong>Days</strong>
-                                                                    <span className="star">*</span>
-                                                                </label>
-                                                                {canEdit ? (
-                                                                    <input
-                                                                        type="tel"
-                                                                        className={`form-control form-control-sm${invalidClass("days")}`}
-                                                                        value={p.days || ""}
-                                                                        onChange={(e) => handleArrayChange("payments", i, "days", e.target.value)}
-                                                                        disabled={locked}
-                                                                        maxLength={2}
-                                                                    />
-                                                                ) : (
-                                                                    <div className="form-control form-control-sm bg-light">{p.days || "N/A"}</div>
-                                                                )}
-                                                                <Err msg={paymentErrors[i]?.days} />
-                                                            </div>
-
-                                                            <div className="col-md-4 mb-2">
-                                                                <label className="form-label">
-                                                                    <strong>Timesheet ID</strong>
-                                                                </label>
-                                                                {canEdit ? (
-                                                                    <input
-                                                                        type="tel"
-                                                                        className="form-control form-control-sm"
-                                                                        value={p.timesheetID || ""}
-                                                                        onChange={(e) => handleArrayChange("payments", i, "timesheetID", e.target.value)}
-                                                                        disabled={locked}
-                                                                        maxLength={9}
-                                                                    />
-                                                                ) : (
-                                                                    <div className="form-control form-control-sm bg-light">{p.timesheetID || "N/A"}</div>
-                                                                )}
-                                                            </div>
+                                                        <div className="mb-2">
+                                                            <label className="form-label"><strong>Remarks</strong></label>
+                                                            <textarea
+                                                                className="form-control form-control-sm"
+                                                                rows={2}
+                                                                value={newPayment.remarks || ""}
+                                                                onChange={(e) => updateNewPayment("remarks", e.target.value)}
+                                                            />
                                                         </div>
 
-                                                        <div className="row">
-                                                            <div className="col-12 mb-2">
-                                                                <label className="form-label">
-                                                                    <strong>Remarks</strong>
-                                                                </label>
-                                                                {canEdit ? (
-                                                                    <textarea
-                                                                        className="form-control form-control-sm"
-                                                                        rows={2}
-                                                                        value={p.remarks || ""}
-                                                                        onChange={(e) => handleArrayChange("payments", i, "remarks", e.target.value)}
-                                                                        disabled={locked}
-                                                                    />
-                                                                ) : (
-                                                                    <div className="form-control form-control-sm bg-light">{p.remarks || "N/A"}</div>
-                                                                )}
-
-                                                                <div className="form-text mt-1">
-                                                                    <small className="small-text d-block text-primary mt-2">
-                                                                        Added by {(p.addedByName || p.createdByName || effectiveUserName)} • {formatDDMMYY(p.addedAt || p.createdAt)} {formatTime12h(p.addedAt || p.createdAt).toLocaleLowerCase()}
-
-                                                                    </small>
-                                                                </div>
-                                                            </div>
+                                                        <div className="d-flex gap-2 justify-content-end">
+                                                            <button className="btn btn-secondary btn-sm" onClick={() => { setShowPaymentForm(false); resetPaymentDraft(); }}>
+                                                                Cancel
+                                                            </button>
+                                                            <button className="btn btn-primary btn-sm" onClick={addPaymentFromForm}>
+                                                                Save Payment
+                                                            </button>
                                                         </div>
                                                     </div>
-                                                );
-                                            })}
+                                                )}
 
-                                            {canEdit && (
-                                                <div className="d-flex justify-content-end mb-3">
-                                                    <button className="btn btn-outline-primary btn-sm mt-2" onClick={addPaymentSection}>
-                                                        + Add Payment
-                                                    </button>
-                                                </div>
-                                            )}
+                                                {/* Table of existing payments */}
+                                                {(formData.payments?.length ?? 0) === 0 ? (
+                                                    <div className="text-muted text-center">No payments added yet.</div>
+                                                ) : (
+                                                    <div className="table-responsive">
+                                                        <table className="table table-sm table-bordered align-middle">
+                                                            <thead className="table-dark">
+                                                                <tr>
+                                                                    <th>#</th>
+                                                                    <th>Date</th>
+                                                                    <th>Client</th>
+                                                                    <th>Days</th>
+                                                                    <th>Amount</th>
+                                                                    <th>Balance</th>
+                                                                    <th>Type</th>
+                                                                    <th>For</th>
+                                                                    <th>Receipt</th>
+                                                                    <th>Timesheet ID</th>
+                                                                    <th>Remarks</th>
+                                                                    <th>Added By</th>
+                                                                    {canEdit && <th>Action</th>}
+                                                                </tr>
+                                                            </thead>
+                                                            <tbody>
+                                                                {(formData.payments || []).map((p, i) => (
+                                                                    <tr key={i}>
+                                                                        <td>{i + 1}</td>
+                                                                        <td>{p.date || "—"}</td>
+                                                                        <td>{p.clientName || "—"}</td>
+                                                                        <td>{p.days || "—"}</td>
+                                                                        <td>{p.amount || "—"}</td>
+                                                                        <td>{p.balanceAmount || "—"}</td>
+                                                                        <td>{p.typeOfPayment || "—"}</td>
+                                                                        <td>{p.status || "—"}</td>
+                                                                        <td>{p.receiptNo || "—"}</td>
+                                                                        <td>{p.timesheetID || "—"}</td>
+                                                                        <td style={{ maxWidth: 240, whiteSpace: 'pre-wrap' }}>{p.remarks || "—"}</td>
+                                                                        <td className="small text-muted">
+                                                                            {(p.addedByName || p.createdByName || effectiveUserName)}<br />
+                                                                            <span>{formatDDMMYY(p.addedAt || p.createdAt)} {formatTime12h(p.addedAt || p.createdAt)}</span>
+                                                                        </td>
+                                                                        {canEdit && (
+                                                                            <td>
+                                                                                {!p.__locked ? (
+                                                                                    <button className="btn btn-outline-danger btn-sm" onClick={() => removePaymentSection(i)}>
+                                                                                        Remove
+                                                                                    </button>
+                                                                                ) : (
+                                                                                    <span className="badge bg-secondary">Locked</span>
+                                                                                )}
+                                                                            </td>
+                                                                        )}
+                                                                    </tr>
+                                                                ))}
+                                                            </tbody>
+                                                        </table>
+                                                    </div>
+                                                )}
+                                            </div>
                                         </div>
-                                    </div>
+
+
+                                    </>
                                 )}
 
                                 {/* Working */}
                                 {activeTab === "working" && (
-                                    <div className="modal-card ">
-                                        <div className="modal-card-header">
-                                            <h4 className="mb-0">Working Details</h4>
-                                        </div>
-                                        <div className="modal-card-body">
-                                            {(formData.workDetails || []).map((w, i) => {
-                                                const locked = !!w.__locked;
-                                                const invalidClass = (field) => (workErrors[i]?.[field] ? " is-invalid" : "");
-                                                return (
-                                                    <div key={i} className="border rounded working  p-3">
-                                                        <div className="d-flex justify-content-between align-items-center mb-2">
-                                                            <h6 className="mb-0">
-                                                                Work #{i + 1} {locked && <span className="badge bg-secondary ms-2">Locked</span>}
-                                                            </h6>
-                                                            {canEdit && !locked && (
-                                                                <button className="btn btn-outline-danger btn-sm" onClick={() => removeWorkSection(i)}>
-                                                                    Remove
-                                                                </button>
-                                                            )}
-                                                        </div>
+                                    <>
+                                        {/* === WORKING TAB === */}
+                                        <div className="modal-card mt-3">
+                                            <div className="modal-card-header d-flex justify-content-between align-items-center">
+                                                <strong>Working</strong>
+                                                {canEdit && (
+                                                    <button
+                                                        type="button"
+                                                        className="btn btn-outline-primary btn-sm"
+                                                        onClick={() => setShowWorkForm((s) => !s)}
+                                                    >
+                                                        {showWorkForm ? "Close" : "+ Add Work"}
+                                                    </button>
+                                                )}
+                                            </div>
 
+                                            <div className="modal-card-body">
+                                                {canEdit && showWorkForm && (
+                                                    <div className="border rounded p-3 mb-3 bg-light">
                                                         <div className="row">
-                                                            <div className="col-md-4 mb-2">
-                                                                <label className="form-label">
-                                                                    <strong>Client ID</strong>
-                                                                    <span className="star">*</span>
-                                                                </label>
-                                                                {canEdit ? (
-                                                                    <input
-                                                                        type="text"
-                                                                        className={`form-control form-control-sm${invalidClass("clientId")}`}
-                                                                        value={w.clientId || ""}
-                                                                        onChange={(e) => handleArrayChange("workDetails", i, "clientId", e.target.value)}
-                                                                        disabled={locked}
-                                                                    />
-                                                                ) : (
-                                                                    <div className="form-control form-control-sm bg-light">{w.clientId || "N/A"}</div>
-                                                                )}
-                                                                <Err msg={workErrors[i]?.clientId} />
+                                                            <div className="col-md-3 mb-2">
+                                                                <label className="form-label"><strong>Client ID</strong><span className="star">*</span></label>
+                                                                <input
+                                                                    className="form-control form-control-sm"
+                                                                    value={newWork.clientId || ""}
+                                                                    onChange={(e) => updateNewWork("clientId", e.target.value)}
+                                                                    onBlur={() => {
+                                                                        // optional: auto-fill from your existing function
+                                                                        const idx = (formData.workDetails?.length || 0); // next index after add
+                                                                    }}
+                                                                />
                                                             </div>
-
-                                                            <div className="col-md-4 mb-2">
-                                                                <label className="form-label">
-                                                                    <strong>Client Name</strong>
-                                                                    <span className="star">*</span>
-                                                                </label>
-                                                                {canEdit ? (
-                                                                    <input
-                                                                        type="text"
-                                                                        className={`form-control form-control-sm${invalidClass("clientName")}`}
-                                                                        value={w.clientName || ""}
-                                                                        onChange={(e) => handleArrayChange("workDetails", i, "clientName", e.target.value)}
-                                                                        disabled={locked}
-                                                                    />
-                                                                ) : (
-                                                                    <div className="form-control form-control-sm bg-light">{w.clientName || "N/A"}</div>
-                                                                )}
-                                                                <Err msg={workErrors[i]?.clientName} />
+                                                            <div className="col-md-3 mb-2">
+                                                                <label className="form-label"><strong>Client Name</strong><span className="star">*</span></label>
+                                                                <input
+                                                                    className="form-control form-control-sm"
+                                                                    value={newWork.clientName || ""}
+                                                                    onChange={(e) => updateNewWork("clientName", e.target.value)}
+                                                                />
                                                             </div>
-
-                                                            <div className="col-md-4 mb-2">
-                                                                <label className="form-label">
-                                                                    <strong>Location</strong>
-                                                                </label>
-                                                                {canEdit ? (
-                                                                    <input
-                                                                        type="text"
-                                                                        className="form-control form-control-sm"
-                                                                        value={w.location || ""}
-                                                                        onChange={(e) => handleArrayChange("workDetails", i, "location", e.target.value)}
-                                                                        disabled={locked}
-                                                                    />
-                                                                ) : (
-                                                                    <div className="form-control form-control-sm bg-light">{w.location || "N/A"}</div>
-                                                                )}
+                                                            <div className="col-md-3 mb-2">
+                                                                <label className="form-label"><strong>Location</strong></label>
+                                                                <input
+                                                                    className="form-control form-control-sm"
+                                                                    value={newWork.location || ""}
+                                                                    onChange={(e) => updateNewWork("location", e.target.value)}
+                                                                />
+                                                            </div>
+                                                            <div className="col-md-3 mb-2">
+                                                                <label className="form-label"><strong>Days</strong> </label>
+                                                                <input
+                                                                    className="form-control form-control-sm"
+                                                                    value={newWork.days || ""}
+                                                                    onChange={(e) => updateNewWork("days", e.target.value.replace(/\D/g, ""))}
+                                                                />
                                                             </div>
                                                         </div>
 
                                                         <div className="row">
-                                                            <div className="col-md-4 mb-2">
-                                                                <label className="form-label">
-                                                                    <strong>Days</strong>
-                                                                    <span className="star">*</span>
-                                                                </label>
-                                                                {canEdit ? (
-                                                                    <input
-                                                                        type="number"
-                                                                        className={`form-control form-control-sm${invalidClass("days")}`}
-                                                                        value={w.days || ""}
-                                                                        onChange={(e) => handleArrayChange("workDetails", i, "days", e.target.value)}
-                                                                        disabled={locked}
-                                                                    />
-                                                                ) : (
-                                                                    <div className="form-control form-control-sm bg-light">{w.days || "N/A"}</div>
-                                                                )}
-                                                                <Err msg={workErrors[i]?.days} />
+                                                            <div className="col-md-3 mb-2">
+                                                                <label className="form-label"><strong>From</strong><span className="star">*</span></label>
+                                                                <input
+                                                                    type="date"
+                                                                    className="form-control form-control-sm"
+                                                                    value={newWork.fromDate || ""}
+                                                                    onChange={(e) => updateNewWork("fromDate", e.target.value)}
+                                                                />
                                                             </div>
-
-                                                            <div className="col-md-4 mb-2">
-                                                                <label className="form-label">
-                                                                    <strong>From Date</strong>
-                                                                    <span className="star">*</span>
-                                                                </label>
-                                                                {canEdit ? (
-                                                                    <input
-                                                                        type="date"
-                                                                        className={`form-control form-control-sm${invalidClass("fromDate")}`}
-                                                                        value={w.fromDate || ""}
-                                                                        onChange={(e) => handleArrayChange("workDetails", i, "fromDate", e.target.value)}
-                                                                        disabled={locked}
-                                                                    />
-                                                                ) : (
-                                                                    <div className="form-control form-control-sm bg-light">{w.fromDate || "N/A"}</div>
-                                                                )}
-                                                                <Err msg={workErrors[i]?.fromDate} />
+                                                            <div className="col-md-3 mb-2">
+                                                                <label className="form-label"><strong>To</strong> </label>
+                                                                <input
+                                                                    type="date"
+                                                                    className="form-control form-control-sm"
+                                                                    value={newWork.toDate || ""}
+                                                                    onChange={(e) => updateNewWork("toDate", e.target.value)}
+                                                                />
                                                             </div>
-
-                                                            <div className="col-md-4 mb-2">
-                                                                <label className="form-label">
-                                                                    <strong>To Date</strong>
-                                                                    <span className="star">*</span>
-                                                                </label>
-                                                                {canEdit ? (
-                                                                    <input
-                                                                        type="date"
-                                                                        className={`form-control form-control-sm${invalidClass("toDate")}`}
-                                                                        value={w.toDate || ""}
-                                                                        onChange={(e) => handleArrayChange("workDetails", i, "toDate", e.target.value)}
-                                                                        disabled={locked}
-                                                                    />
-                                                                ) : (
-                                                                    <div className="form-control form-control-sm bg-light">{w.toDate || "N/A"}</div>
-                                                                )}
-                                                                <Err msg={workErrors[i]?.toDate} />
+                                                            <div className="col-md-3 mb-2">
+                                                                <label className="form-label"><strong>Service Type</strong><span className="star">*</span></label>
+                                                                <input
+                                                                    className="form-control form-control-sm"
+                                                                    value={newWork.serviceType || ""}
+                                                                    onChange={(e) => updateNewWork("serviceType", e.target.value)}
+                                                                />
+                                                            </div>
+                                                            <div className="col-md-3 mb-2">
+                                                                <label className="form-label"><strong>Remarks</strong></label>
+                                                                <textarea
+                                                                    className="form-control form-control-sm"
+                                                                    value={newWork.remarks || ""}
+                                                                    onChange={(e) => updateNewWork("remarks", e.target.value)}
+                                                                />
                                                             </div>
                                                         </div>
 
-                                                        <div className="row">
-                                                            <div className="col-md-6 mb-2">
-                                                                <label className="form-label">
-                                                                    <strong>Service Type</strong>
-                                                                    <span className="star">*</span>
-                                                                </label>
-                                                                {canEdit ? (
-                                                                    <input
-                                                                        type="text"
-                                                                        className={`form-control form-control-sm${invalidClass("serviceType")}`}
-                                                                        value={w.serviceType || ""}
-                                                                        onChange={(e) => handleArrayChange("workDetails", i, "serviceType", e.target.value)}
-                                                                        disabled={locked}
-                                                                    />
-                                                                ) : (
-                                                                    <div className="form-control form-control-sm bg-light">{w.serviceType || "N/A"}</div>
-                                                                )}
-                                                                <Err msg={workErrors[i]?.serviceType} />
-                                                            </div>
-
-                                                            <div className="col-md-6 mb-2">
-                                                                <label className="form-label">
-                                                                    <strong>Remarks</strong>
-                                                                </label>
-                                                                {canEdit ? (
-                                                                    <input
-                                                                        type="text"
-                                                                        className="form-control form-control-sm"
-                                                                        value={w.remarks || ""}
-                                                                        onChange={(e) => handleArrayChange("workDetails", i, "remarks", e.target.value)}
-                                                                        disabled={locked}
-                                                                    />
-                                                                ) : (
-                                                                    <div className="form-control form-control-sm bg-light">{w.remarks || "N/A"}</div>
-                                                                )}
-                                                            </div>
-                                                        </div>
-
-                                                        <div className="form-text mt-1">
-                                                            <small className="small-text d-block text-primary mt-2">
-                                                                Added by {(w.addedByName || w.createdByName || effectiveUserName)} • {formatDDMMYY(w.addedAt || w.createdAt)} {formatTime12h(w.addedAt || w.createdAt).toLocaleLowerCase()}
-                                                            </small>
+                                                        <div className="d-flex gap-2 justify-content-end">
+                                                            <button className="btn btn-secondary btn-sm" onClick={() => { setShowWorkForm(false); resetWorkDraft(); }}>
+                                                                Cancel
+                                                            </button>
+                                                            <button className="btn btn-primary btn-sm" onClick={addWorkFromForm}>
+                                                                Save Work
+                                                            </button>
                                                         </div>
                                                     </div>
-                                                );
-                                            })}
+                                                )}
 
-                                            {canEdit && (
-                                                <div className="d-flex justify-content-end mb-3">
-                                                    <button className="btn btn-outline-primary btn-sm mt-2" onClick={addWorkSection}>
-                                                        + Add Work
-                                                    </button>
-                                                </div>
-                                            )}
+                                                {(formData.workDetails?.length ?? 0) === 0 ? (
+                                                    <div className="text-muted text-center">No work entries added yet.</div>
+                                                ) : (
+                                                    <div className="table-responsive">
+                                                        <table className="table table-sm table-bordered align-middle">
+                                                            <thead className="table-dark">
+                                                                <tr>
+                                                                    <th>#</th>
+                                                                    <th>Client ID</th>
+                                                                    <th>Client Name</th>
+                                                                    <th>Location</th>
+                                                                    <th>Days</th>
+                                                                    <th>From</th>
+                                                                    <th>To</th>
+                                                                    <th>Service Type</th>
+                                                                    <th>Remarks</th>
+                                                                    <th>Added By</th>
+                                                                    {canEdit && <th>Action</th>}
+                                                                </tr>
+                                                            </thead>
+                                                            <tbody>
+                                                                {(formData.workDetails || []).map((w, i) => (
+                                                                    <tr key={i}>
+                                                                        <td>{i + 1}</td>
+                                                                        <td>{w.clientId || "—"}</td>
+                                                                        <td>{w.clientName || "—"}</td>
+                                                                        <td>{w.location || "—"}</td>
+                                                                        <td>{w.days || "—"}</td>
+                                                                        <td>{w.fromDate || "—"}</td>
+                                                                        <td>{w.toDate || "—"}</td>
+                                                                        <td>{w.serviceType || "—"}</td>
+                                                                        <td style={{ maxWidth: 240, whiteSpace: 'pre-wrap' }}>{w.remarks || "—"}</td>
+                                                                        <td className="small text-muted">
+                                                                            {(w.addedByName || w.createdByName || effectiveUserName)}<br />
+                                                                            <span>{formatDDMMYY(w.addedAt || w.createdAt)} {formatTime12h(w.addedAt || w.createdAt)}</span>
+                                                                        </td>
+                                                                        {canEdit && (
+                                                                            <td>
+                                                                                {!w.__locked ? (
+                                                                                    <button
+                                                                                        className="btn btn-outline-warning btn-sm"
+                                                                                        onClick={() => startEditWork(i)}
+                                                                                    >
+                                                                                        Edit
+                                                                                    </button>
+                                                                                ) : (
+                                                                                    <span className="badge bg-secondary">Locked</span>
+                                                                                )}
+                                                                            </td>
+                                                                        )}
+                                                                    </tr>
+                                                                ))}
+                                                            </tbody>
+                                                        </table>
+
+
+                                                        {/* Inline edit panel for a selected row */}
+                                                        {canEdit && editingWorkIndex != null && (
+                                                            <div className="border rounded p-3 mt-3 bg-light">
+                                                                <div className="d-flex justify-content-between align-items-center mb-2">
+                                                                    <strong>Edit Work (Row #{editingWorkIndex + 1})</strong>
+                                                                    <small className="text-muted">
+                                                                        You can edit <em>To date</em>, <em>Days</em>, and <em>Remarks</em> only.
+                                                                    </small>
+                                                                </div>
+
+                                                                <div className="row">
+                                                                    <div className="col-md-3 mb-2">
+                                                                        <label className="form-label"><strong>To date</strong> <small className="text-muted">(optional)</small></label>
+                                                                        <input
+                                                                            type="date"
+                                                                            className="form-control form-control-sm"
+                                                                            value={editWorkDraft.toDate || ""}
+                                                                            onChange={(e) => setEditWorkDraft(d => ({ ...d, toDate: e.target.value }))}
+                                                                        />
+                                                                    </div>
+
+                                                                    <div className="col-md-3 mb-2">
+                                                                        <label className="form-label"><strong>Days</strong> <small className="text-muted">(optional)</small></label>
+                                                                        <input
+                                                                            className="form-control form-control-sm"
+                                                                            value={editWorkDraft.days || ""}
+                                                                            onChange={(e) =>
+                                                                                setEditWorkDraft(d => ({ ...d, days: e.target.value.replace(/\D/g, "") }))
+                                                                            }
+                                                                            maxLength={2}
+                                                                            inputMode="numeric"
+                                                                        />
+                                                                    </div>
+
+                                                                    <div className="col-md-6 mb-2">
+                                                                        <label className="form-label"><strong>Remarks</strong></label>
+                                                                        <input
+                                                                            className="form-control form-control-sm"
+                                                                            value={editWorkDraft.remarks || ""}
+                                                                            onChange={(e) => setEditWorkDraft(d => ({ ...d, remarks: e.target.value }))}
+                                                                        />
+                                                                    </div>
+                                                                </div>
+
+                                                                <div className="d-flex gap-2 justify-content-end">
+                                                                    <button className="btn btn-secondary btn-sm" onClick={cancelEditWork}>Cancel</button>
+                                                                    <button className="btn btn-primary btn-sm" onClick={saveEditWork}>Save</button>
+                                                                </div>
+                                                            </div>
+                                                        )}
+
+                                                    </div>
+                                                )}
+                                            </div>
                                         </div>
-                                    </div>
+
+                                    </>
                                 )}
 
 

@@ -282,6 +282,19 @@ const TimesheetTable = ({ employee }) => {
     return Array.from(years).sort((a, b) => b - a);
   };
 
+  const getAdvanceAmount = (ts) => {
+    if (typeof ts?.advancesTotal === 'number') return ts.advancesTotal;
+    if (typeof ts?.advances === 'number') return ts.advances;
+    if (ts?.advances && typeof ts.advances === 'object') {
+      // Sum amounts from the advances object
+      return Object.values(ts.advances).reduce((sum, a) => {
+        const amt = typeof a === 'object' ? a.amount : a;
+        return sum + (parseFloat(amt) || 0);
+      }, 0);
+    }
+    return 0;
+  };
+
   const getStatusBadge = (status) => {
     const statusConfig = {
       draft: { class: 'bg-warning', text: 'Draft' },
@@ -302,7 +315,7 @@ const TimesheetTable = ({ employee }) => {
     workingDays: acc.workingDays + (parseFloat(ts.workingDays) || 0),
     leaves: acc.leaves + (parseFloat(ts.leaves) || 0),
     holidays: acc.holidays + (parseFloat(ts.holidays) || 0),
-    advances: acc.advances + (parseFloat(ts.advancesTotal) || parseFloat(ts.advances) || 0),
+    advances: acc.advances + getAdvanceAmount(ts),
     netPayable: acc.netPayable + (parseFloat(ts.netPayable) || 0),
     totalSalary: acc.totalSalary + (parseFloat(ts.totalSalary) || 0)
   }), {
@@ -518,9 +531,7 @@ const TimesheetTable = ({ employee }) => {
                       <span className="fw-bold text-primary">{timesheet.holidays || 0}</span>
                     </td>
                     <td className="border-secondary text-center">
-                      <span className="fw-bold text-danger">
-                        ₹{timesheet.advancesTotal || timesheet.advances || 0}
-                      </span>
+                    <span className="fw-bold text-danger">₹{getAdvanceAmount(timesheet)}</span>
                     </td>
                     <td className="border-secondary text-center">
                       <span className="fw-bold text-success">₹{timesheet.totalSalary || 0}</span>

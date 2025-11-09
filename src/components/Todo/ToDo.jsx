@@ -11,8 +11,6 @@ import HeaderActions from "./components/HeaderActions";
 import DeletedTaskCard from "./components/DeletedTaskCard";
 import CreateProjectModal from "./components/CreateProjectModal";
 
-
-
 // ---------- tiny helpers ----------
 const cn = (...xs) => xs.filter(Boolean).join(" ");
 const safeVal = (v, d = "") => (v === null || v === undefined ? d : v);
@@ -28,7 +26,6 @@ const fmtDT = (ts) => {
   }
 };
 
-
 const todayYMD = () => {
   const d = new Date();
   const yyyy = d.getFullYear();
@@ -38,7 +35,7 @@ const todayYMD = () => {
 };
 
 const anyFilterActive = (state) => {
-  const { activeTab, qtext, cat, prio, assignee, issueType, sort } = state;
+  const { activeTab, qtext, cat, prio, assignee, issueType, sort, projectId } = state;
   return !(
     activeTab === "all" &&
     qtext === "" &&
@@ -46,7 +43,8 @@ const anyFilterActive = (state) => {
     prio === "ALL" &&
     assignee === "ALL" &&
     issueType === "ALL" &&
-    sort === "createdAt_desc"
+    sort === "createdAt_desc" &&
+    projectId === "ALL"
   );
 };
 
@@ -117,7 +115,8 @@ const TABS = [
   { id: "In Progress", label: "In Progress" },
   { id: "In Review", label: "In Review" },
   { id: "Done", label: "Done" },
-  { id: "Deleted", label: "Deleted" }, // NEW: Added Deleted tab
+  { id: "Deleted", label: "Deleted" },
+  { id: "unknown", label: "Unknown Project" }, // NEW: For tasks without projects
 ];
 
 const TICKET_KEYS = ["JEN", "OPS", "CRM", "FIN", "HR"];
@@ -177,6 +176,7 @@ export default function ToDo() {
   const [assignee, setAssignee] = useState("ALL");
   const [issueType, setIssueType] = useState("ALL");
   const [sort, setSort] = useState("createdAt_desc");
+  const [projectId, setProjectId] = useState("ALL");
 
   // notifications
   const [notifOpen, setNotifOpen] = useState(false);
@@ -191,8 +191,9 @@ export default function ToDo() {
   const [dirty, setDirty] = useState(false);
   const [showDiscard, setShowDiscard] = useState(false);
   const [selectedTask, setSelectedTask] = useState(null);
-
-
+  const [showDelete, setShowDelete] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState(null);
+  const [showCreateProject, setShowCreateProject] = useState(false);
 
   const [toasts, setToasts] = useState([]);
   const notify = (text, variant = "success") => {
@@ -216,10 +217,11 @@ export default function ToDo() {
     storyPoints: 1,
     labels: [],
     parentTask: "",
+    projectId: "",
+    projectKey: "",
+    projectTitle: "",
     ticketKey: "JEN",
   });
-
- 
 
   // ---------- Current User ----------
   const currentUser = {
@@ -229,121 +231,111 @@ export default function ToDo() {
     photoURL: mergedAuth?.photoURL || ""
   };
 
-
-  const [showDelete, setShowDelete] = useState(false);
-  const [deleteTarget, setDeleteTarget] = useState(null);
-
-  const [showCreateProject, setShowCreateProject] = useState(false);
-  const [projectId, setProjectId] = useState("ALL");
-  const [lastUsedProject, setLastUsedProject] = useState(null);
-
   const [projects, setProjects] = useState([]);
-
-  const isAdmin = ["admin", "super admin", "superadmin"].includes(myRole);
-
+  const [lastUsedProject, setLastUsedProject] = useState(null);
   const [comments, setComments] = useState({});
   const [newSubtaskTitle, setNewSubtaskTitle] = useState("");
 
   const notifRootRef = useRef(null);
   const backendOK = !!hasRTDB;
 
-  // ---------- subscribe USERS (robust: try both DB locations & merge) ----------
-useEffect(() => {
-  if (!backendOK) return;
-  
-  const ref = getRef("Projects");
-  const cb = (snap) => {
-    const val = snap.val?.() ?? snap;
-    const obj = val || {};
-    const list = Object.entries(obj).map(([id, v]) => ({
-      id,
-      ...v,
-    }));
-    list.sort((a, b) => (b.updatedAt || b.createdAt || 0) - (a.updatedAt || a.createdAt || 0));
-    setProjects(list);
-  };
-
-  try {
-    if (isFn(ref.on)) {
-      ref.on("value", cb);
-      return () => {
-        try {
-          ref.off("value", cb);
-        } catch {}
-      };
-    }
-    ref.once?.("value", (s) => cb(s));
-  } catch (error) {
-    console.error("Failed to load projects:", error);
-  }
-}, [backendOK]);
-
-const createProject = async (projectData) => {
-  if (!backendOK) {
-    notify("Firebase not configured", "error");
-    return;
-  }
-  
-  try {
-    const now = Date.now();
+  // ---------- subscribe PROJECTS ----------
+  useEffect(() => {
+    if (!backendOK) return;
+    
     const ref = getRef("Projects");
-    const project = {
-      ...projectData,
-      createdAt: now,
-      updatedAt: now,
-      sequence: 0,
+    const cb = (snap) => {
+      const val = snap.val?.() ?? snap;
+      const obj = val || {};
+      const list = Object.entries(obj).map(([id, v]) => ({
+        id,
+        ...v,
+      }));
+      list.sort((a, b) => (b.updatedAt || b.createdAt || 0) - (a.updatedAt || a.createdAt || 0));
+      setProjects(list);
     };
 
-    let projectId;
-    if (isFn(ref.push)) {
-      const res = await ref.push(project);
-      projectId = res.key;
-    } else {
-      projectId = String(now);
-      await getRef(`Projects/${projectId}`).set(project);
+    try {
+      if (isFn(ref.on)) {
+        ref.on("value", cb);
+        return () => {
+          try {
+            ref.off("value", cb);
+          } catch {}
+        };
+      }
+      ref.once?.("value", (s) => cb(s));
+    } catch (error) {
+      console.error("Failed to load projects:", error);
     }
+  }, [backendOK]);
 
-    notify("Project created successfully");
-    return projectId;
-  } catch (error) {
-    console.error("Failed to create project:", error);
-    notify("Failed to create project", "error");
-    throw error;
-  }
-};
-
-const incrementProjectSeq = async (projectId) => {
-  if (!backendOK) return 1;
-  
-  try {
-    const ref = getRef(`Projects/${projectId}/sequence`);
-    let nextSeq = 1;
-    
-    if (isFn(ref.transaction)) {
-      await ref.transaction((curr) => {
-        nextSeq = (curr || 0) + 1;
-        return nextSeq;
-      });
-    } else {
-      const snap = await ref.get?.();
-      const curr = snap?.val?.() ?? snap?.val ?? 0;
-      nextSeq = (Number(curr) || 0) + 1;
-      await ref.set(nextSeq);
+  const createProject = async (projectData) => {
+    if (!backendOK) {
+      notify("Firebase not configured", "error");
+      return;
     }
     
-    return nextSeq;
-  } catch (error) {
-    console.error("Failed to increment project sequence:", error);
-    return 1;
-  }
-};
+    try {
+      const now = Date.now();
+      const ref = getRef("Projects");
+      const project = {
+        ...projectData,
+        createdAt: now,
+        updatedAt: now,
+        sequence: 0,
+      };
 
-  // ---------- subscribe USERS (robust: merge + filter system + dedupe) ----------
+      let projectId;
+      if (isFn(ref.push)) {
+        const res = await ref.push(project);
+        projectId = res.key;
+      } else {
+        projectId = String(now);
+        await getRef(`Projects/${projectId}`).set(project);
+      }
+
+      notify("Project created successfully");
+      return projectId;
+    } catch (error) {
+      console.error("Failed to create project:", error);
+      notify("Failed to create project", "error");
+      throw error;
+    }
+  };
+
+  const incrementProjectSeq = async (projectId) => {
+    if (!backendOK) return 1;
+    
+    try {
+      const ref = getRef(`Projects/${projectId}/sequence`);
+      let nextSeq = 1;
+      
+      if (isFn(ref.transaction)) {
+        await ref.transaction((curr) => {
+          nextSeq = (curr || 0) + 1;
+          return nextSeq;
+        });
+      } else {
+        const snap = await ref.get?.();
+        const curr = snap?.val?.() ?? snap?.val ?? 0;
+        nextSeq = (Number(curr) || 0) + 1;
+        await ref.set(nextSeq);
+      }
+      
+      return nextSeq;
+    } catch (error) {
+      console.error("Failed to increment project sequence:", error);
+      return 1;
+    }
+  };
+
+  // ---------- subscribe USERS ----------
   useEffect(() => {
     if (!backendOK) return;
 
     const REF_PATHS = [
-      "JenCeo-DataBase/Users", // highest priority
+      "JenCeo-DataBase/Users",
       "Users",
       "JenCeo/Users",
     ];
@@ -354,16 +346,14 @@ const incrementProjectSeq = async (projectId) => {
       const name = String(u?.name || "").toLowerCase();
       const role = String(u?.role || "").toLowerCase();
 
-      // filter obvious system/service entries
-      if (k.startsWith("_")) return true; // e.g. _database
+      if (k.startsWith("_")) return true;
       if (role.includes("service") || role.includes("system")) return true;
-      if (name === "system administrator") return true; // seed rows
+      if (name === "system administrator") return true;
       return false;
     };
 
-    const accumById = {}; // uid -> user
+    const accumById = {};
     const mergeUser = (path, key, raw) => {
-      // normalize an incoming user row
       const user = {
         id: raw?.uid || raw?.id || key,
         name: (
@@ -385,7 +375,6 @@ const incrementProjectSeq = async (projectId) => {
       if (!existing) {
         accumById[user.id] = user;
       } else {
-        // choose better one: prefer avatar; if tie, prefer higher priority path
         const better =
           (user.photoURL && !existing.photoURL) || user._prio < existing._prio
             ? user
@@ -395,7 +384,6 @@ const incrementProjectSeq = async (projectId) => {
     };
 
     const pushToState = () => {
-      // secondary dedupe: sometimes same human has different ids in two trees
       const byDisplay = {};
       Object.values(accumById).forEach((u) => {
         const sig = (u.name + "|" + u.role).toLowerCase();
@@ -411,7 +399,6 @@ const incrementProjectSeq = async (projectId) => {
 
       setUsers(finalMap);
 
-      // default assignee only if it exists in users
       setNewTask((p) =>
         p.assignedTo ? p : { ...p, assignedTo: finalMap[myId] ? myId : "" }
       );
@@ -487,7 +474,7 @@ const incrementProjectSeq = async (projectId) => {
     if (!selectedTask) return;
     const fresh = tasks.find((t) => t.id === selectedTask.id);
     if (fresh) setSelectedTask(fresh);
-  }, [tasks]); // keeps the detail modal in sync with realtime updates
+  }, [tasks]);
 
   // ---------- computed maps ----------
   const tabCounts = useMemo(() => {
@@ -497,15 +484,22 @@ const incrementProjectSeq = async (projectId) => {
       "In Progress": 0,
       "In Review": 0,
       Done: 0,
+      Deleted: 0,
+      unknown: 0,
     };
     tasks.forEach((t) => {
-      // Visibility: privileged see all; others only assigned-to or created-by
       if (!isPrivileged) {
         const mine = t.assignedTo === myId || t.createdById === myId;
         if (!mine) return;
       }
       base.all += 1;
-      if (base[t.status] !== undefined) base[t.status] += 1;
+      if (t.deleted) {
+        base.Deleted += 1;
+      } else if (!t.projectId) {
+        base.unknown += 1;
+      } else if (base[t.status] !== undefined) {
+        base[t.status] += 1;
+      }
     });
     return base;
   }, [tasks, isPrivileged, myId]);
@@ -521,11 +515,13 @@ const incrementProjectSeq = async (projectId) => {
       );
     }
 
-    // Handle Deleted tab separately
+    // Handle special tabs
     if (activeTab === "Deleted") {
       list = list.filter(t => t.deleted === true);
+    } else if (activeTab === "unknown") {
+      list = list.filter(t => !t.deleted && (!t.projectId || t.projectId === ""));
     } else {
-      list = list.filter(t => !t.deleted); // Exclude deleted tasks from other tabs
+      list = list.filter(t => !t.deleted);
       if (activeTab !== "all") list = list.filter((t) => t.status === activeTab);
     }
 
@@ -533,7 +529,12 @@ const incrementProjectSeq = async (projectId) => {
     if (prio !== "ALL") list = list.filter((t) => t.priority === prio);
     if (assignee !== "ALL") list = list.filter((t) => t.assignedTo === assignee);
     if (issueType !== "ALL") list = list.filter((t) => t.issueType === issueType);
-    if (projectId !== "ALL") list = list.filter((t) => t.projectId === projectId); // NEW: Project filter
+    
+    // Project filter (exclude for unknown tab)
+    if (projectId !== "ALL" && activeTab !== "unknown") {
+      list = list.filter((t) => t.projectId === projectId);
+    }
+    
     if (qtext.trim()) {
       const q = qtext.toLowerCase();
       list = list.filter(
@@ -555,7 +556,7 @@ const incrementProjectSeq = async (projectId) => {
     });
     return list;
   }, [
-    tasks, isPrivileged, myId, activeTab, cat, prio, assignee, issueType, projectId, qtext, sort // UPDATED: added projectId
+    tasks, isPrivileged, myId, activeTab, cat, prio, assignee, issueType, projectId, qtext, sort
   ]);
 
   // ---------- Soft Delete Task ----------
@@ -578,7 +579,38 @@ const incrementProjectSeq = async (projectId) => {
     }
   };
 
-  // ---------- notifications (localStorage + outside click + close btn) ----------
+  // ---------- Permanent Delete Task ----------
+  const deleteTask = async (taskId) => {
+    if (!backendOK) return;
+    try {
+      await getRef(`ToDo/${taskId}`).remove();
+      notify("Task permanently deleted");
+    } catch {
+      setError("Failed to delete task.");
+      notify("Failed to delete task", "error");
+    }
+  };
+
+  // ---------- Restore Task ----------
+  const restoreTask = async (taskId) => {
+    if (!backendOK) return;
+    try {
+      const ref = getRef(`ToDo/${taskId}`);
+      await ref.update({
+        deleted: false,
+        deletedAt: null,
+        deletedBy: null,
+        deletedByName: null,
+        updatedAt: Date.now(),
+      });
+      notify("Task restored");
+    } catch (error) {
+      console.error("Failed to restore task:", error);
+      notify("Failed to restore task", "error");
+    }
+  };
+
+  // ---------- notifications ----------
   const relevantToMe = (t) => t.assignedTo === myId || t.createdById === myId;
   const unread = useMemo(() => {
     const unseen = tasks.filter(
@@ -626,7 +658,7 @@ const incrementProjectSeq = async (projectId) => {
     }
   };
 
-  // ---------- ticket sequence per key ----------
+  // ---------- ticket sequence ----------
   const nextTicketSeq = async (key) => {
     const ref = getRef(`ToDoSequences/${key}`);
     if (!ref) return 1;
@@ -699,15 +731,6 @@ const incrementProjectSeq = async (projectId) => {
     }
   };
 
-  const deleteTask = async (taskId) => {
-    if (!backendOK) return;
-    try {
-      await getRef(`ToDo/${taskId}`).remove();
-    } catch {
-      setError("Failed to delete task.");
-    }
-  };
-
   const addComment = async (taskId, text) => {
     const body = (text || "").trim();
     if (!body || !backendOK) return;
@@ -740,7 +763,6 @@ const incrementProjectSeq = async (projectId) => {
     }
   };
 
-  // ----- JIRA-like Subtask creation: create a real child task with its own key and parent link
   const addSubtask = async (parentId, title) => {
     const t = (title || "").trim();
     if (!t || !backendOK) return;
@@ -749,7 +771,6 @@ const incrementProjectSeq = async (projectId) => {
       if (!parent) return;
       const now = Date.now();
 
-      // per-parent counter for dashed child key: e.g., JEN-01-01
       const subSeqRef = getRef(`ToDo/${parentId}/subSeqCounter`);
       let nextSubNo = 1;
       if (isFn(subSeqRef.transaction)) {
@@ -820,7 +841,7 @@ const incrementProjectSeq = async (projectId) => {
         action: "subtask_added",
         field: "subtask",
         from: null,
-        to: title, // <-- 'title' not 't' or undefined
+        to: title,
       });
       notify("Subtask created");
     } catch {
@@ -842,7 +863,7 @@ const incrementProjectSeq = async (projectId) => {
       setError("Please enter a task title.");
       return;
     }
-    if (!newTask.projectId && projects.length > 0) {
+    if (!newTask.projectId) {
       setError("Please select a project.");
       return;
     }
@@ -855,7 +876,7 @@ const incrementProjectSeq = async (projectId) => {
 
     const now = Date.now();
 
-    // NEW: Get ticket sequence from project
+    // Get ticket sequence from project
     let ticketSeq = "1";
     let finalTicketKey = newTask.ticketKey || "TASK";
 
@@ -885,7 +906,7 @@ const incrementProjectSeq = async (projectId) => {
       storyPoints: newTask.storyPoints || 1,
       labels: newTask.labels || [],
       parentTask: newTask.parentTask || "",
-      // NEW: Project fields
+      // Project fields
       projectId: newTask.projectId,
       projectKey: newTask.projectKey,
       projectTitle: newTask.projectTitle,
@@ -931,10 +952,12 @@ const incrementProjectSeq = async (projectId) => {
         storyPoints: 1,
         labels: [],
         parentTask: "",
+        projectId: "",
+        projectKey: "",
+        projectTitle: "",
         ticketKey: "JEN",
       });
       setDirty(false);
-      setShowAdd(false);
       setShowAdd(false);
       notify("Issue created");
     } catch {
@@ -944,10 +967,9 @@ const incrementProjectSeq = async (projectId) => {
     }
   };
 
-  // --- ATTACHMENTS: storage detection + helpers ---
+  // --- ATTACHMENTS ---
   const getStorage = () => {
     try {
-      // Support either firebase v8 style or a custom export on firebaseDB
       return (
         firebaseDB?.storage?.() ||
         firebaseDB?.app?.storage?.() ||
@@ -970,10 +992,8 @@ const incrementProjectSeq = async (projectId) => {
   const [attaching, setAttaching] = useState(false);
   const [attachProgress, setAttachProgress] = useState(0);
 
-  // Admin/creator can delete attachments
-  const canDeleteAttachment = (task) => isAdmin || task?.createdById === myId;
+  const canDeleteAttachment = (task) => isPrivileged || task?.createdById === myId;
 
-  // Add one or more files as attachments
   const attachFiles = async (taskId, files) => {
     if (!backendOK || !files || files.length === 0) return;
     const task = tasks.find((t) => t.id === taskId);
@@ -1002,13 +1022,11 @@ const incrementProjectSeq = async (projectId) => {
 
         let url = "";
 
-        // For very small files (< 1MB), store directly in RTDB as dataURL
         if (file.size < 1024 * 1024 && file.type.startsWith('image/')) {
           const dataUrl = await readFileAsDataURL(file);
           url = dataUrl;
           meta.storageType = 'dataURL';
         } else {
-          // Use Firebase Storage for larger files
           if (storage?.ref || storage?.refFromURL) {
             const safeName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
             const path = `ToDoAttachments/${taskId}/${now}_${safeName}`;
@@ -1019,13 +1037,11 @@ const incrementProjectSeq = async (projectId) => {
               url = await snap.ref.getDownloadURL();
               meta.storageType = 'firebase';
             } else {
-              // Fallback to dataURL if put method not available
               const dataUrl = await readFileAsDataURL(file);
               url = dataUrl;
               meta.storageType = 'dataURL';
             }
           } else {
-            // Final fallback to dataURL
             const dataUrl = await readFileAsDataURL(file);
             url = dataUrl;
             meta.storageType = 'dataURL';
@@ -1102,7 +1118,7 @@ const incrementProjectSeq = async (projectId) => {
     setAssignee("ALL");
     setIssueType("ALL");
     setSort("createdAt_desc");
-    setProjectId("ALL")
+    setProjectId("ALL");
   };
 
   const ticketLabel = (task) => {
@@ -1144,6 +1160,7 @@ const incrementProjectSeq = async (projectId) => {
     projectId,
   };
   const filtersDirty = anyFilterActive(filtersState);
+  const isAdmin = ["admin", "super admin", "superadmin"].includes(myRole);
 
   return (
     <div className="todo-wrap">
@@ -1160,7 +1177,7 @@ const incrementProjectSeq = async (projectId) => {
           </div>
 
           <div className="d-flex align-items-center gap-2">
-            {/* Notifications bell with close button and outside-click close */}
+            {/* Notifications bell */}
             <div className="notif-wrap position-relative" ref={notifRootRef}>
               <button
                 className={cn(
@@ -1270,6 +1287,37 @@ const incrementProjectSeq = async (projectId) => {
           </div>
         </div>
 
+        {/* Project Header */}
+        {projectId !== "ALL" && projects.find(p => p.id === projectId) && (
+          <div className="project-header neo-card p-3 mb-3 mt-3">
+            <div className="d-flex justify-content-between align-items-center">
+              <div>
+                <h4 className="text-info mb-1">
+                  {projects.find(p => p.id === projectId)?.emoji} 
+                  {projects.find(p => p.id === projectId)?.title}
+                </h4>
+                <p className="text-muted mb-0">
+                  {projects.find(p => p.id === projectId)?.description}
+                </p>
+              </div>
+              <div className="d-flex gap-2">
+                <button 
+                  className="btn btn-primary"
+                  onClick={() => setShowAdd(true)}
+                >
+                  + Create Task in {projects.find(p => p.id === projectId)?.projectKey}
+                </button>
+                <button 
+                  className="btn btn-outline-warning"
+                  onClick={() => setProjectId("ALL")}
+                >
+                  View All Projects
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Filters */}
         <div className="d-flex flex-wrap gap-2 mt-3 align-items-center">
           <div
@@ -1348,7 +1396,6 @@ const incrementProjectSeq = async (projectId) => {
             ))}
           </select>
 
-          {/* Add this after the Issue Type filter */}
           <select
             className="form-select form-select-sm dark-input"
             style={{ width: 180 }}
@@ -1387,43 +1434,7 @@ const incrementProjectSeq = async (projectId) => {
             />
           </div>
 
-
-
-          {/* Add this row after the Task Type field */}
-          <div className="col-md-2">
-
-            <select
-              className="form-select dark-input"
-              value={newTask.projectId || lastUsedProject?.id || ""}
-              onChange={(e) => {
-                const selectedProject = projects.find(p => p.id === e.target.value);
-                setNewTask((p) => ({
-                  ...p,
-                  projectId: e.target.value,
-                  projectKey: selectedProject?.projectKey,
-                  projectTitle: selectedProject?.title,
-                  ticketKey: selectedProject?.projectKey // Will be updated with sequence
-                }));
-                setLastUsedProject(selectedProject);
-                setDirty(true);
-              }}
-              required={projects.length > 0}
-            >
-              <option value="">Select a project...</option>
-              {projects.map((proj) => (
-                <option key={proj.id} value={proj.id}>
-                  {proj.emoji} {proj.title} ({proj.projectKey})
-                </option>
-              ))}
-            </select>
-            {projects.length === 0 && (
-              <div className="form-text text-warning">
-                No projects found. <a href="#" onClick={(e) => { e.preventDefault(); setShowCreateProject(true); }}>Create a project first</a>.
-              </div>
-            )}
-          </div>
-
-          {/* Reset Filters button with animation when active */}
+          {/* Reset Filters button */}
           <button
             className={cn(
               "btn btn-sm ms-auto",
@@ -1437,281 +1448,362 @@ const incrementProjectSeq = async (projectId) => {
         </div>
       </div>
 
-
-
       {/* Task list */}
       {loading && tasks.length === 0 ? (
         <div className="alert alert-info">Loading tasks…</div>
+      ) : filtered.length === 0 ? (
+        <div className="col-12">
+          <div className="neo-card p-4 text-center">
+            No tasks found. Create a new task to get started!
+          </div>
+        </div>
+      ) : activeTab === "Deleted" ? (
+        // Deleted Tasks Table View
+        <div className="deleted-tasks-table">
+          <div className="table-responsive">
+            <table className="table table-dark table-hover">
+              <thead>
+                <tr>
+                  <th>Ticket</th>
+                  <th>Title</th>
+                  <th>Project</th>
+                  <th>Status</th>
+                  <th>Deleted By</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filtered.map((task) => (
+                  <tr key={task.id}>
+                    <td>
+                      <span className="badge bg-secondary">{ticketLabel(task)}</span>
+                    </td>
+                    <td>
+                      <div>
+                        <strong className="text-white">{task.title}</strong>
+                        {task.description && (
+                          <div className="text-muted small mt-1">
+                            {task.description.slice(0, 100)}...
+                          </div>
+                        )}
+                      </div>
+                    </td>
+                    <td>
+                      {task.projectId ? (
+                        <span>
+                          {projects.find(p => p.id === task.projectId)?.emoji} 
+                          {projects.find(p => p.id === task.projectId)?.title || 'Unknown'}
+                        </span>
+                      ) : (
+                        <span className="text-warning">Unknown Project</span>
+                      )}
+                    </td>
+                    <td>
+                      <span className="badge" style={{ 
+                        background: STATUS[task.status]?.border || "#475569" 
+                      }}>
+                        {task.status}
+                      </span>
+                    </td>
+                    <td>
+                      <div className="small">
+                        <div className="text-info">{task.deletedByName || 'Unknown'}</div>
+                        <div className="small text-muted opacity-50">
+                          {task.deletedAt ? new Date(task.deletedAt).toLocaleDateString() : 'N/A'}
+                         <br />
+                          {task.deletedAt ? new Date(task.deletedAt).toLocaleTimeString() : ''}
+                      </div>
+                      </div>
+                    </td>
+                    
+                    <td>
+                      <div className="btn-group btn-group-sm">
+                        <button
+                          className="btn btn-success"
+                          onClick={() => restoreTask(task.id)}
+                          title="Restore Task"
+                        >
+                          ↶
+                        </button>
+                        <button
+                          className="btn btn-danger"
+                          onClick={() => {
+                            setDeleteTarget(task);
+                            setShowDelete(true);
+                          }}
+                          title="Permanently Delete"
+                        >
+                          🗑
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
       ) : (
+        // Regular Card View for other tabs
         <div className="row">
-          {filtered.length === 0 ? (
-            <div className="col-12">
-              <div className="neo-card p-4 text-center">
-                No tasks found. Create a new task to get started!
-              </div>
-            </div>
-          ) : (
-            filtered.map((task) => {
-              const ticket = ticketLabel(task);
-              const overdue = isOverdue(task);
-              const createdBy =
-                users[task.createdById]?.name || task.createdBy || "—";
-              const desc = (task.description || "").trim();
-              const snippet =
-                desc.length > 120 ? desc.slice(0, 120) + "…" : desc;
+          {filtered.map((task) => {
+            const ticket = ticketLabel(task);
+            const overdue = isOverdue(task);
+            const createdBy =
+              users[task.createdById]?.name || task.createdBy || "—";
+            const desc = (task.description || "").trim();
+            const snippet =
+              desc.length > 120 ? desc.slice(0, 120) + "…" : desc;
 
-              return (
-                <div className="col-lg-6 col-xl-4 mb-3" key={task.id}>
+            return (
+              <div className="col-lg-6 col-xl-4 mb-3" key={task.id}>
+                <div
+                  className="task-card rounded-3 overflow-hidden"
+                  onClick={() => {
+                    setSelectedTask(task);
+                    setShowDetail(true);
+                  }}
+                >
                   <div
-                    className="task-card rounded-3 overflow-hidden"
-                    onClick={() => {
-                      setSelectedTask(task);
-                      setShowDetail(true);
-                    }}
-                  >
-                    <div
-                      className="task-border"
-                      style={{ borderColor: STATUS[task.status]?.border }}
-                    />
-                    <div className="task-wrapper">
-                      {/* Header */}
-                      <div className="task-info">
-                        <div className="d-flex align-items-center gap-2">
-                          <span
-                            className="category-chip"
-                            style={{
-                              background:
-                                CATEGORIES[task.category] || "#475569",
-                            }}
+                    className="task-border"
+                    style={{ borderColor: STATUS[task.status]?.border }}
+                  />
+                  <div className="task-wrapper">
+                    {/* Header */}
+                    <div className="task-info">
+                      <div className="d-flex align-items-center gap-2">
+                        <span
+                          className="category-chip"
+                          style={{
+                            background:
+                              CATEGORIES[task.category] || "#475569",
+                          }}
+                        />
+                        <span
+                          className="issue-type-badge"
+                          style={{
+                            background:
+                              ISSUE_TYPES[task.issueType]?.color || "#3b82f6",
+                          }}
+                          title={task.issueType}
+                        >
+                          {ISSUE_TYPES[task.issueType]?.icon || "✓"}{" "}
+                          {task.issueType}
+                        </span>
+                        <span className="task-id text-muted-300 small">
+                          {ticket}
+                        </span>
+                        {/* Project badge */}
+                        {task.projectId && (
+                          <span className="badge bg-dark small">
+                            {projects.find(p => p.id === task.projectId)?.projectKey || 'PROJ'}
+                          </span>
+                        )}
+                        {/* Parent link if SubTask */}
+                        {task.issueType === "SubTask" && task.parentTicket && (
+                          <div className="tiny text-info">
+                            Parent:{" "}
+                            <span className="badge bg-dark">
+                              {task.parentTicket}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                      <div className="d-flex align-items-center gap-1">
+                        <span
+                          className="badge priority-badge"
+                          style={{ background: PRIORITIES[task.priority] }}
+                        >
+                          {task.priority}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Assignee & status */}
+                    <div className="d-flex justify-content-between align-items-center mb-2">
+                      <div className="d-flex align-items-center gap-2">
+                        {users[task.assignedTo]?.photoURL ||
+                          task.assignedToAvatar ? (
+                          <img
+                            src={
+                              users[task.assignedTo]?.photoURL ||
+                              task.assignedToAvatar
+                            }
+                            onError={(e) =>
+                              (e.currentTarget.style.display = "none")
+                            }
+                            alt="avatar"
+                            className="avatar avatar-sm"
+                            style={{ objectFit: "cover" }}
                           />
-                          <span
-                            className="issue-type-badge"
-                            style={{
-                              background:
-                                ISSUE_TYPES[task.issueType]?.color || "#3b82f6",
-                            }}
-                            title={task.issueType}
-                          >
-                            {ISSUE_TYPES[task.issueType]?.icon || "✓"}{" "}
-                            {task.issueType}
+                        ) : (
+                          <span className="avatar avatar-sm avatar-fallback">
+                            {(task.assignedToName || "U")
+                              .split(" ")
+                              .map((s) => s[0])
+                              .join("")
+                              .slice(0, 2)
+                              .toUpperCase()}
                           </span>
-                          <span className="task-id text-muted-300 small">
-                            {ticket}
-                          </span>
-                          {/* Parent link if SubTask */}
-                          {task.issueType === "SubTask" && task.parentTicket && (
-                            <div className="tiny text-info">
-                              Parent:{" "}
-                              <span className="badge bg-dark">
-                                {task.parentTicket}
-                              </span>
-                            </div>
-                          )}
-                        </div>
-                        <div className="d-flex align-items-center gap-1">
-
-                          <span
-                            className="badge priority-badge"
-                            style={{ background: PRIORITIES[task.priority] }}
-                          >
-                            {task.priority}
-                          </span>
-                        </div>
-                      </div>
-
-                      {/* Assignee & status */}
-                      <div className="d-flex justify-content-between align-items-center mb-2">
-                        <div className="d-flex align-items-center gap-2">
-                          {users[task.assignedTo]?.photoURL ||
-                            task.assignedToAvatar ? (
-                            <img
-                              src={
-                                users[task.assignedTo]?.photoURL ||
-                                task.assignedToAvatar
-                              }
-                              onError={(e) =>
-                                (e.currentTarget.style.display = "none")
-                              }
-                              alt="avatar"
-                              className="avatar avatar-sm"
-                              style={{ objectFit: "cover" }}
-                            />
-                          ) : (
-                            <span className="avatar avatar-sm avatar-fallback">
-                              {(task.assignedToName || "U")
-                                .split(" ")
-                                .map((s) => s[0])
-                                .join("")
-                                .slice(0, 2)
-                                .toUpperCase()}
-                            </span>
-                          )}
-                          <div className="small text-white-80">
-                            {task.assignedToName ||
-                              users[task.assignedTo]?.name ||
-                              task.assignedTo}
-                          </div>
-                        </div>
-
-                        {/* Due date */}
-                        {task.dueDate && (
-                          <div className="small mb-2">
-                            <strong
-                              className={
-                                overdue ? "text-danger" : "text-success"
-                              }
-                            >
-                              Due:
-                            </strong>{" "}
-                            <span
-                              className={
-                                overdue ? "text-danger" : "text-success"
-                              }
-                            >
-                              {task.dueDate}
-                            </span>
-                          </div>
                         )}
+                        <div className="small text-white-80">
+                          {task.assignedToName ||
+                            users[task.assignedTo]?.name ||
+                            task.assignedTo}
+                        </div>
                       </div>
 
-                      <div className="content-wrapper">
-                        {/* Title */}
-                        <h6 className="text-info mb-1 opacity-75">{task.title}</h6>
-
-                        {/* Description snippet */}
-                        {snippet && (
-                          <div className="small text-secondary">
-                            {snippet}
-                          </div>
-                        )}
-                      </div>
-
-
-
-                      {/* Labels */}
-                      {task.labels && task.labels.length > 0 && (
-                        <div className="d-flex flex-wrap gap-1 mb-2">
-                          {task.labels.slice(0, 3).map((label, i) => (
-                            <span key={i} className="label-tag small">
-                              {label}
-                            </span>
-                          ))}
-                          {task.labels.length > 3 && (
-                            <span className="label-tag small">
-                              +{task.labels.length - 3}
-                            </span>
-                          )}
+                      {/* Due date */}
+                      {task.dueDate && (
+                        <div className="small mb-2">
+                          <strong
+                            className={
+                              overdue ? "text-danger" : "text-success"
+                            }
+                          >
+                            Due:
+                          </strong>{" "}
+                          <span
+                            className={
+                              overdue ? "text-danger" : "text-success"
+                            }
+                          >
+                            {task.dueDate}
+                          </span>
                         </div>
                       )}
+                    </div>
 
-                      {/* Footer: created by + quick actions */}
-                      <div className="action-btns">
-                        <div className="btn-group btn-group-sm w-100 mb-2" onClick={(e) => e.stopPropagation()}>
-                          <button
-                            className={cn(
-                              "btn",
-                              task.status === "To Do"
-                                ? "btn-secondary"
-                                : "btn-outline-secondary"
-                            )}
-                            onClick={() => updateTaskStatus(task.id, "To Do")}
-                          >
-                            To Do
-                          </button>
-                          <button
-                            className={cn(
-                              "btn",
-                              task.status === "In Progress"
-                                ? "btn-primary"
-                                : "btn-outline-primary"
-                            )}
-                            onClick={() =>
-                              updateTaskStatus(task.id, "In Progress")
-                            }
-                          >
-                            In Progress
-                          </button>
-                          {/* Add this Review button */}
-                          <button
-                            className={cn(
-                              "btn",
-                              task.status === "In Review"
-                                ? "btn-warning"
-                                : "btn-outline-warning"
-                            )}
-                            onClick={() =>
-                              updateTaskStatus(task.id, "In Review")
-                            }
-                          >
-                            In Review
-                          </button>
-                          <button
-                            className={cn(
-                              "btn",
-                              task.status === "Done"
-                                ? "btn-success"
-                                : "btn-outline-success"
-                            )}
-                            onClick={() => updateTaskStatus(task.id, "Done")}
-                          >
-                            Done
-                          </button>
+                    <div className="content-wrapper">
+                      {/* Title */}
+                      <h6 className="text-info mb-1 opacity-75">{task.title}</h6>
 
-                          {isAdmin && (
-                            <button
-                              className="btn btn-outline-danger"
-                              title="Delete task"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                if (window.confirm(`Move "${task.title}" to deleted items?`)) {
-                                  softDeleteTask(task.id, {
-                                    id: myId,
-                                    name: myName
-                                  });
-                                }
-                              }}
-                            >
-                              🗑
-                            </button>
-                          )}
+                      {/* Description snippet */}
+                      {snippet && (
+                        <div className="small text-secondary">
+                          {snippet}
                         </div>
+                      )}
+                    </div>
 
-                        <div className="d-flex align-items-center gap-2">
-                          {users[task.createdById]?.photoURL ||
-                            task.createdByAvatar ? (
-                            <img
-                              src={
-                                users[task.createdById]?.photoURL ||
-                                task.createdByAvatar
-                              }
-                              onError={(e) =>
-                                (e.currentTarget.style.display = "none")
-                              }
-                              alt="creator"
-                              className="avatar avatar-xs"
-                              style={{ objectFit: "cover" }}
-                            />
-                          ) : (
-                            <span className="avatar avatar-xs avatar-fallback">
-                              {(createdBy || "U")
-                                .split(" ")
-                                .map((s) => s[0])
-                                .join("")
-                                .slice(0, 2)
-                                .toUpperCase()}
-                            </span>
-                          )}
-                          <span className="tiny text-muted-300 opacity-50">
-                            Created By {createdBy} • {fmtDT(task.createdAt)}
+                    {/* Labels */}
+                    {task.labels && task.labels.length > 0 && (
+                      <div className="d-flex flex-wrap gap-1 mb-2">
+                        {task.labels.slice(0, 3).map((label, i) => (
+                          <span key={i} className="label-tag small">
+                            {label}
                           </span>
-                        </div>
+                        ))}
+                        {task.labels.length > 3 && (
+                          <span className="label-tag small">
+                            +{task.labels.length - 3}
+                          </span>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Footer: created by + quick actions */}
+                    <div className="action-btns">
+                      <div className="btn-group btn-group-sm w-100 mb-2" onClick={(e) => e.stopPropagation()}>
+                        <button
+                          className={cn(
+                            "text-center btn",
+                            task.status === "To Do"
+                              ? "btn-secondary"
+                              : "btn-outline-secondary"
+                          )}
+                          onClick={() => updateTaskStatus(task.id, "To Do")}
+                        >
+                          To Do
+                        </button>
+                        <button
+                          className={cn(
+                            "btn",
+                            task.status === "In Progress"
+                              ? "btn-primary"
+                              : "btn-outline-primary"
+                          )}
+                          onClick={() =>
+                            updateTaskStatus(task.id, "In Progress")
+                          }
+                        >
+                          In Progress
+                        </button>
+                        <button
+                          className={cn(
+                            "btn",
+                            task.status === "In Review"
+                              ? "btn-warning"
+                              : "btn-outline-warning"
+                          )}
+                          onClick={() =>
+                            updateTaskStatus(task.id, "In Review")
+                          }
+                        >
+                          In Review
+                        </button>
+                        <button
+                          className={cn(
+                            "btn",
+                            task.status === "Done"
+                              ? "btn-success"
+                              : "btn-outline-success"
+                          )}
+                          onClick={() => updateTaskStatus(task.id, "Done")}
+                        >
+                          Done
+                        </button>
+
+                        {isAdmin && (
+                          <button
+                            className="btn btn-outline-danger"
+                            title="Delete task"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setDeleteTarget(task);
+                              setShowDelete(true);
+                            }}
+                          >
+                            🗑
+                          </button>
+                        )}
+                      </div>
+
+                      <div className="d-flex align-items-center gap-2">
+                        {users[task.createdById]?.photoURL ||
+                          task.createdByAvatar ? (
+                          <img
+                            src={
+                              users[task.createdById]?.photoURL ||
+                              task.createdByAvatar
+                            }
+                            onError={(e) =>
+                              (e.currentTarget.style.display = "none")
+                            }
+                            alt="creator"
+                            className="avatar avatar-xs"
+                            style={{ objectFit: "cover" }}
+                          />
+                        ) : (
+                          <span className="avatar avatar-xs avatar-fallback">
+                            {(createdBy || "U")
+                              .split(" ")
+                              .map((s) => s[0])
+                              .join("")
+                              .slice(0, 2)
+                              .toUpperCase()}
+                          </span>
+                        )}
+                        <span className="tiny text-muted-300 opacity-50">
+                          Created By {createdBy} • {fmtDT(task.createdAt)}
+                        </span>
                       </div>
                     </div>
                   </div>
                 </div>
-              );
-            })
-          )}
+              </div>
+            );
+          })}
         </div>
       )}
 
@@ -1720,11 +1812,11 @@ const incrementProjectSeq = async (projectId) => {
         <div
           className="modal fade show"
           style={{ display: "block", background: "rgba(2,6,23,.8)" }}
-          onClick={() => (dirty ? setShowDiscard(true) : setShowAdd(false))} // ← close on outside click
+          onClick={() => (dirty ? setShowDiscard(true) : setShowAdd(false))}
         >
           <div
             className="modal-dialog modal-lg modal-dialog-centered"
-            onClick={(e) => e.stopPropagation()} // ← keep clicks inside dialog from closing
+            onClick={(e) => e.stopPropagation()}
           >
             <div className="modal-content overflow-hidden modal-content-dark">
               <div className="modal-header modal-header-grad">
@@ -1745,9 +1837,9 @@ const incrementProjectSeq = async (projectId) => {
                     <div className="alert alert-danger py-2">{error}</div>
                   )}
                   <div className="row g-3">
-                    <div className="col-md-8">
+                    <div className="col-md-6">
                       <label className="form-label text-muted-200">
-                        Task Title
+                        Task Title *
                       </label>
                       <input
                         className="form-control dark-input"
@@ -1760,7 +1852,40 @@ const incrementProjectSeq = async (projectId) => {
                         required
                       />
                     </div>
-                    <div className="col-md-4">
+                    <div className="col-md-3">
+                      <label className="form-label text-muted-200">
+                        Project *
+                      </label>
+                      <select
+                        className="form-select dark-input"
+                        value={newTask.projectId || ""}
+                        onChange={(e) => {
+                          const selectedProject = projects.find(p => p.id === e.target.value);
+                          setNewTask((p) => ({
+                            ...p,
+                            projectId: e.target.value,
+                            projectKey: selectedProject?.projectKey,
+                            projectTitle: selectedProject?.title,
+                          }));
+                          setDirty(true);
+                        }}
+                        required
+                      >
+                        <option value="">Select a project...</option>
+                        {projects.map((proj) => (
+                          <option key={proj.id} value={proj.id}>
+                            {proj.emoji} {proj.title} ({proj.projectKey})
+                          </option>
+                        ))}
+                      </select>
+                      {projects.length === 0 && (
+                        <div className="form-text text-warning">
+                          No projects found. <a href="#" onClick={(e) => { e.preventDefault(); setShowCreateProject(true); }}>Create a project first</a>.
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="col-md-3">
                       <label className="form-label text-muted-200">
                         Task Type
                       </label>
@@ -1908,29 +2033,25 @@ const incrementProjectSeq = async (projectId) => {
 
                     <div className="col-md-4">
                       <label className="form-label text-muted-200">
-                        Project Key
+                        Status
                       </label>
                       <select
                         className="form-select dark-input"
-                        value={newTask.ticketKey}
+                        value={newTask.status}
                         onChange={(e) => {
                           setNewTask((p) => ({
                             ...p,
-                            ticketKey: e.target.value,
+                            status: e.target.value,
                           }));
                           setDirty(true);
                         }}
                       >
-                        {TICKET_KEYS.map((k) => (
-                          <option key={k} value={k}>
-                            {k}
+                        {Object.keys(STATUS).map((s) => (
+                          <option key={s} value={s}>
+                            {s}
                           </option>
                         ))}
                       </select>
-                      <div className="form-text text-muted-300">
-                        IDs will be like <code>JEN-01</code>,{" "}
-                        <code>JEN-02</code>…
-                      </div>
                     </div>
                   </div>
                 </div>
@@ -1958,7 +2079,6 @@ const incrementProjectSeq = async (projectId) => {
           </div>
         </div>
       )}
-
 
       {/* Create Project Modal */}
       {showCreateProject && (
@@ -2002,7 +2122,7 @@ const incrementProjectSeq = async (projectId) => {
                   }}
                   title={selectedTask.issueType}
                 >
-                  {ISSUE_TYPES[selectedTask.issueType]?.icon || "✓"}{" "}
+                  {ISSUE_TYPES[selectedTask.issueType]?.icon || "✓"}{ " "}
                   {selectedTask.issueType}
                 </span>
                 <h5 className="mb-0">
@@ -2034,7 +2154,6 @@ const incrementProjectSeq = async (projectId) => {
                     />
                   </div>
 
-                  {/* Attachments */}
                   {/* Attachments */}
                   <div className="panel-soft mb-3">
                     <div className="d-flex justify-content-between align-items-center mb-2">
@@ -2073,13 +2192,11 @@ const incrementProjectSeq = async (projectId) => {
                       <div className="att-grid">
                         {Object.entries(selectedTask.attachments).map(([id, a]) => (
                           <div key={id} className="att-item">
-                            {/* Improved attachment preview */}
                             <div className="att-preview-wrapper">
                               {String(a.type || "").startsWith("image/") ? (
                                 <div
                                   className="att-preview-image"
                                   onClick={() => {
-                                    // Open image in a proper modal instead of new tab
                                     const newWindow = window.open('', '_blank');
                                     if (newWindow) {
                                       newWindow.document.write(`
@@ -2131,7 +2248,6 @@ const incrementProjectSeq = async (projectId) => {
                                     alt={a.name}
                                     className="att-thumb"
                                     onError={(e) => {
-                                      // Fallback if image fails to load
                                       e.target.style.display = 'none';
                                       e.target.nextSibling.style.display = 'block';
                                     }}
@@ -2144,7 +2260,6 @@ const incrementProjectSeq = async (projectId) => {
                                 <div
                                   className="att-file-fallback"
                                   onClick={() => {
-                                    // For non-image files, open in new tab with proper handling
                                     window.open(a.url, '_blank', 'noopener,noreferrer');
                                   }}
                                 >
@@ -2192,7 +2307,7 @@ const incrementProjectSeq = async (projectId) => {
                     )}
                   </div>
 
-                  {/* Linked Subtasks (JIRA-like list of real child tasks) */}
+                  {/* Linked Subtasks */}
                   <div className="panel-soft mb-3">
                     <h6 className="text-white-90 mb-2">Subtasks</h6>
                     {linkedChildren(selectedTask.id).length === 0 ? (
@@ -2546,6 +2661,12 @@ const incrementProjectSeq = async (projectId) => {
                             ))}
                           </select>
                         </div>
+                        <div className="detail-item">
+                          <span className="text-muted-300">Project:</span>
+                          <div className="text-info">
+                            {selectedTask.projectTitle || 'Unknown Project'}
+                          </div>
+                        </div>
                         {selectedTask.issueType === "SubTask" &&
                           selectedTask.parentTicket && (
                             <div className="detail-item">
@@ -2634,22 +2755,14 @@ const incrementProjectSeq = async (projectId) => {
         </div>
       )}
 
+      {/* Delete Confirmation Modal */}
       {showDelete && deleteTarget && (
         <div className="modal-overlay" onClick={() => setShowDelete(false)}>
-          <div
-            className="modal-modern"
-            style={{ maxWidth: "700px" }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div
-              className="modal-header"
-              style={{
-                background: "linear-gradient(90deg,#ef4444,#b91c1c)",
-                color: "#fff",
-              }}
-            >
-              <h6 className="mb-0 text-truncate">
-                Delete “{deleteTarget.title}”?
+          <div className="modal-modern" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header bg-danger text-white">
+              <h6 className="mb-0">
+                {activeTab === "Deleted" ? "Permanently Delete" : "Move to Deleted"} 
+                "{deleteTarget.title}"?
               </h6>
               <button
                 className="btn btn-sm btn-light"
@@ -2659,11 +2772,24 @@ const incrementProjectSeq = async (projectId) => {
               </button>
             </div>
             <div className="modal-body p-3" style={{ background: "#0f172a" }}>
-              <div className="text-white-80">
-                This action cannot be undone. The task and its comments/subtasks
-                will be removed.
+              <div className="text-white-80 mb-3">
+                {activeTab === "Deleted" ? (
+                  "This action cannot be undone. The task will be permanently removed from the database."
+                ) : (
+                  "This task will be moved to the deleted items. You can restore it later from the Deleted tab."
+                )}
               </div>
-              <div className="d-flex justify-content-end gap-2 mt-3">
+              
+              <div className="task-preview p-2 bg-dark rounded mb-3">
+                <div className="small">
+                  <strong>Ticket:</strong> {ticketLabel(deleteTarget)}<br/>
+                  <strong>Project:</strong> {deleteTarget.projectTitle || projects.find(p => p.id === deleteTarget.projectId)?.title || 'Unknown Project'}<br/>
+                  <strong>Status:</strong> {deleteTarget.status}<br/>
+                  <strong>Assignee:</strong> {deleteTarget.assignedToName}
+                </div>
+              </div>
+
+              <div className="d-flex justify-content-end gap-2">
                 <button
                   className="btn btn-light"
                   onClick={() => setShowDelete(false)}
@@ -2674,26 +2800,35 @@ const incrementProjectSeq = async (projectId) => {
                   className="btn btn-danger"
                   onClick={async () => {
                     try {
+                      if (activeTab === "Deleted") {
+                        // Permanent deletion
+                        await deleteTask(deleteTarget.id);
+                      } else {
+                        // Soft deletion
+                        await softDeleteTask(deleteTarget.id, {
+                          id: myId,
+                          name: myName
+                        });
+                      }
                       if (showDetail && selectedTask?.id === deleteTarget.id) {
                         setShowDetail(false);
                       }
-                      await deleteTask(deleteTarget.id);
-                      notify("Task deleted");
                     } catch (e) {
-                      notify("Failed to delete", "error");
+                      notify("Failed to delete task", "error");
                     } finally {
                       setShowDelete(false);
                       setDeleteTarget(null);
                     }
                   }}
                 >
-                  Delete
+                  {activeTab === "Deleted" ? "Permanently Delete" : "Move to Deleted"}
                 </button>
               </div>
             </div>
           </div>
         </div>
       )}
+
       {/* toasts */}
       <div className="toast-wrap">
         {toasts.map((t) => (

@@ -793,12 +793,12 @@ export default function ClientInfoForm({ isOpen, onClose }) {
       </div>
 
       {showModal && (
-        <div className="modal fade show" style={{ display: "block", background: "rgba(0,0,0,0.5)" }}>
+        <div className="modal fade show" style={{ display: "block", background: "rgba(0,0,0,0.9)" }}>
           <div className="modal-dialog modal-dialog-centered">
             <div className="modal-content">
-              <div className="modal-header">
-                <h5 className="modal-title text-center">Thank you!</h5>
-                <button type="button" className="btn-close" onClick={() => { setShowModal(false); onClose(); }} />
+              <div className="modal-header bg-success">
+                <h5 className="modal-title text-center text-white">Thank you!</h5>
+                <button type="button" className="btn-close btn-white" onClick={() => { setShowModal(false); onClose(); }} />
               </div>
               <div className="modal-body">
                 <p>Your form has been submitted successfully.</p>
@@ -811,7 +811,7 @@ export default function ClientInfoForm({ isOpen, onClose }) {
                 )}
               </div>
               <div className="modal-footer">
-                <button type="button" className="btn btn-primary" onClick={() => { setShowModal(false); onClose(); }}>OK</button>
+                <button type="button" className="btn btn-success" onClick={() => { setShowModal(false); onClose(); }}>OK</button>
               </div>
             </div>
           </div>
@@ -819,7 +819,7 @@ export default function ClientInfoForm({ isOpen, onClose }) {
       )}
 
       {dupModal.show && (
-        <div className="modal fade show" style={{ display: "block", background: "rgba(0,0,0,0.5)" }}>
+        <div className="modal fade show" style={{ display: "block", background: "rgba(0,0,0,0.9)" }}>
           <div className="modal-dialog modal-dialog-centered">
             <div className="modal-content">
               <div className="modal-header bg-danger">

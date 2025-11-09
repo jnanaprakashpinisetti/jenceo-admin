@@ -2917,6 +2917,32 @@ const DisplayTimeSheet = () => {
         };
     };
 
+    // Sum all advances from either an array or an object map
+    const sumAdvances = (src) => {
+        if (!src) return 0;
+        if (Array.isArray(src)) {
+            return src.reduce((s, a) => s + (parseFloat(a?.amount) || 0), 0);
+        }
+        if (typeof src === 'object') {
+            return Object.values(src).reduce((s, a) => {
+                const amt = typeof a === 'object' ? a.amount : a;
+                return s + (parseFloat(amt) || 0);
+            }, 0);
+        }
+        return parseFloat(src) || 0;
+    };
+
+    // Compute net pay from live entries + advances
+    const computeNetPay = () => {
+        const totalSalary = (dailyEntries || []).reduce(
+            (s, e) => s + (parseFloat(e?.dailySalary) || 0),
+            0
+        );
+        const adv = sumAdvances(advances);
+        return Math.round(totalSalary - adv); // can be negative
+    };
+
+
     // Calculate total salary for the table footer
     const totalSalary = dailyEntries.reduce((sum, entry) => sum + (entry.dailySalary || 0), 0);
 
@@ -3634,10 +3660,10 @@ const DisplayTimeSheet = () => {
             {/* Confirmation Modal for Timesheet Submission */}
             {/* Submit Confirmation Modal */}
             {showConfirmModal && (
-                <div className="modal show d-block" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}>
+                <div className="modal show d-block" style={{ backgroundColor: 'rgba(0,0,0,1)' }}>
                     <div className="modal-dialog">
-                        <div className="modal-content bg-dark border border-secondary">
-                            <div className="modal-header border-secondary">
+                        <div className="modal-content bg-secondary bg-opacity-50">
+                            <div className="modal-header bg-dark border-0">
                                 <h5 className="modal-title text-white">
                                     <i className="bi bi-send-check me-2"></i>
                                     Submit Timesheet
@@ -3652,7 +3678,7 @@ const DisplayTimeSheet = () => {
                                 <p className="text-white">
                                     Are you sure you want to submit this timesheet? Once submitted, it cannot be edited.
                                 </p>
-                                <div className="bg-dark border border-secondary rounded p-3">
+                                <div className="bg-dark p-3 rounded-3">
                                     <h6 className="text-info mb-3">
                                         <i className="fas fa-check-circle me-2"></i>
                                         Ready to Submit
@@ -3673,16 +3699,20 @@ const DisplayTimeSheet = () => {
                                         </div>
                                         <div className="list-group-item bg-transparent border-secondary d-flex justify-content-between align-items-center px-0">
                                             <span className="text-muted">Advances</span>
-                                            <span className="text-danger">₹{Number(timesheet?.advances || 0).toFixed(2)}</span>
+                                            <span className="text-danger">
+                                                ₹{sumAdvances(advances).toFixed(2)}
+                                            </span>
                                         </div>
                                         <div className="list-group-item bg-transparent border-0 d-flex justify-content-between align-items-center px-0 pt-3">
-                                            <strong className="text-warning">Net Payable</strong>
-                                            <strong className="text-warning fs-5">₹{Math.round(timesheet?.netPayable || 0)}</strong>
+                                            <span className="text-white">Net Pay</span>
+                                            <span className={computeNetPay() < 0 ? 'text-danger' : 'text-warning'}>
+                                                ₹{computeNetPay().toFixed(0)}
+                                            </span>
                                         </div>
                                     </div>
                                 </div>
                             </div>
-                            <div className="modal-footer border-secondary">
+                            <div className="modal-footer border-0 bg-dark">
                                 <button
                                     type="button"
                                     className="btn btn-secondary"
@@ -4258,9 +4288,9 @@ const DisplayTimeSheet = () => {
                                                 </span>
                                             </div>
                                             <div className="small-text text-info mt-1">By {item.byName || 'Unknown'} -  <small className="small-text text-white-50">
-                                                    {item.at ? new Date(item.at).toLocaleString() : ''}
-                                                </small></div>
-                                              
+                                                {item.at ? new Date(item.at).toLocaleString() : ''}
+                                            </small></div>
+
                                         </div>
                                     ))}
                                 </div>

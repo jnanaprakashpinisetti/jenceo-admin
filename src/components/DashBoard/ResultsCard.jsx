@@ -466,6 +466,8 @@ export default function ResultsCard({
       attach(workerCollections.active, "workerActive");
       attach(workerCollections.exit, "workerExit");
       attach(hospitalCollection, "hospitalData");
+      attach("AgentData/WorkerAgent", "agentWorker");
+      attach("AgentData/ClientAgent", "agentClient");
 
       const rebuild = () => {
         const rows = [];
@@ -487,6 +489,8 @@ export default function ResultsCard({
           extractPettyCash(snapshots.petty || {}).forEach((r) => pettyCollected.push(r));
           extractPettyCash(snapshots.pettyAdmin || {}).forEach((r) => pettyCollected.push(r));
           extractPettyCash(snapshots.pettyAdminLower || {}).forEach((r) => pettyCollected.push(r));
+          extractAgentPayouts(snapshots.agentWorker || {}).forEach((r) => rows.push(r));
+          extractAgentPayouts(snapshots.agentClient || {}).forEach((r) => rows.push(r));
           const seen = new Set();
           pettyCollected.forEach((r) => {
             const raw = r.raw || {};
@@ -702,6 +706,41 @@ export default function ResultsCard({
       commissionRate: agent.commissionRate || agent.rate || "-"
     };
   };
+
+  //Get Worker and Client Agetn Commition
+
+  // Extract Agent commission payouts from AgentData trees
+  function extractAgentPayouts(agentNode = {}) {
+    const out = [];
+    const isPlain = (x) => x && typeof x === "object" && !Array.isArray(x);
+    if (!isPlain(agentNode)) return out;
+
+    Object.values(agentNode).forEach((agent) => {
+      if (!isPlain(agent)) return;
+      const pays = Array.isArray(agent.payments)
+        ? agent.payments
+        : (isPlain(agent.payments) ? Object.values(agent.payments) : []);
+      pays.forEach((p) => {
+        if (!p) return;
+        const amt = safeNumber(p.amount ?? p.paidAmount ?? p.commission ?? 0);
+        if (amt > 0) {
+          const date = p.date ?? p.paymentDate ?? p.createdAt ?? "";
+          out.push({
+            type: "commission",                 // reuse existing commission bucket
+            date,
+            parsedDate: parseDateRobust(date),
+            amount: amt,                        // expense
+            raw: p,
+            agentData: agent,                   // keep who this was for
+            source: "AgentData",
+          });
+        }
+      });
+    });
+
+    return out;
+  }
+
 
   // Function to get transaction details based on type
   const getTransactionDetails = (tx) => {

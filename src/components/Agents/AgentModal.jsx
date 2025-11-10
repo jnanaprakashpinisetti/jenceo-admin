@@ -564,11 +564,11 @@ function EditCardBody({
                                 onClick={handlePaymentCancel}
                             ></button>
                         </div>
-                        <div className="card-body">
-                        <form onSubmit={(e) => {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            handlePaymentSubmit(e);
+                           <div className="card-body">
+                            <form onSubmit={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                handlePaymentSubmit(e);
                             }}>
                                 <div className="row g-3">
                                     <div className="col-md-6">
@@ -607,47 +607,44 @@ function EditCardBody({
                                             <option value="card">Card</option>
                                         </select>
                                     </div>
-                                    <div className="col-md-6">
-                                        <label className="form-label">Client Charges (₹)</label>
-                                        <input
-                                            type="number"
-                                            className="form-control"
-                                            placeholder="Client charges"
-                                            value={localPaymentData.charges}
-                                            onChange={(e) => setLocalPaymentData({ ...localPaymentData, charges: e.target.value })}
-                                            step="0.01"
-                                        />
-                                    </div>
-                                    <div className="col-md-6">
-                                        <label className="form-label">Client Name</label>
-                                        <input
-                                            type="text"
-                                            className="form-control"
-                                            placeholder="Client name"
-                                            value={localPaymentData.clientName}
-                                            onChange={(e) => setLocalPaymentData({ ...localPaymentData, clientName: e.target.value })}
-                                        />
-                                    </div>
-                                    <div className="col-md-6">
-                                        <label className="form-label">Client ID</label>
-                                        <input
-                                            type="text"
-                                            className="form-control"
-                                            placeholder="Client ID"
-                                            value={localPaymentData.clientId}
-                                            onChange={(e) => setLocalPaymentData({ ...localPaymentData, clientId: e.target.value })}
-                                        />
-                                    </div>
-                                    <div className="col-md-6">
-                                        <label className="form-label">Client Name</label>
-                                        <input
-                                            type="text"
-                                            className="form-control"
-                                            placeholder="Client Name"
-                                            value={localPaymentData.clientName}
-                                            onChange={(e) => setLocalPaymentData({ ...localPaymentData, clientName: e.target.value })}
-                                        />
-                                    </div>
+
+                                    {/* Client-specific fields */}
+                                    {safeData?.agentType === "client" && (
+                                        <>
+                                            <div className="col-md-6">
+                                                <label className="form-label">Client Charges (₹)</label>
+                                                <input
+                                                    type="number"
+                                                    className="form-control"
+                                                    placeholder="Client charges"
+                                                    value={localPaymentData.charges}
+                                                    onChange={(e) => setLocalPaymentData({ ...localPaymentData, charges: e.target.value })}
+                                                    step="0.01"
+                                                />
+                                            </div>
+                                            <div className="col-md-6">
+                                                <label className="form-label">Client Name</label>
+                                                <input
+                                                    type="text"
+                                                    className="form-control"
+                                                    placeholder="Client name"
+                                                    value={localPaymentData.clientName}
+                                                    onChange={(e) => setLocalPaymentData({ ...localPaymentData, clientName: e.target.value })}
+                                                />
+                                            </div>
+                                            <div className="col-md-6">
+                                                <label className="form-label">Client ID</label>
+                                                <input
+                                                    type="text"
+                                                    className="form-control"
+                                                    placeholder="Client ID"
+                                                    value={localPaymentData.clientId}
+                                                    onChange={(e) => setLocalPaymentData({ ...localPaymentData, clientId: e.target.value })}
+                                                />
+                                            </div>
+                                        </>
+                                    )}
+
                                     <div className="col-md-6">
                                         <label className="form-label">Receipt No</label>
                                         <input
@@ -658,9 +655,9 @@ function EditCardBody({
                                             onChange={(e) => setLocalPaymentData({ ...localPaymentData, receiptNo: e.target.value })}
                                         />
                                     </div>
-                                    <div className="col-md-6">
+                                    <div className="col-md-12">
                                         <label className="form-label">Remarks</label>
-                                        <input
+                                        <textarea
                                             type="text"
                                             className="form-control"
                                             placeholder="Remarks"

@@ -832,7 +832,6 @@ const WorkerModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode }
                 text: shareText,
                 url: idProofUrl,
             }).catch((error) => {
-                console.log('Error sharing:', error);
                 // Fallback to WhatsApp
                 fallbackShare(idProofUrl, shareText);
             });

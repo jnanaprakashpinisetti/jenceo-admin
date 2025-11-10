@@ -296,8 +296,6 @@ export default function PettyCashForm() {
       const authObj = currentUser || user || dbUser || profile || {};
       const branchKey = resolvePettyBranch(authObj, "users");
 
-      console.log("Saving data for branch:", branchKey);
-      console.log("User info:", { signedInName, signedInUid, signedInRole });
 
       // Prepare data for Firebase
       const nowIso = new Date().toISOString();
@@ -336,7 +334,6 @@ export default function PettyCashForm() {
       const basePath = "PettyCash";
       const finalPath = `${basePath}/${branchKey}`;
 
-      console.log("Saving to path:", finalPath);
 
       // Create reference and push data
       const listRef = firebaseDB.child(finalPath);
@@ -351,7 +348,6 @@ export default function PettyCashForm() {
       // Save to Firebase
       await newRef.set(expenseObj);
 
-      console.log("Data saved successfully:", expenseObj);
 
       // Set success state
       setSavedExpense(expenseObj);

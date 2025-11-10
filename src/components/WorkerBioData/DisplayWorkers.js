@@ -128,7 +128,6 @@ export default function DisplayWorkers() {
             .map(s => String(s).toLowerCase().trim())
             .filter(s => s); // Remove empty strings
 
-        console.log("All skills for employee:", w.employeeId, allSkills);
 
         // Return only the nursing tasks that actually exist in the worker's skills
         const foundTasks = NURSING_TASKS.filter(nursingTask => {
@@ -136,7 +135,6 @@ export default function DisplayWorkers() {
 
             // Direct match
             if (allSkills.includes(taskLower)) {
-                console.log("Direct match found:", nursingTask);
                 return true;
             }
 
@@ -144,12 +142,10 @@ export default function DisplayWorkers() {
             const aliases = NURSING_ALIASES[canon(nursingTask)] || [];
             const aliasMatch = aliases.some(alias => allSkills.includes(alias));
             if (aliasMatch) {
-                console.log("Alias match found:", nursingTask, "via", aliases);
             }
             return aliasMatch;
         });
 
-        console.log("Found nursing tasks for", w.employeeId, ":", foundTasks);
         return foundTasks;
     };
 
@@ -318,11 +314,6 @@ export default function DisplayWorkers() {
         const nursingSelected = selectedHouseSkills.map((s) => s.toLowerCase()).includes("nursing");
 
         if (nursingSelected && selectedNursingTasks.length > 0) {
-            console.log("Nursing filter active:", {
-                selectedNursingTasks,
-                nursingTasksMode,
-                beforeFilterCount: filtered.length
-            });
 
             filtered = filtered.filter((e) => {
                 // First, check if this employee has nursing in their skills
@@ -351,13 +342,11 @@ export default function DisplayWorkers() {
 
                 // If employee doesn't have nursing skill, skip
                 if (!hasNursingSkill()) {
-                    console.log("Employee filtered out - no nursing skill:", e.employeeId);
                     return false;
                 }
 
                 // Now check nursing tasks
                 const workerTasks = getWorkerNursingTasks(e);
-                console.log("Employee nursing tasks:", e.employeeId, workerTasks);
 
                 if (nursingTasksMode === "all") {
                     const hasAllTasks = selectedNursingTasks.every(task =>
@@ -365,7 +354,6 @@ export default function DisplayWorkers() {
                             workerTask.toLowerCase() === task.toLowerCase()
                         )
                     );
-                    console.log("ALL mode - has all tasks:", e.employeeId, hasAllTasks);
                     return hasAllTasks;
                 } else {
                     const hasAnyTask = selectedNursingTasks.some(task =>
@@ -373,12 +361,10 @@ export default function DisplayWorkers() {
                             workerTask.toLowerCase() === task.toLowerCase()
                         )
                     );
-                    console.log("ANY mode - has any task:", e.employeeId, hasAnyTask);
                     return hasAnyTask;
                 }
             });
 
-            console.log("After nursing filter count:", filtered.length);
         }
 
 

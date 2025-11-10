@@ -235,7 +235,6 @@ export default function PettyCashCard({ pettyRoot = "PettyCash" }) {
         });
 
         if (!mounted) return;
-        console.log(`PettyCashCard: Loaded ${uniq.length} records, ${uniq.filter(r => r.status === 'approved').length} approved`);
         setRows(uniq);
       };
 

@@ -482,7 +482,6 @@ export default function PettyCashReport({ effectiveName: propUser, effectiveRole
         const monthMatch = monthsList[d._parsedDate.getMonth()] === activeMonth;
         return monthMatch;
       });
-      console.log("After month filter:", monthFiltered.length);
       return monthFiltered;
     }
 

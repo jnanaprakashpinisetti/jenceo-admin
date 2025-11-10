@@ -134,7 +134,6 @@ export default function TimeSheetDashBoard() {
 
             return base;
         } catch (e) {
-            console.log('[TS][resolveActor][error]', e);
             return { uid: 'admin', displayName: 'Admin User', email: null, _nameSource: 'error-fallback' };
         }
     };

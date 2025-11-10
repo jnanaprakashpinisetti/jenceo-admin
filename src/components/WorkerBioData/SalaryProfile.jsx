@@ -74,7 +74,6 @@ export default function SalaryProfile({
 
     // FIX: This function was missing - this is why rating wasn't clickable
     const setRating = (n) => {
-        console.log("Setting rating to:", n); // Debug log
         handleChange?.({ target: { name: "rating", value: String(n) } });
     };
 

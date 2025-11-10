@@ -238,7 +238,6 @@ export async function createEmailUsers() {
             const querySnapshot = await getDocs(q);
 
             if (!querySnapshot.empty) {
-                console.log(`User with email ${user.email} already exists, skipping...`);
                 continue;
             }
 
@@ -255,13 +254,10 @@ export async function createEmailUsers() {
             };
 
             const docRef = await addDoc(collection(db, "users"), userData);
-            console.log(`Email user ${user.email} created with ID: ${docRef.id}`);
         }
 
-        console.log("All email users created successfully in 'users' collection!");
         return true;
     } catch (error) {
-        console.error("Error creating email users: ", error);
         throw error;
     }
 }
@@ -290,7 +286,6 @@ export async function createAuthEmailUsers() {
             const querySnapshot = await getDocs(q);
 
             if (!querySnapshot.empty) {
-                console.log(`Auth user with email ${user.email} already exists, skipping...`);
                 continue;
             }
 
@@ -307,10 +302,8 @@ export async function createAuthEmailUsers() {
             };
 
             const docRef = await addDoc(collection(db, "authentication"), userData);
-            console.log(`Auth email user ${user.email} created with ID: ${docRef.id}`);
         }
 
-        console.log("All auth email users created successfully in 'authentication' collection!");
         return true;
     } catch (error) {
         console.error("Error creating auth email users: ", error);

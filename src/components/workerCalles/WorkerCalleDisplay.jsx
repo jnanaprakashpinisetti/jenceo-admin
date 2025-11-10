@@ -1261,28 +1261,8 @@ export default function WorkerCalleDisplay({ permissions: permissionsProp }) {
     return { label: "Marvelous", cls: "perf-marv" };
   };
 
-  const debugMultiSkillFilter = (w, wantSkills, haveSkills) => {
-    console.log("Multi-skill debug:", {
-      worker: w.name,
-      wantedSkills: wantSkills,
-      hasSkills: haveSkills,
-      allWantedPresent: wantSkills.every((s) => haveSkills.includes(s)),
-      skillMode: skillMode,
-    });
-  };
 
-  // Add debug for language filtering
-  const debugLanguageFilter = (w, wantLangs, haveLangs) => {
-    console.log("Language debug:", {
-      worker: w.name,
-      wantedLangs: wantLangs,
-      hasLangs: haveLangs,
-      match:
-        skillMode === "single"
-          ? wantLangs.some((s) => haveLangs.includes(s))
-          : wantLangs.every((s) => haveLangs.includes(s)),
-    });
-  };
+
 
   const graphDays = useMemo(() => {
     if (activeMonth == null) return [];

@@ -1052,7 +1052,6 @@ const ClientModal = ({
     });
 
     setErrors(v);
-    console.log("Validation results:", v);
     return Object.keys(v).length === 0;
   };
 

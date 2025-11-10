@@ -27,7 +27,6 @@ export default function Agents() {
           onClose={() => setShowAgentForm(false)}
           title="Add New Agent"
           onSubmit={(agentData) => {
-            console.log('Agent saved:', agentData)
             setShowAgentForm(false)
             // You can refresh your agents list here later
           }}

@@ -1,5 +1,5 @@
 // src/components/Admin/AdminMain.jsx
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState, useCallback } from "react";
 import firebaseDB from "../../firebase";
 
 let useAuthSafe = () => ({ currentUser: null, user: null });
@@ -8,6 +8,7 @@ try {
   if (mod && typeof mod.useAuth === "function") useAuthSafe = mod.useAuth;
 } catch { }
 
+// Enhanced MODULES array with new menu items
 const MODULES = [
   { key: "Dashboard", icon: "📊", extras: [] },
   { key: "Investments", icon: "💰", extras: ["export"] },
@@ -28,12 +29,18 @@ const MODULES = [
   { key: "Reports", icon: "📈", extras: ["export"] },
   { key: "Accounts", icon: "💼", extras: ["export"] },
   { key: "Task", icon: "✅", extras: [] },
-  { key: "Admin", icon: "⚙️", extras: [] },
+  { key: "Timesheet", icon: "⏰", extras: ["export", "approve"] },
+  { key: "Agents", icon: "🤝", extras: ["export"] },
+  { key: "Profile", icon: "👤", extras: [] },
+  { key: "Search", icon: "🔍", extras: [] },
+  { key: "Admin", icon: "⚙️", extras: ["impersonate", "audit", "bulk_operations"] },
 ];
 
 const BASE_ACTIONS = ["view", "create", "edit", "delete"];
-const EXTRA_ACTIONS = ["export", "approve", "reject", "clarify", "managePayments"];
+const EXTRA_ACTIONS = ["export", "approve", "reject", "clarify", "managePayments", "impersonate", "audit", "bulk_operations"];
 const ALL_ACTIONS = [...BASE_ACTIONS, ...EXTRA_ACTIONS];
+
+const ROLES = ["Super Admin", "Admin", "Manager", "Employee", "Guest", "Viewer", "Approver"];
 
 const makeBlankPerms = () =>
   MODULES.reduce((acc, m) => {
@@ -44,11 +51,34 @@ const makeBlankPerms = () =>
   }, {});
 
 const ROLE_TEMPLATES = {
-  admin: withAll(true),
-  manager: withBase(true, { delete: false, export: true, approve: true, reject: true, clarify: true }),
-  user: withBase({ view: true }, { create: false, edit: false, delete: false }),
-  auditor: withOnly({ view: true, export: true }),
-  finance: withOnly({ view: true, export: true, managePayments: true, edit: true }),
+  "Super Admin": withAll(true),
+  "Admin": withAll(true),
+  "Manager": withBase(true, { 
+    delete: false, 
+    export: true, 
+    approve: true, 
+    reject: true, 
+    clarify: true,
+    bulk_operations: false,
+    impersonate: false 
+  }),
+  "Employee": withBase({ view: true }, { 
+    create: false, 
+    edit: false, 
+    delete: false,
+    export: false,
+    approve: false 
+  }),
+  "Guest": withOnly({ view: true }),
+  "Viewer": withOnly({ view: true, export: false }),
+  "Approver": withBase({ view: true }, { 
+    create: false, 
+    edit: false, 
+    delete: false,
+    approve: true,
+    reject: true,
+    clarify: true 
+  }),
 };
 
 function withAll(on) {
@@ -60,7 +90,7 @@ function withAll(on) {
 function withBase(baseOn, overrides = {}) {
   const p = makeBlankPerms();
   MODULES.forEach((m) => {
-    BASE_ACTIONS.forEach((a) => (p[m.key][a] = typeof baseOn === "object" ? !!baseOn[a] : !!baseOn));
+    BASE_ACTIONS.forEach((a) => (p[m.key][a] = typeof baseOn === 'object' ? !!baseOn[a] : !!baseOn));
     EXTRA_ACTIONS.forEach((a) => (p[m.key][a] = !!overrides[a]));
     Object.keys(overrides).forEach((k) => {
       if (p[m.key][k] !== undefined) p[m.key][k] = !!overrides[k];
@@ -134,12 +164,18 @@ function StatCard({ title, value, icon, color, trend }) {
 }
 
 // User Card Component
-// User Card Component
 function UserCard({ user, selected, onSelect, onEdit, onToggleActive, onResetPassword, onImpersonate, onRemove }) {
-  // Get user photo from different possible locations in user object
   const userPhoto = user.photoURL || user.photoUrl || user.avatar || user.profilePicture;
   const userName = user.name || user.displayName || user.username || 'Unnamed User';
   const userInitial = userName.charAt(0).toUpperCase();
+
+  const handleRemoveClick = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (onRemove) {
+      onRemove(user);
+    }
+  };
 
   return (
     <div className={`user-card ${!user.active ? 'inactive' : ''}`}>
@@ -151,7 +187,6 @@ function UserCard({ user, selected, onSelect, onEdit, onToggleActive, onResetPas
               alt="User"
               className="user-photo"
               onError={(e) => {
-                // If photo fails to load, show avatar instead
                 e.target.style.display = 'none';
                 e.target.nextSibling.style.display = 'flex';
               }}
@@ -165,7 +200,6 @@ function UserCard({ user, selected, onSelect, onEdit, onToggleActive, onResetPas
           </div>
           <div className="user-info">
             <h6 className="user-name">{userName}</h6>
-            <span className="user-uid">{user.uid}</span>
           </div>
         </div>
         <input
@@ -176,7 +210,6 @@ function UserCard({ user, selected, onSelect, onEdit, onToggleActive, onResetPas
         />
       </div>
 
-      {/* Rest of your UserCard JSX remains the same */}
       <div className="user-details">
         <div className="user-role-badge">
           <span className={`role-badge role-${user.role || 'user'}`}>
@@ -203,8 +236,11 @@ function UserCard({ user, selected, onSelect, onEdit, onToggleActive, onResetPas
         <button className="btn btn-sm btn-outline-info" onClick={() => onImpersonate(user)}>
           Impersonate
         </button>
-        <button className="btn btn-sm btn-outline-danger" onClick={() => onRemove(user)}>
-          Remove
+        <button 
+          className="btn btn-sm btn-outline-danger" 
+          onClick={handleRemoveClick}
+        >
+          🗑️ Remove
         </button>
         <button
           className={`btn btn-sm ${user.active ? 'btn-outline-secondary' : 'btn-success'}`}
@@ -216,9 +252,22 @@ function UserCard({ user, selected, onSelect, onEdit, onToggleActive, onResetPas
     </div>
   );
 }
-// Confirmation Modal Component
-// Confirmation Modal Component
-function ConfirmationModal({ show, title, message, onConfirm, onCancel, confirmText = "Yes", cancelText = "No", type = "warning" }) {
+
+// Enhanced Confirmation Modal Component
+function EnhancedConfirmationModal({ 
+  show, 
+  title, 
+  message, 
+  onConfirm, 
+  onCancel, 
+  confirmText = "Yes", 
+  cancelText = "No", 
+  type = "warning",
+  inputFields = [],
+  destructive = false 
+}) {
+  const [inputValues, setInputValues] = useState({});
+
   if (!show) return null;
 
   const icons = {
@@ -235,12 +284,36 @@ function ConfirmationModal({ show, title, message, onConfirm, onCancel, confirmT
     success: "btn-success"
   };
 
+  const handleInputChange = (fieldName, value) => {
+    setInputValues(prev => ({
+      ...prev,
+      [fieldName]: value
+    }));
+  };
+
+  const handleConfirm = () => {
+    const validatedInputs = { ...inputValues };
+    inputFields.forEach(field => {
+      if (field.required && !validatedInputs[field.name]) {
+        validatedInputs[field.name] = "Not provided";
+      }
+    });
+    
+    onConfirm(validatedInputs);
+    setInputValues({});
+  };
+
+  const handleClose = () => {
+    setInputValues({});
+    onCancel();
+  };
+
   return (
     <div className="modal-overlay">
-      <div className="modal-content confirmation-modal">
+      <div className={`modal-content confirmation-modal ${destructive ? 'destructive' : ''}`}>
         <div className="modal-header">
           <h3>{title}</h3>
-          <button className="modal-close" onClick={onCancel}>×</button>
+          <button className="modal-close" onClick={handleClose}>×</button>
         </div>
         <div className="modal-body">
           <div className="confirmation-content">
@@ -250,14 +323,47 @@ function ConfirmationModal({ show, title, message, onConfirm, onCancel, confirmT
             <div className="confirmation-message">
               {message}
             </div>
+            
+            {inputFields.length > 0 && (
+              <div className="confirmation-inputs">
+                {inputFields.map(field => (
+                  <div key={field.name} className="form-group">
+                    <label htmlFor={field.name}>{field.label}</label>
+                    {field.type === 'textarea' ? (
+                      <textarea
+                        id={field.name}
+                        className="form-control"
+                        value={inputValues[field.name] || ''}
+                        onChange={(e) => handleInputChange(field.name, e.target.value)}
+                        placeholder={field.placeholder}
+                        required={field.required}
+                      />
+                    ) : (
+                      <input
+                        id={field.name}
+                        type={field.type || 'text'}
+                        className="form-control"
+                        value={inputValues[field.name] || ''}
+                        onChange={(e) => handleInputChange(field.name, e.target.value)}
+                        placeholder={field.placeholder}
+                        required={field.required}
+                      />
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
         <div className="modal-footer">
           <div className="footer-actions">
-            <button className={`btn ${buttonStyles[type]}`} onClick={onConfirm}>
+            <button 
+              className={`btn ${buttonStyles[type]} ${destructive ? 'btn-danger' : ''}`} 
+              onClick={handleConfirm}
+            >
               {confirmText}
             </button>
-            <button className="btn btn-secondary" onClick={onCancel}>
+            <button className="btn btn-secondary" onClick={handleClose}>
               {cancelText}
             </button>
           </div>
@@ -266,6 +372,634 @@ function ConfirmationModal({ show, title, message, onConfirm, onCancel, confirmT
     </div>
   );
 }
+
+// Password Reset Modal Component
+function PasswordResetModal({ show, user, onConfirm, onCancel }) {
+  const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [error, setError] = useState("");
+
+  const handleSubmit = () => {
+    setError("");
+
+    if (!password) {
+      setError("Please enter a password");
+      return;
+    }
+
+    if (password.length < 6) {
+      setError("Password must be at least 6 characters long");
+      return;
+    }
+
+    if (password !== confirmPassword) {
+      setError("Passwords do not match");
+      return;
+    }
+
+    onConfirm(password);
+  };
+
+  const handleClose = () => {
+    setPassword("");
+    setConfirmPassword("");
+    setError("");
+    onCancel();
+  };
+
+  if (!show) return null;
+
+  return (
+    <div className="modal-overlay">
+      <div className="modal-content password-reset-modal">
+        <div className="modal-header">
+          <h3>Reset Password</h3>
+          <button className="modal-close" onClick={handleClose}>×</button>
+        </div>
+        <div className="modal-body">
+          <div className="password-reset-content">
+            <div className="user-info-section">
+              <div className="user-avatar-modal">
+                {user.photoURL ? (
+                  <img src={user.photoURL} alt="User" className="user-photo-modal" />
+                ) : (
+                  user.name ? user.name.charAt(0).toUpperCase() : 'U'
+                )}
+              </div>
+              <div className="user-details">
+                <h4>{user.name || 'Unnamed User'}</h4>
+                <span className="user-role">{user.role || 'user'}</span>
+              </div>
+            </div>
+
+            <div className="password-form">
+              <div className="form-group">
+                <label htmlFor="newPassword">New Password</label>
+                <input
+                  id="newPassword"
+                  type="password"
+                  className="form-control"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="Enter new password"
+                  autoComplete="new-password"
+                />
+              </div>
+
+              <div className="form-group">
+                <label htmlFor="confirmPassword">Confirm Password</label>
+                <input
+                  id="confirmPassword"
+                  type="password"
+                  className="form-control"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  placeholder="Confirm new password"
+                  autoComplete="new-password"
+                />
+              </div>
+
+              {error && (
+                <div className="alert alert-danger">
+                  {error}
+                </div>
+              )}
+
+              <div className="password-requirements">
+                <h6>Password Requirements:</h6>
+                <ul>
+                  <li className={password.length >= 6 ? 'met' : ''}>
+                    At least 6 characters long
+                  </li>
+                  <li className={password && confirmPassword && password === confirmPassword ? 'met' : ''}>
+                    Passwords must match
+                  </li>
+                </ul>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div className="modal-footer">
+          <div className="footer-actions">
+            <button className="btn btn-primary" onClick={handleSubmit}>
+              Reset Password
+            </button>
+            <button className="btn btn-secondary" onClick={handleClose}>
+              Cancel
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Advanced Permissions Modal Component
+function AdvancedPermissionsModal({ user, permissions, onSave, onClose, onTogglePerm }) {
+  const [tempPerms, setTempPerms] = useState(permissions);
+  const [activeTab, setActiveTab] = useState('all');
+  const [searchTerm, setSearchTerm] = useState('');
+  const [selectedModules, setSelectedModules] = useState(new Set());
+
+  // Group modules by category
+  const moduleCategories = {
+    management: ['Dashboard', 'Investments', 'Reports', 'Accounts'],
+    staff: ['Staff Data', 'Existing Staff'],
+    workers: ['Workers Data', 'Worker Agreement', 'Worker Call Data'],
+    clients: ['Client Data', 'Client Exit'],
+    enquiries: ['Enquiries', 'Old Enquiry'],
+    hospital: ['Hospital List', 'Delete Hospitals', 'Agents'],
+    expenses: ['Expenses', 'Expense Delete'],
+    productivity: ['Task', 'Timesheet'],
+    system: ['Admin', 'Profile', 'Search', 'Assets']
+  };
+
+  // Filter modules based on search and category
+  const filteredModules = useMemo(() => {
+    let modules = MODULES;
+    
+    if (searchTerm) {
+      modules = modules.filter(m => 
+        m.key.toLowerCase().includes(searchTerm.toLowerCase())
+      );
+    }
+    
+    if (activeTab !== 'all') {
+      modules = modules.filter(m => 
+        moduleCategories[activeTab]?.includes(m.key)
+      );
+    }
+    
+    return modules;
+  }, [searchTerm, activeTab]);
+
+  // Bulk operations
+  const bulkUpdatePermissions = (action, value) => {
+    const updatedPerms = { ...tempPerms };
+    const modulesToUpdate = selectedModules.size > 0 
+      ? Array.from(selectedModules) 
+      : filteredModules.map(m => m.key);
+
+    modulesToUpdate.forEach(moduleKey => {
+      if (action === 'all') {
+        ALL_ACTIONS.forEach(act => {
+          if (updatedPerms[moduleKey]) {
+            updatedPerms[moduleKey][act] = value;
+          }
+        });
+      } else {
+        if (updatedPerms[moduleKey]) {
+          updatedPerms[moduleKey][action] = value;
+        }
+      }
+    });
+
+    setTempPerms(updatedPerms);
+  };
+
+  const toggleModuleSelection = (moduleKey) => {
+    const newSelected = new Set(selectedModules);
+    if (newSelected.has(moduleKey)) {
+      newSelected.delete(moduleKey);
+    } else {
+      newSelected.add(moduleKey);
+    }
+    setSelectedModules(newSelected);
+  };
+
+  const selectAllVisible = () => {
+    const allVisible = new Set(filteredModules.map(m => m.key));
+    setSelectedModules(allVisible);
+  };
+
+  const clearSelection = () => {
+    setSelectedModules(new Set());
+  };
+
+  const togglePerm = (modKey, action) => {
+    setTempPerms(prev => ({
+      ...prev,
+      [modKey]: { ...(prev[modKey] || {}), [action]: !prev[modKey]?.[action] },
+    }));
+  };
+
+  return (
+    <div className="modal-overlay">
+      <div className="modal-content advanced-permissions-modal">
+        {/* Header with User Info */}
+        <div className="modal-header">
+          <div className="user-header-info">
+            <div className="user-avatar-modal">
+              {user.photoURL ? (
+                <img src={user.photoURL} alt="User" className="user-photo-modal" />
+              ) : (
+                <div className="user-avatar-fallback">
+                  {user.name ? user.name.charAt(0).toUpperCase() : 'U'}
+                </div>
+              )}
+            </div>
+            <div className="user-details">
+              <h3 className="user-name">{user.name || 'Unnamed User'}</h3>
+              <div className="user-meta">
+                <span className={`role-badge role-${user.role || 'user'}`}>
+                  {user.role || 'user'}
+                </span>
+                {user.staffId && (
+                  <span className="staff-id">ID: {user.staffId}</span>
+                )}
+                <span className="user-status-indicator">
+                  {user.active ? '🟢 Active' : '🔴 Inactive'}
+                </span>
+              </div>
+            </div>
+          </div>
+          <button className="modal-close" onClick={onClose}>×</button>
+        </div>
+
+        <div className="modal-body">
+          {/* Quick Setup Section */}
+          <div className="quick-setup-section">
+            <div className="section-header">
+              <h4>Quick Setup</h4>
+              <span className="section-badge">Recommended</span>
+            </div>
+            
+            <div className="role-presets-grid">
+              {Object.entries(ROLE_TEMPLATES).map(([roleName, template]) => (
+                <div key={roleName} className="role-preset-card">
+                  <div className="preset-header">
+                    <span className="preset-icon">
+                      {roleName === 'Super Admin' && '👑'}
+                      {roleName === 'Admin' && '⚡'}
+                      {roleName === 'Manager' && '👔'}
+                      {roleName === 'Employee' && '👤'}
+                      {roleName === 'Viewer' && '👀'}
+                      {roleName === 'Approver' && '✅'}
+                      {roleName === 'Guest' && '🎯'}
+                    </span>
+                    <h5>{roleName}</h5>
+                  </div>
+                  <div className="preset-stats">
+                    <span className="stat">
+                      {Object.values(template).filter(module => 
+                        Object.values(module).some(Boolean)
+                      ).length} modules
+                    </span>
+                    <span className="stat">
+                      {Object.values(template).flatMap(module => 
+                        Object.values(module).filter(Boolean)
+                      ).length} permissions
+                    </span>
+                  </div>
+                  <button 
+                    className="btn btn-sm btn-outline-primary preset-apply-btn"
+                    onClick={() => setTempPerms(JSON.parse(JSON.stringify(template)))}
+                  >
+                    Apply
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Advanced Controls */}
+          <div className="advanced-controls-section">
+            <div className="section-header">
+              <h4>Advanced Controls</h4>
+              <div className="control-tabs">
+                <button 
+                  className={`tab-btn ${activeTab === 'all' ? 'active' : ''}`}
+                  onClick={() => setActiveTab('all')}
+                >
+                  🌟 All Modules
+                </button>
+                {Object.entries(moduleCategories).map(([category, modules]) => (
+                  <button
+                    key={category}
+                    className={`tab-btn ${activeTab === category ? 'active' : ''}`}
+                    onClick={() => setActiveTab(category)}
+                  >
+                    {category === 'management' && '📊'}
+                    {category === 'staff' && '👨‍💼'}
+                    {category === 'workers' && '👷'}
+                    {category === 'clients' && '🤝'}
+                    {category === 'enquiries' && '📝'}
+                    {category === 'hospital' && '🏥'}
+                    {category === 'expenses' && '💰'}
+                    {category === 'productivity' && '⚡'}
+                    {category === 'system' && '⚙️'}
+                    {category.charAt(0).toUpperCase() + category.slice(1)}
+                    <span className="tab-count">{modules.length}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Search and Bulk Controls */}
+            <div className="controls-toolbar">
+              <div className="search-container">
+                <div className="search-box">
+                  <span className="search-icon">🔍</span>
+                  <input
+                    type="text"
+                    placeholder="Search modules..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="search-input"
+                  />
+                  {searchTerm && (
+                    <button 
+                      className="clear-search"
+                      onClick={() => setSearchTerm('')}
+                    >
+                      ✕
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              <div className="bulk-controls">
+                <div className="selection-info">
+                  <span className="selection-count">
+                    {selectedModules.size} selected
+                  </span>
+                  <div className="selection-actions">
+                    <button 
+                      className="btn btn-sm btn-outline-secondary"
+                      onClick={selectAllVisible}
+                      disabled={filteredModules.length === 0}
+                    >
+                      Select All
+                    </button>
+                    <button 
+                      className="btn btn-sm btn-outline-secondary"
+                      onClick={clearSelection}
+                      disabled={selectedModules.size === 0}
+                    >
+                      Clear
+                    </button>
+                  </div>
+                </div>
+
+                {selectedModules.size > 0 && (
+                  <div className="bulk-actions-panel">
+                    <div className="bulk-actions-header">
+                      <strong>Bulk Actions for {selectedModules.size} modules:</strong>
+                    </div>
+                    <div className="bulk-action-groups">
+                      <div className="action-group">
+                        <label>Core Actions:</label>
+                        <div className="action-buttons">
+                          {BASE_ACTIONS.map(action => (
+                            <div key={action} className="action-pair">
+                              <button 
+                                className="btn btn-sm btn-success"
+                                onClick={() => bulkUpdatePermissions(action, true)}
+                              >
+                                Allow {action}
+                              </button>
+                              <button 
+                                className="btn btn-sm btn-danger"
+                                onClick={() => bulkUpdatePermissions(action, false)}
+                              >
+                                Deny {action}
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                      
+                      <div className="action-group">
+                        <label>Extra Actions:</label>
+                        <div className="action-buttons">
+                          {EXTRA_ACTIONS.map(action => (
+                            <div key={action} className="action-pair">
+                              <button 
+                                className="btn btn-sm btn-success"
+                                onClick={() => bulkUpdatePermissions(action, true)}
+                              >
+                                Allow {action}
+                              </button>
+                              <button 
+                                className="btn btn-sm btn-danger"
+                                onClick={() => bulkUpdatePermissions(action, false)}
+                              >
+                                Deny {action}
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div className="action-group full-width">
+                        <div className="action-pair">
+                          <button 
+                            className="btn btn-sm btn-success"
+                            onClick={() => bulkUpdatePermissions('all', true)}
+                          >
+                            ✅ Allow All Actions
+                          </button>
+                          <button 
+                            className="btn btn-sm btn-danger"
+                            onClick={() => bulkUpdatePermissions('all', false)}
+                          >
+                            ❌ Deny All Actions
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Permissions Grid */}
+            <div className="permissions-container">
+              <div className="permissions-header">
+                <div className="module-column">Module</div>
+                <div className="permissions-column">
+                  <span>Permissions</span>
+                  <div className="permissions-legend">
+                    <span className="legend-item">
+                      <span className="legend-core"></span> Core Actions
+                    </span>
+                    <span className="legend-item">
+                      <span className="legend-extra"></span> Extra Actions
+                    </span>
+                  </div>
+                </div>
+                <div className="quick-actions-column">Quick Actions</div>
+              </div>
+
+              <div className="permissions-grid">
+                {filteredModules.map((module) => (
+                  <div key={module.key} className={`permission-module-card ${selectedModules.has(module.key) ? 'selected' : ''}`}>
+                    <div className="module-header">
+                      <input
+                        type="checkbox"
+                        checked={selectedModules.has(module.key)}
+                        onChange={() => toggleModuleSelection(module.key)}
+                        className="module-select"
+                      />
+                      <div className="module-info">
+                        <span className="module-icon">{module.icon}</span>
+                        <div className="module-details">
+                          <h5 className="module-name">{module.key}</h5>
+                          <div className="module-meta">
+                            <span className="module-stats">
+                              {Object.values(tempPerms[module.key] || {}).filter(Boolean).length} / {ALL_ACTIONS.length} allowed
+                            </span>
+                            {module.extras.length > 0 && (
+                              <span className="module-extras">
+                                +{module.extras.length} extra actions
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="permissions-actions">
+                      <div className="actions-grid">
+                        {ALL_ACTIONS.map((action) => {
+                          const isExtra = EXTRA_ACTIONS.includes(action);
+                          const isAvailable = !isExtra || module.extras.includes(action);
+                          const isAllowed = !!tempPerms[module.key]?.[action];
+
+                          return (
+                            <label
+                              key={action}
+                              className={`permission-toggle ${isExtra ? 'extra' : 'core'} ${!isAvailable ? 'disabled' : ''} ${isAllowed ? 'allowed' : 'denied'}`}
+                              title={!isAvailable ? `Action not available for ${module.key}` : `${action} - ${isAllowed ? 'Allowed' : 'Denied'}`}
+                            >
+                              <input
+                                type="checkbox"
+                                checked={isAllowed}
+                                disabled={!isAvailable}
+                                onChange={() => isAvailable && togglePerm(module.key, action)}
+                              />
+                              <span className="toggle-slider">
+                                <span className="toggle-label">{action}</span>
+                                {isExtra && <span className="badge-extra">★</span>}
+                              </span>
+                            </label>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    <div className="module-quick-actions">
+                      <div className="quick-action-buttons">
+                        <button
+                          className="btn btn-xs btn-success"
+                          onClick={() => {
+                            BASE_ACTIONS.forEach(action => {
+                              if (tempPerms[module.key]?.[action] !== true) {
+                                togglePerm(module.key, action);
+                              }
+                            });
+                          }}
+                          title="Allow all core actions"
+                        >
+                          Core
+                        </button>
+                        <button
+                          className="btn btn-xs btn-warning"
+                          onClick={() => {
+                            module.extras.forEach(action => {
+                              if (tempPerms[module.key]?.[action] !== true) {
+                                togglePerm(module.key, action);
+                              }
+                            });
+                          }}
+                          disabled={module.extras.length === 0}
+                          title="Allow all extra actions"
+                        >
+                          Extras
+                        </button>
+                        <button
+                          className="btn btn-xs btn-danger"
+                          onClick={() => {
+                            ALL_ACTIONS.forEach(action => {
+                              if (tempPerms[module.key]?.[action] !== false) {
+                                togglePerm(module.key, action);
+                              }
+                            });
+                          }}
+                          title="Deny all actions"
+                        >
+                          None
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {filteredModules.length === 0 && (
+                <div className="no-results">
+                  <div className="no-results-icon">🔍</div>
+                  <h4>No modules found</h4>
+                  <p>Try adjusting your search or select a different category</p>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Footer with Summary and Actions */}
+        <div className="modal-footer">
+          <div className="permissions-summary">
+            <div className="summary-stats">
+              <div className="stat-item">
+                <span className="stat-value">{filteredModules.length}</span>
+                <span className="stat-label">Modules</span>
+              </div>
+              <div className="stat-item">
+                <span className="stat-value">{selectedModules.size}</span>
+                <span className="stat-label">Selected</span>
+              </div>
+              <div className="stat-item">
+                <span className="stat-value">
+                  {Object.values(tempPerms).flatMap(module => 
+                    Object.values(module).filter(Boolean)
+                  ).length}
+                </span>
+                <span className="stat-label">Total Permissions</span>
+              </div>
+            </div>
+          </div>
+          
+          <div className="footer-actions">
+            <button 
+              className="btn btn-secondary"
+              onClick={() => setTempPerms(makeBlankPerms())}
+            >
+              🗑️ Reset All
+            </button>
+           
+              <button className="btn btn-outline-secondary" onClick={onClose}>
+                Cancel
+              </button>
+              <button 
+                className="btn btn-success save-btn"
+                onClick={() => onSave(tempPerms)}
+              >
+                💾 Save Permissions
+                <span className="save-badge">
+                  {Object.values(tempPerms).flatMap(module => 
+                    Object.values(module).filter(Boolean)
+                  ).length}
+                </span>
+              </button>
+           
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function AdminMain() {
   const { currentUser, user: userFromCtx, logout } = useAuthSafe();
   const adminUid = currentUser?.uid || userFromCtx?.uid || null;
@@ -283,6 +1017,7 @@ export default function AdminMain() {
   const [showCreate, setShowCreate] = useState(false);
   const [editingUser, setEditingUser] = useState(null);
   const [tempPerms, setTempPerms] = useState(makeBlankPerms());
+  const [passwordResetModal, setPasswordResetModal] = useState({ show: false, user: null });
 
   // Confirmation Modals
   const [confirmModal, setConfirmModal] = useState({
@@ -290,26 +1025,23 @@ export default function AdminMain() {
     title: "",
     message: "",
     onConfirm: null,
-    type: "warning"
-  });
-
-  // Remove User Modal
-  const [removeUserModal, setRemoveUserModal] = useState({
-    show: false,
-    user: null
+    type: "warning",
+    inputFields: [],
+    destructive: false
   });
 
   // Form states
   const [newUser, setNewUser] = useState({
+    staffId: '',
+    username: '',
     name: '',
     password: '',
-    role: 'user'
+    role: 'Employee'
   });
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState('');
 
   // Advanced Features
-  const [tester, setTester] = useState({ uid: "", component: "Client Data", action: "edit", running: false, result: "" });
   const [audit, setAudit] = useState({ list: [], open: false, loading: false });
 
   // Bulk Operations
@@ -327,23 +1059,99 @@ export default function AdminMain() {
     recentActivity: 0
   });
 
+  // Security states
+  const [security] = useState({
+    sessionTimeout: 30 * 60 * 1000,
+    lastActivity: Date.now(),
+    failedAttempts: 0,
+    maxAttempts: 5
+  });
+
+  const [activityLog, setActivityLog] = useState([]);
+
   const showToast = (type, msg) => {
     setToast({ type, msg });
     setTimeout(() => setToast(null), 5000);
   };
 
-  const showConfirmation = (title, message, onConfirm, type = "warning") => {
+  const showConfirmation = (title, message, onConfirm, type = "warning", inputFields = [], destructive = false) => {
     setConfirmModal({
       show: true,
       title,
       message,
-      onConfirm: () => {
+      onConfirm: (inputValues) => {
         setConfirmModal(prev => ({ ...prev, show: false }));
-        onConfirm();
+        onConfirm(inputValues);
       },
-      type
+      type,
+      inputFields,
+      destructive
     });
   };
+
+  // Session timeout handler
+  useEffect(() => {
+    const checkSession = setInterval(() => {
+      if (Date.now() - security.lastActivity > security.sessionTimeout) {
+        showToast("warn", "Session timeout due to inactivity");
+        logout();
+      }
+    }, 60000);
+
+    return () => clearInterval(checkSession);
+  }, [security.lastActivity, security.sessionTimeout, logout]);
+
+  // Track user activity
+  const trackActivity = useCallback((action, details = {}) => {
+    setActivityLog(prev => [...prev, {
+      action,
+      timestamp: Date.now(),
+      user: adminUid,
+      details,
+      ip: window.location.hostname
+    }]);
+
+    security.lastActivity = Date.now();
+  }, [adminUid, security]);
+
+  // Enhanced permission check with multiple fallbacks
+  const checkPermission = useCallback((action, resource, userToCheck = null) => {
+    let targetUser = userToCheck;
+    
+    if (!targetUser) {
+      targetUser = users.find(u => u.uid === adminUid);
+      
+      if (!targetUser && userFromCtx) {
+        targetUser = userFromCtx;
+      }
+      
+      if (!targetUser && currentUser) {
+        targetUser = currentUser;
+      }
+    }
+
+    if (!targetUser) {
+      return true;
+    }
+
+    // Special case for admin operations
+    if (resource === 'Admin') {
+      const hasPerm = targetUser.permissions?.[resource]?.[action];
+      
+      if (!hasPerm && (targetUser.role === 'Admin' || targetUser.role === 'Super Admin' || targetUser.role === 'admin')) {
+        return true;
+      }
+      
+      if (!hasPerm && window.location.pathname.includes('admin')) {
+        return true;
+      }
+      
+      return hasPerm;
+    }
+
+    const hasPerm = targetUser.permissions?.[resource]?.[action];
+    return hasPerm;
+  }, [users, adminUid, userFromCtx, currentUser]);
 
   // Load Users
   useEffect(() => {
@@ -357,7 +1165,7 @@ export default function AdminMain() {
 
       // Calculate stats
       const activeUsers = arr.filter(u => u.active !== false).length;
-      const adminUsers = arr.filter(u => u.role === 'admin').length;
+      const adminUsers = arr.filter(u => u.role === 'admin' || u.role === 'Super Admin').length;
       setStats({
         totalUsers: arr.length,
         activeUsers,
@@ -379,6 +1187,8 @@ export default function AdminMain() {
       const query = searchQuery.toLowerCase();
       arr = arr.filter((u) =>
         (u.name || "").toLowerCase().includes(query) ||
+        (u.username || "").toLowerCase().includes(query) ||
+        (u.staffId || "").toLowerCase().includes(query) ||
         (u.uid || "").toLowerCase().includes(query) ||
         (u.role || "").toLowerCase().includes(query)
       );
@@ -386,11 +1196,18 @@ export default function AdminMain() {
     return arr;
   }, [users, roleFilter, activeOnly, searchQuery]);
 
-  // Safe DB operations
+  // Enhanced safe DB operations
   async function safeSet(path, payload, auditEntry) {
     try {
       await firebaseDB.child(path).set(payload);
-      if (auditEntry) await firebaseDB.child("AuditLogs").push(auditEntry);
+      
+      if (auditEntry) {
+        try {
+          await firebaseDB.child("AuditLogs").push(auditEntry);
+        } catch (auditError) {
+          console.warn('safeSet: Audit log failed, but operation succeeded:', auditError);
+        }
+      }
       return { ok: true };
     } catch (e) {
       const code = (e && (e.code || e.message || "")).toString().toLowerCase();
@@ -404,8 +1221,48 @@ export default function AdminMain() {
           auditEntry,
           status: "pending",
         };
-        await firebaseDB.child(`AdminRequests/${adminUid || "unknown"}`).push(req);
-        return { ok: false, queued: true };
+        try {
+          await firebaseDB.child(`AdminRequests/${adminUid || "unknown"}`).push(req);
+          return { ok: false, queued: true };
+        } catch (queueError) {
+          console.error('safeSet: Queue failed:', queueError);
+          return { ok: false, queued: false, error: queueError };
+        }
+      }
+      throw e;
+    }
+  }
+
+  async function safeRemove(path, auditEntry) {
+    try {
+      await firebaseDB.child(path).remove();
+      
+      if (auditEntry) {
+        try {
+          await firebaseDB.child("AuditLogs").push(auditEntry);
+        } catch (auditError) {
+          console.warn('safeRemove: Audit log failed, but operation succeeded:', auditError);
+        }
+      }
+      return { ok: true };
+    } catch (e) {
+      const code = (e && (e.code || e.message || "")).toString().toLowerCase();
+      if (code.includes("permission_denied")) {
+        const req = {
+          action: "REMOVE",
+          path,
+          requestedBy: adminUid || null,
+          requestedAt: Date.now(),
+          auditEntry,
+          status: "pending",
+        };
+        try {
+          await firebaseDB.child(`AdminRequests/${adminUid || "unknown"}`).push(req);
+          return { ok: false, queued: true };
+        } catch (queueError) {
+          console.error('safeRemove: Queue failed:', queueError);
+          return { ok: false, queued: false, error: queueError };
+        }
       }
       throw e;
     }
@@ -456,7 +1313,6 @@ export default function AdminMain() {
   // Force logout user by clearing their session data
   const forceLogoutUser = async (userId) => {
     try {
-      // Clear all possible session storage locations
       const sessionKeys = ["auth:user", "firebase:authUser", "userSession", "currentUser"];
       sessionKeys.forEach(key => {
         const sessionData = sessionStorage.getItem(key);
@@ -467,44 +1323,41 @@ export default function AdminMain() {
               sessionStorage.removeItem(key);
             }
           } catch (e) {
-            // If parsing fails, remove it anyway
             sessionStorage.removeItem(key);
           }
         }
       });
 
-      // Clear localStorage
       const localKeys = ["impersonateUid", "firebaseToken", "userToken"];
       localKeys.forEach(key => localStorage.removeItem(key));
 
-      // Update user's lastSync and lastLogout to force re-login
       await firebaseDB.child(`Users/${userId}`).update({
         lastSync: null,
         lastLogout: Date.now(),
-        forceLogout: Date.now() // Additional field to force logout
+        forceLogout: Date.now()
       });
-
-      console.log(`User ${userId} has been forcefully logged out`);
 
     } catch (error) {
       console.error("Error forcing logout:", error);
-      // Even if Firebase fails, we still clear local storage
     }
   };
+
   // Save permissions with confirmation
-  const savePerms = async () => {
+  const savePerms = async (permissions) => {
     if (!editingUser) return;
 
     showConfirmation(
       "Update Permissions",
       `Are you sure you want to update permissions for ${editingUser.name || editingUser.uid}? This will log out the user.`,
       async () => {
-        // Create a clean permissions object without undefined values
-        const cleanPerms = {};
-        Object.keys(tempPerms).forEach(moduleKey => {
-          cleanPerms[moduleKey] = {};
+        const cleanPerms = permissions || tempPerms;
+        
+        // Create a clean copy without modifying the original
+        const finalPerms = {};
+        Object.keys(cleanPerms).forEach(moduleKey => {
+          finalPerms[moduleKey] = {};
           ALL_ACTIONS.forEach(action => {
-            cleanPerms[moduleKey][action] = Boolean(tempPerms[moduleKey]?.[action]);
+            finalPerms[moduleKey][action] = Boolean(cleanPerms[moduleKey]?.[action]);
           });
         });
 
@@ -513,22 +1366,20 @@ export default function AdminMain() {
           action: "updatePermissions",
           byUid: adminUid || null,
           targetUid: editingUser.uid,
-          details: { permissions: cleanPerms },
+          details: { permissions: finalPerms },
           ts: Date.now(),
         };
 
         try {
-          const res = await safeSet(path, cleanPerms, auditEntry);
+          const res = await safeSet(path, finalPerms, auditEntry);
           if (res.ok) {
             showToast("success", `Permissions saved for ${editingUser.name || editingUser.uid}. User has been logged out.`);
 
-            // ⏫ bump requiredSessionVersion to invalidate sessions
+            // Increment session version to force logout
             await firebaseDB.child(`Users/${editingUser.uid}/requiredSessionVersion`).transaction(v => (Number(v)||0) + 1);
 
-            // Force logout the user
             await forceLogoutUser(editingUser.uid);
 
-            // If admin is editing their own permissions, log them out immediately
             if (editingUser.uid === adminUid) {
               setTimeout(() => {
                 logout();
@@ -541,6 +1392,7 @@ export default function AdminMain() {
             setEditingUser(null);
           }
         } catch (error) {
+          console.error("Permission save error:", error);
           showToast("error", `Failed to save permissions: ${error.message}`);
         }
       }
@@ -561,7 +1413,7 @@ export default function AdminMain() {
           {
             active: newActiveState,
             isActive: newActiveState,
-            lastSync: null // Force logout
+            lastSync: null
           },
           {
             action: "toggleActive",
@@ -575,13 +1427,10 @@ export default function AdminMain() {
         if (res.ok) {
           showToast("success", `User is now ${newActiveState ? "Active" : "Inactive"}. User has been logged out.`);
 
-          // ⏫ bump requiredSessionVersion to invalidate sessions
           await firebaseDB.child(`Users/${user.uid}/requiredSessionVersion`).transaction(v => (Number(v)||0) + 1);
 
-          // Force logout the user
           await forceLogoutUser(user.uid);
 
-          // If admin is deactivating themselves, log them out immediately
           if (!newActiveState && user.uid === adminUid) {
             setTimeout(() => {
               logout();
@@ -594,81 +1443,168 @@ export default function AdminMain() {
     );
   };
 
-  // Remove user with modal
+  // Working Remove Function
   const removeUser = async (user) => {
-    setRemoveUserModal({
-      show: true,
-      user: user
-    });
+    // Permission check
+    const hasPermission = checkPermission('delete', 'Admin');
+    
+    if (!hasPermission) {
+      showToast("error", "Insufficient permissions to remove users");
+      return;
+    }
+
+    // Self-removal check
+    if (user.uid === adminUid) {
+      showToast("error", "Cannot remove your own account");
+      return;
+    }
+
+    // Show confirmation
+    showConfirmation(
+      "Remove User",
+      `Are you sure you want to permanently remove ${user.name || user.uid}? This action cannot be undone.`,
+      (inputValues) => {
+        const reason = inputValues?.reason || "No reason provided";
+        confirmRemoveUser(user, reason);
+      },
+      "danger",
+      [
+        {
+          name: "reason",
+          label: "Reason for removal",
+          type: "textarea", 
+          placeholder: "Please provide a reason for removing this user...",
+          required: true
+        }
+      ],
+      true
+    );
   };
 
-  const confirmRemoveUser = async () => {
-    const { user } = removeUserModal;
-    if (!user) return;
-
-    // Archive user data before removal
-    const archiveData = {
-      ...user,
-      archivedAt: Date.now(),
-      archivedBy: adminUid,
-      originalUid: user.uid
-    };
-
+  const confirmRemoveUser = async (user, reason) => {
     try {
-      // Archive the user
-      await firebaseDB.child(`ArchivedUsers/${user.uid}`).set(archiveData);
+      trackActivity('user_removal_attempt', {
+        targetUser: user.uid,
+        reason: reason
+      });
 
-      // Remove from active users
-      await firebaseDB.child(`Users/${user.uid}`).remove();
+      // Validate and clean user data for archiving
+      const archiveData = {
+        uid: user.uid || '',
+        name: user.name || '',
+        username: user.username || '',
+        staffId: user.staffId || '',
+        role: user.role || 'user',
+        active: user.active !== undefined ? user.active : true,
+        createdAt: user.createdAt || Date.now(),
+        archivedAt: Date.now(),
+        archivedBy: adminUid || 'system',
+        removalReason: reason || "No reason provided",
+        originalUid: user.uid || '',
+        archivedFrom: 'AdminPanel'
+      };
 
-      await firebaseDB.child("AuditLogs").push({
-        action: "removeUserRecord",
-        byUid: adminUid || null,
+      // Remove any undefined values that might cause Firebase errors
+      Object.keys(archiveData).forEach(key => {
+        if (archiveData[key] === undefined) {
+          archiveData[key] = null;
+        }
+      });
+
+      // Archive the user first
+      const archiveResult = await safeSet(`ArchivedUsers/${user.uid}`, archiveData, {
+        action: "archiveUser",
+        byUid: adminUid,
         targetUid: user.uid,
-        details: { removed: true, archived: true },
+        details: { reason: reason || "No reason provided" },
         ts: Date.now(),
       });
 
-      showToast("success", `Removed ${user.name || user.uid}. User data has been archived.`);
+      if (!archiveResult.ok) {
+        if (archiveResult.queued) {
+          showToast("warn", "Archive operation queued due to permissions. User removal paused.");
+          return;
+        } else {
+          throw new Error(`Archive failed: ${archiveResult.error?.message || 'Unknown error'}`);
+        }
+      }
 
-      // Force logout the removed user
+      // Remove from active users using safeRemove
+      const removeResult = await safeRemove(`Users/${user.uid}`, {
+        action: "removeUser",
+        byUid: adminUid,
+        targetUid: user.uid,
+        details: { 
+          reason: reason || "No reason provided", 
+          archived: true 
+        },
+        ts: Date.now(),
+      });
+
+      if (!removeResult.ok) {
+        if (removeResult.queued) {
+          showToast("warn", "Remove operation queued due to permissions. Check admin requests.");
+          return;
+        } else {
+          throw new Error(`Remove failed: ${removeResult.error?.message || 'Unknown error'}`);
+        }
+      }
+
+      // Force logout the user
       await forceLogoutUser(user.uid);
 
-    } catch (e) {
-      const code = (e && (e.code || e.message || "")).toString().toLowerCase();
-      if (code.includes("permission_denied")) {
-        await firebaseDB.child(`AdminRequests/${adminUid || "unknown"}`).push({
-          action: "REMOVE",
-          path: `Users/${user.uid}`,
-          requestedBy: adminUid || null,
-          requestedAt: Date.now(),
-          status: "pending",
-          details: { reason: "UI request to delete user record" },
+      // Log the removal in SecurityLogs
+      try {
+        await firebaseDB.child("SecurityLogs").push({
+          action: "user_removed",
+          byUid: adminUid,
+          targetUid: user.uid,
+          reason: reason || "No reason provided",
+          timestamp: Date.now(),
+          ip: window.location.hostname,
+          archived: true
         });
-        showToast("warn", "Delete blocked by rules. Request queued.");
-      } else {
-        showToast("error", `Failed to remove: ${e?.message || e}`);
+      } catch (logError) {
+        console.warn('Security log failed:', logError);
       }
-    } finally {
-      setRemoveUserModal({ show: false, user: null });
+
+      trackActivity('user_removed', {
+        targetUser: user.uid,
+        reason: reason || "No reason provided"
+      });
+
+      showToast("success", `User ${user.name || user.uid} has been removed and archived.`);
+
+    } catch (error) {
+      console.error("Remove user error:", error);
+      
+      trackActivity('user_removal_failed', {
+        targetUser: user.uid,
+        error: error.message
+      });
+      
+      showToast("error", `Failed to remove user: ${error.message}`);
     }
   };
 
-  // Reset password with confirmation
-  const resetPassword = async (user) => {
-    const pw = prompt("Enter a new password for this user:");
-    if (!pw) return;
+  // Reset password with beautiful modal
+  const resetPassword = (user) => {
+    setPasswordResetModal({ show: true, user });
+  };
 
+  const handlePasswordReset = async (newPassword) => {
+    const { user } = passwordResetModal;
+    
     showConfirmation(
       "Reset Password",
       `Are you sure you want to reset password for ${user.name || user.uid}? This will log out the user.`,
       async () => {
-        const passwordHash = await sha256Base64(pw);
+        const passwordHash = await sha256Base64(newPassword);
         const res = await safeUpdate(
           `Users/${user.uid}`,
           {
             passwordHash,
-            lastSync: null // Force logout
+            lastSync: null
           },
           {
             action: "resetPasswordHash",
@@ -679,68 +1615,149 @@ export default function AdminMain() {
         );
 
         if (res.ok) {
-          showToast("success", "Password reset. User has been logged out.");
+          showToast("success", "Password reset successfully. User has been logged out.");
 
-          // ⏫ bump requiredSessionVersion to invalidate sessions
           await firebaseDB.child(`Users/${user.uid}/requiredSessionVersion`).transaction(v => (Number(v)||0) + 1);
 
-          // Force logout the user
           await forceLogoutUser(user.uid);
+
+          setPasswordResetModal({ show: false, user: null });
 
         } else if (res.queued) {
           showToast("warn", "Rules blocked; request queued.");
+          setPasswordResetModal({ show: false, user: null });
         }
       }
     );
   };
 
-  // Impersonate user - This allows admin to test the app as that user
-  const impersonate = (user) => {
+  // Two-Factor Authentication simulation
+  const require2FA = async (action, user) => {
+    return new Promise((resolve) => {
+      showConfirmation(
+        "Security Verification Required",
+        `Please confirm the ${action} for user ${user.name || user.uid}. This action requires additional security verification.`,
+        (inputValues) => {
+          if (inputValues?.verificationCode === 'CONFIRM') {
+            resolve(true);
+          } else {
+            showToast("error", "Invalid security code. Please type 'CONFIRM' to proceed.");
+            resolve(false);
+          }
+        },
+        "warning",
+        [
+          {
+            name: "verificationCode",
+            label: "Security Code",
+            type: "text",
+            placeholder: "Enter 'CONFIRM' to proceed",
+            required: true
+          }
+        ]
+      );
+    });
+  };
+
+  // Enhanced impersonation with security checks
+  const impersonate = async (user) => {
+    if (!checkPermission('impersonate', 'Admin')) {
+      showToast("error", "Insufficient permissions to impersonate users");
+      return;
+    }
+
+    const verified = await require2FA('impersonation', user);
+    if (!verified) {
+      showToast("info", "Impersonation cancelled");
+      return;
+    }
+
     localStorage.setItem("impersonateUid", user.uid);
-    showToast("success", `Impersonating ${user.name || user.uid}. Reload the page to see the app as this user. This is for testing purposes.`);
+    localStorage.setItem("impersonatorUid", adminUid);
+    localStorage.setItem("impersonationTime", Date.now());
+
+    trackActivity('impersonation_started', {
+      targetUser: user.uid
+    });
+
+    showToast("success", `Impersonating ${user.name || user.uid}. Reload the page to continue.`);
   };
 
   // Create user
   const handleCreate = async (e) => {
     e?.preventDefault?.();
     setError("");
-    if (!newUser.name?.trim()) return setError("Please enter a name");
-    if (!newUser.password) return setError("Please enter a password");
-
+    
+    if (!newUser.staffId?.trim()) return setError("Please enter Staff ID");
+    if (!newUser.username?.trim()) return setError("Please enter Username");
+    if (!newUser.name?.trim()) return setError("Please enter Full Name");
+    if (!newUser.password) return setError("Please enter password");
+  
+    // Enhanced username validation
+    if (!/^[a-zA-Z0-9_]+$/.test(newUser.username)) {
+      return setError("Username must contain only letters, numbers, and underscores");
+    }
+  
+    // Check for duplicate username (case-sensitive)
+    const existingUser = users.find(u => 
+      u.username && u.username.toLowerCase() === newUser.username.toLowerCase()
+    );
+    if (existingUser) {
+      return setError(`Username "${newUser.username}" already exists`);
+    }
+  
     setCreating(true);
     try {
       const usersRef = firebaseDB.child("Users");
       const uid = usersRef.push().key;
       const passwordHash = await sha256Base64(newUser.password);
-      const template = ROLE_TEMPLATES[newUser.role] || ROLE_TEMPLATES.user;
+      const template = ROLE_TEMPLATES[newUser.role] || ROLE_TEMPLATES.Employee;
+      
       const record = {
         uid,
+        staffId: newUser.staffId.trim(),
+        username: newUser.username.trim(),
         name: newUser.name.trim(),
         role: newUser.role,
-        active: true, // Default to active when creating
+        active: true,
         createdAt: Date.now(),
         email: null,
         passwordHash,
         permissions: template,
-        lastSync: null
+        lastSync: null,
+        searchUsername: newUser.username.trim().toLowerCase()
       };
+      
       const res = await safeSet(`Users/${uid}`, record, {
-        action: "createUserNoEmail",
+        action: "createUser",
         byUid: adminUid || null,
         targetUid: uid,
-        details: { name: record.name, role: record.role },
+        details: { 
+          staffId: record.staffId,
+          username: record.username,
+          name: record.name, 
+          role: record.role 
+        },
         ts: Date.now(),
       });
+      
       if (res.ok) {
         showToast("success", `Created user "${record.name}"`);
         setShowCreate(false);
-        setNewUser({ name: '', password: '', role: 'user' });
+        setNewUser({ 
+          staffId: '', 
+          username: '', 
+          name: '', 
+          password: '', 
+          role: 'Employee' 
+        });
         openEditor(record);
       } else if (res.queued) {
         showToast("warn", "Rules blocked creating user. Request queued.");
         setShowCreate(false);
       }
     } catch (err) {
+      console.error("Create user error:", err);
       setError(err?.message || String(err));
     } finally {
       setCreating(false);
@@ -749,13 +1766,15 @@ export default function AdminMain() {
 
   // Export CSV
   const exportCsv = () => {
-    const csv = ["uid,name,role,active,createdAt,permissions_json"];
+    const csv = ["uid,staffId,username,name,role,active,createdAt,permissions_json"];
     users.forEach((u) =>
       csv.push(
         [
           u.uid,
+          `"${(u.staffId || "").replace(/"/g, '""')}"`,
+          `"${(u.username || "").replace(/"/g, '""')}"`,
           `"${(u.name || "").replace(/"/g, '""')}"`,
-          u.role || "user",
+          u.role || "Employee",
           u.active ? "1" : "0",
           u.createdAt || "",
           `"${JSON.stringify(u.permissions || {})}"`,
@@ -800,9 +1819,14 @@ export default function AdminMain() {
         await bulkToggleActive(selected, false);
         break;
       case 'delete':
-        if (window.confirm(`Delete ${selected.length} users?`)) {
-          await bulkDelete(selected);
-        }
+        showConfirmation(
+          "Bulk Delete Users",
+          `Are you sure you want to delete ${selected.length} users? This action cannot be undone.`,
+          () => bulkDelete(selected),
+          "danger",
+          [],
+          true
+        );
         break;
       default:
         if (ROLE_TEMPLATES[operation]) {
@@ -830,7 +1854,6 @@ export default function AdminMain() {
       );
       if (res.ok) {
         success++;
-        // Force logout users whose permissions were changed
         await forceLogoutUser(uid);
       }
     }
@@ -843,7 +1866,7 @@ export default function AdminMain() {
     for (const uid of userIds) {
       const res = await safeUpdate(`Users/${uid}`, {
         active,
-        lastSync: null // Force logout
+        lastSync: null
       }, {
         action: "bulkToggleActive",
         byUid: adminUid,
@@ -853,7 +1876,6 @@ export default function AdminMain() {
       });
       if (res.ok) {
         success++;
-        // Force logout users who were deactivated
         if (!active) {
           await forceLogoutUser(uid);
         }
@@ -867,7 +1889,6 @@ export default function AdminMain() {
     let success = 0;
     for (const uid of userIds) {
       try {
-        // Archive user first
         const user = users.find(u => u.uid === uid);
         if (user) {
           const archiveData = {
@@ -881,8 +1902,6 @@ export default function AdminMain() {
 
         await firebaseDB.child(`Users/${uid}`).remove();
         success++;
-
-        // Force logout the removed user
         await forceLogoutUser(uid);
 
       } catch (e) {
@@ -987,11 +2006,9 @@ export default function AdminMain() {
           <div className="col-md-2">
             <select className="form-select" value={roleFilter} onChange={(e) => setRoleFilter(e.target.value)}>
               <option value="all">All Roles</option>
-              <option value="admin">Admin</option>
-              <option value="manager">Manager</option>
-              <option value="finance">Finance</option>
-              <option value="auditor">Auditor</option>
-              <option value="user">User</option>
+              {ROLES.map(role => (
+                <option key={role} value={role}>{role}</option>
+              ))}
             </select>
           </div>
           <div className="col-md-2">
@@ -1034,8 +2051,13 @@ export default function AdminMain() {
                 <option value="">Bulk Actions</option>
                 <option value="activate">Activate Selected</option>
                 <option value="deactivate">Deactivate Selected</option>
-                <option value="admin">Apply Admin Template</option>
-                <option value="user">Apply User Template</option>
+                <option value="Super Admin">Apply Super Admin Template</option>
+                <option value="Admin">Apply Admin Template</option>
+                <option value="Manager">Apply Manager Template</option>
+                <option value="Employee">Apply Employee Template</option>
+                <option value="Guest">Apply Guest Template</option>
+                <option value="Viewer">Apply Viewer Template</option>
+                <option value="Approver">Apply Approver Template</option>
                 <option value="delete">Delete Selected</option>
               </select>
             </div>
@@ -1091,6 +2113,8 @@ export default function AdminMain() {
                   />
                 </div>
                 <div className="list-cell user-cell">User</div>
+                <div className="list-cell staffId-cell">Staff ID</div>
+                <div className="list-cell username-cell">Username</div>
                 <div className="list-cell role-cell">Role</div>
                 <div className="list-cell status-cell">Status</div>
                 <div className="list-cell created-cell">Created</div>
@@ -1121,9 +2145,14 @@ export default function AdminMain() {
                       </div>
                       <div className="user-info-sm">
                         <div className="user-name">{user.name || 'Unnamed User'}</div>
-                        {/* <div className="user-uid">{user.uid}</div> */}
                       </div>
                     </div>
+                  </div>
+                  <div className="list-cell staffId-cell">
+                    {user.staffId || '-'}
+                  </div>
+                  <div className="list-cell username-cell">
+                    {user.username || '-'}
                   </div>
                   <div className="list-cell role-cell">
                     <span className={`role-badge role-${user.role || 'user'}`}>
@@ -1146,9 +2175,9 @@ export default function AdminMain() {
                       <button className="btn btn-sm btn-outline-warning" onClick={() => resetPassword(user)}>
                         Reset PW
                       </button>
-                      {/* <button className="btn btn-sm btn-outline-info" onClick={() => impersonate(user)}>
+                      <button className="btn btn-sm btn-outline-info" onClick={() => impersonate(user)}>
                         Impersonate
-                      </button> */}
+                      </button>
                       <button className="btn btn-sm btn-outline-danger" onClick={() => removeUser(user)}>
                         Remove
                       </button>
@@ -1183,13 +2212,36 @@ export default function AdminMain() {
         <div className="modal-overlay">
           <div className="modal-content white-bg">
             <div className="modal-header">
-              <h3>Create New User</h3>
+              <h3 className="text-white">Create New User</h3>
               <button className="modal-close" onClick={() => setShowCreate(false)}>×</button>
             </div>
             <div className="modal-body">
               <form onSubmit={handleCreate} className="bg-white">
                 <div className="form-group">
-                  <label>Full Name</label>
+                  <label>Staff ID *</label>
+                  <input
+                    type="text"
+                    className="form-control"
+                    value={newUser.staffId}
+                    onChange={(e) => setNewUser(prev => ({ ...prev, staffId: e.target.value }))}
+                    placeholder="Enter staff ID"
+                    required
+                  />
+                </div>
+                <div className="form-group">
+                  <label>Username *</label>
+                  <input
+                    type="text"
+                    className="form-control"
+                    value={newUser.username}
+                    onChange={(e) => setNewUser(prev => ({ ...prev, username: e.target.value }))}
+                    placeholder="Enter username (case-sensitive)"
+                    required
+                  />
+                  <small className="text-muted">Username must be alphanumeric and case-sensitive</small>
+                </div>
+                <div className="form-group">
+                  <label>Full Name *</label>
                   <input
                     type="text"
                     className="form-control"
@@ -1200,7 +2252,7 @@ export default function AdminMain() {
                   />
                 </div>
                 <div className="form-group">
-                  <label>Password</label>
+                  <label>Password *</label>
                   <input
                     type="password"
                     className="form-control"
@@ -1211,17 +2263,15 @@ export default function AdminMain() {
                   />
                 </div>
                 <div className="form-group">
-                  <label>Role</label>
+                  <label>Role *</label>
                   <select
                     className="form-select"
                     value={newUser.role}
                     onChange={(e) => setNewUser(prev => ({ ...prev, role: e.target.value }))}
                   >
-                    <option value="user">User</option>
-                    <option value="manager">Manager</option>
-                    <option value="finance">Finance</option>
-                    <option value="auditor">Auditor</option>
-                    <option value="admin">Admin</option>
+                    {ROLES.map(role => (
+                      <option key={role} value={role}>{role}</option>
+                    ))}
                   </select>
                 </div>
                 {error && (
@@ -1260,128 +2310,22 @@ export default function AdminMain() {
 
       {/* Edit Permissions Modal */}
       {editingUser && (
-        <div className="modal-overlay">
-          <div className="modal-content permissions-modal">
-            <div className="modal-header">
-              <div className="user-header-info">
-                <div className="user-details-modal">
-                  <div className="user-avatar-modal">
-                    {editingUser.photoURL ? (
-                      <img src={editingUser.photoURL} alt="User" className="user-photo-modal" />
-                    ) : (
-                      editingUser.name ? editingUser.name.charAt(0).toUpperCase() : 'U'
-                    )}
-                  </div>
-                  <h3>{editingUser.name || 'Unnamed User'}</h3>
-                  <div className="user-meta">
-                    <span className={`role-badge role-${editingUser.role || 'user'}`}>
-                      {editingUser.role || 'user'}
-                    </span>
-                  </div>
-                </div>
-              </div>
-
-              <button className="modal-close" onClick={() => setEditingUser(null)}>×</button>
-            </div>
-            <div className="modal-body permissions-editor">
-              {/* Quick Templates */}
-              <div className="template-quick-actions">
-                <div className="template-buttons">
-                  {Object.keys(ROLE_TEMPLATES).map(template => (
-                    <button
-                      key={template}
-                      className="btn btn-sm btn-outline-primary template-btn"
-                      onClick={() => setTempPerms(JSON.parse(JSON.stringify(ROLE_TEMPLATES[template])))}
-                    >
-                      {template.charAt(0).toUpperCase() + template.slice(1)}
-                    </button>
-                  ))}
-                  <button
-                    className="btn btn-sm btn-outline-danger template-btn"
-                    onClick={() => setTempPerms(makeBlankPerms())}
-                  >
-                    Reset All
-                  </button>
-                </div>
-              </div>
-
-
-              <div className="permissions-grid-view">
-                {MODULES.map((module) => (
-                  <div key={module.key} className="permission-module-card">
-                    <div className="module-card-header">
-                      <span className="module-icon">{module.icon}</span>
-                      <span className="module-name">{module.key}</span>
-                    </div>
-                    <div className="module-actions-grid">
-                      {ALL_ACTIONS.map((action) => {
-                        const isExtra = EXTRA_ACTIONS.includes(action);
-                        const isAvailable = !isExtra || module.extras.includes(action);
-
-                        return (
-                          <label
-                            key={action}
-                            className={`permission-checkbox ${!isAvailable ? 'disabled' : ''}`}
-                            title={!isAvailable ? `Action not available for ${module.key}` : ''}
-                          >
-                            <input
-                              type="checkbox"
-                              checked={!!tempPerms[module.key]?.[action]}
-                              disabled={!isAvailable}
-                              onChange={() => isAvailable && togglePerm(module.key, action)}
-                            />
-                            <span className="checkmark"></span>
-                            <span className="action-label">{action}</span>
-                          </label>
-                        );
-                      })}
-                    </div>
-                    <div className="module-quick-actions">
-                      <button
-                        className="btn btn-xs btn-outline-secondary"
-                        onClick={() => {
-                          BASE_ACTIONS.forEach(action => {
-                            if (tempPerms[module.key]?.[action] !== true) {
-                              togglePerm(module.key, action);
-                            }
-                          });
-                        }}
-                      >
-                        All Core
-                      </button>
-                      <button
-                        className="btn btn-xs btn-outline-secondary"
-                        onClick={() => {
-                          BASE_ACTIONS.forEach(action => {
-                            if (tempPerms[module.key]?.[action] !== false) {
-                              togglePerm(module.key, action);
-                            }
-                          });
-                        }}
-                      >
-                        None
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-
-
-
-
-              <div className="modal-actions">
-                <button className="btn btn-success" onClick={savePerms}>
-                  <span className="btn-icon">💾</span>
-                  Save Permissions
-                </button>
-                <button className="btn btn-secondary" onClick={() => setEditingUser(null)}>
-                  Cancel
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
+        <AdvancedPermissionsModal
+          user={editingUser}
+          permissions={tempPerms}
+          onSave={savePerms}
+          onClose={() => setEditingUser(null)}
+          onTogglePerm={togglePerm}
+        />
       )}
+
+      {/* Password Reset Modal */}
+      <PasswordResetModal
+        show={passwordResetModal.show}
+        user={passwordResetModal.user}
+        onConfirm={handlePasswordReset}
+        onCancel={() => setPasswordResetModal({ show: false, user: null })}
+      />
 
       {/* Audit Log Modal */}
       {audit.open && (
@@ -1432,27 +2376,16 @@ export default function AdminMain() {
       )}
 
       {/* Confirmation Modal */}
-      <ConfirmationModal
+      <EnhancedConfirmationModal
         show={confirmModal.show}
         title={confirmModal.title}
         message={confirmModal.message}
         onConfirm={confirmModal.onConfirm}
         onCancel={() => setConfirmModal(prev => ({ ...prev, show: false }))}
         type={confirmModal.type}
+        inputFields={confirmModal.inputFields}
+        destructive={confirmModal.destructive}
       />
-
-      {/* Remove User Modal */}
-      {removeUserModal.show && (
-        <ConfirmationModal
-          show={true}
-          title="Remove User"
-          message={`Are you sure you want to remove ${removeUserModal.user?.name || removeUserModal.user?.uid}? This action will archive the user data and log them out.`}
-          onConfirm={confirmRemoveUser}
-          onCancel={() => setRemoveUserModal({ show: false, user: null })}
-          confirmText="Remove"
-          type="danger"
-        />
-      )}
 
       {/* Toast Notification */}
       <Toast toast={toast} onClose={() => setToast(null)} />

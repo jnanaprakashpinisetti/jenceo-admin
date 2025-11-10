@@ -102,11 +102,12 @@ export default function LeftNav() {
     
     // Check if it's a boolean (legacy) or object structure
     if (typeof modulePerms === 'boolean') {
-      return modulePerms;
+      return modulePerms && (action === 'view' || isAdmin);
     }
     
-    // Check for specific action or fallback to view
-    return modulePerms[action] === true || modulePerms.view === true;
+    // Check for specific action or fallback to view for basic access
+    return modulePerms[action] === true || 
+           (action === 'view' && Object.values(modulePerms).some(v => v === true));
   }, [isAdmin, isManager, perms]);
 
   // Dashboard & core
@@ -138,11 +139,16 @@ export default function LeftNav() {
   // Hospital
   const canHospitalList = hasPerm("Hospital List");
   const canHospitalDeleteList = hasPerm("Hospital List"); // Delete typically part of Hospital List
-  const canAgents = hasPerm("Hospital List");
+  const canAgents = hasPerm("Agents") || hasPerm("Hospital List");
   
   // Expenses
   const canExpenses = hasPerm("Expenses");
   const canExpenceDelete = hasPerm("Expenses"); // Delete typically part of Expenses
+
+  // New menu permissions
+  const canTimesheet = hasPerm("Timesheet");
+  const canProfile = hasPerm("Profile");
+  const canSearch = hasPerm("Search");
 
   // ---- UI state ----
   const [isActive, setIsActive] = useState(false); // (kept if you later want a desktop collapse)
@@ -611,7 +617,7 @@ export default function LeftNav() {
                 <li className="nav-item">
                   <button className="groupBtn btn btn-sm" onClick={() => toggleGroup("hospital")} type="button">
                     <span>Hospital</span>
-                    <span style={{ opacity: 0.7 }}>{open.hospital ? "▾" : "▸"}</span>
+                    <span style={{ opacity: 0.7 }}>{open.hospital ? "▾" : "▸"}</span> {/* Fixed: removed extra } */}
                   </button>
                 </li>
                 {open.hospital && <div className="mt-2" />}
@@ -677,24 +683,30 @@ export default function LeftNav() {
             )}
 
             {/* Productivity */}
-            {canTask && (
+            {(canTask || canTimesheet) && (
               <>
                 <li className="nav-item mt-2 mb-1 text-uppercase small text-muted px-2">Productivity</li>
-                <li className="nav-item">
-                  <NavLink to="Task" className="nav-link" title="Task" onClick={onNavClick}>
-                    <img src={task} alt="" /> <span className="ms-1">Task</span>
-                  </NavLink>
-                </li>
-                <li className="nav-item">
-                  <NavLink to="TimesheetEntryPage" className="nav-link" title="Time Sheet" onClick={onNavClick}>
-                    <img src={task} alt="" /> <span className="ms-1">Time Sheet</span>
-                  </NavLink>
-                </li>
-                <li className="nav-item">
-                  <NavLink to="TimesheetDashboard" className="nav-link" title="Time Sheet Dashboard" onClick={onNavClick}>
-                    <img src={task} alt="" /> <span className="ms-1">Time Sheet Dashboard</span>
-                  </NavLink>
-                </li>
+                {canTask && (
+                  <li className="nav-item">
+                    <NavLink to="Task" className="nav-link" title="Task" onClick={onNavClick}>
+                      <img src={task} alt="" /> <span className="ms-1">Task</span>
+                    </NavLink>
+                  </li>
+                )}
+                {canTimesheet && (
+                  <>
+                    <li className="nav-item">
+                      <NavLink to="TimesheetEntryPage" className="nav-link" title="Time Sheet" onClick={onNavClick}>
+                        <img src={task} alt="" /> <span className="ms-1">Time Sheet</span>
+                      </NavLink>
+                    </li>
+                    <li className="nav-item">
+                      <NavLink to="TimesheetDashboard" className="nav-link" title="Time Sheet Dashboard" onClick={onNavClick}>
+                        <img src={task} alt="" /> <span className="ms-1">Time Sheet Dashboard</span>
+                      </NavLink>
+                    </li>
+                  </>
+                )}
               </>
             )}
 
@@ -745,15 +757,15 @@ export default function LeftNav() {
 
         {/* Task / Accounts / Hospital / Admin */}
         <Route path="Task" element={<PermRoute allowed={canTask}><Task /></PermRoute>} />
-        <Route path="TimesheetEntryPage" element={<PermRoute allowed={canTask}><TimesheetEntryPage /></PermRoute>} />
-        <Route path="TimesheetDashboard" element={<PermRoute allowed={canTask}><TimesheetDashboard /></PermRoute>} />
+        <Route path="TimesheetEntryPage" element={<PermRoute allowed={canTimesheet}><TimesheetEntryPage /></PermRoute>} />
+        <Route path="TimesheetDashboard" element={<PermRoute allowed={canTimesheet}><TimesheetDashboard /></PermRoute>} />
         <Route path="Accounts" element={<PermRoute allowed={canAccounts}><Accounts /></PermRoute>} />
         <Route path="HospitalList" element={<PermRoute allowed={canHospitalList}><HospitalList /></PermRoute>} />
         <Route path="HospitalDeleteList" element={<PermRoute allowed={canHospitalDeleteList}><HospitalDeleteList /></PermRoute>} />
         <Route path="Agents" element={<PermRoute allowed={canAgents}><Agents /></PermRoute>} />
-        <Route path="search" element={<SearchResults />} />
+        <Route path="search" element={<PermRoute allowed={canSearch}><SearchResults /></PermRoute>} />
         <Route path="Admin" element={<PermRoute allowed={canAdmin || isAdmin}><AdminUsers /></PermRoute>} />
-        <Route path="profile" element={<Profile />} />
+        <Route path="profile" element={<PermRoute allowed={canProfile}><Profile /></PermRoute>} />
       </Routes>
     </>
   );

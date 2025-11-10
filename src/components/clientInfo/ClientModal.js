@@ -99,7 +99,6 @@ const stripLocks = (obj) => {
   // Don't strip locks from payments array - we need them to identify existing vs new payments
   if (Array.isArray(clone.workers)) clone.workers = clone.workers.map(({ __locked, ...rest }) => rest);
   // Keep payments as-is, we'll handle locks separately
-  if (Array.isArray(clone.paymentLogs)) clone.paymentLogs = clone.paymentLogs.map((l) => ({ ...l }));
   if (Array.isArray(clone.fullAuditLogs)) clone.fullAuditLogs = clone.fullAuditLogs.map((l) => ({ ...l }));
   return clone;
 };
@@ -724,7 +723,6 @@ const ClientModal = ({
 
     const paymentsArr = client.payments ? (Array.isArray(client.payments) ? client.payments : Object.values(client.payments)) : [];
     const workersArr = client.workers ? (Array.isArray(client.workers) ? client.workers : Object.values(client.workers)) : [];
-    const logs = client.paymentLogs ? (Array.isArray(client.paymentLogs) ? client.paymentLogs : Object.values(client.paymentLogs)) : [];
     const fullLogs = client.fullAuditLogs ? (Array.isArray(client.fullAuditLogs) ? client.fullAuditLogs : Object.values(client.fullAuditLogs)) : [];
 
     const payments = paymentsArr.map((p) => ({
@@ -801,7 +799,6 @@ const ClientModal = ({
       ...client,
       workers: workers,
       payments: lockRows(payments),
-      paymentLogs: logs || [],
       fullAuditLogs: fullLogs || [],
     };
 
@@ -1132,20 +1129,9 @@ const ClientModal = ({
       }
 
 
-      payload.paymentLogs = Array.isArray(payload.paymentLogs) ? payload.paymentLogs : [];
       payload.fullAuditLogs = Array.isArray(payload.fullAuditLogs) ? payload.fullAuditLogs : [];
 
-      if (summaryEntry) {
-        // Keep latest 10 summary/initial logs + all other non-summary logs
-        const summariesOnly = payload.paymentLogs.filter(
-          (l) => l.type === "summary" || l.type === "initial"
-        );
-        const nonSummaries = payload.paymentLogs.filter(
-          (l) => l.type !== "summary" && l.type !== "initial"
-        );
-        const keepSummaries = summariesOnly.slice(-10);
-        payload.paymentLogs = [...nonSummaries, ...keepSummaries, summaryEntry];
-      }
+ 
 
 
       if (fullEntry) {
@@ -2227,45 +2213,6 @@ const ClientModal = ({
                         </div>
                       </div>
                     )}
-                    {/* Change Log */}
-                    {false && (<div className="mt-3">
-                      <div className="d-flex justify-content-between align-items-center mb-2">
-                        <h6><strong>Change Log</strong></h6>
-                        <div>
-                          <button className="btn btn-sm btn-outline-secondary me-2" onClick={() => setShowFullAudit((s) => !s)}>{showFullAudit ? "Show Summary" : "Show Details"}</button>
-                        </div>
-                      </div>
-
-                      <div className="payment-logs">
-                        {(!showFullAudit && (formData.paymentLogs || []).length === 0) && <div className="text-muted small">No changes yet</div>}
-                        {!showFullAudit && (formData.paymentLogs || []).map((L, i) => (
-                          <div className="entry" key={i}>
-                            <div className="header">
-                              <div>
-                                <div className="user">{L.user || "System"} <span className="badge-type">{L.type || "summary"}</span></div>
-                                <div className="meta">{L.dateLabel || (L.date ? new Date(L.date).toLocaleString() : "")}</div>
-                              </div>
-                              <div className="meta small">{(L.changes || []).length} changes</div>
-                            </div>
-                            <div className="msg">{L.message || (Array.isArray(L.changes) ? L.changes.map(c => `${c.friendly}: '${String(c.before)}' → '${String(c.after)}'`).join("\n") : "-")}</div>
-                          </div>
-                        ))}
-
-                        {showFullAudit && (formData.fullAuditLogs || []).length === 0 && <div className="text-muted small">No detailed audit entries</div>}
-                        {showFullAudit && (formData.fullAuditLogs || []).map((L, i) => (
-                          <div className="entry" key={i}>
-                            <div className="header">
-                              <div>
-                                <div className="user">{L.user || "System"} <span className="badge-type">full</span></div>
-                                <div className="meta">{L.dateLabel || (L.date ? new Date(L.date).toLocaleString() : "")}</div>
-                              </div>
-                              <div className="meta small">{(L.changes || []).length} items</div>
-                            </div>
-                            <div className="msg">{Array.isArray(L.changes) ? L.changes.map(c => `${c.friendly} (${c.path}): '${String(c.before)}' → '${String(c.after)}'`).join("\n") : (L.message || "-")}</div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>)}
                   </div>
                 )}
 

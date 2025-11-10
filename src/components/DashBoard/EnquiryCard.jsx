@@ -505,17 +505,17 @@ export default function EnquiryCard({
                                 {detailRow ? (
                                     <div className="row g-3">
                                         <div className="col-md-6">
-                                            <div><strong>Name: </strong> {detailRow.name || "-"}</div>
-                                            <div><strong>Mobile: </strong> {detailRow.mobile || detailRow.mobileNo || "-"}</div>
+                                            <div><strong>Name: &nbsp; </strong> {detailRow.name || "-"}</div>
+                                            <div><strong>Mobile: &nbsp; </strong> {detailRow.mobile || detailRow.mobileNo || "-"}</div>
                                             <div><strong>{tab === "enquiries" ? "Service" : "Location"}:</strong> {tab === "enquiries" ? (detailRow.service || "-") : (detailRow.location || "-")}</div>
                                         </div>
                                         <div className="col-md-6">
                                             {(() => {
                                                 const d = parseDateRobust(detailRow.date || detailRow.createdAt || detailRow.reminderDate || detailRow.callReminderDate);
-                                                return <div><strong>Date: </strong> {d ? d.toLocaleString() : "—"}</div>;
+                                                return <div><strong>Date:&nbsp; </strong> {d ? d.toLocaleString() : "—"}</div>;
                                             })()}
-                                            <div><strong>{tab === "enquiries" ? "Through" : "Call Through"}: </strong> {tab === "enquiries" ? (detailRow.through || "-") : (detailRow.callThrough || detailRow.through || detailRow.source || "-")}</div>
-                                            <div><strong>Notes: </strong> {detailRow.notes || detailRow.remark || detailRow.message || "-"}</div>
+                                            <div><strong>{tab === "enquiries" ? "Through" : "Call Through"}: &nbsp;</strong> {tab === "enquiries" ? (detailRow.through || "-") : (detailRow.callThrough || detailRow.through || detailRow.source || "-")}</div>
+                                            <div><strong>Notes: &nbsp;</strong> {detailRow.notes || detailRow.remark || detailRow.message || "-"}</div>
                                         </div>
                                     </div>
                                 ) : (

@@ -55,12 +55,19 @@ const hasRTDB =
 const getRef = (path) => {
   if (!hasRTDB) return null;
   const p = String(path || "").trim();
-  if (!p) {
-    return isFn(firebaseDB.child)
-      ? firebaseDB.child("ToDo")
-      : firebaseDB.ref("ToDo");
+  
+  // Always start from root and build the path
+  let ref = isFn(firebaseDB.child) ? firebaseDB : firebaseDB;
+  
+  if (p) {
+    // Split the path and navigate through it
+    const pathParts = p.split('/').filter(part => part !== '');
+    pathParts.forEach(part => {
+      ref = isFn(ref.child) ? ref.child(part) : ref.ref(part);
+    });
   }
-  return isFn(firebaseDB.child) ? firebaseDB.child(p) : firebaseDB.ref(p);
+  
+  return ref;
 };
 
 // ---------- constants ----------
@@ -248,7 +255,8 @@ export default function ToDo() {
   useEffect(() => {
     if (!backendOK) return;
     
-    const ref = getRef("Projects");
+    // This should point to ToDo/Projects
+    const ref = getRef("ToDo/Projects");
     const cb = (snap) => {
       const val = snap.val?.() ?? snap;
       const obj = val || {};
@@ -259,7 +267,7 @@ export default function ToDo() {
       list.sort((a, b) => (b.updatedAt || b.createdAt || 0) - (a.updatedAt || a.createdAt || 0));
       setProjects(list);
     };
-
+  
     try {
       if (isFn(ref.on)) {
         ref.on("value", cb);
@@ -283,11 +291,12 @@ export default function ToDo() {
     }
     
     try {
-      const ref = getRef(`Projects/${projectId}/teamMembers`);
+      // This should point to ToDo/Projects/projectId/teamMembers
+      const ref = getRef(`ToDo/Projects/${projectId}/teamMembers`);
       await ref.set(teamMembers);
       
       // Also update the project's updatedAt
-      await getRef(`Projects/${projectId}`).update({
+      await getRef(`ToDo/Projects/${projectId}`).update({
         updatedAt: Date.now()
       });
       
@@ -306,7 +315,7 @@ export default function ToDo() {
     }
     
     try {
-      await getRef(`Projects/${projectId}`).update({
+      await getRef(`ToDo/Projects/${projectId}`).update({
         status: status,
         updatedAt: Date.now()
       });
@@ -345,7 +354,7 @@ export default function ToDo() {
         }
       }
       
-      await getRef(`Projects/${projectId}`).remove();
+      await getRef(`ToDo/Projects/${projectId}`).remove();
       setProjectId("ALL");
       notify("Project deleted successfully");
     } catch (error) {
@@ -362,25 +371,26 @@ export default function ToDo() {
     
     try {
       const now = Date.now();
-      const ref = getRef("Projects");
+      // This should point to ToDo/Projects
+      const ref = getRef("ToDo/Projects");
       const project = {
         ...projectData,
         createdAt: now,
         updatedAt: now,
         sequence: 0,
-        status: "active", // NEW: Default status
-        teamMembers: {}, // NEW: Empty team by default
+        status: "active",
+        teamMembers: {},
       };
-
+  
       let projectId;
       if (isFn(ref.push)) {
         const res = await ref.push(project);
         projectId = res.key;
       } else {
         projectId = String(now);
-        await getRef(`Projects/${projectId}`).set(project);
+        await getRef(`ToDo/Projects/${projectId}`).set(project);
       }
-
+  
       notify("Project created successfully");
       return projectId;
     } catch (error) {
@@ -394,7 +404,8 @@ export default function ToDo() {
     if (!backendOK) return 1;
     
     try {
-      const ref = getRef(`Projects/${projectId}/sequence`);
+      // This should point to ToDo/Projects/projectId/sequence
+      const ref = getRef(`ToDo/Projects/${projectId}/sequence`);
       let nextSeq = 1;
       
       if (isFn(ref.transaction)) {
@@ -523,12 +534,19 @@ export default function ToDo() {
     }
     setLoading(true);
     setError("");
-
+  
+    // This should point to ToDo (for tasks)
     const ref = getRef("ToDo");
     const cb = (snap) => {
       const val = snap.val?.() ?? snap;
       const obj = val || {};
-      const list = Object.entries(obj).map(([id, v]) => ({
+      
+      // Filter out the Projects node from tasks
+      const taskEntries = Object.entries(obj).filter(([key, value]) => 
+        key !== "Projects" && typeof value === "object" && value !== null
+      );
+      
+      const list = taskEntries.map(([id, v]) => ({
         id,
         ...v,
       }));
@@ -539,7 +557,7 @@ export default function ToDo() {
       setTasks(list);
       setLoading(false);
     };
-
+  
     try {
       if (isFn(ref.on)) {
         ref.on("value", cb);
@@ -969,13 +987,13 @@ export default function ToDo() {
     }
     setLoading(true);
     setError("");
-
+  
     const now = Date.now();
-
+  
     // Get ticket sequence from project
     let ticketSeq = "1";
     let finalTicketKey = newTask.ticketKey || "TASK";
-
+  
     if (newTask.projectId) {
       try {
         const nextSeq = await incrementProjectSeq(newTask.projectId);
@@ -1028,8 +1046,9 @@ export default function ToDo() {
         },
       },
     };
-
+  
     try {
+      // This should point to ToDo (for tasks)
       const ref = getRef("ToDo");
       if (isFn(ref.push)) {
         await ref.push(payload);

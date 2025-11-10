@@ -594,56 +594,59 @@ export default function AgentDisplay() {
       
       
 
-    // Real-time listeners after initial load
-    useEffect(() => {
-        if (workerAgents.length === 0 && clientAgents.length === 0) return;
 
-        const workerRef = firebaseDB.child("AgentData/WorkerAgent");
-        const clientRef = firebaseDB.child("AgentData/ClientAgent");
+// Real-time listeners - always set up regardless of initial state
+useEffect(() => {
+    const workerRef = firebaseDB.child("AgentData/WorkerAgent");
+    const clientRef = firebaseDB.child("AgentData/ClientAgent");
 
-        const onWorker = workerRef.on("value", (snap) => {
-            if (snap.exists()) {
-                const data = snap.val();
-                const list = [];
-                if (data && typeof data === 'object') {
-                    Object.entries(data).forEach(([key, value]) => {
-                        if (value && typeof value === 'object') {
-                            list.push({
-                                id: key,
-                                agentType: "worker",
-                                ...value
-                            });
-                        }
-                    });
-                }
-                setWorkerAgents(sortByIdNo(list));
+    const onWorker = workerRef.on("value", (snap) => {
+        if (snap.exists()) {
+            const data = snap.val();
+            const list = [];
+            if (data && typeof data === 'object') {
+                Object.entries(data).forEach(([key, value]) => {
+                    if (value && typeof value === 'object') {
+                        list.push({
+                            id: key,
+                            agentType: "worker",
+                            ...value
+                        });
+                    }
+                });
             }
-        });
+            setWorkerAgents(sortByIdNo(list));
+        } else {
+            setWorkerAgents([]); // Clear if no data
+        }
+    });
 
-        const onClient = clientRef.on("value", (snap) => {
-            if (snap.exists()) {
-                const data = snap.val();
-                const list = [];
-                if (data && typeof data === 'object') {
-                    Object.entries(data).forEach(([key, value]) => {
-                        if (value && typeof value === 'object') {
-                            list.push({
-                                id: key,
-                                agentType: "client",
-                                ...value
-                            });
-                        }
-                    });
-                }
-                setClientAgents(sortByIdNo(list));
+    const onClient = clientRef.on("value", (snap) => {
+        if (snap.exists()) {
+            const data = snap.val();
+            const list = [];
+            if (data && typeof data === 'object') {
+                Object.entries(data).forEach(([key, value]) => {
+                    if (value && typeof value === 'object') {
+                        list.push({
+                            id: key,
+                            agentType: "client",
+                            ...value
+                        });
+                    }
+                });
             }
-        });
+            setClientAgents(sortByIdNo(list));
+        } else {
+            setClientAgents([]); // Clear if no data
+        }
+    });
 
-        return () => {
-            workerRef.off("value", onWorker);
-            clientRef.off("value", onClient);
-        };
-    }, []);
+    return () => {
+        workerRef.off("value", onWorker);
+        clientRef.off("value", onClient);
+    };
+}, []); 
 
     const sortByIdNo = (arr) => {
         const safeNum = (id) => {
@@ -1187,6 +1190,9 @@ export default function AgentDisplay() {
     onSaved={(updatedAgent) => {
         // Just refresh the data without closing modal
         refreshData();
+        setShowModal(false);
+        setModalData(null);
+        setModalMode("view");
     }}
 />
 

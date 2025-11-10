@@ -59,6 +59,17 @@ function parseDateRobust(v) {
 
 function monthKey(d) { const dt = d instanceof Date ? d : parseDateRobust(d); if (!dt) return 'Unknown'; return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}`; }
 
+// Helper function to convert payments to array (same as in AgentModal)
+function convertPaymentsToArray(payments) {
+  if (!payments) return [];
+  if (Array.isArray(payments)) return payments;
+  
+  return Object.entries(payments).map(([key, value]) => ({
+    id: key,
+    ...value
+  }));
+}
+
 /* ---------------------- Normalizers ---------------------- */
 function extractClientPayments(clientRecord = {}) {
   const paymentsArr = Array.isArray(clientRecord.payments)
@@ -297,6 +308,46 @@ function extractHospitalServiceCharges(hospitalNode = {}) {
   return out;
 }
 
+// Extract Agent Payouts from AgentData
+function extractAgentPayouts(agentNode = {}) {
+  const out = [];
+  const isPlain = (x) => x && typeof x === "object" && !Array.isArray(x);
+
+  if (!isPlain(agentNode)) return out;
+
+  Object.values(agentNode).forEach((agent) => {
+    if (!isPlain(agent)) return;
+    
+    const payments = convertPaymentsToArray(agent.payments);
+    
+    if (payments && payments.length) {
+      payments.forEach((p) => {
+        if (!p) return;
+        const amount = safeNumber(p.amount ?? p.paymentAmount ?? p.paidAmount ?? p.total ?? 0);
+        const date = p.date ?? p.paymentDate ?? p.paidOn ?? agent.createdAt ?? "";
+        const agentName = agent.agentName ?? agent.name ?? "Agent";
+        
+        // Only include payments with positive amounts (exclude charges)
+        if (amount > 0) {
+          out.push({
+            type: "agent",
+            date,
+            parsedDate: parseDateRobust(date),
+            amount: amount,
+            raw: p,
+            agentData: agent,
+            agentName: agentName,
+            source: "AgentData"
+          });
+        }
+      });
+    }
+  });
+
+  return out;
+}
+
+
 /* ---------------------- SVG Charts (No external deps) ---------------------- */
 function BarChart({ data = [], width = 520, height = 150, pad = 30, color = "url(#gradProfit)" }) {
   const max = Math.max(...data.map(d => d.value), 1);
@@ -379,6 +430,10 @@ function DonutChart({ segments = [], size = 150, stroke = 18, title = "Expenses"
         <linearGradient id="gradHospital" x1="0" y1="0" x2="1" y2="1">
           <stop offset="0%" stopColor="#06b6d4" />
           <stop offset="100%" stopColor="#0e7490" />
+        </linearGradient>
+        <linearGradient id="gradAgent" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0%" stopColor="#ec4899" />
+          <stop offset="100%" stopColor="#be185d" />
         </linearGradient>
       </defs>
       <circle cx={size / 2} cy={size / 2} r={r} stroke="#e2e8f0" strokeWidth={stroke} fill="none" />
@@ -471,7 +526,7 @@ export default function ResultsCard({
 
       const rebuild = () => {
         const rows = [];
-
+     
         const pushClients = (node) => {
           Object.keys(node || {}).forEach((k) => {
             const rec = node[k] || {};
@@ -480,17 +535,21 @@ export default function ResultsCard({
         };
         pushClients(snapshots.clientsActive || {});
         pushClients(snapshots.clientsExit || {});
-
+      
         extractInvestments(snapshots.investments || {}).forEach((r) => rows.push(r));
-
+      
         // Collect petty from root/Admin/admin then de-duplicate by (id?) else amount+category+month
         {
           const pettyCollected = [];
           extractPettyCash(snapshots.petty || {}).forEach((r) => pettyCollected.push(r));
           extractPettyCash(snapshots.pettyAdmin || {}).forEach((r) => pettyCollected.push(r));
           extractPettyCash(snapshots.pettyAdminLower || {}).forEach((r) => pettyCollected.push(r));
+          
+          // Add agent payouts ONLY (no charges)
           extractAgentPayouts(snapshots.agentWorker || {}).forEach((r) => rows.push(r));
           extractAgentPayouts(snapshots.agentClient || {}).forEach((r) => rows.push(r));
+          // REMOVED: extractAgentCharges calls
+          
           const seen = new Set();
           pettyCollected.forEach((r) => {
             const raw = r.raw || {};
@@ -503,22 +562,22 @@ export default function ResultsCard({
             rows.push(r);
           });
         }
-
+      
         const pushStaff = (node) => { extractStaffSalaries(node || {}).forEach((r) => rows.push(r)); };
         pushStaff(snapshots.staffActive || {});
         pushStaff(snapshots.staffExit || {});
-
+      
         const pushWorkers = (node) => { extractWorkerSalaries(node || {}).forEach((r) => rows.push(r)); };
         pushWorkers(snapshots.workerActive || {});
         pushWorkers(snapshots.workerExit || {});
-
+      
         // Extract Agent Commission and Hospital Service Charges
         extractAgentCommission(snapshots.hospitalData || {}).forEach((r) => rows.push(r));
         extractHospitalServiceCharges(snapshots.hospitalData || {}).forEach((r) => rows.push(r));
-
+      
         rows.forEach((r) => { if (!r.parsedDate && r.date) r.parsedDate = parseDateRobust(r.date); });
         rows.sort((a, b) => (b.parsedDate?.getTime() || 0) - (a.parsedDate?.getTime() || 0));
-
+      
         if (!mounted) return;
         setAllRows(rows);
         setLoading(false);
@@ -564,7 +623,17 @@ export default function ResultsCard({
 
   /* ------------- Calculations ------------- */
   function splitSums(rows) {
-    const s = { income: 0, investment: 0, petty: 0, staff: 0, worker: 0, commission: 0, hospital: 0 };
+    const s = { 
+      income: 0, 
+      investment: 0, 
+      petty: 0, 
+      staff: 0, 
+      worker: 0, 
+      commission: 0, 
+      hospital: 0,
+      agent: 0,
+      agentcharges: 0
+    };
     (rows || []).forEach((r) => {
       if (r.type === "client") s.income += Number(r.payment || 0);
       else if (r.type === "investment") s.investment += Number(r.amount || 0);
@@ -573,9 +642,11 @@ export default function ResultsCard({
       else if (r.type === "worker") s.worker += Number(r.amount || 0);
       else if (r.type === "commission") s.commission += Number(r.amount || 0);
       else if (r.type === "hospital") s.hospital += Number(r.amount || 0);
+      else if (r.type === "agent") s.agent += Number(r.amount || 0);
+      else if (r.type === "agentcharges") s.agentcharges += Number(r.amount || 0);
     });
-    // Profit calculation: Client Amount - (Investment + Worker Salary + Staff Salary + Petty Cash + Agent Commission)
-    s.expense = s.investment + s.petty + s.staff + s.worker + s.commission;
+    // Profit calculation: Client Amount - (Investment + Worker Salary + Staff Salary + Petty Cash + Agent Commission + Agent Payouts)
+    s.expense = s.investment + s.petty + s.staff + s.worker + s.commission + s.agent;
     s.profit = s.income - s.expense;
     return s;
   }
@@ -593,7 +664,6 @@ export default function ResultsCard({
   const activeMonthLabel = React.useMemo(() => {
     return String(activeMonth) === "ALL" ? "All" : (monthLabels[Number(activeMonth)] || "-");
   }, [activeMonth]);
-
 
   const chartDataYear = useMemo(() => {
     if (!activeYear) return [];
@@ -616,6 +686,7 @@ export default function ResultsCard({
       { key: "Workers", value: s.worker, color: "url(#gradWorker)" },
       { key: "Petty", value: s.petty, color: "url(#gradPetty)" },
       { key: "Commission", value: s.commission, color: "url(#gradCommission)" },
+      { key: "Agent Payouts", value: s.agent, color: "url(#gradAgent)" },
     ];
   }, [currentYearTotals]);
 
@@ -628,6 +699,7 @@ export default function ResultsCard({
       { key: "Workers", value: s.worker, color: "url(#gradWorker)" },
       { key: "Petty", value: s.petty, color: "url(#gradPetty)" },
       { key: "Commission", value: s.commission, color: "url(#gradCommission)" },
+      { key: "Agent Payouts", value: s.agent, color: "url(#gradAgent)" },
     ];
   }, [currentMonthTotals]);
 
@@ -637,7 +709,6 @@ export default function ResultsCard({
     if (String(activeMonth) === "ALL") return yearMap[activeYear]?.rows || [];
     return yearMap[activeYear]?.months?.[activeMonth] || [];
   }, [activeYear, activeMonth, yearMap]);
-
 
   // Get all available months for the selected year
   const availableMonths = useMemo(() => {
@@ -707,41 +778,6 @@ export default function ResultsCard({
     };
   };
 
-  //Get Worker and Client Agetn Commition
-
-  // Extract Agent commission payouts from AgentData trees
-  function extractAgentPayouts(agentNode = {}) {
-    const out = [];
-    const isPlain = (x) => x && typeof x === "object" && !Array.isArray(x);
-    if (!isPlain(agentNode)) return out;
-
-    Object.values(agentNode).forEach((agent) => {
-      if (!isPlain(agent)) return;
-      const pays = Array.isArray(agent.payments)
-        ? agent.payments
-        : (isPlain(agent.payments) ? Object.values(agent.payments) : []);
-      pays.forEach((p) => {
-        if (!p) return;
-        const amt = safeNumber(p.amount ?? p.paidAmount ?? p.commission ?? 0);
-        if (amt > 0) {
-          const date = p.date ?? p.paymentDate ?? p.createdAt ?? "";
-          out.push({
-            type: "commission",                 // reuse existing commission bucket
-            date,
-            parsedDate: parseDateRobust(date),
-            amount: amt,                        // expense
-            raw: p,
-            agentData: agent,                   // keep who this was for
-            source: "AgentData",
-          });
-        }
-      });
-    });
-
-    return out;
-  }
-
-
   // Function to get transaction details based on type
   const getTransactionDetails = (tx) => {
     const details = [];
@@ -778,6 +814,18 @@ export default function ResultsCard({
         details.push({ label: "Service Type", value: tx.hospitalData?.serviceType || tx.raw?.serviceType || "-" });
         details.push({ label: "Commission Rate", value: tx.raw?.commissionRate || tx.raw?.rate ? `${tx.raw.commissionRate || tx.raw.rate}%` : "-" });
         details.push({ label: "Reference", value: tx.raw?.refNo || tx.raw?.reference || "-" });
+        break;
+
+      case "agent":
+      case "agentcharges":
+        // Agent payment/charge related data
+        details.push({ label: "Agent Name", value: tx.agentName || tx.agentData?.agentName || tx.agentData?.name || "-" });
+        details.push({ label: "Agent ID", value: tx.agentData?.idNo || tx.agentData?.id || "-" });
+        details.push({ label: "Agent Type", value: tx.agentData?.agentType || "Agent" });
+        details.push({ label: "Payment Type", value: tx.type === "agent" ? "Payout" : "Service Charges" });
+        details.push({ label: "Receipt No", value: tx.raw?.receiptNo || tx.raw?.refNo || "-" });
+        details.push({ label: "Client Name", value: tx.raw?.clientName || "-" });
+        details.push({ label: "Payment Mode", value: tx.raw?.type || tx.raw?.paymentMode || "-" });
         break;
 
       case "investment":
@@ -843,25 +891,16 @@ export default function ResultsCard({
             "-"
         });
 
-        // Client Name (with clientFirstName/clientLastName fallback)
         details.push({
           label: "Recept No",
           value:
-            tx.workDetail?.days
-            ||
-            `${tx.days
-              ?.days
-              || ""} ${tx.workDetail?.days
-              || ""}`.trim() ||
-            tx.raw?.days
-            ||
-            tx.workerData?.days
-            ||
+            tx.workDetail?.days ||
+            `${tx.days?.days || ""} ${tx.workDetail?.days || ""}`.trim() ||
+            tx.raw?.days ||
+            tx.workerData?.days ||
             "-"
         });
-
         break;
-
 
       case "petty":
         // Petty cash related data
@@ -1055,6 +1094,7 @@ export default function ResultsCard({
                         <th className="text-end">Staff Salaries</th>
                         <th className="text-end">Petty Cash</th>
                         <th className="text-end">Agent Commission</th>
+                        <th className="text-end">Agent Payouts</th>
                         <th className="text-end">Hospital Charges</th>
                         <th className="text-end">Profit</th>
                       </tr>
@@ -1068,6 +1108,7 @@ export default function ResultsCard({
                         <td className="text-end">{formatINR(overall.staff)}</td>
                         <td className="text-end">{formatINR(overall.petty)}</td>
                         <td className="text-end">{formatINR(overall.commission)}</td>
+                        <td className="text-end">{formatINR(overall.agent)}</td>
                         <td className="text-end">{formatINR(overall.hospital)}</td>
                         <td className="text-end fw-bold">{formatINR(overall.profit)}</td>
                       </tr>
@@ -1079,6 +1120,7 @@ export default function ResultsCard({
                         <td className="text-end">{formatINR(currentYearTotals.staff)}</td>
                         <td className="text-end">{formatINR(currentYearTotals.petty)}</td>
                         <td className="text-end">{formatINR(currentYearTotals.commission)}</td>
+                        <td className="text-end">{formatINR(currentYearTotals.agent)}</td>
                         <td className="text-end">{formatINR(currentYearTotals.hospital)}</td>
                         <td className="text-end fw-bold">{formatINR(currentYearTotals.profit)}</td>
                       </tr>
@@ -1090,6 +1132,7 @@ export default function ResultsCard({
                         <td className="text-end">{formatINR(currentMonthTotals.staff)}</td>
                         <td className="text-end">{formatINR(currentMonthTotals.petty)}</td>
                         <td className="text-end">{formatINR(currentMonthTotals.commission)}</td>
+                        <td className="text-end">{formatINR(currentMonthTotals.agent)}</td>
                         <td className="text-end">{formatINR(currentMonthTotals.hospital)}</td>
                         <td className="text-end fw-bold">{formatINR(currentMonthTotals.profit)}</td>
                       </tr>
@@ -1130,7 +1173,9 @@ export default function ResultsCard({
                                 {r.type === "petty" ? <span className="badge bg-violet-subtle text-violet fw-semibold">Petty</span> : null}
                                 {r.type === "staff" ? <span className="badge bg-sky-subtle text-sky fw-semibold">Staff</span> : null}
                                 {r.type === "worker" ? <span className="badge bg-amber-subtle text-amber fw-semibold">Worker</span> : null}
-                                {r.type === "commission" ? <span className="badge bg-violet-subtle text-warning fw-semibold">Commission</span> : null}
+                                {r.type === "commission" ? <span className="badge bg-warning-subtle text-warning fw-semibold">Commission</span> : null}
+                                {r.type === "agent" ? <span className="badge bg-pink-subtle text-pink fw-semibold">Agent Payout</span> : null}
+                                {r.type === "agentcharges" ? <span className="badge bg-indigo-subtle text-indigo fw-semibold">Agent Charges</span> : null}
                               </td>
                               <td className={`text-end ${isOut ? "text-danger" : "text-success"}`}>{formatINR(amt)}</td>
                               <td className="text-muted tiny">{r.raw?.remarks || r.raw?.description || r.raw?.invest_purpose || r.raw?.paymentFor || ""}</td>
@@ -1193,7 +1238,9 @@ export default function ResultsCard({
                                     selectedTx.type === "petty" ? "bg-info" :
                                       selectedTx.type === "staff" ? "bg-sky" :
                                         selectedTx.type === "worker" ? "bg-warning" :
-                                          selectedTx.type === "commission" ? "bg-warning" : "bg-secondary"
+                                          selectedTx.type === "commission" ? "bg-warning" :
+                                            selectedTx.type === "agent" ? "bg-pink" :
+                                              selectedTx.type === "agentcharges" ? "bg-indigo" : "bg-secondary"
                                   } text-uppercase fs-6`}>
                                   {selectedTx.type} Transaction
                                 </span>

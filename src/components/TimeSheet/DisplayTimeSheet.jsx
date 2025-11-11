@@ -3170,12 +3170,12 @@ const DisplayTimeSheet = () => {
 
 
                                                             {/* Delete Button - Only show for non-approved timesheets */}
-                                                            {(ts.status === 'draft' || ts.status === 'submitted' || ts.status === 'rejected') && (
+                                                            {(ts.status === 'draft' || ts.status === 'rejected') && (
                                                                 <button
                                                                     className="btn btn-outline-danger"
                                                                     title="Delete Timesheet"
-                                                                    onClick={() => { if (!isReadOnly) return; openPrevTsDelete(ts); }}
-                                                                    disabled={!isReadOnly}
+                                                                    onClick={() => openPrevTsDelete(ts)}
+                                                                    disabled={isReadOnly}
                                                                 >
                                                                     <i className="bi bi-trash"></i>
                                                                 </button>

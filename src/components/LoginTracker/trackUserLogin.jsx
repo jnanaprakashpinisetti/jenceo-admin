@@ -90,7 +90,7 @@ export const trackUserLogin = async (userData, ipAddress = 'Unknown') => {
             securityScore: securityContext.securityScore || 50,
             riskLevel: securityContext.riskLevel || 'MEDIUM',
             isSuspicious: suspiciousCheck.isSuspicious || false,
-            suspiciousReason: suspiciousCheck.reason || null, // FIXED: Use null instead of undefined
+            suspiciousReason: suspiciousCheck.reason || null,
             
             // Device and Browser Info
             browser: getBrowserInfo(navigator.userAgent),
@@ -100,18 +100,21 @@ export const trackUserLogin = async (userData, ipAddress = 'Unknown') => {
             
             // Session Information
             sessionId: generateSessionId(),
-            userType: userData.userType || 'regular' // admin, moderator, regular
+            userType: userData.userType || 'regular', // admin, moderator, regular
+            
+            // Status
+            status: suspiciousCheck.isSuspicious ? 'SUSPICIOUS' : 'SUCCESS'
         };
 
         console.log('Tracking login:', loginData);
 
-        // Store login data
-        const result = await firebaseDB.child('LoginLogs').push(loginData);
+        // Store login data in LoginData only
+        const result = await firebaseDB.child('LoginData').push(loginData);
         
         if (result && result.key) {
             console.log('Login tracked successfully with ID:', result.key);
             
-            // Update user login history
+            // Update user login history in LoginData
             await updateUserLoginHistory(userData.uid, {
                 loginId: result.key,
                 ipAddress,
@@ -119,7 +122,7 @@ export const trackUserLogin = async (userData, ipAddress = 'Unknown') => {
                 location: locationData
             });
 
-            // Update IP analytics
+            // Update IP analytics in LoginData
             await updateIPAnalytics(ipAddress, userData.uid, locationData);
             
             return { 
@@ -135,12 +138,14 @@ export const trackUserLogin = async (userData, ipAddress = 'Unknown') => {
     } catch (error) {
         console.error('Error tracking login:', error);
         
-        // Log the error as a security event
-        await firebaseDB.child('SecurityEvents').push({
+        // Log the error as a security event in LoginData
+        await firebaseDB.child('LoginData').push({
             type: 'TRACKING_ERROR',
             error: error.message,
             timestamp: new Date().toISOString(),
-            severity: 'LOW'
+            loginTime: new Date().toISOString(),
+            severity: 'LOW',
+            status: 'ERROR'
         });
         
         return { success: false, error: error.message };
@@ -296,14 +301,16 @@ export const ipWhitelistManager = {
                 lastModified: new Date().toISOString()
             });
 
-            // Log the security event
-            await firebaseDB.child('SecurityEvents').push({
+            // Log the security event in LoginData
+            await firebaseDB.child('LoginData').push({
                 type: 'IP_WHITELIST_ADDED',
                 ipAddress: ipAddress,
                 description: description,
                 addedBy: addedBy,
                 timestamp: new Date().toISOString(),
-                severity: 'LOW'
+                loginTime: new Date().toISOString(),
+                severity: 'LOW',
+                status: 'INFO'
             });
 
             return { success: true, id: result.key };
@@ -321,14 +328,16 @@ export const ipWhitelistManager = {
             
             await firebaseDB.child(`IPWhitelist/${ipId}`).remove();
 
-            // Log the security event
-            await firebaseDB.child('SecurityEvents').push({
+            // Log the security event in LoginData
+            await firebaseDB.child('LoginData').push({
                 type: 'IP_WHITELIST_REMOVED',
                 ipAddress: ipData?.ip,
                 ipId: ipId,
                 removedBy: removedBy,
                 timestamp: new Date().toISOString(),
-                severity: 'LOW'
+                loginTime: new Date().toISOString(),
+                severity: 'LOW',
+                status: 'INFO'
             });
 
             return { success: true };
@@ -367,14 +376,16 @@ export const ipWhitelistManager = {
             await firebaseDB.child(`IPWhitelist/${ipId}/active`).set(isActive);
             await firebaseDB.child(`IPWhitelist/${ipId}/lastModified`).set(new Date().toISOString());
 
-            // Log the security event
-            await firebaseDB.child('SecurityEvents').push({
+            // Log the security event in LoginData
+            await firebaseDB.child('LoginData').push({
                 type: 'IP_WHITELIST_TOGGLED',
                 ipId: ipId,
                 newStatus: isActive,
                 modifiedBy: modifiedBy,
                 timestamp: new Date().toISOString(),
-                severity: 'LOW'
+                loginTime: new Date().toISOString(),
+                severity: 'LOW',
+                status: 'INFO'
             });
 
             return { success: true };
@@ -408,13 +419,15 @@ export const ipWhitelistManager = {
                 lastModified: new Date().toISOString()
             });
 
-            // Log the security event
-            await firebaseDB.child('SecurityEvents').push({
+            // Log the security event in LoginData
+            await firebaseDB.child('LoginData').push({
                 type: 'IP_RESTRICTION_CHANGED',
                 enabled: enabled,
                 strictMode: strictMode,
                 timestamp: new Date().toISOString(),
-                severity: 'MEDIUM'
+                loginTime: new Date().toISOString(),
+                severity: 'MEDIUM',
+                status: 'INFO'
             });
 
             return { success: true };
@@ -436,14 +449,16 @@ export const ipWhitelistManager = {
                 threatLevel: 'HIGH'
             });
 
-            // Log the security event
-            await firebaseDB.child('SecurityEvents').push({
+            // Log the security event in LoginData
+            await firebaseDB.child('LoginData').push({
                 type: 'IP_BLACKLISTED',
                 ipAddress: ipAddress,
                 reason: reason,
                 addedBy: addedBy,
                 timestamp: new Date().toISOString(),
-                severity: 'HIGH'
+                loginTime: new Date().toISOString(),
+                severity: 'HIGH',
+                status: 'BLOCKED'
             });
 
             return { success: true, id: result.key };
@@ -451,35 +466,9 @@ export const ipWhitelistManager = {
             console.error('Error adding IP to blacklist:', error);
             return { success: false, error: error.message };
         }
-    },
-
-    // Get security events
-    async getSecurityEvents(limit = 100) {
-        try {
-            const snapshot = await firebaseDB.child('SecurityEvents')
-                .orderByChild('timestamp')
-                .limitToLast(limit)
-                .once('value');
-                
-            if (!snapshot.exists()) return {};
-            
-            const events = snapshot.val();
-            const formattedEvents = {};
-            
-            Object.entries(events).forEach(([id, data]) => {
-                formattedEvents[id] = {
-                    id,
-                    ...data
-                };
-            });
-            
-            return formattedEvents;
-        } catch (error) {
-            console.error('Error getting security events:', error);
-            return {};
-        }
     }
 };
+
 
 // Enhanced location detection
 export const getEnhancedLocationFromIP = async (ipAddress) => {
@@ -793,16 +782,17 @@ const updateIPThreatLevel = async (ipAddress, eventType) => {
     }
 };
 
+// Update user login history to use LoginData
 const updateUserLoginHistory = async (userId, loginData) => {
     try {
-        await firebaseDB.child('UserLoginHistory').child(userId).push(loginData);
-        
+        await firebaseDB.child('LoginData').child(userId).push(loginData);
+
         // Keep only last 50 logins per user
-        const snapshot = await firebaseDB.child('UserLoginHistory').child(userId)
+        const snapshot = await firebaseDB.child('LoginData').child(userId)
             .orderByKey()
             .limitToLast(50)
             .once('value');
-            
+
         const logins = snapshot.val();
         if (logins && Object.keys(logins).length > 50) {
             const keys = Object.keys(logins);
@@ -811,21 +801,23 @@ const updateUserLoginHistory = async (userId, loginData) => {
             keysToDelete.forEach(key => {
                 updates[key] = null;
             });
-            await firebaseDB.child('UserLoginHistory').child(userId).update(updates);
+            await firebaseDB.child('LoginData').child(userId).update(updates);
         }
     } catch (error) {
         console.error('Error updating user login history:', error);
     }
 };
 
+
+// Update IP analytics to use LoginData
 const updateIPAnalytics = async (ipAddress, userId, locationData) => {
     try {
         const ipKey = ipAddress.replace(/[\.\:]/g, '_');
-        await firebaseDB.child('IPAnalytics').child(ipKey).set({
+        await firebaseDB.child('LoginData').child('IPAnalytics').child(ipKey).set({
             ip: ipAddress,
             lastSeen: new Date().toISOString(),
             totalLogins: firebaseDB.database.ServerValue.increment(1),
-            uniqueUsers: firebaseDB.database.ServerValue.increment(1), // This needs refinement
+            uniqueUsers: firebaseDB.database.ServerValue.increment(1),
             country: locationData.country,
             city: locationData.city,
             isp: locationData.isp,

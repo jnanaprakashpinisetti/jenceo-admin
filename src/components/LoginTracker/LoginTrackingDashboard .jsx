@@ -1,24 +1,48 @@
+// components/DashBoard/LoginTrackingDashboard.jsx
 import React, { useState, useEffect, useMemo } from 'react';
 import firebaseDB from '../../firebase';
 import IPWhitelistManager from './IPWhitelistManager';
+import IPUsageAnalytics from './IPUsageAnalytics ';
 
 const LoginTrackingDashboard = () => {
     // State declarations
     const [loginLogs, setLoginLogs] = useState([]);
     const [filteredLogs, setFilteredLogs] = useState([]);
+    const [displayedLogs, setDisplayedLogs] = useState([]);
     const [loading, setLoading] = useState(true);
     const [dateRange, setDateRange] = useState({
         startDate: '',
         endDate: ''
     });
     const [searchTerm, setSearchTerm] = useState('');
-    const [currentView, setCurrentView] = useState('all'); // 'all', 'today', 'week', 'month'
+    const [currentView, setCurrentView] = useState('all');
     const [stats, setStats] = useState({
         totalLogins: 0,
         uniqueUsers: 0,
         uniqueIPs: 0,
         todayLogins: 0
     });
+    const [currentPage, setCurrentPage] = useState(1);
+    const [itemsPerPage, setItemsPerPage] = useState(20);
+    const [cardFilter, setCardFilter] = useState(null);
+
+    // Pagination
+    const totalPages = Math.ceil(filteredLogs.length / itemsPerPage);
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    const endIndex = startIndex + itemsPerPage;
+
+    useEffect(() => {
+        setDisplayedLogs(filteredLogs.slice(startIndex, endIndex));
+    }, [filteredLogs, currentPage, itemsPerPage]);
+
+    const handlePageChange = (page) => {
+        setCurrentPage(page);
+    };
+
+    const handleItemsPerPageChange = (value) => {
+        setItemsPerPage(Number(value));
+        setCurrentPage(1);
+    };
 
     // Fetch login logs from Firebase
     const fetchLoginLogs = async () => {
@@ -70,13 +94,50 @@ const LoginTrackingDashboard = () => {
         return () => {
             let filtered = [...loginLogs];
 
+            // Apply card filter
+            if (cardFilter) {
+                switch (cardFilter) {
+                    case 'totalLogins':
+                        // No additional filter needed
+                        break;
+                    case 'uniqueUsers':
+                        const userMap = new Map();
+                        filtered = filtered.filter(log => {
+                            const userKey = log.userId || log.email;
+                            if (!userMap.has(userKey)) {
+                                userMap.set(userKey, true);
+                                return true;
+                            }
+                            return false;
+                        });
+                        break;
+                    case 'uniqueIPs':
+                        const ipMap = new Map();
+                        filtered = filtered.filter(log => {
+                            if (!ipMap.has(log.ipAddress)) {
+                                ipMap.set(log.ipAddress, true);
+                                return true;
+                            }
+                            return false;
+                        });
+                        break;
+                    case 'todayLogins':
+                        const today = new Date();
+                        today.setHours(0, 0, 0, 0);
+                        filtered = filtered.filter(log => new Date(log.loginTime) >= today);
+                        break;
+                    default:
+                        break;
+                }
+            }
+
             // Apply date range filter
             if (dateRange.startDate && dateRange.endDate) {
                 filtered = filtered.filter(log => {
                     const logDate = new Date(log.loginTime);
                     const start = new Date(dateRange.startDate);
                     const end = new Date(dateRange.endDate);
-                    end.setHours(23, 59, 59, 999); // Include entire end date
+                    end.setHours(23, 59, 59, 999);
                     return logDate >= start && logDate <= end;
                 });
             }
@@ -98,7 +159,6 @@ const LoginTrackingDashboard = () => {
                     filtered = filtered.filter(log => new Date(log.loginTime) >= monthAgo);
                     break;
                 default:
-                    // 'all' - no time filter
                     break;
             }
 
@@ -115,8 +175,9 @@ const LoginTrackingDashboard = () => {
             }
 
             setFilteredLogs(filtered);
+            setCurrentPage(1);
         };
-    }, [loginLogs, dateRange, currentView, searchTerm]);
+    }, [loginLogs, dateRange, currentView, searchTerm, cardFilter]);
 
     useEffect(() => {
         applyFilters();
@@ -131,13 +192,18 @@ const LoginTrackingDashboard = () => {
         const ref = firebaseDB.child('LoginLogs');
         const handleData = (snapshot) => {
             if (snapshot.exists()) {
-                fetchLoginLogs(); // Refresh data when new logins occur
+                fetchLoginLogs();
             }
         };
 
         ref.on('value', handleData);
         return () => ref.off('value', handleData);
     }, []);
+
+    // Card click handlers
+    const handleCardClick = (cardType) => {
+        setCardFilter(cardFilter === cardType ? null : cardType);
+    };
 
     // Format date for display
     const formatDate = (dateString) => {
@@ -154,7 +220,6 @@ const LoginTrackingDashboard = () => {
     // Get browser/device info from userAgent
     const getBrowserInfo = (userAgent) => {
         if (!userAgent) return 'Unknown';
-
         if (userAgent.includes('Chrome')) return 'Chrome';
         if (userAgent.includes('Firefox')) return 'Firefox';
         if (userAgent.includes('Safari')) return 'Safari';
@@ -165,16 +230,13 @@ const LoginTrackingDashboard = () => {
     // Get device type from userAgent
     const getDeviceType = (userAgent) => {
         if (!userAgent) return 'Unknown';
-
-        if (/Mobile|Android|iPhone|iPad/.test(userAgent)) {
-            return 'Mobile';
-        }
+        if (/Mobile|Android|iPhone|iPad/.test(userAgent)) return 'Mobile';
         return 'Desktop';
     };
 
     // Export to CSV
     const exportToCSV = () => {
-        const headers = ['User ID', 'Email', 'Display Name', 'IP Address', 'Login Time', 'Browser', 'Device Type', 'User Agent'];
+        const headers = ['User ID', 'Email', 'Display Name', 'IP Address', 'Login Time', 'Browser', 'Device Type', 'Country', 'City', 'ISP'];
         const csvData = filteredLogs.map(log => [
             log.userId || 'N/A',
             log.email || 'N/A',
@@ -183,7 +245,9 @@ const LoginTrackingDashboard = () => {
             formatDate(log.loginTime),
             getBrowserInfo(log.userAgent),
             getDeviceType(log.userAgent),
-            log.userAgent || 'N/A'
+            log.country || 'Unknown',
+            log.city || 'Unknown',
+            log.isp || 'Unknown'
         ]);
 
         const csvContent = [
@@ -205,6 +269,7 @@ const LoginTrackingDashboard = () => {
         setDateRange({ startDate: '', endDate: '' });
         setSearchTerm('');
         setCurrentView('all');
+        setCardFilter(null);
     };
 
     if (loading) {
@@ -227,7 +292,7 @@ const LoginTrackingDashboard = () => {
     }
 
     return (
-        <div className="container py-4 bg-secondary bg-opacity-10 rounded-4 ">
+        <div className="container py-4 bg-secondary bg-opacity-10 rounded-4">
             {/* Header */}
             <div className="row mb-4">
                 <div className="col-12">
@@ -236,7 +301,7 @@ const LoginTrackingDashboard = () => {
                             <div className="d-flex justify-content-between align-items-center">
                                 <div>
                                     <h4 className="card-title mb-0 text-info">
-                                        <i className="fas fa-shield-alt me-2"></i>
+                                        <i className="bi bi-shield-check me-2"></i>
                                         Login Tracking Dashboard
                                     </h4>
                                     <small className="text-warning">
@@ -248,7 +313,7 @@ const LoginTrackingDashboard = () => {
                                     onClick={fetchLoginLogs}
                                     title="Refresh Data"
                                 >
-                                    <i className="fas fa-sync-alt"></i>
+                                    <i className="bi bi-arrow-clockwise"></i>
                                 </button>
                             </div>
                         </div>
@@ -259,7 +324,11 @@ const LoginTrackingDashboard = () => {
             {/* Statistics Cards */}
             <div className="row mb-4">
                 <div className="col-xl-3 col-md-6 mb-4">
-                    <div className="card bg-dark border-success h-100">
+                    <div 
+                        className={`card h-100 ${cardFilter === 'totalLogins' ? 'border-success border-3' : 'border-success'}`}
+                        style={{ cursor: 'pointer', backgroundColor: cardFilter === 'totalLogins' ? 'rgba(25, 135, 84, 0.1)' : '' }}
+                        onClick={() => handleCardClick('totalLogins')}
+                    >
                         <div className="card-body">
                             <div className="d-flex justify-content-between">
                                 <div>
@@ -267,15 +336,25 @@ const LoginTrackingDashboard = () => {
                                     <h3 className="text-success">{stats.totalLogins}</h3>
                                 </div>
                                 <div className="align-self-center">
-                                    <i className="fas fa-sign-in-alt fa-2x text-success opacity-50"></i>
+                                    <i className="bi bi-box-arrow-in-right fa-2x text-success opacity-50"></i>
                                 </div>
                             </div>
+                            {cardFilter === 'totalLogins' && (
+                                <small className="text-success">
+                                    <i className="bi bi-funnel me-1"></i>
+                                    Filtering by total logins
+                                </small>
+                            )}
                         </div>
                     </div>
                 </div>
 
                 <div className="col-xl-3 col-md-6 mb-4">
-                    <div className="card bg-dark border-info h-100">
+                    <div 
+                        className={`card h-100 ${cardFilter === 'uniqueUsers' ? 'border-info border-3' : 'border-info'}`}
+                        style={{ cursor: 'pointer', backgroundColor: cardFilter === 'uniqueUsers' ? 'rgba(13, 202, 240, 0.1)' : '' }}
+                        onClick={() => handleCardClick('uniqueUsers')}
+                    >
                         <div className="card-body">
                             <div className="d-flex justify-content-between">
                                 <div>
@@ -286,12 +365,22 @@ const LoginTrackingDashboard = () => {
                                     <i className="fas fa-users fa-2x text-info opacity-50"></i>
                                 </div>
                             </div>
+                            {cardFilter === 'uniqueUsers' && (
+                                <small className="text-info">
+                                    <i className="bi bi-funnel me-1"></i>
+                                    Filtering by unique users
+                                </small>
+                            )}
                         </div>
                     </div>
                 </div>
 
                 <div className="col-xl-3 col-md-6 mb-4">
-                    <div className="card bg-dark border-warning h-100">
+                    <div 
+                        className={`card h-100 ${cardFilter === 'uniqueIPs' ? 'border-warning border-3' : 'border-warning'}`}
+                        style={{ cursor: 'pointer', backgroundColor: cardFilter === 'uniqueIPs' ? 'rgba(255, 193, 7, 0.1)' : '' }}
+                        onClick={() => handleCardClick('uniqueIPs')}
+                    >
                         <div className="card-body">
                             <div className="d-flex justify-content-between">
                                 <div>
@@ -299,15 +388,25 @@ const LoginTrackingDashboard = () => {
                                     <h3 className="text-warning">{stats.uniqueIPs}</h3>
                                 </div>
                                 <div className="align-self-center">
-                                    <i className="fas fa-network-wired fa-2x text-warning opacity-50"></i>
+                                    <i className="bi bi-diagram-3 fa-2x text-warning opacity-50"></i>
                                 </div>
                             </div>
+                            {cardFilter === 'uniqueIPs' && (
+                                <small className="text-warning">
+                                    <i className="bi bi-funnel me-1"></i>
+                                    Filtering by unique IPs
+                                </small>
+                            )}
                         </div>
                     </div>
                 </div>
 
                 <div className="col-xl-3 col-md-6 mb-4">
-                    <div className="card bg-dark border-primary h-100">
+                    <div 
+                        className={`card h-100 ${cardFilter === 'todayLogins' ? 'border-primary border-3' : 'border-primary'}`}
+                        style={{ cursor: 'pointer', backgroundColor: cardFilter === 'todayLogins' ? 'rgba(13, 110, 253, 0.1)' : '' }}
+                        onClick={() => handleCardClick('todayLogins')}
+                    >
                         <div className="card-body">
                             <div className="d-flex justify-content-between">
                                 <div>
@@ -315,33 +414,48 @@ const LoginTrackingDashboard = () => {
                                     <h3 className="text-primary">{stats.todayLogins}</h3>
                                 </div>
                                 <div className="align-self-center">
-                                    <i className="fas fa-calendar-day fa-2x text-primary opacity-50"></i>
+                                    <i className="bi bi-calendar-date fa-2x text-primary opacity-50"></i>
                                 </div>
                             </div>
+                            {cardFilter === 'todayLogins' && (
+                                <small className="text-primary">
+                                    <i className="bi bi-funnel me-1"></i>
+                                    Filtering by today's logins
+                                </small>
+                            )}
                         </div>
-                    </div>
-                </div>
-
-                <div className="row mb-4">
-                    <div className="col-12">
-                        <IPWhitelistManager />
                     </div>
                 </div>
             </div>
 
+            {/* IP Usage Analytics */}
+            <div className="row mb-4">
+                <div className="col-12">
+                    <IPUsageAnalytics loginLogs={loginLogs} />
+                </div>
+            </div>
+
+            {/* IP Whitelist Manager */}
+            <div className="row mb-4">
+                <div className="col-12">
+                    <IPWhitelistManager />
+                </div>
+            </div>
+
+            {/* Rest of the component remains the same with pagination added to table */}
             {/* Filters and Controls */}
             <div className="row mb-4">
                 <div className="col-12">
                     <div className="card bg-dark border-secondary">
                         <div className="card-header bg-info bg-opacity-25 border-info">
                             <h6 className="mb-0 text-white">
-                                <i className="fas fa-filter me-2"></i>
+                                <i className="bi bi-funnel me-2"></i>
                                 Filters & Controls
                             </h6>
                         </div>
                         <div className="card-body">
                             <div className="row g-3">
-                                <div className="col-md-3">
+                                <div className="col-md-2">
                                     <label className="form-label text-warning">Quick View</label>
                                     <select
                                         className="form-select bg-dark text-white border-secondary"
@@ -355,7 +469,7 @@ const LoginTrackingDashboard = () => {
                                     </select>
                                 </div>
 
-                                <div className="col-md-3">
+                                <div className="col-md-2">
                                     <label className="form-label text-warning">Start Date</label>
                                     <input
                                         type="date"
@@ -368,7 +482,7 @@ const LoginTrackingDashboard = () => {
                                     />
                                 </div>
 
-                                <div className="col-md-3">
+                                <div className="col-md-2">
                                     <label className="form-label text-warning">End Date</label>
                                     <input
                                         type="date"
@@ -392,13 +506,14 @@ const LoginTrackingDashboard = () => {
                                     />
                                 </div>
 
-                                <div className="col-12">
+                                <div className="col-md-3">
+                                    <label className="form-label text-warning">Filters</label>
                                     <div className="d-flex gap-2">
                                         <button
                                             className="btn btn-outline-info"
                                             onClick={clearFilters}
                                         >
-                                            <i className="fas fa-times me-2"></i>
+                                            <i className="bi bi-x me-2"></i>
                                             Clear Filters
                                         </button>
                                         <button
@@ -406,7 +521,7 @@ const LoginTrackingDashboard = () => {
                                             onClick={exportToCSV}
                                             disabled={filteredLogs.length === 0}
                                         >
-                                            <i className="fas fa-download me-2"></i>
+                                            <i className="bi bi-download me-2"></i>
                                             Export CSV ({filteredLogs.length})
                                         </button>
                                     </div>
@@ -417,18 +532,38 @@ const LoginTrackingDashboard = () => {
                 </div>
             </div>
 
-            {/* Login Logs Table */}
+            {/* Login Logs Table with Pagination */}
             <div className="row">
                 <div className="col-12">
                     <div className="card bg-dark border-secondary">
                         <div className="card-header bg-info bg-opacity-25 border-info d-flex justify-content-between align-items-center">
                             <h6 className="mb-0 text-white">
-                                <i className="fas fa-list me-2"></i>
+                                <i className="bi bi-list me-2"></i>
                                 Login Activity ({filteredLogs.length} records)
+                                {cardFilter && (
+                                    <span className="badge bg-warning ms-2">
+                                        Filtered
+                                    </span>
+                                )}
                             </h6>
-                            <span className="badge bg-warning">
-                                Last updated: {new Date().toLocaleTimeString('en-IN')}
-                            </span>
+                            <div className="d-flex align-items-center gap-3">
+                                <span className="badge bg-warning">
+                                    Last updated: {new Date().toLocaleTimeString('en-IN')}
+                                </span>
+                                
+                                {/* Items per page selector */}
+                                <select
+                                    className="form-select form-select-sm bg-dark text-white border-secondary"
+                                    style={{ width: 'auto' }}
+                                    value={itemsPerPage}
+                                    onChange={(e) => handleItemsPerPageChange(e.target.value)}
+                                >
+                                    <option value="10">10 per page</option>
+                                    <option value="20">20 per page</option>
+                                    <option value="50">50 per page</option>
+                                    <option value="100">100 per page</option>
+                                </select>
+                            </div>
                         </div>
                         <div className="card-body p-0">
                             <div className="table-responsive">
@@ -447,15 +582,15 @@ const LoginTrackingDashboard = () => {
                                         </tr>
                                     </thead>
                                     <tbody>
-                                        {filteredLogs.length === 0 ? (
+                                        {displayedLogs.length === 0 ? (
                                             <tr>
-                                                <td colSpan="7" className="text-center py-4">
-                                                    <i className="fas fa-inbox fa-2x text-muted mb-3"></i>
+                                                <td colSpan="9" className="text-center py-4">
+                                                    <i className="bi bi-inbox fa-2x text-muted mb-3"></i>
                                                     <p className="text-muted">No login records found</p>
                                                 </td>
                                             </tr>
                                         ) : (
-                                            filteredLogs.map((log) => (
+                                            displayedLogs.map((log) => (
                                                 <tr key={log.id}>
                                                     <td>
                                                         <div>
@@ -503,10 +638,9 @@ const LoginTrackingDashboard = () => {
                                                             {log.isp || 'Unknown'}
                                                         </small>
                                                     </td>
-
                                                     <td>
                                                         <span className="badge bg-success">
-                                                            <i className="fas fa-check me-1"></i>
+                                                            <i className="bi bi-check me-1"></i>
                                                             Success
                                                         </span>
                                                     </td>
@@ -516,6 +650,68 @@ const LoginTrackingDashboard = () => {
                                     </tbody>
                                 </table>
                             </div>
+
+                            {/* Pagination Controls */}
+                            {totalPages > 1 && (
+                                <div className="card-footer border-secondary">
+                                    <div className="d-flex justify-content-between align-items-center">
+                                        <small className="text-muted">
+                                            Showing {startIndex + 1} to {Math.min(endIndex, filteredLogs.length)} of {filteredLogs.length} entries
+                                        </small>
+                                        <nav>
+                                            <ul className="pagination pagination-sm mb-0">
+                                                <li className={`page-item ${currentPage === 1 ? 'disabled' : ''}`}>
+                                                    <button
+                                                        className="page-link bg-dark text-white border-secondary"
+                                                        onClick={() => handlePageChange(currentPage - 1)}
+                                                    >
+                                                        Previous
+                                                    </button>
+                                                </li>
+                                                
+                                                {[...Array(totalPages)].map((_, index) => {
+                                                    const page = index + 1;
+                                                    if (
+                                                        page === 1 ||
+                                                        page === totalPages ||
+                                                        (page >= currentPage - 1 && page <= currentPage + 1)
+                                                    ) {
+                                                        return (
+                                                            <li key={page} className={`page-item ${currentPage === page ? 'active' : ''}`}>
+                                                                <button
+                                                                    className="page-link bg-dark text-white border-secondary"
+                                                                    onClick={() => handlePageChange(page)}
+                                                                >
+                                                                    {page}
+                                                                </button>
+                                                            </li>
+                                                        );
+                                                    } else if (
+                                                        page === currentPage - 2 ||
+                                                        page === currentPage + 2
+                                                    ) {
+                                                        return (
+                                                            <li key={page} className="page-item disabled">
+                                                                <span className="page-link bg-dark text-muted border-secondary">...</span>
+                                                            </li>
+                                                        );
+                                                    }
+                                                    return null;
+                                                })}
+                                                
+                                                <li className={`page-item ${currentPage === totalPages ? 'disabled' : ''}`}>
+                                                    <button
+                                                        className="page-link bg-dark text-white border-secondary"
+                                                        onClick={() => handlePageChange(currentPage + 1)}
+                                                    >
+                                                        Next
+                                                    </button>
+                                                </li>
+                                            </ul>
+                                        </nav>
+                                    </div>
+                                </div>
+                            )}
                         </div>
                     </div>
                 </div>
@@ -526,7 +722,7 @@ const LoginTrackingDashboard = () => {
                 <div className="col-12">
                     <div className="text-center">
                         <small className="text-muted">
-                            <i className="fas fa-circle text-success me-1"></i>
+                            <i className="bi bi-circle text-success me-1"></i>
                             Real-time updates active • Auto-refreshing every 30 seconds
                         </small>
                     </div>

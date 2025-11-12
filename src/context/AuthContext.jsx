@@ -2,8 +2,7 @@
 import React, { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { getAuth, onAuthStateChanged, signInAnonymously, signOut } from "firebase/auth";
 import { firebaseDB } from "../firebase";
-import { trackUserLogin, getClientIP } from '../components/LoginTracker/trackUserLogin'; 
-import { ipWhitelistManager } from '../components/LoginTracker/trackUserLogin'; 
+import { trackUserLogin, getClientIP, checkIPRestriction, ipWhitelistManager } from '../components/LoginTracker/trackUserLogin'; 
 
 // Utilities
 const normalizeText = (text) => (text ? String(text).trim().toLowerCase() : "");
@@ -70,7 +69,6 @@ async function databasePush(path, data) {
     return null;
   }
 }
-
 
 async function databaseRemove(path) {
   try {
@@ -154,9 +152,19 @@ const validateUserSession = async (userDatabaseId) => {
   }
 };
 
-// Enhanced logout
-const enhancedLogout = async (auth, preventReauth = false) => {
+// Enhanced logout with IP restriction logging
+const enhancedLogout = async (auth, preventReauth = false, reason = "user_initiated") => {
   try {
+    // Log logout event for security monitoring
+    const clientIP = await getClientIP();
+    await firebaseDB.child('SecurityEvents').push({
+      type: 'USER_LOGOUT',
+      reason: reason,
+      ipAddress: clientIP,
+      timestamp: new Date().toISOString(),
+      severity: 'LOW'
+    });
+
     await signOut(auth);
   } catch (error) {
     // Silent catch
@@ -175,7 +183,7 @@ const enhancedLogout = async (auth, preventReauth = false) => {
   }
 };
 
-// Real-time session monitoring
+// Real-time session monitoring with IP restriction checks
 const setupSessionMonitoring = (userDatabaseId, onInvalidSession, onPermissionsUpdate, getCurrentSessionVersion) => {
   if (!userDatabaseId) return () => {};
 
@@ -184,7 +192,7 @@ const setupSessionMonitoring = (userDatabaseId, onInvalidSession, onPermissionsU
 
   const onUserChange = userRef.on("value", (snapshot) => {
     if (!snapshot.exists()) {
-      onInvalidSession?.(true);
+      onInvalidSession?.(true, "user_deleted");
       return;
     }
 
@@ -196,7 +204,7 @@ const setupSessionMonitoring = (userDatabaseId, onInvalidSession, onPermissionsU
     const statusFlag = (val?.status || "").toLowerCase() !== "deactivated";
 
     if (isActiveFlag === false || activeFlag === false || !statusFlag) {
-      onInvalidSession?.(true);
+      onInvalidSession?.(true, "account_deactivated");
       return;
     }
 
@@ -210,7 +218,7 @@ const setupSessionMonitoring = (userDatabaseId, onInvalidSession, onPermissionsU
     const required = Number(snapshot.val() || 0);
     const current = Number(getCurrentSessionVersion?.() || 0);
     if (required > current) {
-      onInvalidSession?.(true);
+      onInvalidSession?.(true, "session_version_mismatch");
     }
   });
 
@@ -218,6 +226,43 @@ const setupSessionMonitoring = (userDatabaseId, onInvalidSession, onPermissionsU
     userRef.off("value", onUserChange);
     versionRef.off("value", onVersionChange);
   };
+};
+
+// IP Restriction Monitor Hook
+const useIPRestrictionMonitor = (user, onIPRestricted) => {
+  useEffect(() => {
+    if (!user) return;
+
+    let isMounted = true;
+    let intervalId;
+
+    const checkIPRestrictionStatus = async () => {
+      try {
+        const clientIP = await getClientIP();
+        const restrictionCheck = await checkIPRestriction(clientIP);
+        
+        if (restrictionCheck.restricted && isMounted) {
+          console.warn(`IP restriction triggered for user ${user.dbId} from IP ${clientIP}`);
+          onIPRestricted?.(restrictionCheck.reason, clientIP);
+        }
+      } catch (error) {
+        console.error('Error checking IP restriction:', error);
+      }
+    };
+
+    // Check immediately
+    checkIPRestrictionStatus();
+
+    // Set up periodic checking (every 30 seconds)
+    intervalId = setInterval(checkIPRestrictionStatus, 30000);
+
+    return () => {
+      isMounted = false;
+      if (intervalId) {
+        clearInterval(intervalId);
+      }
+    };
+  }, [user, onIPRestricted]);
 };
 
 // Context definition
@@ -236,6 +281,8 @@ const AuthContext = createContext({
   initializeDefaultAdmin: async () => {},
   changePassword: async () => {},
   hasPermission: () => false,
+  checkCurrentIPRestriction: async () => {},
+  getCurrentIP: async () => {},
 });
 
 export const useAuth = () => {
@@ -261,6 +308,33 @@ export function AuthProvider({ children }) {
     });
   };
 
+  // Handle IP restriction events
+  const handleIPRestricted = async (reason, ipAddress) => {
+    console.warn(`IP restriction enforced: ${reason} for IP ${ipAddress}`);
+    
+    // Log security event
+    await firebaseDB.child('SecurityEvents').push({
+      type: 'IP_RESTRICTION_ENFORCED',
+      userId: user?.dbId,
+      username: user?.username,
+      ipAddress: ipAddress,
+      reason: reason,
+      timestamp: new Date().toISOString(),
+      severity: 'HIGH'
+    });
+
+    // Force logout due to IP restriction
+    await handleLogout(true, "ip_restriction");
+    
+    // Show notification to user (you can replace this with your notification system)
+    if (typeof window !== 'undefined') {
+      alert(`Your session has been terminated because your IP address (${ipAddress}) is no longer authorized. Please contact administrator.`);
+    }
+  };
+
+  // Use IP restriction monitoring
+  useIPRestrictionMonitor(user, handleIPRestricted);
+
   // User state persistence
   const cacheUser = (userData) => {
     setUser(userData);
@@ -278,7 +352,7 @@ export function AuthProvider({ children }) {
         // Start monitoring this user's session
         const cleanupMonitor = setupSessionMonitoring(
           userData.dbId,
-          (preventReauth) => handleLogout(preventReauth),
+          (preventReauth, reason) => handleLogout(preventReauth, reason),
           (updatedUserData) => handlePermissionsUpdate(updatedUserData),
           () => sessionVersionRef.current
         );
@@ -294,7 +368,7 @@ export function AuthProvider({ children }) {
   };
 
   // Handle logout
-  const handleLogout = async (preventReauth = false) => {
+  const handleLogout = async (preventReauth = false, reason = "user_initiated") => {
     try {
       if (auth.currentUser) {
         await databaseRemove(`authentication/users/${auth.currentUser.uid}`);
@@ -302,7 +376,7 @@ export function AuthProvider({ children }) {
     } catch (err) {
       // Silent catch
     }
-    await enhancedLogout(auth, preventReauth);
+    await enhancedLogout(auth, preventReauth, reason);
     cacheUser(null);
   };
 
@@ -316,7 +390,7 @@ export function AuthProvider({ children }) {
     const before = JSON.stringify(user.permissions || {});
     const after = JSON.stringify(updatedUserData.permissions || {});
     if (before !== after) {
-      handleLogout(true);
+      handleLogout(true, "permissions_updated");
       return;
     }
 
@@ -340,7 +414,7 @@ export function AuthProvider({ children }) {
             
             const cleanupMonitor = setupSessionMonitoring(
               parsedUser.dbId,
-              () => handleLogout(true),
+              (preventReauth, reason) => handleLogout(preventReauth, reason),
               (updatedUserData) => handlePermissionsUpdate(updatedUserData),
               () => sessionVersionRef.current
             );
@@ -394,6 +468,27 @@ export function AuthProvider({ children }) {
     if (typeof permission === "object") return permission[action] === true;
     
     return false;
+  };
+
+  // Check current IP restriction status
+  const checkCurrentIPRestriction = async () => {
+    try {
+      const clientIP = await getClientIP();
+      return await checkIPRestriction(clientIP);
+    } catch (error) {
+      console.error('Error checking IP restriction:', error);
+      return { restricted: false, error: error.message };
+    }
+  };
+
+  // Get current IP address
+  const getCurrentIP = async () => {
+    try {
+      return await getClientIP();
+    } catch (error) {
+      console.error('Error getting current IP:', error);
+      return 'Unknown';
+    }
   };
 
   // Initialize default admin
@@ -496,7 +591,7 @@ export function AuthProvider({ children }) {
       
       // Handle self-updates
       if (user?.dbId === userId && updates.isActive === false) {
-        await handleLogout(true);
+        await handleLogout(true, "self_deactivated");
       }
       
       if (user?.dbId === userId && updates.isActive !== false) {
@@ -552,13 +647,13 @@ export function AuthProvider({ children }) {
     await bumpSessionVersion(userId);
     
     if (user?.dbId === userId) {
-      await handleLogout(true);
+      await handleLogout(true, "password_changed");
     }
     
     return { success: true };
   };
 
-  // Login
+  // Enhanced Login with IP Restriction Check
   const login = async (identifier, password) => {
     const normalizedIdentifier = normalizeText(identifier);
     setLoading(true);
@@ -566,6 +661,24 @@ export function AuthProvider({ children }) {
     try {
       if (!auth.currentUser) {
         await signInAnonymously(auth);
+      }
+      
+      // Check IP restriction before attempting login
+      const clientIP = await getClientIP();
+      const restrictionCheck = await checkIPRestriction(clientIP);
+      
+      if (restrictionCheck.restricted) {
+        // Log blocked login attempt
+        await firebaseDB.child('SecurityEvents').push({
+          type: 'BLOCKED_LOGIN_ATTEMPT',
+          identifier: normalizedIdentifier,
+          ipAddress: clientIP,
+          reason: restrictionCheck.reason,
+          timestamp: new Date().toISOString(),
+          severity: 'HIGH'
+        });
+        
+        throw new Error(`Access denied: Your IP address (${clientIP}) is not authorized to access this website. Please contact administrator.`);
       }
       
       const allUsers = await databaseGet("Users");
@@ -606,6 +719,16 @@ export function AuthProvider({ children }) {
       
       const enteredPasswordHash = await generatePasswordHash(password);
       if (storedPasswordHash !== enteredPasswordHash) {
+        // Log failed login attempt
+        await firebaseDB.child('SecurityEvents').push({
+          type: 'FAILED_LOGIN_ATTEMPT',
+          userId: userDatabaseId,
+          username: userData.username,
+          ipAddress: clientIP,
+          timestamp: new Date().toISOString(),
+          severity: 'MEDIUM'
+        });
+        
         throw new Error("Invalid password");
       }
       
@@ -625,28 +748,30 @@ export function AuthProvider({ children }) {
         updatedAt: getCurrentTimestamp(),
       });
 
-              // Track the login
-        const ipAddress = await getClientIP();
-        const isWhitelisted = await ipWhitelistManager.isIPWhitelisted(ipAddress);
-        await trackUserLogin({
-            uid: auth.currentUser?.uid,
-            email: userData.email,
-            displayName: userData.name,
-            username: userData.username
-        }, ipAddress);
-
-           if (!isWhitelisted) {
-            console.log('Login attempt from non-whitelisted IP:', ipAddress);
-            // Uncomment the next line to enforce IP whitelisting
-            // throw new Error("Access denied from this IP address");
-        }
-
-      await trackUserLogin({
+      // Track successful login with enhanced security context
+      const trackingResult = await trackUserLogin({
         uid: auth.currentUser?.uid,
         email: userData.email,
         displayName: userData.name,
-        username: userData.username
-      }, ipAddress);
+        username: userData.username,
+        userType: userData.role
+      }, clientIP);
+      
+      // Log successful login
+      await firebaseDB.child('SecurityEvents').push({
+        type: 'SUCCESSFUL_LOGIN',
+        userId: userDatabaseId,
+        username: userData.username,
+        ipAddress: clientIP,
+        securityScore: trackingResult.securityScore,
+        riskLevel: trackingResult.riskLevel,
+        timestamp: new Date().toISOString(),
+        severity: 'LOW'
+      });
+
+      if (trackingResult.riskLevel === 'HIGH') {
+        console.warn('High risk login detected - consider additional verification');
+      }
       
       return session;
     } catch (error) {
@@ -658,7 +783,7 @@ export function AuthProvider({ children }) {
 
   // Logout
   const logout = async () => {
-    await handleLogout();
+    await handleLogout(false, "user_initiated");
   };
 
   // Context value
@@ -677,6 +802,8 @@ export function AuthProvider({ children }) {
     initializeDefaultAdmin,
     changePassword,
     hasPermission,
+    checkCurrentIPRestriction,
+    getCurrentIP,
   }), [ready, user, loading]);
 
   return (

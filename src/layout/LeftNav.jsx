@@ -72,7 +72,7 @@ import ExpenceDelete from "../pages/ExpenceDelete";
 
 import Task from "../pages/Task";
 import AdminUsers from "../pages/AdminUsers";
-import Accounts from "../pages/Accounts";
+import ShopAccounts from "../pages/ShopAccounts";
 import SearchResults from "../pages/SearchResults";
 import Profile from "../pages/Profile";
 import TimesheetEntryPage from "../pages/TimesheetEntryPage ";
@@ -114,7 +114,7 @@ export default function LeftNav() {
   const canDashboard = hasPerm("Dashboard");
   const canInvestments = hasPerm("Investments");
   const canTask = hasPerm("Task");
-  const canAccounts = hasPerm("Accounts");
+  const canShopAccounts = hasPerm("ShopAccounts");
   const canAdmin = hasPerm("Admin");
 
   // Staff - Using the actual module keys from AdminMain.jsx
@@ -711,11 +711,11 @@ export default function LeftNav() {
             )}
 
             {/* Finance */}
-            {canAccounts && (
+            {canShopAccounts && (
               <>
                 <li className="nav-item mt-2 mb-1 text-uppercase small text-muted px-2">Finance</li>
                 <li className="nav-item">
-                  <NavLink to="Accounts" className="nav-link" title="Accounts" onClick={onNavClick}>
+                  <NavLink to="ShopAccounts" className="nav-link" title="ShopAccounts" onClick={onNavClick}>
                     <img src={accounts} alt="" /> <span className="ms-1">Shop Accounts</span>
                   </NavLink>
                 </li>
@@ -759,7 +759,7 @@ export default function LeftNav() {
         <Route path="Task" element={<PermRoute allowed={canTask}><Task /></PermRoute>} />
         <Route path="TimesheetEntryPage" element={<PermRoute allowed={canTimesheet}><TimesheetEntryPage /></PermRoute>} />
         <Route path="TimesheetDashboard" element={<PermRoute allowed={canTimesheet}><TimesheetDashboard /></PermRoute>} />
-        <Route path="Accounts" element={<PermRoute allowed={canAccounts}><Accounts /></PermRoute>} />
+        <Route path="ShopAccounts" element={<PermRoute allowed={canShopAccounts}><ShopAccounts /></PermRoute>} />
         <Route path="HospitalList" element={<PermRoute allowed={canHospitalList}><HospitalList /></PermRoute>} />
         <Route path="HospitalDeleteList" element={<PermRoute allowed={canHospitalDeleteList}><HospitalDeleteList /></PermRoute>} />
         <Route path="Agents" element={<PermRoute allowed={canAgents}><Agents /></PermRoute>} />

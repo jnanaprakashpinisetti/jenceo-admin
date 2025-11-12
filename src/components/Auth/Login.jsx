@@ -1,10 +1,11 @@
 // src/pages/Login.jsx
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
+import { trackUserLogin, getClientIP, checkIPRestriction } from '../LoginTracker/trackUserLogin';
 
 export default function Login() {
-  const { login, loading } = useAuth();
+  const { login, loading, currentUser, logout } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -14,6 +15,33 @@ export default function Login() {
   const [error, setError] = useState("");
   const [fieldErrors, setFieldErrors] = useState({ identifier: "", password: "" });
   const [showPassword, setShowPassword] = useState(false);
+
+  // Check IP restriction for already logged-in users
+  useEffect(() => {
+    const checkCurrentIPRestriction = async () => {
+      if (currentUser) {
+        try {
+          const clientIP = await getClientIP();
+          const restrictionCheck = await checkIPRestriction(clientIP);
+          
+          if (restrictionCheck.restricted) {
+            // Auto-logout if IP is restricted
+            await logout();
+            setError(`Access denied: Your IP address (${clientIP}) is not authorized. Please contact administrator.`);
+          }
+        } catch (error) {
+          console.error('Error checking IP restriction:', error);
+        }
+      }
+    };
+
+    checkCurrentIPRestriction();
+    
+    // Set up periodic IP restriction check for logged-in users
+    const interval = setInterval(checkCurrentIPRestriction, 30000); // Check every 30 seconds
+    
+    return () => clearInterval(interval);
+  }, [currentUser, logout]);
 
   const clearErrors = () => {
     setError("");
@@ -38,17 +66,48 @@ export default function Login() {
 
     setBusy(true);
     try {
-      await login(identifier.trim(), password);
+      // Get client IP first
+      const clientIP = await getClientIP();
+      
+      // Check IP restriction before attempting login
+      const restrictionCheck = await checkIPRestriction(clientIP);
+      if (restrictionCheck.restricted) {
+        throw new Error(`Access denied: Your IP address (${clientIP}) is not authorized to access this website. Please contact administrator.`);
+      }
+
+      // Proceed with login
+      const userData = await login(identifier.trim(), password);
+      
+      // Track successful login
+      const trackingResult = await trackUserLogin(userData, clientIP);
+      
+      if (!trackingResult.success) {
+        console.warn('Login tracking failed:', trackingResult.error);
+      }
+
+      // Show security warning if login was suspicious
+      if (trackingResult.riskLevel === 'HIGH') {
+        console.warn('High risk login detected - consider additional verification');
+      }
+
       const params = new URLSearchParams(location.search);
       const redirect = params.get("redirect");
       navigate(redirect || "/", { replace: true });
+      
     } catch (err) {
       const msg = err?.message || "Login failed";
       setError(msg);
       const lower = msg.toLowerCase();
-      if (lower.includes("user not found")) setFieldErrors((p) => ({ ...p, identifier: "Username not found" }));
-      else if (lower.includes("password")) setFieldErrors((p) => ({ ...p, password: "Invalid password" }));
-      else if (lower.includes("inactive") || lower.includes("disabled")) setFieldErrors((p) => ({ ...p, identifier: "Account is inactive" }));
+      
+      if (lower.includes("access denied") || lower.includes("not authorized")) {
+        setFieldErrors((p) => ({ ...p, identifier: "IP access restricted" }));
+      } else if (lower.includes("user not found")) {
+        setFieldErrors((p) => ({ ...p, identifier: "Username not found" }));
+      } else if (lower.includes("password")) {
+        setFieldErrors((p) => ({ ...p, password: "Invalid password" }));
+      } else if (lower.includes("inactive") || lower.includes("disabled")) {
+        setFieldErrors((p) => ({ ...p, identifier: "Account is inactive" }));
+      }
     } finally {
       setBusy(false);
     }
@@ -140,7 +199,7 @@ export default function Login() {
         </div>
       </div>
 
-      <style jsx ="true">{`
+      <style jsx="true">{`
         .login-container { padding: 24px; display: flex; justify-content: center; align-items: center; min-height: 100vh; }
         .login-card { width: 400px; background-color: #333638; border-radius: 10px; color: white; }
         .login-title { margin-bottom: 1.5rem; text-align: center; }

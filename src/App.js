@@ -4,9 +4,11 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import TopNav from "./layout/TopNav";
 import LeftNav from "./layout/LeftNav";
 import { AuthProvider } from "./context/AuthContext";
+import IPRestrictionMonitor from './components/LoginTracker/IPRestrictionMonitor';
 import Login from "./components/Auth/Login";
 import ProtectedRoute from "./components/Auth/ProtectedRoute";
 import AdminSetup from './pages/AdminSetup'; // Make sure this import is correct
+import Dashboard from './pages/Dashboard';
 
 // Ensure your existing pages remain imported in LeftNav or separate route files
 
@@ -25,6 +27,7 @@ function AppLayout() {
 function App() {
   return (
     <AuthProvider>
+        <IPRestrictionMonitor />
       <BrowserRouter>
         <Routes>
           {/* Public */}

@@ -7,12 +7,17 @@ const IPWhitelistManager = () => {
     const [newIP, setNewIP] = useState('');
     const [description, setDescription] = useState('');
     const [loading, setLoading] = useState(false);
+    const [restrictionEnabled, setRestrictionEnabled] = useState(false);
 
     const loadWhitelist = async () => {
         setLoading(true);
         try {
             const list = await ipWhitelistManager.getWhitelistedIPs();
             setWhitelist(list);
+            
+            // Load restriction setting
+            const restrictionSetting = await ipWhitelistManager.getRestrictionSetting();
+            setRestrictionEnabled(restrictionSetting.enabled);
         } catch (error) {
             console.error('Error loading whitelist:', error);
         } finally {
@@ -68,15 +73,56 @@ const IPWhitelistManager = () => {
         }
     };
 
+    const handleToggleRestriction = async () => {
+        setLoading(true);
+        try {
+            await ipWhitelistManager.setRestrictionSetting(!restrictionEnabled);
+            setRestrictionEnabled(!restrictionEnabled);
+            
+            if (!restrictionEnabled) {
+                alert('IP Restriction Enabled: Only whitelisted IPs can access the website');
+            } else {
+                alert('IP Restriction Disabled: All IPs can access the website');
+            }
+        } catch (error) {
+            console.error('Error toggling restriction:', error);
+        } finally {
+            setLoading(false);
+        }
+    };
+
     return (
         <div className="card bg-dark border-warning">
             <div className="card-header bg-warning bg-opacity-25 border-warning">
-                <h6 className="mb-0 text-white">
-                    <i className="fas fa-shield-alt me-2"></i>
-                    IP Whitelist Management
-                </h6>
+                <div className="d-flex justify-content-between align-items-center">
+                    <h6 className="mb-0 text-white">
+                        <i className="fas fa-shield-alt me-2"></i>
+                        IP Whitelist Management
+                    </h6>
+                    <div className="form-check form-switch">
+                        <input
+                            className="form-check-input"
+                            type="checkbox"
+                            checked={restrictionEnabled}
+                            onChange={handleToggleRestriction}
+                            disabled={loading}
+                        />
+                        <label className="form-check-label text-white">
+                            {restrictionEnabled ? 'Restriction Enabled' : 'Restriction Disabled'}
+                        </label>
+                    </div>
+                </div>
             </div>
             <div className="card-body">
+                {/* Restriction Alert */}
+                {restrictionEnabled && (
+                    <div className="alert alert-warning alert-dismissible fade show" role="alert">
+                        <i className="fas fa-exclamation-triangle me-2"></i>
+                        <strong>IP Restriction Active:</strong> Only whitelisted IPs can access the website
+                        <button type="button" className="btn-close btn-close-white" data-bs-dismiss="alert"></button>
+                    </div>
+                )}
+
                 {/* Add IP Form */}
                 <div className="row mb-4">
                     <div className="col-md-4">

@@ -367,13 +367,11 @@ function convertPaymentsToArray(payments) {
 // W-Agent: Worker Agent payments
 function extractWAgent(node = {}) {
   const out = [];
-  console.log("Extracting WAgent data:", node);
   
   Object.values(node || {}).forEach((agent) => {
     if (!agent || typeof agent !== 'object') return;
     
     const payments = convertPaymentsToArray(agent?.payments);
-    console.log(`Found ${payments.length} payments for agent:`, agent.agentName || agent.name);
     
     if (payments && payments.length) {
       payments.forEach((payment) => {
@@ -384,7 +382,6 @@ function extractWAgent(node = {}) {
         const agentName = agent.agentName ?? agent.name ?? "Worker Agent";
         const charges = safeNumber(payment.charges ?? payment.serviceCharges ?? payment.agentCharges ?? payment.fee ?? 0);
         
-        console.log(`Payment: amount=${amount}, charges=${charges}, agent=${agentName}`);
         
         if (amount > 0) {
           out.push({ 
@@ -413,20 +410,17 @@ function extractWAgent(node = {}) {
     }
   });
   
-  console.log(`Total WAgent rows extracted: ${out.length}`);
   return out;
 }
 
 // C-Agent: Client Agent payments
 function extractCAgent(node = {}) {
   const out = [];
-  console.log("Extracting CAgent data:", node);
   
   Object.values(node || {}).forEach((agent) => {
     if (!agent || typeof agent !== 'object') return;
     
     const payments = convertPaymentsToArray(agent?.payments);
-    console.log(`Found ${payments.length} payments for client agent:`, agent.agentName || agent.name);
     
     if (payments && payments.length) {
       payments.forEach((payment) => {
@@ -436,7 +430,6 @@ function extractCAgent(node = {}) {
         const date = payment.date ?? payment.paymentDate ?? payment.paidOn ?? agent.createdAt ?? "";
         const agentName = agent.agentName ?? agent.name ?? "Client Agent";
         
-        console.log(`Client Agent Payment: amount=${amount}, agent=${agentName}`);
         
         if (amount > 0) {
           out.push({ 
@@ -453,7 +446,6 @@ function extractCAgent(node = {}) {
     }
   });
   
-  console.log(`Total CAgent rows extracted: ${out.length}`);
   return out;
 }
 
@@ -646,7 +638,6 @@ export default function ResultsGrafCard({
       const fdb = await importFirebaseDB();
       if (!mounted) return;
       if (!fdb) { 
-        console.log("Firebase not available");
         setLoading(false); 
         return; 
       }
@@ -658,7 +649,6 @@ export default function ResultsGrafCard({
           const ref = fdb.child ? fdb.child(path) : fdb.ref(path);
           const cb = (snap) => { 
             const data = snap.val() || {};
-            console.log(`Firebase data loaded for ${key}:`, data);
             snapshots[key] = data; 
             rebuild(); 
           };
@@ -705,7 +695,6 @@ export default function ResultsGrafCard({
 
       function rebuild() {
         try {
-          console.log("Rebuilding data with snapshots:", Object.keys(snapshots));
           
           // Clients
           const clientRows = [];
@@ -772,8 +761,6 @@ export default function ResultsGrafCard({
           const hospitalRefRows = extractHospitalRef(snapshots.hospitalData || {});
 
           // Agent Data - FIXED EXTRACTION
-          console.log("WAgent data snapshot:", snapshots.wagentData);
-          console.log("CAgent data snapshot:", snapshots.cagentData);
           
           const wagentRows = extractWAgent(snapshots.wagentData || {});
           const cagentRows = extractCAgent(snapshots.cagentData || {});
@@ -783,7 +770,6 @@ export default function ResultsGrafCard({
           const wagentPayments = wagentRows.filter(r => r.type === "wagent");
           const wagentCharges = wagentRows.filter(r => r.type === "wagentcharges");
 
-          console.log(`Agent data extracted - WAgent: ${wagentPayments.length}, WAgentCharges: ${wagentCharges.length}, CAgent: ${cagentRows.length}, CAgentRef: ${cagentRefRows.length}`);
 
           // Sort by date desc
           const byDateDesc = (a, b) => (b.parsedDate?.getTime?.() || 0) - (a.parsedDate?.getTime?.() || 0);
@@ -816,7 +802,6 @@ export default function ResultsGrafCard({
               cagentref: cagentRefRows
             });
             setLoading(false);
-            console.log("Final rows state set with agent data");
           }
         } catch (error) {
           console.error("Error in rebuild function:", error);

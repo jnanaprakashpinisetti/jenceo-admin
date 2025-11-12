@@ -140,7 +140,7 @@ export default function Login() {
         </div>
       </div>
 
-      <style jsx>{`
+      <style jsx ="true">{`
         .login-container { padding: 24px; display: flex; justify-content: center; align-items: center; min-height: 100vh; }
         .login-card { width: 400px; background-color: #333638; border-radius: 10px; color: white; }
         .login-title { margin-bottom: 1.5rem; text-align: center; }

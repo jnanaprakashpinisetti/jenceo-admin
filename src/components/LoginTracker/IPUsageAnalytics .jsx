@@ -92,13 +92,13 @@ const IPUsageAnalytics = ({ loginLogs }) => {
                                             <small className="text-muted">{ip.isp}</small>
                                         </td>
                                         <td>
-                                            <small className="text-white">
-                                                {new Date(ip.firstSeen).toLocaleDateString()}
+                                            <small className="text-white small-text">
+                                                {new Date(ip.firstSeen).toLocaleString()}
                                             </small>
                                         </td>
                                         <td>
-                                            <small className="text-white">
-                                                {new Date(ip.lastSeen).toLocaleDateString()}
+                                            <small className="text-white small-text">
+                                              {new Date(ip.lastSeen).toLocaleString()}
                                             </small>
                                         </td>
                                     </tr>

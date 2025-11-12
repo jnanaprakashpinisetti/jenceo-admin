@@ -38,6 +38,7 @@ export const trackUserLogin = async (userData, ipAddress = 'Unknown') => {
             };
         }
 
+
         // Check for suspicious activity
         const suspiciousCheck = await checkSuspiciousActivity(userData, ipAddress);
         if (suspiciousCheck.isSuspicious) {
@@ -85,11 +86,11 @@ export const trackUserLogin = async (userData, ipAddress = 'Unknown') => {
             isp: locationData.isp || 'Unknown',
             coordinates: locationData.coordinates,
             
-            // Security Context
-            securityScore: securityContext.securityScore,
-            riskLevel: securityContext.riskLevel,
-            isSuspicious: suspiciousCheck.isSuspicious,
-            suspiciousReason: suspiciousCheck.reason,
+            // Security Context - FIXED: Ensure no undefined values
+            securityScore: securityContext.securityScore || 50,
+            riskLevel: securityContext.riskLevel || 'MEDIUM',
+            isSuspicious: suspiciousCheck.isSuspicious || false,
+            suspiciousReason: suspiciousCheck.reason || null, // FIXED: Use null instead of undefined
             
             // Device and Browser Info
             browser: getBrowserInfo(navigator.userAgent),
@@ -124,8 +125,8 @@ export const trackUserLogin = async (userData, ipAddress = 'Unknown') => {
             return { 
                 success: true, 
                 loginId: result.key,
-                securityScore: securityContext.securityScore,
-                riskLevel: securityContext.riskLevel
+                securityScore: securityContext.securityScore || 50,
+                riskLevel: securityContext.riskLevel || 'MEDIUM'
             };
         } else {
             console.error('Failed to push login data to Firebase');
@@ -487,40 +488,50 @@ export const getEnhancedLocationFromIP = async (ipAddress) => {
             return getDefaultLocationData();
         }
 
-        // Try multiple IP geolocation services for redundancy
-        const locationPromises = [
-            fetch(`https://ipapi.co/${ipAddress}/json/`).then(r => r.json()),
-            fetch(`https://ipinfo.io/${ipAddress}/json?token=YOUR_IPINFO_TOKEN`).then(r => r.json()),
-            fetch(`https://api.ipgeolocation.io/ipgeo?apiKey=YOUR_API_KEY&ip=${ipAddress}`).then(r => r.json())
-        ];
-
-        const results = await Promise.allSettled(locationPromises);
-        
-        let bestLocationData = getDefaultLocationData();
-        
-        for (const result of results) {
-            if (result.status === 'fulfilled' && result.value) {
-                const data = result.value;
-                if (data.country || data.city) {
-                    bestLocationData = {
-                        country: data.country_name || data.country || 'Unknown',
-                        city: data.city || 'Unknown',
-                        region: data.region || data.regionName || 'Unknown',
-                        timezone: data.timezone || 'Unknown',
-                        isp: data.org || data.isp || 'Unknown',
-                        coordinates: data.latitude && data.longitude ? {
-                            lat: parseFloat(data.latitude),
-                            lng: parseFloat(data.longitude)
-                        } : null,
-                        asn: data.asn || 'Unknown',
-                        reverseDNS: data.reverse || 'Unknown'
-                    };
-                    break;
-                }
+        // Use only reliable IP geolocation service
+        try {
+            const response = await fetch(`https://ipapi.co/${ipAddress}/json/`);
+            const data = await response.json();
+            
+            if (data.country || data.city) {
+                return {
+                    country: data.country_name || data.country || 'Unknown',
+                    city: data.city || 'Unknown',
+                    region: data.region || data.regionName || 'Unknown',
+                    timezone: data.timezone || 'Unknown',
+                    isp: data.org || data.isp || 'Unknown',
+                    coordinates: data.latitude && data.longitude ? {
+                        lat: parseFloat(data.latitude),
+                        lng: parseFloat(data.longitude)
+                    } : null,
+                    asn: data.asn || 'Unknown',
+                    reverseDNS: data.reverse || 'Unknown'
+                };
             }
+        } catch (error) {
+            console.warn('Primary IP geolocation failed, using fallback');
         }
 
-        return bestLocationData;
+        // Fallback service
+        try {
+            const response = await fetch(`https://api.country.is/${ipAddress}`);
+            const data = await response.json();
+            
+            return {
+                country: data.country || 'Unknown',
+                city: 'Unknown',
+                region: 'Unknown',
+                timezone: 'Unknown',
+                isp: 'Unknown',
+                coordinates: null,
+                asn: 'Unknown',
+                reverseDNS: 'Unknown'
+            };
+        } catch (error) {
+            console.warn('Fallback IP geolocation failed');
+        }
+
+        return getDefaultLocationData();
     } catch (error) {
         console.error('Error getting enhanced location from IP:', error);
         return getDefaultLocationData();
@@ -653,15 +664,16 @@ const generateSessionId = () => {
 // Security analysis functions
 const checkRapidSuccessiveLogins = async (userId, ipAddress) => {
     try {
-        const oneMinuteAgo = new Date(Date.now() - 60000).toISOString();
+        const oneMinuteAgo = Date.now() - 60000;
         const snapshot = await firebaseDB.child('LoginLogs')
-            .orderByChild('timestamp')
-            .startAt(Date.now() - 60000)
+            .orderByChild('userId')
+            .equalTo(userId)
             .once('value');
 
         if (snapshot.exists()) {
-            const recentLogins = Object.values(snapshot.val()).filter(login => 
-                login.userId === userId && login.timestamp > Date.now() - 60000
+            const logins = snapshot.val();
+            const recentLogins = Object.values(logins).filter(login => 
+                login.userId === userId && login.timestamp > oneMinuteAgo
             );
 
             if (recentLogins.length >= 3) {
@@ -830,10 +842,16 @@ const getUserLoginFrequency = async (userId) => {
         const snapshot = await firebaseDB.child('LoginLogs')
             .orderByChild('userId')
             .equalTo(userId)
-            .startAt(oneHourAgo)
             .once('value');
 
-        return snapshot.exists() ? Object.keys(snapshot.val()).length : 0;
+        if (!snapshot.exists()) return 0;
+        
+        const logins = snapshot.val();
+        const recentLogins = Object.values(logins).filter(login => 
+            login.timestamp > oneHourAgo
+        );
+        
+        return recentLogins.length;
     } catch (error) {
         console.error('Error getting user login frequency:', error);
         return 0;

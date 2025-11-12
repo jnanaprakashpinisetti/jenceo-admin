@@ -81,6 +81,8 @@ const IPWhitelistManager = () => {
             
             if (!restrictionEnabled) {
                 alert('IP Restriction Enabled: Only whitelisted IPs can access the website');
+                // Force logout all users when restriction is enabled
+                window.location.reload();
             } else {
                 alert('IP Restriction Disabled: All IPs can access the website');
             }

@@ -2,7 +2,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import firebaseDB from "../../firebase";
 import { useAuth } from "../../context/AuthContext";
-// import categoryMap from "./VegCatalog";
+import Credits from "./Credits";
 
 // Inline catalog (you can switch to import later)
 const categoryMap = {
@@ -503,6 +503,8 @@ export default function PurchaseDetails() {
         switch (activeTab) {
             case "daily":
                 return renderDailyTab();
+            case "credits":
+                return <Credits />;
             case "monthly":
                 return renderMonthlyTab();
             case "payments":
@@ -1577,6 +1579,7 @@ export default function PurchaseDetails() {
                 }}>
                     {[
                         { id: "daily", label: "Daily Purchases", icon: "shopping-basket" },
+                        { id: "credits", label: "Credits", icon: "shopping-basket" },
                         { id: "monthly", label: "Monthly Summary", icon: "chart-bar" },
                         { id: "payments", label: "Payments", icon: "credit-card" },
                         { id: "price-tracker", label: "Price Tracker", icon: "chart-line" }

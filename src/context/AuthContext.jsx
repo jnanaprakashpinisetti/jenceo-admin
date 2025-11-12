@@ -763,8 +763,8 @@ export function AuthProvider({ children }) {
         userId: userDatabaseId,
         username: userData.username,
         ipAddress: clientIP,
-        securityScore: trackingResult.securityScore,
-        riskLevel: trackingResult.riskLevel,
+        securityScore: trackingResult.securityScore || 50, // FIXED: Ensure defined value
+        riskLevel: trackingResult.riskLevel || 'MEDIUM', // FIXED: Ensure defined value
         timestamp: new Date().toISOString(),
         severity: 'LOW'
       });

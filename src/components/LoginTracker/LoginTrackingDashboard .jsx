@@ -324,7 +324,7 @@ const LoginTrackingDashboard = () => {
             {/* Statistics Cards */}
             <div className="row mb-4">
                 <div className="col-xl-3 col-md-6 mb-4">
-                    <div 
+                    <div
                         className={`card h-100 ${cardFilter === 'totalLogins' ? 'border-success border-3' : 'border-success'}`}
                         style={{ cursor: 'pointer', backgroundColor: cardFilter === 'totalLogins' ? 'rgba(25, 135, 84, 0.1)' : '' }}
                         onClick={() => handleCardClick('totalLogins')}
@@ -350,7 +350,7 @@ const LoginTrackingDashboard = () => {
                 </div>
 
                 <div className="col-xl-3 col-md-6 mb-4">
-                    <div 
+                    <div
                         className={`card h-100 ${cardFilter === 'uniqueUsers' ? 'border-info border-3' : 'border-info'}`}
                         style={{ cursor: 'pointer', backgroundColor: cardFilter === 'uniqueUsers' ? 'rgba(13, 202, 240, 0.1)' : '' }}
                         onClick={() => handleCardClick('uniqueUsers')}
@@ -376,7 +376,7 @@ const LoginTrackingDashboard = () => {
                 </div>
 
                 <div className="col-xl-3 col-md-6 mb-4">
-                    <div 
+                    <div
                         className={`card h-100 ${cardFilter === 'uniqueIPs' ? 'border-warning border-3' : 'border-warning'}`}
                         style={{ cursor: 'pointer', backgroundColor: cardFilter === 'uniqueIPs' ? 'rgba(255, 193, 7, 0.1)' : '' }}
                         onClick={() => handleCardClick('uniqueIPs')}
@@ -402,7 +402,7 @@ const LoginTrackingDashboard = () => {
                 </div>
 
                 <div className="col-xl-3 col-md-6 mb-4">
-                    <div 
+                    <div
                         className={`card h-100 ${cardFilter === 'todayLogins' ? 'border-primary border-3' : 'border-primary'}`}
                         style={{ cursor: 'pointer', backgroundColor: cardFilter === 'todayLogins' ? 'rgba(13, 110, 253, 0.1)' : '' }}
                         onClick={() => handleCardClick('todayLogins')}
@@ -513,7 +513,6 @@ const LoginTrackingDashboard = () => {
                                             className="btn btn-outline-info"
                                             onClick={clearFilters}
                                         >
-                                            <i className="bi bi-x me-2"></i>
                                             Clear Filters
                                         </button>
                                         <button
@@ -521,8 +520,7 @@ const LoginTrackingDashboard = () => {
                                             onClick={exportToCSV}
                                             disabled={filteredLogs.length === 0}
                                         >
-                                            <i className="bi bi-download me-2"></i>
-                                            Export CSV ({filteredLogs.length})
+                                            Export <span className='text-warning'>({filteredLogs.length})</span>
                                         </button>
                                     </div>
                                 </div>
@@ -550,7 +548,7 @@ const LoginTrackingDashboard = () => {
                                 <span className="badge bg-warning">
                                     Last updated: {new Date().toLocaleTimeString('en-IN')}
                                 </span>
-                                
+
                                 {/* Items per page selector */}
                                 <select
                                     className="form-select form-select-sm bg-dark text-white border-secondary"
@@ -653,64 +651,66 @@ const LoginTrackingDashboard = () => {
 
                             {/* Pagination Controls */}
                             {totalPages > 1 && (
-                                <div className="card-footer border-secondary">
-                                    <div className="d-flex justify-content-between align-items-center">
-                                        <small className="text-muted">
-                                            Showing {startIndex + 1} to {Math.min(endIndex, filteredLogs.length)} of {filteredLogs.length} entries
-                                        </small>
-                                        <nav>
-                                            <ul className="pagination pagination-sm mb-0">
-                                                <li className={`page-item ${currentPage === 1 ? 'disabled' : ''}`}>
-                                                    <button
-                                                        className="page-link bg-dark text-white border-secondary"
-                                                        onClick={() => handlePageChange(currentPage - 1)}
-                                                    >
-                                                        Previous
-                                                    </button>
-                                                </li>
-                                                
-                                                {[...Array(totalPages)].map((_, index) => {
-                                                    const page = index + 1;
-                                                    if (
-                                                        page === 1 ||
-                                                        page === totalPages ||
-                                                        (page >= currentPage - 1 && page <= currentPage + 1)
-                                                    ) {
-                                                        return (
-                                                            <li key={page} className={`page-item ${currentPage === page ? 'active' : ''}`}>
-                                                                <button
-                                                                    className="page-link bg-dark text-white border-secondary"
-                                                                    onClick={() => handlePageChange(page)}
-                                                                >
-                                                                    {page}
-                                                                </button>
-                                                            </li>
-                                                        );
-                                                    } else if (
-                                                        page === currentPage - 2 ||
-                                                        page === currentPage + 2
-                                                    ) {
-                                                        return (
-                                                            <li key={page} className="page-item disabled">
-                                                                <span className="page-link bg-dark text-muted border-secondary">...</span>
-                                                            </li>
-                                                        );
-                                                    }
-                                                    return null;
-                                                })}
-                                                
-                                                <li className={`page-item ${currentPage === totalPages ? 'disabled' : ''}`}>
-                                                    <button
-                                                        className="page-link bg-dark text-white border-secondary"
-                                                        onClick={() => handlePageChange(currentPage + 1)}
-                                                    >
-                                                        Next
-                                                    </button>
-                                                </li>
-                                            </ul>
-                                        </nav>
+                                <>
+                                    <small className="  text-warning text-center d-block m-2">
+                                        Showing {startIndex + 1} to {Math.min(endIndex, filteredLogs.length)} of {filteredLogs.length} entries
+                                    </small>
+                                    <div className="card-footer bg-secondary bg-opacity-10 justify-content-center">
+                                        <div className="d-flex  align-items-center">
+                                            <nav style={{ backgroundColor: "transparent", padding: 0, margin: 'auto' }}>
+                                                <ul className="pagination pagination-sm mb-0 justify-content-center">
+                                                    <li className={`page-item ${currentPage === 1 ? 'disabled' : ''}`}>
+                                                        <button
+                                                            className="page-link bg-dark text-white border-secondary"
+                                                            onClick={() => handlePageChange(currentPage - 1)}
+                                                        >
+                                                            Previous
+                                                        </button>
+                                                    </li>
+
+                                                    {[...Array(totalPages)].map((_, index) => {
+                                                        const page = index + 1;
+                                                        if (
+                                                            page === 1 ||
+                                                            page === totalPages ||
+                                                            (page >= currentPage - 1 && page <= currentPage + 1)
+                                                        ) {
+                                                            return (
+                                                                <li key={page} className={`page-item ${currentPage === page ? 'active' : ''}`}>
+                                                                    <button
+                                                                        className="page-link bg-dark text-white border-secondary"
+                                                                        onClick={() => handlePageChange(page)}
+                                                                    >
+                                                                        {page}
+                                                                    </button>
+                                                                </li>
+                                                            );
+                                                        } else if (
+                                                            page === currentPage - 2 ||
+                                                            page === currentPage + 2
+                                                        ) {
+                                                            return (
+                                                                <li key={page} className="page-item disabled">
+                                                                    <span className="page-link bg-dark text-muted border-secondary">...</span>
+                                                                </li>
+                                                            );
+                                                        }
+                                                        return null;
+                                                    })}
+
+                                                    <li className={`page-item ${currentPage === totalPages ? 'disabled' : ''}`}>
+                                                        <button
+                                                            className="page-link bg-dark text-white border-secondary"
+                                                            onClick={() => handlePageChange(currentPage + 1)}
+                                                        >
+                                                            Next
+                                                        </button>
+                                                    </li>
+                                                </ul>
+                                            </nav>
+                                        </div>
                                     </div>
-                                </div>
+                                </>
                             )}
                         </div>
                     </div>

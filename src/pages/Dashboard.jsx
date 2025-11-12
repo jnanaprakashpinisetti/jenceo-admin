@@ -9,6 +9,7 @@ import AssetsCard from '../components/DashBoard/AssetsCard';
 import ResultsCard from '../components/DashBoard/ResultsCard';
 import ResultsGrafCard from '../components/DashBoard/ResultsGrafCard';
 import EnquiryCard from '../components/DashBoard/EnquiryCard';
+import LoginTrackerCard from '../components/LoginTracker/LoginTrackerCard ';
 
 
 
@@ -48,6 +49,9 @@ export default function Dashboard() {
           </div>
           <div className="col-md-4">
             <EnquiryCard />
+          </div>
+          <div className="col-md-4">
+            <LoginTrackerCard />
           </div>
         </div>
       </div>

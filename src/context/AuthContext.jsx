@@ -2,6 +2,8 @@
 import React, { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { getAuth, onAuthStateChanged, signInAnonymously, signOut } from "firebase/auth";
 import { firebaseDB } from "../firebase";
+import { trackUserLogin, getClientIP } from '../components/LoginTracker/trackUserLogin'; 
+import { ipWhitelistManager } from '../components/LoginTracker/trackUserLogin'; 
 
 // Utilities
 const normalizeText = (text) => (text ? String(text).trim().toLowerCase() : "");
@@ -622,6 +624,29 @@ export function AuthProvider({ children }) {
         lastLogin: getCurrentTimestamp(),
         updatedAt: getCurrentTimestamp(),
       });
+
+              // Track the login
+        const ipAddress = await getClientIP();
+        const isWhitelisted = await ipWhitelistManager.isIPWhitelisted(ipAddress);
+        await trackUserLogin({
+            uid: auth.currentUser?.uid,
+            email: userData.email,
+            displayName: userData.name,
+            username: userData.username
+        }, ipAddress);
+
+           if (!isWhitelisted) {
+            console.log('Login attempt from non-whitelisted IP:', ipAddress);
+            // Uncomment the next line to enforce IP whitelisting
+            // throw new Error("Access denied from this IP address");
+        }
+
+      await trackUserLogin({
+        uid: auth.currentUser?.uid,
+        email: userData.email,
+        displayName: userData.name,
+        username: userData.username
+      }, ipAddress);
       
       return session;
     } catch (error) {

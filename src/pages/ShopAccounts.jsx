@@ -1,6 +1,6 @@
 import React, { useState } from 'react'
 import ShopForm from '../components/Shop/ShopForm'
-import CustmorForm from '../components/Shop/CustmorForm'
+import CustmorForm from '../components/Shop/CustmorForm' // Use the actual filename
 import PurchaseDetail from '../components/Shop/PurchaseDetails';
 
 export default function Accounts() {

@@ -38,8 +38,8 @@ const CustomerForm = ({ onSuccess, onCancel }) => {
 
     const generateDynamicId = async () => {
         try {
-            // Fetch existing customers to determine the next ID
-            const snapshot = await firebaseDB.child('Shop/CreditData').once('value');
+            // Fetch existing customers from Customers path
+            const snapshot = await firebaseDB.child('Shop/ShopCustomers').once('value');
             const customers = snapshot.val() || {};
 
             // Find the highest C- number
@@ -361,7 +361,7 @@ const CustomerForm = ({ onSuccess, onCancel }) => {
                                         value={formData.gender}
                                         onChange={handleChange}
                                         disabled={loading}
-                                       
+
                                     >
                                         <option value="">Select Gender</option>
                                         <option value="male">Male</option>

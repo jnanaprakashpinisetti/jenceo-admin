@@ -250,7 +250,12 @@ export default function PurchaseDetails() {
                 });
             }
 
-            setAllRows(flat);
+            setAllRows(flat.filter(row => {
+                // Customer records typically don't have these purchase-specific fields
+                return !(row.name && row.gender && !row.subCategory);
+            }));
+
+
             setLoading(false);
         };
 

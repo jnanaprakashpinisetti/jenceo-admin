@@ -1,14 +1,19 @@
-// src/components/Customer/CustomerModal.jsx
 import React, { useState, useEffect, useCallback } from 'react';
 import firebaseDB from '../../firebase';
 import ShopForm from '../Shop/ShopForm';
 import ShareBill from '../Shop/ShareBill';
+import ItemsList from './ItemsList';
+import PaymentModal from './PaymentModal';
+import BasicDetails from './BasicDetails';
 
 const CustomerModal = ({ customer, onClose }) => {
     const [activeTab, setActiveTab] = useState("basic");
     const [customerItems, setCustomerItems] = useState([]);
     const [loadingItems, setLoadingItems] = useState(false);
     const [showShopForm, setShowShopForm] = useState(false);
+    const [showPaymentModal, setShowPaymentModal] = useState(false);
+    const [selectedItemsForPayment, setSelectedItemsForPayment] = useState([]);
+    const [selectedTotalForPayment, setSelectedTotalForPayment] = useState(0);
     const [refreshTrigger, setRefreshTrigger] = useState(0);
 
     // Enhanced language mapping for categories with English and Hindi
@@ -152,15 +157,13 @@ const CustomerModal = ({ customer, onClose }) => {
         }
     }, []);
 
-    // FIXED: Single useEffect to load items
+    // Single useEffect to load items
     useEffect(() => {
         console.log("useEffect triggered - customer:", customer?.id, "refreshTrigger:", refreshTrigger);
         if (customer && customer.id) {
             loadCustomerItems(customer.id);
         }
     }, [customer, refreshTrigger, loadCustomerItems]);
-
-    // FIXED: Remove the duplicate useEffect that was causing issues
 
     // Calculate total
     const totalAmount = customerItems.reduce((sum, item) => sum + (item.total || 0), 0);
@@ -195,27 +198,77 @@ const CustomerModal = ({ customer, onClose }) => {
         }
     };
 
-    // FIXED: Handle shop form submission - use refreshTrigger properly
+    // Handle shop form submission
     const handleShopFormSubmit = useCallback(async (savedData) => {
         try {
             console.log("Item saved successfully:", savedData);
-
-            // Close the shop form
             setShowShopForm(false);
-
-            // Force refresh by updating refreshTrigger
             setRefreshTrigger(prev => prev + 1);
-            
-            console.log("Refresh triggered, new items should load");
-
-            // Show success message
             alert('Item added successfully!');
-
         } catch (error) {
             console.error('Error handling form submission:', error);
             alert('Error adding item. Please try again.');
         }
     }, []);
+ 
+     // Handle pay amount
+    const handlePayAmount = (items, total) => {
+        setSelectedItemsForPayment(items);
+        setSelectedTotalForPayment(total);
+        setShowPaymentModal(true);
+    };
+
+    // Handle payment success
+const handlePaymentSuccess = async (paymentInfo, isFullPayment) => {
+    try {
+        console.log("Payment successful:", paymentInfo);
+        
+        const updates = {};
+        
+        if (isFullPayment) {
+            // Mark all selected items as paid
+            selectedItemsForPayment.forEach(item => {
+                updates[`Shop/CreditData/${customer.id}/CustomerItems/${item.id}/status`] = 'paid';
+                updates[`Shop/CreditData/${customer.id}/CustomerItems/${item.id}/paymentInfo`] = paymentInfo;
+            });
+        } else {
+            // For partial payment, create a balance record
+            updates[`Shop/CreditData/${customer.id}/BalanceRecords/${Date.now()}`] = {
+                ...paymentInfo,
+                createdAt: new Date().toISOString()
+            };
+            
+            // You can also update individual items if needed for partial payments
+            // This depends on your business logic
+        }
+
+        await firebaseDB.update(updates);
+        
+        alert(isFullPayment ? 'Payment recorded successfully! All items marked as paid.' : 'Partial payment recorded successfully!');
+        setRefreshTrigger(prev => prev + 1);
+        setSelectedItemsForPayment([]);
+    } catch (error) {
+        console.error('Error updating payment status:', error);
+        alert('Error recording payment. Please try again.');
+    }
+};
+    // Handle create bill
+    const handleCreateBill = (items, total) => {
+        // Set active tab to bill and pass selected items
+        setActiveTab('bill');
+        // You can pass the selected items to ShareBill component if needed
+        console.log("Creating bill for items:", items, "Total:", total);
+    };
+
+    // Handle refresh
+    const handleRefresh = () => {
+        setRefreshTrigger(prev => prev + 1);
+    };
+
+    // Handle add item
+    const handleAddItem = () => {
+        setShowShopForm(true);
+    };
 
     const characterInfo = getCharacterInfo(customer?.character);
 
@@ -254,6 +307,10 @@ const CustomerModal = ({ customer, onClose }) => {
                                         <span className="badge bg-warning text-dark">
                                             <i className="fas fa-rupee-sign me-1"></i>
                                             Balance: ₹{totalAmount.toFixed(2)}
+                                        </span>
+                                        <span className="badge bg-info">
+                                            <i className="fas fa-shopping-cart me-1"></i>
+                                            Items: {customerItems.length}
                                         </span>
                                     </div>
                                 </div>
@@ -305,162 +362,25 @@ const CustomerModal = ({ customer, onClose }) => {
 
                         {/* Tab Content */}
                         <div className="modal-body p-4">
-                            {activeTab === "basic" && (
-                                <div className="row g-4">
-                                    {/* Basic details content remains the same */}
-                                </div>
-                            )}
+                     {activeTab === "basic" && (
+    <BasicDetails 
+        customer={customer} 
+        totalAmount={totalAmount} 
+    />
+)}
 
                             {activeTab === "items" && (
-                                <div>
-                                    <div className="d-flex justify-content-between align-items-center mb-3">
-                                        <h5 className="text-warning mb-0">
-                                            <i className="fas fa-shopping-cart me-2"></i>
-                                            Items List
-                                        </h5>
-                                        <div className="d-flex align-items-center gap-2">
-                                            <span className="badge bg-primary fs-6 me-2">
-                                                Total: ₹{totalAmount.toFixed(2)}
-                                            </span>
-                                            <button
-                                                className="btn btn-success btn-sm fw-bold"
-                                                onClick={() => setShowShopForm(true)}
-                                                style={{
-                                                    background: "linear-gradient(135deg, #10b981 0%, #059669 100%)",
-                                                    border: "none",
-                                                    borderRadius: "10px",
-                                                    padding: "8px 16px"
-                                                }}
-                                            >
-                                                <i className="fas fa-plus me-2"></i>
-                                                Add Items
-                                            </button>
-                                        </div>
-                                    </div>
-
-                                    {loadingItems ? (
-                                        <div className="text-center py-4">
-                                            <div className="spinner-border text-primary" role="status">
-                                                <span className="visually-hidden">Loading...</span>
-                                            </div>
-                                            <p className="mt-2 text-muted">Loading items...</p>
-                                        </div>
-                                    ) : customerItems.length === 0 ? (
-                                        <div className="text-center py-5">
-                                            <div className="text-muted mb-3">
-                                                <i className="fas fa-shopping-cart fa-3x"></i>
-                                            </div>
-                                            <h5 className="text-muted">No Items Found</h5>
-                                            <p className="text-muted">No items have been added for this customer yet.</p>
-                                            <button
-                                                className="btn btn-success mt-3"
-                                                onClick={() => setShowShopForm(true)}
-                                                style={{
-                                                    background: "linear-gradient(135deg, #10b981 0%, #059669 100%)",
-                                                    border: "none",
-                                                    borderRadius: "10px",
-                                                    padding: "10px 20px"
-                                                }}
-                                            >
-                                                <i className="fas fa-plus me-2"></i>
-                                                Add First Item
-                                            </button>
-                                        </div>
-                                    ) : (
-                                        <div className="table-responsive">
-                                            <table className="table table-dark table-bordered table-hover align-middle">
-                                                <thead>
-                                                    <tr style={{
-                                                        background: "linear-gradient(135deg, #059669 0%, #047857 100%)"
-                                                    }}>
-                                                        <th className="text-center">
-                                                            <input
-                                                                type="checkbox"
-                                                                className="form-check-input"
-                                                                onChange={(e) => {
-                                                                    const checked = e.target.checked;
-                                                                    const updatedItems = customerItems.map(item => ({
-                                                                        ...item,
-                                                                        selected: checked
-                                                                    }));
-                                                                    setCustomerItems(updatedItems);
-                                                                }}
-                                                            />
-                                                        </th>
-                                                        <th className="text-center">S. No</th>
-                                                        <th className="text-center">Date</th>
-                                                        <th>Sub Category</th>
-                                                        <th className="text-center">Qty (KG)</th>
-                                                        <th className="text-center">Price</th>
-                                                        <th className="text-center">Total</th>
-                                                    </tr>
-                                                </thead>
-                                                <tbody>
-                                                    {customerItems.map((item, index) => (
-                                                        <tr key={item.id} style={{
-                                                            background: index % 2 === 0
-                                                                ? "rgba(30, 41, 59, 0.7)"
-                                                                : "rgba(51, 65, 85, 0.7)"
-                                                        }}>
-                                                            <td className="text-center">
-                                                                <input
-                                                                    type="checkbox"
-                                                                    className="form-check-input"
-                                                                    checked={item.selected || false}
-                                                                    onChange={(e) => {
-                                                                        const updatedItems = [...customerItems];
-                                                                        updatedItems[index] = {
-                                                                            ...updatedItems[index],
-                                                                            selected: e.target.checked
-                                                                        };
-                                                                        setCustomerItems(updatedItems);
-                                                                    }}
-                                                                />
-                                                            </td>
-                                                            <td className="text-center fw-bold">{index + 1}</td>
-                                                            <td className="text-center">
-                                                                <span className="text-light">
-                                                                    {item.date}
-                                                                </span>
-                                                            </td>
-                                                            <td>
-                                                                <div>
-                                                                    <div className="fw-semibold text-warning">
-                                                                        {item.subCategory}
-                                                                    </div>
-                                                                    <div className="small text-muted">
-                                                                        {getTranslation(item.subCategory, 'en', true, item.mainCategory)} / {getTranslation(item.subCategory, 'hi', true, item.mainCategory)}
-                                                                    </div>
-                                                                </div>
-                                                            </td>
-                                                            <td className="text-center fw-bold">
-                                                                {item.quantity}
-                                                            </td>
-                                                            <td className="text-center text-success fw-bold">
-                                                                ₹{item.price}
-                                                            </td>
-                                                            <td className="text-center text-warning fw-bold">
-                                                                ₹{item.total}
-                                                            </td>
-                                                        </tr>
-                                                    ))}
-                                                </tbody>
-                                                <tfoot>
-                                                    <tr style={{
-                                                        background: "linear-gradient(135deg, #dc2626 0%, #b91c1c 100%)"
-                                                    }}>
-                                                        <td colSpan="6" className="text-end fw-bold text-white">
-                                                            GRAND TOTAL:
-                                                        </td>
-                                                        <td colSpan="3" className="text-center fw-bold text-white fs-5">
-                                                            ₹{totalAmount.toFixed(2)}
-                                                        </td>
-                                                    </tr>
-                                                </tfoot>
-                                            </table>
-                                        </div>
-                                    )}
-                                </div>
+                                <ItemsList
+                                    customerItems={customerItems}
+                                    loadingItems={loadingItems}
+                                    totalAmount={totalAmount}
+                                    onAddItem={handleAddItem}
+                                    onRefresh={handleRefresh}
+                                    onPayAmount={handlePayAmount}
+                                    onCreateBill={handleCreateBill}
+                                    categoryTranslations={categoryTranslations}
+                                    getTranslation={getTranslation}
+                                />
                             )}
 
                             {activeTab === "bill" && (
@@ -502,6 +422,17 @@ const CustomerModal = ({ customer, onClose }) => {
                     onClose={() => setShowShopForm(false)}
                     onSave={handleShopFormSubmit}
                     mode="customer"
+                />
+            )}
+
+            {/* Payment Modal */}
+            {showPaymentModal && (
+                <PaymentModal
+                    isOpen={showPaymentModal}
+                    onClose={() => setShowPaymentModal(false)}
+                    selectedItems={selectedItemsForPayment}
+                    selectedTotal={selectedTotalForPayment}
+                    onPaymentSuccess={handlePaymentSuccess}
                 />
             )}
         </>

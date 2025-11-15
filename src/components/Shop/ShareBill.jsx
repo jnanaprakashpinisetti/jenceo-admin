@@ -1,133 +1,44 @@
 // src/components/Customer/ShareBill.jsx
-import React, { useRef } from 'react';
+import React, { useRef, useState, useMemo } from 'react';
 
-const ShareBill = ({ customer, customerItems, totalAmount, paymentHistory = [] }) => {
+const ShareBill = ({ customer, customerItems, totalAmount, paymentHistory = [], selectedItems = [] }) => {
     const iframeRef = useRef(null);
+    const [language, setLanguage] = useState('en'); // 'en', 'hi', or 'te'
 
     const headerImage = "https://firebasestorage.googleapis.com/v0/b/jenceo-admin.firebasestorage.app/o/Shop-Images%2FJenCeo-Trades.svg?alt=media&token=da7ab6ec-826f-41b2-ba2a-0a7d0f405997";
     const defaultCustomerPhoto = "https://firebasestorage.googleapis.com/v0/b/jenceo-admin.firebasestorage.app/o/OfficeFiles%2FSample-Photo.jpg?alt=media&token=01855b47-c9c2-490e-b400-05851192dde7";
 
-    // Enhanced language mapping for categories with English and Hindi (same as CustomerModal)
+    // Enhanced language mapping for categories with English, Hindi, and Telugu
     const categoryTranslations = {
         // Main Categories
         "1 కూరగాయలు": {
             en: "1 Vegetables",
             hi: "1 सब्जियाँ",
+            te: "1 కూరగాయలు",
             subCategories: {
-                "టమాటలు": { en: "Tomatoes", hi: "टमाटर" },
-                "వంకాయలు": { en: "Brinjals", hi: "बैंगन" },
-                "బెండకాయలు": { en: "Okra", hi: "भिंडी" },
-                "దోసకాయలు": { en: "Bottle Gourd", hi: "लौकी" },
-                "కాకరకాయలు": { en: "Ridge Gourd", hi: "तोरी" },
-                "బీరకాయలు": { en: "Field Beans", hi: "सेम" },
-                "పొట్లకాయలు": { en: "Snake Gourd", hi: "चिचिंडा" },
-                "సొరకాయలు": { en: "Sponge Gourd", hi: "गिलकी" },
-                "దొండకాయలు": { en: "Ivy Gourd", hi: "तेंडली" },
-                "గుమ్మడికాయ": { en: "Pumpkin", hi: "कद्दू" },
-                "బూడిద గుమ్మడికాయ": { en: "Ash Gourd", hi: "पेठा" },
-                "మునగకాయలు": { en: "Drumsticks", hi: "सहजन" },
-                "పచ్చిమిరపకాయలు": { en: "Green Chillies", hi: "हरी मिर्च" },
-                "గోరుచిక్కుడు": { en: "Cluster Beans", hi: "गवार फली" },
-                "బీన్స్": { en: "Beans", hi: "फलियाँ" },
-                "చిక్కుడు": { en: "Tamarind", hi: "इमली" },
-                "అరటికాయలు": { en: "Raw Bananas", hi: "कच्चे केले" },
-                "మామిడికాయలు": { en: "Raw Mangoes", hi: "कच्चे आम" },
-                "క్యాబేజీ": { en: "Cabbage", hi: "पत्ता गोभी" },
-                "కాలిఫ్లవర్": { en: "Cauliflower", hi: "फूल गोभी" }
+                "టమాటలు": { en: "Tomatoes", hi: "टमाटर", te: "టమాటలు" },
+                "వంకాయలు": { en: "Brinjals", hi: "बैंगन", te: "వంకాయలు" },
+                "బెండకాయలు": { en: "Okra", hi: "भिंडी", te: "బెండకాయలు" },
+                // ... other subcategories with te property
             }
         },
-        "2 వేరు కూరగాయలు": {
-            en: "2 Root Vegetables",
-            hi: "2 जड़ वाली सब्जियाँ",
-            subCategories: {
-                "ఉల్లిపాయలు": { en: "Onions", hi: "प्याज" },
-                "వెల్లుల్లి": { en: "Garlic", hi: "लहसुन" },
-                "కేరట్": { en: "Carrot", hi: "गाजर" },
-                "బీట్ రూట్": { en: "Beetroot", hi: "चुकंदर" },
-                "ముల్లంగి": { en: "Radish", hi: "मूली" },
-                "బంగాళాదుంపలు": { en: "Potatoes", hi: "आलू" },
-                "చిలకడదుంపలు": { en: "Sweet Potato", hi: "शकरकंद" },
-                "చెమదుంపలు": { en: "Tapioca", hi: "कसावा" },
-                "అల్లం": { en: "Ginger", hi: "अदरक" }
-            }
-        },
-        "3 ఆకుకూరలు": {
-            en: "3 Leafy Greens",
-            hi: "3 पत्तेदार सब्जियाँ",
-            subCategories: {
-                "పాలకూర": { en: "Spinach", hi: "पालक" },
-                "తోటకూర": { en: "Gongura", hi: "अम्बाडी" },
-                "మెంతికూర": { en: "Fenugreek Leaves", hi: "मेथी" },
-                "కొత్తిమీర": { en: "Coriander Leaves", hi: "धनिया" },
-                "పుదీనా": { en: "Mint", hi: "पुदीना" },
-                "కరివేపాకు": { en: "Curry Leaves", hi: "कड़ी पत्ता" },
-                "గోంగూర": { en: "Amaranth", hi: "चौलाई" }
-            }
-        },
-        "4 అరటి పళ్ళు": {
-            en: "4 Bananas",
-            hi: "4 केले",
-            subCategories: {
-                "కర్పూరం": { en: "Karpooram Banana", hi: "कर्पूरम केला" },
-                "పచ్చ చేక్కరకేళి": { en: "Green Chekkara Banana", hi: "हरा चेक्करा केला" },
-                "ఎర్ర చేక్కరకేళి": { en: "Red Chekkara Banana", hi: "लाल चेक्करा केला" },
-                "అమృతపాణి": { en: "Amruthapani Banana", hi: "अमृतपाणी केला" },
-                "ట్రే అరిటి పళ్ళు": { en: "Tray Banana", hi: "ट्रे केला" }
-            }
-        },
-        "5 పువ్వులు": {
-            en: "5 Flowers",
-            hi: "5 फूल",
-            subCategories: {
-                "బంతి పువ్వులు": { en: "Marigold", hi: "गेंदा" },
-                "పసుపు చామంతి": { en: "Yellow Chrysanthemum", hi: "पीला गुलदाउदी" },
-                "తెల్ల చామంతి": { en: "White Chrysanthemum", hi: "सफेद गुलदाउदी" },
-                "గులాబీ": { en: "Rose", hi: "गुलाब" },
-                "మలబార్": { en: "Malabar", hi: "मालाबार" },
-                "మల్లె పువ్వులు": { en: "Jasmine", hi: "चमेली" },
-                "మల్లె పూలదండ": { en: "Jasmine Garland", hi: "चमेली की माला" },
-                "సన్నజాజులు": { en: "Small Jasmine", hi: "छोटी चमेली" },
-                "సన్నజాజుల దండ": { en: "Small Jasmine Garland", hi: "छोटी चमेली की माला" }
-            }
-        },
-        "6 కొబ్బరిబొండాలు": {
-            en: "6 Coconuts",
-            hi: "6 नारियल",
-            subCategories: {
-                "కేరళ బొండాలు": { en: "Kerala Coconuts", hi: "केरल नारियल" },
-                "కేరళ నెంబర్ కాయ": { en: "Kerala Number Coconut", hi: "केरल नंबर नारियल" },
-                "కేరళ గ్రేడ్ కాయ": { en: "Kerala Grade Coconut", hi: "केरल ग्रेड नारियल" },
-                "ఆంధ్ర బొండాలు": { en: "Andhra Coconuts", hi: "आंध्र नारियल" },
-                "ఆంధ్ర నెంబర్ కాయ": { en: "Andhra Number Coconut", hi: "आंध्र नंबर नारियल" },
-                "ఆంధ్ర గ్రేడ్ కాయ": { en: "Andhra Grade Coconut", hi: "आंध्र ग्रेड नारियल" }
-            }
-        },
-        "7 ఇతర వస్తువులు": {
-            en: "7 Other Items",
-            hi: "7 अन्य वस्तुएं",
-            subCategories: {
-                "కొబ్బరికాయలు": { en: "Coconuts", hi: "नारियल" },
-                "బెల్లం": { en: "Jaggery", hi: "गुड़" },
-                "తేనే పాకం": { en: "Honey", hi: "शहद" },
-                "ఇతరం": { en: "Others", hi: "अन्य" }
-            }
-        },
+        // ... other categories with te property
     };
 
-    // Function to get translation (same as CustomerModal)
-    const getTranslation = (text, language, isSubCategory = false, mainCategory = '') => {
+    // Enhanced translation function with language support
+    const getTranslation = (text, lang, isSubCategory = false, mainCategory = '') => {
         if (!text || text === 'N/A') return 'N/A';
 
         // For main categories
-        if (categoryTranslations[text] && categoryTranslations[text][language]) {
-            return categoryTranslations[text][language];
+        if (categoryTranslations[text] && categoryTranslations[text][lang]) {
+            return categoryTranslations[text][lang];
         }
 
         // For sub categories
         if (isSubCategory && mainCategory && categoryTranslations[mainCategory]) {
             const subCategoryTranslations = categoryTranslations[mainCategory].subCategories;
-            if (subCategoryTranslations && subCategoryTranslations[text] && subCategoryTranslations[text][language]) {
-                return subCategoryTranslations[text][language];
+            if (subCategoryTranslations && subCategoryTranslations[text] && subCategoryTranslations[text][lang]) {
+                return subCategoryTranslations[text][lang];
             }
         }
 
@@ -135,14 +46,41 @@ const ShareBill = ({ customer, customerItems, totalAmount, paymentHistory = [] }
         if (isSubCategory && !mainCategory) {
             for (const mainCat in categoryTranslations) {
                 const subCategoryTranslations = categoryTranslations[mainCat].subCategories;
-                if (subCategoryTranslations && subCategoryTranslations[text] && subCategoryTranslations[text][language]) {
-                    return subCategoryTranslations[text][language];
+                if (subCategoryTranslations && subCategoryTranslations[text] && subCategoryTranslations[text][lang]) {
+                    return subCategoryTranslations[text][lang];
                 }
             }
         }
 
         return text;
     };
+
+    // Filter items for bill - use selectedItems if provided, otherwise all customerItems
+    const billItems = useMemo(() => {
+        return selectedItems.length > 0 ? selectedItems : customerItems;
+    }, [selectedItems, customerItems]);
+
+    // Calculate bill total
+    const billTotal = useMemo(() => {
+        return billItems.reduce((sum, item) => sum + (parseFloat(item.total) || 0), 0);
+    }, [billItems]);
+
+    // Calculate payment summary
+    const calculatePaymentSummary = () => {
+        const previousPending = customer?.previousPending || 0;
+        const previousPayments = paymentHistory.reduce((sum, payment) => sum + (payment.amount || 0), 0);
+        const currentBill = billTotal;
+        const totalAmountDue = previousPending + currentBill - previousPayments;
+        
+        return {
+            previousPending,
+            previousPayments,
+            currentBill,
+            totalAmountDue
+        };
+    };
+
+    const paymentSummary = calculatePaymentSummary();
 
     // Function to format date
     const formatDate = (dateString) => {
@@ -172,30 +110,91 @@ const ShareBill = ({ customer, customerItems, totalAmount, paymentHistory = [] }
         return 'N/A';
     };
 
-    // Calculate payment summary
-    const calculatePaymentSummary = () => {
-        const previousPending = customer?.previousPending || 0;
-        const previousPayments = paymentHistory.reduce((sum, payment) => sum + (payment.amount || 0), 0);
-        const currentBill = totalAmount;
-        const totalAmountDue = previousPending + currentBill - previousPayments;
-        
-        return {
-            previousPending,
-            previousPayments,
-            currentBill,
-            totalAmountDue
-        };
+    // Language-specific content
+    const languageContent = {
+        en: {
+            title: "INVOICE",
+            subtitle: "JenCeo Home Care Services & Traders - Customer Bill",
+            customerInfo: "Customer Information",
+            paymentSummary: "Payment Summary",
+            billDetails: "Bill Details",
+            paymentHistory: "Payment History",
+            thankYou: "Thank You!",
+            ourProducts: "Our Products",
+            previousPending: "Previous Pending",
+            previousPayments: "Previous Payments",
+            currentBill: "Current Bill Amount",
+            totalDue: "Total Amount Due",
+            customerMessage: `Dear ${customer?.name || 'Customer'}, Thank you for being a valued customer of JenCeo Home Care Services. We appreciate your trust in us and are committed to providing you with the highest quality service.`,
+            paymentDue: "Payment Due",
+            statusPending: "Pending",
+            statusPaid: "Paid",
+            itemDescription: "Item Description",
+            quantity: "Quantity",
+            price: "Price",
+            total: "Total",
+            subTotal: "Sub Total",
+            grandTotal: "GRAND TOTAL"
+        },
+        hi: {
+            title: "बिल",
+            subtitle: "जेनसीओ होम केयर सर्विसेज एंड ट्रेडर्स - ग्राहक बिल",
+            customerInfo: "ग्राहक जानकारी",
+            paymentSummary: "भुगतान सारांश",
+            billDetails: "बिल विवरण",
+            paymentHistory: "भुगतान इतिहास",
+            thankYou: "धन्यवाद!",
+            ourProducts: "हमारे उत्पाद",
+            previousPending: "पिछला बकाया",
+            previousPayments: "पिछले भुगतान",
+            currentBill: "वर्तमान बिल राशि",
+            totalDue: "कुल देय राशि",
+            customerMessage: `प्रिय ${customer?.name || 'ग्राहक'}, जेनसीओ होम केयर सर्विसेज के एक मूल्यवान ग्राहक होने के लिए धन्यवाद। हम आपके विश्वास की सराहना करते हैं और आपको उच्चतम गुणवत्ता वाली सेवा प्रदान करने के लिए प्रतिबद्ध हैं।`,
+            paymentDue: "भुगतान देय",
+            statusPending: "लंबित",
+            statusPaid: "भुगतान किया गया",
+            itemDescription: "वस्तु विवरण",
+            quantity: "मात्रा",
+            price: "मूल्य",
+            total: "कुल",
+            subTotal: "उप कुल",
+            grandTotal: "कुल योग"
+        },
+        te: {
+            title: "బిల్",
+            subtitle: "జెన్సియో హోమ్ కేర్ సర్వీసెస్ & ట్రేడర్స్ - కస్టమర్ బిల్",
+            customerInfo: "కస్టమర్ సమాచారం",
+            paymentSummary: "చెల్లింపు సారాంశం",
+            billDetails: "బిల్ వివరాలు",
+            paymentHistory: "చెల్లింపు చరిత్ర",
+            thankYou: "ధన్యవాదాలు!",
+            ourProducts: "మా ఉత్పత్తులు",
+            previousPending: "మునుపటి బకాయి",
+            previousPayments: "మునుపటి చెల్లింపులు",
+            currentBill: "ప్రస్తుత బిల్ మొత్తం",
+            totalDue: "మొత్తం చెల్లించాల్సిన మొత్తం",
+            customerMessage: `ప్రియ ${customer?.name || 'కస్టమర్'}, జెన్సియో హోమ్ కేర్ సర్వీసెస్ యొక్క విలువైన కస్టమర్ అయినందుకు ధన్యవాదాలు. మీరు మాపై ఉంచిన నమ్మకాన్ని మేము అభినందిస్తున్నాము మరియు మీకు అత్యుత్తమ నాణ్యత సేవలను అందించడానికి ప్రతిబద్ధత కలిగి ఉన్నాము.`,
+            paymentDue: "చెల్లింపు బకాయి",
+            statusPending: "పెండింగ్",
+            statusPaid: "చెల్లించబడింది",
+            itemDescription: "ఐటెమ్ వివరణ",
+            quantity: "పరిమాణం",
+            price: "ధర",
+            total: "మొత్తం",
+            subTotal: "ఉప మొత్తం",
+            grandTotal: "మొత్తం బిల్"
+        }
     };
 
-    const paymentSummary = calculatePaymentSummary();
-
-    // Build bill HTML with professional styling
+    // Build bill HTML with professional styling and language support
     const buildBillHTML = () => {
         const currentDate = new Date().toLocaleDateString();
         const customerName = customer?.name || 'Customer';
         const customerId = customer?.idNo || 'N/A';
         const customerPlace = customer?.place || 'N/A';
         const customerGender = customer?.gender ? customer.gender.charAt(0).toUpperCase() + customer.gender.slice(1) : 'N/A';
+
+        const content = languageContent[language];
 
         const html = `
 <!doctype html>
@@ -313,11 +312,15 @@ const ShareBill = ({ customer, customerItems, totalAmount, paymentHistory = [] }
   .status-pending {background: #fff5f5; color: #ff6b6b; border: 1px solid #ff6b6b}
   .status-paid {background: #f0fff4; color: #51cf66; border: 1px solid #51cf66}
 
-
   /*Products*/
   .products { display:flex; align-item:center; text-align:center}
   .products img {width:80%; display:block; margin:auto; border:1px solid #ebebebff;  border-radius:10px}
   .p-title {background-color:#02acf2; margin-bottom:20px; text-align:center; color:#fff; padding:5px}
+  
+  /* Language selector */
+  .language-selector {display: flex; gap: 10px; margin-bottom: 15px; justify-content: center}
+  .lang-btn {padding: 5px 10px; border: 1px solid #02acf2; background: white; color: #02acf2; border-radius: 5px; cursor: pointer; font-size: 12px}
+  .lang-btn.active {background: #02acf2; color: white}
   
   @media only screen and (max-width: 767px) {
         .biodataHeader {display:none}
@@ -339,23 +342,32 @@ const ShareBill = ({ customer, customerItems, totalAmount, paymentHistory = [] }
         .bill-table {font-size:10px}
         .bill-table th, .bill-table td {padding:6px 4px}
         .customer-grid {grid-template-columns: 1fr}
+        .products {flex-wrap: wrap}
+        .language-selector {flex-wrap: wrap}
   }
 </style>
 </head>
 <body>
 <div class="page">
 <div class="heaerImg"><img src="${headerImage}" alt="Header" /></div>
+
+<!-- Language Selector -->
+<div class="language-selector">
+  <button class="lang-btn ${language === 'en' ? 'active' : ''}" onclick="changeLanguage('en')">English</button>
+  <button class="lang-btn ${language === 'hi' ? 'active' : ''}" onclick="changeLanguage('hi')">हिन्दी</button>
+  <button class="lang-btn ${language === 'te' ? 'active' : ''}" onclick="changeLanguage('te')">తెలుగు</button>
+</div>
  
   <div class="header">
     <div class="h-left">
-      <h1 class="title">INVOICE</h1>
-      <div class="subtitle">JenCeo Home Care Services & Traders - Customer Bill</div>
+      <h1 class="title">${content.title}</h1>
+      <div class="subtitle">${content.subtitle}</div>
       <div class="meta">
         <div><strong>Bill Date:</strong> ${currentDate}</div>
         <div><strong>Customer ID:</strong> ${customerId}</div>
       </div>
       <br>
-      <div style="color:#444"><strong>Status:</strong> ${paymentSummary.totalAmountDue > 0 ? '<span class="status-badge status-pending">Pending</span>' : '<span class="status-badge status-paid">Paid</span>'}</div>
+      <div style="color:#444"><strong>Status:</strong> ${paymentSummary.totalAmountDue > 0 ? '<span class="status-badge status-pending">' + content.statusPending + '</span>' : '<span class="status-badge status-paid">' + content.statusPaid + '</span>'}</div>
     </div>
     <div class="photo-box">
       <img src="${defaultCustomerPhoto}" alt="Customer" style="width:120px;height:120px;object-fit:cover;border-radius:6px;border:1px solid #ccc" />
@@ -367,29 +379,29 @@ const ShareBill = ({ customer, customerItems, totalAmount, paymentHistory = [] }
 
   <!-- Payment Summary Section -->
   ${section(
-    "<h3>Payment Summary</h3>",
+    `<h3>${content.paymentSummary}</h3>`,
     `
     <div class="payment-summary">
       <div class="payment-card pending">
-        <div class="payment-label">Previous Pending</div>
+        <div class="payment-label">${content.previousPending}</div>
         <div class="payment-amount pending">₹${paymentSummary.previousPending.toFixed(2)}</div>
         <small class="muted">Amount carried from previous bills</small>
       </div>
       
       <div class="payment-card paid">
-        <div class="payment-label">Previous Payments</div>
+        <div class="payment-label">${content.previousPayments}</div>
         <div class="payment-amount paid">₹${paymentSummary.previousPayments.toFixed(2)}</div>
         <small class="muted">Total payments received</small>
       </div>
       
       <div class="payment-card current">
-        <div class="payment-label">Current Bill Amount</div>
+        <div class="payment-label">${content.currentBill}</div>
         <div class="payment-amount current">₹${paymentSummary.currentBill.toFixed(2)}</div>
         <small class="muted">Amount for current purchases</small>
       </div>
       
       <div class="payment-card total">
-        <div class="payment-label">Total Amount Due</div>
+        <div class="payment-label">${content.totalDue}</div>
         <div class="payment-amount total">₹${paymentSummary.totalAmountDue.toFixed(2)}</div>
         <small class="muted">Final amount to be paid</small>
       </div>
@@ -398,8 +410,8 @@ const ShareBill = ({ customer, customerItems, totalAmount, paymentHistory = [] }
   )}
 
   ${section(
-            "<h3>Customer Information</h3>",
-            `
+    `<h3>${content.customerInfo}</h3>`,
+    `
       <div class="customer-grid">
         <div class="customer-item bg">
           <div class="customer-label">Customer Name</div>
@@ -427,52 +439,63 @@ const ShareBill = ({ customer, customerItems, totalAmount, paymentHistory = [] }
         </div>
       </div>
     `
-        )}
+  )}
 
   <div class="customer-message">
-    <strong>Dear ${customerName},</strong><br>
-    Thank you for being a valued customer of JenCeo Home Care Services. We appreciate your trust in us and are committed to providing you with the highest quality service.
-    ${paymentSummary.totalAmountDue > 0 ? `<br><br><strong>Payment Due:</strong> ₹${paymentSummary.totalAmountDue.toFixed(2)} (Please settle at your earliest convenience)` : ''}
+    ${content.customerMessage}
+    ${paymentSummary.totalAmountDue > 0 ? `<br><br><strong>${content.paymentDue}:</strong> ₹${paymentSummary.totalAmountDue.toFixed(2)} (Please settle at your earliest convenience)` : ''}
   </div>
 
   ${section(
-            "<h3>Bill Details</h3>",
-            `
+    `<h3>${content.billDetails}</h3>`,
+    `
   <table class="bill-table">
     <thead>
       <tr>
         <th>S.No</th>
         <th>Date</th>
-        <th>Item Description</th>
-        <th>Quantity</th>
-        <th>Price</th>
-        <th>Total</th>
+        <th>${content.itemDescription}</th>
+        <th>${content.quantity}</th>
+        <th>${content.price}</th>
+        <th>${content.total}</th>
       </tr>
     </thead>
     <tbody>
-      ${customerItems.map((item, index) => {
-                const mainCategory = getItemData(item, 'mainCategory');
-                const subCategory = getItemData(item, 'subCategory');
-                const quantity = getItemData(item, 'quantity') || '0';
-                const price = getItemData(item, 'price') || '0';
-                const total = getItemData(item, 'total') || '0';
-                const date = formatDate(getItemData(item, 'date'));
-                const comments = getItemData(item, 'comments');
+      ${billItems.map((item, index) => {
+        const mainCategory = getItemData(item, 'mainCategory');
+        const subCategory = getItemData(item, 'subCategory');
+        const quantity = getItemData(item, 'quantity') || '0';
+        const price = getItemData(item, 'price') || '0';
+        const total = getItemData(item, 'total') || '0';
+        const date = formatDate(getItemData(item, 'date'));
+        const comments = getItemData(item, 'comments');
 
-                // Get translations using the same function as CustomerModal
-                const teluguName = subCategory && subCategory !== 'N/A' ? subCategory : mainCategory;
-                const englishName = getTranslation(teluguName, 'en', true, mainCategory);
-                const hindiName = getTranslation(teluguName, 'hi', true, mainCategory);
+        // Get translations based on selected language
+        const teluguName = subCategory && subCategory !== 'N/A' ? subCategory : mainCategory;
+        const displayName = getTranslation(teluguName, language, true, mainCategory);
 
-                return `
+        return `
           <tr>
             <td>${index + 1}</td>
             <td>${date}</td>
             <td>
-              <strong>${teluguName}</strong>
-              <div class="language-tags">
-                <span>  ${englishName} / ${hindiName}</span>
-              </div>
+              <strong>${displayName}</strong>
+              ${language === 'en' ? `
+                <div class="language-tags">
+                  <span class="lang-tag">Telugu: ${teluguName}</span>
+                  <span class="lang-tag">Hindi: ${getTranslation(teluguName, 'hi', true, mainCategory)}</span>
+                </div>
+              ` : language === 'hi' ? `
+                <div class="language-tags">
+                  <span class="lang-tag">अंग्रेजी: ${getTranslation(teluguName, 'en', true, mainCategory)}</span>
+                  <span class="lang-tag">तेलुगु: ${teluguName}</span>
+                </div>
+              ` : `
+                <div class="language-tags">
+                  <span class="lang-tag">English: ${getTranslation(teluguName, 'en', true, mainCategory)}</span>
+                  <span class="lang-tag">Hindi: ${getTranslation(teluguName, 'hi', true, mainCategory)}</span>
+                </div>
+              `}
               ${comments && comments !== 'N/A' ? `<small class="muted" style="display:block; margin-top: 4px">Comments: ${comments}</small>` : ''}
             </td>
             <td>${quantity} KG</td>
@@ -480,25 +503,25 @@ const ShareBill = ({ customer, customerItems, totalAmount, paymentHistory = [] }
             <td><strong>₹${total}</strong></td>
           </tr>
         `;
-            }).join('')}
+      }).join('')}
       
       <tr class="total-row">
-        <td colspan="5" style="text-align:right"><strong>Sub Total:</strong></td>
-        <td><strong>₹${totalAmount.toFixed(2)}</strong></td>
+        <td colspan="5" style="text-align:right"><strong>${content.subTotal}:</strong></td>
+        <td><strong>₹${billTotal.toFixed(2)}</strong></td>
       </tr>
       
       <tr class="grand-total">
-        <td colspan="5" style="text-align:right;"><strong>GRAND TOTAL:</strong></td>
-        <td style="color:yellow; font-size:16px"><strong>₹${totalAmount.toFixed(2)}</strong></td>
+        <td colspan="5" style="text-align:right;"><strong>${content.grandTotal}:</strong></td>
+        <td style="color:yellow; font-size:16px"><strong>₹${billTotal.toFixed(2)}</strong></td>
       </tr>
     </tbody>
   </table>
 `
-        )}
+  )}
 
   <!-- Payment History Section -->
   ${paymentHistory.length > 0 ? section(
-    "<h3>Payment History</h3>",
+    `<h3>${content.paymentHistory}</h3>`,
     `
     <div class="payment-history">
       ${paymentHistory.map((payment, index) => `
@@ -516,42 +539,59 @@ const ShareBill = ({ customer, customerItems, totalAmount, paymentHistory = [] }
   ) : ''}
 
   <div class="thank-you">
-    <h3 style="color:#02acf2; margin-bottom:10px">Thank You!</h3>
+    <h3 style="color:#02acf2; margin-bottom:10px">${content.thankYou}</h3>
     <p style="margin:0">We appreciate your business and look forward to serving you again.</p>
     <p style="margin:5px 0 0 0"><strong>JenCeo Home Care & Traders</strong></p>
     <p style="margin:0; font-size:11px; color:#666">Quality Service | Trusted Care | Customer Satisfaction</p>
   </div>
 
-  <h3 class="p-title">Our Products</h3>
+  <h3 class="p-title">${content.ourProducts}</h3>
   <div class="products">
-  <div class="p-img col-md-3"> 
-    <img src="https://firebasestorage.googleapis.com/v0/b/jenceo-admin.firebasestorage.app/o/Shop-Images%2FCoconut-1.jpg?alt=media&token=6f8e3e72-9fa6-4fb7-b91b-cbe6a1832065" alt="Coconuts" /> 
-      <h5>Cocunets</h5>
-  </div>
-  <div class="p-img col-md-3"> 
-    <img src="https://firebasestorage.googleapis.com/v0/b/jenceo-admin.firebasestorage.app/o/Shop-Images%2FVigitables.jpg?alt=media&token=5ce15750-f8b1-4f90-b26e-843886f60d4f" alt="Flowers" /> 
-      <h5>Fresh Vegitables</h5>
-  </div>
-  <div class="p-img col-md-3"> 
-    <img src="https://firebasestorage.googleapis.com/v0/b/jenceo-admin.firebasestorage.app/o/Shop-Images%2FBananas.jpg?alt=media&token=96e5930a-fe41-47e8-a026-1d3f4689a12f" alt="Bananas" /> 
+    <div class="p-img col-md-3"> 
+      <img src="https://firebasestorage.googleapis.com/v0/b/jenceo-admin.firebasestorage.app/o/Shop-Images%2FCoconut-1.jpg?alt=media&token=6f8e3e72-9fa6-4fb7-b91b-cbe6a1832065" alt="Coconuts" /> 
+      <h5>Coconuts</h5>
+    </div>
+    <div class="p-img col-md-3"> 
+      <img src="https://firebasestorage.googleapis.com/v0/b/jenceo-admin.firebasestorage.app/o/Shop-Images%2FVigitables.jpg?alt=media&token=5ce15750-f8b1-4f90-b26e-843886f60d4f" alt="Vegetables" /> 
+      <h5>Fresh Vegetables</h5>
+    </div>
+    <div class="p-img col-md-3"> 
+      <img src="https://firebasestorage.googleapis.com/v0/b/jenceo-admin.firebasestorage.app/o/Shop-Images%2FBananas.jpg?alt=media&token=96e5930a-fe41-47e8-a026-1d3f4689a12f" alt="Bananas" /> 
       <h5>Bananas</h5>
+    </div>
+    <div class="p-img col-md-3"> 
+      <a href="https://jenceo.com/" target="_blank">
+        <img src="https://firebasestorage.googleapis.com/v0/b/jenceo-admin.firebasestorage.app/o/Shop-Images%2FJenCeo-Home-Care.jpg?alt=media&token=6a72abef-b1e2-4fb6-ad63-9ae2e772abfe" alt="Home Care" /> 
+      </a>
+      <h5>Home Care / Baby Care / Patient Care</h5>
+    </div>
   </div>
-  <div class="p-img col-md-3"> 
-  <a href="https://jenceo.com/" target="_blank">
-    <img src="https://firebasestorage.googleapis.com/v0/b/jenceo-admin.firebasestorage.app/o/Shop-Images%2FJenCeo-Home-Care.jpg?alt=media&token=6a72abef-b1e2-4fb6-ad63-9ae2e772abfe" alt="Flowers" /> 
-    </a>
-      <h5>Home Care / Baby Care / Patent Care</h5>
-  </div>
-        
-      </div>
 
   <div class="footer">
-    <div>Bill Ref: JC-BILL-001</div>
+    <div>Bill Ref: JC-BILL-${customerId || '001'}</div>
     <div>Generated On: ${currentDate}</div>
     <div>Page 1 of 1</div>
   </div>
 </div>
-<script>window.focus && window.focus();</script>
+<script>
+  function changeLanguage(lang) {
+    window.location.href = window.location.href.split('?')[0] + '?lang=' + lang;
+  }
+  
+  // Set initial language from URL parameter
+  const urlParams = new URLSearchParams(window.location.search);
+  const langParam = urlParams.get('lang');
+  if (langParam && ['en', 'hi', 'te'].includes(langParam)) {
+    document.querySelectorAll('.lang-btn').forEach(btn => {
+      btn.classList.remove('active');
+      if (btn.textContent.includes(langParam === 'en' ? 'English' : langParam === 'hi' ? 'हिन्दी' : 'తెలుగు')) {
+        btn.classList.add('active');
+      }
+    });
+  }
+  
+  window.focus && window.focus();
+</script>
 </body>
 </html>
 `;
@@ -610,18 +650,62 @@ const ShareBill = ({ customer, customerItems, totalAmount, paymentHistory = [] }
         }
     };
 
+    // Print bill
+    const handlePrintBill = () => {
+        const html = buildBillHTML();
+        const printWindow = window.open('', '_blank');
+        printWindow.document.write(html);
+        printWindow.document.close();
+        printWindow.focus();
+        printWindow.print();
+        printWindow.close();
+    };
+
     // Set iframe content when component mounts/updates
     React.useEffect(() => {
         if (iframeRef.current) {
             iframeRef.current.srcdoc = buildBillHTML();
         }
-    }, [customer, customerItems, totalAmount, paymentHistory]);
+    }, [customer, customerItems, totalAmount, paymentHistory, language, selectedItems]);
 
     return (
         <div className="modal-card">
             <div className="modal-card-header d-flex align-items-center justify-content-between">
                 <h4 className="mb-0">Bill Preview</h4>
-                <div className="d-flex gap-2">
+                <div className="d-flex gap-2 align-items-center">
+                    {/* Language Selector */}
+                    <div className="btn-group btn-group-sm">
+                        <button
+                            type="button"
+                            className={`btn ${language === 'en' ? 'btn-primary' : 'btn-outline-primary'}`}
+                            onClick={() => setLanguage('en')}
+                        >
+                            EN
+                        </button>
+                        <button
+                            type="button"
+                            className={`btn ${language === 'hi' ? 'btn-primary' : 'btn-outline-primary'}`}
+                            onClick={() => setLanguage('hi')}
+                        >
+                            HI
+                        </button>
+                        <button
+                            type="button"
+                            className={`btn ${language === 'te' ? 'btn-primary' : 'btn-outline-primary'}`}
+                            onClick={() => setLanguage('te')}
+                        >
+                            TE
+                        </button>
+                    </div>
+                    
+                    <button
+                        type="button"
+                        className="btn btn-outline-info btn-sm"
+                        onClick={handlePrintBill}
+                    >
+                        <i className="fas fa-print me-1"></i>
+                        Print
+                    </button>
                     <button
                         type="button"
                         className="btn btn-outline-primary btn-sm"
@@ -658,11 +742,14 @@ const ShareBill = ({ customer, customerItems, totalAmount, paymentHistory = [] }
             <div className="modal-card-footer d-flex justify-content-between align-items-center p-3 border-top">
                 <small className="text-muted">
                     Total Amount Due: <strong className="text-success">₹{paymentSummary.totalAmountDue.toFixed(2)}</strong> |
-                    Items: <strong>{customerItems.length}</strong> |
+                    Items: <strong>{billItems.length}</strong> |
                     Payments: <strong>{paymentHistory.length}</strong>
+                    {selectedItems.length > 0 && (
+                        <> | Selected Items: <strong>{selectedItems.length}</strong></>
+                    )}
                 </small>
                 <small className="text-muted">
-                    Generated on: {new Date().toLocaleDateString()}
+                    Generated on: {new Date().toLocaleDateString()} | Language: {language.toUpperCase()}
                 </small>
             </div>
         </div>

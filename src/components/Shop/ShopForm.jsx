@@ -18,8 +18,8 @@ const pathUnderJenCeo = (relative) => {
 
 // Enhanced category map with English and Hindi translations
 const categoryMap = {
-    "1 కూరగాయలు": { 
-        en: "1 Vegetables", 
+    "1 కూరగాయలు": {
+        en: "1 Vegetables",
         hi: "1 सब्जियाँ",
         subCategories: {
             "టమాటలు": { en: "Tomatoes", hi: "टमाटर" },
@@ -44,8 +44,8 @@ const categoryMap = {
             "కాలిఫ్లవర్": { en: "Cauliflower", hi: "फूल गोभी" }
         }
     },
-    "2 వేరు కూరగాయలు": { 
-        en: "2 Root Vegetables", 
+    "2 వేరు కూరగాయలు": {
+        en: "2 Root Vegetables",
         hi: "2 जड़ वाली सब्जियाँ",
         subCategories: {
             "ఉల్లిపాయలు": { en: "Onions", hi: "प्याज" },
@@ -59,8 +59,8 @@ const categoryMap = {
             "అల్లం": { en: "Ginger", hi: "अदरक" }
         }
     },
-    "3 ఆకుకూరలు": { 
-        en: "3 Leafy Greens", 
+    "3 ఆకుకూరలు": {
+        en: "3 Leafy Greens",
         hi: "3 पत्तेदार सब्जियाँ",
         subCategories: {
             "పాలకూర": { en: "Spinach", hi: "पालक" },
@@ -72,8 +72,8 @@ const categoryMap = {
             "గోంగూర": { en: "Amaranth", hi: "चौलाई" }
         }
     },
-    "4 అరటి పళ్ళు": { 
-        en: "4 Bananas", 
+    "4 అరటి పళ్ళు": {
+        en: "4 Bananas",
         hi: "4 केले",
         subCategories: {
             "కర్పూరం": { en: "Karpooram Banana", hi: "कर्पूरम केला" },
@@ -83,8 +83,8 @@ const categoryMap = {
             "ట్రే అరిటి పళ్ళు": { en: "Tray Banana", hi: "ट्रे केला" }
         }
     },
-    "5 పువ్వులు": { 
-        en: "5 Flowers", 
+    "5 పువ్వులు": {
+        en: "5 Flowers",
         hi: "5 फूल",
         subCategories: {
             "బంతి పువ్వులు": { en: "Marigold", hi: "गेंदा" },
@@ -98,8 +98,8 @@ const categoryMap = {
             "సన్నజాజుల దండ": { en: "Small Jasmine Garland", hi: "छोटी चमेली की माला" }
         }
     },
-    "6 కొబ్బరిబొండాలు": { 
-        en: "6 Coconuts", 
+    "6 కొబ్బరిబొండాలు": {
+        en: "6 Coconuts",
         hi: "6 नारियल",
         subCategories: {
             "కేరళ బొండాలు": { en: "Kerala Coconuts", hi: "केरल नारियल" },
@@ -110,8 +110,8 @@ const categoryMap = {
             "ఆంధ్ర గ్రేడ్ కాయ": { en: "Andhra Grade Coconut", hi: "आंध्र ग्रेड नारियल" }
         }
     },
-    "7 ఇతర వస్తువులు": { 
-        en: "7 Other Items", 
+    "7 ఇతర వస్తువులు": {
+        en: "7 Other Items",
         hi: "7 अन्य वस्तुएं",
         subCategories: {
             "కొబ్బరికాయలు": { en: "Coconuts", hi: "नारियल" },
@@ -130,7 +130,37 @@ const resolveShopBranch = (authUser, fallback = "users") => {
     return id ? String(id).replace(/[^\w-]/g, "_") : fallback;
 };
 
-export default function ShopForm({ customer, onClose, onSave, mode = "purchase" }) {
+// Confirmation Modal Component
+const ConfirmationModal = ({ show, title, message, onConfirm, onCancel, confirmText = "Confirm", cancelText = "Cancel" }) => {
+    if (!show) return null;
+
+    return (
+        <div className="modal fade show d-block" style={{ background: "rgba(0,0,0,0.8)" }}>
+            <div className="modal-dialog modal-dialog-centered">
+                <div className="modal-content bg-dark text-light border-0 rounded-4 shadow-lg">
+                    <div className="modal-header bg-warning text-dark">
+                        <h5 className="modal-title">{title}</h5>
+                        <button type="button" className="btn-close" onClick={onCancel}></button>
+                    </div>
+                    <div className="modal-body text-center">
+                        <i className="fas fa-question-circle fa-3x text-warning mb-3"></i>
+                        <p className="fs-5">{message}</p>
+                    </div>
+                    <div className="modal-footer border-0 d-flex justify-content-center">
+                        <button className="btn btn-outline-light me-3" onClick={onCancel}>
+                            {cancelText}
+                        </button>
+                        <button className="btn btn-warning text-dark fw-bold" onClick={onConfirm}>
+                            {confirmText}
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+};
+
+export default function ShopForm({ customer, onClose, onSave, mode = "purchase", hideAddItem = false }) {
     const authCtx = useAuth() || {};
     const { currentUser, user, dbUser, profile } = authCtx;
 
@@ -155,12 +185,12 @@ export default function ShopForm({ customer, onClose, onSave, mode = "purchase" 
         price: "",
         total: "",
         comments: "",
-        customItem: "" // For custom items in "Other" category
+        customItem: ""
     });
 
     const [errors, setErrors] = useState({});
     const [isSubmitting, setIsSubmitting] = useState(false);
-    const [submitMode, setSubmitMode] = useState(""); // "purchase" or "customer"
+    const [submitMode, setSubmitMode] = useState("");
     const isOtherSelected = formData.mainCategory === "7 ఇతర వస్తువులు";
 
     // Success modal
@@ -171,6 +201,9 @@ export default function ShopForm({ customer, onClose, onSave, mode = "purchase" 
     const [showDuplicateModal, setShowDuplicateModal] = useState(false);
     const [existingRow, setExistingRow] = useState(null);
     const [pendingPayload, setPendingPayload] = useState(null);
+
+    // Close confirmation modal
+    const [showCloseConfirm, setShowCloseConfirm] = useState(false);
 
     useEffect(() => {
         const qty = parseFloat(formData.quantity) || 0;
@@ -207,9 +240,8 @@ export default function ShopForm({ customer, onClose, onSave, mode = "purchase" 
         const total = qty * price;
         const nowIso = new Date().toISOString();
 
-        // Use custom item if provided, otherwise use selected subcategory
-        const finalSubCategory = isOtherSelected && formData.customItem 
-            ? formData.customItem 
+        const finalSubCategory = isOtherSelected && formData.customItem
+            ? formData.customItem
             : formData.subCategory;
 
         const basePayload = {
@@ -228,7 +260,6 @@ export default function ShopForm({ customer, onClose, onSave, mode = "purchase" 
             mode: submitMode || mode
         };
 
-        // Add customer info if in customer mode or when using Add Item button
         if ((submitMode === "customer" || mode === "customer") && customer) {
             basePayload.customerId = customer.id;
             basePayload.customerName = customer.name;
@@ -239,34 +270,23 @@ export default function ShopForm({ customer, onClose, onSave, mode = "purchase" 
         return basePayload;
     };
 
-    // ========== SEPARATE SAVE FUNCTIONS ==========
-
-    // 1. SAVE AS CUSTOMER ITEM (Add Item button) - Save ONLY to Shop/CreditData/key/CustomerItems
+    // Save functions remain the same
     const saveAsCustomerItem = async () => {
         if (!customer || !customer.id) {
             throw new Error("Customer information is missing");
         }
 
-        // Build the payload
         const payload = buildPayload(`customer_${Date.now()}`);
-        
-        // Save to CustomerItems under CreditData
         const customerItemsRef = firebaseDB.child(pathUnderJenCeo(`Shop/CreditData/${customer.id}/CustomerItems`));
         const newRef = customerItemsRef.push();
         await newRef.set(payload);
 
-        // Get current balance
         const balanceRef = firebaseDB.child(pathUnderJenCeo(`Shop/CreditData/${customer.id}/Balance`));
         const snapshot = await balanceRef.once('value');
         const currentBalance = parseFloat(snapshot.val()) || 0;
-        
-        // Calculate new balance
         const newBalance = currentBalance + payload.total;
-        
-        // Update balance in CreditData
         await balanceRef.set(newBalance);
 
-        // Also update customer info in CreditData
         const customerRef = firebaseDB.child(pathUnderJenCeo(`Shop/CreditData/${customer.id}`));
         await customerRef.update({
             customerName: customer.name,
@@ -277,30 +297,27 @@ export default function ShopForm({ customer, onClose, onSave, mode = "purchase" 
             updatedById: signedInUid
         });
 
-        return { 
-            ...payload, 
-            newBalance, 
-            saveLocation: `Shop/CreditData/${customer.id}/CustomerItems` 
+        return {
+            ...payload,
+            newBalance,
+            saveLocation: `Shop/CreditData/${customer.id}/CustomerItems`
         };
     };
 
-    // 2. SAVE AS REGULAR PURCHASE (కొనుగోలు button) - Save ONLY to existing logic
     const saveAsRegularPurchase = async () => {
         const authObj = currentUser || user || dbUser || profile || {};
         const branchKey = resolveShopBranch(authObj);
         const listRef = firebaseDB.child(pathUnderJenCeo(`Shop/${branchKey}`));
         const newRef = listRef.push();
         const payload = buildPayload(newRef.key);
-        
+
         await newRef.set(payload);
         return { ...payload, saveLocation: `Shop/${branchKey}` };
     };
 
-    // ========== SEPARATE DUPLICATE CHECK FUNCTIONS ==========
-
+    // Duplicate check functions remain the same
     const checkDuplicateForCustomerItem = async () => {
         if (!customer || !customer.id) {
-            alert("Customer information is missing");
             return false;
         }
 
@@ -308,8 +325,8 @@ export default function ShopForm({ customer, onClose, onSave, mode = "purchase" 
         const snap = await ref.once("value");
         const raw = snap.val() || {};
 
-        const finalSubCategory = isOtherSelected && formData.customItem 
-            ? formData.customItem 
+        const finalSubCategory = isOtherSelected && formData.customItem
+            ? formData.customItem
             : formData.subCategory;
 
         const exists = Object.values(raw).find(
@@ -326,8 +343,8 @@ export default function ShopForm({ customer, onClose, onSave, mode = "purchase" 
         const snap = await ref.once("value");
         const raw = snap.val() || {};
 
-        const finalSubCategory = isOtherSelected && formData.customItem 
-            ? formData.customItem 
+        const finalSubCategory = isOtherSelected && formData.customItem
+            ? formData.customItem
             : formData.subCategory;
 
         const exists = Object.values(raw).find(
@@ -337,18 +354,15 @@ export default function ShopForm({ customer, onClose, onSave, mode = "purchase" 
         return exists;
     };
 
-    // ========== SEPARATE SUBMIT HANDLERS ==========
-
     const handlePurchaseSubmit = async (e) => {
         e.preventDefault();
         if (!validateForm()) return;
-        
+
         setSubmitMode("purchase");
         setIsSubmitting(true);
         try {
-            // Check duplicate for regular purchase
             const duplicateExists = await checkDuplicateForRegularPurchase();
-            
+
             if (duplicateExists) {
                 const dummyRefKey = "_pending_";
                 const nextPayload = buildPayload(dummyRefKey);
@@ -358,12 +372,11 @@ export default function ShopForm({ customer, onClose, onSave, mode = "purchase" 
                 return;
             }
 
-            // Save as regular purchase ONLY
             const result = await saveAsRegularPurchase();
             handleSaveSuccess(result);
         } catch (error) {
-            console.error("Error saving purchase:", error);
-            alert("Error saving purchase: " + error.message);
+            setShowSuccessModal(true);
+            setSavedPurchase({ error: error.message });
         } finally {
             setIsSubmitting(false);
         }
@@ -372,13 +385,12 @@ export default function ShopForm({ customer, onClose, onSave, mode = "purchase" 
     const handleCustomerItemSubmit = async (e) => {
         e.preventDefault();
         if (!validateForm()) return;
-        
+
         setSubmitMode("customer");
         setIsSubmitting(true);
         try {
-            // Check duplicate for customer item
             const duplicateExists = await checkDuplicateForCustomerItem();
-            
+
             if (duplicateExists) {
                 const dummyRefKey = "_pending_";
                 const nextPayload = buildPayload(dummyRefKey);
@@ -388,12 +400,11 @@ export default function ShopForm({ customer, onClose, onSave, mode = "purchase" 
                 return;
             }
 
-            // Save as customer item ONLY
             const result = await saveAsCustomerItem();
             handleSaveSuccess(result);
         } catch (error) {
-            console.error("Error saving customer item:", error);
-            alert("Error saving customer item: " + error.message);
+            setShowSuccessModal(true);
+            setSavedPurchase({ error: error.message });
         } finally {
             setIsSubmitting(false);
         }
@@ -403,7 +414,6 @@ export default function ShopForm({ customer, onClose, onSave, mode = "purchase" 
         setSavedPurchase(result);
         setShowSuccessModal(true);
 
-        // Reset form but keep main category
         setFormData({
             mainCategory: formData.mainCategory,
             subCategory: "",
@@ -415,8 +425,7 @@ export default function ShopForm({ customer, onClose, onSave, mode = "purchase" 
             customItem: ""
         });
 
-        // Call onSave callback if provided
-        if (onSave) {
+        if (onSave && typeof onSave === 'function') {
             onSave(result);
         }
     };
@@ -431,8 +440,20 @@ export default function ShopForm({ customer, onClose, onSave, mode = "purchase" 
             }
             handleSaveSuccess(result);
         } catch (error) {
-            console.error("Error saving after duplicate:", error);
-            alert("Error saving: " + error.message);
+            setShowSuccessModal(true);
+            setSavedPurchase({ error: error.message });
+        }
+    };
+
+    const handleClose = () => {
+        const hasData = Object.values(formData).some(value => 
+            value && value !== todayISODateIST && value !== ""
+        );
+        
+        if (hasData) {
+            setShowCloseConfirm(true);
+        } else {
+            onClose();
         }
     };
 
@@ -447,6 +468,18 @@ export default function ShopForm({ customer, onClose, onSave, mode = "purchase" 
     const getSuccessMessage = () => {
         if (!savedPurchase) return <p>Saved successfully</p>;
 
+        if (savedPurchase.error) {
+            return (
+                <>
+                    <div className="text-center text-danger">
+                        <i className="fas fa-exclamation-triangle fa-3x mb-3"></i>
+                        <h5>Error</h5>
+                        <p>{savedPurchase.error}</p>
+                    </div>
+                </>
+            );
+        }
+
         if (submitMode === "customer") {
             return (
                 <>
@@ -456,7 +489,6 @@ export default function ShopForm({ customer, onClose, onSave, mode = "purchase" 
                     <p>ధర ₹{savedPurchase.price}</p>
                     <p>మొత్తం ₹{savedPurchase.total}</p>
                     <p className="fw-bold text-success">కొత్త బ్యాలెన్స్: ₹{savedPurchase.newBalance?.toFixed(2)}</p>
-                    <p className="small text-muted">Saved to: {savedPurchase.saveLocation}</p>
                 </>
             );
         } else {
@@ -466,7 +498,6 @@ export default function ShopForm({ customer, onClose, onSave, mode = "purchase" 
                     <p>తేదీ: {savedPurchase.date}</p>
                     <p>ధర ₹{savedPurchase.price}</p>
                     <p>మొత్తం ₹{savedPurchase.total}</p>
-                    <p className="small text-muted">Saved to: {savedPurchase.saveLocation}</p>
                 </>
             );
         }
@@ -483,27 +514,12 @@ export default function ShopForm({ customer, onClose, onSave, mode = "purchase" 
                                 <span className="badge bg-info ms-2">Customer Mode</span>
                             )}
                         </h5>
-                        <button type="button" className="btn-close btn-close-white" onClick={onClose}></button>
+                        <button type="button" className="btn-close btn-close-white" onClick={handleClose}></button>
                     </div>
 
-                    <div className="modal-body bg-dark text-light p-4">
-                        {/* Customer Info Display */}
-                        {mode === "customer" && customer && (
-                            <div className="alert alert-info mb-3">
-                                <div className="d-flex align-items-center">
-                                    <i className="fas fa-user-circle me-2"></i>
-                                    <div>
-                                        <strong>{customer.name}</strong>
-                                        {customer.mobileNo && <span className="ms-2">📞 {customer.mobileNo}</span>}
-                                        {customer.place && <span className="ms-2">📍 {customer.place}</span>}
-                                    </div>
-                                </div>
-                            </div>
-                        )}
+                    <div className={`modal-body bg-dark text-light p-4 ${hideAddItem ? 'd-btnNone' : ''}`}>
 
                         <form>
-                            {/* Form fields remain the same */}
-                            {/* Date Input */}
                             <div className="row">
                                 <div className="col-md-6 mb-3">
                                     <label className="form-label">తేదీ</label>
@@ -536,7 +552,6 @@ export default function ShopForm({ customer, onClose, onSave, mode = "purchase" 
                                 </div>
                             </div>
 
-                            {/* Sub Category */}
                             <div className="row">
                                 <div className="col-md-6 mb-3">
                                     <label className="form-label">ఉప కేటగిరీ</label>
@@ -592,7 +607,6 @@ export default function ShopForm({ customer, onClose, onSave, mode = "purchase" 
                                 </div>
                             </div>
 
-                            {/* Price and Total */}
                             <div className="row">
                                 <div className="col-md-6 mb-3">
                                     <label className="form-label">ధర</label>
@@ -632,13 +646,12 @@ export default function ShopForm({ customer, onClose, onSave, mode = "purchase" 
                                 </div>
                             </div>
 
-                            {/* DUAL SUBMIT BUTTONS WITH SEPARATE HANDLERS */}
                             <div className="row g-2">
                                 {mode !== "customer" && (
                                     <div className="col-md-6">
-                                        <button 
+                                        <button
                                             type="button"
-                                            className="btn btn-primary w-100 py-2" 
+                                            className="btn btn-primary w-100 py-2"
                                             disabled={isSubmitting}
                                             onClick={handlePurchaseSubmit}
                                         >
@@ -651,32 +664,30 @@ export default function ShopForm({ customer, onClose, onSave, mode = "purchase" 
                                                 </>
                                             )}
                                         </button>
-                                        <div className="form-text text-center text-muted small mt-1">
-                                            Save to: Shop/[user-branch]
-                                        </div>
+                                       
                                     </div>
                                 )}
-                                
-                                <div className={mode !== "customer" ? "col-md-6" : "col-12"}>
-                                    <button 
-                                        type="button"
-                                        className="btn btn-success w-100 py-2" 
-                                        disabled={isSubmitting}
-                                        onClick={handleCustomerItemSubmit}
-                                    >
-                                        {isSubmitting && submitMode === "customer" ? (
-                                            <><i className="fas fa-spinner fa-spin me-2"></i>Adding...</>
-                                        ) : (
-                                            <>
-                                                <i className="fas fa-plus me-2"></i>
-                                                Add Item
-                                            </>
-                                        )}
-                                    </button>
-                                    <div className="form-text text-center text-muted small mt-1">
-                                        Save to: {customer ? `Shop/CreditData/${customer.id}/CustomerItems` : 'Customer Credit Data'}
+
+                                {!hideAddItem && (
+                                    <div className={mode !== "customer" ? "col-md-6" : "col-12"}>
+                                        <button
+                                            type="button"
+                                            className="btn btn-success w-100 py-2"
+                                            disabled={isSubmitting}
+                                            onClick={handleCustomerItemSubmit}
+                                        >
+                                            {isSubmitting && submitMode === "customer" ? (
+                                                <><i className="fas fa-spinner fa-spin me-2"></i>Adding...</>
+                                            ) : (
+                                                <>
+                                                    <i className="fas fa-plus me-2"></i>
+                                                    Add Item
+                                                </>
+                                            )}
+                                        </button>
+                                      
                                     </div>
-                                </div>
+                                )}
                             </div>
                         </form>
                     </div>
@@ -686,9 +697,14 @@ export default function ShopForm({ customer, onClose, onSave, mode = "purchase" 
             {/* Success Modal */}
             <SuccessModal
                 show={showSuccessModal}
-                title={submitMode === "customer" ? "Item Added Successfully" : "Purchase Saved Successfully"}
+                title={savedPurchase?.error ? "Error" : (submitMode === "customer" ? "Item Added Successfully" : "Purchase Saved Successfully")}
                 message={getSuccessMessage()}
-                onClose={() => setShowSuccessModal(false)}
+                onClose={() => {
+                    setShowSuccessModal(false);
+                    if (!savedPurchase?.error) {
+                        onClose();
+                    }
+                }}
             />
 
             {/* Duplicate Confirmation Modal */}
@@ -760,6 +776,17 @@ export default function ShopForm({ customer, onClose, onSave, mode = "purchase" 
                     </div>
                 </div>
             )}
+
+            {/* Close Confirmation Modal */}
+            <ConfirmationModal
+                show={showCloseConfirm}
+                title="Close Form"
+                message="You have unsaved changes. Are you sure you want to close?"
+                onConfirm={onClose}
+                onCancel={() => setShowCloseConfirm(false)}
+                confirmText="Yes, Close"
+                cancelText="Continue Editing"
+            />
         </div>
     );
 }

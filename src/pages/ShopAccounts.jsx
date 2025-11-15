@@ -1,6 +1,6 @@
 import React, { useState } from 'react'
 import ShopForm from '../components/Shop/ShopForm'
-import CustmorForm from '../components/Shop/CustmorForm' // Use the actual filename
+import CustmorForm from '../components/Shop/CustmorForm'
 import PurchaseDetail from '../components/Shop/PurchaseDetails';
 
 export default function Accounts() {
@@ -12,7 +12,13 @@ export default function Accounts() {
       <button className="btn btn-primary" onClick={() => setShopFormOpen(true)}>
         కొనుగోలు
       </button>
-      {shopFormOpen && <ShopForm onClose={() => setShopFormOpen(false)} />}
+      {shopFormOpen && (
+        <ShopForm 
+          onClose={() => setShopFormOpen(false)} 
+          mode="purchase" 
+          hideAddItem={true} // Add this prop
+        />
+      )}
 
       <button 
         className="btn btn-warning ms-2" 

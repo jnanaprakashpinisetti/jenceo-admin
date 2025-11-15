@@ -1,10 +1,10 @@
 // src/components/Customer/ShareBill.jsx
 import React, { useRef } from 'react';
 
-const ShareBill = ({ customer, customerItems, totalAmount }) => {
+const ShareBill = ({ customer, customerItems, totalAmount, paymentHistory = [] }) => {
     const iframeRef = useRef(null);
 
-    const headerImage = "https://firebasestorage.googleapis.com/v0/b/jenceo-admin.firebasestorage.app/o/OfficeFiles%2FHeadder.svg?alt=media&token=fa65a3ab-ba03-4959-bc36-e293c6db48ae";
+    const headerImage = "https://firebasestorage.googleapis.com/v0/b/jenceo-admin.firebasestorage.app/o/Shop-Images%2FJenCeo-Trades.svg?alt=media&token=da7ab6ec-826f-41b2-ba2a-0a7d0f405997";
     const defaultCustomerPhoto = "https://firebasestorage.googleapis.com/v0/b/jenceo-admin.firebasestorage.app/o/OfficeFiles%2FSample-Photo.jpg?alt=media&token=01855b47-c9c2-490e-b400-05851192dde7";
 
     // Enhanced language mapping for categories with English and Hindi (same as CustomerModal)
@@ -172,6 +172,23 @@ const ShareBill = ({ customer, customerItems, totalAmount }) => {
         return 'N/A';
     };
 
+    // Calculate payment summary
+    const calculatePaymentSummary = () => {
+        const previousPending = customer?.previousPending || 0;
+        const previousPayments = paymentHistory.reduce((sum, payment) => sum + (payment.amount || 0), 0);
+        const currentBill = totalAmount;
+        const totalAmountDue = previousPending + currentBill - previousPayments;
+        
+        return {
+            previousPending,
+            previousPayments,
+            currentBill,
+            totalAmountDue
+        };
+    };
+
+    const paymentSummary = calculatePaymentSummary();
+
     // Build bill HTML with professional styling
     const buildBillHTML = () => {
         const currentDate = new Date().toLocaleDateString();
@@ -190,7 +207,7 @@ const ShareBill = ({ customer, customerItems, totalAmount }) => {
   *{box-sizing:border-box}
   html,body{margin:0;padding:0;font-family:Arial,Helvetica,sans-serif;color:#111}
   .page{ max-width:900px; margin:auto;background:#fff;border:1px solid #e5e5e5;padding:20px}
-  .header{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;border-bottom:2px solid #b7b4b4; padding:20px; margin:0 -20px; background: #c7d1f5; border-radius: 5px;}
+  .header{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;border-bottom:2px solid #b7b4b4; padding:20px; margin:0 -20px; background: linear-gradient(135deg, #c7d1f5 0%, #e3e8ff 100%); border-radius: 5px;}
   .row { display: flex; flex-wrap: wrap; margin-left: -6px; margin-right: -6px; margin-bottom:6px }
   .row > div { padding-left: 6px; padding-right: 6px; }
   .col-md-1 { flex: 0 0 8.3333%;  max-width: 8.3333%; }
@@ -211,13 +228,13 @@ const ShareBill = ({ customer, customerItems, totalAmount }) => {
   .dataSection span {font-size:10px; }
 
   .h-left{flex:1; margin-top:25px}
-  .title{font-size:40px;font-weight:700;letter-spacing:.4px;margin:0}
+  .title{font-size:40px;font-weight:700;letter-spacing:.4px;margin:0;background:linear-gradient(135deg, #02acf2 0%, #0266f2 100%);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
   .subtitle{font-size:12px;color:#444;margin-top:2px}
   .meta{font-size:11px;color:#555;margin-top:4px;display:flex;gap:14px;flex-wrap:wrap}
-  .sec{margin-top:14px;border:1px solid #ddd;border-radius:6px;overflow:hidden}
-  .sec-title{background:#dfe2f5; padding:8px 10px;font-weight:700}
+  .sec{margin-top:14px;border:1px solid #ddd;border-radius:8px;overflow:hidden;box-shadow:0 2px 4px rgba(0,0,0,0.1)}
+  .sec-title{background:linear-gradient(135deg, #02acf2 0%, #0266f2 100%); padding:12px 10px;font-weight:700;color:white}
   .sec-title h3{margin:0;font-size:14px}
-  .sec-body{padding:10px}
+  .sec-body{padding:15px}
   /* UNIFIED rows: label | : | value have the same width everywhere */
   .kv-row{display:grid;grid-template-columns: 240px 12px 1fr;gap:10px;align-items:start; margin-bottom:0; padding: 8px 0 2px 5px;}
   .kv-row:nth-child(even) {background-color: #f2f3fd;}
@@ -234,7 +251,7 @@ const ShareBill = ({ customer, customerItems, totalAmount }) => {
   .tags{display:flex;flex-wrap:wrap;gap:6px}
   .tag{border:1px solid #02acf2;color:#02acf2;font-size:12px;padding:3px 8px;border-radius:999px}
   .muted{color:#777}
-  .footer{margin :20px -20px -20px -20px;font-size:10px; color:#fff;display:flex;justify-content:space-between; background-color:#02acf2; padding:10px 20px}
+  .footer{margin :20px -20px -20px -20px;font-size:10px; color:#fff;display:flex;justify-content:space-between; background:linear-gradient(135deg, #02acf2 0%, #0266f2 100%); padding:10px 20px}
   .blue {color:#02acf2}
   @media print{.page{border:none;margin:0;width:100%}}
   .header-img{width:100%;max-height:120px;object-fit:contain;margin-bottom:6px}
@@ -246,27 +263,61 @@ const ShareBill = ({ customer, customerItems, totalAmount }) => {
   .heaerImg {margin: -21px -20px 10px -20px}
   .heaerImg img {width:100%}
   
+  /* Payment summary styles */
+  .payment-summary {display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin: 20px 0}
+  .payment-card {background: white; border-radius: 8px; padding: 15px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); border-left: 4px solid}
+  .payment-card.pending {border-left-color: #ff6b6b; background: linear-gradient(135deg, #fff5f5 0%, #ffecec 100%)}
+  .payment-card.paid {border-left-color: #51cf66; background: linear-gradient(135deg, #f0fff4 0%, #e6f7ea 100%)}
+  .payment-card.current {border-left-color: #339af0; background: linear-gradient(135deg, #f0f8ff 0%, #e6f2ff 100%)}
+  .payment-card.total {border-left-color: #ff922b; background: linear-gradient(135deg, #fff4e6 0%, #ffebd6 100%)}
+  .payment-label {font-size: 12px; color: #666; margin-bottom: 5px}
+  .payment-amount {font-size: 18px; font-weight: bold}
+  .payment-amount.pending {color: #ff6b6b}
+  .payment-amount.paid {color: #51cf66}
+  .payment-amount.current {color: #339af0}
+  .payment-amount.total {color: #ff922b}
+  
   /* Bill specific styles */
-  .bill-table {width:100%; border-collapse:collapse; margin:20px 0}
-  .bill-table th {background:#02acf2; color:white; padding:12px 8px; text-align:center; font-size:12px}
+  .bill-table {width:100%; border-collapse:collapse; margin:20px 0; box-shadow: 0 1px 3px rgba(0,0,0,0.1)}
+  .bill-table th {background:linear-gradient(135deg, #02acf2 0%, #0266f2 100%); color:white; padding:12px 8px; text-align:center; font-size:12px}
   .bill-table td {padding:10px 8px; border-bottom:1px solid #e5e5e5; font-size:12px; text-align:center}
   .bill-table tr:nth-child(even) {background:#f8f9fa}
   .bill-table .total-row {background:#e3f2fd !important; font-weight:bold}
-  .bill-table .grand-total {background:#02acf2 !important; color:white; font-size:14px}
+  .bill-table .grand-total {background:linear-gradient(135deg, #02acf2 0%, #0266f2 100%) !important; color:white; font-size:14px}
   
   .customer-message {background:#e8f5e8; padding:15px; border-radius:8px; margin:20px 0; border-left:4px solid #4caf50}
-  .thank-you {text-align:center; padding:20px; background:#e3f2fd; border-radius:8px; margin:20px 0; border: 1px solid #c6e5f1}
+  .thank-you {text-align:center; padding:20px; background:linear-gradient(135deg, #e3f2fd 0%, #f0f8ff 100%); border-radius:8px; margin:20px 0; border: 1px solid #c6e5f1}
   
   /* Customer info grid */
   .customer-grid {display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 10px 0}
-  .customer-item {padding: 8px;}
+  .customer-item {padding: 8px; border-radius: 6px}
   .customer-item.bg {background-color: #f2f3fd}
   .customer-label {font-weight: 600; font-size: 12px; color: #555; margin-bottom: 10px}
   .customer-value {font-weight: 500; font-size: 12px}
   
+  /* Payment history */
+  .payment-history {margin-top: 20px}
+  .payment-item {display: flex; justify-content: space-between; align-items: center; padding: 10px; border-bottom: 1px solid #e5e5e5}
+  .payment-item:last-child {border-bottom: none}
+  .payment-item:nth-child(even) {background: #f8f9fa}
+  .payment-date {font-size: 11px; color: #666}
+  .payment-amount {font-weight: bold; color: #51cf66}
+  .payment-mode {font-size: 10px; color: #888; background: #e9ecef; padding: 2px 6px; border-radius: 4px}
+  
   /* Language tags */
   .language-tags {display: flex; flex-direction: column; gap: 2px; margin-top: 4px}
   .lang-tag {font-size: 10px; color: #666; line-height: 1.2}
+  
+  /* Status badges */
+  .status-badge {padding: 4px 8px; border-radius: 12px; font-size: 10px; font-weight: bold}
+  .status-pending {background: #fff5f5; color: #ff6b6b; border: 1px solid #ff6b6b}
+  .status-paid {background: #f0fff4; color: #51cf66; border: 1px solid #51cf66}
+
+
+  /*Products*/
+  .products { display:flex; align-item:center; text-align:center}
+  .products img {width:80%; display:block; margin:auto; border:1px solid #ebebebff;  border-radius:10px}
+  .p-title {background-color:#02acf2; margin-bottom:20px; text-align:center; color:#fff; padding:5px}
   
   @media only screen and (max-width: 767px) {
         .biodataHeader {display:none}
@@ -278,6 +329,7 @@ const ShareBill = ({ customer, customerItems, totalAmount }) => {
         .kv-colon {display:none}
         .kv-label {margin-bottom:5px}
         .two-col {display:block}
+        .payment-summary {grid-template-columns: 1fr}
         .col-md-1 { display:none}
         .col-md-2, .col-md-3, .col-md-4, .col-md-6, .col-md-7, .col-md-8 { 
             flex: 0 0 100%; max-width: 100%; 
@@ -297,11 +349,13 @@ const ShareBill = ({ customer, customerItems, totalAmount }) => {
   <div class="header">
     <div class="h-left">
       <h1 class="title">INVOICE</h1>
-      <div class="subtitle">JenCeo Home Care Services - Customer Bill</div>
+      <div class="subtitle">JenCeo Home Care Services & Traders - Customer Bill</div>
       <div class="meta">
         <div><strong>Bill Date:</strong> ${currentDate}</div>
         <div><strong>Customer ID:</strong> ${customerId}</div>
       </div>
+      <br>
+      <div style="color:#444"><strong>Status:</strong> ${paymentSummary.totalAmountDue > 0 ? '<span class="status-badge status-pending">Pending</span>' : '<span class="status-badge status-paid">Paid</span>'}</div>
     </div>
     <div class="photo-box">
       <img src="${defaultCustomerPhoto}" alt="Customer" style="width:120px;height:120px;object-fit:cover;border-radius:6px;border:1px solid #ccc" />
@@ -310,6 +364,38 @@ const ShareBill = ({ customer, customerItems, totalAmount }) => {
       </div>
     </div>
   </div>
+
+  <!-- Payment Summary Section -->
+  ${section(
+    "<h3>Payment Summary</h3>",
+    `
+    <div class="payment-summary">
+      <div class="payment-card pending">
+        <div class="payment-label">Previous Pending</div>
+        <div class="payment-amount pending">₹${paymentSummary.previousPending.toFixed(2)}</div>
+        <small class="muted">Amount carried from previous bills</small>
+      </div>
+      
+      <div class="payment-card paid">
+        <div class="payment-label">Previous Payments</div>
+        <div class="payment-amount paid">₹${paymentSummary.previousPayments.toFixed(2)}</div>
+        <small class="muted">Total payments received</small>
+      </div>
+      
+      <div class="payment-card current">
+        <div class="payment-label">Current Bill Amount</div>
+        <div class="payment-amount current">₹${paymentSummary.currentBill.toFixed(2)}</div>
+        <small class="muted">Amount for current purchases</small>
+      </div>
+      
+      <div class="payment-card total">
+        <div class="payment-label">Total Amount Due</div>
+        <div class="payment-amount total">₹${paymentSummary.totalAmountDue.toFixed(2)}</div>
+        <small class="muted">Final amount to be paid</small>
+      </div>
+    </div>
+    `
+  )}
 
   ${section(
             "<h3>Customer Information</h3>",
@@ -346,6 +432,7 @@ const ShareBill = ({ customer, customerItems, totalAmount }) => {
   <div class="customer-message">
     <strong>Dear ${customerName},</strong><br>
     Thank you for being a valued customer of JenCeo Home Care Services. We appreciate your trust in us and are committed to providing you with the highest quality service.
+    ${paymentSummary.totalAmountDue > 0 ? `<br><br><strong>Payment Due:</strong> ₹${paymentSummary.totalAmountDue.toFixed(2)} (Please settle at your earliest convenience)` : ''}
   </div>
 
   ${section(
@@ -385,7 +472,6 @@ const ShareBill = ({ customer, customerItems, totalAmount }) => {
               <strong>${teluguName}</strong>
               <div class="language-tags">
                 <span>  ${englishName} / ${hindiName}</span>
-              
               </div>
               ${comments && comments !== 'N/A' ? `<small class="muted" style="display:block; margin-top: 4px">Comments: ${comments}</small>` : ''}
             </td>
@@ -410,12 +496,54 @@ const ShareBill = ({ customer, customerItems, totalAmount }) => {
 `
         )}
 
+  <!-- Payment History Section -->
+  ${paymentHistory.length > 0 ? section(
+    "<h3>Payment History</h3>",
+    `
+    <div class="payment-history">
+      ${paymentHistory.map((payment, index) => `
+        <div class="payment-item">
+          <div>
+            <div><strong>Payment ${index + 1}</strong></div>
+            <div class="payment-date">${formatDate(payment.date)}</div>
+            <div class="payment-mode">${payment.mode || 'Cash'}</div>
+          </div>
+          <div class="payment-amount">₹${payment.amount?.toFixed(2) || '0.00'}</div>
+        </div>
+      `).join('')}
+    </div>
+    `
+  ) : ''}
+
   <div class="thank-you">
     <h3 style="color:#02acf2; margin-bottom:10px">Thank You!</h3>
     <p style="margin:0">We appreciate your business and look forward to serving you again.</p>
-    <p style="margin:5px 0 0 0"><strong>JenCeo Home Care Services</strong></p>
+    <p style="margin:5px 0 0 0"><strong>JenCeo Home Care & Traders</strong></p>
     <p style="margin:0; font-size:11px; color:#666">Quality Service | Trusted Care | Customer Satisfaction</p>
   </div>
+
+  <h3 class="p-title">Our Products</h3>
+  <div class="products">
+  <div class="p-img col-md-3"> 
+    <img src="https://firebasestorage.googleapis.com/v0/b/jenceo-admin.firebasestorage.app/o/Shop-Images%2FCoconut-1.jpg?alt=media&token=6f8e3e72-9fa6-4fb7-b91b-cbe6a1832065" alt="Coconuts" /> 
+      <h5>Cocunets</h5>
+  </div>
+  <div class="p-img col-md-3"> 
+    <img src="https://firebasestorage.googleapis.com/v0/b/jenceo-admin.firebasestorage.app/o/Shop-Images%2FVigitables.jpg?alt=media&token=5ce15750-f8b1-4f90-b26e-843886f60d4f" alt="Flowers" /> 
+      <h5>Fresh Vegitables</h5>
+  </div>
+  <div class="p-img col-md-3"> 
+    <img src="https://firebasestorage.googleapis.com/v0/b/jenceo-admin.firebasestorage.app/o/Shop-Images%2FBananas.jpg?alt=media&token=96e5930a-fe41-47e8-a026-1d3f4689a12f" alt="Bananas" /> 
+      <h5>Bananas</h5>
+  </div>
+  <div class="p-img col-md-3"> 
+  <a href="https://jenceo.com/" target="_blank">
+    <img src="https://firebasestorage.googleapis.com/v0/b/jenceo-admin.firebasestorage.app/o/Shop-Images%2FJenCeo-Home-Care.jpg?alt=media&token=6a72abef-b1e2-4fb6-ad63-9ae2e772abfe" alt="Flowers" /> 
+    </a>
+      <h5>Home Care / Baby Care / Patent Care</h5>
+  </div>
+        
+      </div>
 
   <div class="footer">
     <div>Bill Ref: JC-BILL-001</div>
@@ -487,7 +615,7 @@ const ShareBill = ({ customer, customerItems, totalAmount }) => {
         if (iframeRef.current) {
             iframeRef.current.srcdoc = buildBillHTML();
         }
-    }, [customer, customerItems, totalAmount]);
+    }, [customer, customerItems, totalAmount, paymentHistory]);
 
     return (
         <div className="modal-card">
@@ -519,7 +647,7 @@ const ShareBill = ({ customer, customerItems, totalAmount }) => {
                     title="Bill Preview"
                     style={{
                         width: "100%",
-                        height: "700px",
+                        height: "800px",
                         border: "1px solid #e5e5e5",
                         borderRadius: 8,
                         background: "white"
@@ -529,8 +657,9 @@ const ShareBill = ({ customer, customerItems, totalAmount }) => {
 
             <div className="modal-card-footer d-flex justify-content-between align-items-center p-3 border-top">
                 <small className="text-muted">
-                    Total Amount: <strong className="text-success">₹{totalAmount.toFixed(2)}</strong> |
-                    Items: <strong>{customerItems.length}</strong>
+                    Total Amount Due: <strong className="text-success">₹{paymentSummary.totalAmountDue.toFixed(2)}</strong> |
+                    Items: <strong>{customerItems.length}</strong> |
+                    Payments: <strong>{paymentHistory.length}</strong>
                 </small>
                 <small className="text-muted">
                     Generated on: {new Date().toLocaleDateString()}

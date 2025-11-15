@@ -365,22 +365,18 @@ const CustomerList = () => {
                                                     <div className="d-flex gap-1">
                                                         <a
                                                             href={`tel:${customer.mobileNo}`}
-                                                            className="btn btn-sm btn-success px-2 py-1"
+                                                            className="btn btn-sm btn-info px-2 py-1"
                                                             title="Call"
                                                             onClick={(e) => e.stopPropagation()}
-                                                            style={{
-                                                                background: "linear-gradient(135deg, #10b981 0%, #059669 100%)",
-                                                                border: "none",
-                                                                borderRadius: "5px"
-                                                            }}
+                                                          
                                                         >
-                                                            <i className="fas fa-phone fa-xs"></i>
+                                                            <i className="bi bi-phone fa-xs"></i>
                                                         </a>
                                                         <a
                                                             href={`https://wa.me/${customer.mobileNo}`}
                                                             target="_blank"
                                                             rel="noopener noreferrer"
-                                                            className="btn btn-sm btn-success px-2 py-1"
+                                                            className="btn btn-sm px-2 py-1"
                                                             title="WhatsApp"
                                                             onClick={(e) => e.stopPropagation()}
                                                             style={{
@@ -389,7 +385,7 @@ const CustomerList = () => {
                                                                 borderRadius: "5px"
                                                             }}
                                                         >
-                                                            <i className="fab fa-whatsapp fa-xs"></i>
+                                                            <i className="bi bi-whatsapp fa-xs"></i>
                                                         </a>
                                                     </div>
                                                 </div>
@@ -420,18 +416,6 @@ const CustomerList = () => {
                                                     }}
                                                 >
                                                     <i className="bi bi-pencil"></i>
-                                                </button>
-                                                <button
-                                                    className="btn btn-sm btn-primary px-2"
-                                                    onClick={(e) => handleAddItems(customer, e)}
-                                                    title="Add Items"
-                                                    style={{
-                                                        background: "linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%)",
-                                                        border: "none",
-                                                        borderRadius: "5px"
-                                                    }}
-                                                >
-                                                    <i className="bi bi-plus"></i>
                                                 </button>
                                                 <button
                                                     className="btn btn-sm btn-danger px-2"

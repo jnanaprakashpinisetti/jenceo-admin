@@ -29,6 +29,8 @@ const ItemsList = ({
     // Sync local items with prop changes
     useEffect(() => {
         setLocalItems(customerItems);
+        // Clear selection when items change
+        setSelectedItems([]);
     }, [customerItems, refreshTrigger]);
 
     // Format date to short format (Dec-11)
@@ -95,14 +97,23 @@ const ItemsList = ({
         return selectedItems.reduce((sum, item) => sum + (parseFloat(item.total) || 0), 0);
     }, [selectedItems]);
 
-    // Calculate pending amount and items
+    // Calculate pending amount and items - FIXED CALCULATION
     const pendingStats = useMemo(() => {
         const pendingItems = localItems.filter(item => item.status !== 'paid');
         const pendingAmount = pendingItems.reduce((sum, item) => sum + (parseFloat(item.total) || 0), 0);
         
         const pendingDates = new Set();
         pendingItems.forEach(item => {
-            if (item.date) pendingDates.add(item.date);
+            if (item.date) {
+                try {
+                    const date = new Date(item.date);
+                    if (!isNaN(date.getTime())) {
+                        pendingDates.add(date.toISOString().split('T')[0]);
+                    }
+                } catch (error) {
+                    // Skip invalid dates
+                }
+            }
         });
         
         return {
@@ -149,7 +160,7 @@ const ItemsList = ({
                !selectableItems.every(item => selectedItems.includes(item));
     };
 
-    // Handle pay amount with confirmation
+    // Handle pay amount with confirmation - FIXED TO UPDATE UI
     const handlePayAmount = () => {
         if (selectedItems.length === 0) {
             showModal('warning', 'No Items Selected', 'Please select items to make a payment.');
@@ -165,7 +176,11 @@ const ItemsList = ({
         
         showModal('confirm', 'Confirm Payment', 
             `Are you sure you want to process payment for ${payableItems.length} items totaling ₹${selectedTotal.toFixed(2)}?`,
-            () => onPayAmount(payableItems, selectedTotal)
+            () => {
+                onPayAmount(payableItems, selectedTotal);
+                // Clear selection after payment
+                setSelectedItems([]);
+            }
         );
     };
 
@@ -493,8 +508,10 @@ const ItemsList = ({
                     .sort(([dateA], [dateB]) => new Date(dateB) - new Date(dateA))
                     .map(([date, items]) => {
                         const dateTotal = items.reduce((sum, item) => sum + (parseFloat(item.total) || 0), 0);
-                        const pendingItems = items.filter(item => item.status !== 'paid').length;
+                        const pendingItems = items.filter(item => item.status !== 'paid');
+                        const pendingItemsCount = pendingItems.length;
                         const paidItems = items.filter(item => item.status === 'paid').length;
+                        const pendingAmount = pendingItems.reduce((sum, item) => sum + (parseFloat(item.total) || 0), 0);
                         
                         return (
                             <div key={date} className="card border-0 shadow-sm" style={{
@@ -515,10 +532,10 @@ const ItemsList = ({
                                         <span className="badge bg-light text-dark">
                                             {items.length} items
                                         </span>
-                                        {pendingItems > 0 ? (
+                                        {pendingItemsCount > 0 ? (
                                             <span className="badge bg-warning">
                                                 <i className="fas fa-clock me-1"></i>
-                                                {pendingItems} pending
+                                                {pendingItemsCount} pending
                                             </span>
                                         ) : (
                                             <span className="badge bg-success">
@@ -530,7 +547,7 @@ const ItemsList = ({
                                             ₹{dateTotal.toFixed(2)}
                                         </span>
                                     </div>
-                                    {pendingItems > 0 && (
+                                    {pendingItemsCount > 0 && (
                                         <div className="form-check form-check-inline m-0">
                                             <input
                                                 type="checkbox"
@@ -573,20 +590,25 @@ const ItemsList = ({
                                                         key={item.id} 
                                                         style={{
                                                             background: item.status === 'paid' 
-                                                                ? "rgba(34, 197, 94, 0.1)" 
+                                                                ? "rgba(34, 197, 94, 0.15)" 
                                                                 : index % 2 === 0
                                                                     ? "rgba(30, 41, 59, 0.7)"
                                                                     : "rgba(51, 65, 85, 0.7)",
-                                                            opacity: item.status === 'paid' ? 0.7 : 1
+                                                            opacity: item.status === 'paid' ? 0.8 : 1,
+                                                            textDecoration: item.status === 'paid' ? 'line-through' : 'none'
                                                         }}
+                                                        className={item.status === 'paid' ? 'text-muted' : ''}
                                                     >
                                                         <td className="text-center fw-bold text-muted">
                                                             {index + 1}
                                                         </td>
                                                         <td>
                                                             <div>
-                                                                <div className="fw-semibold text-warning mb-1">
+                                                                <div className={`fw-semibold mb-1 ${item.status === 'paid' ? 'text-success' : 'text-warning'}`}>
                                                                     {item.subCategory}
+                                                                    {item.status === 'paid' && (
+                                                                        <i className="fas fa-check-circle ms-2 text-success" title="Paid"></i>
+                                                                    )}
                                                                 </div>
                                                                 <div className="small text-muted">
                                                                     {getTranslation(item.subCategory, 'en', true, item.mainCategory)}
@@ -602,8 +624,10 @@ const ItemsList = ({
                                                         <td className="text-center text-success fw-bold">
                                                             ₹{item.price}
                                                         </td>
-                                                        <td className="text-center text-warning fw-bold">
-                                                            ₹{item.total}
+                                                        <td className="text-center fw-bold">
+                                                            <span className={item.status === 'paid' ? 'text-success' : 'text-warning'}>
+                                                                ₹{item.total}
+                                                            </span>
                                                         </td>
                                                         <td className="text-center">
                                                             <span className={`badge ${item.status === 'paid' ? 'bg-success' : 'bg-warning'}`}>
@@ -623,13 +647,40 @@ const ItemsList = ({
                                                                 disabled={item.status === 'paid'}
                                                                 style={{ 
                                                                     transform: "scale(1.1)",
-                                                                    opacity: item.status === 'paid' ? 0.5 : 1,
+                                                                    opacity: item.status === 'paid' ? 0.3 : 1,
                                                                     cursor: item.status === 'paid' ? 'not-allowed' : 'pointer'
                                                                 }}
                                                             />
                                                         </td>
                                                     </tr>
                                                 ))}
+                                                
+                                                {/* Daily Total Row - ADDED */}
+                                                <tr style={{
+                                                    background: "linear-gradient(135deg, rgba(99, 102, 241, 0.3) 0%, rgba(168, 85, 247, 0.3) 100%)",
+                                                    borderTop: "2px solid rgba(255,255,255,0.2)"
+                                                }}>
+                                                    <td colSpan="4" className="text-end fw-bold text-white">
+                                                        Daily Total:
+                                                    </td>
+                                                    <td className="text-center fw-bold text-warning">
+                                                        ₹{dateTotal.toFixed(2)}
+                                                    </td>
+                                                    <td className="text-center">
+                                                        <span className="badge bg-info">
+                                                            {pendingItemsCount > 0 ? (
+                                                                <><i className="fas fa-clock me-1"></i>{pendingItemsCount} pending</>
+                                                            ) : (
+                                                                <><i className="fas fa-check me-1"></i>All paid</>
+                                                            )}
+                                                        </span>
+                                                    </td>
+                                                    <td className="text-center">
+                                                        <span className="text-muted small">
+                                                            {pendingAmount > 0 ? `Pending: ₹${pendingAmount.toFixed(2)}` : 'Clear'}
+                                                        </span>
+                                                    </td>
+                                                </tr>
                                             </tbody>
                                         </table>
                                     </div>

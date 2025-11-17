@@ -16,6 +16,7 @@ const CustomerList = () => {
     const [showModal, setShowModal] = useState(false);
     const [showShopForm, setShowShopForm] = useState(false);
     const [showCustomerForm, setShowCustomerForm] = useState(false);
+    const [refreshTrigger, setRefreshTrigger] = useState(0);
 
     // Filter states
     const [filters, setFilters] = useState({
@@ -58,7 +59,7 @@ const CustomerList = () => {
 
         const cb = ref.on("value", handler, errHandler);
         return () => ref.off("value", cb);
-    }, []);
+    }, [refreshTrigger]);
 
     // Calculate balance from customer items
     const calculateBalanceFromItems = (customerData) => {
@@ -68,7 +69,8 @@ const CustomerList = () => {
         let totalBalance = 0;
         
         Object.values(items).forEach(item => {
-            if (item.total) {
+            // Only include pending items in balance calculation
+            if (item.total && item.status !== 'paid') {
                 totalBalance += parseFloat(item.total) || 0;
             }
         });
@@ -149,6 +151,7 @@ const CustomerList = () => {
             firebaseDB.child(`Shop/CreditData/${customer.id}`).remove()
                 .then(() => {
                     setCustomers(prev => prev.filter(c => c.id !== customer.id));
+                    setRefreshTrigger(prev => prev + 1);
                 })
                 .catch(error => {
                     console.error("Error deleting customer:", error);
@@ -192,6 +195,11 @@ const CustomerList = () => {
             case 'worst': return { color: 'dark', label: 'Worst' };
             default: return { color: 'secondary', label: 'Not Rated' };
         }
+    };
+
+    // Refresh customer data
+    const refreshCustomerData = () => {
+        setRefreshTrigger(prev => prev + 1);
     };
 
     return (
@@ -368,7 +376,6 @@ const CustomerList = () => {
                                                             className="btn btn-sm btn-info px-2 py-1"
                                                             title="Call"
                                                             onClick={(e) => e.stopPropagation()}
-                                                          
                                                         >
                                                             <i className="bi bi-phone fa-xs"></i>
                                                         </a>
@@ -444,6 +451,7 @@ const CustomerList = () => {
                 <CustomerModal
                     customer={selectedCustomer}
                     onClose={handleCloseModal}
+                    onDataUpdate={refreshCustomerData}
                 />
             )}
 
@@ -454,7 +462,7 @@ const CustomerList = () => {
                     onClose={() => setShowShopForm(false)}
                     onSave={() => {
                         setShowShopForm(false);
-                        // Refresh customer data or show success message
+                        refreshCustomerData();
                     }}
                 />
             )}
@@ -464,7 +472,7 @@ const CustomerList = () => {
                 <CustmorForm
                     onSuccess={(customerData) => {
                         setShowCustomerForm(false);
-                        // Refresh customers list or show success message
+                        refreshCustomerData();
                         console.log("Customer created:", customerData);
                     }}
                     onCancel={() => setShowCustomerForm(false)}

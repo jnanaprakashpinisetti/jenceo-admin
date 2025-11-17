@@ -6,7 +6,7 @@ import ItemsList from './ItemsList';
 import PaymentModal from './PaymentModal';
 import BasicDetails from './BasicDetails';
 
-const CustomerModal = ({ customer, onClose }) => {
+const CustomerModal = ({ customer, onClose, onDataUpdate }) => {
     const [activeTab, setActiveTab] = useState("basic");
     const [customerItems, setCustomerItems] = useState([]);
     const [loadingItems, setLoadingItems] = useState(false);
@@ -162,8 +162,13 @@ const CustomerModal = ({ customer, onClose }) => {
         }
     }, [customer, refreshTrigger, loadCustomerItems]);
 
-    // Calculate total
-    const totalAmount = customerItems.reduce((sum, item) => sum + (item.total || 0), 0);
+    // Calculate total (only pending items)
+    const totalAmount = customerItems.reduce((sum, item) => {
+        if (item.status !== 'paid') {
+            return sum + (parseFloat(item.total) || 0);
+        }
+        return sum;
+    }, 0);
 
     // Function to get translation
     const getTranslation = (text, language, isSubCategory = false, mainCategory = '') => {
@@ -204,11 +209,12 @@ const CustomerModal = ({ customer, onClose }) => {
         try {
             setShowShopForm(false);
             setRefreshTrigger(prev => prev + 1);
+            if (onDataUpdate) onDataUpdate();
             showSuccess('Item added successfully!');
         } catch (error) {
             showError('Error adding item. Please try again.');
         }
-    }, []);
+    }, [onDataUpdate]);
 
     // Handle pay amount
     const handlePayAmount = (items, total) => {
@@ -219,8 +225,9 @@ const CustomerModal = ({ customer, onClose }) => {
 
     const handlePaymentSuccess = async (paymentInfo, isFullPayment) => {
         try {
-            // Refresh data to get the latest state from Firebase
-            await loadCustomerItems(customer.id);
+            // Force refresh of items and customer data
+            setRefreshTrigger(prev => prev + 1);
+            if (onDataUpdate) onDataUpdate();
 
             // Clear selection and close modal
             setSelectedItemsForPayment([]);
@@ -246,6 +253,7 @@ const CustomerModal = ({ customer, onClose }) => {
     // Handle refresh
     const handleRefresh = () => {
         setRefreshTrigger(prev => prev + 1);
+        if (onDataUpdate) onDataUpdate();
     };
 
     // Show success modal
@@ -259,6 +267,15 @@ const CustomerModal = ({ customer, onClose }) => {
         setErrorMessage(message);
         setShowErrorModal(true);
     };
+
+    // Force refresh all data
+    const forceRefreshAllData = useCallback(async () => {
+        if (customer?.id) {
+            await loadCustomerItems(customer.id);
+            setRefreshTrigger(prev => prev + 1);
+            if (onDataUpdate) onDataUpdate();
+        }
+    }, [customer, loadCustomerItems, onDataUpdate]);
 
     const characterInfo = getCharacterInfo(customer?.character);
 
@@ -357,6 +374,7 @@ const CustomerModal = ({ customer, onClose }) => {
                                     customer={customer}
                                     totalAmount={totalAmount}
                                     customerItems={customerItems}
+                                    refreshTrigger={refreshTrigger}
                                 />
                             )}
 
@@ -366,12 +384,13 @@ const CustomerModal = ({ customer, onClose }) => {
                                     loadingItems={loadingItems}
                                     totalAmount={totalAmount}
                                     onAddItem={handleAddItem}
-                                    onRefresh={handleRefresh}
+                                    onRefresh={forceRefreshAllData}
                                     onPayAmount={handlePayAmount}
                                     onCreateBill={handleCreateBill}
                                     categoryTranslations={categoryTranslations}
                                     getTranslation={getTranslation}
                                     refreshTrigger={refreshTrigger}
+                                    onUpdateItemStatus={forceRefreshAllData}
                                 />
                             )}
 

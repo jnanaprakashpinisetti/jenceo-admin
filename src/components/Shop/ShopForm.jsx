@@ -246,25 +246,25 @@ export default function ShopForm({ customer, onClose, onSave, mode = "purchase",
 
         const basePayload = {
             id: key,
-            mainCategory: formData.mainCategory,
-            subCategory: finalSubCategory,
-            date: formData.date,
+            mainCategory: formData.mainCategory || '',
+            subCategory: finalSubCategory || '',
+            date: formData.date || '',
             quantity: qty,
             price,
             total,
-            comments: formData.comments || "",
+            comments: formData.comments || '',
             createdAt: nowIso,
-            createdById: signedInUid,
-            createdByName: signedInName,
-            createdByRole: signedInRole,
+            createdById: signedInUid || '',
+            createdByName: signedInName || '',
+            createdByRole: signedInRole || '',
             mode: submitMode || mode
         };
 
         if ((submitMode === "customer" || mode === "customer") && customer) {
-            basePayload.customerId = customer.id;
-            basePayload.customerName = customer.name;
-            basePayload.customerPhone = customer.mobileNo || customer.mobile;
-            basePayload.customerPlace = customer.place;
+            basePayload.customerId = customer.id || '';
+            basePayload.customerName = customer.name || '';
+            basePayload.customerPhone = customer.mobileNo || customer.mobile || '';
+            basePayload.customerPlace = customer.place || '';
         }
 
         return basePayload;
@@ -277,9 +277,19 @@ export default function ShopForm({ customer, onClose, onSave, mode = "purchase",
         }
 
         const payload = buildPayload(`customer_${Date.now()}`);
+
+        // Ensure all customer fields have values
+        const customerData = {
+            customerId: customer.id,
+            customerName: customer.name || '',
+            customerPhone: customer.mobileNo || customer.mobile || '',
+            customerPlace: customer.place || '',
+            ...payload
+        };
+
         const customerItemsRef = firebaseDB.child(pathUnderJenCeo(`Shop/CreditData/${customer.id}/CustomerItems`));
         const newRef = customerItemsRef.push();
-        await newRef.set(payload);
+        await newRef.set(customerData);
 
         const balanceRef = firebaseDB.child(pathUnderJenCeo(`Shop/CreditData/${customer.id}/Balance`));
         const snapshot = await balanceRef.once('value');
@@ -289,16 +299,16 @@ export default function ShopForm({ customer, onClose, onSave, mode = "purchase",
 
         const customerRef = firebaseDB.child(pathUnderJenCeo(`Shop/CreditData/${customer.id}`));
         await customerRef.update({
-            customerName: customer.name,
-            customerPhone: customer.mobileNo || customer.mobile,
-            customerPlace: customer.place,
+            customerName: customer.name || '',
+            customerPhone: customer.mobileNo || customer.mobile || '',
+            customerPlace: customer.place || '',
             lastUpdated: new Date().toISOString(),
             updatedBy: signedInName,
             updatedById: signedInUid
         });
 
         return {
-            ...payload,
+            ...customerData,
             newBalance,
             saveLocation: `Shop/CreditData/${customer.id}/CustomerItems`
         };

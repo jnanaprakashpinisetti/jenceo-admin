@@ -56,12 +56,24 @@ const PaymentModal = ({
                     updates[`Shop/CreditData/${customerId}/CustomerItems/${item.id}/paymentId`] = paymentKey;
                 });
             } else {
-                // For partial payments, update the items with partial payment info
+                // For partial payments, we still mark items as paid if the payment covers them
+                // This is a simplified approach - you might want more complex logic for partial payments
+                let remainingAmount = paymentInfo.paidAmount;
+                
                 selectedItems.forEach(item => {
+                    if (remainingAmount >= parseFloat(item.total) && item.status !== 'paid') {
+                        updates[`Shop/CreditData/${customerId}/CustomerItems/${item.id}/status`] = 'paid';
+                        remainingAmount -= parseFloat(item.total);
+                    }
+                    // Always update last payment date and payment ID
                     updates[`Shop/CreditData/${customerId}/CustomerItems/${item.id}/lastPaymentDate`] = new Date().toISOString();
                     updates[`Shop/CreditData/${customerId}/CustomerItems/${item.id}/paymentId`] = paymentKey;
                 });
             }
+
+            // 3. Update customer's last payment date
+            updates[`Shop/CreditData/${customerId}/lastPaymentDate`] = new Date().toISOString();
+            updates[`Shop/CreditData/${customerId}/lastPaymentAmount`] = paymentInfo.paidAmount;
 
             await firebaseDB.update(updates);
             
@@ -128,6 +140,9 @@ const PaymentModal = ({
 
         try {
             const savedPayment = await savePaymentToDB(paymentInfo);
+            
+            // Wait a bit to ensure Firebase updates are propagated
+            await new Promise(resolve => setTimeout(resolve, 500));
             
             if (onPaymentSuccess) {
                 onPaymentSuccess(savedPayment, savedPayment.isFullPayment);

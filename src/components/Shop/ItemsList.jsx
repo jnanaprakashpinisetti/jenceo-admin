@@ -1,5 +1,4 @@
-// src/components/Customer/ItemsList.jsx
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 
 const ItemsList = ({ 
     customerItems, 
@@ -11,10 +10,26 @@ const ItemsList = ({
     getTranslation,
     onPayAmount,
     onCreateBill,
-    onUpdateItemStatus
+    onUpdateItemStatus,
+    refreshTrigger
 }) => {
     const [selectedDate, setSelectedDate] = useState('');
     const [selectedItems, setSelectedItems] = useState([]);
+    const [localItems, setLocalItems] = useState([]);
+    const [showConfirmModal, setShowConfirmModal] = useState(false);
+    const [showSuccessModal, setShowSuccessModal] = useState(false);
+    const [showDiscardModal, setShowDiscardModal] = useState(false);
+    const [modalConfig, setModalConfig] = useState({
+        title: '',
+        message: '',
+        onConfirm: null,
+        type: '' // 'confirm', 'success', 'discard'
+    });
+
+    // Sync local items with prop changes
+    useEffect(() => {
+        setLocalItems(customerItems);
+    }, [customerItems, refreshTrigger]);
 
     // Format date to short format (Dec-11)
     const formatDateShort = (dateString) => {
@@ -48,7 +63,7 @@ const ItemsList = ({
     // Group items by date
     const itemsByDate = useMemo(() => {
         const grouped = {};
-        customerItems.forEach(item => {
+        localItems.forEach(item => {
             if (!item.date) return;
             
             try {
@@ -64,11 +79,11 @@ const ItemsList = ({
                     displayDate: formatDateFull(item.date)
                 });
             } catch (error) {
-                console.error('Invalid date format:', item.date);
+                // Silent error handling for invalid dates
             }
         });
         return grouped;
-    }, [customerItems]);
+    }, [localItems]);
 
     // Get all unique dates sorted (newest first)
     const availableDates = useMemo(() => {
@@ -82,7 +97,7 @@ const ItemsList = ({
 
     // Calculate pending amount and items
     const pendingStats = useMemo(() => {
-        const pendingItems = customerItems.filter(item => item.status !== 'paid');
+        const pendingItems = localItems.filter(item => item.status !== 'paid');
         const pendingAmount = pendingItems.reduce((sum, item) => sum + (parseFloat(item.total) || 0), 0);
         
         const pendingDates = new Set();
@@ -94,9 +109,9 @@ const ItemsList = ({
             pendingAmount,
             pendingItemsCount: pendingItems.length,
             pendingDays: pendingDates.size,
-            totalItems: customerItems.length
+            totalItems: localItems.length
         };
-    }, [customerItems]);
+    }, [localItems]);
 
     // Handle select all for current date
     const handleSelectAll = (checked, date) => {
@@ -111,7 +126,7 @@ const ItemsList = ({
 
     // Handle individual item selection
     const handleItemSelect = (item, checked) => {
-        if (item.status === 'paid') return; // Don't allow selection of paid items
+        if (item.status === 'paid') return;
         
         const updatedSelectedItems = checked
             ? [...selectedItems, item]
@@ -134,49 +149,116 @@ const ItemsList = ({
                !selectableItems.every(item => selectedItems.includes(item));
     };
 
-    // Handle pay amount
+    // Handle pay amount with confirmation
     const handlePayAmount = () => {
         if (selectedItems.length === 0) {
-            alert('Please select items to pay');
+            showModal('warning', 'No Items Selected', 'Please select items to make a payment.');
             return;
         }
         
-        // Filter out already paid items
         const payableItems = selectedItems.filter(item => item.status !== 'paid');
         
         if (payableItems.length === 0) {
-            alert('Selected items are already paid');
+            showModal('info', 'Items Already Paid', 'Selected items are already paid.');
             return;
         }
         
-        onPayAmount(payableItems, selectedTotal);
+        showModal('confirm', 'Confirm Payment', 
+            `Are you sure you want to process payment for ${payableItems.length} items totaling ₹${selectedTotal.toFixed(2)}?`,
+            () => onPayAmount(payableItems, selectedTotal)
+        );
     };
 
-    // Handle create bill
+    // Handle create bill with confirmation
     const handleCreateBill = () => {
         if (selectedItems.length === 0) {
-            alert('Please select items to create bill');
+            showModal('warning', 'No Items Selected', 'Please select items to create a bill.');
             return;
         }
-        onCreateBill(selectedItems, selectedTotal);
+        
+        showModal('confirm', 'Create Bill', 
+            `Create bill for ${selectedItems.length} items totaling ₹${selectedTotal.toFixed(2)}?`,
+            () => onCreateBill(selectedItems, selectedTotal)
+        );
     };
 
-    // Handle payment success - UPDATED to properly clear pending states
-    const handlePaymentSuccess = (paymentInfo, isFullPayment) => {
-        if (isFullPayment) {
-            // Mark selected items as paid
-            selectedItems.forEach(item => {
-                if (onUpdateItemStatus) {
-                    onUpdateItemStatus(item.id, 'paid');
-                }
-            });
-            // Clear selection
-            setSelectedItems([]);
-            
-            // Show success message
-            alert('Payment successful! Selected items have been marked as paid.');
+    // Handle clear selection with confirmation
+    const handleClearSelection = () => {
+        if (selectedItems.length === 0) return;
+        
+        showModal('discard', 'Clear Selection', 
+            `Are you sure you want to clear ${selectedItems.length} selected items?`,
+            () => setSelectedItems([])
+        );
+    };
+
+    // Handle add item
+    const handleAddItem = () => {
+        if (onAddItem) {
+            onAddItem();
         } else {
-            alert('Partial payment recorded successfully!');
+            showModal('error', 'Feature Unavailable', 'Add item functionality is not available at the moment.');
+        }
+    };
+
+    // Show modal helper function
+    const showModal = (type, title, message, onConfirm = null) => {
+        setModalConfig({
+            title,
+            message,
+            onConfirm,
+            type
+        });
+        
+        switch (type) {
+            case 'confirm':
+                setShowConfirmModal(true);
+                break;
+            case 'success':
+                setShowSuccessModal(true);
+                break;
+            case 'discard':
+            case 'warning':
+            case 'error':
+            case 'info':
+                setShowDiscardModal(true);
+                break;
+            default:
+                setShowConfirmModal(true);
+        }
+    };
+
+    // Handle modal confirm
+    const handleConfirm = () => {
+        if (modalConfig.onConfirm) {
+            modalConfig.onConfirm();
+        }
+        setShowConfirmModal(false);
+        setShowDiscardModal(false);
+    };
+
+    // Handle modal cancel/close
+    const handleCancel = () => {
+        setShowConfirmModal(false);
+        setShowDiscardModal(false);
+        setShowSuccessModal(false);
+    };
+
+    // Get modal icon and color based on type
+    const getModalConfig = (type) => {
+        switch (type) {
+            case 'success':
+                return { icon: 'check-circle', color: 'success', btnColor: 'success' };
+            case 'warning':
+                return { icon: 'exclamation-triangle', color: 'warning', btnColor: 'warning' };
+            case 'error':
+                return { icon: 'times-circle', color: 'danger', btnColor: 'danger' };
+            case 'info':
+                return { icon: 'info-circle', color: 'info', btnColor: 'info' };
+            case 'discard':
+                return { icon: 'trash', color: 'danger', btnColor: 'danger' };
+            default:
+                return { icon: 'question-circle', color: 'primary', btnColor: 'primary' };
         }
     };
 
@@ -191,7 +273,7 @@ const ItemsList = ({
         );
     }
 
-    if (customerItems.length === 0) {
+    if (localItems.length === 0) {
         return (
             <div className="text-center py-5">
                 <div className="text-muted mb-3">
@@ -201,7 +283,7 @@ const ItemsList = ({
                 <p className="text-muted">No items have been added for this customer yet.</p>
                 <button
                     className="btn btn-success mt-3"
-                    onClick={onAddItem}
+                    onClick={handleAddItem}
                     style={{
                         background: "linear-gradient(135deg, #10b981 0%, #059669 100%)",
                         border: "none",
@@ -215,6 +297,8 @@ const ItemsList = ({
             </div>
         );
     }
+
+    const modalStyle = getModalConfig(modalConfig.type);
 
     return (
         <div>
@@ -284,7 +368,7 @@ const ItemsList = ({
                     )}
                     <button
                         className="btn btn-success btn-sm fw-bold"
-                        onClick={onAddItem}
+                        onClick={handleAddItem}
                         style={{
                             background: "linear-gradient(135deg, #10b981 0%, #059669 100%)",
                             border: "none",
@@ -338,7 +422,7 @@ const ItemsList = ({
                             }}
                         >
                             {formatDateShort(date)}
-                            {itemsByDate[date]?.some(item => item.status === 'pending') && (
+                            {itemsByDate[date]?.some(item => item.status !== 'paid') && (
                                 <span className="badge bg-danger ms-1">!</span>
                             )}
                         </button>
@@ -388,7 +472,7 @@ const ItemsList = ({
                             </button>
                             <button
                                 className="btn btn-outline-light btn-sm fw-bold"
-                                onClick={() => setSelectedItems([])}
+                                onClick={handleClearSelection}
                                 style={{
                                     borderRadius: "8px",
                                     padding: "8px 16px"
@@ -554,6 +638,87 @@ const ItemsList = ({
                         );
                     })}
             </div>
+
+            {/* Confirmation Modal */}
+            {(showConfirmModal || showDiscardModal) && (
+                <div className="modal fade show d-block" tabIndex="-1" style={{ backgroundColor: "rgba(0,0,0,0.5)" }}>
+                    <div className="modal-dialog modal-dialog-centered">
+                        <div className="modal-content border-0 shadow-lg rounded-3">
+                            <div className={`modal-header border-0 text-white`} style={{
+                                background: `linear-gradient(135deg, var(--bs-${modalStyle.color}) 0%, var(--bs-${modalStyle.color}-dark) 100%)`
+                            }}>
+                                <h6 className="modal-title mb-0">
+                                    <i className={`fas fa-${modalStyle.icon} me-2`}></i>
+                                    {modalConfig.title}
+                                </h6>
+                            </div>
+                            <div className="modal-body bg-dark bg-opacity-90 text-white p-4">
+                                <p className="mb-0">{modalConfig.message}</p>
+                            </div>
+                            <div className="modal-footer border-0 bg-dark bg-opacity-75">
+                                <button
+                                    type="button"
+                                    className="btn btn-outline-secondary"
+                                    onClick={handleCancel}
+                                    style={{ borderRadius: "8px" }}
+                                >
+                                    <i className="fas fa-times me-2"></i>
+                                    Cancel
+                                </button>
+                                <button
+                                    type="button"
+                                    className={`btn btn-${modalStyle.btnColor}`}
+                                    onClick={handleConfirm}
+                                    style={{
+                                        borderRadius: "8px",
+                                        background: `linear-gradient(135deg, var(--bs-${modalStyle.btnColor}) 0%, var(--bs-${modalStyle.btnColor}-dark) 100%)`,
+                                        border: "none"
+                                    }}
+                                >
+                                    <i className="fas fa-check me-2"></i>
+                                    {modalConfig.type === 'discard' ? 'Discard' : 'Confirm'}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Success Modal */}
+            {showSuccessModal && (
+                <div className="modal fade show d-block" tabIndex="-1" style={{ backgroundColor: "rgba(0,0,0,0.5)" }}>
+                    <div className="modal-dialog modal-dialog-centered">
+                        <div className="modal-content border-0 shadow-lg rounded-3">
+                            <div className="modal-header border-0 text-white" style={{
+                                background: "linear-gradient(135deg, #10b981 0%, #059669 100%)"
+                            }}>
+                                <h6 className="modal-title mb-0">
+                                    <i className="fas fa-check-circle me-2"></i>
+                                    Success
+                                </h6>
+                            </div>
+                            <div className="modal-body bg-dark bg-opacity-90 text-white p-4">
+                                <p className="mb-0">{modalConfig.message}</p>
+                            </div>
+                            <div className="modal-footer border-0 bg-dark bg-opacity-75">
+                                <button
+                                    type="button"
+                                    className="btn btn-success"
+                                    onClick={handleCancel}
+                                    style={{
+                                        borderRadius: "8px",
+                                        background: "linear-gradient(135deg, #10b981 0%, #059669 100%)",
+                                        border: "none"
+                                    }}
+                                >
+                                    <i className="fas fa-check me-2"></i>
+                                    OK
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

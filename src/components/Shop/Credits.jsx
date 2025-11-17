@@ -195,7 +195,7 @@ const CustomerList = () => {
     };
 
     return (
-        <div className="p-3 bg-dark border border-secondary rounded-3 mt-3">
+        <div className="p-3 bg-dark border border-secondary rounded-3 border-opacity-25 mt-3">
             {/* Header */}
             <div className="d-flex justify-content-between align-items-center mb-4">
                 <h4 className="text-warning mb-0">
@@ -219,14 +219,14 @@ const CustomerList = () => {
             </div>
 
             {/* Filters */}
-            <div className="card bg-dark border-secondary mb-4">
+            <div className="card bg-dark border-secondary border-opacity-10 mb-4">
                 <div className="card-header bg-primary bg-opacity-25">
                     <h6 className="mb-0 text-white">
                         <i className="bi bi-filter me-2"></i>
                         Filters
                     </h6>
                 </div>
-                <div className="card-body">
+                <div className="card-body bg-secondary bg-opacity-10 ">
                     <div className="row g-3">
                         <div className="col-md-3">
                             <label className="form-label text-white small">Search</label>

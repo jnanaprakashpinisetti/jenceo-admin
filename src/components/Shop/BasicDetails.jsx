@@ -1,7 +1,7 @@
 // src/components/Customer/BasicDetails.jsx
 import React, { useMemo } from 'react';
 
-const BasicDetails = ({ customer, totalAmount, paymentHistory }) => {
+const BasicDetails = ({ customer, totalAmount, paymentHistory, customerItems }) => {
     
     // Get character badge color and label
     const getCharacterInfo = (character) => {
@@ -15,38 +15,75 @@ const BasicDetails = ({ customer, totalAmount, paymentHistory }) => {
         }
     };
 
-    // Calculate financial summary from payment history
+    // Calculate financial summary from payment history and customer items
     const financialSummary = useMemo(() => {
-        if (!paymentHistory || paymentHistory.length === 0) {
-            return {
-                totalPurchase: 0,
-                totalPaid: 0,
-                totalPending: totalAmount,
-                lastPaymentDate: 'N/A',
-                paymentCount: 0
-            };
+        let totalPurchase = 0;
+        let totalPaid = 0;
+        let totalPending = 0;
+        let lastPaymentDate = 'N/A';
+        let paymentCount = 0;
+
+        // Calculate from payment history if available
+        if (paymentHistory && paymentHistory.length > 0) {
+            paymentCount = paymentHistory.length;
+            totalPaid = paymentHistory.reduce((sum, payment) => sum + (parseFloat(payment.paidAmount) || 0), 0);
+            totalPurchase = paymentHistory.reduce((sum, payment) => sum + (parseFloat(payment.totalAmount) || 0), 0);
+            
+            // Find last payment date
+            const sortedPayments = [...paymentHistory].sort((a, b) => 
+                new Date(b.paymentDate) - new Date(a.paymentDate)
+            );
+            if (sortedPayments.length > 0) {
+                lastPaymentDate = new Date(sortedPayments[0].paymentDate).toLocaleDateString();
+            }
+        } 
+        // Calculate from customer items if no payment history
+        else if (customerItems && customerItems.length > 0) {
+            totalPurchase = customerItems.reduce((sum, item) => sum + (parseFloat(item.total) || 0), 0);
+            
+            const paidItems = customerItems.filter(item => item.status === 'paid');
+            const pendingItems = customerItems.filter(item => item.status !== 'paid');
+            
+            totalPaid = paidItems.reduce((sum, item) => sum + (parseFloat(item.total) || 0), 0);
+            paymentCount = paidItems.length;
+            
+            // Find last payment date from paid items
+            if (paidItems.length > 0) {
+                const sortedPaidItems = [...paidItems].sort((a, b) => 
+                    new Date(b.lastPaymentDate || b.date) - new Date(a.lastPaymentDate || a.date)
+                );
+                lastPaymentDate = new Date(sortedPaidItems[0].lastPaymentDate || sortedPaidItems[0].date).toLocaleDateString();
+            }
+        } 
+        // Use totalAmount as fallback
+        else {
+            totalPurchase = parseFloat(totalAmount) || 0;
+            totalPaid = 0;
+            paymentCount = 0;
         }
 
-        const totalPaid = paymentHistory.reduce((sum, payment) => sum + payment.paidAmount, 0);
-        const totalPurchase = paymentHistory.reduce((sum, payment) => sum + payment.totalAmount, 0);
-        const lastPayment = paymentHistory.sort((a, b) => new Date(b.paymentDate) - new Date(a.paymentDate))[0];
+        totalPending = totalPurchase - totalPaid;
 
         return {
             totalPurchase,
             totalPaid,
-            totalPending: totalPurchase - totalPaid,
-            lastPaymentDate: lastPayment ? new Date(lastPayment.paymentDate).toLocaleDateString() : 'N/A',
-            paymentCount: paymentHistory.length
+            totalPending,
+            lastPaymentDate,
+            paymentCount
         };
-    }, [paymentHistory, totalAmount]);
+    }, [paymentHistory, customerItems, totalAmount]);
 
-    // Group payment history by month
+    // Group payment history by month - FIXED VERSION
     const monthlyPayments = useMemo(() => {
-        if (!paymentHistory) return [];
+        if (!paymentHistory || paymentHistory.length === 0) {
+            return [];
+        }
 
         const monthlyData = {};
         
         paymentHistory.forEach(payment => {
+            if (!payment.paymentDate) return;
+            
             const date = new Date(payment.paymentDate);
             const monthYear = `${date.getFullYear()}-${(date.getMonth() + 1).toString().padStart(2, '0')}`;
             const monthName = date.toLocaleDateString('en-US', { year: 'numeric', month: 'long' });
@@ -61,65 +98,136 @@ const BasicDetails = ({ customer, totalAmount, paymentHistory }) => {
                 };
             }
             
-            monthlyData[monthYear].totalAmount += payment.totalAmount;
-            monthlyData[monthYear].paidAmount += payment.paidAmount;
+            monthlyData[monthYear].totalAmount += parseFloat(payment.totalAmount) || 0;
+            monthlyData[monthYear].paidAmount += parseFloat(payment.paidAmount) || 0;
             monthlyData[monthYear].balance = monthlyData[monthYear].totalAmount - monthlyData[monthYear].paidAmount;
             monthlyData[monthYear].payments.push(payment);
         });
 
-        return Object.values(monthlyData).sort((a, b) => {
+        const monthlyArray = Object.values(monthlyData);
+        
+        // Sort by date descending
+        monthlyArray.sort((a, b) => {
             const dateA = new Date(a.payments[0].paymentDate);
             const dateB = new Date(b.payments[0].paymentDate);
             return dateB - dateA;
         });
+
+        return monthlyArray;
     }, [paymentHistory]);
+
+    // Calculate total purchases count from customer items
+    const totalPurchasesCount = useMemo(() => {
+        if (customerItems && customerItems.length > 0) {
+            return customerItems.length;
+        }
+        return customer?.totalPurchases || 0;
+    }, [customerItems, customer]);
 
     const characterInfo = getCharacterInfo(customer?.character);
 
     return (
         <div className="row g-4">
-            {/* Customer Basic Information */}
+            {/* Customer Information */}
             <div className="col-md-6">
                 <div className="card border-0 shadow-lg h-100" style={{
-                    background: "linear-gradient(135deg, rgba(30, 41, 59, 0.8) 0%, rgba(15, 23, 42, 0.8) 100%)",
-                    borderRadius: "15px",
-                    border: "1px solid rgba(99, 102, 241, 0.3)"
+                    background: "linear-gradient(135deg, rgba(30, 41, 59, 0.95) 0%, rgba(15, 23, 42, 0.95) 100%)",
+                    borderRadius: "12px",
+                    border: "1px solid rgba(99, 102, 241, 0.4)",
+                    backdropFilter: "blur(10px)"
                 }}>
-                    <div className="card-header border-0" style={{
+                    <div className="card-header border-0 py-3" style={{
                         background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
-                        borderRadius: "15px 15px 0 0"
+                        borderRadius: "12px 12px 0 0",
+                        borderBottom: "2px solid rgba(255, 255, 255, 0.2)"
                     }}>
-                        <h6 className="text-white mb-0 fw-bold">
-                            <i className="fas fa-user me-2"></i>
+                        <h6 className="text-white mb-0 fw-bold d-flex align-items-center">
+                            <i className="fas fa-user-circle me-2 fs-5"></i>
                             Customer Information
                         </h6>
                     </div>
-                    <div className="card-body">
-                        <div className="space-y-3">
-                            <div className="d-flex justify-content-between align-items-center">
-                                <span className="text-light fw-semibold">Name:</span>
-                                <span className="text-warning fw-bold">{customer?.name || 'N/A'}</span>
-                            </div>
-                            <div className="d-flex justify-content-between align-items-center">
-                                <span className="text-light fw-semibold">ID Number:</span>
-                                <span className="text-info fw-bold">{customer?.idNo || 'N/A'}</span>
-                            </div>
-                            <div className="d-flex justify-content-between align-items-center">
-                                <span className="text-light fw-semibold">Phone:</span>
-                                <span className="text-light fw-bold">{customer?.phone || 'N/A'}</span>
-                            </div>
-                            <div className="d-flex justify-content-between align-items-center">
-                                <span className="text-light fw-semibold">Address:</span>
-                                <span className="text-light fw-bold text-end" style={{ maxWidth: '200px' }}>
-                                    {customer?.address || 'N/A'}
-                                </span>
-                            </div>
-                            <div className="d-flex justify-content-between align-items-center">
-                                <span className="text-light fw-semibold">Character:</span>
-                                <span className={`badge bg-${characterInfo.color} fw-bold`}>
-                                    {characterInfo.label}
-                                </span>
-                            </div>
+                    <div className="card-body p-0">
+                        <div className="table-responsive">
+                            <table className="table table-dark table-borderless align-middle mb-0" style={{
+                                background: "transparent"
+                            }}>
+                                <tbody>
+                                    <tr style={{
+                                        borderBottom: "1px solid rgba(255, 255, 255, 0.1)",
+                                        background: "rgba(99, 102, 241, 0.1)"
+                                    }}>
+                                        <td className="ps-4 py-3" style={{ width: '40%', borderRight: "1px solid rgba(255, 255, 255, 0.1)" }}>
+                                            <span className="text-light fw-semibold d-flex align-items-center">
+                                                <i className="fas fa-signature me-2 text-info fs-6"></i>
+                                                Full Name
+                                            </span>
+                                        </td>
+                                        <td className="py-3 pe-4">
+                                            <span className="text-warning fw-bold fs-6">{customer?.name || 'N/A'}</span>
+                                        </td>
+                                    </tr>
+                                    <tr style={{
+                                        borderBottom: "1px solid rgba(255, 255, 255, 0.1)"
+                                    }}>
+                                        <td className="ps-4 py-3" style={{ width: '40%', borderRight: "1px solid rgba(255, 255, 255, 0.1)" }}>
+                                            <span className="text-light fw-semibold d-flex align-items-center">
+                                                <i className="fas fa-id-card me-2 text-primary fs-6"></i>
+                                                ID Number
+                                            </span>
+                                        </td>
+                                        <td className="py-3 pe-4">
+                                            <span className="text-info fw-bold fs-6">{customer?.idNo || 'N/A'}</span>
+                                        </td>
+                                    </tr>
+                                    <tr style={{
+                                        borderBottom: "1px solid rgba(255, 255, 255, 0.1)",
+                                        background: "rgba(99, 102, 241, 0.1)"
+                                    }}>
+                                        <td className="ps-4 py-3" style={{ width: '40%', borderRight: "1px solid rgba(255, 255, 255, 0.1)" }}>
+                                            <span className="text-light fw-semibold d-flex align-items-center">
+                                                <i className="fas fa-phone me-2 text-success fs-6"></i>
+                                                Phone Number
+                                            </span>
+                                        </td>
+                                        <td className="py-3 pe-4">
+                                            <span className="text-light fw-bold">{customer?.phone || 'N/A'}</span>
+                                        </td>
+                                    </tr>
+                                    <tr style={{
+                                        borderBottom: "1px solid rgba(255, 255, 255, 0.1)"
+                                    }}>
+                                        <td className="ps-4 py-3" style={{ width: '40%', borderRight: "1px solid rgba(255, 255, 255, 0.1)" }}>
+                                            <span className="text-light fw-semibold d-flex align-items-center">
+                                                <i className="fas fa-map-marker-alt me-2 text-warning fs-6"></i>
+                                                Address
+                                            </span>
+                                        </td>
+                                        <td className="py-3 pe-4">
+                                            <span className="text-light fw-bold text-end" style={{ maxWidth: '200px', lineHeight: '1.2' }}>
+                                                {customer?.address || 'N/A'}
+                                            </span>
+                                        </td>
+                                    </tr>
+                                    <tr style={{
+                                        background: "rgba(99, 102, 241, 0.1)"
+                                    }}>
+                                        <td className="ps-4 py-3" style={{ width: '40%', borderRight: "1px solid rgba(255, 255, 255, 0.1)" }}>
+                                            <span className="text-light fw-semibold d-flex align-items-center">
+                                                <i className="fas fa-star me-2 text-warning fs-6"></i>
+                                                Character Rating
+                                            </span>
+                                        </td>
+                                        <td className="py-3 pe-4">
+                                            <span className={`badge bg-${characterInfo.color} fw-bold px-3 py-2`} style={{
+                                                fontSize: '0.75rem',
+                                                borderRadius: '20px'
+                                            }}>
+                                                {characterInfo.label}
+                                            </span>
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
                         </div>
                     </div>
                 </div>
@@ -128,45 +236,111 @@ const BasicDetails = ({ customer, totalAmount, paymentHistory }) => {
             {/* Financial Summary */}
             <div className="col-md-6">
                 <div className="card border-0 shadow-lg h-100" style={{
-                    background: "linear-gradient(135deg, rgba(30, 41, 59, 0.8) 0%, rgba(15, 23, 42, 0.8) 100%)",
-                    borderRadius: "15px",
-                    border: "1px solid rgba(99, 102, 241, 0.3)"
+                    background: "linear-gradient(135deg, rgba(30, 41, 59, 0.95) 0%, rgba(15, 23, 42, 0.95) 100%)",
+                    borderRadius: "12px",
+                    border: "1px solid rgba(16, 185, 129, 0.4)",
+                    backdropFilter: "blur(10px)"
                 }}>
-                    <div className="card-header border-0" style={{
+                    <div className="card-header border-0 py-3" style={{
                         background: "linear-gradient(135deg, #059669 0%, #047857 100%)",
-                        borderRadius: "15px 15px 0 0"
+                        borderRadius: "12px 12px 0 0",
+                        borderBottom: "2px solid rgba(255, 255, 255, 0.2)"
                     }}>
-                        <h6 className="text-white mb-0 fw-bold">
-                            <i className="fas fa-chart-line me-2"></i>
+                        <h6 className="text-white mb-0 fw-bold d-flex align-items-center">
+                            <i className="fas fa-chart-bar me-2 fs-5"></i>
                             Financial Summary
                         </h6>
                     </div>
-                    <div className="card-body">
-                        <div className="space-y-3">
-                            <div className="d-flex justify-content-between align-items-center">
-                                <span className="text-light fw-semibold">Total Purchase:</span>
-                                <span className="text-warning fw-bold fs-6">₹{financialSummary.totalPurchase.toFixed(2)}</span>
-                            </div>
-                            <div className="d-flex justify-content-between align-items-center">
-                                <span className="text-light fw-semibold">Total Paid:</span>
-                                <span className="text-success fw-bold fs-6">₹{financialSummary.totalPaid.toFixed(2)}</span>
-                            </div>
-                            <div className="d-flex justify-content-between align-items-center">
-                                <span className="text-light fw-semibold">Pending Amount:</span>
-                                <span className="text-danger fw-bold fs-6">₹{financialSummary.totalPending.toFixed(2)}</span>
-                            </div>
-                            <div className="d-flex justify-content-between align-items-center">
-                                <span className="text-light fw-semibold">Last Payment:</span>
-                                <span className="text-light fw-bold">
-                                    {financialSummary.lastPaymentDate}
-                                </span>
-                            </div>
-                            <div className="d-flex justify-content-between align-items-center">
-                                <span className="text-light fw-semibold">Total Payments:</span>
-                                <span className="text-info fw-bold">
-                                    {financialSummary.paymentCount}
-                                </span>
-                            </div>
+                    <div className="card-body p-0">
+                        <div className="table-responsive">
+                            <table className="table table-dark table-borderless align-middle mb-0" style={{
+                                background: "transparent"
+                            }}>
+                                <tbody>
+                                    <tr style={{
+                                        borderBottom: "1px solid rgba(255, 255, 255, 0.1)",
+                                        background: "rgba(16, 185, 129, 0.1)"
+                                    }}>
+                                        <td className="ps-4 py-3" style={{ width: '40%', borderRight: "1px solid rgba(255, 255, 255, 0.1)" }}>
+                                            <span className="text-light fw-semibold d-flex align-items-center">
+                                                <i className="fas fa-shopping-cart me-2 text-warning fs-6"></i>
+                                                Total Purchase
+                                            </span>
+                                        </td>
+                                        <td className="py-3 pe-4">
+                                            <span className="text-warning fw-bold fs-6 d-flex align-items-center justify-content-end">
+                                                ₹{financialSummary.totalPurchase.toFixed(2)}
+                                                <i className="fas fa-arrow-up text-success ms-2 fs-7"></i>
+                                            </span>
+                                        </td>
+                                    </tr>
+                                    <tr style={{
+                                        borderBottom: "1px solid rgba(255, 255, 255, 0.1)"
+                                    }}>
+                                        <td className="ps-4 py-3" style={{ width: '40%', borderRight: "1px solid rgba(255, 255, 255, 0.1)" }}>
+                                            <span className="text-light fw-semibold d-flex align-items-center">
+                                                <i className="fas fa-credit-card me-2 text-success fs-6"></i>
+                                                Total Paid
+                                            </span>
+                                        </td>
+                                        <td className="py-3 pe-4">
+                                            <span className="text-success fw-bold fs-6 d-flex align-items-center justify-content-end">
+                                                ₹{financialSummary.totalPaid.toFixed(2)}
+                                                <i className="fas fa-check-circle text-success ms-2 fs-7"></i>
+                                            </span>
+                                        </td>
+                                    </tr>
+                                    <tr style={{
+                                        borderBottom: "1px solid rgba(255, 255, 255, 0.1)",
+                                        background: "rgba(16, 185, 129, 0.1)"
+                                    }}>
+                                        <td className="ps-4 py-3" style={{ width: '40%', borderRight: "1px solid rgba(255, 255, 255, 0.1)" }}>
+                                            <span className="text-light fw-semibold d-flex align-items-center">
+                                                <i className="fas fa-clock me-2 text-danger fs-6"></i>
+                                                Pending Amount
+                                            </span>
+                                        </td>
+                                        <td className="py-3 pe-4">
+                                            <span className="text-danger fw-bold fs-6 d-flex align-items-center justify-content-end">
+                                                ₹{financialSummary.totalPending.toFixed(2)}
+                                                <i className="fas fa-exclamation-triangle text-danger ms-2 fs-7"></i>
+                                            </span>
+                                        </td>
+                                    </tr>
+                                    <tr style={{
+                                        borderBottom: "1px solid rgba(255, 255, 255, 0.1)"
+                                    }}>
+                                        <td className="ps-4 py-3" style={{ width: '40%', borderRight: "1px solid rgba(255, 255, 255, 0.1)" }}>
+                                            <span className="text-light fw-semibold d-flex align-items-center">
+                                                <i className="fas fa-calendar-check me-2 text-info fs-6"></i>
+                                                Last Payment
+                                            </span>
+                                        </td>
+                                        <td className="py-3 pe-4">
+                                            <span className="text-light fw-bold d-flex align-items-center justify-content-end">
+                                                {financialSummary.lastPaymentDate}
+                                                <i className="fas fa-history text-info ms-2 fs-7"></i>
+                                            </span>
+                                        </td>
+                                    </tr>
+                                    <tr style={{
+                                        background: "rgba(16, 185, 129, 0.1)"
+                                    }}>
+                                        <td className="ps-4 py-3" style={{ width: '40%', borderRight: "1px solid rgba(255, 255, 255, 0.1)" }}>
+                                            <span className="text-light fw-semibold d-flex align-items-center">
+                                                <i className="fas fa-receipt me-2 text-primary fs-6"></i>
+                                                Total Payments
+                                            </span>
+                                        </td>
+                                        <td className="py-3 pe-4">
+                                            <span className="text-info fw-bold d-flex align-items-center justify-content-end">
+                                                {financialSummary.paymentCount}
+                                                <i className="fas fa-file-invoice-dollar text-primary ms-2 fs-7"></i>
+                                            </span>
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
                         </div>
                     </div>
                 </div>
@@ -274,7 +448,7 @@ const BasicDetails = ({ customer, totalAmount, paymentHistory }) => {
                                     <i className="fas fa-shopping-cart fa-2x text-primary mb-2"></i>
                                     <h6 className="text-light mb-1">Total Purchases</h6>
                                     <span className="text-warning fw-bold fs-5">
-                                        {customer?.totalPurchases || 0}
+                                        {totalPurchasesCount}
                                     </span>
                                 </div>
                             </div>

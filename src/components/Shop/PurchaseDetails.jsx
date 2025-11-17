@@ -1337,7 +1337,7 @@ export default function PurchaseDetails() {
     );
 
     return (
-        <div className="p-3 bg-dark border border-secondary rounded-3 mt-3">
+        <div className="p-3 bg-dark border border-secondary border-opacity-10 rounded-3 mt-3">
 
 
             {/* Controls + Info */}

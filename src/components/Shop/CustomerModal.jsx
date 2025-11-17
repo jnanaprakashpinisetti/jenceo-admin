@@ -15,6 +15,10 @@ const CustomerModal = ({ customer, onClose }) => {
     const [selectedItemsForPayment, setSelectedItemsForPayment] = useState([]);
     const [selectedTotalForPayment, setSelectedTotalForPayment] = useState(0);
     const [refreshTrigger, setRefreshTrigger] = useState(0);
+    const [showSuccessModal, setShowSuccessModal] = useState(false);
+    const [successMessage, setSuccessMessage] = useState('');
+    const [showErrorModal, setShowErrorModal] = useState(false);
+    const [errorMessage, setErrorMessage] = useState('');
 
     // Enhanced language mapping for categories with English and Hindi
     const categoryTranslations = {
@@ -125,19 +129,14 @@ const CustomerModal = ({ customer, onClose }) => {
 
     const loadCustomerItems = useCallback(async (customerId) => {
         if (!customerId) {
-            console.log("No customer ID provided");
             return;
         }
-        
-        console.log("Loading customer items for:", customerId);
+
         setLoadingItems(true);
         try {
             const ref = firebaseDB.child(`Shop/CreditData/${customerId}/CustomerItems`);
             const snapshot = await ref.once('value');
             const itemsData = snapshot.val() || {};
-
-            console.log("Loaded customer items from:", `Shop/CreditData/${customerId}/CustomerItems`);
-            console.log("Items data:", itemsData);
 
             const itemsList = Object.entries(itemsData).map(([itemId, item]) => ({
                 id: itemId,
@@ -147,11 +146,10 @@ const CustomerModal = ({ customer, onClose }) => {
             // Sort by date descending (newest first)
             itemsList.sort((a, b) => new Date(b.date) - new Date(a.date));
 
-            console.log("Processed items list:", itemsList);
             setCustomerItems(itemsList);
         } catch (error) {
-            console.error("Error loading customer items:", error);
             setCustomerItems([]);
+            showError('Failed to load customer items. Please try again.');
         } finally {
             setLoadingItems(false);
         }
@@ -159,7 +157,6 @@ const CustomerModal = ({ customer, onClose }) => {
 
     // Single useEffect to load items
     useEffect(() => {
-        console.log("useEffect triggered - customer:", customer?.id, "refreshTrigger:", refreshTrigger);
         if (customer && customer.id) {
             loadCustomerItems(customer.id);
         }
@@ -198,66 +195,52 @@ const CustomerModal = ({ customer, onClose }) => {
         }
     };
 
+    const handleAddItem = () => {
+        setShowShopForm(true);
+    };
+
     // Handle shop form submission
     const handleShopFormSubmit = useCallback(async (savedData) => {
         try {
-            console.log("Item saved successfully:", savedData);
             setShowShopForm(false);
             setRefreshTrigger(prev => prev + 1);
-            alert('Item added successfully!');
+            showSuccess('Item added successfully!');
         } catch (error) {
-            console.error('Error handling form submission:', error);
-            alert('Error adding item. Please try again.');
+            showError('Error adding item. Please try again.');
         }
     }, []);
- 
-     // Handle pay amount
+
+    // Handle pay amount
     const handlePayAmount = (items, total) => {
         setSelectedItemsForPayment(items);
         setSelectedTotalForPayment(total);
         setShowPaymentModal(true);
     };
 
-    // Handle payment success
-const handlePaymentSuccess = async (paymentInfo, isFullPayment) => {
-    try {
-        console.log("Payment successful:", paymentInfo);
-        
-        const updates = {};
-        
-        if (isFullPayment) {
-            // Mark all selected items as paid
-            selectedItemsForPayment.forEach(item => {
-                updates[`Shop/CreditData/${customer.id}/CustomerItems/${item.id}/status`] = 'paid';
-                updates[`Shop/CreditData/${customer.id}/CustomerItems/${item.id}/paymentInfo`] = paymentInfo;
-            });
-        } else {
-            // For partial payment, create a balance record
-            updates[`Shop/CreditData/${customer.id}/BalanceRecords/${Date.now()}`] = {
-                ...paymentInfo,
-                createdAt: new Date().toISOString()
-            };
-            
-            // You can also update individual items if needed for partial payments
-            // This depends on your business logic
-        }
+    const handlePaymentSuccess = async (paymentInfo, isFullPayment) => {
+        try {
+            // Refresh data to get the latest state from Firebase
+            await loadCustomerItems(customer.id);
 
-        await firebaseDB.update(updates);
-        
-        alert(isFullPayment ? 'Payment recorded successfully! All items marked as paid.' : 'Partial payment recorded successfully!');
-        setRefreshTrigger(prev => prev + 1);
-        setSelectedItemsForPayment([]);
-    } catch (error) {
-        console.error('Error updating payment status:', error);
-        alert('Error recording payment. Please try again.');
-    }
-};
+            // Clear selection and close modal
+            setSelectedItemsForPayment([]);
+            setShowPaymentModal(false);
+
+            // Show success message
+            if (isFullPayment) {
+                showSuccess('Payment recorded successfully! All items marked as paid.');
+            } else {
+                showSuccess('Partial payment recorded successfully!');
+            }
+
+        } catch (error) {
+            showError('Error updating payment status. Please refresh the page.');
+        }
+    };
+
     // Handle create bill
     const handleCreateBill = (items, total) => {
-        // Set active tab to bill and pass selected items
         setActiveTab('bill');
-        // You can pass the selected items to ShareBill component if needed
-        console.log("Creating bill for items:", items, "Total:", total);
     };
 
     // Handle refresh
@@ -265,9 +248,16 @@ const handlePaymentSuccess = async (paymentInfo, isFullPayment) => {
         setRefreshTrigger(prev => prev + 1);
     };
 
-    // Handle add item
-    const handleAddItem = () => {
-        setShowShopForm(true);
+    // Show success modal
+    const showSuccess = (message) => {
+        setSuccessMessage(message);
+        setShowSuccessModal(true);
+    };
+
+    // Show error modal
+    const showError = (message) => {
+        setErrorMessage(message);
+        setShowErrorModal(true);
     };
 
     const characterInfo = getCharacterInfo(customer?.character);
@@ -362,12 +352,13 @@ const handlePaymentSuccess = async (paymentInfo, isFullPayment) => {
 
                         {/* Tab Content */}
                         <div className="modal-body p-4">
-                     {activeTab === "basic" && (
-    <BasicDetails 
-        customer={customer} 
-        totalAmount={totalAmount} 
-    />
-)}
+                            {activeTab === "basic" && (
+                                <BasicDetails
+                                    customer={customer}
+                                    totalAmount={totalAmount}
+                                    customerItems={customerItems}
+                                />
+                            )}
 
                             {activeTab === "items" && (
                                 <ItemsList
@@ -380,6 +371,7 @@ const handlePaymentSuccess = async (paymentInfo, isFullPayment) => {
                                     onCreateBill={handleCreateBill}
                                     categoryTranslations={categoryTranslations}
                                     getTranslation={getTranslation}
+                                    refreshTrigger={refreshTrigger}
                                 />
                             )}
 
@@ -433,7 +425,74 @@ const handlePaymentSuccess = async (paymentInfo, isFullPayment) => {
                     selectedItems={selectedItemsForPayment}
                     selectedTotal={selectedTotalForPayment}
                     onPaymentSuccess={handlePaymentSuccess}
+                    customerId={customer?.id}
                 />
+            )}
+
+            {/* Success Modal */}
+            {showSuccessModal && (
+                <div className="modal show d-block" style={{ backgroundColor: "rgba(0,0,0,0.8)" }}>
+                    <div className="modal-dialog modal-dialog-centered">
+                        <div className="modal-content border-0 shadow-lg">
+                            <div className="modal-header border-0 bg-success text-white">
+                                <h5 className="modal-title fw-bold">
+                                    <i className="fas fa-check-circle me-2"></i>
+                                    Success
+                                </h5>
+                                <button
+                                    type="button"
+                                    className="btn-close btn-close-white"
+                                    onClick={() => setShowSuccessModal(false)}
+                                ></button>
+                            </div>
+                            <div className="modal-body py-4">
+                                <p className="mb-0">{successMessage}</p>
+                            </div>
+                            <div className="modal-footer border-0">
+                                <button
+                                    type="button"
+                                    className="btn btn-success"
+                                    onClick={() => setShowSuccessModal(false)}
+                                >
+                                    Continue
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Error Modal */}
+            {showErrorModal && (
+                <div className="modal show d-block" style={{ backgroundColor: "rgba(0,0,0,0.8)" }}>
+                    <div className="modal-dialog modal-dialog-centered">
+                        <div className="modal-content border-0 shadow-lg">
+                            <div className="modal-header border-0 bg-danger text-white">
+                                <h5 className="modal-title fw-bold">
+                                    <i className="fas fa-exclamation-triangle me-2"></i>
+                                    Error
+                                </h5>
+                                <button
+                                    type="button"
+                                    className="btn-close btn-close-white"
+                                    onClick={() => setShowErrorModal(false)}
+                                ></button>
+                            </div>
+                            <div className="modal-body py-4">
+                                <p className="mb-0">{errorMessage}</p>
+                            </div>
+                            <div className="modal-footer border-0">
+                                <button
+                                    type="button"
+                                    className="btn btn-secondary"
+                                    onClick={() => setShowErrorModal(false)}
+                                >
+                                    Close
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             )}
         </>
     );

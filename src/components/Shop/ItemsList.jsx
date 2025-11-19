@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 
 const ItemsList = ({ 
-    customerItems, 
+    PurchaseItems, 
     loadingItems, 
     totalAmount, 
     onAddItem, 
@@ -26,12 +26,7 @@ const ItemsList = ({
         type: '' // 'confirm', 'success', 'discard'
     });
 
-    // Sync local items with prop changes
-    useEffect(() => {
-        setLocalItems(customerItems);
-        // Clear selection when items change
-        setSelectedItems([]);
-    }, [customerItems, refreshTrigger]);
+    
 
     // Format date to short format (Dec-11)
     const formatDateShort = (dateString) => {
@@ -97,7 +92,6 @@ const ItemsList = ({
         return selectedItems.reduce((sum, item) => sum + (parseFloat(item.total) || 0), 0);
     }, [selectedItems]);
 
-    // Calculate pending amount and items - FIXED CALCULATION
     const pendingStats = useMemo(() => {
         const pendingItems = localItems.filter(item => item.status !== 'paid');
         const pendingAmount = pendingItems.reduce((sum, item) => sum + (parseFloat(item.total) || 0), 0);
@@ -120,7 +114,8 @@ const ItemsList = ({
             pendingAmount,
             pendingItemsCount: pendingItems.length,
             pendingDays: pendingDates.size,
-            totalItems: localItems.length
+            totalItems: localItems.length,
+            paidItemsCount: localItems.filter(item => item.status === 'paid').length
         };
     }, [localItems]);
 
@@ -160,29 +155,48 @@ const ItemsList = ({
                !selectableItems.every(item => selectedItems.includes(item));
     };
 
-    // Handle pay amount with confirmation - FIXED TO UPDATE UI
-    const handlePayAmount = () => {
-        if (selectedItems.length === 0) {
-            showModal('warning', 'No Items Selected', 'Please select items to make a payment.');
-            return;
+    // In ItemsList.jsx - UPDATE the handlePayAmount function
+const handlePayAmount = () => {
+    if (selectedItems.length === 0) {
+        showModal('warning', 'No Items Selected', 'Please select items to make a payment.');
+        return;
+    }
+    
+    const payableItems = selectedItems.filter(item => item.status !== 'paid');
+    
+    if (payableItems.length === 0) {
+        showModal('info', 'Items Already Paid', 'Selected items are already paid.');
+        return;
+    }
+    
+    showModal('confirm', 'Confirm Payment', 
+        `Are you sure you want to process payment for ${payableItems.length} items totaling ₹${selectedTotal.toFixed(2)}?`,
+        () => {
+            // Clear selection immediately when payment is confirmed
+            setSelectedItems([]);
+            // Pass the actual item objects, not just IDs
+            onPayAmount(payableItems, selectedTotal);
         }
-        
-        const payableItems = selectedItems.filter(item => item.status !== 'paid');
-        
-        if (payableItems.length === 0) {
-            showModal('info', 'Items Already Paid', 'Selected items are already paid.');
-            return;
-        }
-        
-        showModal('confirm', 'Confirm Payment', 
-            `Are you sure you want to process payment for ${payableItems.length} items totaling ₹${selectedTotal.toFixed(2)}?`,
-            () => {
-                onPayAmount(payableItems, selectedTotal);
-                // Clear selection after payment
-                setSelectedItems([]);
-            }
-        );
-    };
+    );
+};
+
+// In ItemsList.jsx, ensure the component properly receives updated items
+useEffect(() => {
+    console.log("ItemsList: Received PurchaseItems update", PurchaseItems.length);
+    setLocalItems(PurchaseItems);
+    // Clear selection when items change
+    setSelectedItems([]);
+}, [PurchaseItems, refreshTrigger]); // Add refreshTrigger dependency
+
+// In ItemsList.jsx - ADD debug logging
+useEffect(() => {
+    console.log("ItemsList Debug:", {
+        totalItems: localItems.length,
+        selectedItems: selectedItems.length,
+        selectedTotal: selectedTotal,
+        refreshTrigger: refreshTrigger
+    });
+}, [localItems, selectedItems, selectedTotal, refreshTrigger]);
 
     // Handle create bill with confirmation
     const handleCreateBill = () => {
@@ -585,75 +599,85 @@ const ItemsList = ({
                                                 </tr>
                                             </thead>
                                             <tbody>
-                                                {items.map((item, index) => (
-                                                    <tr 
-                                                        key={item.id} 
-                                                        style={{
-                                                            background: item.status === 'paid' 
-                                                                ? "rgba(34, 197, 94, 0.15)" 
-                                                                : index % 2 === 0
-                                                                    ? "rgba(30, 41, 59, 0.7)"
-                                                                    : "rgba(51, 65, 85, 0.7)",
-                                                            opacity: item.status === 'paid' ? 0.8 : 1,
-                                                            textDecoration: item.status === 'paid' ? 'line-through' : 'none'
-                                                        }}
-                                                        className={item.status === 'paid' ? 'text-muted' : ''}
-                                                    >
-                                                        <td className="text-center fw-bold text-muted">
-                                                            {index + 1}
-                                                        </td>
-                                                        <td>
-                                                            <div>
-                                                                <div className={`fw-semibold mb-1 ${item.status === 'paid' ? 'text-success' : 'text-warning'}`}>
-                                                                    {item.subCategory}
-                                                                    {item.status === 'paid' && (
-                                                                        <i className="fas fa-check-circle ms-2 text-success" title="Paid"></i>
+                                                {items.map((item, index) => {
+                                                    const isPaid = item.status === 'paid';
+                                                    const isSelected = selectedItems.includes(item);
+                                                    
+                                                    return (
+                                                        <tr 
+                                                            key={item.id} 
+                                                            style={{
+                                                                background: isPaid 
+                                                                    ? "rgba(34, 197, 94, 0.2)" 
+                                                                    : index % 2 === 0
+                                                                        ? "rgba(30, 41, 59, 0.7)"
+                                                                        : "rgba(51, 65, 85, 0.7)",
+                                                                opacity: isPaid ? 0.7 : 1,
+                                                            }}
+                                                            className={isPaid ? 'text-success' : ''}
+                                                        >
+                                                            <td className="text-center fw-bold">
+                                                                {index + 1}
+                                                            </td>
+                                                            <td>
+                                                                <div>
+                                                                    <div className={`fw-semibold mb-1 ${isPaid ? 'text-success' : 'text-warning'}`}>
+                                                                        {item.subCategory}
+                                                                        {isPaid && (
+                                                                            <i className="fas fa-check-circle ms-2 text-success" title="Paid"></i>
+                                                                        )}
+                                                                    </div>
+                                                                    <div className="small text-muted">
+                                                                        {getTranslation(item.subCategory, 'en', true, item.mainCategory)}
+                                                                    </div>
+                                                                    <div className="small text-muted">
+                                                                        {getTranslation(item.subCategory, 'hi', true, item.mainCategory)}
+                                                                    </div>
+                                                                    {isPaid && item.paymentDate && (
+                                                                        <div className="small text-success">
+                                                                            <i className="fas fa-calendar-check me-1"></i>
+                                                                            Paid on: {new Date(item.paymentDate).toLocaleDateString()}
+                                                                        </div>
                                                                     )}
                                                                 </div>
-                                                                <div className="small text-muted">
-                                                                    {getTranslation(item.subCategory, 'en', true, item.mainCategory)}
-                                                                </div>
-                                                                <div className="small text-muted">
-                                                                    {getTranslation(item.subCategory, 'hi', true, item.mainCategory)}
-                                                                </div>
-                                                            </div>
-                                                        </td>
-                                                        <td className="text-center fw-bold">
-                                                            {item.quantity} KG
-                                                        </td>
-                                                        <td className="text-center text-success fw-bold">
-                                                            ₹{item.price}
-                                                        </td>
-                                                        <td className="text-center fw-bold">
-                                                            <span className={item.status === 'paid' ? 'text-success' : 'text-warning'}>
-                                                                ₹{item.total}
-                                                            </span>
-                                                        </td>
-                                                        <td className="text-center">
-                                                            <span className={`badge ${item.status === 'paid' ? 'bg-success' : 'bg-warning'}`}>
-                                                                {item.status === 'paid' ? (
-                                                                    <><i className="fas fa-check me-1"></i>Paid</>
-                                                                ) : (
-                                                                    <><i className="fas fa-clock me-1"></i>Pending</>
-                                                                )}
-                                                            </span>
-                                                        </td>
-                                                        <td className="text-center">
-                                                            <input
-                                                                type="checkbox"
-                                                                className="form-check-input"
-                                                                checked={selectedItems.includes(item)}
-                                                                onChange={(e) => handleItemSelect(item, e.target.checked)}
-                                                                disabled={item.status === 'paid'}
-                                                                style={{ 
-                                                                    transform: "scale(1.1)",
-                                                                    opacity: item.status === 'paid' ? 0.3 : 1,
-                                                                    cursor: item.status === 'paid' ? 'not-allowed' : 'pointer'
-                                                                }}
-                                                            />
-                                                        </td>
-                                                    </tr>
-                                                ))}
+                                                            </td>
+                                                            <td className="text-center fw-bold">
+                                                                {item.quantity} KG
+                                                            </td>
+                                                            <td className="text-center text-success fw-bold">
+                                                                ₹{item.price}
+                                                            </td>
+                                                            <td className="text-center fw-bold">
+                                                                <span className={isPaid ? 'text-success' : 'text-warning'}>
+                                                                    ₹{item.total}
+                                                                </span>
+                                                            </td>
+                                                            <td className="text-center">
+                                                                <span className={`badge ${isPaid ? 'bg-success' : 'bg-warning'}`}>
+                                                                    {isPaid ? (
+                                                                        <><i className="fas fa-check me-1"></i>Paid</>
+                                                                    ) : (
+                                                                        <><i className="fas fa-clock me-1"></i>Pending</>
+                                                                    )}
+                                                                </span>
+                                                            </td>
+                                                            <td className="text-center">
+                                                                <input
+                                                                    type="checkbox"
+                                                                    className="form-check-input"
+                                                                    checked={isSelected}
+                                                                    onChange={(e) => handleItemSelect(item, e.target.checked)}
+                                                                    disabled={isPaid}
+                                                                    style={{ 
+                                                                        transform: "scale(1.1)",
+                                                                        opacity: isPaid ? 0.3 : 1,
+                                                                        cursor: isPaid ? 'not-allowed' : 'pointer'
+                                                                    }}
+                                                                />
+                                                            </td>
+                                                        </tr>
+                                                    );
+                                                })}
                                                 
                                                 {/* Daily Total Row - ADDED */}
                                                 <tr style={{

@@ -271,48 +271,53 @@ export default function ShopForm({ customer, onClose, onSave, mode = "purchase",
     };
 
     // Save functions remain the same
-    const saveAsCustomerItem = async () => {
-        if (!customer || !customer.id) {
-            throw new Error("Customer information is missing");
-        }
+const saveAsCustomerItem = async () => {
+    if (!customer || !customer.id) {
+        throw new Error("Customer information is missing");
+    }
 
-        const payload = buildPayload(`customer_${Date.now()}`);
+    // Generate a proper unique ID
+    const itemId = `item_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    const payload = buildPayload(itemId);
 
-        // Ensure all customer fields have values
-        const customerData = {
-            customerId: customer.id,
-            customerName: customer.name || '',
-            customerPhone: customer.mobileNo || customer.mobile || '',
-            customerPlace: customer.place || '',
-            ...payload
-        };
-
-        const customerItemsRef = firebaseDB.child(pathUnderJenCeo(`Shop/CreditData/${customer.id}/CustomerItems`));
-        const newRef = customerItemsRef.push();
-        await newRef.set(customerData);
-
-        const balanceRef = firebaseDB.child(pathUnderJenCeo(`Shop/CreditData/${customer.id}/Balance`));
-        const snapshot = await balanceRef.once('value');
-        const currentBalance = parseFloat(snapshot.val()) || 0;
-        const newBalance = currentBalance + payload.total;
-        await balanceRef.set(newBalance);
-
-        const customerRef = firebaseDB.child(pathUnderJenCeo(`Shop/CreditData/${customer.id}`));
-        await customerRef.update({
-            customerName: customer.name || '',
-            customerPhone: customer.mobileNo || customer.mobile || '',
-            customerPlace: customer.place || '',
-            lastUpdated: new Date().toISOString(),
-            updatedBy: signedInName,
-            updatedById: signedInUid
-        });
-
-        return {
-            ...customerData,
-            newBalance,
-            saveLocation: `Shop/CreditData/${customer.id}/CustomerItems`
-        };
+    // Ensure all customer fields have values
+    const customerData = {
+        customerId: customer.id,
+        customerName: customer.name || '',
+        customerPhone: customer.mobileNo || customer.mobile || '',
+        customerPlace: customer.place || '',
+        ...payload
     };
+
+    const PurchaseItemsRef = firebaseDB.child(pathUnderJenCeo(`Shop/CreditData/${customer.id}/PurchaseItems`));
+    
+    // Use the generated ID instead of push()
+    await PurchaseItemsRef.child(itemId).set(customerData);
+
+    // Update balance
+    const balanceRef = firebaseDB.child(pathUnderJenCeo(`Shop/CreditData/${customer.id}/Balance`));
+    const snapshot = await balanceRef.once('value');
+    const currentBalance = parseFloat(snapshot.val()) || 0;
+    const newBalance = currentBalance + payload.total;
+    await balanceRef.set(newBalance);
+
+    // Update customer info
+    const customerRef = firebaseDB.child(pathUnderJenCeo(`Shop/CreditData/${customer.id}`));
+    await customerRef.update({
+        customerName: customer.name || '',
+        customerPhone: customer.mobileNo || customer.mobile || '',
+        customerPlace: customer.place || '',
+        lastUpdated: new Date().toISOString(),
+        updatedBy: signedInName,
+        updatedById: signedInUid
+    });
+
+    return {
+        ...customerData,
+        newBalance,
+        saveLocation: `Shop/CreditData/${customer.id}/PurchaseItems`
+    };
+};
 
     const saveAsRegularPurchase = async () => {
         const authObj = currentUser || user || dbUser || profile || {};
@@ -331,7 +336,7 @@ export default function ShopForm({ customer, onClose, onSave, mode = "purchase",
             return false;
         }
 
-        const ref = firebaseDB.child(pathUnderJenCeo(`Shop/CreditData/${customer.id}/CustomerItems`));
+        const ref = firebaseDB.child(pathUnderJenCeo(`Shop/CreditData/${customer.id}/PurchaseItems`));
         const snap = await ref.once("value");
         const raw = snap.val() || {};
 
@@ -392,7 +397,7 @@ export default function ShopForm({ customer, onClose, onSave, mode = "purchase",
         }
     };
 
-    const handleCustomerItemSubmit = async (e) => {
+    const handlePurchaseItemsubmit = async (e) => {
         e.preventDefault();
         if (!validateForm()) return;
 
@@ -684,7 +689,7 @@ export default function ShopForm({ customer, onClose, onSave, mode = "purchase",
                                             type="button"
                                             className="btn btn-success w-100 py-2"
                                             disabled={isSubmitting}
-                                            onClick={handleCustomerItemSubmit}
+                                            onClick={handlePurchaseItemsubmit}
                                         >
                                             {isSubmitting && submitMode === "customer" ? (
                                                 <><i className="fas fa-spinner fa-spin me-2"></i>Adding...</>

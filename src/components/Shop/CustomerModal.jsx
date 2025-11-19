@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import firebaseDB from '../../firebase';
 import ShopForm from '../Shop/ShopForm';
 import ShareBill from '../Shop/ShareBill';
@@ -8,7 +8,9 @@ import BasicDetails from './BasicDetails';
 
 const CustomerModal = ({ customer, onClose, onDataUpdate }) => {
     const [activeTab, setActiveTab] = useState("basic");
-    const [customerItems, setCustomerItems] = useState([]);
+    const [PurchaseItems, setPurchaseItems] = useState([]);
+    const [Payments, setPayments] = useState([]);
+    const [Balance, setBalance] = useState(null);
     const [loadingItems, setLoadingItems] = useState(false);
     const [showShopForm, setShowShopForm] = useState(false);
     const [showPaymentModal, setShowPaymentModal] = useState(false);
@@ -22,7 +24,6 @@ const CustomerModal = ({ customer, onClose, onDataUpdate }) => {
 
     // Enhanced language mapping for categories with English and Hindi
     const categoryTranslations = {
-        // Main Categories
         "1 కూరగాయలు": {
             en: "1 Vegetables",
             hi: "1 सब्जियाँ",
@@ -127,48 +128,100 @@ const CustomerModal = ({ customer, onClose, onDataUpdate }) => {
         },
     };
 
-    const loadCustomerItems = useCallback(async (customerId) => {
-        if (!customerId) {
-            return;
-        }
+   // UPDATED: Load all customer data including PurchaseItems, Payments, and Balance
+   const loadCustomerData = useCallback(async (customerId) => {
+    if (!customerId) {
+        console.error("No customer ID provided");
+        return;
+    }
 
-        setLoadingItems(true);
-        try {
-            const ref = firebaseDB.child(`Shop/CreditData/${customerId}/CustomerItems`);
-            const snapshot = await ref.once('value');
-            const itemsData = snapshot.val() || {};
+    setLoadingItems(true);
+    try {
+        console.log("Loading data for customer:", customerId);
+        
+        // Load PurchaseItems
+        const purchaseItemsPath = `Shop/CreditData/${customerId}/PurchaseItems`;
+        const purchaseItemsRef = firebaseDB.child(purchaseItemsPath);
+        const purchaseItemsSnapshot = await purchaseItemsRef.once('value');
+        const purchaseItemsData = purchaseItemsSnapshot.val() || {};
+        
+        // Convert object to array if needed
+        const itemsList = Object.entries(purchaseItemsData).map(([itemId, item]) => ({
+            id: itemId,
+            ...item,
+            status: item.status || 'pending',
+            total: item.total || '0',
+            price: item.price || '0',
+            quantity: item.quantity || '0'
+        }));
 
-            const itemsList = Object.entries(itemsData).map(([itemId, item]) => ({
-                id: itemId,
-                ...item
-            }));
+        // Sort by date descending (newest first)
+        itemsList.sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0));
+        setPurchaseItems(itemsList);
 
-            // Sort by date descending (newest first)
-            itemsList.sort((a, b) => new Date(b.date) - new Date(a.date));
+        // Load Payments
+        const paymentsPath = `Shop/CreditData/${customerId}/Payments`;
+        const paymentsRef = firebaseDB.child(paymentsPath);
+        const paymentsSnapshot = await paymentsRef.once('value');
+        const paymentsData = paymentsSnapshot.val() || {};
+        
+        // Convert object to array if needed
+        const paymentsList = Object.entries(paymentsData).map(([paymentId, payment]) => ({
+            id: paymentId,
+            ...payment
+        }));
 
-            setCustomerItems(itemsList);
-        } catch (error) {
-            setCustomerItems([]);
-            showError('Failed to load customer items. Please try again.');
-        } finally {
-            setLoadingItems(false);
-        }
-    }, []);
+        // Sort payments by date descending
+        paymentsList.sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0));
+        setPayments(paymentsList);
 
-    // Single useEffect to load items
+        // Load Balance
+        const balancePath = `Shop/CreditData/${customerId}/Balance`;
+        const balanceRef = firebaseDB.child(balancePath);
+        const balanceSnapshot = await balanceRef.once('value');
+        const balanceData = balanceSnapshot.val() || null;
+        setBalance(balanceData);
+
+        console.log("Customer data loaded:", {
+            itemsCount: itemsList.length,
+            paymentsCount: paymentsList.length,
+            balanceData: balanceData
+        });
+        
+    } catch (error) {
+        console.error('Error loading customer data:', error);
+        setPurchaseItems([]);
+        setPayments([]);
+        setBalance(null);
+        showError('Failed to load customer data. Please try again.');
+    } finally {
+        setLoadingItems(false);
+    }
+}, []);
+
+    // Single useEffect to load all customer data
     useEffect(() => {
         if (customer && customer.id) {
-            loadCustomerItems(customer.id);
+            console.log("CustomerModal: Loading data for customer:", customer.id, customer.name);
+            loadCustomerData(customer.id);
+        } else {
+            console.log("CustomerModal: No customer ID available");
+            setPurchaseItems([]);
+            setPayments([]);
+            setBalance(null);
         }
-    }, [customer, refreshTrigger, loadCustomerItems]);
+    }, [customer, refreshTrigger, loadCustomerData]);
 
-    // Calculate total (only pending items)
-    const totalAmount = customerItems.reduce((sum, item) => {
-        if (item.status !== 'paid') {
-            return sum + (parseFloat(item.total) || 0);
-        }
-        return sum;
-    }, 0);
+    // Calculate total (only pending items) - UPDATED
+    const totalAmount = useMemo(() => {
+        console.log("Calculating total amount from items:", PurchaseItems);
+        return PurchaseItems.reduce((sum, item) => {
+            if (item.status !== "paid") {
+                return sum + (parseFloat(item.total) || 0);
+            }
+            return sum;
+        }, 0);
+    }, [PurchaseItems]);
 
     // Function to get translation
     const getTranslation = (text, language, isSubCategory = false, mainCategory = '') => {
@@ -223,27 +276,40 @@ const CustomerModal = ({ customer, onClose, onDataUpdate }) => {
         setShowPaymentModal(true);
     };
 
-    const handlePaymentSuccess = async (paymentInfo, isFullPayment) => {
-        try {
-            // Force refresh of items and customer data
-            setRefreshTrigger(prev => prev + 1);
-            if (onDataUpdate) onDataUpdate();
+    // UPDATED: Handle payment success with proper data structure
+// In CustomerModal.jsx - UPDATE the handlePaymentSuccess function
+const handlePaymentSuccess = async (paymentInfo, isFullPayment) => {
+    try {
+        console.log('Payment successful, updating UI...', { 
+            isFullPayment, 
+            selectedItemsCount: selectedItemsForPayment.length,
+            paymentInfo 
+        });
 
-            // Clear selection and close modal
-            setSelectedItemsForPayment([]);
-            setShowPaymentModal(false);
+        // Clear selection immediately
+        setSelectedItemsForPayment([]);
+        setSelectedTotalForPayment(0);
+        setShowPaymentModal(false);
 
-            // Show success message
-            if (isFullPayment) {
-                showSuccess('Payment recorded successfully! All items marked as paid.');
-            } else {
-                showSuccess('Partial payment recorded successfully!');
-            }
+        // Force refresh from Firebase to get updated data
+        console.log('Refreshing data from Firebase...');
+        await loadCustomerData(customer.id);
+        setRefreshTrigger(prev => prev + 1);
+        
+        if (onDataUpdate) onDataUpdate();
 
-        } catch (error) {
-            showError('Error updating payment status. Please refresh the page.');
+        // Show success message
+        if (isFullPayment) {
+            showSuccess(`Payment of ₹${paymentInfo.amount.toFixed(2)} recorded successfully! ${paymentInfo.items.length} items marked as paid.`);
+        } else {
+            showSuccess(`Partial payment of ₹${paymentInfo.amount.toFixed(2)} recorded successfully!`);
         }
-    };
+
+    } catch (error) {
+        console.error('Error handling payment success:', error);
+        showError('Error updating payment status. Please refresh the page.');
+    }
+};
 
     // Handle create bill
     const handleCreateBill = (items, total) => {
@@ -252,6 +318,7 @@ const CustomerModal = ({ customer, onClose, onDataUpdate }) => {
 
     // Handle refresh
     const handleRefresh = () => {
+        console.log("Refreshing customer data...");
         setRefreshTrigger(prev => prev + 1);
         if (onDataUpdate) onDataUpdate();
     };
@@ -271,13 +338,27 @@ const CustomerModal = ({ customer, onClose, onDataUpdate }) => {
     // Force refresh all data
     const forceRefreshAllData = useCallback(async () => {
         if (customer?.id) {
-            await loadCustomerItems(customer.id);
+            console.log("Force refreshing data for customer:", customer.id);
+            await loadCustomerData(customer.id);
             setRefreshTrigger(prev => prev + 1);
             if (onDataUpdate) onDataUpdate();
         }
-    }, [customer, loadCustomerItems, onDataUpdate]);
+    }, [customer, loadCustomerData, onDataUpdate]);
 
     const characterInfo = getCharacterInfo(customer?.character);
+
+    // Debug: Log current state
+    useEffect(() => {
+        console.log("CustomerModal State:", {
+            customer: customer?.id,
+            itemsCount: PurchaseItems.length,
+            paymentsCount: Payments.length,
+            balanceData: Balance,
+            totalAmount,
+            loadingItems,
+            activeTab
+        });
+    }, [customer, PurchaseItems, Payments, Balance, totalAmount, loadingItems, activeTab]);
 
     return (
         <>
@@ -317,7 +398,16 @@ const CustomerModal = ({ customer, onClose, onDataUpdate }) => {
                                         </span>
                                         <span className="badge bg-info">
                                             <i className="fas fa-shopping-cart me-1"></i>
-                                            Items: {customerItems.length}
+                                            Items: {PurchaseItems.length}
+                                        </span>
+                                        <span className="badge bg-success">
+                                            <i className="fas fa-credit-card me-1"></i>
+                                            Payments: {Payments.length}
+                                        </span>
+                                        {/* Debug badge */}
+                                        <span className="badge bg-secondary" title="Debug info">
+                                            <i className="fas fa-bug me-1"></i>
+                                            {loadingItems ? 'Loading...' : `${PurchaseItems.length} items`}
                                         </span>
                                     </div>
                                 </div>
@@ -373,14 +463,16 @@ const CustomerModal = ({ customer, onClose, onDataUpdate }) => {
                                 <BasicDetails
                                     customer={customer}
                                     totalAmount={totalAmount}
-                                    customerItems={customerItems}
+                                    PurchaseItems={PurchaseItems}
+                                    Payments={Payments}
+                                    Balance={Balance}
                                     refreshTrigger={refreshTrigger}
                                 />
                             )}
 
                             {activeTab === "items" && (
                                 <ItemsList
-                                    customerItems={customerItems}
+                                    PurchaseItems={PurchaseItems}
                                     loadingItems={loadingItems}
                                     totalAmount={totalAmount}
                                     onAddItem={handleAddItem}
@@ -398,8 +490,9 @@ const CustomerModal = ({ customer, onClose, onDataUpdate }) => {
                                 <div className="text-center py-5">
                                     <ShareBill
                                         customer={customer}
-                                        customerItems={customerItems}
+                                        PurchaseItems={PurchaseItems}
                                         totalAmount={totalAmount}
+                                        paymentHistory={Payments}
                                     />
                                 </div>
                             )}
@@ -445,6 +538,8 @@ const CustomerModal = ({ customer, onClose, onDataUpdate }) => {
                     selectedTotal={selectedTotalForPayment}
                     onPaymentSuccess={handlePaymentSuccess}
                     customerId={customer?.id}
+                    customerData={customer}
+                    PurchaseItems={PurchaseItems}
                 />
             )}
 

@@ -1,7 +1,7 @@
 // src/components/Customer/ShareBill.jsx
 import React, { useRef, useState, useMemo } from 'react';
 
-const ShareBill = ({ customer, customerItems, totalAmount, paymentHistory = [], selectedItems = [] }) => {
+const ShareBill = ({ customer, PurchaseItems, totalAmount, paymentHistory = [], selectedItems = [] }) => {
     const iframeRef = useRef(null);
     const [language, setLanguage] = useState('en'); // 'en', 'hi', or 'te'
 
@@ -55,10 +55,10 @@ const ShareBill = ({ customer, customerItems, totalAmount, paymentHistory = [], 
         return text;
     };
 
-    // Filter items for bill - use selectedItems if provided, otherwise all customerItems
+    // Filter items for bill - use selectedItems if provided, otherwise all PurchaseItems
     const billItems = useMemo(() => {
-        return selectedItems.length > 0 ? selectedItems : customerItems;
-    }, [selectedItems, customerItems]);
+        return selectedItems.length > 0 ? selectedItems : PurchaseItems;
+    }, [selectedItems, PurchaseItems]);
 
     // Calculate bill total
     const billTotal = useMemo(() => {
@@ -102,7 +102,7 @@ const ShareBill = ({ customer, customerItems, totalAmount, paymentHistory = [], 
             return item[key];
         }
 
-        // Handle nested data from /Shop/CreditData/key/CustomerItems/-key path
+        // Handle nested data from /Shop/CreditData/key/PurchaseItems/-key path
         if (item.data && item.data[key] !== undefined) {
             return item.data[key];
         }
@@ -666,7 +666,7 @@ const ShareBill = ({ customer, customerItems, totalAmount, paymentHistory = [], 
         if (iframeRef.current) {
             iframeRef.current.srcdoc = buildBillHTML();
         }
-    }, [customer, customerItems, totalAmount, paymentHistory, language, selectedItems]);
+    }, [customer, PurchaseItems, totalAmount, paymentHistory, language, selectedItems]);
 
     return (
         <div className="modal-card">

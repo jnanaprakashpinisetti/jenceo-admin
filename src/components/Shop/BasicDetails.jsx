@@ -1,7 +1,7 @@
 // src/components/Customer/BasicDetails.jsx
 import React, { useMemo } from 'react';
 
-const BasicDetails = ({ customer, totalAmount, paymentHistory, customerItems }) => {
+const BasicDetails = ({ customer, totalAmount, paymentHistory, PurchaseItems, Payments, Balance }) => {
     
     // Get character badge color and label
     const getCharacterInfo = (character) => {
@@ -15,76 +15,156 @@ const BasicDetails = ({ customer, totalAmount, paymentHistory, customerItems }) 
         }
     };
 
-    // Calculate financial summary from payment history and customer items
-    const financialSummary = useMemo(() => {
-        let totalPurchase = 0;
-        let totalPaid = 0;
-        let totalPending = 0;
-        let lastPaymentDate = 'N/A';
-        let paymentCount = 0;
+// UPDATED: Enhanced financialSummary using Balance data and PurchaseItems
+const financialSummary = useMemo(() => {
+    // Use Balance data if available (primary source)
+    if (Balance && Balance.totalPurchase !== undefined) {
+        console.log('Using Balance data for financial summary:', Balance);
+        return {
+            totalPurchase: parseFloat(Balance.totalPurchase) || 0,
+            totalPaid: parseFloat(Balance.totalPaid) || 0,
+            totalPending: parseFloat(Balance.totalPending) || 0,
+            lastPaymentDate: Balance.lastPaymentDate || 'N/A',
+            paymentCount: Payments?.length || 0
+        };
+    }
 
-        // Calculate from payment history if available
-        if (paymentHistory && paymentHistory.length > 0) {
-            paymentCount = paymentHistory.length;
-            totalPaid = paymentHistory.reduce((sum, payment) => sum + (parseFloat(payment.paidAmount) || 0), 0);
-            totalPurchase = paymentHistory.reduce((sum, payment) => sum + (parseFloat(payment.totalAmount) || 0), 0);
+    // Calculate from PurchaseItems and Payments as fallback
+    let totalPurchase = 0;
+    let totalPaid = 0;
+    
+    // Calculate from PurchaseItems
+    if (PurchaseItems && PurchaseItems.length > 0) {
+        PurchaseItems.forEach(item => {
+            const itemTotal = parseFloat(item.total) || 0;
+            totalPurchase += itemTotal;
             
-            // Find last payment date
-            const sortedPayments = [...paymentHistory].sort((a, b) => 
-                new Date(b.paymentDate) - new Date(a.paymentDate)
-            );
-            if (sortedPayments.length > 0) {
-                lastPaymentDate = new Date(sortedPayments[0].paymentDate).toLocaleDateString();
+            if (item.status === 'paid') {
+                totalPaid += itemTotal;
             }
-        } 
-        // Calculate from customer items if no payment history
-        else if (customerItems && customerItems.length > 0) {
-            totalPurchase = customerItems.reduce((sum, item) => sum + (parseFloat(item.total) || 0), 0);
+        });
+    }
+    
+    // Also add payments from Payments collection
+    if (Payments && Payments.length > 0) {
+        Payments.forEach(payment => {
+            totalPaid += parseFloat(payment.amount) || 0;
+        });
+    }
+
+    const totalPending = Math.max(0, totalPurchase - totalPaid);
+
+    // Find last payment date
+    let lastPaymentDate = 'N/A';
+    if (Payments && Payments.length > 0) {
+        const sortedPayments = [...Payments].sort((a, b) => new Date(b.date) - new Date(a.date));
+        lastPaymentDate = sortedPayments[0]?.date || 'N/A';
+    }
+
+    return {
+        totalPurchase,
+        totalPaid,
+        totalPending,
+        lastPaymentDate,
+        paymentCount: Payments?.length || 0
+    };
+}, [PurchaseItems, Balance, Payments]);
+
+// Handle payment row click to show details
+const handlePaymentRowClick = (payment) => {
+    console.log('Payment details:', payment);
+    
+    // Create a modal or alert with payment details
+    const paymentDetails = `
+Payment Details:
+- Date: ${new Date(payment.date).toLocaleDateString()}
+- Amount: ₹${parseFloat(payment.amount).toFixed(2)}
+- Method: ${payment.method}
+- Items Paid: ${payment.items?.length || 0}
+- Notes: ${payment.notes || 'No notes'}
+- Paid By: ${payment.createdBy?.name || 'Unknown'}
+
+Items Included:
+${payment.items?.map(item => `  • ${item.name}: ₹${item.amount}`).join('\n') || 'No items listed'}
+    `;
+    
+    alert(paymentDetails);
+    // Alternatively, you can create a proper modal component
+};
+
+    // UPDATED: Monthly payments calculation using Payments data
+    const monthlyPayments = useMemo(() => {
+        // Use Payments data for accurate monthly breakdown
+        if (Payments && Payments.length > 0) {
+            const monthlyData = {};
             
-            const paidItems = customerItems.filter(item => item.status === 'paid');
-            const pendingItems = customerItems.filter(item => item.status !== 'paid');
-            
-            totalPaid = paidItems.reduce((sum, item) => sum + (parseFloat(item.total) || 0), 0);
-            paymentCount = paidItems.length;
-            
-            // Find last payment date from paid items
-            if (paidItems.length > 0) {
-                const sortedPaidItems = [...paidItems].sort((a, b) => 
-                    new Date(b.lastPaymentDate || b.date) - new Date(a.lastPaymentDate || a.date)
-                );
-                lastPaymentDate = new Date(sortedPaidItems[0].lastPaymentDate || sortedPaidItems[0].date).toLocaleDateString();
+            Payments.forEach(payment => {
+                if (!payment.date) return;
+                
+                const date = new Date(payment.date);
+                const monthYear = `${date.getFullYear()}-${(date.getMonth() + 1).toString().padStart(2, '0')}`;
+                const monthName = date.toLocaleDateString('en-US', { year: 'numeric', month: 'long' });
+                
+                if (!monthlyData[monthYear]) {
+                    monthlyData[monthYear] = {
+                        month: monthName,
+                        totalAmount: 0,
+                        paidAmount: 0,
+                        balance: 0,
+                        payments: []
+                    };
+                }
+                
+                const paymentAmount = parseFloat(payment.amount) || 0;
+                monthlyData[monthYear].paidAmount += paymentAmount;
+                monthlyData[monthYear].payments.push(payment);
+            });
+
+            // Calculate total amounts for each month from PurchaseItems
+            if (PurchaseItems && PurchaseItems.length > 0) {
+                PurchaseItems.forEach(item => {
+                    if (!item.date) return;
+                    
+                    const date = new Date(item.date);
+                    const monthYear = `${date.getFullYear()}-${(date.getMonth() + 1).toString().padStart(2, '0')}`;
+                    
+                    if (monthlyData[monthYear]) {
+                        const itemAmount = parseFloat(item.total) || 0;
+                        monthlyData[monthYear].totalAmount += itemAmount;
+                    }
+                });
             }
-        } 
-        // Use totalAmount as fallback
-        else {
-            totalPurchase = parseFloat(totalAmount) || 0;
-            totalPaid = 0;
-            paymentCount = 0;
+
+            // Calculate balance for each month
+            Object.keys(monthlyData).forEach(monthKey => {
+                monthlyData[monthKey].balance = monthlyData[monthKey].totalAmount - monthlyData[monthKey].paidAmount;
+            });
+
+            const monthlyArray = Object.values(monthlyData);
+            
+            // Sort by date descending
+            monthlyArray.sort((a, b) => {
+                const dateA = new Date(a.payments[0]?.date || 0);
+                const dateB = new Date(b.payments[0]?.date || 0);
+                return dateB - dateA;
+            });
+
+            return monthlyArray;
         }
 
-        totalPending = totalPurchase - totalPaid;
-
-        return {
-            totalPurchase,
-            totalPaid,
-            totalPending,
-            lastPaymentDate,
-            paymentCount
-        };
-    }, [paymentHistory, customerItems, totalAmount]);
-
-    // Group payment history by month - FIXED VERSION
-    const monthlyPayments = useMemo(() => {
-        if (!paymentHistory || paymentHistory.length === 0) {
+        // Fallback to old calculation if no Payments data
+        if (!PurchaseItems || PurchaseItems.length === 0) {
             return [];
         }
 
         const monthlyData = {};
         
-        paymentHistory.forEach(payment => {
-            if (!payment.paymentDate) return;
+        // Process paid items from PurchaseItems
+        PurchaseItems.filter(item => item.status === 'paid').forEach(item => {
+            if (!item.paymentDate && !item.date) return;
             
-            const date = new Date(payment.paymentDate);
+            const paymentDate = item.paymentDate || item.date;
+            const date = new Date(paymentDate);
             const monthYear = `${date.getFullYear()}-${(date.getMonth() + 1).toString().padStart(2, '0')}`;
             const monthName = date.toLocaleDateString('en-US', { year: 'numeric', month: 'long' });
             
@@ -98,31 +178,35 @@ const BasicDetails = ({ customer, totalAmount, paymentHistory, customerItems }) 
                 };
             }
             
-            monthlyData[monthYear].totalAmount += parseFloat(payment.totalAmount) || 0;
-            monthlyData[monthYear].paidAmount += parseFloat(payment.paidAmount) || 0;
+            const itemAmount = parseFloat(item.total) || 0;
+            monthlyData[monthYear].totalAmount += itemAmount;
+            monthlyData[monthYear].paidAmount += itemAmount;
             monthlyData[monthYear].balance = monthlyData[monthYear].totalAmount - monthlyData[monthYear].paidAmount;
-            monthlyData[monthYear].payments.push(payment);
+            monthlyData[monthYear].payments.push({
+                ...item,
+                paymentDate: paymentDate
+            });
         });
 
         const monthlyArray = Object.values(monthlyData);
         
         // Sort by date descending
         monthlyArray.sort((a, b) => {
-            const dateA = new Date(a.payments[0].paymentDate);
-            const dateB = new Date(b.payments[0].paymentDate);
+            const dateA = new Date(a.payments[0]?.paymentDate || 0);
+            const dateB = new Date(b.payments[0]?.paymentDate || 0);
             return dateB - dateA;
         });
 
         return monthlyArray;
-    }, [paymentHistory]);
+    }, [PurchaseItems, Payments]);
 
-    // Calculate total purchases count from customer items
+    // Calculate total purchases count from purchase items
     const totalPurchasesCount = useMemo(() => {
-        if (customerItems && customerItems.length > 0) {
-            return customerItems.length;
+        if (PurchaseItems && PurchaseItems.length > 0) {
+            return PurchaseItems.length;
         }
         return customer?.totalPurchases || 0;
-    }, [customerItems, customer]);
+    }, [PurchaseItems, customer]);
 
     const characterInfo = getCharacterInfo(customer?.character);
 
@@ -347,80 +431,90 @@ const BasicDetails = ({ customer, totalAmount, paymentHistory, customerItems }) 
             </div>
 
             {/* Monthly Payment History */}
-            <div className="col-12">
-                <div className="card border-0 shadow-lg" style={{
-                    background: "linear-gradient(135deg, rgba(30, 41, 59, 0.8) 0%, rgba(15, 23, 42, 0.8) 100%)",
-                    borderRadius: "15px",
-                    border: "1px solid rgba(99, 102, 241, 0.3)"
-                }}>
-                    <div className="card-header border-0" style={{
-                        background: "linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%)",
-                        borderRadius: "15px 15px 0 0"
-                    }}>
-                        <h6 className="text-white mb-0 fw-bold">
-                            <i className="fas fa-history me-2"></i>
-                            Monthly Payment History
-                        </h6>
-                    </div>
-                    <div className="card-body">
-                        {monthlyPayments.length === 0 ? (
-                            <div className="text-center py-4 text-muted">
-                                <i className="fas fa-receipt fa-2x mb-3"></i>
-                                <p>No payment history available</p>
-                            </div>
-                        ) : (
-                            <div className="table-responsive">
-                                <table className="table table-dark table-hover align-middle mb-0">
-                                    <thead>
-                                        <tr style={{
-                                            background: "linear-gradient(135deg, #0369a1 0%, #0c4a6e 100%)"
-                                        }}>
-                                            <th className="text-center">Month</th>
-                                            <th className="text-center">Total Amount</th>
-                                            <th className="text-center">Paid Amount</th>
-                                            <th className="text-center">Balance</th>
-                                            <th className="text-center">Status</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        {monthlyPayments.map((monthData, index) => (
-                                            <tr key={index} style={{
-                                                background: index % 2 === 0
-                                                    ? "rgba(30, 41, 59, 0.7)"
-                                                    : "rgba(51, 65, 85, 0.7)"
-                                            }}>
-                                                <td className="text-center fw-bold text-warning">
-                                                    {monthData.month}
-                                                </td>
-                                                <td className="text-center text-light fw-bold">
-                                                    ₹{monthData.totalAmount.toFixed(2)}
-                                                </td>
-                                                <td className="text-center text-success fw-bold">
-                                                    ₹{monthData.paidAmount.toFixed(2)}
-                                                </td>
-                                                <td className="text-center fw-bold">
-                                                    <span className={monthData.balance === 0 ? 'text-success' : 'text-warning'}>
-                                                        ₹{monthData.balance.toFixed(2)}
-                                                    </span>
-                                                </td>
-                                                <td className="text-center">
-                                                    <span className={`badge ${monthData.balance === 0 ? 'bg-success' : 'bg-warning'}`}>
-                                                        {monthData.balance === 0 ? (
-                                                            <><i className="fas fa-check me-1"></i>Paid</>
-                                                        ) : (
-                                                            <><i className="fas fa-clock me-1"></i>Pending</>
-                                                        )}
-                                                    </span>
-                                                </td>
-                                            </tr>
-                                        ))}
-                                    </tbody>
-                                </table>
-                            </div>
-                        )}
-                    </div>
+<div className="col-12">
+    <div className="card border-0 shadow-lg" style={{
+        background: "linear-gradient(135deg, rgba(30, 41, 59, 0.8) 0%, rgba(15, 23, 42, 0.8) 100%)",
+        borderRadius: "15px",
+        border: "1px solid rgba(99, 102, 241, 0.3)"
+    }}>
+        <div className="card-header border-0" style={{
+            background: "linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%)",
+            borderRadius: "15px 15px 0 0"
+        }}>
+            <h6 className="text-white mb-0 fw-bold">
+                <i className="fas fa-history me-2"></i>
+                Payment History
+            </h6>
+        </div>
+        <div className="card-body p-0">
+            {Payments && Payments.length === 0 ? (
+                <div className="text-center py-4 text-muted">
+                    <i className="fas fa-receipt fa-2x mb-3"></i>
+                    <p>No payment history available</p>
                 </div>
-            </div>
+            ) : (
+                <div className="table-responsive">
+                    <table className="table table-dark table-hover align-middle mb-0">
+                        <thead>
+                            <tr style={{
+                                background: "linear-gradient(135deg, #0369a1 0%, #0c4a6e 100%)"
+                            }}>
+                                <th className="text-center">Date</th>
+                                <th className="text-center">Payment ID</th>
+                                <th className="text-center">Amount</th>
+                                <th className="text-center">Method</th>
+                                <th className="text-center">Items Paid</th>
+                                <th className="text-center">Notes</th>
+                                <th className="text-center">Status</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {Payments && Payments.sort((a, b) => new Date(b.date) - new Date(a.date)).map((payment, index) => (
+                                <tr 
+                                    key={payment.id} 
+                                    style={{
+                                        background: index % 2 === 0
+                                            ? "rgba(30, 41, 59, 0.7)"
+                                            : "rgba(51, 65, 85, 0.7)",
+                                        cursor: "pointer"
+                                    }}
+                                    onClick={() => handlePaymentRowClick(payment)}
+                                >
+                                    <td className="text-center fw-bold text-info">
+                                        {new Date(payment.date).toLocaleDateString()}
+                                    </td>
+                                    <td className="text-center text-light small">
+                                        {payment.id}
+                                    </td>
+                                    <td className="text-center text-success fw-bold fs-6">
+                                        ₹{parseFloat(payment.amount).toFixed(2)}
+                                    </td>
+                                    <td className="text-center">
+                                        <span className="badge bg-primary text-capitalize">
+                                            {payment.method}
+                                        </span>
+                                    </td>
+                                    <td className="text-center text-warning fw-bold">
+                                        {payment.items?.length || 0}
+                                    </td>
+                                    <td className="text-center text-light">
+                                        {payment.notes || 'No notes'}
+                                    </td>
+                                    <td className="text-center">
+                                        <span className="badge bg-success">
+                                            <i className="fas fa-check me-1"></i>
+                                            Completed
+                                        </span>
+                                    </td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
+            )}
+        </div>
+    </div>
+</div>
 
             {/* Additional Details */}
             <div className="col-12">

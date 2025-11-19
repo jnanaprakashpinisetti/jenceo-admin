@@ -26,54 +26,129 @@ const CustomerList = () => {
         amountValue: ""
     });
 
-    // Load customers
-    useEffect(() => {
-        setLoading(true);
-        const ref = firebaseDB.child("Shop/CreditData");
+    // Debug function to check Firebase paths
+    const debugFirebasePaths = async () => {
+        try {
+            console.log("=== FIREBASE PATH DEBUG ===");
+            
+            // Test different paths
+            const pathsToTest = [
+                "Shop/CreditData",
+                "CreditData"
+            ];
+            
+            for (const path of pathsToTest) {
+                try {
+                    const ref = firebaseDB.child(path);
+                    const snapshot = await ref.once('value');
+                    console.log(`Path "${path}":`, snapshot.val());
+                } catch (error) {
+                    console.log(`Path "${path}" error:`, error.message);
+                }
+            }
+            
+            console.log("=== END DEBUG ===");
+        } catch (error) {
+            console.error("Debug error:", error);
+        }
+    };
 
-        const handler = (snap) => {
-            const raw = snap.val() || {};
-            const customersList = [];
+    // In Credits.jsx - UPDATE THE useEffect for loading customers
+useEffect(() => {
+    setLoading(true);
+    
+    // Use the correct path
+    const correctPath = "Shop/CreditData";
 
-            for (const [customerId, customerData] of Object.entries(raw)) {
+    const loadCustomers = async () => {
+        try {
+            console.log(`Loading from path: ${correctPath}`);
+            const ref = firebaseDB.child(correctPath);
+            const snapshot = await ref.once('value');
+            const raw = snapshot.val() || {};
+            
+            console.log(`Data from path "${correctPath}":`, raw);
+            
+            if (Object.keys(raw).length > 0) {
+                processCustomerData(raw);
+            } else {
+                setCustomers([]);
+                setFilteredCustomers([]);
+                setLoading(false);
+            }
+        } catch (error) {
+            console.log(`Path "${correctPath}" failed:`, error.message);
+            setCustomers([]);
+            setFilteredCustomers([]);
+            setLoading(false);
+        }
+    };
+
+    const processCustomerData = (raw) => {
+        const customersList = [];
+
+        console.log("Processing raw data:", raw);
+
+        for (const [customerId, customerData] of Object.entries(raw)) {
+            // Skip if customerData is null/undefined or if it's nested data structure
+            if (!customerData || typeof customerData !== 'object') {
+                continue;
+            }
+
+            // Check if this looks like a customer record (has name or idNo)
+            const hasCustomerFields = customerData.name || customerData.idNo;
+            const isNestedData = customerId === "PurchaseItems" || customerId === "Balance" || customerId === "Payments";
+            
+            if (hasCustomerFields && !isNestedData) {
                 // Calculate balance from customer items
                 const balance = calculateBalanceFromItems(customerData);
                 
                 customersList.push({
                     id: customerId,
-                    ...customerData,
-                    balance: balance
+                    name: customerData.name || 'Unnamed Customer',
+                    idNo: customerData.idNo || 'N/A',
+                    gender: customerData.gender || 'N/A',
+                    character: customerData.character || 'average',
+                    mobileNo: customerData.mobileNo || '',
+                    place: customerData.place || '',
+                    reminderDate: customerData.reminderDate || '',
+                    balance: balance,
+                    ...customerData
                 });
             }
+        }
 
-            setCustomers(customersList);
-            setFilteredCustomers(customersList);
-            setLoading(false);
-        };
+        console.log("Processed customers list:", customersList);
+        
+        setCustomers(customersList);
+        setFilteredCustomers(customersList);
+        setLoading(false);
+    };
 
-        const errHandler = () => {
-            setCustomers([]);
-            setFilteredCustomers([]);
-            setLoading(false);
-        };
+    loadCustomers();
 
-        const cb = ref.on("value", handler, errHandler);
-        return () => ref.off("value", cb);
-    }, [refreshTrigger]);
+}, [refreshTrigger]);
 
     // Calculate balance from customer items
     const calculateBalanceFromItems = (customerData) => {
-        if (!customerData.CustomerItems) return 0;
+        if (!customerData) return 0;
         
-        const items = customerData.CustomerItems;
         let totalBalance = 0;
         
-        Object.values(items).forEach(item => {
-            // Only include pending items in balance calculation
-            if (item.total && item.status !== 'paid') {
-                totalBalance += parseFloat(item.total) || 0;
-            }
-        });
+        // Check if PurchaseItems exists and has data
+        if (customerData.PurchaseItems && typeof customerData.PurchaseItems === 'object') {
+            const items = customerData.PurchaseItems;
+            
+            // Handle both array and object formats
+            const itemsArray = Array.isArray(items) ? items : Object.values(items);
+            
+            itemsArray.forEach(item => {
+                // Only include pending items in balance calculation
+                if (item && item.total && item.status !== 'paid') {
+                    totalBalance += parseFloat(item.total) || 0;
+                }
+            });
+        }
         
         return totalBalance;
     };
@@ -148,15 +223,29 @@ const CustomerList = () => {
     const handleDelete = (customer, e) => {
         e.stopPropagation();
         if (window.confirm(`Are you sure you want to delete customer ${customer.name}?`)) {
-            firebaseDB.child(`Shop/CreditData/${customer.id}`).remove()
-                .then(() => {
-                    setCustomers(prev => prev.filter(c => c.id !== customer.id));
-                    setRefreshTrigger(prev => prev + 1);
-                })
-                .catch(error => {
-                    console.error("Error deleting customer:", error);
-                    alert("Error deleting customer");
-                });
+            // Try different paths for deletion
+            const deletePaths = [
+                `Shop/CreditData/${customer.id}`,
+                `Shop/CreditData/${customer.id}`,
+                `CreditData/${customer.id}`
+            ];
+
+            const tryDelete = async () => {
+                for (const path of deletePaths) {
+                    try {
+                        await firebaseDB.child(path).remove();
+                        console.log(`Successfully deleted from path: ${path}`);
+                        setCustomers(prev => prev.filter(c => c.id !== customer.id));
+                        setRefreshTrigger(prev => prev + 1);
+                        return;
+                    } catch (error) {
+                        console.log(`Delete failed for path ${path}:`, error.message);
+                    }
+                }
+                alert("Error deleting customer from all paths");
+            };
+
+            tryDelete();
         }
     };
 
@@ -204,6 +293,34 @@ const CustomerList = () => {
 
     return (
         <div className="p-3 bg-dark border border-secondary rounded-3 border-opacity-25 mt-3">
+            {/* Debug Info */}
+            <div className="alert alert-info mb-3">
+                <h6>Debug Info:</h6>
+                <p>Total Customers: {customers.length}</p>
+                <p>Filtered Customers: {filteredCustomers.length}</p>
+                <p>Loading: {loading.toString()}</p>
+                <div className="d-flex gap-2 mt-2">
+                    <button 
+                        className="btn btn-sm btn-warning"
+                        onClick={() => console.log('Customers:', customers, 'Filtered:', filteredCustomers)}
+                    >
+                        Log Data to Console
+                    </button>
+                    <button 
+                        className="btn btn-sm btn-info"
+                        onClick={debugFirebasePaths}
+                    >
+                        Debug Firebase Paths
+                    </button>
+                    <button 
+                        className="btn btn-sm btn-success"
+                        onClick={refreshCustomerData}
+                    >
+                        Refresh Data
+                    </button>
+                </div>
+            </div>
+
             {/* Header */}
             <div className="d-flex justify-content-between align-items-center mb-4">
                 <h4 className="text-warning mb-0">
@@ -234,7 +351,7 @@ const CustomerList = () => {
                         Filters
                     </h6>
                 </div>
-                <div className="card-body bg-secondary bg-opacity-10 ">
+                <div className="card-body bg-secondary bg-opacity-10">
                     <div className="row g-3">
                         <div className="col-md-3">
                             <label className="form-label text-white small">Search</label>
@@ -303,7 +420,12 @@ const CustomerList = () => {
                         <i className="bi bi-users fa-3x"></i>
                     </div>
                     <h5 className="text-muted">No Customers Found</h5>
-                    <p className="text-muted">No customers match your search criteria.</p>
+                    <p className="text-muted">
+                        {customers.length === 0 
+                            ? "No customers found in database. Try adding a customer or check Firebase paths." 
+                            : "No customers match your search criteria."
+                        }
+                    </p>
                 </div>
             ) : (
                 <div className="table-responsive">
@@ -425,6 +547,18 @@ const CustomerList = () => {
                                                     <i className="bi bi-pencil"></i>
                                                 </button>
                                                 <button
+                                                    className="btn btn-sm btn-success px-2"
+                                                    onClick={(e) => handleAddItems(customer, e)}
+                                                    title="Add Items"
+                                                    style={{
+                                                        background: "linear-gradient(135deg, #10b981 0%, #059669 100%)",
+                                                        border: "none",
+                                                        borderRadius: "5px"
+                                                    }}
+                                                >
+                                                    <i className="bi bi-cart-plus"></i>
+                                                </button>
+                                                <button
                                                     className="btn btn-sm btn-danger px-2"
                                                     onClick={(e) => handleDelete(customer, e)}
                                                     title="Delete Customer"
@@ -464,6 +598,7 @@ const CustomerList = () => {
                         setShowShopForm(false);
                         refreshCustomerData();
                     }}
+                    mode="customer"
                 />
             )}
 

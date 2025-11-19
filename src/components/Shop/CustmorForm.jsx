@@ -38,24 +38,24 @@ const CustomerForm = ({ onSuccess, onCancel }) => {
 
     const generateDynamicId = async () => {
         try {
-            // Fetch existing customers from Customers path
-            const snapshot = await firebaseDB.child('Shop/ShopCustomers').once('value');
+            // Fetch existing customers from CreditData path (not ShopCustomers)
+            const snapshot = await firebaseDB.child('Shop/CreditData').once('value');
             const customers = snapshot.val() || {};
-
+    
             // Find the highest C- number
             let maxNumber = 0;
             Object.values(customers).forEach(customer => {
-                if (customer.idNo && customer.idNo.startsWith('C-')) {
+                if (customer && customer.idNo && customer.idNo.startsWith('C-')) {
                     const num = parseInt(customer.idNo.substring(2));
                     if (num > maxNumber) {
                         maxNumber = num;
                     }
                 }
             });
-
+    
             // Generate next ID (C-01, C-02, etc.)
             const nextId = `C-${String(maxNumber + 1).padStart(2, '0')}`;
-
+    
             setFormData(prev => ({
                 ...prev,
                 idNo: nextId

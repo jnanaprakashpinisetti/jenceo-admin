@@ -11,7 +11,8 @@ const ItemsList = ({
     onPayAmount,
     onCreateBill,
     onUpdateItemStatus,
-    refreshTrigger
+    refreshTrigger,
+    onShareBill // New prop for sharing bills
 }) => {
     const [selectedDate, setSelectedDate] = useState('');
     const [selectedItems, setSelectedItems] = useState([]);
@@ -33,6 +34,13 @@ const ItemsList = ({
         onConfirm: null,
         type: '' // 'confirm', 'success', 'discard'
     });
+
+    // Generate bill number
+    const generateBillNumber = (items = []) => {
+        const timestamp = new Date().getTime().toString().slice(-6);
+        const itemCount = items.length.toString().padStart(3, '0');
+        return `JC-BILL-${timestamp}-${itemCount}`;
+    };
 
     // Format date to short format (Dec-11)
     const formatDateShort = (dateString) => {
@@ -245,6 +253,38 @@ const ItemsList = ({
                 onPayAmount(payableItems, selectedTotal);
             }
         );
+    };
+
+    // Handle share bill for date group
+    const handleShareDateBill = (date) => {
+        const dateItems = itemsByDate[date] || [];
+        if (dateItems.length === 0) return;
+
+        const billNumber = generateBillNumber(dateItems);
+        if (onShareBill) {
+            onShareBill(dateItems, billNumber, `Bill for ${formatDateFull(date)}`);
+        }
+    };
+
+    // Handle share bill for individual item
+    const handleShareItemBill = (item) => {
+        const billNumber = generateBillNumber([item]);
+        if (onShareBill) {
+            onShareBill([item], billNumber, `Bill for ${item.subCategory}`);
+        }
+    };
+
+    // Handle share selected items bill
+    const handleShareSelectedBill = () => {
+        if (selectedItems.length === 0) {
+            showModal('warning', 'No Items Selected', 'Please select items to share bill.');
+            return;
+        }
+
+        const billNumber = generateBillNumber(selectedItems);
+        if (onShareBill) {
+            onShareBill(selectedItems, billNumber, 'Selected Items Bill');
+        }
     };
 
     // Update local items when PurchaseItems changes
@@ -616,6 +656,19 @@ const ItemsList = ({
                                         Create Bill
                                     </button>
                                     <button
+                                        className="btn btn-info btn-sm fw-bold"
+                                        onClick={handleShareSelectedBill}
+                                        style={{
+                                            background: "linear-gradient(135deg, #0ea5e9 0%, #0284c7 100%)",
+                                            border: "none",
+                                            borderRadius: "8px",
+                                            padding: "8px 16px"
+                                        }}
+                                    >
+                                        <i className="bi bi-share me-2"></i>
+                                        Share Bill
+                                    </button>
+                                    <button
                                         className="btn btn-outline-light btn-sm fw-bold"
                                         onClick={handleClearSelection}
                                         style={{
@@ -677,22 +730,35 @@ const ItemsList = ({
                                                     ₹{dateTotal.toFixed(2)}
                                                 </span>
                                             </div>
-                                            {pendingItemsCount > 0 && (
-                                                <div className="form-check form-check-inline m-0">
-                                                    <input
-                                                        type="checkbox"
-                                                        className="form-check-input"
-                                                        checked={isDateAllSelected(date)}
-                                                        ref={input => {
-                                                            if (input) {
-                                                                input.indeterminate = isDatePartiallySelected(date);
-                                                            }
-                                                        }}
-                                                        onChange={(e) => handleSelectAll(e.target.checked, date)}
-                                                        style={{ transform: "scale(1.1)" }}
-                                                    />
-                                                </div>
-                                            )}
+                                            <div className="d-flex align-items-center gap-2">
+                                                <button
+                                                    className="btn btn-outline-light btn-sm"
+                                                    onClick={() => handleShareDateBill(date)}
+                                                    title="Share Bill for this date"
+                                                    style={{
+                                                        borderRadius: "6px",
+                                                        padding: "4px 8px"
+                                                    }}
+                                                >
+                                                    <i className="bi bi-share text-info"></i>
+                                                </button>
+                                                {pendingItemsCount > 0 && (
+                                                    <div className="form-check form-check-inline m-0">
+                                                        <input
+                                                            type="checkbox"
+                                                            className="form-check-input"
+                                                            checked={isDateAllSelected(date)}
+                                                            ref={input => {
+                                                                if (input) {
+                                                                    input.indeterminate = isDatePartiallySelected(date);
+                                                                }
+                                                            }}
+                                                            onChange={(e) => handleSelectAll(e.target.checked, date)}
+                                                            style={{ transform: "scale(1.1)" }}
+                                                        />
+                                                    </div>
+                                                )}
+                                            </div>
                                         </div>
 
                                         {/* Items Table */}
@@ -712,6 +778,7 @@ const ItemsList = ({
                                                             <th className="text-center" style={{ width: '120px' }}>Total</th>
                                                             <th className="text-center" style={{ width: '100px' }}>Status</th>
                                                             <th className="text-center" style={{ width: '60px' }}>Select</th>
+                                                            <th className="text-center" style={{ width: '50px' }}>Share</th>
                                                         </tr>
                                                     </thead>
                                                     <tbody>
@@ -744,7 +811,7 @@ const ItemsList = ({
                                                                                 )}
                                                                             </div>
                                                                             <div className="small text-muted">
-                                                                                {getTranslation(item.subCategory, 'en', true, item.mainCategory)} /   {getTranslation(item.subCategory, 'hi', true, item.mainCategory)}
+                                                                                {getTranslation(item.subCategory, 'en', true, item.mainCategory)} / {getTranslation(item.subCategory, 'hi', true, item.mainCategory)}
                                                                             </div>
 
                                                                             {isPaid && item.paymentDate && (
@@ -789,6 +856,21 @@ const ItemsList = ({
                                                                             }}
                                                                         />
                                                                     </td>
+                                                                    <td className="text-center">
+                                                                        <button
+                                                                            className="btn btn-outline-info btn-sm"
+                                                                            onClick={() => handleShareItemBill(item)}
+                                                                            title="Share this item bill"
+                                                                            style={{
+                                                                                borderRadius: "6px",
+                                                                                padding: "2px 6px",
+                                                                                border: "1px solid #0dcaf0"
+                                                                            }}
+                                                                            disabled={isPaid}
+                                                                        >
+                                                                            <i className="bi bi-share fa-xs"></i>
+                                                                        </button>
+                                                                    </td>
                                                                 </tr>
                                                             );
                                                         })}
@@ -817,6 +899,9 @@ const ItemsList = ({
                                                                 <span className="text-muted small">
                                                                     {pendingAmount > 0 ? `Pending: ₹${pendingAmount.toFixed(2)}` : 'Clear'}
                                                                 </span>
+                                                            </td>
+                                                            <td className="text-center">
+                                                                {/* Empty cell for share column */}
                                                             </td>
                                                         </tr>
                                                     </tbody>
@@ -933,6 +1018,7 @@ const ItemsList = ({
                                                 <th className="text-center">Price</th>
                                                 <th className="text-center">Total</th>
                                                 <th className="text-center">Paid Date</th>
+                                                <th className="text-center">Share</th>
                                             </tr>
                                         </thead>
                                         <tbody>
@@ -976,6 +1062,20 @@ const ItemsList = ({
                                                         <td className="text-center text-success">
                                                             {item.paymentDate ? formatDateShort(item.paymentDate) : 'N/A'}
                                                         </td>
+                                                        <td className="text-center">
+                                                            <button
+                                                                className="btn btn-outline-info btn-sm"
+                                                                onClick={() => handleShareItemBill(item)}
+                                                                title="Share this item bill"
+                                                                style={{
+                                                                    borderRadius: "6px",
+                                                                    padding: "2px 6px",
+                                                                    border: "1px solid #0dcaf0"
+                                                                }}
+                                                            >
+                                                                <i className="bi bi-share fa-xs"></i>
+                                                            </button>
+                                                        </td>
                                                     </tr>
                                                 );
                                             })}
@@ -984,27 +1084,14 @@ const ItemsList = ({
                                 </div>
 
                                 {/* Pagination */}
-                                <div className="card-footer border-0 d-flex justify-content-between align-items-center">
-                                    <div className="text-light small">
+                                <div className="card-footer border-0 d-flex justify-content-center align-items-center">
+                                    <div className="text-warning small">
                                         Showing {paginatedOldItems.length} of {filteredOldItems.length} items
                                     </div>
                                     <div className="d-flex gap-2 align-items-center border-0">
-                                        <select
-                                            className="form-select form-select-sm w-auto"
-                                            value={oldItemsPerPage}
-                                            onChange={(e) => {
-                                                setOldItemsPerPage(Number(e.target.value));
-                                                setOldItemsPage(1);
-                                            }}
-                                        >
-                                            <option value={5}>5 per page</option>
-                                            <option value={10}>10 per page</option>
-                                            <option value={20}>20 per page</option>
-                                            <option value={50}>50 per page</option>
-                                        </select>
-                                        <div className="btn-group w-auto bg-none border-0">
+                                        <div className="btn-group">
                                             <button
-                                                className="btn btn-outline-light bg-none"
+                                                className="btn btn-outline-light btn-sm"
                                                 onClick={() => setOldItemsPage(prev => Math.max(1, prev - 1))}
                                                 disabled={oldItemsPage === 1}
                                             >
@@ -1021,6 +1108,19 @@ const ItemsList = ({
                                                 <i className="bi bi-chevron-right"></i>
                                             </button>
                                         </div>
+                                        <select
+                                            className="form-select form-select-sm w-auto"
+                                            value={oldItemsPerPage}
+                                            onChange={(e) => {
+                                                setOldItemsPerPage(Number(e.target.value));
+                                                setOldItemsPage(1);
+                                            }}
+                                        >
+                                            <option value={5}>5 per page</option>
+                                            <option value={10}>10 per page</option>
+                                            <option value={20}>20 per page</option>
+                                            <option value={50}>50 per page</option>
+                                        </select>
                                     </div>
                                 </div>
                             </>

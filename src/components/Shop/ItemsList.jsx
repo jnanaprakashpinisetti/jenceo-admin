@@ -1,10 +1,10 @@
 import React, { useState, useMemo, useEffect } from 'react';
 
-const ItemsList = ({ 
-    PurchaseItems, 
-    loadingItems, 
-    totalAmount, 
-    onAddItem, 
+const ItemsList = ({
+    PurchaseItems,
+    loadingItems,
+    totalAmount,
+    onAddItem,
     onRefresh,
     categoryTranslations,
     getTranslation,
@@ -26,7 +26,7 @@ const ItemsList = ({
         type: '' // 'confirm', 'success', 'discard'
     });
 
-    
+
 
     // Format date to short format (Dec-11)
     const formatDateShort = (dateString) => {
@@ -46,9 +46,9 @@ const ItemsList = ({
         try {
             const date = new Date(dateString);
             if (isNaN(date.getTime())) return 'Invalid Date';
-            return date.toLocaleDateString('en-US', { 
-                year: 'numeric', 
-                month: 'long', 
+            return date.toLocaleDateString('en-US', {
+                year: 'numeric',
+                month: 'long',
                 day: 'numeric',
                 weekday: 'short'
             });
@@ -62,11 +62,11 @@ const ItemsList = ({
         const grouped = {};
         localItems.forEach(item => {
             if (!item.date) return;
-            
+
             try {
                 const date = new Date(item.date);
                 if (isNaN(date.getTime())) return;
-                
+
                 const dateKey = date.toISOString().split('T')[0];
                 if (!grouped[dateKey]) {
                     grouped[dateKey] = [];
@@ -95,7 +95,7 @@ const ItemsList = ({
     const pendingStats = useMemo(() => {
         const pendingItems = localItems.filter(item => item.status !== 'paid');
         const pendingAmount = pendingItems.reduce((sum, item) => sum + (parseFloat(item.total) || 0), 0);
-        
+
         const pendingDates = new Set();
         pendingItems.forEach(item => {
             if (item.date) {
@@ -109,7 +109,7 @@ const ItemsList = ({
                 }
             }
         });
-        
+
         return {
             pendingAmount,
             pendingItemsCount: pendingItems.length,
@@ -123,8 +123,8 @@ const ItemsList = ({
     const handleSelectAll = (checked, date) => {
         const dateItems = itemsByDate[date] || [];
         const selectableItems = dateItems.filter(item => item.status !== 'paid');
-        
-        const updatedSelectedItems = checked 
+
+        const updatedSelectedItems = checked
             ? [...selectedItems, ...selectableItems.filter(item => !selectedItems.includes(item))]
             : selectedItems.filter(item => !dateItems.includes(item));
         setSelectedItems(updatedSelectedItems);
@@ -133,7 +133,7 @@ const ItemsList = ({
     // Handle individual item selection
     const handleItemSelect = (item, checked) => {
         if (item.status === 'paid') return;
-        
+
         const updatedSelectedItems = checked
             ? [...selectedItems, item]
             : selectedItems.filter(selected => selected.id !== item.id);
@@ -151,52 +151,52 @@ const ItemsList = ({
     const isDatePartiallySelected = (date) => {
         const dateItems = itemsByDate[date] || [];
         const selectableItems = dateItems.filter(item => item.status !== 'paid');
-        return selectableItems.some(item => selectedItems.includes(item)) && 
-               !selectableItems.every(item => selectedItems.includes(item));
+        return selectableItems.some(item => selectedItems.includes(item)) &&
+            !selectableItems.every(item => selectedItems.includes(item));
     };
 
     // In ItemsList.jsx - UPDATE the handlePayAmount function
-const handlePayAmount = () => {
-    if (selectedItems.length === 0) {
-        showModal('warning', 'No Items Selected', 'Please select items to make a payment.');
-        return;
-    }
-    
-    const payableItems = selectedItems.filter(item => item.status !== 'paid');
-    
-    if (payableItems.length === 0) {
-        showModal('info', 'Items Already Paid', 'Selected items are already paid.');
-        return;
-    }
-    
-    showModal('confirm', 'Confirm Payment', 
-        `Are you sure you want to process payment for ${payableItems.length} items totaling ₹${selectedTotal.toFixed(2)}?`,
-        () => {
-            // Clear selection immediately when payment is confirmed
-            setSelectedItems([]);
-            // Pass the actual item objects, not just IDs
-            onPayAmount(payableItems, selectedTotal);
+    const handlePayAmount = () => {
+        if (selectedItems.length === 0) {
+            showModal('warning', 'No Items Selected', 'Please select items to make a payment.');
+            return;
         }
-    );
-};
 
-// In ItemsList.jsx, ensure the component properly receives updated items
-useEffect(() => {
-    console.log("ItemsList: Received PurchaseItems update", PurchaseItems.length);
-    setLocalItems(PurchaseItems);
-    // Clear selection when items change
-    setSelectedItems([]);
-}, [PurchaseItems, refreshTrigger]); // Add refreshTrigger dependency
+        const payableItems = selectedItems.filter(item => item.status !== 'paid');
 
-// In ItemsList.jsx - ADD debug logging
-useEffect(() => {
-    console.log("ItemsList Debug:", {
-        totalItems: localItems.length,
-        selectedItems: selectedItems.length,
-        selectedTotal: selectedTotal,
-        refreshTrigger: refreshTrigger
-    });
-}, [localItems, selectedItems, selectedTotal, refreshTrigger]);
+        if (payableItems.length === 0) {
+            showModal('info', 'Items Already Paid', 'Selected items are already paid.');
+            return;
+        }
+
+        showModal('confirm', 'Confirm Payment',
+            `Are you sure you want to process payment for ${payableItems.length} items totaling ₹${selectedTotal.toFixed(2)}?`,
+            () => {
+                // Clear selection immediately when payment is confirmed
+                setSelectedItems([]);
+                // Pass the actual item objects, not just IDs
+                onPayAmount(payableItems, selectedTotal);
+            }
+        );
+    };
+
+    // In ItemsList.jsx, ensure the component properly receives updated items
+    useEffect(() => {
+        console.log("ItemsList: Received PurchaseItems update", PurchaseItems.length);
+        setLocalItems(PurchaseItems);
+        // Clear selection when items change
+        setSelectedItems([]);
+    }, [PurchaseItems, refreshTrigger]); // Add refreshTrigger dependency
+
+    // In ItemsList.jsx - ADD debug logging
+    useEffect(() => {
+        console.log("ItemsList Debug:", {
+            totalItems: localItems.length,
+            selectedItems: selectedItems.length,
+            selectedTotal: selectedTotal,
+            refreshTrigger: refreshTrigger
+        });
+    }, [localItems, selectedItems, selectedTotal, refreshTrigger]);
 
     // Handle create bill with confirmation
     const handleCreateBill = () => {
@@ -204,8 +204,8 @@ useEffect(() => {
             showModal('warning', 'No Items Selected', 'Please select items to create a bill.');
             return;
         }
-        
-        showModal('confirm', 'Create Bill', 
+
+        showModal('confirm', 'Create Bill',
             `Create bill for ${selectedItems.length} items totaling ₹${selectedTotal.toFixed(2)}?`,
             () => onCreateBill(selectedItems, selectedTotal)
         );
@@ -214,8 +214,8 @@ useEffect(() => {
     // Handle clear selection with confirmation
     const handleClearSelection = () => {
         if (selectedItems.length === 0) return;
-        
-        showModal('discard', 'Clear Selection', 
+
+        showModal('discard', 'Clear Selection',
             `Are you sure you want to clear ${selectedItems.length} selected items?`,
             () => setSelectedItems([])
         );
@@ -238,7 +238,7 @@ useEffect(() => {
             onConfirm,
             type
         });
-        
+
         switch (type) {
             case 'confirm':
                 setShowConfirmModal(true);
@@ -526,7 +526,7 @@ useEffect(() => {
                         const pendingItemsCount = pendingItems.length;
                         const paidItems = items.filter(item => item.status === 'paid').length;
                         const pendingAmount = pendingItems.reduce((sum, item) => sum + (parseFloat(item.total) || 0), 0);
-                        
+
                         return (
                             <div key={date} className="card border-0 shadow-sm" style={{
                                 background: "linear-gradient(135deg, rgba(30, 41, 59, 0.9) 0%, rgba(15, 23, 42, 0.9) 100%)",
@@ -602,13 +602,13 @@ useEffect(() => {
                                                 {items.map((item, index) => {
                                                     const isPaid = item.status === 'paid';
                                                     const isSelected = selectedItems.includes(item);
-                                                    
+
                                                     return (
-                                                        <tr 
-                                                            key={item.id} 
+                                                        <tr
+                                                            key={item.id}
                                                             style={{
-                                                                background: isPaid 
-                                                                    ? "rgba(34, 197, 94, 0.2)" 
+                                                                background: isPaid
+                                                                    ? "rgba(34, 197, 94, 0.2)"
                                                                     : index % 2 === 0
                                                                         ? "rgba(30, 41, 59, 0.7)"
                                                                         : "rgba(51, 65, 85, 0.7)",
@@ -624,19 +624,17 @@ useEffect(() => {
                                                                     <div className={`fw-semibold mb-1 ${isPaid ? 'text-success' : 'text-warning'}`}>
                                                                         {item.subCategory}
                                                                         {isPaid && (
-                                                                            <i className="fas fa-check-circle ms-2 text-success" title="Paid"></i>
+                                                                            <i className="bi bi-check-circle ms-2 text-success" title="Paid"></i>
                                                                         )}
                                                                     </div>
                                                                     <div className="small text-muted">
-                                                                        {getTranslation(item.subCategory, 'en', true, item.mainCategory)}
+                                                                        {getTranslation(item.subCategory, 'en', true, item.mainCategory)} /   {getTranslation(item.subCategory, 'hi', true, item.mainCategory)}
                                                                     </div>
-                                                                    <div className="small text-muted">
-                                                                        {getTranslation(item.subCategory, 'hi', true, item.mainCategory)}
-                                                                    </div>
+
                                                                     {isPaid && item.paymentDate && (
                                                                         <div className="small text-success">
-                                                                            <i className="fas fa-calendar-check me-1"></i>
-                                                                            Paid on: {new Date(item.paymentDate).toLocaleDateString()}
+                                                                            <i className="bi bi-calendar-check me-1"></i>
+                                                                            Paid on :<span className='text-warning'> {new Date(item.paymentDate).toLocaleDateString()}</span>
                                                                         </div>
                                                                     )}
                                                                 </div>
@@ -668,7 +666,7 @@ useEffect(() => {
                                                                     checked={isSelected}
                                                                     onChange={(e) => handleItemSelect(item, e.target.checked)}
                                                                     disabled={isPaid}
-                                                                    style={{ 
+                                                                    style={{
                                                                         transform: "scale(1.1)",
                                                                         opacity: isPaid ? 0.3 : 1,
                                                                         cursor: isPaid ? 'not-allowed' : 'pointer'
@@ -678,7 +676,7 @@ useEffect(() => {
                                                         </tr>
                                                     );
                                                 })}
-                                                
+
                                                 {/* Daily Total Row - ADDED */}
                                                 <tr style={{
                                                     background: "linear-gradient(135deg, rgba(99, 102, 241, 0.3) 0%, rgba(168, 85, 247, 0.3) 100%)",

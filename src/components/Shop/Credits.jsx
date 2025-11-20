@@ -30,13 +30,13 @@ const CustomerList = () => {
     const debugFirebasePaths = async () => {
         try {
             console.log("=== FIREBASE PATH DEBUG ===");
-            
+
             // Test different paths
             const pathsToTest = [
                 "Shop/CreditData",
                 "CreditData"
             ];
-            
+
             for (const path of pathsToTest) {
                 try {
                     const ref = firebaseDB.child(path);
@@ -46,7 +46,7 @@ const CustomerList = () => {
                     console.log(`Path "${path}" error:`, error.message);
                 }
             }
-            
+
             console.log("=== END DEBUG ===");
         } catch (error) {
             console.error("Debug error:", error);
@@ -54,94 +54,94 @@ const CustomerList = () => {
     };
 
     // In Credits.jsx - UPDATE THE useEffect for loading customers
-useEffect(() => {
-    setLoading(true);
-    
-    // Use the correct path
-    const correctPath = "Shop/CreditData";
+    useEffect(() => {
+        setLoading(true);
 
-    const loadCustomers = async () => {
-        try {
-            console.log(`Loading from path: ${correctPath}`);
-            const ref = firebaseDB.child(correctPath);
-            const snapshot = await ref.once('value');
-            const raw = snapshot.val() || {};
-            
-            console.log(`Data from path "${correctPath}":`, raw);
-            
-            if (Object.keys(raw).length > 0) {
-                processCustomerData(raw);
-            } else {
+        // Use the correct path
+        const correctPath = "Shop/CreditData";
+
+        const loadCustomers = async () => {
+            try {
+                console.log(`Loading from path: ${correctPath}`);
+                const ref = firebaseDB.child(correctPath);
+                const snapshot = await ref.once('value');
+                const raw = snapshot.val() || {};
+
+                console.log(`Data from path "${correctPath}":`, raw);
+
+                if (Object.keys(raw).length > 0) {
+                    processCustomerData(raw);
+                } else {
+                    setCustomers([]);
+                    setFilteredCustomers([]);
+                    setLoading(false);
+                }
+            } catch (error) {
+                console.log(`Path "${correctPath}" failed:`, error.message);
                 setCustomers([]);
                 setFilteredCustomers([]);
                 setLoading(false);
             }
-        } catch (error) {
-            console.log(`Path "${correctPath}" failed:`, error.message);
-            setCustomers([]);
-            setFilteredCustomers([]);
+        };
+
+        const processCustomerData = (raw) => {
+            const customersList = [];
+
+            console.log("Processing raw data:", raw);
+
+            for (const [customerId, customerData] of Object.entries(raw)) {
+                // Skip if customerData is null/undefined or if it's nested data structure
+                if (!customerData || typeof customerData !== 'object') {
+                    continue;
+                }
+
+                // Check if this looks like a customer record (has name or idNo)
+                const hasCustomerFields = customerData.name || customerData.idNo;
+                const isNestedData = customerId === "PurchaseItems" || customerId === "Balance" || customerId === "Payments";
+
+                if (hasCustomerFields && !isNestedData) {
+                    // Calculate balance from customer items
+                    const balance = calculateBalanceFromItems(customerData);
+
+                    customersList.push({
+                        id: customerId,
+                        name: customerData.name || 'Unnamed Customer',
+                        idNo: customerData.idNo || 'N/A',
+                        gender: customerData.gender || 'N/A',
+                        character: customerData.character || 'average',
+                        mobileNo: customerData.mobileNo || '',
+                        place: customerData.place || '',
+                        reminderDate: customerData.reminderDate || '',
+                        balance: balance,
+                        ...customerData
+                    });
+                }
+            }
+
+            console.log("Processed customers list:", customersList);
+
+            setCustomers(customersList);
+            setFilteredCustomers(customersList);
             setLoading(false);
-        }
-    };
+        };
 
-    const processCustomerData = (raw) => {
-        const customersList = [];
+        loadCustomers();
 
-        console.log("Processing raw data:", raw);
-
-        for (const [customerId, customerData] of Object.entries(raw)) {
-            // Skip if customerData is null/undefined or if it's nested data structure
-            if (!customerData || typeof customerData !== 'object') {
-                continue;
-            }
-
-            // Check if this looks like a customer record (has name or idNo)
-            const hasCustomerFields = customerData.name || customerData.idNo;
-            const isNestedData = customerId === "PurchaseItems" || customerId === "Balance" || customerId === "Payments";
-            
-            if (hasCustomerFields && !isNestedData) {
-                // Calculate balance from customer items
-                const balance = calculateBalanceFromItems(customerData);
-                
-                customersList.push({
-                    id: customerId,
-                    name: customerData.name || 'Unnamed Customer',
-                    idNo: customerData.idNo || 'N/A',
-                    gender: customerData.gender || 'N/A',
-                    character: customerData.character || 'average',
-                    mobileNo: customerData.mobileNo || '',
-                    place: customerData.place || '',
-                    reminderDate: customerData.reminderDate || '',
-                    balance: balance,
-                    ...customerData
-                });
-            }
-        }
-
-        console.log("Processed customers list:", customersList);
-        
-        setCustomers(customersList);
-        setFilteredCustomers(customersList);
-        setLoading(false);
-    };
-
-    loadCustomers();
-
-}, [refreshTrigger]);
+    }, [refreshTrigger]);
 
     // Calculate balance from customer items
     const calculateBalanceFromItems = (customerData) => {
         if (!customerData) return 0;
-        
+
         let totalBalance = 0;
-        
+
         // Check if PurchaseItems exists and has data
         if (customerData.PurchaseItems && typeof customerData.PurchaseItems === 'object') {
             const items = customerData.PurchaseItems;
-            
+
             // Handle both array and object formats
             const itemsArray = Array.isArray(items) ? items : Object.values(items);
-            
+
             itemsArray.forEach(item => {
                 // Only include pending items in balance calculation
                 if (item && item.total && item.status !== 'paid') {
@@ -149,7 +149,7 @@ useEffect(() => {
                 }
             });
         }
-        
+
         return totalBalance;
     };
 
@@ -168,7 +168,7 @@ useEffect(() => {
         }
 
         if (filters.reminderDate) {
-            filtered = filtered.filter(customer => 
+            filtered = filtered.filter(customer =>
                 customer.reminderDate === filters.reminderDate
             );
         }
@@ -300,19 +300,19 @@ useEffect(() => {
                 <p>Filtered Customers: {filteredCustomers.length}</p>
                 <p>Loading: {loading.toString()}</p>
                 <div className="d-flex gap-2 mt-2">
-                    <button 
+                    <button
                         className="btn btn-sm btn-warning"
                         onClick={() => console.log('Customers:', customers, 'Filtered:', filteredCustomers)}
                     >
                         Log Data to Console
                     </button>
-                    <button 
+                    <button
                         className="btn btn-sm btn-info"
                         onClick={debugFirebasePaths}
                     >
                         Debug Firebase Paths
                     </button>
-                    <button 
+                    <button
                         className="btn btn-sm btn-success"
                         onClick={refreshCustomerData}
                     >
@@ -421,8 +421,8 @@ useEffect(() => {
                     </div>
                     <h5 className="text-muted">No Customers Found</h5>
                     <p className="text-muted">
-                        {customers.length === 0 
-                            ? "No customers found in database. Try adding a customer or check Firebase paths." 
+                        {customers.length === 0
+                            ? "No customers found in database. Try adding a customer or check Firebase paths."
                             : "No customers match your search criteria."
                         }
                     </p>
@@ -476,7 +476,7 @@ useEffect(() => {
                                         </td>
                                         <td>
                                             <span className={`badge ${customer.gender === 'male' ? 'bg-primary' :
-                                                    customer.gender === 'female' ? 'bg-pink' : 'bg-secondary'
+                                                customer.gender === 'female' ? 'bg-pink' : 'bg-secondary'
                                                 }`}>
                                                 {customer.gender ? customer.gender.charAt(0).toUpperCase() + customer.gender.slice(1) : "N/A"}
                                             </span>

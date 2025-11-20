@@ -19,14 +19,20 @@ const ItemsList = ({
     const [showConfirmModal, setShowConfirmModal] = useState(false);
     const [showSuccessModal, setShowSuccessModal] = useState(false);
     const [showDiscardModal, setShowDiscardModal] = useState(false);
+    const [activeTab, setActiveTab] = useState('current'); // 'current' or 'old'
+    const [oldItemsPage, setOldItemsPage] = useState(1);
+    const [oldItemsPerPage, setOldItemsPerPage] = useState(10);
+    const [oldItemsFilter, setOldItemsFilter] = useState({
+        date: '',
+        category: '',
+        search: ''
+    });
     const [modalConfig, setModalConfig] = useState({
         title: '',
         message: '',
         onConfirm: null,
         type: '' // 'confirm', 'success', 'discard'
     });
-
-
 
     // Format date to short format (Dec-11)
     const formatDateShort = (dateString) => {
@@ -57,10 +63,17 @@ const ItemsList = ({
         }
     };
 
-    // Group items by date
+    // Separate items into current (pending) and old (paid)
+    const { currentItems, oldItems } = useMemo(() => {
+        const current = localItems.filter(item => item.status !== 'paid');
+        const old = localItems.filter(item => item.status === 'paid');
+        return { currentItems: current, oldItems: old };
+    }, [localItems]);
+
+    // Group current items by date
     const itemsByDate = useMemo(() => {
         const grouped = {};
-        localItems.forEach(item => {
+        currentItems.forEach(item => {
             if (!item.date) return;
 
             try {
@@ -80,12 +93,66 @@ const ItemsList = ({
             }
         });
         return grouped;
-    }, [localItems]);
+    }, [currentItems]);
 
-    // Get all unique dates sorted (newest first)
+    // Get all unique dates sorted (newest first) for current items
     const availableDates = useMemo(() => {
         return Object.keys(itemsByDate).sort((a, b) => new Date(b) - new Date(a));
     }, [itemsByDate]);
+
+    // Filter and paginate old items
+    const filteredOldItems = useMemo(() => {
+        let filtered = [...oldItems];
+
+        // Apply date filter
+        if (oldItemsFilter.date) {
+            filtered = filtered.filter(item => {
+                const itemDate = new Date(item.date).toISOString().split('T')[0];
+                return itemDate === oldItemsFilter.date;
+            });
+        }
+
+        // Apply category filter
+        if (oldItemsFilter.category) {
+            filtered = filtered.filter(item =>
+                item.mainCategory === oldItemsFilter.category ||
+                item.subCategory === oldItemsFilter.category
+            );
+        }
+
+        // Apply search filter
+        if (oldItemsFilter.search) {
+            const searchTerm = oldItemsFilter.search.toLowerCase();
+            filtered = filtered.filter(item =>
+                item.subCategory?.toLowerCase().includes(searchTerm) ||
+                item.mainCategory?.toLowerCase().includes(searchTerm) ||
+                item.notes?.toLowerCase().includes(searchTerm)
+            );
+        }
+
+        return filtered.sort((a, b) => new Date(b.paymentDate || b.date) - new Date(a.paymentDate || a.date));
+    }, [oldItems, oldItemsFilter]);
+
+    // Paginate old items
+    const paginatedOldItems = useMemo(() => {
+        const startIndex = (oldItemsPage - 1) * oldItemsPerPage;
+        return filteredOldItems.slice(startIndex, startIndex + oldItemsPerPage);
+    }, [filteredOldItems, oldItemsPage, oldItemsPerPage]);
+
+    // Get unique dates and categories for old items filters
+    const oldItemsDates = useMemo(() => {
+        const dates = [...new Set(oldItems.map(item => new Date(item.date).toISOString().split('T')[0]))];
+        return dates.sort((a, b) => new Date(b) - new Date(a));
+    }, [oldItems]);
+
+    const oldItemsCategories = useMemo(() => {
+        const categories = new Set();
+        oldItems.forEach(item => {
+            if (item.mainCategory) categories.add(item.mainCategory);
+            if (item.subCategory) categories.add(item.subCategory);
+        });
+        return Array.from(categories).sort();
+    }, [oldItems]);
 
     // Calculate total for selected items
     const selectedTotal = useMemo(() => {
@@ -93,7 +160,7 @@ const ItemsList = ({
     }, [selectedItems]);
 
     const pendingStats = useMemo(() => {
-        const pendingItems = localItems.filter(item => item.status !== 'paid');
+        const pendingItems = currentItems;
         const pendingAmount = pendingItems.reduce((sum, item) => sum + (parseFloat(item.total) || 0), 0);
 
         const pendingDates = new Set();
@@ -115,9 +182,9 @@ const ItemsList = ({
             pendingItemsCount: pendingItems.length,
             pendingDays: pendingDates.size,
             totalItems: localItems.length,
-            paidItemsCount: localItems.filter(item => item.status === 'paid').length
+            paidItemsCount: oldItems.length
         };
-    }, [localItems]);
+    }, [currentItems, oldItems, localItems]);
 
     // Handle select all for current date
     const handleSelectAll = (checked, date) => {
@@ -155,7 +222,7 @@ const ItemsList = ({
             !selectableItems.every(item => selectedItems.includes(item));
     };
 
-    // In ItemsList.jsx - UPDATE the handlePayAmount function
+    // Handle pay amount - items will automatically move to old tab
     const handlePayAmount = () => {
         if (selectedItems.length === 0) {
             showModal('warning', 'No Items Selected', 'Please select items to make a payment.');
@@ -180,23 +247,25 @@ const ItemsList = ({
         );
     };
 
-    // In ItemsList.jsx, ensure the component properly receives updated items
+    // Update local items when PurchaseItems changes
     useEffect(() => {
         console.log("ItemsList: Received PurchaseItems update", PurchaseItems.length);
         setLocalItems(PurchaseItems);
         // Clear selection when items change
         setSelectedItems([]);
-    }, [PurchaseItems, refreshTrigger]); // Add refreshTrigger dependency
+    }, [PurchaseItems, refreshTrigger]);
 
-    // In ItemsList.jsx - ADD debug logging
+    // Debug logging
     useEffect(() => {
         console.log("ItemsList Debug:", {
             totalItems: localItems.length,
+            currentItems: currentItems.length,
+            oldItems: oldItems.length,
             selectedItems: selectedItems.length,
             selectedTotal: selectedTotal,
             refreshTrigger: refreshTrigger
         });
-    }, [localItems, selectedItems, selectedTotal, refreshTrigger]);
+    }, [localItems, currentItems, oldItems, selectedItems, selectedTotal, refreshTrigger]);
 
     // Handle create bill with confirmation
     const handleCreateBill = () => {
@@ -289,6 +358,16 @@ const ItemsList = ({
             default:
                 return { icon: 'question-circle', color: 'primary', btnColor: 'primary' };
         }
+    };
+
+    // Reset old items filters
+    const resetOldItemsFilters = () => {
+        setOldItemsFilter({
+            date: '',
+            category: '',
+            search: ''
+        });
+        setOldItemsPage(1);
     };
 
     if (loadingItems) {
@@ -390,7 +469,7 @@ const ItemsList = ({
                     Purchase History
                 </h5>
                 <div className="d-flex align-items-center gap-2">
-                    {selectedItems.length > 0 && (
+                    {selectedItems.length > 0 && activeTab === 'current' && (
                         <span className="badge bg-warning fs-6 me-2">
                             Selected: {selectedItems.length} items (₹{selectedTotal.toFixed(2)})
                         </span>
@@ -424,293 +503,531 @@ const ItemsList = ({
                 </div>
             </div>
 
-            {/* Date Tabs */}
+            {/* Tabs */}
             <div className="mb-4">
-                <div className="d-flex flex-wrap gap-2 align-items-center mb-3">
-                    <span className="text-light fw-bold me-2">Filter by Date:</span>
-                    <button
-                        className={`btn btn-sm ${selectedDate === '' ? 'btn-primary' : 'btn-outline-primary'}`}
-                        onClick={() => setSelectedDate('')}
-                        style={{
-                            borderRadius: "20px",
-                            padding: "6px 12px",
-                            fontWeight: "600"
-                        }}
-                    >
-                        All Dates
-                    </button>
-                    {availableDates.map(date => (
+                <ul className="nav nav-tabs nav-justified">
+                    <li className="nav-item">
                         <button
-                            key={date}
-                            className={`btn btn-sm ${selectedDate === date ? 'btn-primary' : 'btn-outline-primary'}`}
-                            onClick={() => setSelectedDate(date === selectedDate ? '' : date)}
+                            className={`nav-link ${activeTab === 'current' ? 'active text-warning fw-bold' : 'text-light'}`}
+                            onClick={() => setActiveTab('current')}
                             style={{
-                                borderRadius: "20px",
-                                padding: "6px 12px",
-                                fontWeight: "600"
+                                background: activeTab === 'current' ? 'rgba(30, 41, 59, 0.9)' : 'transparent',
+                                border: 'none',
+                                borderRadius: '8px 8px 0 0'
                             }}
                         >
-                            {formatDateShort(date)}
-                            {itemsByDate[date]?.some(item => item.status !== 'paid') && (
-                                <span className="badge bg-danger ms-1">!</span>
-                            )}
+                            <i className="fas fa-clock me-2"></i>
+                            Current Items ({currentItems.length})
                         </button>
-                    ))}
-                </div>
+                    </li>
+                    <li className="nav-item">
+                        <button
+                            className={`nav-link ${activeTab === 'old' ? 'active text-success fw-bold' : 'text-light'}`}
+                            onClick={() => setActiveTab('old')}
+                            style={{
+                                background: activeTab === 'old' ? 'rgba(30, 41, 59, 0.9)' : 'transparent',
+                                border: 'none',
+                                borderRadius: '8px 8px 0 0'
+                            }}
+                        >
+                            <i className="fas fa-history me-2"></i>
+                            Paid History ({oldItems.length})
+                        </button>
+                    </li>
+                </ul>
             </div>
 
-            {/* Action Buttons for Selected Items */}
-            {selectedItems.length > 0 && (
-                <div className="mb-4 p-3 rounded" style={{
-                    background: "linear-gradient(135deg, rgba(99, 102, 241, 0.2) 0%, rgba(168, 85, 247, 0.2) 100%)",
-                    border: "1px solid rgba(99, 102, 241, 0.3)"
+            {/* Current Items Tab */}
+            {activeTab === 'current' && (
+                <>
+                    {/* Date Tabs */}
+                    <div className="mb-4">
+                        <div className="d-flex flex-wrap gap-2 align-items-center mb-3">
+                            <span className="text-light fw-bold me-2">Filter by Date:</span>
+                            <button
+                                className={`btn btn-sm ${selectedDate === '' ? 'btn-primary' : 'btn-outline-primary'}`}
+                                onClick={() => setSelectedDate('')}
+                                style={{
+                                    borderRadius: "20px",
+                                    padding: "6px 12px",
+                                    fontWeight: "600"
+                                }}
+                            >
+                                All Dates
+                            </button>
+                            {availableDates.map(date => (
+                                <button
+                                    key={date}
+                                    className={`btn btn-sm ${selectedDate === date ? 'btn-primary' : 'btn-outline-primary'}`}
+                                    onClick={() => setSelectedDate(date === selectedDate ? '' : date)}
+                                    style={{
+                                        borderRadius: "20px",
+                                        padding: "6px 12px",
+                                        fontWeight: "600"
+                                    }}
+                                >
+                                    {formatDateShort(date)}
+                                    {itemsByDate[date]?.some(item => item.status !== 'paid') && (
+                                        <span className="badge bg-danger ms-1">!</span>
+                                    )}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+
+                    {/* Action Buttons for Selected Items */}
+                    {selectedItems.length > 0 && (
+                        <div className="mb-4 p-3 rounded" style={{
+                            background: "linear-gradient(135deg, rgba(99, 102, 241, 0.2) 0%, rgba(168, 85, 247, 0.2) 100%)",
+                            border: "1px solid rgba(99, 102, 241, 0.3)"
+                        }}>
+                            <div className="d-flex justify-content-between align-items-center">
+                                <div>
+                                    <span className="text-light fw-bold">
+                                        <i className="fas fa-check-circle me-2 text-success"></i>
+                                        {selectedItems.length} items selected • Total: ₹{selectedTotal.toFixed(2)}
+                                    </span>
+                                </div>
+                                <div className="d-flex gap-2">
+                                    <button
+                                        className="btn btn-success btn-sm fw-bold"
+                                        onClick={handlePayAmount}
+                                        style={{
+                                            background: "linear-gradient(135deg, #10b981 0%, #059669 100%)",
+                                            border: "none",
+                                            borderRadius: "8px",
+                                            padding: "8px 16px"
+                                        }}
+                                    >
+                                        <i className="fas fa-credit-card me-2"></i>
+                                        Pay Amount
+                                    </button>
+                                    <button
+                                        className="btn btn-warning btn-sm fw-bold"
+                                        onClick={handleCreateBill}
+                                        style={{
+                                            background: "linear-gradient(135deg, #f59e0b 0%, #d97706 100%)",
+                                            border: "none",
+                                            borderRadius: "8px",
+                                            padding: "8px 16px"
+                                        }}
+                                    >
+                                        <i className="fas fa-receipt me-2"></i>
+                                        Create Bill
+                                    </button>
+                                    <button
+                                        className="btn btn-outline-light btn-sm fw-bold"
+                                        onClick={handleClearSelection}
+                                        style={{
+                                            borderRadius: "8px",
+                                            padding: "8px 16px"
+                                        }}
+                                    >
+                                        <i className="fas fa-times me-2"></i>
+                                        Clear
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Items Tables by Date */}
+                    <div className="space-y-3">
+                        {Object.entries(itemsByDate)
+                            .filter(([date]) => !selectedDate || date === selectedDate)
+                            .sort(([dateA], [dateB]) => new Date(dateB) - new Date(dateA))
+                            .map(([date, items]) => {
+                                const dateTotal = items.reduce((sum, item) => sum + (parseFloat(item.total) || 0), 0);
+                                const pendingItems = items.filter(item => item.status !== 'paid');
+                                const pendingItemsCount = pendingItems.length;
+                                const paidItems = items.filter(item => item.status === 'paid').length;
+                                const pendingAmount = pendingItems.reduce((sum, item) => sum + (parseFloat(item.total) || 0), 0);
+
+                                return (
+                                    <div key={date} className="card border-0 shadow-sm" style={{
+                                        background: "linear-gradient(135deg, rgba(30, 41, 59, 0.9) 0%, rgba(15, 23, 42, 0.9) 100%)",
+                                        borderRadius: "12px",
+                                        border: "1px solid rgba(99, 102, 241, 0.2)"
+                                    }}>
+                                        {/* Date Header */}
+                                        <div className="card-header border-0 d-flex justify-content-between align-items-center py-3" style={{
+                                            background: "linear-gradient(135deg, #059669 0%, #047857 100%)",
+                                            borderRadius: "12px 12px 0 0"
+                                        }}>
+                                            <div className="d-flex align-items-center gap-3">
+                                                <h6 className="text-white mb-0 fw-bold">
+                                                    <i className="fas fa-calendar-day me-2"></i>
+                                                    {items[0]?.displayDate || 'Invalid Date'}
+                                                </h6>
+                                                <span className="badge bg-light text-dark">
+                                                    {items.length} items
+                                                </span>
+                                                {pendingItemsCount > 0 ? (
+                                                    <span className="badge bg-warning">
+                                                        <i className="fas fa-clock me-1"></i>
+                                                        {pendingItemsCount} pending
+                                                    </span>
+                                                ) : (
+                                                    <span className="badge bg-success">
+                                                        <i className="fas fa-check me-1"></i>
+                                                        All paid
+                                                    </span>
+                                                )}
+                                                <span className="badge bg-info">
+                                                    ₹{dateTotal.toFixed(2)}
+                                                </span>
+                                            </div>
+                                            {pendingItemsCount > 0 && (
+                                                <div className="form-check form-check-inline m-0">
+                                                    <input
+                                                        type="checkbox"
+                                                        className="form-check-input"
+                                                        checked={isDateAllSelected(date)}
+                                                        ref={input => {
+                                                            if (input) {
+                                                                input.indeterminate = isDatePartiallySelected(date);
+                                                            }
+                                                        }}
+                                                        onChange={(e) => handleSelectAll(e.target.checked, date)}
+                                                        style={{ transform: "scale(1.1)" }}
+                                                    />
+                                                </div>
+                                            )}
+                                        </div>
+
+                                        {/* Items Table */}
+                                        <div className="card-body p-0">
+                                            <div className="table-responsive">
+                                                <table className="table table-dark table-hover align-middle mb-0">
+                                                    <thead>
+                                                        <tr style={{
+                                                            background: "linear-gradient(135deg, #0369a1 0%, #0c4a6e 100%)"
+                                                        }}>
+                                                            <th className="text-center" style={{ width: '40px' }}>
+                                                                #
+                                                            </th>
+                                                            <th style={{ width: '200px' }}>Item Details</th>
+                                                            <th className="text-center" style={{ width: '100px' }}>Quantity</th>
+                                                            <th className="text-center" style={{ width: '100px' }}>Price</th>
+                                                            <th className="text-center" style={{ width: '120px' }}>Total</th>
+                                                            <th className="text-center" style={{ width: '100px' }}>Status</th>
+                                                            <th className="text-center" style={{ width: '60px' }}>Select</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody>
+                                                        {items.map((item, index) => {
+                                                            const isPaid = item.status === 'paid';
+                                                            const isSelected = selectedItems.includes(item);
+
+                                                            return (
+                                                                <tr
+                                                                    key={item.id}
+                                                                    style={{
+                                                                        background: isPaid
+                                                                            ? "rgba(34, 197, 94, 0.2)"
+                                                                            : index % 2 === 0
+                                                                                ? "rgba(30, 41, 59, 0.7)"
+                                                                                : "rgba(51, 65, 85, 0.7)",
+                                                                        opacity: isPaid ? 0.7 : 1,
+                                                                    }}
+                                                                    className={isPaid ? 'text-success' : ''}
+                                                                >
+                                                                    <td className="text-center fw-bold">
+                                                                        {index + 1}
+                                                                    </td>
+                                                                    <td>
+                                                                        <div>
+                                                                            <div className={`fw-semibold mb-1 ${isPaid ? 'text-success' : 'text-warning'}`}>
+                                                                                {item.subCategory}
+                                                                                {isPaid && (
+                                                                                    <i className="bi bi-check-circle ms-2 text-success" title="Paid"></i>
+                                                                                )}
+                                                                            </div>
+                                                                            <div className="small text-muted">
+                                                                                {getTranslation(item.subCategory, 'en', true, item.mainCategory)} /   {getTranslation(item.subCategory, 'hi', true, item.mainCategory)}
+                                                                            </div>
+
+                                                                            {isPaid && item.paymentDate && (
+                                                                                <div className="small text-success">
+                                                                                    <i className="bi bi-calendar-check me-1"></i>
+                                                                                    Paid on :<span className='text-warning'> {new Date(item.paymentDate).toLocaleDateString()}</span>
+                                                                                </div>
+                                                                            )}
+                                                                        </div>
+                                                                    </td>
+                                                                    <td className="text-center fw-bold">
+                                                                        {item.quantity} KG
+                                                                    </td>
+                                                                    <td className="text-center text-success fw-bold">
+                                                                        ₹{item.price}
+                                                                    </td>
+                                                                    <td className="text-center fw-bold">
+                                                                        <span className={isPaid ? 'text-success' : 'text-warning'}>
+                                                                            ₹{item.total}
+                                                                        </span>
+                                                                    </td>
+                                                                    <td className="text-center">
+                                                                        <span className={`badge ${isPaid ? 'bg-success' : 'bg-warning'}`}>
+                                                                            {isPaid ? (
+                                                                                <><i className="fas fa-check me-1"></i>Paid</>
+                                                                            ) : (
+                                                                                <><i className="fas fa-clock me-1"></i>Pending</>
+                                                                            )}
+                                                                        </span>
+                                                                    </td>
+                                                                    <td className="text-center">
+                                                                        <input
+                                                                            type="checkbox"
+                                                                            className="form-check-input"
+                                                                            checked={isSelected}
+                                                                            onChange={(e) => handleItemSelect(item, e.target.checked)}
+                                                                            disabled={isPaid}
+                                                                            style={{
+                                                                                transform: "scale(1.1)",
+                                                                                opacity: isPaid ? 0.3 : 1,
+                                                                                cursor: isPaid ? 'not-allowed' : 'pointer'
+                                                                            }}
+                                                                        />
+                                                                    </td>
+                                                                </tr>
+                                                            );
+                                                        })}
+
+                                                        {/* Daily Total Row */}
+                                                        <tr style={{
+                                                            background: "linear-gradient(135deg, rgba(99, 102, 241, 0.3) 0%, rgba(168, 85, 247, 0.3) 100%)",
+                                                            borderTop: "2px solid rgba(255,255,255,0.2)"
+                                                        }}>
+                                                            <td colSpan="4" className="text-end fw-bold text-white">
+                                                                Daily Total:
+                                                            </td>
+                                                            <td className="text-center fw-bold text-warning">
+                                                                ₹{dateTotal.toFixed(2)}
+                                                            </td>
+                                                            <td className="text-center">
+                                                                <span className="badge bg-info">
+                                                                    {pendingItemsCount > 0 ? (
+                                                                        <><i className="fas fa-clock me-1"></i>{pendingItemsCount} pending</>
+                                                                    ) : (
+                                                                        <><i className="fas fa-check me-1"></i>All paid</>
+                                                                    )}
+                                                                </span>
+                                                            </td>
+                                                            <td className="text-center">
+                                                                <span className="text-muted small">
+                                                                    {pendingAmount > 0 ? `Pending: ₹${pendingAmount.toFixed(2)}` : 'Clear'}
+                                                                </span>
+                                                            </td>
+                                                        </tr>
+                                                    </tbody>
+                                                </table>
+                                            </div>
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                    </div>
+                </>
+            )}
+
+            {/* Old Items Tab */}
+            {activeTab === 'old' && (
+                <div className="card border-0 shadow-sm" style={{
+                    background: "linear-gradient(135deg, rgba(30, 41, 59, 0.9) 0%, rgba(15, 23, 42, 0.9) 100%)",
+                    borderRadius: "12px",
+                    border: "1px solid rgba(34, 197, 94, 0.3)"
                 }}>
-                    <div className="d-flex justify-content-between align-items-center">
-                        <div>
-                            <span className="text-light fw-bold">
-                                <i className="fas fa-check-circle me-2 text-success"></i>
-                                {selectedItems.length} items selected • Total: ₹{selectedTotal.toFixed(2)}
-                            </span>
+                    <div className="card-header border-0 py-3" style={{
+                        background: "linear-gradient(135deg, #059669 0%, #047857 100%)",
+                        borderRadius: "12px 12px 0 0"
+                    }}>
+                        <h6 className="text-white mb-0 fw-bold">
+                            <i className="fas fa-history me-2"></i>
+                            Paid Items History ({oldItems.length} items)
+                        </h6>
+                    </div>
+
+                    {/* Filters */}
+                    <div className="card-body border-bottom">
+                        <div className="row g-3">
+                            <div className="col-md-3">
+                                <label className="form-label text-light small fw-bold">Date</label>
+                                <select
+                                    className="form-select form-select-sm"
+                                    value={oldItemsFilter.date}
+                                    onChange={(e) => {
+                                        setOldItemsFilter(prev => ({ ...prev, date: e.target.value }));
+                                        setOldItemsPage(1);
+                                    }}
+                                >
+                                    <option value="">All Dates</option>
+                                    {oldItemsDates.map(date => (
+                                        <option key={date} value={date}>
+                                            {formatDateFull(date)}
+                                        </option>
+                                    ))}
+                                </select>
+                            </div>
+                            <div className="col-md-3">
+                                <label className="form-label text-light small fw-bold">Category</label>
+                                <select
+                                    className="form-select form-select-sm"
+                                    value={oldItemsFilter.category}
+                                    onChange={(e) => {
+                                        setOldItemsFilter(prev => ({ ...prev, category: e.target.value }));
+                                        setOldItemsPage(1);
+                                    }}
+                                >
+                                    <option value="">All Categories</option>
+                                    {oldItemsCategories.map(category => (
+                                        <option key={category} value={category}>
+                                            {category}
+                                        </option>
+                                    ))}
+                                </select>
+                            </div>
+                            <div className="col-md-4">
+                                <label className="form-label text-light small fw-bold">Search</label>
+                                <input
+                                    type="text"
+                                    className="form-control form-control-sm"
+                                    placeholder="Search by item name or notes..."
+                                    value={oldItemsFilter.search}
+                                    onChange={(e) => {
+                                        setOldItemsFilter(prev => ({ ...prev, search: e.target.value }));
+                                        setOldItemsPage(1);
+                                    }}
+                                />
+                            </div>
+                            <div className="col-md-2 d-flex align-items-end">
+                                <button
+                                    className="btn btn-outline-light btn-sm w-100"
+                                    onClick={resetOldItemsFilters}
+                                >
+                                    <i className="fas fa-refresh me-1"></i>
+                                    Reset
+                                </button>
+                            </div>
                         </div>
-                        <div className="d-flex gap-2">
-                            <button
-                                className="btn btn-success btn-sm fw-bold"
-                                onClick={handlePayAmount}
-                                style={{
-                                    background: "linear-gradient(135deg, #10b981 0%, #059669 100%)",
-                                    border: "none",
-                                    borderRadius: "8px",
-                                    padding: "8px 16px"
-                                }}
-                            >
-                                <i className="fas fa-credit-card me-2"></i>
-                                Pay Amount
-                            </button>
-                            <button
-                                className="btn btn-warning btn-sm fw-bold"
-                                onClick={handleCreateBill}
-                                style={{
-                                    background: "linear-gradient(135deg, #f59e0b 0%, #d97706 100%)",
-                                    border: "none",
-                                    borderRadius: "8px",
-                                    padding: "8px 16px"
-                                }}
-                            >
-                                <i className="fas fa-receipt me-2"></i>
-                                Create Bill
-                            </button>
-                            <button
-                                className="btn btn-outline-light btn-sm fw-bold"
-                                onClick={handleClearSelection}
-                                style={{
-                                    borderRadius: "8px",
-                                    padding: "8px 16px"
-                                }}
-                            >
-                                <i className="fas fa-times me-2"></i>
-                                Clear
-                            </button>
-                        </div>
+                    </div>
+
+                    {/* Items Table */}
+                    <div className="card-body p-0">
+                        {filteredOldItems.length === 0 ? (
+                            <div className="text-center py-5 text-muted">
+                                <i className="fas fa-receipt fa-3x mb-3"></i>
+                                <p>No paid items found</p>
+                            </div>
+                        ) : (
+                            <>
+                                <div className="table-responsive">
+                                    <table className="table table-dark table-hover align-middle mb-0">
+                                        <thead>
+                                            <tr style={{
+                                                background: "linear-gradient(135deg, #059669 0%, #047857 100%)"
+                                            }}>
+                                                <th className="text-center">#</th>
+                                                <th>Item Details</th>
+                                                <th className="text-center">Date</th>
+                                                <th className="text-center">Quantity</th>
+                                                <th className="text-center">Price</th>
+                                                <th className="text-center">Total</th>
+                                                <th className="text-center">Paid Date</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {paginatedOldItems.map((item, index) => {
+                                                const globalIndex = (oldItemsPage - 1) * oldItemsPerPage + index + 1;
+                                                return (
+                                                    <tr
+                                                        key={item.id}
+                                                        style={{
+                                                            background: index % 2 === 0
+                                                                ? "rgba(34, 197, 94, 0.1)"
+                                                                : "rgba(34, 197, 94, 0.05)"
+                                                        }}
+                                                    >
+                                                        <td className="text-center fw-bold text-success">
+                                                            {globalIndex}
+                                                        </td>
+                                                        <td>
+                                                            <div>
+                                                                <div className="fw-semibold text-success mb-1">
+                                                                    {item.subCategory}
+                                                                    <i className="fas fa-check-circle ms-2 text-success" title="Paid"></i>
+                                                                </div>
+                                                                <div className="small text-muted">
+                                                                    {getTranslation(item.subCategory, 'en', true, item.mainCategory)} / {getTranslation(item.subCategory, 'hi', true, item.mainCategory)}
+                                                                </div>
+                                                            </div>
+                                                        </td>
+                                                        <td className="text-center text-light">
+                                                            {formatDateShort(item.date)}
+                                                        </td>
+                                                        <td className="text-center fw-bold text-info">
+                                                            {item.quantity} KG
+                                                        </td>
+                                                        <td className="text-center text-success fw-bold">
+                                                            ₹{item.price}
+                                                        </td>
+                                                        <td className="text-center fw-bold text-warning">
+                                                            ₹{item.total}
+                                                        </td>
+                                                        <td className="text-center text-success">
+                                                            {item.paymentDate ? formatDateShort(item.paymentDate) : 'N/A'}
+                                                        </td>
+                                                    </tr>
+                                                );
+                                            })}
+                                        </tbody>
+                                    </table>
+                                </div>
+
+                                {/* Pagination */}
+                                <div className="card-footer border-0 d-flex justify-content-between align-items-center">
+                                    <div className="text-light small">
+                                        Showing {paginatedOldItems.length} of {filteredOldItems.length} items
+                                    </div>
+                                    <div className="d-flex gap-2 align-items-center border-0">
+                                        <select
+                                            className="form-select form-select-sm w-auto"
+                                            value={oldItemsPerPage}
+                                            onChange={(e) => {
+                                                setOldItemsPerPage(Number(e.target.value));
+                                                setOldItemsPage(1);
+                                            }}
+                                        >
+                                            <option value={5}>5 per page</option>
+                                            <option value={10}>10 per page</option>
+                                            <option value={20}>20 per page</option>
+                                            <option value={50}>50 per page</option>
+                                        </select>
+                                        <div className="btn-group w-auto bg-none border-0">
+                                            <button
+                                                className="btn btn-outline-light bg-none"
+                                                onClick={() => setOldItemsPage(prev => Math.max(1, prev - 1))}
+                                                disabled={oldItemsPage === 1}
+                                            >
+                                                <i className="bi bi-chevron-left"></i>
+                                            </button>
+                                            <span className="btn btn-light btn-sm disabled">
+                                                Page {oldItemsPage} of {Math.ceil(filteredOldItems.length / oldItemsPerPage)}
+                                            </span>
+                                            <button
+                                                className="btn btn-outline-light btn-sm"
+                                                onClick={() => setOldItemsPage(prev => Math.min(Math.ceil(filteredOldItems.length / oldItemsPerPage), prev + 1))}
+                                                disabled={oldItemsPage >= Math.ceil(filteredOldItems.length / oldItemsPerPage)}
+                                            >
+                                                <i className="bi bi-chevron-right"></i>
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </>
+                        )}
                     </div>
                 </div>
             )}
-
-            {/* Items Tables by Date */}
-            <div className="space-y-3">
-                {Object.entries(itemsByDate)
-                    .filter(([date]) => !selectedDate || date === selectedDate)
-                    .sort(([dateA], [dateB]) => new Date(dateB) - new Date(dateA))
-                    .map(([date, items]) => {
-                        const dateTotal = items.reduce((sum, item) => sum + (parseFloat(item.total) || 0), 0);
-                        const pendingItems = items.filter(item => item.status !== 'paid');
-                        const pendingItemsCount = pendingItems.length;
-                        const paidItems = items.filter(item => item.status === 'paid').length;
-                        const pendingAmount = pendingItems.reduce((sum, item) => sum + (parseFloat(item.total) || 0), 0);
-
-                        return (
-                            <div key={date} className="card border-0 shadow-sm" style={{
-                                background: "linear-gradient(135deg, rgba(30, 41, 59, 0.9) 0%, rgba(15, 23, 42, 0.9) 100%)",
-                                borderRadius: "12px",
-                                border: "1px solid rgba(99, 102, 241, 0.2)"
-                            }}>
-                                {/* Date Header */}
-                                <div className="card-header border-0 d-flex justify-content-between align-items-center py-3" style={{
-                                    background: "linear-gradient(135deg, #059669 0%, #047857 100%)",
-                                    borderRadius: "12px 12px 0 0"
-                                }}>
-                                    <div className="d-flex align-items-center gap-3">
-                                        <h6 className="text-white mb-0 fw-bold">
-                                            <i className="fas fa-calendar-day me-2"></i>
-                                            {items[0]?.displayDate || 'Invalid Date'}
-                                        </h6>
-                                        <span className="badge bg-light text-dark">
-                                            {items.length} items
-                                        </span>
-                                        {pendingItemsCount > 0 ? (
-                                            <span className="badge bg-warning">
-                                                <i className="fas fa-clock me-1"></i>
-                                                {pendingItemsCount} pending
-                                            </span>
-                                        ) : (
-                                            <span className="badge bg-success">
-                                                <i className="fas fa-check me-1"></i>
-                                                All paid
-                                            </span>
-                                        )}
-                                        <span className="badge bg-info">
-                                            ₹{dateTotal.toFixed(2)}
-                                        </span>
-                                    </div>
-                                    {pendingItemsCount > 0 && (
-                                        <div className="form-check form-check-inline m-0">
-                                            <input
-                                                type="checkbox"
-                                                className="form-check-input"
-                                                checked={isDateAllSelected(date)}
-                                                ref={input => {
-                                                    if (input) {
-                                                        input.indeterminate = isDatePartiallySelected(date);
-                                                    }
-                                                }}
-                                                onChange={(e) => handleSelectAll(e.target.checked, date)}
-                                                style={{ transform: "scale(1.1)" }}
-                                            />
-                                        </div>
-                                    )}
-                                </div>
-
-                                {/* Items Table */}
-                                <div className="card-body p-0">
-                                    <div className="table-responsive">
-                                        <table className="table table-dark table-hover align-middle mb-0">
-                                            <thead>
-                                                <tr style={{
-                                                    background: "linear-gradient(135deg, #0369a1 0%, #0c4a6e 100%)"
-                                                }}>
-                                                    <th className="text-center" style={{ width: '40px' }}>
-                                                        #
-                                                    </th>
-                                                    <th style={{ width: '200px' }}>Item Details</th>
-                                                    <th className="text-center" style={{ width: '100px' }}>Quantity</th>
-                                                    <th className="text-center" style={{ width: '100px' }}>Price</th>
-                                                    <th className="text-center" style={{ width: '120px' }}>Total</th>
-                                                    <th className="text-center" style={{ width: '100px' }}>Status</th>
-                                                    <th className="text-center" style={{ width: '60px' }}>Select</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody>
-                                                {items.map((item, index) => {
-                                                    const isPaid = item.status === 'paid';
-                                                    const isSelected = selectedItems.includes(item);
-
-                                                    return (
-                                                        <tr
-                                                            key={item.id}
-                                                            style={{
-                                                                background: isPaid
-                                                                    ? "rgba(34, 197, 94, 0.2)"
-                                                                    : index % 2 === 0
-                                                                        ? "rgba(30, 41, 59, 0.7)"
-                                                                        : "rgba(51, 65, 85, 0.7)",
-                                                                opacity: isPaid ? 0.7 : 1,
-                                                            }}
-                                                            className={isPaid ? 'text-success' : ''}
-                                                        >
-                                                            <td className="text-center fw-bold">
-                                                                {index + 1}
-                                                            </td>
-                                                            <td>
-                                                                <div>
-                                                                    <div className={`fw-semibold mb-1 ${isPaid ? 'text-success' : 'text-warning'}`}>
-                                                                        {item.subCategory}
-                                                                        {isPaid && (
-                                                                            <i className="bi bi-check-circle ms-2 text-success" title="Paid"></i>
-                                                                        )}
-                                                                    </div>
-                                                                    <div className="small text-muted">
-                                                                        {getTranslation(item.subCategory, 'en', true, item.mainCategory)} /   {getTranslation(item.subCategory, 'hi', true, item.mainCategory)}
-                                                                    </div>
-
-                                                                    {isPaid && item.paymentDate && (
-                                                                        <div className="small text-success">
-                                                                            <i className="bi bi-calendar-check me-1"></i>
-                                                                            Paid on :<span className='text-warning'> {new Date(item.paymentDate).toLocaleDateString()}</span>
-                                                                        </div>
-                                                                    )}
-                                                                </div>
-                                                            </td>
-                                                            <td className="text-center fw-bold">
-                                                                {item.quantity} KG
-                                                            </td>
-                                                            <td className="text-center text-success fw-bold">
-                                                                ₹{item.price}
-                                                            </td>
-                                                            <td className="text-center fw-bold">
-                                                                <span className={isPaid ? 'text-success' : 'text-warning'}>
-                                                                    ₹{item.total}
-                                                                </span>
-                                                            </td>
-                                                            <td className="text-center">
-                                                                <span className={`badge ${isPaid ? 'bg-success' : 'bg-warning'}`}>
-                                                                    {isPaid ? (
-                                                                        <><i className="fas fa-check me-1"></i>Paid</>
-                                                                    ) : (
-                                                                        <><i className="fas fa-clock me-1"></i>Pending</>
-                                                                    )}
-                                                                </span>
-                                                            </td>
-                                                            <td className="text-center">
-                                                                <input
-                                                                    type="checkbox"
-                                                                    className="form-check-input"
-                                                                    checked={isSelected}
-                                                                    onChange={(e) => handleItemSelect(item, e.target.checked)}
-                                                                    disabled={isPaid}
-                                                                    style={{
-                                                                        transform: "scale(1.1)",
-                                                                        opacity: isPaid ? 0.3 : 1,
-                                                                        cursor: isPaid ? 'not-allowed' : 'pointer'
-                                                                    }}
-                                                                />
-                                                            </td>
-                                                        </tr>
-                                                    );
-                                                })}
-
-                                                {/* Daily Total Row - ADDED */}
-                                                <tr style={{
-                                                    background: "linear-gradient(135deg, rgba(99, 102, 241, 0.3) 0%, rgba(168, 85, 247, 0.3) 100%)",
-                                                    borderTop: "2px solid rgba(255,255,255,0.2)"
-                                                }}>
-                                                    <td colSpan="4" className="text-end fw-bold text-white">
-                                                        Daily Total:
-                                                    </td>
-                                                    <td className="text-center fw-bold text-warning">
-                                                        ₹{dateTotal.toFixed(2)}
-                                                    </td>
-                                                    <td className="text-center">
-                                                        <span className="badge bg-info">
-                                                            {pendingItemsCount > 0 ? (
-                                                                <><i className="fas fa-clock me-1"></i>{pendingItemsCount} pending</>
-                                                            ) : (
-                                                                <><i className="fas fa-check me-1"></i>All paid</>
-                                                            )}
-                                                        </span>
-                                                    </td>
-                                                    <td className="text-center">
-                                                        <span className="text-muted small">
-                                                            {pendingAmount > 0 ? `Pending: ₹${pendingAmount.toFixed(2)}` : 'Clear'}
-                                                        </span>
-                                                    </td>
-                                                </tr>
-                                            </tbody>
-                                        </table>
-                                    </div>
-                                </div>
-                            </div>
-                        );
-                    })}
-            </div>
 
             {/* Confirmation Modal */}
             {(showConfirmModal || showDiscardModal) && (

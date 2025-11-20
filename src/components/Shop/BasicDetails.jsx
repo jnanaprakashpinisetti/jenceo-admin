@@ -4,6 +4,8 @@ import React, { useMemo, useState } from 'react';
 const BasicDetails = ({ customer, totalAmount, paymentHistory, PurchaseItems, Payments, Balance }) => {
     const [selectedPayment, setSelectedPayment] = useState(null);
     const [showPaymentModal, setShowPaymentModal] = useState(false);
+    const [currentPage, setCurrentPage] = useState(1);
+    const paymentsPerPage = 5;
 
     // Get character badge color and label
     const getCharacterInfo = (character) => {
@@ -23,7 +25,7 @@ const BasicDetails = ({ customer, totalAmount, paymentHistory, PurchaseItems, Pa
         const month = date.toLocaleDateString('en-US', { month: 'short' });
         const day = date.getDate();
         const customerId = customer?.id?.substring(0, 3) || 'C01'; // Use first 3 chars of customer ID
-        return `${customerId}-${month}-${day}-${index}`;
+        return `${customerId}-${month}-${day}-${index + 1}`;
     };
 
     // UPDATED: Enhanced financialSummary using Balance data and PurchaseItems
@@ -213,6 +215,17 @@ const BasicDetails = ({ customer, totalAmount, paymentHistory, PurchaseItems, Pa
         return customer?.totalPurchases || 0;
     }, [PurchaseItems, customer]);
 
+    // Pagination logic
+    const sortedPayments = Payments ? [...Payments].sort((a, b) => new Date(b.date) - new Date(a.date)) : [];
+    const indexOfLastPayment = currentPage * paymentsPerPage;
+    const indexOfFirstPayment = indexOfLastPayment - paymentsPerPage;
+    const currentPayments = sortedPayments.slice(indexOfFirstPayment, indexOfLastPayment);
+    const totalPages = Math.ceil(sortedPayments.length / paymentsPerPage);
+
+    const handlePageChange = (pageNumber) => {
+        setCurrentPage(pageNumber);
+    };
+
     const characterInfo = getCharacterInfo(customer?.character);
 
     return (
@@ -231,7 +244,7 @@ const BasicDetails = ({ customer, totalAmount, paymentHistory, PurchaseItems, Pa
                         borderBottom: "2px solid rgba(255, 255, 255, 0.2)"
                     }}>
                         <h6 className="text-white mb-0 fw-bold d-flex align-items-center">
-                            <i className="fas fa-user-circle me-2 fs-5"></i>
+                            <i className="bi bi-person-circle me-2 fs-5"></i>
                             Customer Information
                         </h6>
                     </div>
@@ -247,7 +260,7 @@ const BasicDetails = ({ customer, totalAmount, paymentHistory, PurchaseItems, Pa
                                     }}>
                                         <td className="ps-4 py-3" style={{ width: '40%', borderRight: "1px solid rgba(255, 255, 255, 0.1)" }}>
                                             <span className="text-light fw-semibold d-flex align-items-center">
-                                                <i className="fas fa-signature me-2 text-info fs-6"></i>
+                                                <i className="bi bi-person me-2 text-info fs-6"></i>
                                                 Full Name
                                             </span>
                                         </td>
@@ -260,7 +273,7 @@ const BasicDetails = ({ customer, totalAmount, paymentHistory, PurchaseItems, Pa
                                     }}>
                                         <td className="ps-4 py-3" style={{ width: '40%', borderRight: "1px solid rgba(255, 255, 255, 0.1)" }}>
                                             <span className="text-light fw-semibold d-flex align-items-center">
-                                                <i className="fas fa-id-card me-2 text-primary fs-6"></i>
+                                                <i className="bi bi-card-text me-2 text-primary fs-6"></i>
                                                 ID Number
                                             </span>
                                         </td>
@@ -274,7 +287,7 @@ const BasicDetails = ({ customer, totalAmount, paymentHistory, PurchaseItems, Pa
                                     }}>
                                         <td className="ps-4 py-3" style={{ width: '40%', borderRight: "1px solid rgba(255, 255, 255, 0.1)" }}>
                                             <span className="text-light fw-semibold d-flex align-items-center">
-                                                <i className="fas fa-phone me-2 text-success fs-6"></i>
+                                                <i className="bi bi-telephone me-2 text-success fs-6"></i>
                                                 Phone Number
                                             </span>
                                         </td>
@@ -287,7 +300,7 @@ const BasicDetails = ({ customer, totalAmount, paymentHistory, PurchaseItems, Pa
                                     }}>
                                         <td className="ps-4 py-3" style={{ width: '40%', borderRight: "1px solid rgba(255, 255, 255, 0.1)" }}>
                                             <span className="text-light fw-semibold d-flex align-items-center">
-                                                <i className="fas fa-map-marker-alt me-2 text-warning fs-6"></i>
+                                                <i className="bi bi-geo-alt me-2 text-warning fs-6"></i>
                                                 Address
                                             </span>
                                         </td>
@@ -302,7 +315,7 @@ const BasicDetails = ({ customer, totalAmount, paymentHistory, PurchaseItems, Pa
                                     }}>
                                         <td className="ps-4 py-3" style={{ width: '40%', borderRight: "1px solid rgba(255, 255, 255, 0.1)" }}>
                                             <span className="text-light fw-semibold d-flex align-items-center">
-                                                <i className="fas fa-star me-2 text-warning fs-6"></i>
+                                                <i className="bi bi-star me-2 text-warning fs-6"></i>
                                                 Character Rating
                                             </span>
                                         </td>
@@ -336,7 +349,7 @@ const BasicDetails = ({ customer, totalAmount, paymentHistory, PurchaseItems, Pa
                         borderBottom: "2px solid rgba(255, 255, 255, 0.2)"
                     }}>
                         <h6 className="text-white mb-0 fw-bold d-flex align-items-center">
-                            <i className="fas fa-chart-bar me-2 fs-5"></i>
+                            <i className="bi bi-graph-up me-2 fs-5"></i>
                             Financial Summary
                         </h6>
                     </div>
@@ -352,14 +365,14 @@ const BasicDetails = ({ customer, totalAmount, paymentHistory, PurchaseItems, Pa
                                     }}>
                                         <td className="ps-4 py-3" style={{ width: '40%', borderRight: "1px solid rgba(255, 255, 255, 0.1)" }}>
                                             <span className="text-light fw-semibold d-flex align-items-center">
-                                                <i className="fas fa-shopping-cart me-2 text-warning fs-6"></i>
+                                                <i className="bi bi-cart me-2 text-warning fs-6"></i>
                                                 Total Purchase
                                             </span>
                                         </td>
                                         <td className="py-3 pe-4">
                                             <span className="text-warning fw-bold fs-6 d-flex align-items-center justify-content-end">
                                                 ₹{financialSummary.totalPurchase.toFixed(2)}
-                                                <i className="fas fa-arrow-up text-success ms-2 fs-7"></i>
+                                                <i className="bi bi-arrow-up text-success ms-2 fs-7"></i>
                                             </span>
                                         </td>
                                     </tr>
@@ -368,14 +381,14 @@ const BasicDetails = ({ customer, totalAmount, paymentHistory, PurchaseItems, Pa
                                     }}>
                                         <td className="ps-4 py-3" style={{ width: '40%', borderRight: "1px solid rgba(255, 255, 255, 0.1)" }}>
                                             <span className="text-light fw-semibold d-flex align-items-center">
-                                                <i className="fas fa-credit-card me-2 text-success fs-6"></i>
+                                                <i className="bi bi-credit-card me-2 text-success fs-6"></i>
                                                 Total Paid
                                             </span>
                                         </td>
                                         <td className="py-3 pe-4">
                                             <span className="text-success fw-bold fs-6 d-flex align-items-center justify-content-end">
                                                 ₹{financialSummary.totalPaid.toFixed(2)}
-                                                <i className="fas fa-check-circle text-success ms-2 fs-7"></i>
+                                                <i className="bi bi-check-circle text-success ms-2 fs-7"></i>
                                             </span>
                                         </td>
                                     </tr>
@@ -385,14 +398,14 @@ const BasicDetails = ({ customer, totalAmount, paymentHistory, PurchaseItems, Pa
                                     }}>
                                         <td className="ps-4 py-3" style={{ width: '40%', borderRight: "1px solid rgba(255, 255, 255, 0.1)" }}>
                                             <span className="text-light fw-semibold d-flex align-items-center">
-                                                <i className="fas fa-clock me-2 text-danger fs-6"></i>
+                                                <i className="bi bi-clock me-2 text-danger fs-6"></i>
                                                 Pending Amount
                                             </span>
                                         </td>
                                         <td className="py-3 pe-4">
                                             <span className="text-danger fw-bold fs-6 d-flex align-items-center justify-content-end">
                                                 ₹{financialSummary.totalPending.toFixed(2)}
-                                                <i className="fas fa-exclamation-triangle text-danger ms-2 fs-7"></i>
+                                                <i className="bi bi-exclamation-triangle text-danger ms-2 fs-7"></i>
                                             </span>
                                         </td>
                                     </tr>
@@ -401,14 +414,14 @@ const BasicDetails = ({ customer, totalAmount, paymentHistory, PurchaseItems, Pa
                                     }}>
                                         <td className="ps-4 py-3" style={{ width: '40%', borderRight: "1px solid rgba(255, 255, 255, 0.1)" }}>
                                             <span className="text-light fw-semibold d-flex align-items-center">
-                                                <i className="fas fa-calendar-check me-2 text-info fs-6"></i>
+                                                <i className="bi bi-calendar-check me-2 text-info fs-6"></i>
                                                 Last Payment
                                             </span>
                                         </td>
                                         <td className="py-3 pe-4">
                                             <span className="text-light fw-bold d-flex align-items-center justify-content-end">
                                                 {financialSummary.lastPaymentDate}
-                                                <i className="fas fa-history text-info ms-2 fs-7"></i>
+                                                <i className="bi bi-clock-history text-info ms-2 fs-7"></i>
                                             </span>
                                         </td>
                                     </tr>
@@ -417,14 +430,14 @@ const BasicDetails = ({ customer, totalAmount, paymentHistory, PurchaseItems, Pa
                                     }}>
                                         <td className="ps-4 py-3" style={{ width: '40%', borderRight: "1px solid rgba(255, 255, 255, 0.1)" }}>
                                             <span className="text-light fw-semibold d-flex align-items-center">
-                                                <i className="fas fa-receipt me-2 text-primary fs-6"></i>
+                                                <i className="bi bi-receipt me-2 text-primary fs-6"></i>
                                                 Total Payments
                                             </span>
                                         </td>
                                         <td className="py-3 pe-4">
                                             <span className="text-info fw-bold d-flex align-items-center justify-content-end">
                                                 {financialSummary.paymentCount}
-                                                <i className="fas fa-file-invoice-dollar text-primary ms-2 fs-7"></i>
+                                                <i className="bi bi-file-earmark-text text-primary ms-2 fs-7"></i>
                                             </span>
                                         </td>
                                     </tr>
@@ -447,75 +460,121 @@ const BasicDetails = ({ customer, totalAmount, paymentHistory, PurchaseItems, Pa
                         borderRadius: "15px 15px 0 0"
                     }}>
                         <h6 className="text-white mb-0 fw-bold">
-                            <i className="fas fa-history me-2"></i>
+                            <i className="bi bi-clock-history me-2"></i>
                             Payment History
                         </h6>
                     </div>
                     <div className="card-body p-0">
                         {Payments && Payments.length === 0 ? (
                             <div className="text-center py-4 text-muted">
-                                <i className="fas fa-receipt fa-2x mb-3"></i>
+                                <i className="bi bi-receipt fa-2x mb-3"></i>
                                 <p>No payment history available</p>
                             </div>
                         ) : (
-                            <div className="table-responsive">
-                                <table className="table table-dark table-hover align-middle mb-0">
-                                    <thead>
-                                        <tr style={{
-                                            background: "linear-gradient(135deg, #0369a1 0%, #0c4a6e 100%)"
-                                        }}>
-                                            <th className="text-center">Date</th>
-                                            <th className="text-center">Payment ID</th>
-                                            <th className="text-center">Amount</th>
-                                            <th className="text-center">Method</th>
-                                            <th className="text-center">Items Paid</th>
-                                            <th className="text-center">Notes</th>
-                                            <th className="text-center">Status</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        {Payments && Payments.sort((a, b) => new Date(b.date) - new Date(a.date)).map((payment, index) => (
-                                            <tr
-                                                key={payment.id}
-                                                style={{
-                                                    background: index % 2 === 0
-                                                        ? "rgba(30, 41, 59, 0.7)"
-                                                        : "rgba(51, 65, 85, 0.7)",
-                                                    cursor: "pointer"
-                                                }}
-                                                onClick={() => handlePaymentRowClick(payment, index)}
-                                            >
-                                                <td className="text-center fw-bold text-info">
-                                                    {new Date(payment.date).toLocaleDateString()}
-                                                </td>
-                                                <td className="text-center text-light small fw-bold">
-                                                    {generatePaymentId(payment, index)}
-                                                </td>
-                                                <td className="text-center text-success fw-bold fs-6">
-                                                    ₹{parseFloat(payment.amount).toFixed(2)}
-                                                </td>
-                                                <td className="text-center">
-                                                    <span className="badge bg-primary text-capitalize">
-                                                        {payment.method}
-                                                    </span>
-                                                </td>
-                                                <td className="text-center text-warning fw-bold">
-                                                    {payment.items?.length || 0}
-                                                </td>
-                                                <td className="text-center text-light">
-                                                    {payment.notes || 'No notes'}
-                                                </td>
-                                                <td className="text-center">
-                                                    <span className="badge bg-success">
-                                                        <i className="fas fa-check me-1"></i>
-                                                        Completed
-                                                    </span>
-                                                </td>
+                            <>
+                                <div className="table-responsive">
+                                    <table className="table table-dark table-hover align-middle mb-0">
+                                        <thead>
+                                            <tr style={{
+                                                background: "linear-gradient(135deg, #0369a1 0%, #0c4a6e 100%)"
+                                            }}>
+                                                <th className="text-center">Date</th>
+                                                <th className="text-center">Payment ID</th>
+                                                <th className="text-center">Amount</th>
+                                                <th className="text-center">Method</th>
+                                                <th className="text-center">Items Paid</th>
+                                                <th className="text-center">Notes</th>
+                                                <th className="text-center">Status</th>
+                                                <th className="text-center">View</th>
                                             </tr>
-                                        ))}
-                                    </tbody>
-                                </table>
-                            </div>
+                                        </thead>
+                                        <tbody>
+                                            {currentPayments.map((payment, index) => (
+                                                <tr
+                                                    key={payment.id}
+                                                    style={{
+                                                        background: index % 2 === 0
+                                                            ? "rgba(30, 41, 59, 0.7)"
+                                                            : "rgba(51, 65, 85, 0.7)",
+                                                        cursor: "pointer"
+                                                    }}
+                                                    onClick={() => handlePaymentRowClick(payment, index + (currentPage - 1) * paymentsPerPage)}
+                                                >
+                                                    <td className="text-center fw-bold text-info">
+                                                        {new Date(payment.date).toLocaleDateString()}
+                                                    </td>
+                                                    <td className="text-center text-light small fw-bold">
+                                                        {generatePaymentId(payment, index + (currentPage - 1) * paymentsPerPage)}
+                                                    </td>
+                                                    <td className="text-center text-success fw-bold fs-6">
+                                                        ₹{parseFloat(payment.amount).toFixed(2)}
+                                                    </td>
+                                                    <td className="text-center">
+                                                        <span className="badge bg-primary text-capitalize">
+                                                            {payment.method}
+                                                        </span>
+                                                    </td>
+                                                    <td className="text-center text-warning fw-bold">
+                                                        {payment.items?.length || 0}
+                                                    </td>
+                                                    <td className="text-center text-light">
+                                                        {payment.notes || 'No notes'}
+                                                    </td>
+                                                    <td className="text-center">
+                                                        <span className="badge bg-success">
+                                                            <i className="bi bi-check me-1"></i>
+                                                            Completed
+                                                        </span>
+                                                    </td>
+                                                    <td className="text-center">
+                                                        <i className="bi bi-eye text-info fs-5"></i>
+                                                    </td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                                
+                                {/* Pagination */}
+                                {totalPages > 1 && (
+                                    <div className="d-flex justify-content-center mt-4 pb-3">
+                                        <nav>
+                                            <ul className="pagination mb-0">
+                                                <li className={`page-item ${currentPage === 1 ? 'disabled' : ''}`}>
+                                                    <button 
+                                                        className="page-link" 
+                                                        onClick={() => handlePageChange(currentPage - 1)}
+                                                        disabled={currentPage === 1}
+                                                    >
+                                                        <i className="bi bi-chevron-left"></i>
+                                                    </button>
+                                                </li>
+                                                
+                                                {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => (
+                                                    <li key={page} className={`page-item ${currentPage === page ? 'active' : ''}`}>
+                                                        <button 
+                                                            className="page-link" 
+                                                            onClick={() => handlePageChange(page)}
+                                                        >
+                                                            {page}
+                                                        </button>
+                                                    </li>
+                                                ))}
+                                                
+                                                <li className={`page-item ${currentPage === totalPages ? 'disabled' : ''}`}>
+                                                    <button 
+                                                        className="page-link" 
+                                                        onClick={() => handlePageChange(currentPage + 1)}
+                                                        disabled={currentPage === totalPages}
+                                                    >
+                                                        <i className="bi bi-chevron-right"></i>
+                                                    </button>
+                                                </li>
+                                            </ul>
+                                        </nav>
+                                    </div>
+                                )}
+                            </>
                         )}
                     </div>
                 </div>
@@ -535,8 +594,8 @@ const BasicDetails = ({ customer, totalAmount, paymentHistory, PurchaseItems, Pa
                                 borderRadius: "15px 15px 0 0"
                             }}>
                                 <h5 className="modal-title text-white fw-bold">
-                                    <i className="fas fa-receipt me-2"></i>
-                                    Payment Details  :{selectedPayment.displayId}
+                                    <i className="bi bi-receipt me-2"></i>
+                                    Payment Details: {selectedPayment.displayId}
                                 </h5>
                                 <button
                                     type="button"
@@ -552,7 +611,7 @@ const BasicDetails = ({ customer, totalAmount, paymentHistory, PurchaseItems, Pa
                                             border: "1px solid rgba(99, 102, 241, 0.3)"
                                         }}>
                                             <h6 className="text-info mb-2">
-                                                <i className="fas fa-calendar me-2"></i>
+                                                <i className="bi bi-calendar me-2"></i>
                                                 Payment Date
                                             </h6>
                                             <p className="text-light mb-0 fw-bold">
@@ -566,7 +625,7 @@ const BasicDetails = ({ customer, totalAmount, paymentHistory, PurchaseItems, Pa
                                             border: "1px solid rgba(34, 197, 94, 0.3)"
                                         }}>
                                             <h6 className="text-success mb-2">
-                                                <i className="fas fa-money-bill-wave me-2"></i>
+                                                <i className="bi bi-currency-rupee me-2"></i>
                                                 Amount
                                             </h6>
                                             <p className="text-success fw-bold fs-5 mb-0">
@@ -580,7 +639,7 @@ const BasicDetails = ({ customer, totalAmount, paymentHistory, PurchaseItems, Pa
                                             border: "1px solid rgba(59, 130, 246, 0.3)"
                                         }}>
                                             <h6 className="text-primary mb-2">
-                                                <i className="fas fa-credit-card me-2"></i>
+                                                <i className="bi bi-credit-card me-2"></i>
                                                 Payment Method
                                             </h6>
                                             <p className="text-light mb-0 fw-bold text-capitalize">
@@ -594,7 +653,7 @@ const BasicDetails = ({ customer, totalAmount, paymentHistory, PurchaseItems, Pa
                                             border: "1px solid rgba(245, 158, 11, 0.3)"
                                         }}>
                                             <h6 className="text-warning mb-2">
-                                                <i className="fas fa-cube me-2"></i>
+                                                <i className="bi bi-box me-2"></i>
                                                 Items Paid
                                             </h6>
                                             <p className="text-warning fw-bold fs-5 mb-0">
@@ -608,7 +667,7 @@ const BasicDetails = ({ customer, totalAmount, paymentHistory, PurchaseItems, Pa
                                             border: "1px solid rgba(107, 114, 128, 0.3)"
                                         }}>
                                             <h6 className="text-light mb-2">
-                                                <i className="fas fa-sticky-note me-2"></i>
+                                                <i className="bi bi-sticky-note me-2"></i>
                                                 Notes
                                             </h6>
                                             <p className="text-light mb-0">
@@ -623,7 +682,7 @@ const BasicDetails = ({ customer, totalAmount, paymentHistory, PurchaseItems, Pa
                                                 border: "1px solid rgba(16, 185, 129, 0.3)"
                                             }}>
                                                 <h6 className="text-success mb-3">
-                                                    <i className="fas fa-list me-2"></i>
+                                                    <i className="bi bi-list me-2"></i>
                                                     Items Included in this Payment
                                                 </h6>
                                                 <div className="table-responsive">
@@ -657,7 +716,7 @@ const BasicDetails = ({ customer, totalAmount, paymentHistory, PurchaseItems, Pa
                                             border: "1px solid rgba(139, 92, 246, 0.3)"
                                         }}>
                                             <h6 className="text-purple mb-2">
-                                                <i className="fas fa-user me-2"></i>
+                                                <i className="bi bi-person me-2"></i>
                                                 Processed By
                                             </h6>
                                             <p className="text-light mb-0">
@@ -673,7 +732,7 @@ const BasicDetails = ({ customer, totalAmount, paymentHistory, PurchaseItems, Pa
                                     className="btn btn-primary"
                                     onClick={handleCloseModal}
                                 >
-                                    <i className="fas fa-times me-2"></i>
+                                    <i className="bi bi-x me-2"></i>
                                     Close
                                 </button>
                             </div>
@@ -681,65 +740,6 @@ const BasicDetails = ({ customer, totalAmount, paymentHistory, PurchaseItems, Pa
                     </div>
                 </div>
             )}
-
-            {/* Additional Details */}
-            <div className="col-12">
-                <div className="card border-0 shadow-lg" style={{
-                    background: "linear-gradient(135deg, rgba(30, 41, 59, 0.8) 0%, rgba(15, 23, 42, 0.8) 100%)",
-                    borderRadius: "15px",
-                    border: "1px solid rgba(99, 102, 241, 0.3)"
-                }}>
-                    <div className="card-header border-0" style={{
-                        background: "linear-gradient(135deg, #f59e0b 0%, #d97706 100%)",
-                        borderRadius: "15px 15px 0 0"
-                    }}>
-                        <h6 className="text-white mb-0 fw-bold">
-                            <i className="fas fa-info-circle me-2"></i>
-                            Additional Information
-                        </h6>
-                    </div>
-                    <div className="card-body">
-                        <div className="row g-4">
-                            <div className="col-md-4">
-                                <div className="text-center p-3 rounded" style={{
-                                    background: "rgba(99, 102, 241, 0.1)",
-                                    border: "1px solid rgba(99, 102, 241, 0.3)"
-                                }}>
-                                    <i className="fas fa-shopping-cart fa-2x text-primary mb-2"></i>
-                                    <h6 className="text-light mb-1">Total Purchases</h6>
-                                    <span className="text-warning fw-bold fs-5">
-                                        {totalPurchasesCount}
-                                    </span>
-                                </div>
-                            </div>
-                            <div className="col-md-4">
-                                <div className="text-center p-3 rounded" style={{
-                                    background: "rgba(34, 197, 94, 0.1)",
-                                    border: "1px solid rgba(34, 197, 94, 0.3)"
-                                }}>
-                                    <i className="fas fa-credit-card fa-2x text-success mb-2"></i>
-                                    <h6 className="text-light mb-1">Payments Made</h6>
-                                    <span className="text-success fw-bold fs-5">
-                                        {financialSummary.paymentCount}
-                                    </span>
-                                </div>
-                            </div>
-                            <div className="col-md-4">
-                                <div className="text-center p-3 rounded" style={{
-                                    background: "rgba(249, 115, 22, 0.1)",
-                                    border: "1px solid rgba(249, 115, 22, 0.3)"
-                                }}>
-                                    <i className="fas fa-star fa-2x text-warning mb-2"></i>
-                                    <h6 className="text-light mb-1">Customer Rating</h6>
-                                    <span className="text-warning fw-bold fs-5">
-                                        {customer?.rating || '4.5'}/5
-                                    </span>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
 
             {/* Notes Section */}
             <div className="col-12">
@@ -753,11 +753,11 @@ const BasicDetails = ({ customer, totalAmount, paymentHistory, PurchaseItems, Pa
                         borderRadius: "15px 15px 0 0"
                     }}>
                         <h6 className="text-white mb-0 fw-bold">
-                            <i className="fas fa-sticky-note me-2"></i>
+                            <i className="bi bi-sticky-note me-2"></i>
                             Customer Notes
                         </h6>
                         <button className="btn btn-sm btn-light">
-                            <i className="fas fa-edit me-1"></i>
+                            <i className="bi bi-pencil me-1"></i>
                             Edit
                         </button>
                     </div>

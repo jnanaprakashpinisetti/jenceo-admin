@@ -1,7 +1,7 @@
 // src/components/Customer/ShareBill.jsx
 import React, { useRef, useState, useMemo } from 'react';
 
-const ShareBill = ({ customer, PurchaseItems, totalAmount, paymentHistory = [], selectedItems = [] }) => {
+const ShareBill = ({ customer, PurchaseItems, totalAmount, paymentHistory = [], selectedItems = [], billNumber = '', billTitle = 'Customer Bill' }) => {
     const iframeRef = useRef(null);
     const [language, setLanguage] = useState('en'); // 'en', 'hi', or 'te'
 
@@ -65,22 +65,33 @@ const ShareBill = ({ customer, PurchaseItems, totalAmount, paymentHistory = [], 
         return billItems.reduce((sum, item) => sum + (parseFloat(item.total) || 0), 0);
     }, [billItems]);
 
-    // Calculate payment summary
-    const calculatePaymentSummary = () => {
+    // Get last payment and current balance
+    const getPaymentDetails = () => {
+        const lastPayment = paymentHistory.length > 0 ? paymentHistory[paymentHistory.length - 1] : null;
         const previousPending = customer?.previousPending || 0;
-        const previousPayments = paymentHistory.reduce((sum, payment) => sum + (payment.amount || 0), 0);
-        const currentBill = billTotal;
-        const totalAmountDue = previousPending + currentBill - previousPayments;
-        
+        const totalPayments = paymentHistory.reduce((sum, payment) => sum + (payment.amount || 0), 0);
+        const currentBalance = previousPending + billTotal - totalPayments;
+
         return {
-            previousPending,
-            previousPayments,
-            currentBill,
-            totalAmountDue
+            lastPayment: lastPayment ? {
+                amount: lastPayment.amount || 0,
+                date: lastPayment.date,
+                mode: lastPayment.mode || 'Cash'
+            } : null,
+            currentBalance,
+            totalPayments
         };
     };
 
-    const paymentSummary = calculatePaymentSummary();
+    const paymentDetails = getPaymentDetails();
+
+    // Generate bill number if not provided
+    const generatedBillNumber = useMemo(() => {
+        if (billNumber) return billNumber;
+        const timestamp = new Date().getTime().toString().slice(-6);
+        const itemCount = billItems.length.toString().padStart(3, '0');
+        return `JC-BILL-${timestamp}-${itemCount}`;
+    }, [billNumber, billItems]);
 
     // Function to format date
     const formatDate = (dateString) => {
@@ -114,17 +125,17 @@ const ShareBill = ({ customer, PurchaseItems, totalAmount, paymentHistory = [], 
     const languageContent = {
         en: {
             title: "INVOICE",
-            subtitle: "JenCeo Home Care Services & Traders - Customer Bill",
+            subtitle: "JenCeo Home Care Services & Traders - " + billTitle,
             customerInfo: "Customer Information",
             paymentSummary: "Payment Summary",
             billDetails: "Bill Details",
-            paymentHistory: "Payment History",
+            paymentHistory: "Recent Payment",
             thankYou: "Thank You!",
             ourProducts: "Our Products",
-            previousPending: "Previous Pending",
-            previousPayments: "Previous Payments",
+            lastPayment: "Last Payment",
+            currentBalance: "Current Balance",
+            totalPayments: "Total Payments",
             currentBill: "Current Bill Amount",
-            totalDue: "Total Amount Due",
             customerMessage: `Dear ${customer?.name || 'Customer'}, Thank you for being a valued customer of JenCeo Home Care Services. We appreciate your trust in us and are committed to providing you with the highest quality service.`,
             paymentDue: "Payment Due",
             statusPending: "Pending",
@@ -134,21 +145,23 @@ const ShareBill = ({ customer, PurchaseItems, totalAmount, paymentHistory = [], 
             price: "Price",
             total: "Total",
             subTotal: "Sub Total",
-            grandTotal: "GRAND TOTAL"
+            grandTotal: "GRAND TOTAL",
+            billNumber: "Bill Number",
+            paymentMode: "Payment Mode"
         },
         hi: {
             title: "बिल",
-            subtitle: "जेनसीओ होम केयर सर्विसेज एंड ट्रेडर्स - ग्राहक बिल",
+            subtitle: "जेनसीओ होम केयर सर्विसेज एंड ट्रेडर्स - " + (billTitle === 'Customer Bill' ? 'ग्राहक बिल' : billTitle),
             customerInfo: "ग्राहक जानकारी",
             paymentSummary: "भुगतान सारांश",
             billDetails: "बिल विवरण",
-            paymentHistory: "भुगतान इतिहास",
+            paymentHistory: "हालिया भुगतान",
             thankYou: "धन्यवाद!",
             ourProducts: "हमारे उत्पाद",
-            previousPending: "पिछला बकाया",
-            previousPayments: "पिछले भुगतान",
+            lastPayment: "अंतिम भुगतान",
+            currentBalance: "वर्तमान शेष",
+            totalPayments: "कुल भुगतान",
             currentBill: "वर्तमान बिल राशि",
-            totalDue: "कुल देय राशि",
             customerMessage: `प्रिय ${customer?.name || 'ग्राहक'}, जेनसीओ होम केयर सर्विसेज के एक मूल्यवान ग्राहक होने के लिए धन्यवाद। हम आपके विश्वास की सराहना करते हैं और आपको उच्चतम गुणवत्ता वाली सेवा प्रदान करने के लिए प्रतिबद्ध हैं।`,
             paymentDue: "भुगतान देय",
             statusPending: "लंबित",
@@ -158,21 +171,23 @@ const ShareBill = ({ customer, PurchaseItems, totalAmount, paymentHistory = [], 
             price: "मूल्य",
             total: "कुल",
             subTotal: "उप कुल",
-            grandTotal: "कुल योग"
+            grandTotal: "कुल योग",
+            billNumber: "बिल नंबर",
+            paymentMode: "भुगतान मोड"
         },
         te: {
             title: "బిల్",
-            subtitle: "జెన్సియో హోమ్ కేర్ సర్వీసెస్ & ట్రేడర్స్ - కస్టమర్ బిల్",
+            subtitle: "జెన్సియో హోమ్ కేర్ సర్వీసెస్ & ట్రేడర్స్ - " + (billTitle === 'Customer Bill' ? 'కస్టమర్ బిల్' : billTitle),
             customerInfo: "కస్టమర్ సమాచారం",
             paymentSummary: "చెల్లింపు సారాంశం",
             billDetails: "బిల్ వివరాలు",
-            paymentHistory: "చెల్లింపు చరిత్ర",
+            paymentHistory: "ఇటీవలి చెల్లింపు",
             thankYou: "ధన్యవాదాలు!",
             ourProducts: "మా ఉత్పత్తులు",
-            previousPending: "మునుపటి బకాయి",
-            previousPayments: "మునుపటి చెల్లింపులు",
+            lastPayment: "చివరి చెల్లింపు",
+            currentBalance: "ప్రస్తుత బ్యాలెన్స్",
+            totalPayments: "మొత్తం చెల్లింపులు",
             currentBill: "ప్రస్తుత బిల్ మొత్తం",
-            totalDue: "మొత్తం చెల్లించాల్సిన మొత్తం",
             customerMessage: `ప్రియ ${customer?.name || 'కస్టమర్'}, జెన్సియో హోమ్ కేర్ సర్వీసెస్ యొక్క విలువైన కస్టమర్ అయినందుకు ధన్యవాదాలు. మీరు మాపై ఉంచిన నమ్మకాన్ని మేము అభినందిస్తున్నాము మరియు మీకు అత్యుత్తమ నాణ్యత సేవలను అందించడానికి ప్రతిబద్ధత కలిగి ఉన్నాము.`,
             paymentDue: "చెల్లింపు బకాయి",
             statusPending: "పెండింగ్",
@@ -182,7 +197,9 @@ const ShareBill = ({ customer, PurchaseItems, totalAmount, paymentHistory = [], 
             price: "ధర",
             total: "మొత్తం",
             subTotal: "ఉప మొత్తం",
-            grandTotal: "మొత్తం బిల్"
+            grandTotal: "మొత్తం బిల్",
+            billNumber: "బిల్ నంబర్",
+            paymentMode: "చెల్లింపు మోడ్"
         }
     };
 
@@ -265,16 +282,16 @@ const ShareBill = ({ customer, PurchaseItems, totalAmount, paymentHistory = [], 
   /* Payment summary styles */
   .payment-summary {display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin: 20px 0}
   .payment-card {background: white; border-radius: 8px; padding: 15px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); border-left: 4px solid}
-  .payment-card.pending {border-left-color: #ff6b6b; background: linear-gradient(135deg, #fff5f5 0%, #ffecec 100%)}
-  .payment-card.paid {border-left-color: #51cf66; background: linear-gradient(135deg, #f0fff4 0%, #e6f7ea 100%)}
-  .payment-card.current {border-left-color: #339af0; background: linear-gradient(135deg, #f0f8ff 0%, #e6f2ff 100%)}
-  .payment-card.total {border-left-color: #ff922b; background: linear-gradient(135deg, #fff4e6 0%, #ffebd6 100%)}
+  .payment-card.last-payment {border-left-color: #51cf66; background: linear-gradient(135deg, #f0fff4 0%, #e6f7ea 100%)}
+  .payment-card.current-balance {border-left-color: #ff6b6b; background: linear-gradient(135deg, #fff5f5 0%, #ffecec 100%)}
+  .payment-card.current-bill {border-left-color: #339af0; background: linear-gradient(135deg, #f0f8ff 0%, #e6f2ff 100%)}
+  .payment-card.total-payments {border-left-color: #ff922b; background: linear-gradient(135deg, #fff4e6 0%, #ffebd6 100%)}
   .payment-label {font-size: 12px; color: #666; margin-bottom: 5px}
   .payment-amount {font-size: 18px; font-weight: bold}
-  .payment-amount.pending {color: #ff6b6b}
-  .payment-amount.paid {color: #51cf66}
-  .payment-amount.current {color: #339af0}
-  .payment-amount.total {color: #ff922b}
+  .payment-amount.last-payment {color: #51cf66}
+  .payment-amount.current-balance {color: #ff6b6b}
+  .payment-amount.current-bill {color: #339af0}
+  .payment-amount.total-payments {color: #ff922b}
   
   /* Bill specific styles */
   .bill-table {width:100%; border-collapse:collapse; margin:20px 0; box-shadow: 0 1px 3px rgba(0,0,0,0.1)}
@@ -364,10 +381,11 @@ const ShareBill = ({ customer, PurchaseItems, totalAmount, paymentHistory = [], 
       <div class="subtitle">${content.subtitle}</div>
       <div class="meta">
         <div><strong>Bill Date:</strong> ${currentDate}</div>
+        <div><strong>${content.billNumber}:</strong> ${generatedBillNumber}</div>
         <div><strong>Customer ID:</strong> ${customerId}</div>
       </div>
       <br>
-      <div style="color:#444"><strong>Status:</strong> ${paymentSummary.totalAmountDue > 0 ? '<span class="status-badge status-pending">' + content.statusPending + '</span>' : '<span class="status-badge status-paid">' + content.statusPaid + '</span>'}</div>
+      <div style="color:#444"><strong>Status:</strong> ${paymentDetails.currentBalance > 0 ? '<span class="status-badge status-pending">' + content.statusPending + '</span>' : '<span class="status-badge status-paid">' + content.statusPaid + '</span>'}</div>
     </div>
     <div class="photo-box">
       <img src="${defaultCustomerPhoto}" alt="Customer" style="width:120px;height:120px;object-fit:cover;border-radius:6px;border:1px solid #ccc" />
@@ -382,28 +400,36 @@ const ShareBill = ({ customer, PurchaseItems, totalAmount, paymentHistory = [], 
     `<h3>${content.paymentSummary}</h3>`,
     `
     <div class="payment-summary">
-      <div class="payment-card pending">
-        <div class="payment-label">${content.previousPending}</div>
-        <div class="payment-amount pending">₹${paymentSummary.previousPending.toFixed(2)}</div>
-        <small class="muted">Amount carried from previous bills</small>
+      ${paymentDetails.lastPayment ? `
+      <div class="payment-card last-payment">
+        <div class="payment-label">${content.lastPayment}</div>
+        <div class="payment-amount last-payment">₹${paymentDetails.lastPayment.amount.toFixed(2)}</div>
+        <small class="muted">${formatDate(paymentDetails.lastPayment.date)} • ${paymentDetails.lastPayment.mode}</small>
+      </div>
+      ` : `
+      <div class="payment-card last-payment">
+        <div class="payment-label">${content.lastPayment}</div>
+        <div class="payment-amount last-payment">₹0.00</div>
+        <small class="muted">No payments recorded</small>
+      </div>
+      `}
+      
+      <div class="payment-card current-balance">
+        <div class="payment-label">${content.currentBalance}</div>
+        <div class="payment-amount current-balance">₹${paymentDetails.currentBalance.toFixed(2)}</div>
+        <small class="muted">Current outstanding amount</small>
       </div>
       
-      <div class="payment-card paid">
-        <div class="payment-label">${content.previousPayments}</div>
-        <div class="payment-amount paid">₹${paymentSummary.previousPayments.toFixed(2)}</div>
-        <small class="muted">Total payments received</small>
-      </div>
-      
-      <div class="payment-card current">
+      <div class="payment-card current-bill">
         <div class="payment-label">${content.currentBill}</div>
-        <div class="payment-amount current">₹${paymentSummary.currentBill.toFixed(2)}</div>
-        <small class="muted">Amount for current purchases</small>
+        <div class="payment-amount current-bill">₹${billTotal.toFixed(2)}</div>
+        <small class="muted">Amount for current items</small>
       </div>
       
-      <div class="payment-card total">
-        <div class="payment-label">${content.totalDue}</div>
-        <div class="payment-amount total">₹${paymentSummary.totalAmountDue.toFixed(2)}</div>
-        <small class="muted">Final amount to be paid</small>
+      <div class="payment-card total-payments">
+        <div class="payment-label">${content.totalPayments}</div>
+        <div class="payment-amount total-payments">₹${paymentDetails.totalPayments.toFixed(2)}</div>
+        <small class="muted">Total payments received</small>
       </div>
     </div>
     `
@@ -443,7 +469,7 @@ const ShareBill = ({ customer, PurchaseItems, totalAmount, paymentHistory = [], 
 
   <div class="customer-message">
     ${content.customerMessage}
-    ${paymentSummary.totalAmountDue > 0 ? `<br><br><strong>${content.paymentDue}:</strong> ₹${paymentSummary.totalAmountDue.toFixed(2)} (Please settle at your earliest convenience)` : ''}
+    ${paymentDetails.currentBalance > 0 ? `<br><br><strong>${content.paymentDue}:</strong> ₹${paymentDetails.currentBalance.toFixed(2)} (Please settle at your earliest convenience)` : ''}
   </div>
 
   ${section(
@@ -519,21 +545,19 @@ const ShareBill = ({ customer, PurchaseItems, totalAmount, paymentHistory = [], 
 `
   )}
 
-  <!-- Payment History Section -->
-  ${paymentHistory.length > 0 ? section(
+  <!-- Recent Payment Section -->
+  ${paymentDetails.lastPayment ? section(
     `<h3>${content.paymentHistory}</h3>`,
     `
     <div class="payment-history">
-      ${paymentHistory.map((payment, index) => `
-        <div class="payment-item">
-          <div>
-            <div><strong>Payment ${index + 1}</strong></div>
-            <div class="payment-date">${formatDate(payment.date)}</div>
-            <div class="payment-mode">${payment.mode || 'Cash'}</div>
-          </div>
-          <div class="payment-amount">₹${payment.amount?.toFixed(2) || '0.00'}</div>
+      <div class="payment-item">
+        <div>
+          <div><strong>Last Payment</strong></div>
+          <div class="payment-date">${formatDate(paymentDetails.lastPayment.date)}</div>
+          <div class="payment-mode">${paymentDetails.lastPayment.mode}</div>
         </div>
-      `).join('')}
+        <div class="payment-amount">₹${paymentDetails.lastPayment.amount.toFixed(2)}</div>
+      </div>
     </div>
     `
   ) : ''}
@@ -568,7 +592,7 @@ const ShareBill = ({ customer, PurchaseItems, totalAmount, paymentHistory = [], 
   </div>
 
   <div class="footer">
-    <div>Bill Ref: JC-BILL-${customerId || '001'}</div>
+    <div>Bill Ref: ${generatedBillNumber}</div>
     <div>Generated On: ${currentDate}</div>
     <div>Page 1 of 1</div>
   </div>
@@ -618,7 +642,7 @@ const ShareBill = ({ customer, PurchaseItems, totalAmount, paymentHistory = [], 
 
         const a = document.createElement('a');
         a.href = url;
-        a.download = `Bill_${customer?.idNo || customer?.name || 'customer'}_${new Date().toISOString().split('T')[0]}.html`;
+        a.download = `Bill_${generatedBillNumber}_${customer?.name || 'customer'}.html`;
         document.body.appendChild(a);
         a.click();
 
@@ -635,9 +659,9 @@ const ShareBill = ({ customer, PurchaseItems, totalAmount, paymentHistory = [], 
             const blob = new Blob([html], { type: 'text/html' });
 
             if (navigator.share) {
-                const file = new File([blob], `Bill_${customer?.idNo || customer?.name || 'customer'}.html`, { type: 'text/html' });
+                const file = new File([blob], `Bill_${generatedBillNumber}_${customer?.name || 'customer'}.html`, { type: 'text/html' });
                 await navigator.share({
-                    title: `Bill - ${customer?.name}`,
+                    title: `Bill - ${customer?.name} - ${generatedBillNumber}`,
                     files: [file]
                 });
             } else {
@@ -666,12 +690,12 @@ const ShareBill = ({ customer, PurchaseItems, totalAmount, paymentHistory = [], 
         if (iframeRef.current) {
             iframeRef.current.srcdoc = buildBillHTML();
         }
-    }, [customer, PurchaseItems, totalAmount, paymentHistory, language, selectedItems]);
+    }, [customer, PurchaseItems, totalAmount, paymentHistory, language, selectedItems, generatedBillNumber]);
 
     return (
         <div className="modal-card">
             <div className="modal-card-header d-flex align-items-center justify-content-between">
-                <h4 className="mb-0">Bill Preview</h4>
+                <h4 className="mb-0">Bill Preview - {generatedBillNumber}</h4>
                 <div className="d-flex gap-2 align-items-center">
                     {/* Language Selector */}
                     <div className="btn-group btn-group-sm">
@@ -741,9 +765,9 @@ const ShareBill = ({ customer, PurchaseItems, totalAmount, paymentHistory = [], 
 
             <div className="modal-card-footer d-flex justify-content-between align-items-center p-3 border-top">
                 <small className="text-muted">
-                    Total Amount Due: <strong className="text-success">₹{paymentSummary.totalAmountDue.toFixed(2)}</strong> |
-                    Items: <strong>{billItems.length}</strong> |
-                    Payments: <strong>{paymentHistory.length}</strong>
+                    Bill Number: <strong className="text-primary">{generatedBillNumber}</strong> |
+                    Current Balance: <strong className="text-success">₹{paymentDetails.currentBalance.toFixed(2)}</strong> |
+                    Items: <strong>{billItems.length}</strong>
                     {selectedItems.length > 0 && (
                         <> | Selected Items: <strong>{selectedItems.length}</strong></>
                     )}

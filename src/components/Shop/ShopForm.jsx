@@ -271,53 +271,53 @@ export default function ShopForm({ customer, onClose, onSave, mode = "purchase",
     };
 
     // Save functions remain the same
-const saveAsCustomerItem = async () => {
-    if (!customer || !customer.id) {
-        throw new Error("Customer information is missing");
-    }
+    const saveAsCustomerItem = async () => {
+        if (!customer || !customer.id) {
+            throw new Error("Customer information is missing");
+        }
 
-    // Generate a proper unique ID
-    const itemId = `item_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-    const payload = buildPayload(itemId);
+        // Generate a proper unique ID
+        const itemId = `item_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+        const payload = buildPayload(itemId);
 
-    // Ensure all customer fields have values
-    const customerData = {
-        customerId: customer.id,
-        customerName: customer.name || '',
-        customerPhone: customer.mobileNo || customer.mobile || '',
-        customerPlace: customer.place || '',
-        ...payload
+        // Ensure all customer fields have values
+        const customerData = {
+            customerId: customer.id,
+            customerName: customer.name || '',
+            customerPhone: customer.mobileNo || customer.mobile || '',
+            customerPlace: customer.place || '',
+            ...payload
+        };
+
+        const PurchaseItemsRef = firebaseDB.child(pathUnderJenCeo(`Shop/CreditData/${customer.id}/PurchaseItems`));
+
+        // Use the generated ID instead of push()
+        await PurchaseItemsRef.child(itemId).set(customerData);
+
+        // Update balance
+        const balanceRef = firebaseDB.child(pathUnderJenCeo(`Shop/CreditData/${customer.id}/Balance`));
+        const snapshot = await balanceRef.once('value');
+        const currentBalance = parseFloat(snapshot.val()) || 0;
+        const newBalance = currentBalance + payload.total;
+        await balanceRef.set(newBalance);
+
+        // Update customer info
+        const customerRef = firebaseDB.child(pathUnderJenCeo(`Shop/CreditData/${customer.id}`));
+        await customerRef.update({
+            customerName: customer.name || '',
+            customerPhone: customer.mobileNo || customer.mobile || '',
+            customerPlace: customer.place || '',
+            lastUpdated: new Date().toISOString(),
+            updatedBy: signedInName,
+            updatedById: signedInUid
+        });
+
+        return {
+            ...customerData,
+            newBalance,
+            saveLocation: `Shop/CreditData/${customer.id}/PurchaseItems`
+        };
     };
-
-    const PurchaseItemsRef = firebaseDB.child(pathUnderJenCeo(`Shop/CreditData/${customer.id}/PurchaseItems`));
-    
-    // Use the generated ID instead of push()
-    await PurchaseItemsRef.child(itemId).set(customerData);
-
-    // Update balance
-    const balanceRef = firebaseDB.child(pathUnderJenCeo(`Shop/CreditData/${customer.id}/Balance`));
-    const snapshot = await balanceRef.once('value');
-    const currentBalance = parseFloat(snapshot.val()) || 0;
-    const newBalance = currentBalance + payload.total;
-    await balanceRef.set(newBalance);
-
-    // Update customer info
-    const customerRef = firebaseDB.child(pathUnderJenCeo(`Shop/CreditData/${customer.id}`));
-    await customerRef.update({
-        customerName: customer.name || '',
-        customerPhone: customer.mobileNo || customer.mobile || '',
-        customerPlace: customer.place || '',
-        lastUpdated: new Date().toISOString(),
-        updatedBy: signedInName,
-        updatedById: signedInUid
-    });
-
-    return {
-        ...customerData,
-        newBalance,
-        saveLocation: `Shop/CreditData/${customer.id}/PurchaseItems`
-    };
-};
 
     const saveAsRegularPurchase = async () => {
         const authObj = currentUser || user || dbUser || profile || {};
@@ -461,10 +461,10 @@ const saveAsCustomerItem = async () => {
     };
 
     const handleClose = () => {
-        const hasData = Object.values(formData).some(value => 
+        const hasData = Object.values(formData).some(value =>
             value && value !== todayISODateIST && value !== ""
         );
-        
+
         if (hasData) {
             setShowCloseConfirm(true);
         } else {
@@ -679,7 +679,7 @@ const saveAsCustomerItem = async () => {
                                                 </>
                                             )}
                                         </button>
-                                       
+
                                     </div>
                                 )}
 
@@ -700,7 +700,7 @@ const saveAsCustomerItem = async () => {
                                                 </>
                                             )}
                                         </button>
-                                      
+
                                     </div>
                                 )}
                             </div>

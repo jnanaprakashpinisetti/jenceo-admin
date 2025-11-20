@@ -304,7 +304,7 @@ const ShareBill = ({ customer, PurchaseItems, totalAmount, paymentHistory = [], 
   .payment-mode {font-size: 10px; color: #888; background: #e9ecef; padding: 2px 6px; border-radius: 4px}
   
   /* Language tags */
-  .language-tags {display: flex; flex-direction: column; gap: 2px; margin-top: 4px}
+  .language-tags {flex-direction: column; gap: 2px; margin-top: 4px}
   .lang-tag {font-size: 10px; color: #666; line-height: 1.2}
   
   /* Status badges */
@@ -482,18 +482,18 @@ const ShareBill = ({ customer, PurchaseItems, totalAmount, paymentHistory = [], 
               <strong>${displayName}</strong>
               ${language === 'en' ? `
                 <div class="language-tags">
-                  <span class="lang-tag">Telugu: ${teluguName}</span>
-                  <span class="lang-tag">Hindi: ${getTranslation(teluguName, 'hi', true, mainCategory)}</span>
+                  <span class="lang-tag">${teluguName}</span> /
+                  <span class="lang-tag">${getTranslation(teluguName, 'hi', true, mainCategory)}</span>
                 </div>
               ` : language === 'hi' ? `
                 <div class="language-tags">
-                  <span class="lang-tag">अंग्रेजी: ${getTranslation(teluguName, 'en', true, mainCategory)}</span>
-                  <span class="lang-tag">तेलुगु: ${teluguName}</span>
+                  <span class="lang-tag">${getTranslation(teluguName, 'en', true, mainCategory)}</span> /
+                  <span class="lang-tag">${teluguName}</span>
                 </div>
               ` : `
                 <div class="language-tags">
-                  <span class="lang-tag">English: ${getTranslation(teluguName, 'en', true, mainCategory)}</span>
-                  <span class="lang-tag">Hindi: ${getTranslation(teluguName, 'hi', true, mainCategory)}</span>
+                  <span class="lang-tag">${getTranslation(teluguName, 'en', true, mainCategory)}</span> /
+                  <span class="lang-tag">${getTranslation(teluguName, 'hi', true, mainCategory)}</span>
                 </div>
               `}
               ${comments && comments !== 'N/A' ? `<small class="muted" style="display:block; margin-top: 4px">Comments: ${comments}</small>` : ''}

@@ -293,33 +293,6 @@ const CustomerList = () => {
 
     return (
         <div className="p-3 bg-dark border border-secondary rounded-3 border-opacity-25 mt-3">
-            {/* Debug Info */}
-            <div className="alert alert-info mb-3">
-                <h6>Debug Info:</h6>
-                <p>Total Customers: {customers.length}</p>
-                <p>Filtered Customers: {filteredCustomers.length}</p>
-                <p>Loading: {loading.toString()}</p>
-                <div className="d-flex gap-2 mt-2">
-                    <button
-                        className="btn btn-sm btn-warning"
-                        onClick={() => console.log('Customers:', customers, 'Filtered:', filteredCustomers)}
-                    >
-                        Log Data to Console
-                    </button>
-                    <button
-                        className="btn btn-sm btn-info"
-                        onClick={debugFirebasePaths}
-                    >
-                        Debug Firebase Paths
-                    </button>
-                    <button
-                        className="btn btn-sm btn-success"
-                        onClick={refreshCustomerData}
-                    >
-                        Refresh Data
-                    </button>
-                </div>
-            </div>
 
             {/* Header */}
             <div className="d-flex justify-content-between align-items-center mb-4">

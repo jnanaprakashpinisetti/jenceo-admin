@@ -669,7 +669,6 @@ const ShareBill = ({ customer, PurchaseItems, totalAmount, paymentHistory = [], 
                 handleDownloadBill();
             }
         } catch (error) {
-            console.error('Error sharing bill:', error);
             handleDownloadBill();
         }
     };

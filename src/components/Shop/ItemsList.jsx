@@ -289,23 +289,10 @@ const ItemsList = ({
 
     // Update local items when PurchaseItems changes
     useEffect(() => {
-        console.log("ItemsList: Received PurchaseItems update", PurchaseItems.length);
         setLocalItems(PurchaseItems);
         // Clear selection when items change
         setSelectedItems([]);
     }, [PurchaseItems, refreshTrigger]);
-
-    // Debug logging
-    useEffect(() => {
-        console.log("ItemsList Debug:", {
-            totalItems: localItems.length,
-            currentItems: currentItems.length,
-            oldItems: oldItems.length,
-            selectedItems: selectedItems.length,
-            selectedTotal: selectedTotal,
-            refreshTrigger: refreshTrigger
-        });
-    }, [localItems, currentItems, oldItems, selectedItems, selectedTotal, refreshTrigger]);
 
     // Handle create bill with confirmation
     const handleCreateBill = () => {
@@ -807,7 +794,7 @@ const ItemsList = ({
                                                                             <div className={`fw-semibold mb-1 ${isPaid ? 'text-success' : 'text-warning'}`}>
                                                                                 {item.subCategory}
                                                                                 {isPaid && (
-                                                                                    <i className="bi bi-check-circle ms-2 text-success" title="Paid"></i>
+                                                                                    <i className="fas fa-check-circle ms-2 text-success" title="Paid"></i>
                                                                                 )}
                                                                             </div>
                                                                             <div className="small text-muted">
@@ -816,7 +803,7 @@ const ItemsList = ({
 
                                                                             {isPaid && item.paymentDate && (
                                                                                 <div className="small text-success">
-                                                                                    <i className="bi bi-calendar-check me-1"></i>
+                                                                                    <i className="fas fa-calendar-check me-1"></i>
                                                                                     Paid on :<span className='text-warning'> {new Date(item.paymentDate).toLocaleDateString()}</span>
                                                                                 </div>
                                                                             )}
@@ -1095,7 +1082,7 @@ const ItemsList = ({
                                                 onClick={() => setOldItemsPage(prev => Math.max(1, prev - 1))}
                                                 disabled={oldItemsPage === 1}
                                             >
-                                                <i className="bi bi-chevron-left"></i>
+                                                <i className="fas fa-chevron-left"></i>
                                             </button>
                                             <span className="btn btn-light btn-sm disabled">
                                                 Page {oldItemsPage} of {Math.ceil(filteredOldItems.length / oldItemsPerPage)}
@@ -1105,7 +1092,7 @@ const ItemsList = ({
                                                 onClick={() => setOldItemsPage(prev => Math.min(Math.ceil(filteredOldItems.length / oldItemsPerPage), prev + 1))}
                                                 disabled={oldItemsPage >= Math.ceil(filteredOldItems.length / oldItemsPerPage)}
                                             >
-                                                <i className="bi bi-chevron-right"></i>
+                                                <i className="fas fa-chevron-right"></i>
                                             </button>
                                         </div>
                                         <select

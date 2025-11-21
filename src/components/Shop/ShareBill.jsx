@@ -1,219 +1,281 @@
-// src/components/Customer/ShareBill.jsx
 import React, { useRef, useState, useMemo } from 'react';
 
-const ShareBill = ({ customer, PurchaseItems, totalAmount, paymentHistory = [], selectedItems = [], billNumber = '', billTitle = 'Customer Bill' }) => {
-    const iframeRef = useRef(null);
-    const [language, setLanguage] = useState('en'); // 'en', 'hi', or 'te'
+const ShareBill = ({
+  customer,
+  PurchaseItems,
+  totalAmount,
+  paymentHistory = [],
+  selectedItems = [],
+  billNumber = '',
+  billTitle = 'Customer Bill',
+  categoryTranslations = {},
+  getTranslation
+}) => {
+  const iframeRef = useRef(null);
+  const [language, setLanguage] = useState('en'); // 'en', 'hi', or 'te'
 
-    const headerImage = "https://firebasestorage.googleapis.com/v0/b/jenceo-admin.firebasestorage.app/o/Shop-Images%2FJenCeo-Trades.svg?alt=media&token=da7ab6ec-826f-41b2-ba2a-0a7d0f405997";
-    const defaultCustomerPhoto = "https://firebasestorage.googleapis.com/v0/b/jenceo-admin.firebasestorage.app/o/OfficeFiles%2FSample-Photo.jpg?alt=media&token=01855b47-c9c2-490e-b400-05851192dde7";
+  const headerImage = "https://firebasestorage.googleapis.com/v0/b/jenceo-admin.firebasestorage.app/o/Shop-Images%2FJenCeo-Trades.svg?alt=media&token=da7ab6ec-826f-41b2-ba2a-0a7d0f405997";
+  const defaultCustomerPhoto = "https://firebasestorage.googleapis.com/v0/b/jenceo-admin.firebasestorage.app/o/OfficeFiles%2FSample-Photo.jpg?alt=media&token=01855b47-c9c2-490e-b400-05851192dde7";
 
-    // Enhanced language mapping for categories with English, Hindi, and Telugu
-    const categoryTranslations = {
-        // Main Categories
-        "1 కూరగాయలు": {
-            en: "1 Vegetables",
-            hi: "1 सब्जियाँ",
-            te: "1 కూరగాయలు",
-            subCategories: {
-                "టమాటలు": { en: "Tomatoes", hi: "टमाटर", te: "టమాటలు" },
-                "వంకాయలు": { en: "Brinjals", hi: "बैंगन", te: "వంకాయలు" },
-                "బెండకాయలు": { en: "Okra", hi: "भिंडी", te: "బెండకాయలు" },
-                // ... other subcategories with te property
-            }
-        },
-        // ... other categories with te property
-    };
+  // Enhanced language mapping for categories with English, Hindi, and Telugu
+  const enhancedCategoryTranslations = {
+    // Main Categories
+    "1 కూరగాయలు": {
+      en: "1 Vegetables",
+      hi: "1 सब्जियाँ",
+      te: "1 కూరగాయలు",
+      subCategories: {
+        "టమాటలు": { en: "Tomatoes", hi: "टमाटर", te: "టమాటలు" },
+        "వంకాయలు": { en: "Brinjals", hi: "बैंगन", te: "వంకాయలు" },
+        "బెండకాయలు": { en: "Okra", hi: "भिंडी", te: "బెండకాయలు" },
+      }
+    },
+    // Add other categories as needed
+    ...categoryTranslations
+  };
 
-    // Enhanced translation function with language support
-    const getTranslation = (text, lang, isSubCategory = false, mainCategory = '') => {
-        if (!text || text === 'N/A') return 'N/A';
+  // Enhanced translation function with language support
+  const enhancedGetTranslation = (text, lang, isSubCategory = false, mainCategory = '') => {
+    if (!text || text === 'N/A') return 'N/A';
 
-        // For main categories
-        if (categoryTranslations[text] && categoryTranslations[text][lang]) {
-            return categoryTranslations[text][lang];
+    // Use provided getTranslation function if available
+    if (getTranslation) {
+      const result = getTranslation(text, lang, isSubCategory, mainCategory);
+      if (result !== text) return result;
+    }
+
+    // For main categories
+    if (enhancedCategoryTranslations[text] && enhancedCategoryTranslations[text][lang]) {
+      return enhancedCategoryTranslations[text][lang];
+    }
+
+    // For sub categories
+    if (isSubCategory && mainCategory && enhancedCategoryTranslations[mainCategory]) {
+      const subCategoryTranslations = enhancedCategoryTranslations[mainCategory].subCategories;
+      if (subCategoryTranslations && subCategoryTranslations[text] && subCategoryTranslations[text][lang]) {
+        return subCategoryTranslations[text][lang];
+      }
+    }
+
+    // Try to find in any subcategory if mainCategory is not provided
+    if (isSubCategory && !mainCategory) {
+      for (const mainCat in enhancedCategoryTranslations) {
+        const subCategoryTranslations = enhancedCategoryTranslations[mainCat].subCategories;
+        if (subCategoryTranslations && subCategoryTranslations[text] && subCategoryTranslations[text][lang]) {
+          return subCategoryTranslations[text][lang];
         }
+      }
+    }
 
-        // For sub categories
-        if (isSubCategory && mainCategory && categoryTranslations[mainCategory]) {
-            const subCategoryTranslations = categoryTranslations[mainCategory].subCategories;
-            if (subCategoryTranslations && subCategoryTranslations[text] && subCategoryTranslations[text][lang]) {
-                return subCategoryTranslations[text][lang];
-            }
-        }
+    return text;
+  };
 
-        // Try to find in any subcategory if mainCategory is not provided
-        if (isSubCategory && !mainCategory) {
-            for (const mainCat in categoryTranslations) {
-                const subCategoryTranslations = categoryTranslations[mainCat].subCategories;
-                if (subCategoryTranslations && subCategoryTranslations[text] && subCategoryTranslations[text][lang]) {
-                    return subCategoryTranslations[text][lang];
-                }
-            }
-        }
+  // FIXED: Use only selected items for bill, ensure proper data structure
+  const billItems = useMemo(() => {
+    if (selectedItems && selectedItems.length > 0) {
+      // Ensure all items have required properties
+      return selectedItems.map(item => ({
+        id: item.id || Math.random().toString(36).substr(2, 9),
+        subCategory: item.subCategory || 'Unknown Item',
+        mainCategory: item.mainCategory || 'General',
+        quantity: item.quantity || 0,
+        price: item.price || 0,
+        total: item.total || 0,
+        date: item.date || new Date().toISOString(),
+        comments: item.comments || '',
+        status: item.status || 'pending'
+      }));
+    }
+    return [];
+  }, [selectedItems]);
 
-        return text;
+  // Calculate bill total from selected items only
+  const billTotal = useMemo(() => {
+    return billItems.reduce((sum, item) => sum + (parseFloat(item.total) || 0), 0);
+  }, [billItems]);
+
+  // FIXED: Get last payment and current balance with proper calculations
+  const getPaymentDetails = () => {
+    const lastPayment = paymentHistory.length > 0 ? paymentHistory[paymentHistory.length - 1] : null;
+    
+    // Calculate total purchase from all items
+    const totalPurchase = PurchaseItems.reduce((sum, item) => sum + (parseFloat(item.total) || 0), 0);
+    
+    // Calculate total paid from payment history
+    const totalPaid = paymentHistory.reduce((sum, payment) => sum + (parseFloat(payment.amount) || 0), 0);
+    
+    // Calculate current balance
+    const currentBalance = totalPurchase - totalPaid;
+
+    return {
+      lastPayment: lastPayment ? {
+        amount: lastPayment.amount || 0,
+        date: lastPayment.date,
+        mode: lastPayment.method || lastPayment.mode || 'Cash'
+      } : null,
+      currentBalance: Math.max(0, currentBalance),
+      totalPayments: totalPaid,
+      totalPurchase: totalPurchase,
+      previousPending: customer?.previousPending || 0
     };
+  };
 
-    // Filter items for bill - use selectedItems if provided, otherwise all PurchaseItems
-    const billItems = useMemo(() => {
-        return selectedItems.length > 0 ? selectedItems : PurchaseItems;
-    }, [selectedItems, PurchaseItems]);
+  const paymentDetails = getPaymentDetails();
 
-    // Calculate bill total
-    const billTotal = useMemo(() => {
-        return billItems.reduce((sum, item) => sum + (parseFloat(item.total) || 0), 0);
-    }, [billItems]);
+  // Generate bill number if not provided
+  const generatedBillNumber = useMemo(() => {
+    if (billNumber) return billNumber;
+    const timestamp = new Date().getTime().toString().slice(-6);
+    const itemCount = billItems.length.toString().padStart(3, '0');
+    const customerId = customer?.idNo?.substring(0, 4) || 'C-01';
+    return `${customerId}-BILL-${timestamp}-${itemCount}`;
+  }, [billNumber, billItems, customer]);
 
-    // Get last payment and current balance
-    const getPaymentDetails = () => {
-        const lastPayment = paymentHistory.length > 0 ? paymentHistory[paymentHistory.length - 1] : null;
-        const previousPending = customer?.previousPending || 0;
-        const totalPayments = paymentHistory.reduce((sum, payment) => sum + (payment.amount || 0), 0);
-        const currentBalance = previousPending + billTotal - totalPayments;
+  // Function to format date
+  const formatDate = (dateString) => {
+    if (!dateString) return 'N/A';
+    try {
+      const date = new Date(dateString);
+      return date.toLocaleDateString('en-IN');
+    } catch (error) {
+      return dateString;
+    }
+  };
 
-        return {
-            lastPayment: lastPayment ? {
-                amount: lastPayment.amount || 0,
-                date: lastPayment.date,
-                mode: lastPayment.mode || 'Cash'
-            } : null,
-            currentBalance,
-            totalPayments
-        };
-    };
-
+  const handleShareToWhatsApp = () => {
     const paymentDetails = getPaymentDetails();
+    const message = `*Bill Details*\n\n` +
+      `*Customer:* ${customer?.name || 'N/A'}\n` +
+      `*Bill Number:* ${generatedBillNumber}\n` +
+      `*Total Amount:* ₹${billTotal.toFixed(2)}\n` +
+      `*Items Count:* ${billItems.length}\n` +
+      `*Current Balance:* ₹${paymentDetails.currentBalance.toFixed(2)}\n` +
+      `*Last Payment:* ${paymentDetails.lastPayment ? `₹${paymentDetails.lastPayment.amount.toFixed(2)} on ${formatDate(paymentDetails.lastPayment.date)}` : 'No payments'}\n` +
+      `*Generated Date:* ${new Date().toLocaleDateString()}\n\n` +
+      `Thank you for your business!`;
 
-    // Generate bill number if not provided
-    const generatedBillNumber = useMemo(() => {
-        if (billNumber) return billNumber;
-        const timestamp = new Date().getTime().toString().slice(-6);
-        const itemCount = billItems.length.toString().padStart(3, '0');
-        return `JC-BILL-${timestamp}-${itemCount}`;
-    }, [billNumber, billItems]);
+    const encodedMessage = encodeURIComponent(message);
+    const whatsappUrl = `https://wa.me/?text=${encodedMessage}`;
 
-    // Function to format date
-    const formatDate = (dateString) => {
-        if (!dateString) return 'N/A';
-        try {
-            const date = new Date(dateString);
-            return date.toLocaleDateString('en-IN');
-        } catch (error) {
-            return dateString;
-        }
-    };
+    window.open(whatsappUrl, '_blank');
+  };
 
-    // Function to safely get item data
-    const getItemData = (item, key) => {
-        if (!item) return 'N/A';
+  // Function to safely get item data
+  const getItemData = (item, key) => {
+    if (!item) return 'N/A';
 
-        // Handle different data structures
-        if (item[key] !== undefined) {
-            return item[key];
-        }
+    // Handle different data structures
+    if (item[key] !== undefined) {
+      return item[key];
+    }
 
-        // Handle nested data from /Shop/CreditData/key/PurchaseItems/-key path
-        if (item.data && item.data[key] !== undefined) {
-            return item.data[key];
-        }
+    // Handle nested data from /Shop/CreditData/key/PurchaseItems/-key path
+    if (item.data && item.data[key] !== undefined) {
+      return item.data[key];
+    }
 
-        return 'N/A';
-    };
+    return 'N/A';
+  };
 
-    // Language-specific content
-    const languageContent = {
-        en: {
-            title: "INVOICE",
-            subtitle: "JenCeo Home Care Services & Traders - " + billTitle,
-            customerInfo: "Customer Information",
-            paymentSummary: "Payment Summary",
-            billDetails: "Bill Details",
-            paymentHistory: "Recent Payment",
-            thankYou: "Thank You!",
-            ourProducts: "Our Products",
-            lastPayment: "Last Payment",
-            currentBalance: "Current Balance",
-            totalPayments: "Total Payments",
-            currentBill: "Current Bill Amount",
-            customerMessage: `Dear ${customer?.name || 'Customer'}, Thank you for being a valued customer of JenCeo Home Care Services. We appreciate your trust in us and are committed to providing you with the highest quality service.`,
-            paymentDue: "Payment Due",
-            statusPending: "Pending",
-            statusPaid: "Paid",
-            itemDescription: "Item Description",
-            quantity: "Quantity",
-            price: "Price",
-            total: "Total",
-            subTotal: "Sub Total",
-            grandTotal: "GRAND TOTAL",
-            billNumber: "Bill Number",
-            paymentMode: "Payment Mode"
-        },
-        hi: {
-            title: "बिल",
-            subtitle: "जेनसीओ होम केयर सर्विसेज एंड ट्रेडर्स - " + (billTitle === 'Customer Bill' ? 'ग्राहक बिल' : billTitle),
-            customerInfo: "ग्राहक जानकारी",
-            paymentSummary: "भुगतान सारांश",
-            billDetails: "बिल विवरण",
-            paymentHistory: "हालिया भुगतान",
-            thankYou: "धन्यवाद!",
-            ourProducts: "हमारे उत्पाद",
-            lastPayment: "अंतिम भुगतान",
-            currentBalance: "वर्तमान शेष",
-            totalPayments: "कुल भुगतान",
-            currentBill: "वर्तमान बिल राशि",
-            customerMessage: `प्रिय ${customer?.name || 'ग्राहक'}, जेनसीओ होम केयर सर्विसेज के एक मूल्यवान ग्राहक होने के लिए धन्यवाद। हम आपके विश्वास की सराहना करते हैं और आपको उच्चतम गुणवत्ता वाली सेवा प्रदान करने के लिए प्रतिबद्ध हैं।`,
-            paymentDue: "भुगतान देय",
-            statusPending: "लंबित",
-            statusPaid: "भुगतान किया गया",
-            itemDescription: "वस्तु विवरण",
-            quantity: "मात्रा",
-            price: "मूल्य",
-            total: "कुल",
-            subTotal: "उप कुल",
-            grandTotal: "कुल योग",
-            billNumber: "बिल नंबर",
-            paymentMode: "भुगतान मोड"
-        },
-        te: {
-            title: "బిల్",
-            subtitle: "జెన్సియో హోమ్ కేర్ సర్వీసెస్ & ట్రేడర్స్ - " + (billTitle === 'Customer Bill' ? 'కస్టమర్ బిల్' : billTitle),
-            customerInfo: "కస్టమర్ సమాచారం",
-            paymentSummary: "చెల్లింపు సారాంశం",
-            billDetails: "బిల్ వివరాలు",
-            paymentHistory: "ఇటీవలి చెల్లింపు",
-            thankYou: "ధన్యవాదాలు!",
-            ourProducts: "మా ఉత్పత్తులు",
-            lastPayment: "చివరి చెల్లింపు",
-            currentBalance: "ప్రస్తుత బ్యాలెన్స్",
-            totalPayments: "మొత్తం చెల్లింపులు",
-            currentBill: "ప్రస్తుత బిల్ మొత్తం",
-            customerMessage: `ప్రియ ${customer?.name || 'కస్టమర్'}, జెన్సియో హోమ్ కేర్ సర్వీసెస్ యొక్క విలువైన కస్టమర్ అయినందుకు ధన్యవాదాలు. మీరు మాపై ఉంచిన నమ్మకాన్ని మేము అభినందిస్తున్నాము మరియు మీకు అత్యుత్తమ నాణ్యత సేవలను అందించడానికి ప్రతిబద్ధత కలిగి ఉన్నాము.`,
-            paymentDue: "చెల్లింపు బకాయి",
-            statusPending: "పెండింగ్",
-            statusPaid: "చెల్లించబడింది",
-            itemDescription: "ఐటెమ్ వివరణ",
-            quantity: "పరిమాణం",
-            price: "ధర",
-            total: "మొత్తం",
-            subTotal: "ఉప మొత్తం",
-            grandTotal: "మొత్తం బిల్",
-            billNumber: "బిల్ నంబర్",
-            paymentMode: "చెల్లింపు మోడ్"
-        }
-    };
+  // Language-specific content
+  const languageContent = {
+    en: {
+      title: "INVOICE",
+      subtitle: "JenCeo Home Care Services & Traders - " + billTitle,
+      customerInfo: "Customer Information",
+      paymentSummary: "Payment Summary",
+      billDetails: "Bill Details",
+      paymentHistory: "Payment History",
+      thankYou: "Thank You!",
+      ourProducts: "Our Products",
+      lastPayment: "Last Payment",
+      currentBalance: "Current Balance",
+      totalPayments: "Total Payments",
+      totalPurchase: "Total Purchase",
+      currentBill: "Current Bill Amount",
+      previousPending: "Previous Pending",
+      customerMessage: `Dear ${customer?.name || 'Customer'}, Thank you for being a valued customer of JenCeo Home Care Services. We appreciate your trust in us and are committed to providing you with the highest quality service.`,
+      paymentDue: "Payment Due",
+      statusPending: "Pending",
+      statusPaid: "Paid",
+      itemDescription: "Item Description",
+      quantity: "Quantity",
+      price: "Price",
+      total: "Total",
+      subTotal: "Sub Total",
+      grandTotal: "GRAND TOTAL",
+      billNumber: "Bill Number",
+      paymentMode: "Payment Mode"
+    },
+    hi: {
+      title: "बिल",
+      subtitle: "जेनसीओ होम केयर सर्विसेज एंड ट्रेडर्स - " + (billTitle === 'Customer Bill' ? 'ग्राहक बिल' : billTitle),
+      customerInfo: "ग्राहक जानकारी",
+      paymentSummary: "भुगतान सारांश",
+      billDetails: "बिल विवरण",
+      paymentHistory: "भुगतान इतिहास",
+      thankYou: "धन्यवाद!",
+      ourProducts: "हमारे उत्पाद",
+      lastPayment: "अंतिम भुगतान",
+      currentBalance: "वर्तमान शेष",
+      totalPayments: "कुल भुगतान",
+      totalPurchase: "कुल खरीद",
+      currentBill: "वर्तमान बिल राशि",
+      previousPending: "पिछला बकाया",
+      customerMessage: `प्रिय ${customer?.name || 'ग्राहक'}, जेनसीओ होम केयर सर्विसेज के एक मूल्यवान ग्राहक होने के लिए धन्यवाद। हम आपके विश्वास की सराहना करते हैं और आपको उच्चतम गुणवत्ता वाली सेवा प्रदान करने के लिए प्रतिबद्ध हैं।`,
+      paymentDue: "भुगतान देय",
+      statusPending: "लंबित",
+      statusPaid: "भुगतान किया गया",
+      itemDescription: "वस्तु विवरण",
+      quantity: "मात्रा",
+      price: "मूल्य",
+      total: "कुल",
+      subTotal: "उप कुल",
+      grandTotal: "कुल योग",
+      billNumber: "बिल नंबर",
+      paymentMode: "भुगतान मोड"
+    },
+    te: {
+      title: "బిల్",
+      subtitle: "జెన్సియో హోమ్ కేర్ సర్వీసెస్ & ట్రేడర్స్ - " + (billTitle === 'Customer Bill' ? 'కస్టమర్ బిల్' : billTitle),
+      customerInfo: "కస్టమర్ సమాచారం",
+      paymentSummary: "చెల్లింపు సారాంశం",
+      billDetails: "బిల్ వివరాలు",
+      paymentHistory: "చెల్లింపు చరిత్ర",
+      thankYou: "ధన్యవాదాలు!",
+      ourProducts: "మా ఉత్పత్తులు",
+      lastPayment: "చివరి చెల్లింపు",
+      currentBalance: "ప్రస్తుత బ్యాలెన్స్",
+      totalPayments: "మొత్తం చెల్లింపులు",
+      totalPurchase: "మొత్తం కొనుగోలు",
+      currentBill: "ప్రస్తుత బిల్ మొత్తం",
+      previousPending: "మునుపటి బకాయి",
+      customerMessage: `ప్రియ ${customer?.name || 'కస్టమర్'}, జెన్సియో హోమ్ కేర్ సర్వీసెస్ యొక్క విలువైన కస్టమర్ అయినందుకు ధన్యవాదాలు. మీరు మాపై ఉంచిన నమ్మకాన్ని మేము అభినందిస్తున్నాము మరియు మీకు అత్యుత్తమ నాణ్యత సేవలను అందించడానికి ప్రతిబద్ధత కలిగి ఉన్నాము.`,
+      paymentDue: "చెల్లింపు బకాయి",
+      statusPending: "పెండింగ్",
+      statusPaid: "చెల్లించబడింది",
+      itemDescription: "ఐటెమ్ వివరణ",
+      quantity: "పరిమాణం",
+      price: "ధర",
+      total: "మొత్తం",
+      subTotal: "ఉప మొత్తం",
+      grandTotal: "మొత్తం బిల్",
+      billNumber: "బిల్ నంబర్",
+      paymentMode: "చెల్లింపు మోడ్"
+    }
+  };
 
-    // Build bill HTML with professional styling and language support
-    const buildBillHTML = () => {
-        const currentDate = new Date().toLocaleDateString();
-        const customerName = customer?.name || 'Customer';
-        const customerId = customer?.idNo || 'N/A';
-        const customerPlace = customer?.place || 'N/A';
-        const customerGender = customer?.gender ? customer.gender.charAt(0).toUpperCase() + customer.gender.slice(1) : 'N/A';
+  // Build bill HTML with professional styling and language support
+  const buildBillHTML = () => {
+    const currentDate = new Date().toLocaleDateString();
+    const customerName = customer?.name || 'Customer';
+    const customerId = customer?.idNo || 'N/A';
+    const customerPlace = customer?.place || 'N/A';
+    const customerGender = customer?.gender ? customer.gender.charAt(0).toUpperCase() + customer.gender.slice(1) : 'N/A';
 
-        const content = languageContent[language];
+    const content = languageContent[language];
 
-        const html = `
+    const html = `
 <!doctype html>
 <html>
 <head>
@@ -286,12 +348,14 @@ const ShareBill = ({ customer, PurchaseItems, totalAmount, paymentHistory = [], 
   .payment-card.current-balance {border-left-color: #ff6b6b; background: linear-gradient(135deg, #fff5f5 0%, #ffecec 100%)}
   .payment-card.current-bill {border-left-color: #339af0; background: linear-gradient(135deg, #f0f8ff 0%, #e6f2ff 100%)}
   .payment-card.total-payments {border-left-color: #ff922b; background: linear-gradient(135deg, #fff4e6 0%, #ffebd6 100%)}
+  .payment-card.total-purchase {border-left-color: #cc5de8; background: linear-gradient(135deg, #f8f0fc 0%, #f3d9fa 100%)}
   .payment-label {font-size: 12px; color: #666; margin-bottom: 5px}
   .payment-amount {font-size: 18px; font-weight: bold}
   .payment-amount.last-payment {color: #51cf66}
   .payment-amount.current-balance {color: #ff6b6b}
   .payment-amount.current-bill {color: #339af0}
   .payment-amount.total-payments {color: #ff922b}
+  .payment-amount.total-purchase {color: #cc5de8}
   
   /* Bill specific styles */
   .bill-table {width:100%; border-collapse:collapse; margin:20px 0; box-shadow: 0 1px 3px rgba(0,0,0,0.1)}
@@ -395,10 +459,10 @@ const ShareBill = ({ customer, PurchaseItems, totalAmount, paymentHistory = [], 
     </div>
   </div>
 
-  <!-- Payment Summary Section -->
+  <!-- FIXED: Payment Summary Section with proper calculations -->
   ${section(
-    `<h3>${content.paymentSummary}</h3>`,
-    `
+      `<h3>${content.paymentSummary}</h3>`,
+      `
     <div class="payment-summary">
       ${paymentDetails.lastPayment ? `
       <div class="payment-card last-payment">
@@ -414,16 +478,16 @@ const ShareBill = ({ customer, PurchaseItems, totalAmount, paymentHistory = [], 
       </div>
       `}
       
-      <div class="payment-card current-balance">
-        <div class="payment-label">${content.currentBalance}</div>
-        <div class="payment-amount current-balance">₹${paymentDetails.currentBalance.toFixed(2)}</div>
-        <small class="muted">Current outstanding amount</small>
+      <div class="payment-card total-purchase">
+        <div class="payment-label">${content.totalPurchase}</div>
+        <div class="payment-amount total-purchase">₹${paymentDetails.totalPurchase.toFixed(2)}</div>
+        <small class="muted">Total purchase amount</small>
       </div>
       
       <div class="payment-card current-bill">
         <div class="payment-label">${content.currentBill}</div>
         <div class="payment-amount current-bill">₹${billTotal.toFixed(2)}</div>
-        <small class="muted">Amount for current items</small>
+        <small class="muted">Amount for selected items</small>
       </div>
       
       <div class="payment-card total-payments">
@@ -431,13 +495,19 @@ const ShareBill = ({ customer, PurchaseItems, totalAmount, paymentHistory = [], 
         <div class="payment-amount total-payments">₹${paymentDetails.totalPayments.toFixed(2)}</div>
         <small class="muted">Total payments received</small>
       </div>
+      
+      <div class="payment-card current-balance">
+        <div class="payment-label">${content.currentBalance}</div>
+        <div class="payment-amount current-balance">₹${paymentDetails.currentBalance.toFixed(2)}</div>
+        <small class="muted">Current outstanding amount</small>
+      </div>
     </div>
     `
-  )}
+    )}
 
   ${section(
-    `<h3>${content.customerInfo}</h3>`,
-    `
+      `<h3>${content.customerInfo}</h3>`,
+      `
       <div class="customer-grid">
         <div class="customer-item bg">
           <div class="customer-label">Customer Name</div>
@@ -465,16 +535,16 @@ const ShareBill = ({ customer, PurchaseItems, totalAmount, paymentHistory = [], 
         </div>
       </div>
     `
-  )}
+    )}
 
   <div class="customer-message">
     ${content.customerMessage}
     ${paymentDetails.currentBalance > 0 ? `<br><br><strong>${content.paymentDue}:</strong> ₹${paymentDetails.currentBalance.toFixed(2)} (Please settle at your earliest convenience)` : ''}
   </div>
 
-  ${section(
-    `<h3>${content.billDetails}</h3>`,
-    `
+  ${billItems.length > 0 ? section(
+      `<h3>${content.billDetails}</h3>`,
+      `
   <table class="bill-table">
     <thead>
       <tr>
@@ -498,35 +568,35 @@ const ShareBill = ({ customer, PurchaseItems, totalAmount, paymentHistory = [], 
 
         // Get translations based on selected language
         const teluguName = subCategory && subCategory !== 'N/A' ? subCategory : mainCategory;
-        const displayName = getTranslation(teluguName, language, true, mainCategory);
+        const displayName = enhancedGetTranslation(teluguName, language, true, mainCategory);
 
         return `
           <tr>
             <td>${index + 1}</td>
             <td>${date}</td>
-            <td>
+            <td style="text-align: left;">
               <strong>${displayName}</strong>
               ${language === 'en' ? `
                 <div class="language-tags">
-                  <span class="lang-tag">${teluguName}</span> /
-                  <span class="lang-tag">${getTranslation(teluguName, 'hi', true, mainCategory)}</span>
+                  <span class="lang-tag">Telugu: ${teluguName}</span>
+                  <span class="lang-tag">Hindi: ${enhancedGetTranslation(teluguName, 'hi', true, mainCategory)}</span>
                 </div>
               ` : language === 'hi' ? `
                 <div class="language-tags">
-                  <span class="lang-tag">${getTranslation(teluguName, 'en', true, mainCategory)}</span> /
-                  <span class="lang-tag">${teluguName}</span>
+                  <span class="lang-tag">English: ${enhancedGetTranslation(teluguName, 'en', true, mainCategory)}</span>
+                  <span class="lang-tag">Telugu: ${teluguName}</span>
                 </div>
               ` : `
                 <div class="language-tags">
-                  <span class="lang-tag">${getTranslation(teluguName, 'en', true, mainCategory)}</span> /
-                  <span class="lang-tag">${getTranslation(teluguName, 'hi', true, mainCategory)}</span>
+                  <span class="lang-tag">English: ${enhancedGetTranslation(teluguName, 'en', true, mainCategory)}</span>
+                  <span class="lang-tag">Hindi: ${enhancedGetTranslation(teluguName, 'hi', true, mainCategory)}</span>
                 </div>
               `}
               ${comments && comments !== 'N/A' ? `<small class="muted" style="display:block; margin-top: 4px">Comments: ${comments}</small>` : ''}
             </td>
             <td>${quantity} KG</td>
-            <td>₹${price}</td>
-            <td><strong>₹${total}</strong></td>
+            <td>₹${parseFloat(price).toFixed(2)}</td>
+            <td><strong>₹${parseFloat(total).toFixed(2)}</strong></td>
           </tr>
         `;
       }).join('')}
@@ -543,24 +613,31 @@ const ShareBill = ({ customer, PurchaseItems, totalAmount, paymentHistory = [], 
     </tbody>
   </table>
 `
-  )}
+    ) : `
+    <div class="customer-message" style="background: #fff3cd; border-left: 4px solid #ffc107;">
+      <strong>No Items Selected</strong><br>
+      This bill contains only payment summary information. No specific items are included in this bill.
+    </div>
+  `}
 
   <!-- Recent Payment Section -->
-  ${paymentDetails.lastPayment ? section(
-    `<h3>${content.paymentHistory}</h3>`,
-    `
+  ${paymentHistory.length > 0 ? section(
+      `<h3>${content.paymentHistory}</h3>`,
+      `
     <div class="payment-history">
-      <div class="payment-item">
-        <div>
-          <div><strong>Last Payment</strong></div>
-          <div class="payment-date">${formatDate(paymentDetails.lastPayment.date)}</div>
-          <div class="payment-mode">${paymentDetails.lastPayment.mode}</div>
+      ${paymentHistory.slice(-5).reverse().map(payment => `
+        <div class="payment-item">
+          <div>
+            <div><strong>Payment</strong></div>
+            <div class="payment-date">${formatDate(payment.date)}</div>
+            <div class="payment-mode">${payment.method || payment.mode || 'Cash'}</div>
+          </div>
+          <div class="payment-amount">₹${parseFloat(payment.amount || 0).toFixed(2)}</div>
         </div>
-        <div class="payment-amount">₹${paymentDetails.lastPayment.amount.toFixed(2)}</div>
-      </div>
+      `).join('')}
     </div>
     `
-  ) : ''}
+    ) : ''}
 
   <div class="thank-you">
     <h3 style="color:#02acf2; margin-bottom:10px">${content.thankYou}</h3>
@@ -599,7 +676,7 @@ const ShareBill = ({ customer, PurchaseItems, totalAmount, paymentHistory = [], 
 </div>
 <script>
   function changeLanguage(lang) {
-    window.location.href = window.location.href.split('?')[0] + '?lang=' + lang;
+    window.parent.postMessage({ type: 'CHANGE_LANGUAGE', language: lang }, '*');
   }
   
   // Set initial language from URL parameter
@@ -620,8 +697,8 @@ const ShareBill = ({ customer, PurchaseItems, totalAmount, paymentHistory = [], 
 </html>
 `;
 
-        function section(title, body) {
-            return `
+    function section(title, body) {
+      return `
       <div class="sec">
         <div class="sec-title">${title}</div>
         <div class="sec-body">
@@ -629,154 +706,197 @@ const ShareBill = ({ customer, PurchaseItems, totalAmount, paymentHistory = [], 
         </div>
       </div>
     `;
+    }
+
+    return html;
+  };
+
+  // Download bill as HTML file
+  const handleDownloadBill = () => {
+    const html = buildBillHTML();
+    const blob = new Blob([html], { type: 'text/html' });
+    const url = URL.createObjectURL(blob);
+
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `Bill_${generatedBillNumber}_${customer?.name || 'customer'}.html`;
+    document.body.appendChild(a);
+    a.click();
+
+    setTimeout(() => {
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }, 100);
+  };
+
+  // Share bill
+  const handleShareBill = async () => {
+    try {
+      const html = buildBillHTML();
+      const blob = new Blob([html], { type: 'text/html' });
+
+      if (navigator.share && navigator.canShare) {
+        const file = new File([blob], `Bill_${generatedBillNumber}_${customer?.name || 'customer'}.html`, { type: 'text/html' });
+
+        // Check if files can be shared
+        if (navigator.canShare && navigator.canShare({ files: [file] })) {
+          await navigator.share({
+            title: `Bill - ${customer?.name || 'Customer'} - ${generatedBillNumber}`,
+            text: `Bill for ${customer?.name || 'Customer'} - Total: ₹${billTotal.toFixed(2)}`,
+            files: [file]
+          });
+        } else {
+          // Fallback to sharing text
+          await navigator.share({
+            title: `Bill - ${customer?.name || 'Customer'} - ${generatedBillNumber}`,
+            text: `Bill for ${customer?.name || 'Customer'} - Total: ₹${billTotal.toFixed(2)}\nBill Number: ${generatedBillNumber}`
+          });
         }
+      } else {
+        // Fallback to download if share is not supported
+        handleDownloadBill();
+      }
+    } catch (error) {
+      console.error('Error sharing bill:', error);
+      // Fallback to download
+      handleDownloadBill();
+    }
+  };
 
-        return html;
-    };
+  // Print bill
+  const handlePrintBill = () => {
+    const html = buildBillHTML();
+    const printWindow = window.open('', '_blank');
+    printWindow.document.write(html);
+    printWindow.document.close();
+    printWindow.focus();
 
-    // Download bill as HTML file
-    const handleDownloadBill = () => {
-        const html = buildBillHTML();
-        const blob = new Blob([html], { type: 'text/html' });
-        const url = URL.createObjectURL(blob);
-
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `Bill_${generatedBillNumber}_${customer?.name || 'customer'}.html`;
-        document.body.appendChild(a);
-        a.click();
-
-        setTimeout(() => {
-            document.body.removeChild(a);
-            URL.revokeObjectURL(url);
-        }, 100);
-    };
-
-    // Share bill
-    const handleShareBill = async () => {
-        try {
-            const html = buildBillHTML();
-            const blob = new Blob([html], { type: 'text/html' });
-
-            if (navigator.share) {
-                const file = new File([blob], `Bill_${generatedBillNumber}_${customer?.name || 'customer'}.html`, { type: 'text/html' });
-                await navigator.share({
-                    title: `Bill - ${customer?.name} - ${generatedBillNumber}`,
-                    files: [file]
-                });
-            } else {
-                // Fallback to download if share is not supported
-                handleDownloadBill();
-            }
-        } catch (error) {
-            handleDownloadBill();
-        }
-    };
-
-    // Print bill
-    const handlePrintBill = () => {
-        const html = buildBillHTML();
-        const printWindow = window.open('', '_blank');
-        printWindow.document.write(html);
-        printWindow.document.close();
-        printWindow.focus();
-        printWindow.print();
+    // Wait for images to load before printing
+    printWindow.onload = () => {
+      printWindow.print();
+      // Don't close immediately to allow print dialog to show
+      setTimeout(() => {
         printWindow.close();
+      }, 100);
+    };
+  };
+
+  // Set iframe content when component mounts/updates
+  React.useEffect(() => {
+    if (iframeRef.current) {
+      iframeRef.current.srcdoc = buildBillHTML();
+    }
+  }, [customer, PurchaseItems, totalAmount, paymentHistory, language, selectedItems, generatedBillNumber]);
+
+  // Listen for language change messages from iframe
+  React.useEffect(() => {
+    const handleMessage = (event) => {
+      if (event.data && event.data.type === 'CHANGE_LANGUAGE') {
+        setLanguage(event.data.language);
+      }
     };
 
-    // Set iframe content when component mounts/updates
-    React.useEffect(() => {
-        if (iframeRef.current) {
-            iframeRef.current.srcdoc = buildBillHTML();
-        }
-    }, [customer, PurchaseItems, totalAmount, paymentHistory, language, selectedItems, generatedBillNumber]);
+    window.addEventListener('message', handleMessage);
+    return () => window.removeEventListener('message', handleMessage);
+  }, []);
 
-    return (
-        <div className="modal-card">
-            <div className="modal-card-header d-flex align-items-center justify-content-between">
-                <h4 className="mb-0">Bill Preview - {generatedBillNumber}</h4>
-                <div className="d-flex gap-2 align-items-center">
-                    {/* Language Selector */}
-                    <div className="btn-group btn-group-sm">
-                        <button
-                            type="button"
-                            className={`btn ${language === 'en' ? 'btn-primary' : 'btn-outline-primary'}`}
-                            onClick={() => setLanguage('en')}
-                        >
-                            EN
-                        </button>
-                        <button
-                            type="button"
-                            className={`btn ${language === 'hi' ? 'btn-primary' : 'btn-outline-primary'}`}
-                            onClick={() => setLanguage('hi')}
-                        >
-                            HI
-                        </button>
-                        <button
-                            type="button"
-                            className={`btn ${language === 'te' ? 'btn-primary' : 'btn-outline-primary'}`}
-                            onClick={() => setLanguage('te')}
-                        >
-                            TE
-                        </button>
-                    </div>
-                    
-                    <button
-                        type="button"
-                        className="btn btn-outline-info btn-sm"
-                        onClick={handlePrintBill}
-                    >
-                        <i className="fas fa-print me-1"></i>
-                        Print
-                    </button>
-                    <button
-                        type="button"
-                        className="btn btn-outline-primary btn-sm"
-                        onClick={handleDownloadBill}
-                    >
-                        <i className="fas fa-download me-1"></i>
-                        Download Bill
-                    </button>
-                    <button
-                        type="button"
-                        className="btn btn-outline-success btn-sm"
-                        onClick={handleShareBill}
-                    >
-                        <i className="fas fa-share me-1"></i>
-                        Share Bill
-                    </button>
-                </div>
-            </div>
+  return (
+    <div className="modal-card">
+      <div className="modal-card-header d-flex align-items-center justify-content-between">
+        <h4 className="mb-0">Bill Preview - {generatedBillNumber}</h4>
+        <div className="d-flex gap-2 align-items-center">
+          {/* Language Selector */}
+          <div className="btn-group btn-group-sm">
+            <button
+              type="button"
+              className={`btn ${language === 'en' ? 'btn-primary' : 'btn-outline-primary'}`}
+              onClick={() => setLanguage('en')}
+            >
+              EN
+            </button>
+            <button
+              type="button"
+              className={`btn ${language === 'hi' ? 'btn-primary' : 'btn-outline-primary'}`}
+              onClick={() => setLanguage('hi')}
+            >
+              HI
+            </button>
+            <button
+              type="button"
+              className={`btn ${language === 'te' ? 'btn-primary' : 'btn-outline-primary'}`}
+              onClick={() => setLanguage('te')}
+            >
+              TE
+            </button>
+          </div>
 
-            <div className="modal-card-body bill-wrapper">
-                <iframe
-                    ref={iframeRef}
-                    title="Bill Preview"
-                    style={{
-                        width: "100%",
-                        height: "800px",
-                        border: "1px solid #e5e5e5",
-                        borderRadius: 8,
-                        background: "white"
-                    }}
-                />
-            </div>
-
-            <div className="modal-card-footer d-flex justify-content-between align-items-center p-3 border-top">
-                <small className="text-muted">
-                    Bill Number: <strong className="text-primary">{generatedBillNumber}</strong> |
-                    Current Balance: <strong className="text-success">₹{paymentDetails.currentBalance.toFixed(2)}</strong> |
-                    Items: <strong>{billItems.length}</strong>
-                    {selectedItems.length > 0 && (
-                        <> | Selected Items: <strong>{selectedItems.length}</strong></>
-                    )}
-                </small>
-                <small className="text-muted">
-                    Generated on: {new Date().toLocaleDateString()} | Language: {language.toUpperCase()}
-                </small>
-            </div>
+          <button
+            type="button"
+            className="btn btn-outline-info btn-sm"
+            onClick={handlePrintBill}
+          >
+            <i className="bi bi-printer me-1"></i>
+            Print
+          </button>
+          <button
+            type="button"
+            className="btn btn-outline-primary btn-sm"
+            onClick={handleDownloadBill}
+          >
+            <i className="bi bi-download me-1"></i>
+            Download Bill
+          </button>
+          <button
+            type="button"
+            className="btn btn-outline-success btn-sm"
+            onClick={handleShareBill}
+          >
+            <i className="bi bi-share me-1"></i>
+            Share Bill
+          </button>
         </div>
-    );
+      </div>
+
+      <div className="modal-card-body bill-wrapper">
+        <iframe
+          ref={iframeRef}
+          title="Bill Preview"
+          style={{
+            width: "100%",
+            height: "800px",
+            border: "1px solid #e5e5e5",
+            borderRadius: 8,
+            background: "white"
+          }}
+        />
+      </div>
+
+      <div className="modal-card-footer d-flex justify-content-between align-items-center p-3 border-top">
+        <div className="d-flex gap-2">
+          <button
+            type="button"
+            className="btn btn-success btn-sm"
+            onClick={handleShareToWhatsApp}
+          >
+            <i className="bi bi-whatsapp me-1"></i>
+            Share to WhatsApp
+          </button>
+          <button
+            type="button"
+            className="btn btn-outline-primary btn-sm"
+            onClick={handleDownloadBill}
+          >
+            <i className="bi bi-download me-1"></i>
+            Download
+          </button>
+        </div>
+        <small className="text-muted">
+          Bill: <strong className="text-primary">{generatedBillNumber}</strong> |
+          Balance: <strong className="text-success">₹{paymentDetails.currentBalance.toFixed(2)}</strong>
+        </small>
+      </div>
+    </div>
+  );
 };
 
 export default ShareBill;

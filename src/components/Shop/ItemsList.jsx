@@ -20,6 +20,8 @@ const ItemsList = ({
     const [showConfirmModal, setShowConfirmModal] = useState(false);
     const [showSuccessModal, setShowSuccessModal] = useState(false);
     const [showDiscardModal, setShowDiscardModal] = useState(false);
+    const [showDetailsModal, setShowDetailsModal] = useState(false);
+    const [selectedPaidItems, setSelectedPaidItems] = useState([]);
     const [activeTab, setActiveTab] = useState('current'); // 'current' or 'old'
     const [oldItemsPage, setOldItemsPage] = useState(1);
     const [oldItemsPerPage, setOldItemsPerPage] = useState(10);
@@ -37,9 +39,14 @@ const ItemsList = ({
 
     // Generate bill number
     const generateBillNumber = (items = []) => {
-        const timestamp = new Date().getTime().toString().slice(-6);
-        const itemCount = items.length.toString().padStart(3, '0');
-        return `JC-BILL-${timestamp}-${itemCount}`;
+        const now = new Date();
+        const timestamp = now.getTime().toString().slice(-6);
+        const customerId = 'C-01'; // You might want to pass customer ID as prop
+        const month = now.toLocaleDateString('en-US', { month: 'short' });
+        const day = now.getDate();
+        const itemCount = items.length.toString();
+
+        return `${customerId}-${month}-${day}-${itemCount}`;
     };
 
     // Format date to short format (Dec-11)
@@ -108,59 +115,45 @@ const ItemsList = ({
         return Object.keys(itemsByDate).sort((a, b) => new Date(b) - new Date(a));
     }, [itemsByDate]);
 
-    // Filter and paginate old items
-    const filteredOldItems = useMemo(() => {
-        let filtered = [...oldItems];
-
-        // Apply date filter
-        if (oldItemsFilter.date) {
-            filtered = filtered.filter(item => {
-                const itemDate = new Date(item.date).toISOString().split('T')[0];
-                return itemDate === oldItemsFilter.date;
-            });
-        }
-
-        // Apply category filter
-        if (oldItemsFilter.category) {
-            filtered = filtered.filter(item =>
-                item.mainCategory === oldItemsFilter.category ||
-                item.subCategory === oldItemsFilter.category
-            );
-        }
-
-        // Apply search filter
-        if (oldItemsFilter.search) {
-            const searchTerm = oldItemsFilter.search.toLowerCase();
-            filtered = filtered.filter(item =>
-                item.subCategory?.toLowerCase().includes(searchTerm) ||
-                item.mainCategory?.toLowerCase().includes(searchTerm) ||
-                item.notes?.toLowerCase().includes(searchTerm)
-            );
-        }
-
-        return filtered.sort((a, b) => new Date(b.paymentDate || b.date) - new Date(a.paymentDate || a.date));
-    }, [oldItems, oldItemsFilter]);
-
-    // Paginate old items
-    const paginatedOldItems = useMemo(() => {
-        const startIndex = (oldItemsPage - 1) * oldItemsPerPage;
-        return filteredOldItems.slice(startIndex, startIndex + oldItemsPerPage);
-    }, [filteredOldItems, oldItemsPage, oldItemsPerPage]);
-
-    // Get unique dates and categories for old items filters
-    const oldItemsDates = useMemo(() => {
-        const dates = [...new Set(oldItems.map(item => new Date(item.date).toISOString().split('T')[0]))];
-        return dates.sort((a, b) => new Date(b) - new Date(a));
-    }, [oldItems]);
-
-    const oldItemsCategories = useMemo(() => {
-        const categories = new Set();
+    // Group paid items by payment date for summary view
+    const paidItemsByPaymentDate = useMemo(() => {
+        const grouped = {};
         oldItems.forEach(item => {
-            if (item.mainCategory) categories.add(item.mainCategory);
-            if (item.subCategory) categories.add(item.subCategory);
+            const paymentDate = item.paymentDate || item.date;
+            if (!paymentDate) return;
+
+            try {
+                const date = new Date(paymentDate);
+                if (isNaN(date.getTime())) return;
+
+                const dateKey = date.toISOString().split('T')[0];
+                if (!grouped[dateKey]) {
+                    grouped[dateKey] = {
+                        items: [],
+                        totalAmount: 0,
+                        paymentDate: paymentDate,
+                        paymentMode: item.paymentMode || 'Cash'
+                    };
+                }
+                grouped[dateKey].items.push(item);
+                grouped[dateKey].totalAmount += parseFloat(item.total) || 0;
+            } catch (error) {
+                // Skip invalid dates
+            }
         });
-        return Array.from(categories).sort();
+        return grouped;
     }, [oldItems]);
+
+    // Get paid dates for summary view
+    const paidDates = useMemo(() => {
+        return Object.keys(paidItemsByPaymentDate).sort((a, b) => new Date(b) - new Date(a));
+    }, [paidItemsByPaymentDate]);
+
+    // Paginate paid dates summary
+    const paginatedPaidDates = useMemo(() => {
+        const startIndex = (oldItemsPage - 1) * oldItemsPerPage;
+        return paidDates.slice(startIndex, startIndex + oldItemsPerPage);
+    }, [paidDates, oldItemsPage, oldItemsPerPage]);
 
     // Calculate total for selected items
     const selectedTotal = useMemo(() => {
@@ -189,10 +182,10 @@ const ItemsList = ({
             pendingAmount,
             pendingItemsCount: pendingItems.length,
             pendingDays: pendingDates.size,
-            totalItems: localItems.length,
+            totalItems: currentItems.length, // Show only unpaid items total
             paidItemsCount: oldItems.length
         };
-    }, [currentItems, oldItems, localItems]);
+    }, [currentItems, oldItems]);
 
     // Handle select all for current date
     const handleSelectAll = (checked, date) => {
@@ -255,8 +248,8 @@ const ItemsList = ({
         );
     };
 
-    // Handle share bill for date group
-    const handleShareDateBill = (date) => {
+    // Handle generate bill for date group
+    const handleGenerateDateBill = (date) => {
         const dateItems = itemsByDate[date] || [];
         if (dateItems.length === 0) return;
 
@@ -266,24 +259,55 @@ const ItemsList = ({
         }
     };
 
-    // Handle share bill for individual item
-    const handleShareItemBill = (item) => {
-        const billNumber = generateBillNumber([item]);
+    // Handle generate bill for paid date summary
+    const handleGeneratePaidDateBill = (paymentDate) => {
+        const paidDateData = paidItemsByPaymentDate[paymentDate];
+        if (!paidDateData || paidDateData.items.length === 0) return;
+
+        const billNumber = generateBillNumber(paidDateData.items);
         if (onShareBill) {
-            onShareBill([item], billNumber, `Bill for ${item.subCategory}`);
+            onShareBill(paidDateData.items, billNumber, `Paid Bill for ${formatDateFull(paymentDate)}`);
         }
     };
 
-    // Handle share selected items bill
-    const handleShareSelectedBill = () => {
+    // FIXED: Handle create bill with selected items - ensure proper data passing
+    const handleCreateBill = () => {
         if (selectedItems.length === 0) {
-            showModal('warning', 'No Items Selected', 'Please select items to share bill.');
+            showModal('warning', 'No Items Selected', 'Please select items to create a bill.');
             return;
         }
 
-        const billNumber = generateBillNumber(selectedItems);
+        // Filter only valid items with required properties
+        const validSelectedItems = selectedItems.filter(item => 
+            item && item.id && item.subCategory && item.total
+        );
+
+        if (validSelectedItems.length === 0) {
+            showModal('error', 'Invalid Items', 'Selected items are not valid for bill generation.');
+            return;
+        }
+
+        const billNumber = generateBillNumber(validSelectedItems);
+        
+        console.log('Creating bill with items:', validSelectedItems);
+        console.log('Bill number:', billNumber);
+        
         if (onShareBill) {
-            onShareBill(selectedItems, billNumber, 'Selected Items Bill');
+            // Ensure we pass all required data
+            onShareBill(validSelectedItems, billNumber, 'Selected Items Bill');
+            // Show success message
+            showModal('success', 'Bill Generated', `Bill ${billNumber} has been generated successfully!`);
+        } else {
+            showModal('error', 'Feature Unavailable', 'Share bill functionality is not available at the moment.');
+        }
+    };
+
+    // Handle paid date row click to show details
+    const handlePaidDateClick = (paymentDate) => {
+        const paidDateData = paidItemsByPaymentDate[paymentDate];
+        if (paidDateData && paidDateData.items.length > 0) {
+            setSelectedPaidItems(paidDateData.items);
+            setShowDetailsModal(true);
         }
     };
 
@@ -293,19 +317,6 @@ const ItemsList = ({
         // Clear selection when items change
         setSelectedItems([]);
     }, [PurchaseItems, refreshTrigger]);
-
-    // Handle create bill with confirmation
-    const handleCreateBill = () => {
-        if (selectedItems.length === 0) {
-            showModal('warning', 'No Items Selected', 'Please select items to create a bill.');
-            return;
-        }
-
-        showModal('confirm', 'Create Bill',
-            `Create bill for ${selectedItems.length} items totaling ₹${selectedTotal.toFixed(2)}?`,
-            () => onCreateBill(selectedItems, selectedTotal)
-        );
-    };
 
     // Handle clear selection with confirmation
     const handleClearSelection = () => {
@@ -367,6 +378,7 @@ const ItemsList = ({
         setShowConfirmModal(false);
         setShowDiscardModal(false);
         setShowSuccessModal(false);
+        setShowDetailsModal(false);
     };
 
     // Get modal icon and color based on type
@@ -412,7 +424,7 @@ const ItemsList = ({
         return (
             <div className="text-center py-5">
                 <div className="text-muted mb-3">
-                    <i className="fas fa-shopping-cart fa-3x"></i>
+                    <i className="bi bi-cart3" style={{fontSize: '3rem'}}></i>
                 </div>
                 <h5 className="text-muted">No Items Found</h5>
                 <p className="text-muted">No items have been added for this customer yet.</p>
@@ -426,7 +438,7 @@ const ItemsList = ({
                         padding: "10px 20px"
                     }}
                 >
-                    <i className="fas fa-plus me-2"></i>
+                    <i className="bi bi-plus me-2"></i>
                     Add First Item
                 </button>
             </div>
@@ -445,7 +457,7 @@ const ItemsList = ({
                         borderRadius: "12px"
                     }}>
                         <div className="card-body py-3">
-                            <i className="fas fa-coins fa-2x text-warning mb-2"></i>
+                            <i className="bi bi-coin text-warning mb-2" style={{fontSize: '2rem'}}></i>
                             <h6 className="text-white mb-1">Total Balance</h6>
                             <h5 className="text-white fw-bold">₹{totalAmount.toFixed(2)}</h5>
                         </div>
@@ -457,7 +469,7 @@ const ItemsList = ({
                         borderRadius: "12px"
                     }}>
                         <div className="card-body py-3">
-                            <i className="fas fa-clock fa-2x text-warning mb-2"></i>
+                            <i className="bi bi-clock text-warning mb-2" style={{fontSize: '2rem'}}></i>
                             <h6 className="text-white mb-1">Pending Amount</h6>
                             <h5 className="text-white fw-bold">₹{pendingStats.pendingAmount.toFixed(2)}</h5>
                         </div>
@@ -469,7 +481,7 @@ const ItemsList = ({
                         borderRadius: "12px"
                     }}>
                         <div className="card-body py-3">
-                            <i className="fas fa-calendar-day fa-2x text-info mb-2"></i>
+                            <i className="bi bi-calendar-day text-info mb-2" style={{fontSize: '2rem'}}></i>
                             <h6 className="text-white mb-1">Pending Days</h6>
                             <h5 className="text-white fw-bold">{pendingStats.pendingDays} days</h5>
                         </div>
@@ -481,8 +493,8 @@ const ItemsList = ({
                         borderRadius: "12px"
                     }}>
                         <div className="card-body py-3">
-                            <i className="fas fa-shopping-cart fa-2x text-success mb-2"></i>
-                            <h6 className="text-white mb-1">Total Items</h6>
+                            <i className="bi bi-cart3 text-success mb-2" style={{fontSize: '2rem'}}></i>
+                            <h6 className="text-white mb-1">Pending Items</h6>
                             <h5 className="text-white fw-bold">{pendingStats.totalItems}</h5>
                         </div>
                     </div>
@@ -492,7 +504,7 @@ const ItemsList = ({
             {/* Header with Actions */}
             <div className="d-flex justify-content-between align-items-center mb-4">
                 <h5 className="text-warning mb-0">
-                    <i className="fas fa-shopping-cart me-2"></i>
+                    <i className="bi bi-cart3 me-2"></i>
                     Purchase History
                 </h5>
                 <div className="d-flex align-items-center gap-2">
@@ -511,7 +523,7 @@ const ItemsList = ({
                             padding: "8px 16px"
                         }}
                     >
-                        <i className="fas fa-plus me-2"></i>
+                        <i className="bi bi-plus me-2"></i>
                         Add Items
                     </button>
                     <button
@@ -524,7 +536,7 @@ const ItemsList = ({
                             padding: "8px 16px"
                         }}
                     >
-                        <i className="fas fa-sync-alt me-2"></i>
+                        <i className="bi bi-arrow-clockwise me-2"></i>
                         Refresh
                     </button>
                 </div>
@@ -543,7 +555,7 @@ const ItemsList = ({
                                 borderRadius: '8px 8px 0 0'
                             }}
                         >
-                            <i className="fas fa-clock me-2"></i>
+                            <i className="bi bi-clock me-2"></i>
                             Current Items ({currentItems.length})
                         </button>
                     </li>
@@ -557,7 +569,7 @@ const ItemsList = ({
                                 borderRadius: '8px 8px 0 0'
                             }}
                         >
-                            <i className="fas fa-history me-2"></i>
+                            <i className="bi bi-history me-2"></i>
                             Paid History ({oldItems.length})
                         </button>
                     </li>
@@ -611,7 +623,7 @@ const ItemsList = ({
                             <div className="d-flex justify-content-between align-items-center">
                                 <div>
                                     <span className="text-light fw-bold">
-                                        <i className="fas fa-check-circle me-2 text-success"></i>
+                                        <i className="bi bi-check-circle me-2 text-success"></i>
                                         {selectedItems.length} items selected • Total: ₹{selectedTotal.toFixed(2)}
                                     </span>
                                 </div>
@@ -626,7 +638,7 @@ const ItemsList = ({
                                             padding: "8px 16px"
                                         }}
                                     >
-                                        <i className="fas fa-credit-card me-2"></i>
+                                        <i className="bi bi-credit-card me-2"></i>
                                         Pay Amount
                                     </button>
                                     <button
@@ -639,21 +651,8 @@ const ItemsList = ({
                                             padding: "8px 16px"
                                         }}
                                     >
-                                        <i className="fas fa-receipt me-2"></i>
+                                        <i className="bi bi-receipt me-2"></i>
                                         Create Bill
-                                    </button>
-                                    <button
-                                        className="btn btn-info btn-sm fw-bold"
-                                        onClick={handleShareSelectedBill}
-                                        style={{
-                                            background: "linear-gradient(135deg, #0ea5e9 0%, #0284c7 100%)",
-                                            border: "none",
-                                            borderRadius: "8px",
-                                            padding: "8px 16px"
-                                        }}
-                                    >
-                                        <i className="bi bi-share me-2"></i>
-                                        Share Bill
                                     </button>
                                     <button
                                         className="btn btn-outline-light btn-sm fw-bold"
@@ -663,7 +662,7 @@ const ItemsList = ({
                                             padding: "8px 16px"
                                         }}
                                     >
-                                        <i className="fas fa-times me-2"></i>
+                                        <i className="bi bi-x me-2"></i>
                                         Clear
                                     </button>
                                 </div>
@@ -696,7 +695,7 @@ const ItemsList = ({
                                         }}>
                                             <div className="d-flex align-items-center gap-3">
                                                 <h6 className="text-white mb-0 fw-bold">
-                                                    <i className="fas fa-calendar-day me-2"></i>
+                                                    <i className="bi bi-calendar-day me-2"></i>
                                                     {items[0]?.displayDate || 'Invalid Date'}
                                                 </h6>
                                                 <span className="badge bg-light text-dark">
@@ -704,12 +703,12 @@ const ItemsList = ({
                                                 </span>
                                                 {pendingItemsCount > 0 ? (
                                                     <span className="badge bg-warning">
-                                                        <i className="fas fa-clock me-1"></i>
+                                                        <i className="bi bi-clock me-1"></i>
                                                         {pendingItemsCount} pending
                                                     </span>
                                                 ) : (
                                                     <span className="badge bg-success">
-                                                        <i className="fas fa-check me-1"></i>
+                                                        <i className="bi bi-check me-1"></i>
                                                         All paid
                                                     </span>
                                                 )}
@@ -718,17 +717,6 @@ const ItemsList = ({
                                                 </span>
                                             </div>
                                             <div className="d-flex align-items-center gap-2">
-                                                <button
-                                                    className="btn btn-outline-light btn-sm"
-                                                    onClick={() => handleShareDateBill(date)}
-                                                    title="Share Bill for this date"
-                                                    style={{
-                                                        borderRadius: "6px",
-                                                        padding: "4px 8px"
-                                                    }}
-                                                >
-                                                    <i className="bi bi-share text-info"></i>
-                                                </button>
                                                 {pendingItemsCount > 0 && (
                                                     <div className="form-check form-check-inline m-0">
                                                         <input
@@ -765,7 +753,6 @@ const ItemsList = ({
                                                             <th className="text-center" style={{ width: '120px' }}>Total</th>
                                                             <th className="text-center" style={{ width: '100px' }}>Status</th>
                                                             <th className="text-center" style={{ width: '60px' }}>Select</th>
-                                                            <th className="text-center" style={{ width: '50px' }}>Share</th>
                                                         </tr>
                                                     </thead>
                                                     <tbody>
@@ -794,7 +781,7 @@ const ItemsList = ({
                                                                             <div className={`fw-semibold mb-1 ${isPaid ? 'text-success' : 'text-warning'}`}>
                                                                                 {item.subCategory}
                                                                                 {isPaid && (
-                                                                                    <i className="fas fa-check-circle ms-2 text-success" title="Paid"></i>
+                                                                                    <i className="bi bi-check-circle ms-2 text-success" title="Paid"></i>
                                                                                 )}
                                                                             </div>
                                                                             <div className="small text-muted">
@@ -803,7 +790,7 @@ const ItemsList = ({
 
                                                                             {isPaid && item.paymentDate && (
                                                                                 <div className="small text-success">
-                                                                                    <i className="fas fa-calendar-check me-1"></i>
+                                                                                    <i className="bi bi-calendar-check me-1"></i>
                                                                                     Paid on :<span className='text-warning'> {new Date(item.paymentDate).toLocaleDateString()}</span>
                                                                                 </div>
                                                                             )}
@@ -823,9 +810,9 @@ const ItemsList = ({
                                                                     <td className="text-center">
                                                                         <span className={`badge ${isPaid ? 'bg-success' : 'bg-warning'}`}>
                                                                             {isPaid ? (
-                                                                                <><i className="fas fa-check me-1"></i>Paid</>
+                                                                                <><i className="bi bi-check me-1"></i>Paid</>
                                                                             ) : (
-                                                                                <><i className="fas fa-clock me-1"></i>Pending</>
+                                                                                <><i className="bi bi-clock me-1"></i>Pending</>
                                                                             )}
                                                                         </span>
                                                                     </td>
@@ -842,21 +829,6 @@ const ItemsList = ({
                                                                                 cursor: isPaid ? 'not-allowed' : 'pointer'
                                                                             }}
                                                                         />
-                                                                    </td>
-                                                                    <td className="text-center">
-                                                                        <button
-                                                                            className="btn btn-outline-info btn-sm"
-                                                                            onClick={() => handleShareItemBill(item)}
-                                                                            title="Share this item bill"
-                                                                            style={{
-                                                                                borderRadius: "6px",
-                                                                                padding: "2px 6px",
-                                                                                border: "1px solid #0dcaf0"
-                                                                            }}
-                                                                            disabled={isPaid}
-                                                                        >
-                                                                            <i className="bi bi-share fa-xs"></i>
-                                                                        </button>
                                                                     </td>
                                                                 </tr>
                                                             );
@@ -876,9 +848,9 @@ const ItemsList = ({
                                                             <td className="text-center">
                                                                 <span className="badge bg-info">
                                                                     {pendingItemsCount > 0 ? (
-                                                                        <><i className="fas fa-clock me-1"></i>{pendingItemsCount} pending</>
+                                                                        <><i className="bi bi-clock me-1"></i>{pendingItemsCount} pending</>
                                                                     ) : (
-                                                                        <><i className="fas fa-check me-1"></i>All paid</>
+                                                                        <><i className="bi bi-check me-1"></i>All paid</>
                                                                     )}
                                                                 </span>
                                                             </td>
@@ -886,9 +858,6 @@ const ItemsList = ({
                                                                 <span className="text-muted small">
                                                                     {pendingAmount > 0 ? `Pending: ₹${pendingAmount.toFixed(2)}` : 'Clear'}
                                                                 </span>
-                                                            </td>
-                                                            <td className="text-center">
-                                                                {/* Empty cell for share column */}
                                                             </td>
                                                         </tr>
                                                     </tbody>
@@ -914,80 +883,16 @@ const ItemsList = ({
                         borderRadius: "12px 12px 0 0"
                     }}>
                         <h6 className="text-white mb-0 fw-bold">
-                            <i className="fas fa-history me-2"></i>
+                            <i className="bi bi-history me-2"></i>
                             Paid Items History ({oldItems.length} items)
                         </h6>
                     </div>
 
-                    {/* Filters */}
-                    <div className="card-body border-bottom">
-                        <div className="row g-3">
-                            <div className="col-md-3">
-                                <label className="form-label text-light small fw-bold">Date</label>
-                                <select
-                                    className="form-select form-select-sm"
-                                    value={oldItemsFilter.date}
-                                    onChange={(e) => {
-                                        setOldItemsFilter(prev => ({ ...prev, date: e.target.value }));
-                                        setOldItemsPage(1);
-                                    }}
-                                >
-                                    <option value="">All Dates</option>
-                                    {oldItemsDates.map(date => (
-                                        <option key={date} value={date}>
-                                            {formatDateFull(date)}
-                                        </option>
-                                    ))}
-                                </select>
-                            </div>
-                            <div className="col-md-3">
-                                <label className="form-label text-light small fw-bold">Category</label>
-                                <select
-                                    className="form-select form-select-sm"
-                                    value={oldItemsFilter.category}
-                                    onChange={(e) => {
-                                        setOldItemsFilter(prev => ({ ...prev, category: e.target.value }));
-                                        setOldItemsPage(1);
-                                    }}
-                                >
-                                    <option value="">All Categories</option>
-                                    {oldItemsCategories.map(category => (
-                                        <option key={category} value={category}>
-                                            {category}
-                                        </option>
-                                    ))}
-                                </select>
-                            </div>
-                            <div className="col-md-4">
-                                <label className="form-label text-light small fw-bold">Search</label>
-                                <input
-                                    type="text"
-                                    className="form-control form-control-sm"
-                                    placeholder="Search by item name or notes..."
-                                    value={oldItemsFilter.search}
-                                    onChange={(e) => {
-                                        setOldItemsFilter(prev => ({ ...prev, search: e.target.value }));
-                                        setOldItemsPage(1);
-                                    }}
-                                />
-                            </div>
-                            <div className="col-md-2 d-flex align-items-end">
-                                <button
-                                    className="btn btn-outline-light btn-sm w-100"
-                                    onClick={resetOldItemsFilters}
-                                >
-                                    <i className="fas fa-refresh me-1"></i>
-                                    Reset
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* Items Table */}
+                    {/* Paid Items Summary Table */}
                     <div className="card-body p-0">
-                        {filteredOldItems.length === 0 ? (
+                        {paidDates.length === 0 ? (
                             <div className="text-center py-5 text-muted">
-                                <i className="fas fa-receipt fa-3x mb-3"></i>
+                                <i className="bi bi-receipt" style={{fontSize: '3rem'}}></i>
                                 <p>No paid items found</p>
                             </div>
                         ) : (
@@ -998,69 +903,66 @@ const ItemsList = ({
                                             <tr style={{
                                                 background: "linear-gradient(135deg, #059669 0%, #047857 100%)"
                                             }}>
-                                                <th className="text-center">#</th>
-                                                <th>Item Details</th>
+                                                <th className="text-center">S.No</th>
                                                 <th className="text-center">Date</th>
-                                                <th className="text-center">Quantity</th>
-                                                <th className="text-center">Price</th>
-                                                <th className="text-center">Total</th>
+                                                <th className="text-center">Total Items</th>
+                                                <th className="text-center">Total Price</th>
                                                 <th className="text-center">Paid Date</th>
-                                                <th className="text-center">Share</th>
+                                                <th className="text-center">Payment Type</th>
+                                                <th className="text-center">Generate Bill</th>
                                             </tr>
                                         </thead>
                                         <tbody>
-                                            {paginatedOldItems.map((item, index) => {
+                                            {paginatedPaidDates.map((paymentDate, index) => {
+                                                const paidDateData = paidItemsByPaymentDate[paymentDate];
                                                 const globalIndex = (oldItemsPage - 1) * oldItemsPerPage + index + 1;
+                                                
                                                 return (
                                                     <tr
-                                                        key={item.id}
+                                                        key={paymentDate}
                                                         style={{
                                                             background: index % 2 === 0
                                                                 ? "rgba(34, 197, 94, 0.1)"
-                                                                : "rgba(34, 197, 94, 0.05)"
+                                                                : "rgba(34, 197, 94, 0.05)",
+                                                            cursor: 'pointer'
                                                         }}
+                                                        onClick={() => handlePaidDateClick(paymentDate)}
                                                     >
                                                         <td className="text-center fw-bold text-success">
                                                             {globalIndex}
                                                         </td>
-                                                        <td>
-                                                            <div>
-                                                                <div className="fw-semibold text-success mb-1">
-                                                                    {item.subCategory}
-                                                                    <i className="fas fa-check-circle ms-2 text-success" title="Paid"></i>
-                                                                </div>
-                                                                <div className="small text-muted">
-                                                                    {getTranslation(item.subCategory, 'en', true, item.mainCategory)} / {getTranslation(item.subCategory, 'hi', true, item.mainCategory)}
-                                                                </div>
-                                                            </div>
-                                                        </td>
                                                         <td className="text-center text-light">
-                                                            {formatDateShort(item.date)}
+                                                            {formatDateFull(paymentDate)}
                                                         </td>
                                                         <td className="text-center fw-bold text-info">
-                                                            {item.quantity} KG
-                                                        </td>
-                                                        <td className="text-center text-success fw-bold">
-                                                            ₹{item.price}
+                                                            {paidDateData.items.length} items
                                                         </td>
                                                         <td className="text-center fw-bold text-warning">
-                                                            ₹{item.total}
+                                                            ₹{paidDateData.totalAmount.toFixed(2)}
                                                         </td>
                                                         <td className="text-center text-success">
-                                                            {item.paymentDate ? formatDateShort(item.paymentDate) : 'N/A'}
+                                                            {formatDateShort(paidDateData.paymentDate)}
+                                                        </td>
+                                                        <td className="text-center">
+                                                            <span className="badge bg-primary">
+                                                                {paidDateData.paymentMode}
+                                                            </span>
                                                         </td>
                                                         <td className="text-center">
                                                             <button
                                                                 className="btn btn-outline-info btn-sm"
-                                                                onClick={() => handleShareItemBill(item)}
-                                                                title="Share this item bill"
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    handleGeneratePaidDateBill(paymentDate);
+                                                                }}
+                                                                title="Generate bill for this date"
                                                                 style={{
                                                                     borderRadius: "6px",
-                                                                    padding: "2px 6px",
+                                                                    padding: "4px 8px",
                                                                     border: "1px solid #0dcaf0"
                                                                 }}
                                                             >
-                                                                <i className="bi bi-share fa-xs"></i>
+                                                                <i className="bi bi-file-text"></i> Generate Bill
                                                             </button>
                                                         </td>
                                                     </tr>
@@ -1071,28 +973,28 @@ const ItemsList = ({
                                 </div>
 
                                 {/* Pagination */}
-                                <div className="card-footer border-0 d-flex justify-content-center align-items-center">
+                                <div className="card-footer border-0 d-flex justify-content-between align-items-center">
                                     <div className="text-warning small">
-                                        Showing {paginatedOldItems.length} of {filteredOldItems.length} items
+                                        Showing {paginatedPaidDates.length} of {paidDates.length} payment dates
                                     </div>
-                                    <div className="d-flex gap-2 align-items-center border-0">
+                                    <div className="d-flex gap-2 align-items-center">
                                         <div className="btn-group">
                                             <button
                                                 className="btn btn-outline-light btn-sm"
                                                 onClick={() => setOldItemsPage(prev => Math.max(1, prev - 1))}
                                                 disabled={oldItemsPage === 1}
                                             >
-                                                <i className="fas fa-chevron-left"></i>
+                                                <i className="bi bi-chevron-left"></i>
                                             </button>
                                             <span className="btn btn-light btn-sm disabled">
-                                                Page {oldItemsPage} of {Math.ceil(filteredOldItems.length / oldItemsPerPage)}
+                                                Page {oldItemsPage} of {Math.ceil(paidDates.length / oldItemsPerPage)}
                                             </span>
                                             <button
                                                 className="btn btn-outline-light btn-sm"
-                                                onClick={() => setOldItemsPage(prev => Math.min(Math.ceil(filteredOldItems.length / oldItemsPerPage), prev + 1))}
-                                                disabled={oldItemsPage >= Math.ceil(filteredOldItems.length / oldItemsPerPage)}
+                                                onClick={() => setOldItemsPage(prev => Math.min(Math.ceil(paidDates.length / oldItemsPerPage), prev + 1))}
+                                                disabled={oldItemsPage >= Math.ceil(paidDates.length / oldItemsPerPage)}
                                             >
-                                                <i className="fas fa-chevron-right"></i>
+                                                <i className="bi bi-chevron-right"></i>
                                             </button>
                                         </div>
                                         <select
@@ -1116,6 +1018,81 @@ const ItemsList = ({
                 </div>
             )}
 
+            {/* Paid Items Details Modal */}
+            {showDetailsModal && (
+                <div className="modal fade show d-block" tabIndex="-1" style={{ backgroundColor: "rgba(0,0,0,0.5)" }}>
+                    <div className="modal-dialog modal-xl modal-dialog-centered">
+                        <div className="modal-content border-0 shadow-lg rounded-3">
+                            <div className="modal-header border-0 text-white" style={{
+                                background: "linear-gradient(135deg, #059669 0%, #047857 100%)"
+                            }}>
+                                <h6 className="modal-title mb-0">
+                                    <i className="bi bi-list-check me-2"></i>
+                                    Paid Items Details
+                                </h6>
+                                <button type="button" className="btn-close btn-close-white" onClick={handleCancel}></button>
+                            </div>
+                            <div className="modal-body bg-dark bg-opacity-90 text-white p-4">
+                                <div className="table-responsive">
+                                    <table className="table table-dark table-hover align-middle mb-0">
+                                        <thead>
+                                            <tr style={{
+                                                background: "linear-gradient(135deg, #0369a1 0%, #0c4a6e 100%)"
+                                            }}>
+                                                <th className="text-center">#</th>
+                                                <th>Item Details</th>
+                                                <th className="text-center">Quantity</th>
+                                                <th className="text-center">Price</th>
+                                                <th className="text-center">Total</th>
+                                                <th className="text-center">Payment Date</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {selectedPaidItems.map((item, index) => (
+                                                <tr key={item.id} style={{
+                                                    background: index % 2 === 0
+                                                        ? "rgba(30, 41, 59, 0.7)"
+                                                        : "rgba(51, 65, 85, 0.7)"
+                                                }}>
+                                                    <td className="text-center fw-bold">{index + 1}</td>
+                                                    <td>
+                                                        <div className="fw-semibold text-success">{item.subCategory}</div>
+                                                        <div className="small text-muted">
+                                                            {getTranslation(item.subCategory, 'en', true, item.mainCategory)} / {getTranslation(item.subCategory, 'hi', true, item.mainCategory)}
+                                                        </div>
+                                                    </td>
+                                                    <td className="text-center fw-bold">{item.quantity} KG</td>
+                                                    <td className="text-center text-success fw-bold">₹{item.price}</td>
+                                                    <td className="text-center fw-bold text-warning">₹{item.total}</td>
+                                                    <td className="text-center text-info">
+                                                        {item.paymentDate ? new Date(item.paymentDate).toLocaleDateString() : 'N/A'}
+                                                    </td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                            <div className="modal-footer border-0 bg-dark bg-opacity-75">
+                                <button
+                                    type="button"
+                                    className="btn btn-success"
+                                    onClick={handleCancel}
+                                    style={{
+                                        borderRadius: "8px",
+                                        background: "linear-gradient(135deg, #10b981 0%, #059669 100%)",
+                                        border: "none"
+                                    }}
+                                >
+                                    <i className="bi bi-check me-2"></i>
+                                    Close
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             {/* Confirmation Modal */}
             {(showConfirmModal || showDiscardModal) && (
                 <div className="modal fade show d-block" tabIndex="-1" style={{ backgroundColor: "rgba(0,0,0,0.5)" }}>
@@ -1125,7 +1102,7 @@ const ItemsList = ({
                                 background: `linear-gradient(135deg, var(--bs-${modalStyle.color}) 0%, var(--bs-${modalStyle.color}-dark) 100%)`
                             }}>
                                 <h6 className="modal-title mb-0">
-                                    <i className={`fas fa-${modalStyle.icon} me-2`}></i>
+                                    <i className={`bi bi-${modalStyle.icon} me-2`}></i>
                                     {modalConfig.title}
                                 </h6>
                             </div>
@@ -1139,7 +1116,7 @@ const ItemsList = ({
                                     onClick={handleCancel}
                                     style={{ borderRadius: "8px" }}
                                 >
-                                    <i className="fas fa-times me-2"></i>
+                                    <i className="bi bi-x me-2"></i>
                                     Cancel
                                 </button>
                                 <button
@@ -1152,7 +1129,7 @@ const ItemsList = ({
                                         border: "none"
                                     }}
                                 >
-                                    <i className="fas fa-check me-2"></i>
+                                    <i className="bi bi-check me-2"></i>
                                     {modalConfig.type === 'discard' ? 'Discard' : 'Confirm'}
                                 </button>
                             </div>
@@ -1170,7 +1147,7 @@ const ItemsList = ({
                                 background: "linear-gradient(135deg, #10b981 0%, #059669 100%)"
                             }}>
                                 <h6 className="modal-title mb-0">
-                                    <i className="fas fa-check-circle me-2"></i>
+                                    <i className="bi bi-check-circle me-2"></i>
                                     Success
                                 </h6>
                             </div>
@@ -1188,7 +1165,7 @@ const ItemsList = ({
                                         border: "none"
                                     }}
                                 >
-                                    <i className="fas fa-check me-2"></i>
+                                    <i className="bi bi-check me-2"></i>
                                     OK
                                 </button>
                             </div>

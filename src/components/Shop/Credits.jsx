@@ -26,33 +26,6 @@ const CustomerList = () => {
         amountValue: ""
     });
 
-    // Debug function to check Firebase paths
-    const debugFirebasePaths = async () => {
-        try {
-            console.log("=== FIREBASE PATH DEBUG ===");
-
-            // Test different paths
-            const pathsToTest = [
-                "Shop/CreditData",
-                "CreditData"
-            ];
-
-            for (const path of pathsToTest) {
-                try {
-                    const ref = firebaseDB.child(path);
-                    const snapshot = await ref.once('value');
-                    console.log(`Path "${path}":`, snapshot.val());
-                } catch (error) {
-                    console.log(`Path "${path}" error:`, error.message);
-                }
-            }
-
-            console.log("=== END DEBUG ===");
-        } catch (error) {
-            console.error("Debug error:", error);
-        }
-    };
-
     // In Credits.jsx - UPDATE THE useEffect for loading customers
     useEffect(() => {
         setLoading(true);
@@ -62,12 +35,10 @@ const CustomerList = () => {
 
         const loadCustomers = async () => {
             try {
-                console.log(`Loading from path: ${correctPath}`);
                 const ref = firebaseDB.child(correctPath);
                 const snapshot = await ref.once('value');
                 const raw = snapshot.val() || {};
 
-                console.log(`Data from path "${correctPath}":`, raw);
 
                 if (Object.keys(raw).length > 0) {
                     processCustomerData(raw);
@@ -77,7 +48,6 @@ const CustomerList = () => {
                     setLoading(false);
                 }
             } catch (error) {
-                console.log(`Path "${correctPath}" failed:`, error.message);
                 setCustomers([]);
                 setFilteredCustomers([]);
                 setLoading(false);
@@ -87,7 +57,6 @@ const CustomerList = () => {
         const processCustomerData = (raw) => {
             const customersList = [];
 
-            console.log("Processing raw data:", raw);
 
             for (const [customerId, customerData] of Object.entries(raw)) {
                 // Skip if customerData is null/undefined or if it's nested data structure
@@ -118,7 +87,6 @@ const CustomerList = () => {
                 }
             }
 
-            console.log("Processed customers list:", customersList);
 
             setCustomers(customersList);
             setFilteredCustomers(customersList);
@@ -217,7 +185,6 @@ const CustomerList = () => {
     const handleEdit = (customer, e) => {
         e.stopPropagation();
         // Handle edit logic
-        console.log("Edit customer:", customer);
     };
 
     const handleDelete = (customer, e) => {
@@ -234,12 +201,10 @@ const CustomerList = () => {
                 for (const path of deletePaths) {
                     try {
                         await firebaseDB.child(path).remove();
-                        console.log(`Successfully deleted from path: ${path}`);
                         setCustomers(prev => prev.filter(c => c.id !== customer.id));
                         setRefreshTrigger(prev => prev + 1);
                         return;
                     } catch (error) {
-                        console.log(`Delete failed for path ${path}:`, error.message);
                     }
                 }
                 alert("Error deleting customer from all paths");
@@ -581,7 +546,6 @@ const CustomerList = () => {
                     onSuccess={(customerData) => {
                         setShowCustomerForm(false);
                         refreshCustomerData();
-                        console.log("Customer created:", customerData);
                     }}
                     onCancel={() => setShowCustomerForm(false)}
                 />

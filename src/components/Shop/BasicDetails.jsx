@@ -1,11 +1,13 @@
 // src/components/Customer/BasicDetails.jsx
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 
 const BasicDetails = ({ customer, totalAmount, paymentHistory, PurchaseItems, Payments, Balance }) => {
     const [selectedPayment, setSelectedPayment] = useState(null);
     const [showPaymentModal, setShowPaymentModal] = useState(false);
     const [currentPage, setCurrentPage] = useState(1);
     const paymentsPerPage = 5;
+    const [searchTerm, setSearchTerm] = useState('');
+    const [filteredPayments, setFilteredPayments] = useState([]);
 
     // Get character badge color and label
     const getCharacterInfo = (character) => {
@@ -19,13 +21,22 @@ const BasicDetails = ({ customer, totalAmount, paymentHistory, PurchaseItems, Pa
         }
     };
 
-    // Generate payment ID in format: CustomerID-Month-Day-index
+    // FIXED: Generate payment ID in format: CustomerID-PurchaseDate-index
     const generatePaymentId = (payment, index) => {
-        const date = new Date(payment.date);
-        const month = date.toLocaleDateString('en-US', { month: 'short' });
-        const day = date.getDate();
-        const customerId = customer?.id?.substring(0, 3) || 'C01'; // Use first 3 chars of customer ID
-        return `${customerId}-${month}-${day}-${index + 1}`;
+        try {
+            const date = new Date(payment.date);
+            const month = date.toLocaleDateString('en-US', { month: 'short' });
+            const day = date.getDate().toString().padStart(2, '0');
+            const customerId = customer?.idNo?.substring(0, 4) || 'C-01';
+            const purchaseDate = payment.purchaseDate ? new Date(payment.purchaseDate) : date;
+            const purchaseMonth = purchaseDate.toLocaleDateString('en-US', { month: 'short' });
+            const purchaseDay = purchaseDate.getDate().toString().padStart(2, '0');
+            
+            return `${customerId}-${purchaseMonth}-${purchaseDay}-${index + 1}`;
+        } catch (error) {
+            const customerId = customer?.idNo?.substring(0, 4) || 'C-01';
+            return `${customerId}-${index + 1}`;
+        }
     };
 
     // UPDATED: Enhanced financialSummary using Balance data and PurchaseItems
@@ -42,26 +53,35 @@ const BasicDetails = ({ customer, totalAmount, paymentHistory, PurchaseItems, Pa
             };
         }
 
-        // Calculate from PurchaseItems and Payments as fallback
+        // Enhanced calculation from PurchaseItems and Payments
         let totalPurchase = 0;
         let totalPaid = 0;
 
-        // Calculate from PurchaseItems
+        // Calculate from PurchaseItems (all items)
         if (PurchaseItems && PurchaseItems.length > 0) {
             PurchaseItems.forEach(item => {
                 const itemTotal = parseFloat(item.total) || 0;
                 totalPurchase += itemTotal;
-
-                if (item.status === 'paid') {
-                    totalPaid += itemTotal;
-                }
             });
         }
 
-        // Also add payments from Payments collection
+        // Calculate total paid from Payments collection
         if (Payments && Payments.length > 0) {
             Payments.forEach(payment => {
                 totalPaid += parseFloat(payment.amount) || 0;
+            });
+        }
+
+        // Also add paid amounts from PurchaseItems with status 'paid'
+        if (PurchaseItems && PurchaseItems.length > 0) {
+            PurchaseItems.forEach(item => {
+                if (item.status === 'paid') {
+                    const itemTotal = parseFloat(item.total) || 0;
+                    // Only add if not already counted in Payments
+                    if (!Payments || Payments.length === 0) {
+                        totalPaid += itemTotal;
+                    }
+                }
             });
         }
 
@@ -71,8 +91,16 @@ const BasicDetails = ({ customer, totalAmount, paymentHistory, PurchaseItems, Pa
         let lastPaymentDate = 'N/A';
         if (Payments && Payments.length > 0) {
             const sortedPayments = [...Payments].sort((a, b) => new Date(b.date) - new Date(a.date));
-            lastPaymentDate = sortedPayments[0]?.date || 'N/A';
+            lastPaymentDate = sortedPayments[0]?.date ? new Date(sortedPayments[0].date).toLocaleDateString() : 'N/A';
         }
+
+        console.log('Financial Summary:', {
+            totalPurchase,
+            totalPaid,
+            totalPending,
+            lastPaymentDate,
+            paymentCount: Payments?.length || 0
+        });
 
         return {
             totalPurchase,
@@ -83,12 +111,18 @@ const BasicDetails = ({ customer, totalAmount, paymentHistory, PurchaseItems, Pa
         };
     }, [PurchaseItems, Balance, Payments]);
 
-    // Handle payment row click to show modal
+    // FIXED: Handle payment row click to show modal with proper details
     const handlePaymentRowClick = (payment, index) => {
         const paymentId = generatePaymentId(payment, index);
         setSelectedPayment({
             ...payment,
-            displayId: paymentId
+            displayId: paymentId,
+            // Ensure all required fields are present
+            date: payment.date || 'N/A',
+            amount: payment.amount || 0,
+            method: payment.method || 'Cash',
+            notes: payment.notes || 'No notes',
+            items: payment.items || []
         });
         setShowPaymentModal(true);
     };
@@ -97,6 +131,88 @@ const BasicDetails = ({ customer, totalAmount, paymentHistory, PurchaseItems, Pa
     const handleCloseModal = () => {
         setShowPaymentModal(false);
         setSelectedPayment(null);
+    };
+
+    // FIXED: Set reminder function
+    const handleSetReminder = () => {
+        const customerName = customer?.name || 'Customer';
+        const pendingAmount = financialSummary.totalPending;
+        
+        if (pendingAmount > 0) {
+            const message = `Reminder: ${customerName} has a pending amount of ₹${pendingAmount.toFixed(2)}. Please follow up for payment.`;
+            
+            // For now, show an alert. You can integrate with actual reminder system later
+            alert(message);
+            
+            // Here you can integrate with:
+            // 1. Browser notifications
+            // 2. Calendar API
+            // 3. Email/SMS service
+            // 4. Local storage for reminders
+            
+            console.log('Reminder set for:', customerName, 'Amount:', pendingAmount);
+        } else {
+            alert('No pending amount for this customer.');
+        }
+    };
+
+    useEffect(() => {
+        if (Payments && Payments.length > 0) {
+            const filtered = Payments.filter(payment =>
+                payment.notes?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                payment.method?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                payment.amount?.toString().includes(searchTerm) ||
+                generatePaymentId(payment, 0).toLowerCase().includes(searchTerm.toLowerCase())
+            );
+            setFilteredPayments(filtered);
+        } else {
+            setFilteredPayments([]);
+        }
+    }, [Payments, searchTerm]);
+
+    const handleSharePaymentToWhatsApp = (payment) => {
+        const message = `*Payment Receipt*\n\n` +
+            `*Payment ID:* ${payment.displayId}\n` +
+            `*Customer:* ${customer?.name || 'N/A'}\n` +
+            `*Amount:* ₹${parseFloat(payment.amount).toFixed(2)}\n` +
+            `*Date:* ${new Date(payment.date).toLocaleDateString()}\n` +
+            `*Method:* ${payment.method}\n` +
+            `*Items Paid:* ${payment.items?.length || 0}\n` +
+            `*Notes:* ${payment.notes || 'No notes'}\n\n` +
+            `Thank you for your payment!`;
+
+        const encodedMessage = encodeURIComponent(message);
+        const whatsappUrl = `https://wa.me/?text=${encodedMessage}`;
+
+        window.open(whatsappUrl, '_blank');
+    };
+
+    const exportPaymentsToCSV = () => {
+        if (!Payments || Payments.length === 0) return;
+
+        const headers = ['Payment ID', 'Date', 'Amount', 'Method', 'Items Count', 'Notes'];
+        const csvData = Payments.map((payment, index) => [
+            generatePaymentId(payment, index),
+            new Date(payment.date).toLocaleDateString(),
+            payment.amount,
+            payment.method,
+            payment.items?.length || 0,
+            payment.notes || ''
+        ]);
+
+        const csvContent = [headers, ...csvData]
+            .map(row => row.map(field => `"${field}"`).join(','))
+            .join('\n');
+
+        const blob = new Blob([csvContent], { type: 'text/csv' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `payments_${customer?.name || 'customer'}_${new Date().toISOString().split('T')[0]}.csv`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
     };
 
     // UPDATED: Monthly payments calculation using Payments data
@@ -230,6 +346,51 @@ const BasicDetails = ({ customer, totalAmount, paymentHistory, PurchaseItems, Pa
 
     return (
         <div className="row g-4">
+            <div className="col-12">
+                <div className="card border-0 shadow-lg" style={{
+                    background: "linear-gradient(135deg, rgba(30, 41, 59, 0.8) 0%, rgba(15, 23, 42, 0.8) 100%)",
+                    borderRadius: "15px",
+                    border: "1px solid rgba(245, 158, 11, 0.3)"
+                }}>
+                    <div className="card-header border-0" style={{
+                        background: "linear-gradient(135deg, #f59e0b 0%, #d97706 100%)",
+                        borderRadius: "15px 15px 0 0"
+                    }}>
+                        <h6 className="text-white mb-0 fw-bold">
+                            <i className="bi bi-lightning me-2"></i>
+                            Quick Actions
+                        </h6>
+                    </div>
+                    <div className="card-body">
+                        <div className="row g-3">
+                            <div className="col-md-3">
+                                <button className="btn btn-success w-100" onClick={exportPaymentsToCSV}>
+                                    <i className="bi bi-file-earmark-excel me-2"></i>
+                                    Export CSV
+                                </button>
+                            </div>
+                            <div className="col-md-3">
+                                <button className="btn btn-info w-100" onClick={() => window.print()}>
+                                    <i className="bi bi-printer me-2"></i>
+                                    Print Summary
+                                </button>
+                            </div>
+                            <div className="col-md-3">
+                                <button className="btn btn-warning w-100" onClick={handleSharePaymentToWhatsApp}>
+                                    <i className="bi bi-whatsapp me-2"></i>
+                                    Share Summary
+                                </button>
+                            </div>
+                            <div className="col-md-3">
+                                <button className="btn btn-primary w-100" onClick={handleSetReminder}>
+                                    <i className="bi bi-bell me-2"></i>
+                                    Set Reminder
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
             {/* Customer Information */}
             <div className="col-md-6">
                 <div className="card border-0 shadow-lg h-100" style={{
@@ -534,36 +695,36 @@ const BasicDetails = ({ customer, totalAmount, paymentHistory, PurchaseItems, Pa
                                         </tbody>
                                     </table>
                                 </div>
-                                
+
                                 {/* Pagination */}
                                 {totalPages > 1 && (
                                     <div className="d-flex justify-content-center mt-4 pb-3">
                                         <nav>
                                             <ul className="pagination mb-0">
                                                 <li className={`page-item ${currentPage === 1 ? 'disabled' : ''}`}>
-                                                    <button 
-                                                        className="page-link" 
+                                                    <button
+                                                        className="page-link"
                                                         onClick={() => handlePageChange(currentPage - 1)}
                                                         disabled={currentPage === 1}
                                                     >
                                                         <i className="bi bi-chevron-left"></i>
                                                     </button>
                                                 </li>
-                                                
+
                                                 {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => (
                                                     <li key={page} className={`page-item ${currentPage === page ? 'active' : ''}`}>
-                                                        <button 
-                                                            className="page-link" 
+                                                        <button
+                                                            className="page-link"
                                                             onClick={() => handlePageChange(page)}
                                                         >
                                                             {page}
                                                         </button>
                                                     </li>
                                                 ))}
-                                                
+
                                                 <li className={`page-item ${currentPage === totalPages ? 'disabled' : ''}`}>
-                                                    <button 
-                                                        className="page-link" 
+                                                    <button
+                                                        className="page-link"
                                                         onClick={() => handlePageChange(currentPage + 1)}
                                                         disabled={currentPage === totalPages}
                                                     >
@@ -580,9 +741,9 @@ const BasicDetails = ({ customer, totalAmount, paymentHistory, PurchaseItems, Pa
                 </div>
             </div>
 
-            {/* Payment Details Modal */}
+            {/* FIXED: Payment Details Modal with proper content */}
             {showPaymentModal && selectedPayment && (
-                <div className="modal fade show d-block" tabIndex="-1" style={{ backgroundColor: 'rgba(0,0,0,1)' }}>
+                <div className="modal fade show d-block" tabIndex="-1" style={{ backgroundColor: 'rgba(0,0,0,0.8)' }}>
                     <div className="modal-dialog modal-lg modal-dialog-centered">
                         <div className="modal-content border-0 shadow-lg" style={{
                             background: "linear-gradient(135deg, rgba(30, 41, 59, 0.95) 0%, rgba(15, 23, 42, 0.95) 100%)",
@@ -597,142 +758,169 @@ const BasicDetails = ({ customer, totalAmount, paymentHistory, PurchaseItems, Pa
                                     <i className="bi bi-receipt me-2"></i>
                                     Payment Details: {selectedPayment.displayId}
                                 </h5>
-                                <button
-                                    type="button"
-                                    className="btn-close btn-close-white"
-                                    onClick={handleCloseModal}
-                                ></button>
+                                <div className="d-flex gap-2">
+                                    <button
+                                        type="button"
+                                        className="btn btn-success btn-sm"
+                                        onClick={() => handleSharePaymentToWhatsApp(selectedPayment)}
+                                    >
+                                        <i className="bi bi-whatsapp me-1"></i>
+                                        Share
+                                    </button>
+                                    <button
+                                        type="button"
+                                        className="btn-close btn-close-white"
+                                        onClick={handleCloseModal}
+                                    ></button>
+                                </div>
                             </div>
                             <div className="modal-body">
-                                <div className="row g-3">
-                                    <div className="col-md-6">
-                                        <div className="p-3 rounded" style={{
-                                            background: "rgba(99, 102, 241, 0.1)",
-                                            border: "1px solid rgba(99, 102, 241, 0.3)"
+                                {/* Payment Date at the top */}
+                                <div className="row mb-4">
+                                    <div className="col-12">
+                                        <div className="p-3 rounded text-center" style={{
+                                            background: "rgba(59, 130, 246, 0.2)",
+                                            border: "1px solid rgba(59, 130, 246, 0.5)"
                                         }}>
-                                            <h6 className="text-info mb-2">
+                                            <h6 className="text-info mb-1">
                                                 <i className="bi bi-calendar me-2"></i>
                                                 Payment Date
                                             </h6>
-                                            <p className="text-light mb-0 fw-bold">
-                                                {new Date(selectedPayment.date).toLocaleDateString()}
-                                            </p>
-                                        </div>
-                                    </div>
-                                    <div className="col-md-6">
-                                        <div className="p-3 rounded" style={{
-                                            background: "rgba(34, 197, 94, 0.1)",
-                                            border: "1px solid rgba(34, 197, 94, 0.3)"
-                                        }}>
-                                            <h6 className="text-success mb-2">
-                                                <i className="bi bi-currency-rupee me-2"></i>
-                                                Amount
-                                            </h6>
-                                            <p className="text-success fw-bold fs-5 mb-0">
-                                                ₹{parseFloat(selectedPayment.amount).toFixed(2)}
-                                            </p>
-                                        </div>
-                                    </div>
-                                    <div className="col-md-6">
-                                        <div className="p-3 rounded" style={{
-                                            background: "rgba(59, 130, 246, 0.1)",
-                                            border: "1px solid rgba(59, 130, 246, 0.3)"
-                                        }}>
-                                            <h6 className="text-primary mb-2">
-                                                <i className="bi bi-credit-card me-2"></i>
-                                                Payment Method
-                                            </h6>
-                                            <p className="text-light mb-0 fw-bold text-capitalize">
-                                                {selectedPayment.method}
-                                            </p>
-                                        </div>
-                                    </div>
-                                    <div className="col-md-6">
-                                        <div className="p-3 rounded" style={{
-                                            background: "rgba(245, 158, 11, 0.1)",
-                                            border: "1px solid rgba(245, 158, 11, 0.3)"
-                                        }}>
-                                            <h6 className="text-warning mb-2">
-                                                <i className="bi bi-box me-2"></i>
-                                                Items Paid
-                                            </h6>
-                                            <p className="text-warning fw-bold fs-5 mb-0">
-                                                {selectedPayment.items?.length || 0}
-                                            </p>
-                                        </div>
-                                    </div>
-                                    <div className="col-12">
-                                        <div className="p-3 rounded" style={{
-                                            background: "rgba(107, 114, 128, 0.1)",
-                                            border: "1px solid rgba(107, 114, 128, 0.3)"
-                                        }}>
-                                            <h6 className="text-light mb-2">
-                                                <i className="bi bi-sticky-note me-2"></i>
-                                                Notes
-                                            </h6>
-                                            <p className="text-light mb-0">
-                                                {selectedPayment.notes || 'No additional notes'}
-                                            </p>
-                                        </div>
-                                    </div>
-                                    {selectedPayment.items && selectedPayment.items.length > 0 && (
-                                        <div className="col-12">
-                                            <div className="p-3 rounded" style={{
-                                                background: "rgba(16, 185, 129, 0.1)",
-                                                border: "1px solid rgba(16, 185, 129, 0.3)"
-                                            }}>
-                                                <h6 className="text-success mb-3">
-                                                    <i className="bi bi-list me-2"></i>
-                                                    Items Included in this Payment
-                                                </h6>
-                                                <div className="table-responsive">
-                                                    <table className="table table-dark table-sm table-borderless mb-0">
-                                                        <thead>
-                                                            <tr>
-                                                                <th className="text-start">Item Name</th>
-                                                                <th className="text-end">Amount</th>
-                                                            </tr>
-                                                        </thead>
-                                                        <tbody>
-                                                            {selectedPayment.items.map((item, idx) => (
-                                                                <tr key={idx} style={{
-                                                                    borderBottom: "1px solid rgba(255, 255, 255, 0.1)"
-                                                                }}>
-                                                                    <td className="text-light">{item.name}</td>
-                                                                    <td className="text-success text-end fw-bold">
-                                                                        ₹{parseFloat(item.amount).toFixed(2)}
-                                                                    </td>
-                                                                </tr>
-                                                            ))}
-                                                        </tbody>
-                                                    </table>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    )}
-                                    <div className="col-12">
-                                        <div className="p-3 rounded" style={{
-                                            background: "rgba(139, 92, 246, 0.1)",
-                                            border: "1px solid rgba(139, 92, 246, 0.3)"
-                                        }}>
-                                            <h6 className="text-purple mb-2">
-                                                <i className="bi bi-person me-2"></i>
-                                                Processed By
-                                            </h6>
-                                            <p className="text-light mb-0">
-                                                {selectedPayment.createdBy?.name || 'Unknown'}
-                                            </p>
+                                            <h5 className="text-light fw-bold mb-0">
+                                                {new Date(selectedPayment.date).toLocaleDateString('en-US', {
+                                                    weekday: 'long',
+                                                    year: 'numeric',
+                                                    month: 'long',
+                                                    day: 'numeric'
+                                                })}
+                                            </h5>
                                         </div>
                                     </div>
                                 </div>
+
+                                {/* Payment Details */}
+                                <div className="row g-3">
+                                    <div className="col-md-6">
+                                        <div className="card border-0 h-100" style={{
+                                            background: "rgba(16, 185, 129, 0.1)",
+                                            border: "1px solid rgba(16, 185, 129, 0.3)"
+                                        }}>
+                                            <div className="card-body">
+                                                <h6 className="text-success mb-3">
+                                                    <i className="bi bi-currency-rupee me-2"></i>
+                                                    Payment Information
+                                                </h6>
+                                                <div className="space-y-2">
+                                                    <div className="d-flex justify-content-between">
+                                                        <span className="text-light">Amount:</span>
+                                                        <span className="text-warning fw-bold">₹{parseFloat(selectedPayment.amount).toFixed(2)}</span>
+                                                    </div>
+                                                    <div className="d-flex justify-content-between">
+                                                        <span className="text-light">Method:</span>
+                                                        <span className="text-info fw-bold text-capitalize">{selectedPayment.method}</span>
+                                                    </div>
+                                                    <div className="d-flex justify-content-between">
+                                                        <span className="text-light">Status:</span>
+                                                        <span className="badge bg-success">Completed</span>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div className="col-md-6">
+                                        <div className="card border-0 h-100" style={{
+                                            background: "rgba(59, 130, 246, 0.1)",
+                                            border: "1px solid rgba(59, 130, 246, 0.3)"
+                                        }}>
+                                            <div className="card-body">
+                                                <h6 className="text-primary mb-3">
+                                                    <i className="bi bi-info-circle me-2"></i>
+                                                    Additional Information
+                                                </h6>
+                                                <div className="space-y-2">
+                                                    <div className="d-flex justify-content-between">
+                                                        <span className="text-light">Items Paid:</span>
+                                                        <span className="text-warning fw-bold">{selectedPayment.items?.length || 0}</span>
+                                                    </div>
+                                                    <div className="d-flex justify-content-between">
+                                                        <span className="text-light">Full Payment:</span>
+                                                        <span className={selectedPayment.isFullPayment ? "text-success fw-bold" : "text-warning fw-bold"}>
+                                                            {selectedPayment.isFullPayment ? 'Yes' : 'No'}
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Notes Section */}
+                                {selectedPayment.notes && selectedPayment.notes !== 'No notes' && (
+                                    <div className="row mt-4">
+                                        <div className="col-12">
+                                            <div className="card border-0" style={{
+                                                background: "rgba(245, 158, 11, 0.1)",
+                                                border: "1px solid rgba(245, 158, 11, 0.3)"
+                                            }}>
+                                                <div className="card-body">
+                                                    <h6 className="text-warning mb-3">
+                                                        <i className="bi bi-sticky me-2"></i>
+                                                        Payment Notes
+                                                    </h6>
+                                                    <p className="text-light mb-0">{selectedPayment.notes}</p>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* Items List */}
+                                {selectedPayment.items && selectedPayment.items.length > 0 && (
+                                    <div className="row mt-4">
+                                        <div className="col-12">
+                                            <div className="card border-0" style={{
+                                                background: "rgba(99, 102, 241, 0.1)",
+                                                border: "1px solid rgba(99, 102, 241, 0.3)"
+                                            }}>
+                                                <div className="card-header bg-transparent border-0">
+                                                    <h6 className="text-primary mb-0">
+                                                        <i className="bi bi-list-check me-2"></i>
+                                                        Paid Items ({selectedPayment.items.length})
+                                                    </h6>
+                                                </div>
+                                                <div className="card-body">
+                                                    <div className="table-responsive">
+                                                        <table className="table table-dark table-sm table-borderless">
+                                                            <thead>
+                                                                <tr>
+                                                                    <th>Item Name</th>
+                                                                    <th className="text-center">Quantity</th>
+                                                                    <th className="text-end">Amount</th>
+                                                                </tr>
+                                                            </thead>
+                                                            <tbody>
+                                                                {selectedPayment.items.map((item, index) => (
+                                                                    <tr key={index}>
+                                                                        <td className="text-light">{item.name || item.subCategory || 'Unknown Item'}</td>
+                                                                        <td className="text-center text-warning">{item.quantity || 'N/A'}</td>
+                                                                        <td className="text-end text-success">₹{parseFloat(item.amount || item.total || 0).toFixed(2)}</td>
+                                                                    </tr>
+                                                                ))}
+                                                            </tbody>
+                                                        </table>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
                             </div>
                             <div className="modal-footer border-0">
                                 <button
                                     type="button"
-                                    className="btn btn-primary"
+                                    className="btn btn-secondary"
                                     onClick={handleCloseModal}
                                 >
-                                    <i className="bi bi-x me-2"></i>
                                     Close
                                 </button>
                             </div>
@@ -753,13 +941,9 @@ const BasicDetails = ({ customer, totalAmount, paymentHistory, PurchaseItems, Pa
                         borderRadius: "15px 15px 0 0"
                     }}>
                         <h6 className="text-white mb-0 fw-bold">
-                            <i className="bi bi-sticky-note me-2"></i>
+                            <i className="bi bi-journal-text me-2"></i>
                             Customer Notes
                         </h6>
-                        <button className="btn btn-sm btn-light">
-                            <i className="bi bi-pencil me-1"></i>
-                            Edit
-                        </button>
                     </div>
                     <div className="card-body">
                         <p className="text-light mb-0">

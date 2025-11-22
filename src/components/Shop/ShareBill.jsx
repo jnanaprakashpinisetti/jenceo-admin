@@ -13,6 +13,8 @@ const ShareBill = ({
 }) => {
   const iframeRef = useRef(null);
   const [language, setLanguage] = useState('en'); // 'en', 'hi', or 'te'
+  const [showBillModal, setShowBillModal] = useState(false);
+  const [billPayload, setBillPayload] = useState(null);
 
   const headerImage = "https://firebasestorage.googleapis.com/v0/b/jenceo-admin.firebasestorage.app/o/Shop-Images%2FJenCeo-Trades.svg?alt=media&token=da7ab6ec-826f-41b2-ba2a-0a7d0f405997";
   const defaultCustomerPhoto = "https://firebasestorage.googleapis.com/v0/b/jenceo-admin.firebasestorage.app/o/OfficeFiles%2FSample-Photo.jpg?alt=media&token=01855b47-c9c2-490e-b400-05851192dde7";
@@ -70,21 +72,37 @@ const ShareBill = ({
     return text;
   };
 
+  const handleOpenBill = ({ items, billNumber, title }) => {
+    setBillPayload({ items, billNumber, title });
+    // Option A: open ShareBill modal
+    setShowBillModal(true);
+
+    // Option B: switch to a specific "bill" tab in parent if you have such a tab
+    // setActiveParentTab('bill');
+  };
+
   // FIXED: Use only selected items for bill, ensure proper data structure
   const billItems = useMemo(() => {
     if (selectedItems && selectedItems.length > 0) {
-      // Ensure all items have required properties
-      return selectedItems.map(item => ({
-        id: item.id || Math.random().toString(36).substr(2, 9),
-        subCategory: item.subCategory || 'Unknown Item',
-        mainCategory: item.mainCategory || 'General',
-        quantity: item.quantity || 0,
-        price: item.price || 0,
-        total: item.total || 0,
-        date: item.date || new Date().toISOString(),
-        comments: item.comments || '',
-        status: item.status || 'pending'
-      }));
+      // Ensure all items have required properties - FIXED: Handle different data structures
+      return selectedItems.map(item => {
+        // Handle different item data structures
+        const itemData = item.data || item;
+        
+        return {
+          id: itemData.id || Math.random().toString(36).substr(2, 9),
+          subCategory: itemData.subCategory || 'Unknown Item',
+          mainCategory: itemData.mainCategory || 'General',
+          quantity: itemData.quantity || 0,
+          price: itemData.price || 0,
+          total: itemData.total || 0,
+          date: itemData.date || new Date().toISOString(),
+          comments: itemData.comments || '',
+          status: itemData.status || 'pending',
+          // Include original data for compatibility
+          data: itemData
+        };
+      });
     }
     return [];
   }, [selectedItems]);
@@ -160,17 +178,17 @@ const ShareBill = ({
     window.open(whatsappUrl, '_blank');
   };
 
-  // Function to safely get item data
+  // Function to safely get item data - FIXED: Handle different data structures properly
   const getItemData = (item, key) => {
     if (!item) return 'N/A';
 
     // Handle different data structures
-    if (item[key] !== undefined) {
+    if (item[key] !== undefined && item[key] !== null) {
       return item[key];
     }
 
     // Handle nested data from /Shop/CreditData/key/PurchaseItems/-key path
-    if (item.data && item.data[key] !== undefined) {
+    if (item.data && item.data[key] !== undefined && item.data[key] !== null) {
       return item.data[key];
     }
 
@@ -558,6 +576,7 @@ const ShareBill = ({
     </thead>
     <tbody>
       ${billItems.map((item, index) => {
+        // FIXED: Use getItemData function to handle different data structures
         const mainCategory = getItemData(item, 'mainCategory');
         const subCategory = getItemData(item, 'subCategory');
         const quantity = getItemData(item, 'quantity') || '0';
@@ -620,21 +639,19 @@ const ShareBill = ({
     </div>
   `}
 
-  <!-- Recent Payment Section -->
-  ${paymentHistory.length > 0 ? section(
+  <!-- FIXED: Recent Payment Section - Show only last payment -->
+  ${paymentDetails.lastPayment ? section(
       `<h3>${content.paymentHistory}</h3>`,
       `
     <div class="payment-history">
-      ${paymentHistory.slice(-5).reverse().map(payment => `
-        <div class="payment-item">
-          <div>
-            <div><strong>Payment</strong></div>
-            <div class="payment-date">${formatDate(payment.date)}</div>
-            <div class="payment-mode">${payment.method || payment.mode || 'Cash'}</div>
-          </div>
-          <div class="payment-amount">₹${parseFloat(payment.amount || 0).toFixed(2)}</div>
+      <div class="payment-item">
+        <div>
+          <div><strong>Last Payment</strong></div>
+          <div class="payment-date">${formatDate(paymentDetails.lastPayment.date)}</div>
+          <div class="payment-mode">${paymentDetails.lastPayment.mode}</div>
         </div>
-      `).join('')}
+        <div class="payment-amount">₹${parseFloat(paymentDetails.lastPayment.amount || 0).toFixed(2)}</div>
+      </div>
     </div>
     `
     ) : ''}

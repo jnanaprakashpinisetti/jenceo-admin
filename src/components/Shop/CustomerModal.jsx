@@ -21,6 +21,7 @@ const CustomerModal = ({ customer, onClose, onDataUpdate }) => {
     const [successMessage, setSuccessMessage] = useState('');
     const [showErrorModal, setShowErrorModal] = useState(false);
     const [errorMessage, setErrorMessage] = useState('');
+    const [billPayload, setBillPayload] = useState(null);
 
     // Enhanced language mapping for categories with English and Hindi
     const categoryTranslations = {
@@ -312,9 +313,35 @@ const handlePaymentSuccess = async (paymentInfo, isFullPayment) => {
 };
 
     // Handle create bill
-    const handleCreateBill = (items, total) => {
-        setActiveTab('bill');
+    const handleCreateBill = (payload) => {
+        try {
+            if (!payload || !Array.isArray(payload.items) || payload.items.length === 0) {
+                console.warn('handleCreateBill called with invalid payload:', payload);
+                // still switch to bill tab if you want to show the bill area
+                setActiveTab('bill');
+                setBillPayload(null);
+                return;
+            }
+
+            // Save the payload and switch to bill tab so ShareBill receives it
+            setBillPayload({
+                items: payload.items,
+                billNumber: payload.billNumber || '',
+                billTitle: payload.title || 'Customer Bill'
+            });
+
+            // switch to the Bill tab which renders ShareBill
+            setActiveTab('bill');
+
+            // Optional: log for debugging
+            console.log('Opening bill tab with payload:', payload);
+        } catch (err) {
+            console.error('Error in handleCreateBill:', err);
+            setActiveTab('bill');
+            setBillPayload(null);
+        }
     };
+
 
     // Handle refresh
     const handleRefresh = () => {
@@ -476,13 +503,17 @@ const handlePaymentSuccess = async (paymentInfo, isFullPayment) => {
                                     loadingItems={loadingItems}
                                     totalAmount={totalAmount}
                                     onAddItem={handleAddItem}
-                                    onRefresh={forceRefreshAllData}
-                                    onPayAmount={handlePayAmount}
-                                    onCreateBill={handleCreateBill}
+                                    onRefresh={handleRefresh}
                                     categoryTranslations={categoryTranslations}
                                     getTranslation={getTranslation}
+                                    onPayAmount={handlePayAmount}
+                                    onCreateBill={handleCreateBill}      // <-- make sure this is present
+                                    onShareBill={(items, billNumber, title) => {
+                                        // fallback if ItemsList calls onShareBill directly
+                                        handleCreateBill({ items, billNumber, title });
+                                    }}
+                                    // onUpdateItemStatus={}
                                     refreshTrigger={refreshTrigger}
-                                    onUpdateItemStatus={forceRefreshAllData}
                                 />
                             )}
 
@@ -493,6 +524,11 @@ const handlePaymentSuccess = async (paymentInfo, isFullPayment) => {
                                         PurchaseItems={PurchaseItems}
                                         totalAmount={totalAmount}
                                         paymentHistory={Payments}
+                                        selectedItems={billPayload?.items || []}      // <- the selected items from ItemsList
+                                        billNumber={billPayload?.billNumber || ''}    // <- optional bill number
+                                        billTitle={billPayload?.billTitle || 'Customer Bill'} // <- optional title
+                                        categoryTranslations={categoryTranslations}
+                                        getTranslation={getTranslation}
                                     />
                                 </div>
                             )}

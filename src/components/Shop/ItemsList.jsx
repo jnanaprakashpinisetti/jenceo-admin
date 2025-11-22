@@ -254,10 +254,16 @@ const ItemsList = ({
         if (dateItems.length === 0) return;
 
         const billNumber = generateBillNumber(dateItems);
+        if (typeof onCreateBill === 'function') {
+            onCreateBill({ items: dateItems, billNumber, title: `Bill for ${formatDateFull(date)}` });
+            return;
+        }
         if (onShareBill) {
             onShareBill(dateItems, billNumber, `Bill for ${formatDateFull(date)}`);
+            setActiveTab('old'); // fallback UX
         }
     };
+
 
     // Handle generate bill for paid date summary
     const handleGeneratePaidDateBill = (paymentDate) => {
@@ -265,10 +271,17 @@ const ItemsList = ({
         if (!paidDateData || paidDateData.items.length === 0) return;
 
         const billNumber = generateBillNumber(paidDateData.items);
+
+        if (typeof onCreateBill === 'function') {
+            onCreateBill({ items: paidDateData.items, billNumber, title: `Paid Bill for ${formatDateFull(paymentDate)}` });
+            return;
+        }
         if (onShareBill) {
             onShareBill(paidDateData.items, billNumber, `Paid Bill for ${formatDateFull(paymentDate)}`);
+            setActiveTab('old'); // fallback UX
         }
     };
+
 
     // FIXED: Handle create bill with selected items - ensure proper data passing
     const handleCreateBill = () => {
@@ -278,7 +291,7 @@ const ItemsList = ({
         }
 
         // Filter only valid items with required properties
-        const validSelectedItems = selectedItems.filter(item => 
+        const validSelectedItems = selectedItems.filter(item =>
             item && item.id && item.subCategory && item.total
         );
 
@@ -288,19 +301,33 @@ const ItemsList = ({
         }
 
         const billNumber = generateBillNumber(validSelectedItems);
-        
+
         console.log('Creating bill with items:', validSelectedItems);
         console.log('Bill number:', billNumber);
-        
-        if (onShareBill) {
-            // Ensure we pass all required data
-            onShareBill(validSelectedItems, billNumber, 'Selected Items Bill');
-            // Show success message
-            showModal('success', 'Bill Generated', `Bill ${billNumber} has been generated successfully!`);
-        } else {
-            showModal('error', 'Feature Unavailable', 'Share bill functionality is not available at the moment.');
+
+        // 1) prefer onCreateBill (parent-driven navigation / modal)
+        if (typeof onCreateBill === 'function') {
+            // pass full items and bill meta so parent can open the bill tab/modal
+            onCreateBill({ items: validSelectedItems, billNumber, title: 'Selected Items Bill' });
+            // clear selection and show success
+            setSelectedItems([]);
+            showModal('success', 'Bill Generated', `Bill ${billNumber} has been generated and opened.`);
+            return;
         }
+
+        // 2) fallback to existing onShareBill (builds bill preview)
+        if (onShareBill) {
+            onShareBill(validSelectedItems, billNumber, 'Selected Items Bill');
+            setSelectedItems([]);
+            showModal('success', 'Bill Generated', `Bill ${billNumber} has been generated successfully!`);
+            // optional: switch to 'old' tab so user sees paid/bill area
+            setActiveTab('old');
+            return;
+        }
+
+        showModal('error', 'Feature Unavailable', 'Share/Create bill functionality is not available at the moment.');
     };
+
 
     // Handle paid date row click to show details
     const handlePaidDateClick = (paymentDate) => {

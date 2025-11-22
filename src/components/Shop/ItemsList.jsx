@@ -302,9 +302,6 @@ const ItemsList = ({
 
         const billNumber = generateBillNumber(validSelectedItems);
 
-        console.log('Creating bill with items:', validSelectedItems);
-        console.log('Bill number:', billNumber);
-
         // 1) prefer onCreateBill (parent-driven navigation / modal)
         if (typeof onCreateBill === 'function') {
             // pass full items and bill meta so parent can open the bill tab/modal

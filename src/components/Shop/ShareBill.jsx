@@ -12,16 +12,14 @@ const ShareBill = ({
   getTranslation
 }) => {
   const iframeRef = useRef(null);
-  const [language, setLanguage] = useState('en'); // 'en', 'hi', or 'te'
+  const [language, setLanguage] = useState('en');
   const [showBillModal, setShowBillModal] = useState(false);
   const [billPayload, setBillPayload] = useState(null);
 
   const headerImage = "https://firebasestorage.googleapis.com/v0/b/jenceo-admin.firebasestorage.app/o/Shop-Images%2FJenCeo-Trades.svg?alt=media&token=da7ab6ec-826f-41b2-ba2a-0a7d0f405997";
   const defaultCustomerPhoto = "https://firebasestorage.googleapis.com/v0/b/jenceo-admin.firebasestorage.app/o/OfficeFiles%2FSample-Photo.jpg?alt=media&token=01855b47-c9c2-490e-b400-05851192dde7";
 
-  // Enhanced language mapping for categories with English, Hindi, and Telugu
   const enhancedCategoryTranslations = {
-    // Main Categories
     "1 కూరగాయలు": {
       en: "1 Vegetables",
       hi: "1 सब्जियाँ",
@@ -32,26 +30,21 @@ const ShareBill = ({
         "బెండకాయలు": { en: "Okra", hi: "भिंडी", te: "బెండకాయలు" },
       }
     },
-    // Add other categories as needed
     ...categoryTranslations
   };
 
-  // Enhanced translation function with language support
   const enhancedGetTranslation = (text, lang, isSubCategory = false, mainCategory = '') => {
     if (!text || text === 'N/A') return 'N/A';
 
-    // Use provided getTranslation function if available
     if (getTranslation) {
       const result = getTranslation(text, lang, isSubCategory, mainCategory);
       if (result !== text) return result;
     }
 
-    // For main categories
     if (enhancedCategoryTranslations[text] && enhancedCategoryTranslations[text][lang]) {
       return enhancedCategoryTranslations[text][lang];
     }
 
-    // For sub categories
     if (isSubCategory && mainCategory && enhancedCategoryTranslations[mainCategory]) {
       const subCategoryTranslations = enhancedCategoryTranslations[mainCategory].subCategories;
       if (subCategoryTranslations && subCategoryTranslations[text] && subCategoryTranslations[text][lang]) {
@@ -59,7 +52,6 @@ const ShareBill = ({
       }
     }
 
-    // Try to find in any subcategory if mainCategory is not provided
     if (isSubCategory && !mainCategory) {
       for (const mainCat in enhancedCategoryTranslations) {
         const subCategoryTranslations = enhancedCategoryTranslations[mainCat].subCategories;
@@ -74,21 +66,14 @@ const ShareBill = ({
 
   const handleOpenBill = ({ items, billNumber, title }) => {
     setBillPayload({ items, billNumber, title });
-    // Option A: open ShareBill modal
     setShowBillModal(true);
-
-    // Option B: switch to a specific "bill" tab in parent if you have such a tab
-    // setActiveParentTab('bill');
   };
 
-  // FIXED: Use only selected items for bill, ensure proper data structure
   const billItems = useMemo(() => {
     if (selectedItems && selectedItems.length > 0) {
-      // Ensure all items have required properties - FIXED: Handle different data structures
       return selectedItems.map(item => {
-        // Handle different item data structures
         const itemData = item.data || item;
-        
+
         return {
           id: itemData.id || Math.random().toString(36).substr(2, 9),
           subCategory: itemData.subCategory || 'Unknown Item',
@@ -99,7 +84,6 @@ const ShareBill = ({
           date: itemData.date || new Date().toISOString(),
           comments: itemData.comments || '',
           status: itemData.status || 'pending',
-          // Include original data for compatibility
           data: itemData
         };
       });
@@ -107,22 +91,25 @@ const ShareBill = ({
     return [];
   }, [selectedItems]);
 
-  // Calculate bill total from selected items only
   const billTotal = useMemo(() => {
     return billItems.reduce((sum, item) => sum + (parseFloat(item.total) || 0), 0);
   }, [billItems]);
 
-  // FIXED: Get last payment and current balance with proper calculations
+  // FIX: Check if any item in the bill is pending
+  const invoiceIsPending = useMemo(() => {
+    return Array.isArray(billItems) && billItems.some(item => {
+      const status = (item?.status || "").toLowerCase();
+      return status !== "paid";
+    });
+  }, [billItems]);
+
   const getPaymentDetails = () => {
     const lastPayment = paymentHistory.length > 0 ? paymentHistory[paymentHistory.length - 1] : null;
-    
-    // Calculate total purchase from all items
+
     const totalPurchase = PurchaseItems.reduce((sum, item) => sum + (parseFloat(item.total) || 0), 0);
-    
-    // Calculate total paid from payment history
+
     const totalPaid = paymentHistory.reduce((sum, payment) => sum + (parseFloat(payment.amount) || 0), 0);
-    
-    // Calculate current balance
+
     const currentBalance = totalPurchase - totalPaid;
 
     return {
@@ -140,7 +127,6 @@ const ShareBill = ({
 
   const paymentDetails = getPaymentDetails();
 
-  // Generate bill number if not provided
   const generatedBillNumber = useMemo(() => {
     if (billNumber) return billNumber;
     const timestamp = new Date().getTime().toString().slice(-6);
@@ -149,7 +135,6 @@ const ShareBill = ({
     return `${customerId}-BILL-${timestamp}-${itemCount}`;
   }, [billNumber, billItems, customer]);
 
-  // Function to format date
   const formatDate = (dateString) => {
     if (!dateString) return 'N/A';
     try {
@@ -178,16 +163,13 @@ const ShareBill = ({
     window.open(whatsappUrl, '_blank');
   };
 
-  // Function to safely get item data - FIXED: Handle different data structures properly
   const getItemData = (item, key) => {
     if (!item) return 'N/A';
 
-    // Handle different data structures
     if (item[key] !== undefined && item[key] !== null) {
       return item[key];
     }
 
-    // Handle nested data from /Shop/CreditData/key/PurchaseItems/-key path
     if (item.data && item.data[key] !== undefined && item.data[key] !== null) {
       return item.data[key];
     }
@@ -195,11 +177,10 @@ const ShareBill = ({
     return 'N/A';
   };
 
-  // Language-specific content
   const languageContent = {
     en: {
       title: "INVOICE",
-      subtitle: "JenCeo Home Care Services & Traders - " + billTitle,
+      subtitle: "JenCeo Home Care Services & Traders",
       customerInfo: "Customer Information",
       paymentSummary: "Payment Summary",
       billDetails: "Bill Details",
@@ -283,7 +264,6 @@ const ShareBill = ({
     }
   };
 
-  // Build bill HTML with professional styling and language support
   const buildBillHTML = () => {
     const currentDate = new Date().toLocaleDateString();
     const customerName = customer?.name || 'Customer';
@@ -292,6 +272,11 @@ const ShareBill = ({
     const customerGender = customer?.gender ? customer.gender.charAt(0).toUpperCase() + customer.gender.slice(1) : 'N/A';
 
     const content = languageContent[language];
+
+    // FIX: Use the invoiceIsPending variable to determine status
+    const statusBadgeHTML = invoiceIsPending
+      ? `<span class="status-badge status-pending">${content.statusPending}</span>`
+      : `<span class="status-badge status-paid">${content.statusPaid}</span>`;
 
     const html = `
 <!doctype html>
@@ -331,7 +316,6 @@ const ShareBill = ({
   .sec-title{background:linear-gradient(135deg, #02acf2 0%, #0266f2 100%); padding:12px 10px;font-weight:700;color:white}
   .sec-title h3{margin:0;font-size:14px}
   .sec-body{padding:15px}
-  /* UNIFIED rows: label | : | value have the same width everywhere */
   .kv-row{display:grid;grid-template-columns: 240px 12px 1fr;gap:10px;align-items:start; margin-bottom:0; padding: 8px 0 2px 5px;}
   .kv-row:nth-child(even) {background-color: #f2f3fd;}
   .kv-label{font-weight:600; font-size:12px}
@@ -342,7 +326,6 @@ const ShareBill = ({
   .addr-line{font-size:10px;line-height:1; margin-bottom:5px}
   .addr-line .row {padding-top:10px; padding-bottom:10px; border-bottom:0; margin-bottom:0}
   .addr-line .row:nth-child(odd) {background-color:#f2f3fd;}
-  /* Two even columns area */
   .two-col{display:grid;grid-template-columns:1fr 1fr;gap:12px}
   .tags{display:flex;flex-wrap:wrap;gap:6px}
   .tag{border:1px solid #02acf2;color:#02acf2;font-size:12px;padding:3px 8px;border-radius:999px}
@@ -351,7 +334,6 @@ const ShareBill = ({
   .blue {color:#02acf2}
   @media print{.page{border:none;margin:0;width:100%}}
   .header-img{width:100%;max-height:120px;object-fit:contain;margin-bottom:6px}
-  /* photo box on the right */
   .photo-box{display:block;align-items:center;text-align:center}
   .photo-box .rating{background: #f5f5f5; padding: 3px; border-radius: 5px;}
   .photo-box img{width:130px;height:130px;object-fit:cover;border-radius:6px;border:1px solid #ccc}
@@ -359,7 +341,6 @@ const ShareBill = ({
   .heaerImg {margin: -21px -20px 10px -20px}
   .heaerImg img {width:100%}
   
-  /* Payment summary styles */
   .payment-summary {display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin: 20px 0}
   .payment-card {background: white; border-radius: 8px; padding: 15px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); border-left: 4px solid}
   .payment-card.last-payment {border-left-color: #51cf66; background: linear-gradient(135deg, #f0fff4 0%, #e6f7ea 100%)}
@@ -375,7 +356,6 @@ const ShareBill = ({
   .payment-amount.total-payments {color: #ff922b}
   .payment-amount.total-purchase {color: #cc5de8}
   
-  /* Bill specific styles */
   .bill-table {width:100%; border-collapse:collapse; margin:20px 0; box-shadow: 0 1px 3px rgba(0,0,0,0.1)}
   .bill-table th {background:linear-gradient(135deg, #02acf2 0%, #0266f2 100%); color:white; padding:12px 8px; text-align:center; font-size:12px}
   .bill-table td {padding:10px 8px; border-bottom:1px solid #e5e5e5; font-size:12px; text-align:center}
@@ -386,14 +366,12 @@ const ShareBill = ({
   .customer-message {background:#e8f5e8; padding:15px; border-radius:8px; margin:20px 0; border-left:4px solid #4caf50}
   .thank-you {text-align:center; padding:20px; background:linear-gradient(135deg, #e3f2fd 0%, #f0f8ff 100%); border-radius:8px; margin:20px 0; border: 1px solid #c6e5f1}
   
-  /* Customer info grid */
   .customer-grid {display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 10px 0}
   .customer-item {padding: 8px; border-radius: 6px}
   .customer-item.bg {background-color: #f2f3fd}
   .customer-label {font-weight: 600; font-size: 12px; color: #555; margin-bottom: 10px}
   .customer-value {font-weight: 500; font-size: 12px}
   
-  /* Payment history */
   .payment-history {margin-top: 20px}
   .payment-item {display: flex; justify-content: space-between; align-items: center; padding: 10px; border-bottom: 1px solid #e5e5e5}
   .payment-item:last-child {border-bottom: none}
@@ -402,21 +380,17 @@ const ShareBill = ({
   .payment-amount {font-weight: bold; color: #51cf66}
   .payment-mode {font-size: 10px; color: #888; background: #e9ecef; padding: 2px 6px; border-radius: 4px}
   
-  /* Language tags */
   .language-tags {flex-direction: column; gap: 2px; margin-top: 4px}
   .lang-tag {font-size: 10px; color: #666; line-height: 1.2}
   
-  /* Status badges */
   .status-badge {padding: 4px 8px; border-radius: 12px; font-size: 10px; font-weight: bold}
   .status-pending {background: #fff5f5; color: #ff6b6b; border: 1px solid #ff6b6b}
   .status-paid {background: #f0fff4; color: #51cf66; border: 1px solid #51cf66}
 
-  /*Products*/
   .products { display:flex; align-item:center; text-align:center}
   .products img {width:80%; display:block; margin:auto; border:1px solid #ebebebff;  border-radius:10px}
   .p-title {background-color:#02acf2; margin-bottom:20px; text-align:center; color:#fff; padding:5px}
   
-  /* Language selector */
   .language-selector {display: flex; gap: 10px; margin-bottom: 15px; justify-content: center}
   .lang-btn {padding: 5px 10px; border: 1px solid #02acf2; background: white; color: #02acf2; border-radius: 5px; cursor: pointer; font-size: 12px}
   .lang-btn.active {background: #02acf2; color: white}
@@ -467,7 +441,8 @@ const ShareBill = ({
         <div><strong>Customer ID:</strong> ${customerId}</div>
       </div>
       <br>
-      <div style="color:#444"><strong>Status:</strong> ${paymentDetails.currentBalance > 0 ? '<span class="status-badge status-pending">' + content.statusPending + '</span>' : '<span class="status-badge status-paid">' + content.statusPaid + '</span>'}</div>
+      <!-- FIX: Use the dynamic status badge -->
+      <div style="color:#444"><strong>Status:</strong> ${statusBadgeHTML}</div>
     </div>
     <div class="photo-box">
       <img src="${defaultCustomerPhoto}" alt="Customer" style="width:120px;height:120px;object-fit:cover;border-radius:6px;border:1px solid #ccc" />
@@ -477,7 +452,6 @@ const ShareBill = ({
     </div>
   </div>
 
-  <!-- FIXED: Payment Summary Section with proper calculations -->
   ${section(
       `<h3>${content.paymentSummary}</h3>`,
       `
@@ -496,27 +470,9 @@ const ShareBill = ({
       </div>
       `}
       
-      <div class="payment-card total-purchase">
-        <div class="payment-label">${content.totalPurchase}</div>
-        <div class="payment-amount total-purchase">₹${paymentDetails.totalPurchase.toFixed(2)}</div>
-        <small class="muted">Total purchase amount</small>
-      </div>
-      
-      <div class="payment-card current-bill">
-        <div class="payment-label">${content.currentBill}</div>
-        <div class="payment-amount current-bill">₹${billTotal.toFixed(2)}</div>
-        <small class="muted">Amount for selected items</small>
-      </div>
-      
-      <div class="payment-card total-payments">
-        <div class="payment-label">${content.totalPayments}</div>
-        <div class="payment-amount total-payments">₹${paymentDetails.totalPayments.toFixed(2)}</div>
-        <small class="muted">Total payments received</small>
-      </div>
-      
       <div class="payment-card current-balance">
-        <div class="payment-label">${content.currentBalance}</div>
-        <div class="payment-amount current-balance">₹${paymentDetails.currentBalance.toFixed(2)}</div>
+        <div class="payment-label">${content.currentBill}</div>
+        <div class="payment-amount current-balance">₹${billTotal.toFixed(2)}</div>
         <small class="muted">Current outstanding amount</small>
       </div>
     </div>
@@ -576,7 +532,6 @@ const ShareBill = ({
     </thead>
     <tbody>
       ${billItems.map((item, index) => {
-        // FIXED: Use getItemData function to handle different data structures
         const mainCategory = getItemData(item, 'mainCategory');
         const subCategory = getItemData(item, 'subCategory');
         const quantity = getItemData(item, 'quantity') || '0';
@@ -585,7 +540,6 @@ const ShareBill = ({
         const date = formatDate(getItemData(item, 'date'));
         const comments = getItemData(item, 'comments');
 
-        // Get translations based on selected language
         const teluguName = subCategory && subCategory !== 'N/A' ? subCategory : mainCategory;
         const displayName = enhancedGetTranslation(teluguName, language, true, mainCategory);
 
@@ -639,22 +593,7 @@ const ShareBill = ({
     </div>
   `}
 
-  <!-- FIXED: Recent Payment Section - Show only last payment -->
-  ${paymentDetails.lastPayment ? section(
-      `<h3>${content.paymentHistory}</h3>`,
-      `
-    <div class="payment-history">
-      <div class="payment-item">
-        <div>
-          <div><strong>Last Payment</strong></div>
-          <div class="payment-date">${formatDate(paymentDetails.lastPayment.date)}</div>
-          <div class="payment-mode">${paymentDetails.lastPayment.mode}</div>
-        </div>
-        <div class="payment-amount">₹${parseFloat(paymentDetails.lastPayment.amount || 0).toFixed(2)}</div>
-      </div>
-    </div>
-    `
-    ) : ''}
+  
 
   <div class="thank-you">
     <h3 style="color:#02acf2; margin-bottom:10px">${content.thankYou}</h3>
@@ -696,7 +635,6 @@ const ShareBill = ({
     window.parent.postMessage({ type: 'CHANGE_LANGUAGE', language: lang }, '*');
   }
   
-  // Set initial language from URL parameter
   const urlParams = new URLSearchParams(window.location.search);
   const langParam = urlParams.get('lang');
   if (langParam && ['en', 'hi', 'te'].includes(langParam)) {
@@ -728,7 +666,6 @@ const ShareBill = ({
     return html;
   };
 
-  // Download bill as HTML file
   const handleDownloadBill = () => {
     const html = buildBillHTML();
     const blob = new Blob([html], { type: 'text/html' });
@@ -746,7 +683,6 @@ const ShareBill = ({
     }, 100);
   };
 
-  // Share bill
   const handleShareBill = async () => {
     try {
       const html = buildBillHTML();
@@ -755,7 +691,6 @@ const ShareBill = ({
       if (navigator.share && navigator.canShare) {
         const file = new File([blob], `Bill_${generatedBillNumber}_${customer?.name || 'customer'}.html`, { type: 'text/html' });
 
-        // Check if files can be shared
         if (navigator.canShare && navigator.canShare({ files: [file] })) {
           await navigator.share({
             title: `Bill - ${customer?.name || 'Customer'} - ${generatedBillNumber}`,
@@ -763,24 +698,19 @@ const ShareBill = ({
             files: [file]
           });
         } else {
-          // Fallback to sharing text
           await navigator.share({
             title: `Bill - ${customer?.name || 'Customer'} - ${generatedBillNumber}`,
             text: `Bill for ${customer?.name || 'Customer'} - Total: ₹${billTotal.toFixed(2)}\nBill Number: ${generatedBillNumber}`
           });
         }
       } else {
-        // Fallback to download if share is not supported
         handleDownloadBill();
       }
     } catch (error) {
-      console.error('Error sharing bill:', error);
-      // Fallback to download
       handleDownloadBill();
     }
   };
 
-  // Print bill
   const handlePrintBill = () => {
     const html = buildBillHTML();
     const printWindow = window.open('', '_blank');
@@ -788,24 +718,20 @@ const ShareBill = ({
     printWindow.document.close();
     printWindow.focus();
 
-    // Wait for images to load before printing
     printWindow.onload = () => {
       printWindow.print();
-      // Don't close immediately to allow print dialog to show
       setTimeout(() => {
         printWindow.close();
       }, 100);
     };
   };
 
-  // Set iframe content when component mounts/updates
   React.useEffect(() => {
     if (iframeRef.current) {
       iframeRef.current.srcdoc = buildBillHTML();
     }
-  }, [customer, PurchaseItems, totalAmount, paymentHistory, language, selectedItems, generatedBillNumber]);
+  }, [customer, PurchaseItems, totalAmount, paymentHistory, language, selectedItems, generatedBillNumber, invoiceIsPending]);
 
-  // Listen for language change messages from iframe
   React.useEffect(() => {
     const handleMessage = (event) => {
       if (event.data && event.data.type === 'CHANGE_LANGUAGE') {
@@ -820,9 +746,8 @@ const ShareBill = ({
   return (
     <div className="modal-card">
       <div className="modal-card-header d-flex align-items-center justify-content-between">
-        <h4 className="mb-0">Bill Preview - {generatedBillNumber}</h4>
+        <h4 className="mb-0 text-info opacity-50">Bill Preview - {generatedBillNumber}</h4>
         <div className="d-flex gap-2 align-items-center">
-          {/* Language Selector */}
           <div className="btn-group btn-group-sm">
             <button
               type="button"
@@ -909,6 +834,9 @@ const ShareBill = ({
         </div>
         <small className="text-muted">
           Bill: <strong className="text-primary">{generatedBillNumber}</strong> |
+          Status: <strong className={invoiceIsPending ? 'text-warning' : 'text-success'}>
+            {invoiceIsPending ? 'Pending' : 'Paid'}
+          </strong> |
           Balance: <strong className="text-success">₹{paymentDetails.currentBalance.toFixed(2)}</strong>
         </small>
       </div>

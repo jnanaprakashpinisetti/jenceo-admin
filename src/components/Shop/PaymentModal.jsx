@@ -15,7 +15,7 @@ const PaymentModal = ({ isOpen, onClose, selectedItems, selectedTotal, onPayment
     useEffect(() => {
         const loadCustomerBalance = async () => {
             if (!customerId) return;
-            
+
             try {
                 const balanceRef = firebaseDB.child(`Shop/CreditData/${customerId}/Balance`);
                 const snapshot = await balanceRef.once('value');
@@ -42,33 +42,30 @@ const PaymentModal = ({ isOpen, onClose, selectedItems, selectedTotal, onPayment
 
     // UPDATED: Update item status in PurchaseItems
     // In PaymentModal.jsx - UPDATE the updateItemStatusInFirebase function
-const updateItemStatusInFirebase = async (customerId, itemIds, status) => {
-    try {
-        const updates = {};
-        const timestamp = new Date().toISOString();
-        
-        itemIds.forEach(itemId => {
-            // Use the correct path structure
-            const itemPath = `Shop/CreditData/${customerId}/PurchaseItems/${itemId}`;
-            updates[`${itemPath}/status`] = status;
-            updates[`${itemPath}/lastPaymentDate`] = timestamp;
-            
-            if (status === 'paid') {
-                updates[`${itemPath}/paymentDate`] = timestamp;
-                updates[`${itemPath}/paymentMethod`] = paymentMethod;
-                updates[`${itemPath}/lastUpdated`] = timestamp;
-            }
-        });
+    const updateItemStatusInFirebase = async (customerId, itemIds, status) => {
+        try {
+            const updates = {};
+            const timestamp = new Date().toISOString();
 
-        console.log('Updating item status:', updates);
-        await firebaseDB.update(updates);
-        console.log('Item status updated successfully');
-        return true;
-    } catch (error) {
-        console.error('Error updating item status:', error);
-        throw error;
-    }
-};
+            itemIds.forEach(itemId => {
+                // Use the correct path structure
+                const itemPath = `Shop/CreditData/${customerId}/PurchaseItems/${itemId}`;
+                updates[`${itemPath}/status`] = status;
+                updates[`${itemPath}/lastPaymentDate`] = timestamp;
+
+                if (status === 'paid') {
+                    updates[`${itemPath}/paymentDate`] = timestamp;
+                    updates[`${itemPath}/paymentMethod`] = paymentMethod;
+                    updates[`${itemPath}/lastUpdated`] = timestamp;
+                }
+            });
+
+            await firebaseDB.update(updates);
+            return true;
+        } catch (error) {
+            throw error;
+        }
+    };
 
     // UPDATED: Save payment record to Payments collection
     const savePaymentRecord = async (paymentData) => {
@@ -100,56 +97,52 @@ const updateItemStatusInFirebase = async (customerId, itemIds, status) => {
             };
 
             await firebaseDB.child(`Shop/CreditData/${customerId}/Payments/${paymentId}`).set(paymentRecord);
-            console.log('Payment record saved successfully');
             return paymentRecord;
         } catch (error) {
-            console.error('Error saving payment record:', error);
             throw error;
         }
     };
 
     // UPDATED: Update customer balance
     // UPDATED: Update customer balance with correct calculations
-const updateCustomerBalance = async (paymentAmount, isFullPayment) => {
-    try {
-        const balanceRef = firebaseDB.child(`Shop/CreditData/${customerId}/Balance`);
-        const snapshot = await balanceRef.once('value');
-        const currentBalance = snapshot.val() || {
-            totalPurchase: 0,
-            totalPaid: 0,
-            totalPending: 0,
-            lastPaymentDate: null,
-            lastUpdated: new Date().toISOString()
-        };
+    const updateCustomerBalance = async (paymentAmount, isFullPayment) => {
+        try {
+            const balanceRef = firebaseDB.child(`Shop/CreditData/${customerId}/Balance`);
+            const snapshot = await balanceRef.once('value');
+            const currentBalance = snapshot.val() || {
+                totalPurchase: 0,
+                totalPaid: 0,
+                totalPending: 0,
+                lastPaymentDate: null,
+                lastUpdated: new Date().toISOString()
+            };
 
-        // Calculate total purchase from all items
-        let totalPurchase = 0;
-        if (PurchaseItems && PurchaseItems.length > 0) {
-            totalPurchase = PurchaseItems.reduce((sum, item) => {
-                return sum + (parseFloat(item.total) || 0);
-            }, 0);
+            // Calculate total purchase from all items
+            let totalPurchase = 0;
+            if (PurchaseItems && PurchaseItems.length > 0) {
+                totalPurchase = PurchaseItems.reduce((sum, item) => {
+                    return sum + (parseFloat(item.total) || 0);
+                }, 0);
+            }
+
+            // Calculate new balance values
+            const newTotalPaid = parseFloat(currentBalance.totalPaid || 0) + parseFloat(paymentAmount);
+            const newTotalPending = Math.max(0, totalPurchase - newTotalPaid);
+
+            const updatedBalance = {
+                totalPurchase: totalPurchase,
+                totalPaid: newTotalPaid,
+                totalPending: newTotalPending,
+                lastPaymentDate: new Date().toISOString().split('T')[0],
+                lastUpdated: new Date().toISOString()
+            };
+
+            await balanceRef.set(updatedBalance);
+            return updatedBalance;
+        } catch (error) {
+            throw error;
         }
-
-        // Calculate new balance values
-        const newTotalPaid = parseFloat(currentBalance.totalPaid || 0) + parseFloat(paymentAmount);
-        const newTotalPending = Math.max(0, totalPurchase - newTotalPaid);
-
-        const updatedBalance = {
-            totalPurchase: totalPurchase,
-            totalPaid: newTotalPaid,
-            totalPending: newTotalPending,
-            lastPaymentDate: new Date().toISOString().split('T')[0],
-            lastUpdated: new Date().toISOString()
-        };
-
-        await balanceRef.set(updatedBalance);
-        console.log('Customer balance updated:', updatedBalance);
-        return updatedBalance;
-    } catch (error) {
-        console.error('Error updating customer balance:', error);
-        throw error;
-    }
-};
+    };
 
     // UPDATED: Main payment processing function
     const handleSubmitPayment = async () => {
@@ -167,14 +160,13 @@ const updateCustomerBalance = async (paymentAmount, isFullPayment) => {
         try {
             // Filter only pending items that can be paid
             const payableItems = selectedItems.filter(item => item.status !== 'paid');
-            
+
             if (payableItems.length === 0) {
                 alert('No pending items to pay');
                 setProcessingPayment(false);
                 return;
             }
 
-            console.log('Processing payment for items:', payableItems);
 
             const isFullPayment = parseFloat(paymentAmount) >= parseFloat(selectedTotal);
             const itemIds = payableItems.map(item => item.id);
@@ -208,10 +200,8 @@ const updateCustomerBalance = async (paymentAmount, isFullPayment) => {
                 }, isFullPayment);
             }
 
-            console.log('Payment processed successfully');
-            
+
         } catch (error) {
-            console.error('Payment processing error:', error);
             alert('Payment failed: ' + (error.message || 'Unknown error occurred'));
         } finally {
             setProcessingPayment(false);
@@ -298,9 +288,9 @@ const updateCustomerBalance = async (paymentAmount, isFullPayment) => {
                                 <span className="input-group-text bg-dark border-secondary text-white">
                                     <i className="fas fa-indian-rupee-sign"></i>
                                 </span>
-                                <input 
-                                    type="number" 
-                                    className="form-control bg-dark text-white border-secondary" 
+                                <input
+                                    type="number"
+                                    className="form-control bg-dark text-white border-secondary"
                                     value={paymentAmount}
                                     onChange={(e) => setPaymentAmount(parseFloat(e.target.value) || 0)}
                                     max={selectedTotal}
@@ -326,7 +316,7 @@ const updateCustomerBalance = async (paymentAmount, isFullPayment) => {
                                 <i className="fas fa-credit-card me-2 text-primary"></i>
                                 Payment Method
                             </label>
-                            <select 
+                            <select
                                 className="form-select bg-dark text-white border-secondary"
                                 value={paymentMethod}
                                 onChange={(e) => setPaymentMethod(e.target.value)}
@@ -346,8 +336,8 @@ const updateCustomerBalance = async (paymentAmount, isFullPayment) => {
                                 <i className="fas fa-sticky-note me-2 text-info"></i>
                                 Payment Notes (Optional)
                             </label>
-                            <textarea 
-                                className="form-control bg-dark text-white border-secondary" 
+                            <textarea
+                                className="form-control bg-dark text-white border-secondary"
                                 rows="2"
                                 value={paymentNotes}
                                 onChange={(e) => setPaymentNotes(e.target.value)}
@@ -380,7 +370,7 @@ const updateCustomerBalance = async (paymentAmount, isFullPayment) => {
 
                         {/* Final Summary */}
                         <div className="alert border-0 mt-3" style={{
-                            background: balanceAfterPayment === 0 
+                            background: balanceAfterPayment === 0
                                 ? "linear-gradient(135deg, rgba(34, 197, 94, 0.1) 0%, rgba(22, 163, 74, 0.05) 100%)"
                                 : "linear-gradient(135deg, rgba(249, 115, 22, 0.1) 0%, rgba(234, 88, 12, 0.05) 100%)",
                             borderLeft: balanceAfterPayment === 0 ? "4px solid #22c55e" : "4px solid #f97316",
@@ -409,8 +399,8 @@ const updateCustomerBalance = async (paymentAmount, isFullPayment) => {
                     {/* Footer */}
                     <div className="modal-footer border-0 pt-0 px-4 pb-4">
                         <div className="d-flex gap-3 w-100">
-                            <button 
-                                type="button" 
+                            <button
+                                type="button"
                                 className="btn flex-fill py-3 fw-bold border-0"
                                 onClick={onClose}
                                 disabled={processingPayment}
@@ -424,13 +414,13 @@ const updateCustomerBalance = async (paymentAmount, isFullPayment) => {
                                 <i className="fas fa-times me-2"></i>
                                 Cancel
                             </button>
-                            <button 
-                                type="button" 
+                            <button
+                                type="button"
                                 className="btn flex-fill py-3 fw-bold border-0"
                                 onClick={handleSubmitPayment}
                                 disabled={processingPayment || paymentAmount <= 0 || paymentAmount > selectedTotal}
                                 style={{
-                                    background: processingPayment 
+                                    background: processingPayment
                                         ? "linear-gradient(135deg, #6b7280 0%, #4b5563 100%)"
                                         : "linear-gradient(135deg, #10b981 0%, #059669 100%)",
                                     color: "white",

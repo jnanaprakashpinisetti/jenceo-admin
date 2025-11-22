@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import firebaseDB from '../../firebase';
 import ShopForm from '../Shop/ShopForm';
-import ShareBill from '../Shop/ShareBill';
+import ShareBill from './ShareBill'; // FIXED: Changed from '../ShareBill' to './ShareBill'
 import ItemsList from './ItemsList';
 import PaymentModal from './PaymentModal';
 import BasicDetails from './BasicDetails';
@@ -23,7 +23,6 @@ const CustomerModal = ({ customer, onClose, onDataUpdate }) => {
     const [errorMessage, setErrorMessage] = useState('');
     const [billPayload, setBillPayload] = useState(null);
 
-    // Enhanced language mapping for categories with English and Hindi
     const categoryTranslations = {
         "1 కూరగాయలు": {
             en: "1 Vegetables",
@@ -129,24 +128,18 @@ const CustomerModal = ({ customer, onClose, onDataUpdate }) => {
         },
     };
 
-   // UPDATED: Load all customer data including PurchaseItems, Payments, and Balance
    const loadCustomerData = useCallback(async (customerId) => {
     if (!customerId) {
-        console.error("No customer ID provided");
         return;
     }
 
     setLoadingItems(true);
     try {
-        console.log("Loading data for customer:", customerId);
-        
-        // Load PurchaseItems
         const purchaseItemsPath = `Shop/CreditData/${customerId}/PurchaseItems`;
         const purchaseItemsRef = firebaseDB.child(purchaseItemsPath);
         const purchaseItemsSnapshot = await purchaseItemsRef.once('value');
         const purchaseItemsData = purchaseItemsSnapshot.val() || {};
         
-        // Convert object to array if needed
         const itemsList = Object.entries(purchaseItemsData).map(([itemId, item]) => ({
             id: itemId,
             ...item,
@@ -156,41 +149,29 @@ const CustomerModal = ({ customer, onClose, onDataUpdate }) => {
             quantity: item.quantity || '0'
         }));
 
-        // Sort by date descending (newest first)
         itemsList.sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0));
         setPurchaseItems(itemsList);
 
-        // Load Payments
         const paymentsPath = `Shop/CreditData/${customerId}/Payments`;
         const paymentsRef = firebaseDB.child(paymentsPath);
         const paymentsSnapshot = await paymentsRef.once('value');
         const paymentsData = paymentsSnapshot.val() || {};
         
-        // Convert object to array if needed
         const paymentsList = Object.entries(paymentsData).map(([paymentId, payment]) => ({
             id: paymentId,
             ...payment
         }));
 
-        // Sort payments by date descending
         paymentsList.sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0));
         setPayments(paymentsList);
 
-        // Load Balance
         const balancePath = `Shop/CreditData/${customerId}/Balance`;
         const balanceRef = firebaseDB.child(balancePath);
         const balanceSnapshot = await balanceRef.once('value');
         const balanceData = balanceSnapshot.val() || null;
         setBalance(balanceData);
-
-        console.log("Customer data loaded:", {
-            itemsCount: itemsList.length,
-            paymentsCount: paymentsList.length,
-            balanceData: balanceData
-        });
         
     } catch (error) {
-        console.error('Error loading customer data:', error);
         setPurchaseItems([]);
         setPayments([]);
         setBalance(null);
@@ -200,22 +181,17 @@ const CustomerModal = ({ customer, onClose, onDataUpdate }) => {
     }
 }, []);
 
-    // Single useEffect to load all customer data
     useEffect(() => {
         if (customer && customer.id) {
-            console.log("CustomerModal: Loading data for customer:", customer.id, customer.name);
             loadCustomerData(customer.id);
         } else {
-            console.log("CustomerModal: No customer ID available");
             setPurchaseItems([]);
             setPayments([]);
             setBalance(null);
         }
     }, [customer, refreshTrigger, loadCustomerData]);
 
-    // Calculate total (only pending items) - UPDATED
     const totalAmount = useMemo(() => {
-        console.log("Calculating total amount from items:", PurchaseItems);
         return PurchaseItems.reduce((sum, item) => {
             if (item.status !== "paid") {
                 return sum + (parseFloat(item.total) || 0);
@@ -224,14 +200,11 @@ const CustomerModal = ({ customer, onClose, onDataUpdate }) => {
         }, 0);
     }, [PurchaseItems]);
 
-    // Function to get translation
     const getTranslation = (text, language, isSubCategory = false, mainCategory = '') => {
-        // For main categories
         if (categoryTranslations[text] && categoryTranslations[text][language]) {
             return categoryTranslations[text][language];
         }
 
-        // For sub categories
         if (isSubCategory && mainCategory && categoryTranslations[mainCategory]) {
             const subCategoryTranslations = categoryTranslations[mainCategory].subCategories;
             if (subCategoryTranslations && subCategoryTranslations[text] && subCategoryTranslations[text][language]) {
@@ -242,7 +215,6 @@ const CustomerModal = ({ customer, onClose, onDataUpdate }) => {
         return text;
     };
 
-    // Get character badge color and label
     const getCharacterInfo = (character) => {
         switch (character) {
             case 'very-good': return { color: 'success', label: 'Very Good' };
@@ -258,7 +230,6 @@ const CustomerModal = ({ customer, onClose, onDataUpdate }) => {
         setShowShopForm(true);
     };
 
-    // Handle shop form submission
     const handleShopFormSubmit = useCallback(async (savedData) => {
         try {
             setShowShopForm(false);
@@ -270,102 +241,73 @@ const CustomerModal = ({ customer, onClose, onDataUpdate }) => {
         }
     }, [onDataUpdate]);
 
-    // Handle pay amount
     const handlePayAmount = (items, total) => {
         setSelectedItemsForPayment(items);
         setSelectedTotalForPayment(total);
         setShowPaymentModal(true);
     };
 
-    // UPDATED: Handle payment success with proper data structure
-// In CustomerModal.jsx - UPDATE the handlePaymentSuccess function
-const handlePaymentSuccess = async (paymentInfo, isFullPayment) => {
-    try {
-        console.log('Payment successful, updating UI...', { 
-            isFullPayment, 
-            selectedItemsCount: selectedItemsForPayment.length,
-            paymentInfo 
-        });
+    const handlePaymentSuccess = async (paymentInfo, isFullPayment) => {
+        try {
+            setSelectedItemsForPayment([]);
+            setSelectedTotalForPayment(0);
+            setShowPaymentModal(false);
 
-        // Clear selection immediately
-        setSelectedItemsForPayment([]);
-        setSelectedTotalForPayment(0);
-        setShowPaymentModal(false);
+            await loadCustomerData(customer.id);
+            setRefreshTrigger(prev => prev + 1);
+            
+            if (onDataUpdate) onDataUpdate();
 
-        // Force refresh from Firebase to get updated data
-        console.log('Refreshing data from Firebase...');
-        await loadCustomerData(customer.id);
-        setRefreshTrigger(prev => prev + 1);
-        
-        if (onDataUpdate) onDataUpdate();
+            if (isFullPayment) {
+                showSuccess(`Payment of ₹${paymentInfo.amount.toFixed(2)} recorded successfully! ${paymentInfo.items.length} items marked as paid.`);
+            } else {
+                showSuccess(`Partial payment of ₹${paymentInfo.amount.toFixed(2)} recorded successfully!`);
+            }
 
-        // Show success message
-        if (isFullPayment) {
-            showSuccess(`Payment of ₹${paymentInfo.amount.toFixed(2)} recorded successfully! ${paymentInfo.items.length} items marked as paid.`);
-        } else {
-            showSuccess(`Partial payment of ₹${paymentInfo.amount.toFixed(2)} recorded successfully!`);
+        } catch (error) {
+            showError('Error updating payment status. Please refresh the page.');
         }
+    };
 
-    } catch (error) {
-        console.error('Error handling payment success:', error);
-        showError('Error updating payment status. Please refresh the page.');
-    }
-};
-
-    // Handle create bill
     const handleCreateBill = (payload) => {
         try {
             if (!payload || !Array.isArray(payload.items) || payload.items.length === 0) {
-                console.warn('handleCreateBill called with invalid payload:', payload);
-                // still switch to bill tab if you want to show the bill area
                 setActiveTab('bill');
                 setBillPayload(null);
                 return;
             }
 
-            // Save the payload and switch to bill tab so ShareBill receives it
             setBillPayload({
                 items: payload.items,
                 billNumber: payload.billNumber || '',
                 billTitle: payload.title || 'Customer Bill'
             });
 
-            // switch to the Bill tab which renders ShareBill
             setActiveTab('bill');
 
-            // Optional: log for debugging
-            console.log('Opening bill tab with payload:', payload);
         } catch (err) {
-            console.error('Error in handleCreateBill:', err);
             setActiveTab('bill');
             setBillPayload(null);
         }
     };
 
-
-    // Handle refresh
     const handleRefresh = () => {
-        console.log("Refreshing customer data...");
         setRefreshTrigger(prev => prev + 1);
         if (onDataUpdate) onDataUpdate();
     };
 
-    // Show success modal
     const showSuccess = (message) => {
         setSuccessMessage(message);
         setShowSuccessModal(true);
     };
 
-    // Show error modal
     const showError = (message) => {
         setErrorMessage(message);
         setShowErrorModal(true);
     };
 
-    // Force refresh all data
     const forceRefreshAllData = useCallback(async () => {
         if (customer?.id) {
-            console.log("Force refreshing data for customer:", customer.id);
             await loadCustomerData(customer.id);
             setRefreshTrigger(prev => prev + 1);
             if (onDataUpdate) onDataUpdate();
@@ -373,19 +315,6 @@ const handlePaymentSuccess = async (paymentInfo, isFullPayment) => {
     }, [customer, loadCustomerData, onDataUpdate]);
 
     const characterInfo = getCharacterInfo(customer?.character);
-
-    // Debug: Log current state
-    useEffect(() => {
-        console.log("CustomerModal State:", {
-            customer: customer?.id,
-            itemsCount: PurchaseItems.length,
-            paymentsCount: Payments.length,
-            balanceData: Balance,
-            totalAmount,
-            loadingItems,
-            activeTab
-        });
-    }, [customer, PurchaseItems, Payments, Balance, totalAmount, loadingItems, activeTab]);
 
     return (
         <>
@@ -397,7 +326,6 @@ const handlePaymentSuccess = async (paymentInfo, isFullPayment) => {
                         border: "2px solid rgba(99, 102, 241, 0.3)",
                         boxShadow: "0 25px 50px -12px rgba(99, 102, 241, 0.25)"
                     }}>
-                        {/* Header */}
                         <div className="modal-header border-0 p-3" style={{
                             background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
                             padding: "2rem 2rem 1.5rem 2rem"
@@ -431,7 +359,6 @@ const handlePaymentSuccess = async (paymentInfo, isFullPayment) => {
                                             <i className="fas fa-credit-card me-1"></i>
                                             Payments: {Payments.length}
                                         </span>
-                                        {/* Debug badge */}
                                         <span className="badge bg-secondary" title="Debug info">
                                             <i className="fas fa-bug me-1"></i>
                                             {loadingItems ? 'Loading...' : `${PurchaseItems.length} items`}
@@ -447,7 +374,6 @@ const handlePaymentSuccess = async (paymentInfo, isFullPayment) => {
                             </div>
                         </div>
 
-                        {/* Tabs Navigation */}
                         <div className="px-4 pt-3">
                             <ul className="nav nav-pills nav-justified gap-2" style={{
                                 background: "linear-gradient(135deg, rgba(30, 41, 59, 0.8) 0%, rgba(15, 23, 42, 0.8) 100%)",
@@ -484,7 +410,6 @@ const handlePaymentSuccess = async (paymentInfo, isFullPayment) => {
                             </ul>
                         </div>
 
-                        {/* Tab Content */}
                         <div className="modal-body p-4">
                             {activeTab === "basic" && (
                                 <BasicDetails
@@ -507,12 +432,10 @@ const handlePaymentSuccess = async (paymentInfo, isFullPayment) => {
                                     categoryTranslations={categoryTranslations}
                                     getTranslation={getTranslation}
                                     onPayAmount={handlePayAmount}
-                                    onCreateBill={handleCreateBill}      // <-- make sure this is present
+                                    onCreateBill={handleCreateBill}
                                     onShareBill={(items, billNumber, title) => {
-                                        // fallback if ItemsList calls onShareBill directly
                                         handleCreateBill({ items, billNumber, title });
                                     }}
-                                    // onUpdateItemStatus={}
                                     refreshTrigger={refreshTrigger}
                                 />
                             )}
@@ -524,9 +447,9 @@ const handlePaymentSuccess = async (paymentInfo, isFullPayment) => {
                                         PurchaseItems={PurchaseItems}
                                         totalAmount={totalAmount}
                                         paymentHistory={Payments}
-                                        selectedItems={billPayload?.items || []}      // <- the selected items from ItemsList
-                                        billNumber={billPayload?.billNumber || ''}    // <- optional bill number
-                                        billTitle={billPayload?.billTitle || 'Customer Bill'} // <- optional title
+                                        selectedItems={billPayload?.items || []}
+                                        billNumber={billPayload?.billNumber || ''}
+                                        billTitle={billPayload?.billTitle || 'Customer Bill'}
                                         categoryTranslations={categoryTranslations}
                                         getTranslation={getTranslation}
                                     />
@@ -534,7 +457,6 @@ const handlePaymentSuccess = async (paymentInfo, isFullPayment) => {
                             )}
                         </div>
 
-                        {/* Footer */}
                         <div className="modal-footer border-0 pt-0 px-4 pb-4">
                             <button
                                 type="button"
@@ -555,7 +477,6 @@ const handlePaymentSuccess = async (paymentInfo, isFullPayment) => {
                 </div>
             </div>
 
-            {/* Shop Form Modal */}
             {showShopForm && (
                 <ShopForm
                     customer={customer}
@@ -565,7 +486,6 @@ const handlePaymentSuccess = async (paymentInfo, isFullPayment) => {
                 />
             )}
 
-            {/* Payment Modal */}
             {showPaymentModal && (
                 <PaymentModal
                     isOpen={showPaymentModal}
@@ -579,7 +499,6 @@ const handlePaymentSuccess = async (paymentInfo, isFullPayment) => {
                 />
             )}
 
-            {/* Success Modal */}
             {showSuccessModal && (
                 <div className="modal show d-block" style={{ backgroundColor: "rgba(0,0,0,0.8)" }}>
                     <div className="modal-dialog modal-dialog-centered">
@@ -612,7 +531,6 @@ const handlePaymentSuccess = async (paymentInfo, isFullPayment) => {
                 </div>
             )}
 
-            {/* Error Modal */}
             {showErrorModal && (
                 <div className="modal show d-block" style={{ backgroundColor: "rgba(0,0,0,0.8)" }}>
                     <div className="modal-dialog modal-dialog-centered">

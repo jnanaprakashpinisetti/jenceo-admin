@@ -31,7 +31,7 @@ const BasicDetails = ({ customer, totalAmount, paymentHistory, PurchaseItems, Pa
             const purchaseDate = payment.purchaseDate ? new Date(payment.purchaseDate) : date;
             const purchaseMonth = purchaseDate.toLocaleDateString('en-US', { month: 'short' });
             const purchaseDay = purchaseDate.getDate().toString().padStart(2, '0');
-            
+
             return `${customerId}-${purchaseMonth}-${purchaseDay}-${index + 1}`;
         } catch (error) {
             const customerId = customer?.idNo?.substring(0, 4) || 'C-01';
@@ -43,7 +43,6 @@ const BasicDetails = ({ customer, totalAmount, paymentHistory, PurchaseItems, Pa
     const financialSummary = useMemo(() => {
         // Use Balance data if available (primary source)
         if (Balance && Balance.totalPurchase !== undefined) {
-            console.log('Using Balance data for financial summary:', Balance);
             return {
                 totalPurchase: parseFloat(Balance.totalPurchase) || 0,
                 totalPaid: parseFloat(Balance.totalPaid) || 0,
@@ -94,14 +93,6 @@ const BasicDetails = ({ customer, totalAmount, paymentHistory, PurchaseItems, Pa
             lastPaymentDate = sortedPayments[0]?.date ? new Date(sortedPayments[0].date).toLocaleDateString() : 'N/A';
         }
 
-        console.log('Financial Summary:', {
-            totalPurchase,
-            totalPaid,
-            totalPending,
-            lastPaymentDate,
-            paymentCount: Payments?.length || 0
-        });
-
         return {
             totalPurchase,
             totalPaid,
@@ -137,20 +128,19 @@ const BasicDetails = ({ customer, totalAmount, paymentHistory, PurchaseItems, Pa
     const handleSetReminder = () => {
         const customerName = customer?.name || 'Customer';
         const pendingAmount = financialSummary.totalPending;
-        
+
         if (pendingAmount > 0) {
             const message = `Reminder: ${customerName} has a pending amount of ₹${pendingAmount.toFixed(2)}. Please follow up for payment.`;
-            
+
             // For now, show an alert. You can integrate with actual reminder system later
             alert(message);
-            
+
             // Here you can integrate with:
             // 1. Browser notifications
             // 2. Calendar API
             // 3. Email/SMS service
             // 4. Local storage for reminders
-            
-            console.log('Reminder set for:', customerName, 'Amount:', pendingAmount);
+
         } else {
             alert('No pending amount for this customer.');
         }
@@ -743,14 +733,14 @@ const BasicDetails = ({ customer, totalAmount, paymentHistory, PurchaseItems, Pa
 
             {/* FIXED: Payment Details Modal with proper content */}
             {showPaymentModal && selectedPayment && (
-                <div className="modal fade show d-block" tabIndex="-1" style={{ backgroundColor: 'rgba(0,0,0,0.8)' }}>
+                <div className="modal fade show d-block" tabIndex="-1" style={{ backgroundColor: 'rgba(0,0,0,1)' }}>
                     <div className="modal-dialog modal-lg modal-dialog-centered">
                         <div className="modal-content border-0 shadow-lg" style={{
                             background: "linear-gradient(135deg, rgba(30, 41, 59, 0.95) 0%, rgba(15, 23, 42, 0.95) 100%)",
                             borderRadius: "15px",
                             border: "2px solid rgba(99, 102, 241, 0.5)"
                         }}>
-                            <div className="modal-header border-0" style={{
+                            <div className="modal-header border-0 justify-content-between" style={{
                                 background: "linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%)",
                                 borderRadius: "15px 15px 0 0"
                             }}>
@@ -758,7 +748,7 @@ const BasicDetails = ({ customer, totalAmount, paymentHistory, PurchaseItems, Pa
                                     <i className="bi bi-receipt me-2"></i>
                                     Payment Details: {selectedPayment.displayId}
                                 </h5>
-                                <div className="d-flex gap-2">
+                                <div className="d-flex gap-2 align-items-center">
                                     <button
                                         type="button"
                                         className="btn btn-success btn-sm"

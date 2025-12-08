@@ -30,8 +30,15 @@ const CustomerList = () => {
         reminderDate: "",
         amountOperator: ">",
         amountValue: "",
-        reminderStatus: "all" // all, today, tomorrow, upcoming, overdue
     });
+
+    // State for reminder date buttons
+    const [reminderDateButtons, setReminderDateButtons] = useState([
+        { label: "Today", value: "today", active: false },
+        { label: "Tomorrow", value: "tomorrow", active: false },
+        { label: "This Week", value: "week", active: false },
+        { label: "Overdue", value: "overdue", active: false },
+    ]);
 
     // Check if user is admin
     const isAdmin = authUser?.email === "admin@example.com" || authUser?.role === "admin";
@@ -75,31 +82,38 @@ const CustomerList = () => {
 
                 if (hasCustomerFields && !isNestedData) {
                     // Calculate balance from customer items
-                    const balance = calculateBalanceFromItems(customerData);
+                    const balanceAmount = calculateBalanceFromItems(customerData);
 
-                    // Get latest reminder date - IMPROVED: Check both Firebase structure and BasicDetails reminders
+                    // Create Balance object structure that BasicDetails expects
+                    const balanceObject = {
+                        total: balanceAmount,
+                        pending: balanceAmount,
+                        paid: 0,
+                        transactions: []
+                    };
+
+                    // Get latest reminder date
                     let latestReminderDate = '';
                     let reminderStatus = 'none';
 
-                    // Check for reminders in the customer data (BasicDetails.jsx saves them here)
+                    // Check for reminders
                     if (customerData.reminders) {
                         let remindersArray = [];
 
                         if (Array.isArray(customerData.reminders)) {
                             remindersArray = customerData.reminders;
                         } else if (typeof customerData.reminders === 'object') {
-                            // Convert object to array
                             remindersArray = Object.values(customerData.reminders);
                         }
 
                         if (remindersArray.length > 0) {
-                            // Sort by date descending to get the latest reminder
                             const validReminders = remindersArray.filter(r => r && r.date);
                             if (validReminders.length > 0) {
                                 const sortedReminders = validReminders.sort((a, b) =>
                                     new Date(b.date) - new Date(a.date)
                                 );
                                 latestReminderDate = sortedReminders[0].date;
+                                // Update reminder status dynamically based on current date
                                 reminderStatus = getReminderStatus(latestReminderDate);
                             }
                         }
@@ -115,7 +129,8 @@ const CustomerList = () => {
                         place: customerData.place || '',
                         reminderDate: latestReminderDate,
                         reminderStatus: reminderStatus,
-                        balance: balance,
+                        balance: balanceObject,
+                        Balance: balanceObject,
                         isDeleted: customerData.isDeleted || false,
                         deletedAt: customerData.deletedAt || '',
                         deletedBy: customerData.deletedBy || 'unknown',
@@ -137,7 +152,7 @@ const CustomerList = () => {
         loadCustomers();
     }, [refreshTrigger]);
 
-    // Get reminder status based on date (same as BasicDetails.jsx)
+    // Get reminder status based on date
     const getReminderStatus = (dateString) => {
         if (!dateString) return 'none';
 
@@ -279,7 +294,7 @@ const CustomerList = () => {
             const amount = parseFloat(filters.amountValue);
             if (!isNaN(amount)) {
                 filtered = filtered.filter(customer => {
-                    const customerBalance = customer.balance || 0;
+                    const customerBalance = customer.balance?.total || 0;
                     if (filters.amountOperator === ">") {
                         return customerBalance > amount;
                     } else if (filters.amountOperator === "<") {
@@ -292,15 +307,38 @@ const CustomerList = () => {
             }
         }
 
-        // Apply reminder status filter
-        if (filters.reminderStatus !== "all") {
-            filtered = filtered.filter(customer =>
-                customer.reminderStatus === filters.reminderStatus
-            );
+        // Apply reminder date button filters
+        const activeDateButton = reminderDateButtons.find(btn => btn.active);
+        if (activeDateButton) {
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+
+            filtered = filtered.filter(customer => {
+                if (!customer.reminderDate) return false;
+
+                const reminderDate = new Date(customer.reminderDate);
+                reminderDate.setHours(0, 0, 0, 0);
+
+                const timeDiff = reminderDate.getTime() - today.getTime();
+                const dayDiff = Math.ceil(timeDiff / (1000 * 3600 * 24));
+
+                switch (activeDateButton.value) {
+                    case 'today':
+                        return dayDiff === 0;
+                    case 'tomorrow':
+                        return dayDiff === 1;
+                    case 'week':
+                        return dayDiff >= 0 && dayDiff <= 7;
+                    case 'overdue':
+                        return dayDiff < 0;
+                    default:
+                        return true;
+                }
+            });
         }
 
         setFilteredCustomers(filtered);
-    }, [customers, filters]);
+    }, [customers, filters, reminderDateButtons]);
 
     const handleFilterChange = (key, value) => {
         setFilters(prev => ({
@@ -309,19 +347,74 @@ const CustomerList = () => {
         }));
     };
 
+    // Handle reminder date button click
+    const handleReminderDateButtonClick = (buttonValue) => {
+        setReminderDateButtons(prev =>
+            prev.map(btn => ({
+                ...btn,
+                active: btn.value === buttonValue ? !btn.active : false
+            }))
+        );
+    };
+
     const clearFilters = () => {
         setFilters({
             search: "",
             reminderDate: "",
             amountOperator: ">",
-            amountValue: "",
-            reminderStatus: "all"
+            amountValue: ""
         });
+        setReminderDateButtons(prev =>
+            prev.map(btn => ({ ...btn, active: false }))
+        );
     };
 
+    // ADDED MISSING FUNCTION: Handle row click
     const handleRowClick = (customer) => {
         setSelectedCustomer(customer);
         setShowModal(true);
+    };
+
+    // ADDED MISSING FUNCTION: Handle add items
+    const handleAddItems = (customer, e) => {
+        e.stopPropagation();
+        setSelectedCustomer(customer);
+        setShowShopForm(true);
+    };
+
+    // ADDED MISSING FUNCTION: Handle close modal
+    const handleCloseModal = () => {
+        setShowModal(false);
+        setSelectedCustomer(null);
+    };
+
+    // ADDED MISSING FUNCTION: Handle close edit modal
+    const handleCloseEditModal = () => {
+        setShowEditModal(false);
+        setCustomerToEdit(null);
+    };
+
+    // ADDED MISSING FUNCTION: Handle update customer
+    const handleUpdateCustomer = async (updatedData) => {
+        if (!customerToEdit) return;
+
+        try {
+            const correctPath = `Shop/CreditData/${customerToEdit.id}`;
+            await firebaseDB.child(correctPath).update({
+                ...updatedData,
+                updatedAt: new Date().toISOString(),
+                updatedBy: authUser?.displayName || authUser?.email || 'Unknown User'
+            });
+
+            // Refresh data
+            setRefreshTrigger(prev => prev + 1);
+            setShowEditModal(false);
+            setCustomerToEdit(null);
+            alert("Customer updated successfully!");
+        } catch (error) {
+            console.error("Error updating customer:", error);
+            alert("Error updating customer");
+        }
     };
 
     // Handle edit customer
@@ -338,7 +431,7 @@ const CustomerList = () => {
         setShowDeleteModal(true);
     };
 
-    // Confirm delete (soft delete) - FIXED: Use authUser's name instead of email
+    // Confirm delete (soft delete)
     const confirmDelete = async () => {
         if (!customerToDelete) return;
 
@@ -349,7 +442,7 @@ const CustomerList = () => {
             await firebaseDB.child(correctPath).update({
                 isDeleted: true,
                 deletedAt: new Date().toISOString(),
-                deletedBy: deletedBy  // Store the user's name or email
+                deletedBy: deletedBy
             });
 
             // Refresh data
@@ -380,63 +473,7 @@ const CustomerList = () => {
         }
     };
 
-    // Permanently delete customer (admin only)
-    const handlePermanentDelete = async (customerId) => {
-        if (!window.confirm("Are you sure you want to permanently delete this customer? This action cannot be undone!")) {
-            return;
-        }
-
-        try {
-            const correctPath = `Shop/CreditData/${customerId}`;
-            await firebaseDB.child(correctPath).remove();
-
-            // Refresh data
-            setRefreshTrigger(prev => prev + 1);
-        } catch (error) {
-            console.error("Error permanently deleting customer:", error);
-            alert("Error permanently deleting customer");
-        }
-    };
-
-    const handleAddItems = (customer, e) => {
-        e.stopPropagation();
-        setSelectedCustomer(customer);
-        setShowShopForm(true);
-    };
-
-    const handleCloseModal = () => {
-        setShowModal(false);
-        setSelectedCustomer(null);
-    };
-
-    const handleCloseEditModal = () => {
-        setShowEditModal(false);
-        setCustomerToEdit(null);
-    };
-
-    // Update customer data
-    const handleUpdateCustomer = async (updatedData) => {
-        if (!customerToEdit) return;
-
-        try {
-            const correctPath = `Shop/CreditData/${customerToEdit.id}`;
-            await firebaseDB.child(correctPath).update({
-                ...updatedData,
-                updatedAt: new Date().toISOString(),
-                updatedBy: authUser?.displayName || authUser?.email || 'Unknown User'
-            });
-
-            // Refresh data
-            setRefreshTrigger(prev => prev + 1);
-            setShowEditModal(false);
-            setCustomerToEdit(null);
-            alert("Customer updated successfully!");
-        } catch (error) {
-            console.error("Error updating customer:", error);
-            alert("Error updating customer");
-        }
-    };
-
+    // Format phone number
     const formatPhoneNumber = (phone) => {
         if (!phone) return "N/A";
         const cleaned = phone.toString().replace(/\D/g, '');
@@ -463,7 +500,7 @@ const CustomerList = () => {
         setRefreshTrigger(prev => prev + 1);
     };
 
-    // Handle row click in deleted customers modal (same as main list)
+    // Handle row click in deleted customers modal
     const handleDeletedCustomerRowClick = (customer) => {
         setSelectedCustomer(customer);
         setShowModal(true);
@@ -495,6 +532,25 @@ const CustomerList = () => {
             });
         } catch (error) {
             return 'N/A';
+        }
+    };
+
+    // Get date for reminder buttons
+    const getDateForReminderButton = (type) => {
+        const today = new Date();
+        const result = new Date(today);
+
+        switch (type) {
+            case 'today':
+                return today.toISOString().split('T')[0];
+            case 'tomorrow':
+                result.setDate(today.getDate() + 1);
+                return result.toISOString().split('T')[0];
+            case 'week':
+                result.setDate(today.getDate() + 7);
+                return result.toISOString().split('T')[0];
+            default:
+                return '';
         }
     };
 
@@ -551,7 +607,7 @@ const CustomerList = () => {
                 </div>
                 <div className="card-body bg-secondary bg-opacity-10">
                     <div className="row g-3">
-                        <div className="col-md-2">
+                        <div className="col-md-4">
                             <label className="form-label text-white small">Search</label>
                             <input
                                 type="text"
@@ -561,30 +617,27 @@ const CustomerList = () => {
                                 onChange={(e) => handleFilterChange('search', e.target.value)}
                             />
                         </div>
-                        <div className="col-md-2">
+                        <div className="col-md-3">
                             <label className="form-label text-white small">Reminder Date</label>
-                            <input
-                                type="date"
-                                className="form-control form-control-sm bg-dark text-white border-secondary"
-                                value={filters.reminderDate}
-                                onChange={(e) => handleFilterChange('reminderDate', e.target.value)}
-                            />
-                        </div>
-                        <div className="col-md-2">
-                            <label className="form-label text-white small">Reminder Status</label>
-                            <select
-                                className="form-select form-select-sm bg-dark text-white border-secondary"
-                                value={filters.reminderStatus}
-                                onChange={(e) => handleFilterChange('reminderStatus', e.target.value)}
-                            >
-                                <option value="all">All Reminders</option>
-                                <option value="today">Today</option>
-                                <option value="tomorrow">Tomorrow</option>
-                                <option value="upcoming">Upcoming (7 days)</option>
-                                <option value="overdue">Overdue</option>
-                                <option value="future">Future</option>
-                                <option value="none">No Reminder</option>
-                            </select>
+                            <div className="d-flex flex-wrap gap-2 justify-content-between">
+                                {reminderDateButtons.map((button) => (
+                                    <button
+                                        key={button.value}
+                                        type="button"
+                                        className={`btn btn-sm ${button.active ? 'btn-warning' : 'btn-outline-warning'}`}
+                                        onClick={() => handleReminderDateButtonClick(button.value)}
+                                        style={{
+                                            borderRadius: "20px",
+                                            padding: "5px 15px",
+                                            fontSize: "0.75rem",
+                                            fontWeight: "bold"
+                                        }}
+                                    >
+                                        {button.label}
+                                        {button.active && <i className="bi bi-check-circle ms-1"></i>}
+                                    </button>
+                                ))}
+                            </div>
                         </div>
                         <div className="col-md-3">
                             <label className="form-label text-white small">Balance Amount</label>
@@ -663,7 +716,7 @@ const CustomerList = () => {
                         <tbody>
                             {filteredCustomers.map((customer, index) => {
                                 const characterInfo = getCharacterInfo(customer.character);
-                                const balance = customer.balance || 0;
+                                const balance = customer.balance?.total || 0;
                                 const reminderStatusInfo = getReminderStatusInfo(customer.reminderStatus);
 
                                 return (
@@ -1049,7 +1102,7 @@ const CustomerList = () => {
                 </div>
             )}
 
-            {/* Deleted Customers Modal - UPDATED with same functionality */}
+            {/* Deleted Customers Modal */}
             {showDeletedCustomersModal && (
                 <div className="modal fade show d-block" tabIndex="-1" style={{ backgroundColor: 'rgba(0,0,0,0.9)', zIndex: 1 }}>
                     <div className="modal-dialog modal-xl modal-dialog-centered">
@@ -1099,7 +1152,6 @@ const CustomerList = () => {
                                             </thead>
                                             <tbody>
                                                 {deletedCustomers.map((customer, index) => {
-                                                    const characterInfo = getCharacterInfo(customer.character);
                                                     const reminderStatusInfo = getReminderStatusInfo(customer.reminderStatus);
 
                                                     return (
@@ -1127,8 +1179,8 @@ const CustomerList = () => {
                                                                 {customer.mobileNo ? formatPhoneNumber(customer.mobileNo) : "N/A"}
                                                             </td>
                                                             <td className="text-center">
-                                                                <span className={`badge ${customer.balance > 0 ? 'bg-danger' : 'bg-success'}`}>
-                                                                    ₹{customer.balance?.toFixed(2) || '0.00'}
+                                                                <span className={`badge ${customer.balance?.total > 0 ? 'bg-danger' : 'bg-success'}`}>
+                                                                    ₹{customer.balance?.total?.toFixed(2) || '0.00'}
                                                                 </span>
                                                             </td>
                                                             <td className="text-center">
@@ -1161,30 +1213,6 @@ const CustomerList = () => {
                                                             </td>
                                                             <td className="text-center">
                                                                 <div className="d-flex justify-content-center gap-2">
-                                                                    {/* <button
-                                                                        className="btn btn-sm btn-warning px-2"
-                                                                        onClick={(e) => handleDeletedCustomerEdit(customer, e)}
-                                                                        title="Edit Customer"
-                                                                        style={{
-                                                                            background: "linear-gradient(135deg, #f59e0b 0%, #d97706 100%)",
-                                                                            border: "none",
-                                                                            borderRadius: "5px"
-                                                                        }}
-                                                                    >
-                                                                        <i className="bi bi-pencil"></i>
-                                                                    </button> */}
-                                                                    {/* <button
-                                                                        className="btn btn-sm btn-success px-2"
-                                                                        onClick={(e) => handleDeletedCustomerAddItems(customer, e)}
-                                                                        title="Add Items"
-                                                                        style={{
-                                                                            background: "linear-gradient(135deg, #10b981 0%, #059669 100%)",
-                                                                            border: "none",
-                                                                            borderRadius: "5px"
-                                                                        }}
-                                                                    >
-                                                                        <i className="bi bi-cart-plus"></i>
-                                                                    </button> */}
                                                                     <button
                                                                         className="btn btn-sm btn-success px-2"
                                                                         onClick={(e) => {
@@ -1200,16 +1228,6 @@ const CustomerList = () => {
                                                                     >
                                                                         <i className="bi bi-arrow-counterclockwise"></i>
                                                                     </button>
-                                                                    {/* <button
-                                                                        className="btn btn-sm btn-danger px-2"
-                                                                        onClick={(e) => {
-                                                                            e.stopPropagation();
-                                                                            handlePermanentDelete(customer.id);
-                                                                        }}
-                                                                        title="Permanently Delete"
-                                                                    >
-                                                                        <i className="bi bi-trash-fill"></i>
-                                                                    </button> */}
                                                                 </div>
                                                             </td>
                                                         </tr>

@@ -1119,11 +1119,11 @@ const ItemsList = ({
 
             {/* Confirmation Modal */}
             {(showConfirmModal || showDiscardModal) && (
-                <div className="modal fade show d-block" tabIndex="-1" style={{ backgroundColor: "rgba(0,0,0,0.5)" }}>
+                <div className="modal fade show d-block" tabIndex="-1" style={{ backgroundColor: "rgba(0,0,0,0.9)" }}>
                     <div className="modal-dialog modal-dialog-centered">
                         <div className="modal-content border-0 shadow-lg rounded-3">
-                            <div className={`modal-header border-0 text-white`} style={{
-                                background: `linear-gradient(135deg, var(--bs-${modalStyle.color}) 0%, var(--bs-${modalStyle.color}-dark) 100%)`
+                            <div className={`modal-header border-0 text-dark`} style={{
+                                background: "#ffc107 "
                             }}>
                                 <h6 className="modal-title mb-0">
                                     <i className={`bi bi-${modalStyle.icon} me-2`}></i>
@@ -1133,10 +1133,10 @@ const ItemsList = ({
                             <div className="modal-body bg-dark bg-opacity-90 text-white p-4">
                                 <p className="mb-0">{modalConfig.message}</p>
                             </div>
-                            <div className="modal-footer border-0 bg-dark bg-opacity-75">
+                            <div className="modal-footer border-0 bg-dark bg-opacity-75 ">
                                 <button
                                     type="button"
-                                    className="btn btn-outline-secondary"
+                                    className="btn btn-outline-secondary text-white"
                                     onClick={handleCancel}
                                     style={{ borderRadius: "8px" }}
                                 >
@@ -1145,7 +1145,7 @@ const ItemsList = ({
                                 </button>
                                 <button
                                     type="button"
-                                    className={`btn btn-${modalStyle.btnColor}`}
+                                    className={`btn btn-${modalStyle.btnColor} bg-warning`}
                                     onClick={handleConfirm}
                                     style={{
                                         borderRadius: "8px",

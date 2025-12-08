@@ -1,5 +1,6 @@
 // src/components/Customer/BasicDetails.jsx
-import React, { useMemo, useState, useEffect } from 'react';
+import React, { useMemo, useState, useEffect, useCallback } from 'react';
+import PropTypes from 'prop-types';
 
 const BasicDetails = ({ customer, totalAmount, paymentHistory, PurchaseItems, Payments, Balance }) => {
     const [selectedPayment, setSelectedPayment] = useState(null);
@@ -18,19 +19,106 @@ const BasicDetails = ({ customer, totalAmount, paymentHistory, PurchaseItems, Pa
     });
     const [reminderDate, setReminderDate] = useState('');
     const [reminders, setReminders] = useState([]);
+    const [isLoadingReminders, setIsLoadingReminders] = useState(false);
 
-    // Load reminders from localStorage on component mount
+    // Load reminders from Firebase/localStorage on component mount
     useEffect(() => {
-        const savedReminders = localStorage.getItem(`customer_reminders_${customer?.id}`);
-        if (savedReminders) {
-            setReminders(JSON.parse(savedReminders));
+        const loadReminders = async () => {
+            setIsLoadingReminders(true);
+            try {
+                // Try Firebase first if available
+                if (window.firebase) {
+                    const db = window.firebase.database();
+                    const remindersRef = db.ref(`customers/${customer?.id}/reminders`);
+                    const snapshot = await remindersRef.once('value');
+                    if (snapshot.exists()) {
+                        const remindersData = snapshot.val();
+                        const remindersList = Object.keys(remindersData).map(key => ({
+                            id: key,
+                            ...remindersData[key]
+                        }));
+                        setReminders(remindersList);
+                    }
+                } else {
+                    // Fallback to localStorage
+                    const savedReminders = localStorage.getItem(`customer_reminders_${customer?.id}`);
+                    if (savedReminders) {
+                        setReminders(JSON.parse(savedReminders));
+                    }
+                }
+            } catch (error) {
+                console.error('Error loading reminders:', error);
+                // Fallback to localStorage
+                const savedReminders = localStorage.getItem(`customer_reminders_${customer?.id}`);
+                if (savedReminders) {
+                    setReminders(JSON.parse(savedReminders));
+                }
+            } finally {
+                setIsLoadingReminders(false);
+            }
+        };
+
+        if (customer?.id) {
+            loadReminders();
         }
     }, [customer?.id]);
 
-    // Save reminders to localStorage
-    const saveReminders = (remindersList) => {
-        localStorage.setItem(`customer_reminders_${customer?.id}`, JSON.stringify(remindersList));
+    // Save reminders to Firebase/localStorage
+    const saveReminders = async (remindersList) => {
+        try {
+            // Try Firebase first
+            if (window.firebase && customer?.id) {
+                const db = window.firebase.database();
+                const remindersRef = db.ref(`customers/${customer.id}/reminders`);
+
+                // Convert array to object for Firebase
+                const remindersObj = {};
+                remindersList.forEach(reminder => {
+                    remindersObj[reminder.id] = {
+                        date: reminder.date,
+                        customerId: reminder.customerId,
+                        customerName: reminder.customerName,
+                        pendingAmount: reminder.pendingAmount,
+                        status: reminder.status,
+                        createdAt: reminder.createdAt,
+                        updatedAt: new Date().toISOString()
+                    };
+                });
+
+                await remindersRef.set(remindersObj);
+            } else {
+                // Fallback to localStorage
+                localStorage.setItem(`customer_reminders_${customer?.id}`, JSON.stringify(remindersList));
+            }
+        } catch (error) {
+            console.error('Error saving reminders:', error);
+            // Fallback to localStorage
+            localStorage.setItem(`customer_reminders_${customer?.id}`, JSON.stringify(remindersList));
+        }
     };
+
+    // Update reminder status dynamically based on current date
+    const updateReminderStatus = (remindersList) => {
+        return remindersList.map(reminder => ({
+            ...reminder,
+            status: getReminderStatus(reminder.date)
+        }));
+    };
+
+    // Update reminders status when component mounts or date changes
+    useEffect(() => {
+        if (reminders.length > 0) {
+            const updatedReminders = updateReminderStatus(reminders);
+            // Only update if status changed
+            const hasChanges = reminders.some((reminder, index) =>
+                reminder.status !== updatedReminders[index].status
+            );
+            if (hasChanges) {
+                setReminders(updatedReminders);
+                saveReminders(updatedReminders);
+            }
+        }
+    }, [reminders.length]); // Update when reminders array changes
 
     // Get character badge color and label
     const getCharacterInfo = (character) => {
@@ -62,7 +150,7 @@ const BasicDetails = ({ customer, totalAmount, paymentHistory, PurchaseItems, Pa
     };
 
     // FIXED: Generate payment ID in format: CustomerID-PurchaseDate-index
-    const generatePaymentId = (payment, index) => {
+    const generatePaymentId = useCallback((payment, index) => {
         try {
             const purchaseDate = getPurchaseDate(payment);
             const date = purchaseDate ? new Date(purchaseDate) : new Date(payment.date);
@@ -75,7 +163,7 @@ const BasicDetails = ({ customer, totalAmount, paymentHistory, PurchaseItems, Pa
             const customerId = customer?.idNo?.substring(0, 4) || 'C-01';
             return `${customerId}-${index + 1}`;
         }
-    };
+    }, [customer?.idNo]);
 
     // UPDATED: Enhanced financialSummary using Balance data and PurchaseItems - FIXED calculation
     const financialSummary = useMemo(() => {
@@ -84,7 +172,7 @@ const BasicDetails = ({ customer, totalAmount, paymentHistory, PurchaseItems, Pa
             const totalPurchase = parseFloat(Balance.totalPurchase) || 0;
             const totalPaid = parseFloat(Balance.totalPaid) || 0;
             const totalPending = Math.max(0, totalPurchase - totalPaid);
-            
+
             return {
                 totalPurchase,
                 totalPaid,
@@ -103,7 +191,7 @@ const BasicDetails = ({ customer, totalAmount, paymentHistory, PurchaseItems, Pa
             PurchaseItems.forEach(item => {
                 const itemTotal = parseFloat(item.total) || 0;
                 totalPurchase += itemTotal;
-                
+
                 // If item is paid, add to totalPaid
                 if (item.status === 'paid' || item.paymentStatus === 'paid') {
                     totalPaid += itemTotal;
@@ -136,10 +224,11 @@ const BasicDetails = ({ customer, totalAmount, paymentHistory, PurchaseItems, Pa
         };
     }, [PurchaseItems, Balance, Payments]);
 
-    // FIXED: Handle payment row click to show modal with proper details
+    // FIXED: Handle payment row click to show modal with proper details AND scroll to top
     const handlePaymentRowClick = (payment, index) => {
+        // Prevent default behavior that causes scroll issues
         const paymentId = generatePaymentId(payment, index);
-        setSelectedPayment({
+        const updatedPayment = {
             ...payment,
             displayId: paymentId,
             // Ensure all required fields are present
@@ -150,8 +239,13 @@ const BasicDetails = ({ customer, totalAmount, paymentHistory, PurchaseItems, Pa
             items: payment.items || [],
             attachments: payment.attachments || [],
             purchaseDate: payment.purchaseDate || getPurchaseDate(payment) || 'N/A'
-        });
+        };
+
+        setSelectedPayment(updatedPayment);
         setShowPaymentModal(true);
+
+        // Scroll to top when modal opens
+        window.scrollTo({ top: 0, behavior: 'smooth' });
     };
 
     // Close modal
@@ -160,55 +254,63 @@ const BasicDetails = ({ customer, totalAmount, paymentHistory, PurchaseItems, Pa
         setSelectedPayment(null);
     };
 
-    // FIXED: Set reminder function with calendar
-    const handleSetReminder = () => {
+    // Get reminder status based on date
+    const getReminderStatus = (dateString) => {
+        if (!dateString) return 'unknown';
+
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+
+        const reminderDate = new Date(dateString);
+        reminderDate.setHours(0, 0, 0, 0);
+
+        const timeDiff = reminderDate.getTime() - today.getTime();
+        const dayDiff = Math.ceil(timeDiff / (1000 * 3600 * 24));
+
+        if (dayDiff === 0) return 'today';
+        if (dayDiff === 1) return 'tomorrow';
+        if (dayDiff < 0) return 'overdue';
+        if (dayDiff > 1 && dayDiff <= 7) return 'upcoming';
+        return 'future';
+    };
+
+    // FIXED: Set reminder function with calendar and save to Firebase
+    const handleSetReminder = async () => {
         const today = new Date().toISOString().split('T')[0];
-        const reminderDateInput = prompt('Enter reminder date (YYYY-MM-DD):', today);
-        
+        const defaultDate = new Date();
+        defaultDate.setDate(defaultDate.getDate() + 7); // Default to 7 days from now
+
+        const reminderDateInput = prompt('Enter reminder date (YYYY-MM-DD):', defaultDate.toISOString().split('T')[0]);
+
         if (!reminderDateInput) return;
-        
+
         const newReminder = {
-            id: Date.now(),
+            id: Date.now().toString(),
             date: reminderDateInput,
             customerId: customer?.id,
             customerName: customer?.name,
             pendingAmount: financialSummary.totalPending,
             status: getReminderStatus(reminderDateInput),
-            createdAt: new Date().toISOString()
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString()
         };
-        
+
         const updatedReminders = [...reminders, newReminder];
         setReminders(updatedReminders);
-        saveReminders(updatedReminders);
-        
-        alert(`Reminder set for ${new Date(reminderDateInput).toLocaleDateString()}`);
-    };
+        await saveReminders(updatedReminders);
 
-    // Get reminder status
-    const getReminderStatus = (dateString) => {
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-        
-        const reminderDate = new Date(dateString);
-        reminderDate.setHours(0, 0, 0, 0);
-        
-        const timeDiff = reminderDate.getTime() - today.getTime();
-        const dayDiff = Math.ceil(timeDiff / (1000 * 3600 * 24));
-        
-        if (dayDiff === 0) return 'today';
-        if (dayDiff === 1) return 'tomorrow';
-        if (dayDiff < 0) return 'overdue';
-        return 'upcoming';
+        alert(`Reminder set for ${new Date(reminderDateInput).toLocaleDateString()}`);
     };
 
     // Get reminder status color and label
     const getReminderStatusInfo = (status) => {
         switch (status) {
-            case 'today': return { color: 'warning', label: 'Today', bgColor: 'rgba(245, 158, 11, 0.2)' };
-            case 'tomorrow': return { color: 'info', label: 'Tomorrow', bgColor: 'rgba(59, 130, 246, 0.2)' };
-            case 'overdue': return { color: 'danger', label: 'Overdue', bgColor: 'rgba(239, 68, 68, 0.2)' };
-            case 'upcoming': return { color: 'success', label: 'Upcoming', bgColor: 'rgba(16, 185, 129, 0.2)' };
-            default: return { color: 'secondary', label: 'Unknown', bgColor: 'rgba(100, 116, 139, 0.2)' };
+            case 'today': return { color: 'warning', label: 'Today', bgColor: 'rgba(245, 158, 11, 0.3)' };
+            case 'tomorrow': return { color: 'info', label: 'Tomorrow', bgColor: 'rgba(59, 130, 246, 0.3)' };
+            case 'overdue': return { color: 'danger', label: 'Overdue', bgColor: 'rgba(239, 68, 68, 0.3)' };
+            case 'upcoming': return { color: 'success', label: 'Upcoming', bgColor: 'rgba(16, 185, 129, 0.3)' };
+            case 'future': return { color: 'secondary', label: 'Future', bgColor: 'rgba(100, 116, 139, 0.3)' };
+            default: return { color: 'secondary', label: 'Unknown', bgColor: 'rgba(100, 116, 139, 0.3)' };
         }
     };
 
@@ -266,6 +368,108 @@ const BasicDetails = ({ customer, totalAmount, paymentHistory, PurchaseItems, Pa
         window.open(whatsappUrl, '_blank');
     };
 
+    // FIXED: NEW FUNCTION - Share single payment details to WhatsApp
+    const handleShareSinglePaymentToWhatsApp = (payment) => {
+        if (!payment) {
+            alert('No payment data to share.');
+            return;
+        }
+
+        const formatDate = (dateString) => {
+            if (!dateString || dateString === 'N/A') return 'N/A';
+            try {
+                const date = new Date(dateString);
+                const formattedDate = date.toLocaleDateString('en-US', {
+                    weekday: 'long',
+                    year: 'numeric',
+                    month: 'long',
+                    day: 'numeric'
+                });
+                const shortDate = date.toLocaleDateString('en-GB'); // DD/MM/YYYY format
+                return `${formattedDate} (${shortDate})`;
+            } catch (error) {
+                return 'N/A';
+            }
+        };
+
+        let message = `*Payment Details*\n\n`;
+        message += `*Customer:* ${customer?.name || 'N/A'}\n`;
+        message += `*Phone:* ${customer?.phone || 'N/A'}\n`;
+        message += `*Payment ID:* ${payment.displayId || 'N/A'}\n\n`;
+        message += `*Payment Date:* ${formatDate(payment.date)}\n`;
+        message += `*Purchase Date:* ${formatDate(payment.purchaseDate)}\n`;
+        message += `*Amount:* ₹${parseFloat(payment.amount || 0).toFixed(2)}\n`;
+        message += `*Payment Method:* ${payment.method || 'Cash'}\n\n`;
+
+        if (payment.items && payment.items.length > 0) {
+            message += `*Items (${payment.items.length}):*\n`;
+            payment.items.forEach((item, index) => {
+                const itemName = item.name || item.productName || item.itemName || item.subCategory || 'Item';
+
+                // FIXED: Get correct quantity value
+                let quantity = 0;
+                if (item.quantity !== undefined && item.quantity !== null) {
+                    quantity = parseFloat(item.quantity);
+                } else if (item.qty !== undefined && item.qty !== null) {
+                    quantity = parseFloat(item.qty);
+                } else if (item.Qty !== undefined && item.Qty !== null) {
+                    quantity = parseFloat(item.Qty);
+                } else if (item.Quantity !== undefined && item.Quantity !== null) {
+                    quantity = parseFloat(item.Quantity);
+                }
+
+                const unit = item.unit || item.Unit || item.uom || item.UOM || 'units';
+
+                // FIXED: Get correct price value
+                let price = 0;
+                if (item.price !== undefined && item.price !== null) {
+                    price = parseFloat(item.price);
+                } else if (item.Price !== undefined && item.Price !== null) {
+                    price = parseFloat(item.Price);
+                } else if (item.rate !== undefined && item.rate !== null) {
+                    price = parseFloat(item.rate);
+                } else if (item.Rate !== undefined && item.Rate !== null) {
+                    price = parseFloat(item.Rate);
+                }
+
+                // FIXED: Calculate amount correctly
+                let amount = 0;
+                if (item.amount !== undefined && item.amount !== null) {
+                    amount = parseFloat(item.amount);
+                } else if (item.total !== undefined && item.total !== null) {
+                    amount = parseFloat(item.total);
+                } else if (item.Total !== undefined && item.Total !== null) {
+                    amount = parseFloat(item.Total);
+                } else if (quantity > 0 && price > 0) {
+                    amount = quantity * price;
+                }
+
+                message += `${index + 1}. ${itemName}: ${quantity} ${unit} @ ₹${price.toFixed(2)} = ₹${amount.toFixed(2)}\n`;
+            });
+
+            const totalAmount = payment.items.reduce((sum, item) => {
+                let itemAmount = 0;
+                if (item.amount !== undefined && item.amount !== null) {
+                    itemAmount = parseFloat(item.amount);
+                } else if (item.total !== undefined && item.total !== null) {
+                    itemAmount = parseFloat(item.total);
+                } else if (item.Total !== undefined && item.Total !== null) {
+                    itemAmount = parseFloat(item.Total);
+                }
+                return sum + itemAmount;
+            }, 0);
+
+            message += `\n*Sub Total:* ₹${totalAmount.toFixed(2)}\n`;
+        }
+
+        message += `\n*Payment Status:* Completed ✅\n`;
+        message += `\nThank you for your business!`;
+
+        const encodedMessage = encodeURIComponent(message);
+        const whatsappUrl = `https://wa.me/?text=${encodedMessage}`;
+        window.open(whatsappUrl, '_blank');
+    };
+
     // FIXED: Apply filters properly
     useEffect(() => {
         if (Payments && Payments.length > 0) {
@@ -279,11 +483,11 @@ const BasicDetails = ({ customer, totalAmount, paymentHistory, PurchaseItems, Pa
                     const notes = payment.notes?.toLowerCase() || '';
                     const method = payment.method?.toLowerCase() || '';
                     const amount = payment.amount?.toString() || '';
-                    
+
                     return paymentId.includes(searchTermLower) ||
-                           notes.includes(searchTermLower) ||
-                           method.includes(searchTermLower) ||
-                           amount.includes(searchTermLower);
+                        notes.includes(searchTermLower) ||
+                        method.includes(searchTermLower) ||
+                        amount.includes(searchTermLower);
                 });
             }
 
@@ -331,7 +535,7 @@ const BasicDetails = ({ customer, totalAmount, paymentHistory, PurchaseItems, Pa
             setFilteredPayments([]);
         }
         setCurrentPage(1); // Reset to first page when filters change
-    }, [Payments, searchTerm, filters, customer?.idNo]);
+    }, [Payments, searchTerm, filters, customer?.idNo, generatePaymentId]);
 
     const exportPaymentsToCSV = () => {
         if (!Payments || Payments.length === 0) return;
@@ -402,6 +606,95 @@ const BasicDetails = ({ customer, totalAmount, paymentHistory, PurchaseItems, Pa
         });
         setSearchTerm('');
         setCurrentPage(1);
+    };
+
+    // FIXED: Enhanced function to get item details correctly
+    const getItemDetails = (item) => {
+        // Get item name
+        const itemName = item.name || item.productName || item.itemName || item.ItemName || item.subCategory || 'Unknown Item';
+
+        // FIXED: Get quantity with proper field mapping and default to 1 if not found
+        let quantity = 1;
+        if (item.quantity !== undefined && item.quantity !== null && !isNaN(parseFloat(item.quantity))) {
+            quantity = parseFloat(item.quantity);
+        } else if (item.qty !== undefined && item.qty !== null && !isNaN(parseFloat(item.qty))) {
+            quantity = parseFloat(item.qty);
+        } else if (item.Qty !== undefined && item.Qty !== null && !isNaN(parseFloat(item.Qty))) {
+            quantity = parseFloat(item.Qty);
+        } else if (item.Quantity !== undefined && item.Quantity !== null && !isNaN(parseFloat(item.Quantity))) {
+            quantity = parseFloat(item.Quantity);
+        } else if (item.amount !== undefined && item.amount !== null && !isNaN(parseFloat(item.amount))) {
+            // If only amount is available, try to calculate quantity from amount/price
+            quantity = 1;
+        }
+
+        // FIXED: Get unit with fallbacks
+        const quantityUnit = item.unit || item.Unit || item.uom || item.UOM || 'units';
+
+        // FIXED: Get price with proper field mapping
+        let price = 0;
+        if (item.price !== undefined && item.price !== null && !isNaN(parseFloat(item.price))) {
+            price = parseFloat(item.price);
+        } else if (item.Price !== undefined && item.Price !== null && !isNaN(parseFloat(item.Price))) {
+            price = parseFloat(item.Price);
+        } else if (item.rate !== undefined && item.rate !== null && !isNaN(parseFloat(item.rate))) {
+            price = parseFloat(item.rate);
+        } else if (item.Rate !== undefined && item.Rate !== null && !isNaN(parseFloat(item.Rate))) {
+            price = parseFloat(item.Rate);
+        } else if (item.total && quantity > 0 && !isNaN(parseFloat(item.total))) {
+            // Calculate price from total/quantity
+            price = parseFloat(item.total) / quantity;
+        } else if (item.Total && quantity > 0 && !isNaN(parseFloat(item.Total))) {
+            price = parseFloat(item.Total) / quantity;
+        } else if (item.amount && quantity > 0 && !isNaN(parseFloat(item.amount))) {
+            price = parseFloat(item.amount) / quantity;
+        }
+
+        // FIXED: Calculate amount correctly
+        let amount = 0;
+        if (item.amount !== undefined && item.amount !== null && !isNaN(parseFloat(item.amount))) {
+            amount = parseFloat(item.amount);
+        } else if (item.total !== undefined && item.total !== null && !isNaN(parseFloat(item.total))) {
+            amount = parseFloat(item.total);
+        } else if (item.Total !== undefined && item.Total !== null && !isNaN(parseFloat(item.Total))) {
+            amount = parseFloat(item.Total);
+        } else if (quantity > 0 && price > 0) {
+            amount = quantity * price;
+        }
+
+        return {
+            name: itemName,
+            quantity,
+            unit: quantityUnit,
+            price,
+            amount
+        };
+    };
+
+    // FIXED: Remove reminder function
+    const handleRemoveReminder = async (reminderId) => {
+        const updatedReminders = reminders.filter(r => r.id !== reminderId);
+        setReminders(updatedReminders);
+        await saveReminders(updatedReminders);
+    };
+
+    // FIXED: Date formatting function for both full and short formats
+    const formatDateDisplay = (dateString) => {
+        if (!dateString || dateString === 'N/A') return 'N/A';
+
+        try {
+            const date = new Date(dateString);
+            const formattedDate = date.toLocaleDateString('en-US', {
+                weekday: 'long',
+                year: 'numeric',
+                month: 'long',
+                day: 'numeric'
+            });
+            const shortDate = date.toLocaleDateString('en-GB'); // DD/MM/YYYY format
+            return `${formattedDate} (${shortDate})`;
+        } catch (error) {
+            return 'N/A';
+        }
     };
 
     const characterInfo = getCharacterInfo(customer?.character);
@@ -641,36 +934,43 @@ const BasicDetails = ({ customer, totalAmount, paymentHistory, PurchaseItems, Pa
                             <h6 className="text-white mb-0 fw-bold">
                                 <i className="bi bi-bell me-2"></i>
                                 Reminders ({reminders.length})
+                                {isLoadingReminders && (
+                                    <span className="spinner-border spinner-border-sm ms-2" role="status">
+                                        <span className="visually-hidden">Loading...</span>
+                                    </span>
+                                )}
                             </h6>
                         </div>
                         <div className="card-body">
                             <div className="row g-3">
-                                {reminders.map((reminder, index) => {
+                                {reminders.map((reminder) => {
                                     const statusInfo = getReminderStatusInfo(reminder.status);
                                     return (
                                         <div key={reminder.id} className="col-md-3">
                                             <div className="p-3 rounded" style={{
                                                 background: statusInfo.bgColor,
-                                                border: `1px solid rgba(var(--bs-${statusInfo.color}-rgb), 0.5)`
+                                                border: `2px solid rgba(var(--bs-${statusInfo.color}-rgb), 0.7)`
                                             }}>
                                                 <div className="d-flex justify-content-between align-items-center mb-2">
                                                     <span className="fw-bold text-light">
                                                         {new Date(reminder.date).toLocaleDateString()}
                                                     </span>
-                                                    <span className={`badge bg-${statusInfo.color}`}>
+                                                    <span className={`badge bg-${statusInfo.color} px-3 py-1`}>
+                                                        <i className="bi bi-clock me-1"></i>
                                                         {statusInfo.label}
                                                     </span>
                                                 </div>
                                                 <div className="small text-light">
-                                                    Pending: ₹{reminder.pendingAmount.toFixed(2)}
+                                                    <i className="bi bi-currency-rupee me-1"></i>
+                                                    Pending: ₹{parseFloat(reminder.pendingAmount || 0).toFixed(2)}
                                                 </div>
-                                                <button 
-                                                    className="btn btn-sm btn-outline-danger mt-2"
-                                                    onClick={() => {
-                                                        const updatedReminders = reminders.filter(r => r.id !== reminder.id);
-                                                        setReminders(updatedReminders);
-                                                        saveReminders(updatedReminders);
-                                                    }}
+                                                <div className="small text-light mt-1">
+                                                    <i className="bi bi-person me-1"></i>
+                                                    {reminder.customerName || customer?.name}
+                                                </div>
+                                                <button
+                                                    className="btn btn-sm btn-outline-danger mt-3 w-100"
+                                                    onClick={() => handleRemoveReminder(reminder.id)}
                                                 >
                                                     <i className="bi bi-trash me-1"></i>
                                                     Remove
@@ -727,7 +1027,7 @@ const BasicDetails = ({ customer, totalAmount, paymentHistory, PurchaseItems, Pa
                                 </button>
                             </div>
                             <div className="col-md-2">
-                                <select 
+                                <select
                                     className="form-select"
                                     value={paymentsPerPage}
                                     onChange={(e) => {
@@ -943,10 +1243,8 @@ const BasicDetails = ({ customer, totalAmount, paymentHistory, PurchaseItems, Pa
                                 {/* Pagination */}
                                 {totalPages > 1 && (
                                     <div className="d-flex justify-content-between align-items-center mt-4 pb-3">
-                                        <div className="text-light small">
-                                            Showing {indexOfFirstPayment + 1} to {Math.min(indexOfLastPayment, sortedPayments.length)} of {sortedPayments.length} entries
-                                        </div>
-                                        <nav>
+                                      
+                                        <nav style={{ background: "transparent", padding: 0, margin: "auto", width:'auto' }}>
                                             <ul className="pagination mb-0">
                                                 <li className={`page-item ${currentPage === 1 ? 'disabled' : ''}`}>
                                                     <button
@@ -979,6 +1277,9 @@ const BasicDetails = ({ customer, totalAmount, paymentHistory, PurchaseItems, Pa
                                                     </button>
                                                 </li>
                                             </ul>
+                                              <div className="text-warning small">
+                                            Showing {indexOfFirstPayment + 1} to {Math.min(indexOfLastPayment, sortedPayments.length)} of {sortedPayments.length} entries
+                                        </div>
                                         </nav>
                                     </div>
                                 )}
@@ -990,7 +1291,7 @@ const BasicDetails = ({ customer, totalAmount, paymentHistory, PurchaseItems, Pa
 
             {/* FIXED: Payment Details Modal with proper content */}
             {showPaymentModal && selectedPayment && (
-                <div className="modal fade show d-block" tabIndex="-1" style={{ backgroundColor: 'rgba(0,0,0,1)' }}>
+                <div className="modal fade show d-block" tabIndex="-1" style={{ backgroundColor: 'rgba(0,0,0,0.9)' }}>
                     <div className="modal-dialog modal-lg modal-dialog-centered">
                         <div className="modal-content border-0 shadow-lg" style={{
                             background: "linear-gradient(135deg, rgba(30, 41, 59, 0.95) 0%, rgba(15, 23, 42, 0.95) 100%)",
@@ -1009,7 +1310,7 @@ const BasicDetails = ({ customer, totalAmount, paymentHistory, PurchaseItems, Pa
                                     <button
                                         type="button"
                                         className="btn btn-success btn-sm"
-                                        onClick={() => handleShareSelectedToWhatsApp()}
+                                        onClick={() => handleShareSinglePaymentToWhatsApp(selectedPayment)}
                                     >
                                         <i className="bi bi-whatsapp me-1"></i>
                                         Share
@@ -1022,7 +1323,7 @@ const BasicDetails = ({ customer, totalAmount, paymentHistory, PurchaseItems, Pa
                                 </div>
                             </div>
                             <div className="modal-body">
-                                {/* Payment and Purchase Dates */}
+                                {/* Payment and Purchase Dates - FIXED with proper formatting */}
                                 <div className="row mb-4">
                                     <div className="col-md-6">
                                         <div className="p-3 rounded text-center" style={{
@@ -1034,15 +1335,7 @@ const BasicDetails = ({ customer, totalAmount, paymentHistory, PurchaseItems, Pa
                                                 Payment Date
                                             </h6>
                                             <h5 className="text-light fw-bold mb-0">
-                                                {selectedPayment.date && selectedPayment.date !== 'N/A'
-                                                    ? new Date(selectedPayment.date).toLocaleDateString('en-US', {
-                                                        weekday: 'long',
-                                                        year: 'numeric',
-                                                        month: 'long',
-                                                        day: 'numeric'
-                                                    })
-                                                    : 'N/A'
-                                                }
+                                                {formatDateDisplay(selectedPayment.date)}
                                             </h5>
                                         </div>
                                     </div>
@@ -1056,15 +1349,7 @@ const BasicDetails = ({ customer, totalAmount, paymentHistory, PurchaseItems, Pa
                                                 Purchase Date
                                             </h6>
                                             <h5 className="text-light fw-bold mb-0">
-                                                {selectedPayment.purchaseDate && selectedPayment.purchaseDate !== 'N/A'
-                                                    ? new Date(selectedPayment.purchaseDate).toLocaleDateString('en-US', {
-                                                        weekday: 'long',
-                                                        year: 'numeric',
-                                                        month: 'long',
-                                                        day: 'numeric'
-                                                    })
-                                                    : 'N/A'
-                                                }
+                                                {formatDateDisplay(selectedPayment.purchaseDate)}
                                             </h5>
                                         </div>
                                     </div>
@@ -1154,71 +1439,23 @@ const BasicDetails = ({ customer, totalAmount, paymentHistory, PurchaseItems, Pa
                                                             </thead>
                                                             <tbody>
                                                                 {selectedPayment.items.map((item, index) => {
-                                                                    // FIXED: Enhanced quantity calculation with proper field mapping
-                                                                    const quantity = 
-                                                                        item.quantity || 
-                                                                        item.qty || 
-                                                                        item.Qty || 
-                                                                        item.Quantity || 
-                                                                        item.amount || 
-                                                                        0;
-
-                                                                    // FIXED: Get unit with fallbacks
-                                                                    const quantityUnit = 
-                                                                        item.unit || 
-                                                                        item.Unit || 
-                                                                        item.uom || 
-                                                                        item.UOM || 
-                                                                        'K.G';
-
-                                                                    // FIXED: Enhanced price calculation
-                                                                    let price = 0;
-                                                                    if (item.price && parseFloat(item.price) > 0) {
-                                                                        price = parseFloat(item.price);
-                                                                    } else if (item.Price && parseFloat(item.Price) > 0) {
-                                                                        price = parseFloat(item.Price);
-                                                                    } else if (item.rate && parseFloat(item.rate) > 0) {
-                                                                        price = parseFloat(item.rate);
-                                                                    } else if (item.Rate && parseFloat(item.Rate) > 0) {
-                                                                        price = parseFloat(item.Rate);
-                                                                    } else if (item.total && quantity && parseFloat(quantity) > 0) {
-                                                                        price = parseFloat(item.total) / parseFloat(quantity);
-                                                                    } else if (item.Total && quantity && parseFloat(quantity) > 0) {
-                                                                        price = parseFloat(item.Total) / parseFloat(quantity);
-                                                                    }
-
-                                                                    // FIXED: Enhanced amount calculation
-                                                                    let amount = 0;
-                                                                    if (item.amount && parseFloat(item.amount) > 0) {
-                                                                        amount = parseFloat(item.amount);
-                                                                    } else if (item.total && parseFloat(item.total) > 0) {
-                                                                        amount = parseFloat(item.total);
-                                                                    } else if (item.Total && parseFloat(item.Total) > 0) {
-                                                                        amount = parseFloat(item.Total);
-                                                                    } else if (quantity && price && parseFloat(quantity) > 0 && parseFloat(price) > 0) {
-                                                                        amount = parseFloat(quantity) * parseFloat(price);
-                                                                    }
+                                                                    // FIXED: Use enhanced item details function
+                                                                    const itemDetails = getItemDetails(item);
 
                                                                     return (
                                                                         <tr key={index}>
                                                                             <td className="text-light">{index + 1}</td>
                                                                             <td className="text-light">
-                                                                                {item.name || item.productName || item.itemName || item.ItemName || item.subCategory || 'Unknown Item'}
+                                                                                {itemDetails.name}
                                                                             </td>
-                                                                            <td className="text-center text-warning">
-                                                                                {quantity && parseFloat(quantity) > 0 ?
-                                                                                    `${parseFloat(quantity).toFixed(2)} ${quantityUnit}` :
-                                                                                    'N/A'
-                                                                                }
+                                                                            <td className="text-center text-warning fw-bold">
+                                                                                {itemDetails.quantity} {itemDetails.unit}
                                                                             </td>
-                                                                            <td className="text-center text-info">
-                                                                                {price && parseFloat(price) > 0 ?
-                                                                                    `₹${parseFloat(price).toFixed(2)}` :
-                                                                                    'N/A'
-                                                                                }
+                                                                            <td className="text-center text-info fw-bold">
+                                                                                ₹{itemDetails.price.toFixed(2)}
                                                                             </td>
-                                                                            <td className="text-end text-success">
-                                                                                ₹{parseFloat(amount).toFixed(2)}
+                                                                            <td className="text-end text-success fw-bold">
+                                                                                ₹{itemDetails.amount.toFixed(2)}
                                                                             </td>
                                                                         </tr>
                                                                     );
@@ -1233,16 +1470,12 @@ const BasicDetails = ({ customer, totalAmount, paymentHistory, PurchaseItems, Pa
                                                                         }}>
                                                                             <td colSpan="4" className="text-end fw-bold text-light">
                                                                                 <i className="bi bi-calculator me-2"></i>
-                                                                                Sub Total:
+                                                                                Items Sub Total:
                                                                             </td>
                                                                             <td className="text-end fw-bold text-success">
                                                                                 ₹{selectedPayment.items.reduce((total, item) => {
-                                                                                    const amount = 
-                                                                                        item.amount || 
-                                                                                        item.total || 
-                                                                                        item.Total || 
-                                                                                        0;
-                                                                                    return total + parseFloat(amount);
+                                                                                    const itemDetails = getItemDetails(item);
+                                                                                    return total + itemDetails.amount;
                                                                                 }, 0).toFixed(2)}
                                                                             </td>
                                                                         </tr>
@@ -1257,14 +1490,10 @@ const BasicDetails = ({ customer, totalAmount, paymentHistory, PurchaseItems, Pa
                                                                                 ₹{parseFloat(selectedPayment.amount).toFixed(2)}
                                                                             </td>
                                                                         </tr>
-                                                                        {selectedPayment.items.reduce((total, item) => {
-                                                                            const amount = 
-                                                                                item.amount || 
-                                                                                item.total || 
-                                                                                item.Total || 
-                                                                                0;
-                                                                            return total + parseFloat(amount);
-                                                                        }, 0) !== parseFloat(selectedPayment.amount) && (
+                                                                        {Math.abs(selectedPayment.items.reduce((total, item) => {
+                                                                            const itemDetails = getItemDetails(item);
+                                                                            return total + itemDetails.amount;
+                                                                        }, 0) - parseFloat(selectedPayment.amount)) > 0.01 && (
                                                                                 <tr style={{
                                                                                     background: 'rgba(245, 158, 11, 0.2)'
                                                                                 }}>
@@ -1272,14 +1501,10 @@ const BasicDetails = ({ customer, totalAmount, paymentHistory, PurchaseItems, Pa
                                                                                         <i className="bi bi-info-circle me-2"></i>
                                                                                         Difference:
                                                                                     </td>
-                                                                                    <td className="text-end fw-bold text-danger">
+                                                                                    <td className="text-end fw-bold text-warning">
                                                                                         ₹{(parseFloat(selectedPayment.amount) - selectedPayment.items.reduce((total, item) => {
-                                                                                            const amount = 
-                                                                                                item.amount || 
-                                                                                                item.total || 
-                                                                                                item.Total || 
-                                                                                                0;
-                                                                                            return total + parseFloat(amount);
+                                                                                            const itemDetails = getItemDetails(item);
+                                                                                            return total + itemDetails.amount;
                                                                                         }, 0)).toFixed(2)}
                                                                                     </td>
                                                                                 </tr>
@@ -1334,6 +1559,38 @@ const BasicDetails = ({ customer, totalAmount, paymentHistory, PurchaseItems, Pa
             </div>
         </div>
     );
+};
+
+BasicDetails.propTypes = {
+    customer: PropTypes.shape({
+        id: PropTypes.string,
+        name: PropTypes.string,
+        idNo: PropTypes.string,
+        phone: PropTypes.string,
+        address: PropTypes.string,
+        character: PropTypes.string,
+        notes: PropTypes.string,
+        totalPurchases: PropTypes.number
+    }),
+    totalAmount: PropTypes.number,
+    paymentHistory: PropTypes.array,
+    PurchaseItems: PropTypes.array,
+    Payments: PropTypes.array,
+    Balance: PropTypes.shape({
+        totalPurchase: PropTypes.number,
+        totalPaid: PropTypes.number,
+        totalPending: PropTypes.number,
+        lastPaymentDate: PropTypes.string
+    })
+};
+
+BasicDetails.defaultProps = {
+    customer: {},
+    totalAmount: 0,
+    paymentHistory: [],
+    PurchaseItems: [],
+    Payments: [],
+    Balance: null
 };
 
 export default BasicDetails;

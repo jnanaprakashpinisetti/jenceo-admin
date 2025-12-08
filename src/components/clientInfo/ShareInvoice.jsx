@@ -17,6 +17,7 @@ const ShareInvoice = ({
     const [invoiceData, setInvoiceData] = useState({
         serviceDate: '',
         invoiceDate: new Date().toISOString().split('T')[0],
+        invoiceAmount: '', // Added invoice amount field
         gapIfAny: '',
         travelingCharges: '',
         extraCharges: '',
@@ -40,13 +41,15 @@ const ShareInvoice = ({
         return date.toISOString().split('T')[0];
     };
 
-    // Handle service date change
+    // Handle service date change - FIXED
     const handleServiceDateChange = (e) => {
         const serviceDate = e.target.value;
+        const autoFillDate = calculateAutoFillDate(serviceDate);
+
         setInvoiceData(prev => ({
             ...prev,
             serviceDate,
-            autoFillDate: calculateAutoFillDate(serviceDate)
+            autoFillDate
         }));
     };
 
@@ -145,12 +148,12 @@ const ShareInvoice = ({
 
         return `
       <div class="biodata-table-section" style="margin: 20px 0;">
-        <h4 style="color: #fff; border-bottom: 2px solid #0b66a3; padding-bottom: 8px; margin-bottom: 15px;">Client Biodata</h4>
+        <h4 style="color: #fff; border-bottom: 2px solid #0b66a3; padding-bottom: 8px; margin-bottom: 15px;">Client Details</h4>
         <table style="width: 100%; border-collapse: collapse; font-size: 12px; background: #f8f9fa;">
           <tbody>
             <!-- Basic Info -->
             <tr style="background: #e9ecef;">
-              <td colspan="4" style="padding: 8px; font-weight: bold; border: 1px solid #dee2e6;">Basic Information</td>
+              <td colspan="4" style="padding: 8px; font-weight: bold; border: 1px solid #dee2e6; color:#0266f2 ">Basic Information</td>
             </tr>
             <tr>
               <td style="width: 25%; padding: 8px; border: 1px solid #dee2e6; font-weight: bold; background: #f1f3f4;">ID No</td>
@@ -170,13 +173,13 @@ const ShareInvoice = ({
             
             <!-- Service Details -->
             <tr style="background: #e9ecef;">
-              <td colspan="4" style="padding: 8px; font-weight: bold; border: 1px solid #dee2e6;">Service Details</td>
+              <td colspan="4" style="padding: 8px; font-weight: bold; border: 1px solid #dee2e6; color:#0266f2">Service Details</td>
             </tr>
             <tr>
               <td style="padding: 8px; border: 1px solid #dee2e6; font-weight: bold; background: #f1f3f4;">Type of Service</td>
               <td style="padding: 8px; border: 1px solid #dee2e6;">${safe(client?.typeOfService)}</td>
-              <td style="padding: 8px; border: 1px solid #dee2e6; font-weight: bold; background: #f1f3f4;">Service Charges</td>
-              <td style="padding: 8px; border: 1px solid #dee2e6;">${formatINR(client?.serviceCharges)}</td>
+              <td style="padding: 8px; border: 1px solid #dee2e6; font-weight: bold; background: #f1f3f4; ">Service Charges</td>
+              <td style="padding: 8px; border: 1px solid #dee2e6; color:#0266f2 "><strong>${formatINR(client?.serviceCharges)}</strong> for 30 Days</td>
             </tr>
             <tr>
               <td style="padding: 8px; border: 1px solid #dee2e6; font-weight: bold; background: #f1f3f4;">Starting Date</td>
@@ -226,6 +229,11 @@ const ShareInvoice = ({
         const autoFillDate = invoiceData.autoFillDate ? formatDate(invoiceData.autoFillDate) : 'N/A';
         const invoiceDate = invoiceData.invoiceDate ? formatDate(invoiceData.invoiceDate) : currentDate;
 
+        // Calculate due amount from invoice amount minus total paid
+        const invoiceAmount = parseFloat(invoiceData.invoiceAmount) || parseFloat(client?.serviceCharges) || 0;
+        const totalPaid = paymentDetails.totalPaid || 0;
+        const dueAmount = Math.max(0, invoiceAmount - totalPaid);
+
         // Build payment summary HTML
         const paymentSummaryHTML = paymentDetails.lastPayment ? `
       <div class="payment-card last-payment">
@@ -264,11 +272,10 @@ const ShareInvoice = ({
   .sec-body{padding:15px}
   
   .custom-invoice-section {
-    background: #f8f9fa;
+    background: #e3f1fdff;
     border: 1px solid #dee2e6;
     border-radius: 8px;
     padding: 15px;
-    margin: 15px 0;
   }
   
   .custom-invoice-grid {
@@ -356,7 +363,7 @@ const ShareInvoice = ({
     font-weight: 600;
   }
   
-  .thank-you {text-align:center; padding:20px; background:linear-gradient(135deg, #e3f2fd 0%, #f0f8ff 100%); border-radius:8px; margin:20px 0; border: 1px solid #c6e5f1}
+  .thank-you {text-align:center; padding:20px; background:linear-gradient(135deg, #e3fde7 0%, #d3f8e1ff 100%); border-radius:8px; margin:20px 0; border: 1px solid #c6e5f1}
   
   .comments-section {margin-top: 20px; padding: 15px; background: #f9f9f9; border-radius: 8px; border-left: 4px solid #02acf2}
   .comments-title {font-weight: bold; margin-bottom: 10px; color: #333}
@@ -393,59 +400,53 @@ const ShareInvoice = ({
       </div>
     </div>
   </div>
-
+ ${buildClientBiodataTable()}
   <div class="sec">
     <div class="sec-title"><h3>Payment Summary</h3></div>
     <div class="sec-body">
       <div class="payment-summary">
         ${paymentSummaryHTML}
         
-        <div class="payment-card due-amount">
-          <div class="payment-label">Due Amount</div>
-          <div class="payment-amount due-amount">₹${(Number(paymentDetails.currentBalance) || 0).toFixed(2)}</div>
-          <small class="muted">Amount to be paid</small>
-        </div>
+   
         
         <div class="payment-card next-payment">
           <div class="payment-label">Next Payment Due</div>
           <div class="payment-amount next-payment">${paymentDetails.nextPaymentDate ? formatDate(paymentDetails.nextPaymentDate.toISOString()) : 'N/A'}</div>
           <small class="muted">Every 30 days Cycle</small>
         </div>
+     
         
-        <div class="payment-card service-charges">
-          <div class="payment-label">Service Charges</div>
-          <div class="payment-amount service-charges">₹${(Number(paymentDetails.serviceCharges) || 0).toFixed(2)}</div>
-          <small class="muted">Monthly service charges</small>
-        </div>
       </div>
     </div>
   </div>
 
   <div class="sec">
-    <div class="sec-title"><h3>Custom Invoice Details</h3></div>
+    <div class="sec-title"><h3>Current Invoice Details <strong>from ${serviceDate} to ${autoFillDate}</strong></h3></div>
     <div class="sec-body">
       <div class="custom-invoice-section">
         <div class="custom-invoice-grid">
           <div class="custom-invoice-item">
-            <div class="custom-invoice-label">Service Date</div>
+            <div class="custom-invoice-label">Service Start Date</div>
             <div class="custom-invoice-value">${serviceDate}</div>
           </div>
           <div class="custom-invoice-item">
-            <div class="custom-invoice-label">(30 days)</div>
+            <div class="custom-invoice-label">30 days End Date</div>
             <div class="custom-invoice-value">${autoFillDate}</div>
           </div>
           <div class="custom-invoice-item">
             <div class="custom-invoice-label">Invoice Date</div>
             <div class="custom-invoice-value">${invoiceDate}</div>
           </div>
+      
+          <div class="custom-invoice-item">
+            <div class="custom-invoice-label">Due Amount</div>
+            <div class="custom-invoice-value" style="color: #ff6b6b; font-weight: bold;">₹${invoiceAmount.toFixed(2)}</div>
+          </div>
           <div class="custom-invoice-item">
             <div class="custom-invoice-label">Gap if Any</div>
             <div class="custom-invoice-value">${gapInfo}</div>
           </div>
-          <div class="custom-invoice-item">
-            <div class="custom-invoice-label">Traveling Charges</div>
-            <div class="custom-invoice-value">${travelingCharges}</div>
-          </div>
+   
           <div class="custom-invoice-item">
             <div class="custom-invoice-label">Extra Charges</div>
             <div class="custom-invoice-value">${extraCharges}</div>
@@ -461,7 +462,7 @@ const ShareInvoice = ({
     </div>
   </div>
 
-  ${buildClientBiodataTable()}
+ 
 
   ${invoiceData.additionalComments ? `
   <div class="sec">
@@ -522,13 +523,13 @@ const ShareInvoice = ({
                 if (navigator.canShare && navigator.canShare({ files: [file] })) {
                     await navigator.share({
                         title: `Invoice - ${client?.clientName || 'Client'} - ${generatedInvoiceNumber}`,
-                        text: `Invoice for ${client?.clientName || 'Client'} - Service Charges: ₹${(Number(paymentDetails.serviceCharges) || 0).toFixed(2)} - Due: ₹${(Number(paymentDetails.currentBalance) || 0).toFixed(2)}`,
+                        text: `Invoice for ${client?.clientName || 'Client'} - Invoice Amount: ₹${(Number(invoiceData.invoiceAmount) || Number(client?.serviceCharges) || 0).toFixed(2)} - Due: ₹${(Number(paymentDetails.currentBalance) || 0).toFixed(2)}`,
                         files: [file]
                     });
                 } else {
                     await navigator.share({
                         title: `Invoice - ${client?.clientName || 'Client'} - ${generatedInvoiceNumber}`,
-                        text: `Invoice for ${client?.clientName || 'Client'} - Service Charges: ₹${(Number(paymentDetails.serviceCharges) || 0).toFixed(2)} - Due: ₹${(Number(paymentDetails.currentBalance) || 0).toFixed(2)}\nInvoice Number: ${generatedInvoiceNumber}`
+                        text: `Invoice for ${client?.clientName || 'Client'} - Invoice Amount: ₹${(Number(invoiceData.invoiceAmount) || Number(client?.serviceCharges) || 0).toFixed(2)} - Due: ₹${(Number(paymentDetails.currentBalance) || 0).toFixed(2)}\nInvoice Number: ${generatedInvoiceNumber}`
                     });
                 }
             } else {
@@ -555,12 +556,16 @@ const ShareInvoice = ({
     };
 
     const handleShareToWhatsApp = () => {
+        const invoiceAmount = parseFloat(invoiceData.invoiceAmount) || parseFloat(client?.serviceCharges) || 0;
+        const totalPaid = paymentDetails.totalPaid || 0;
+        const dueAmount = Math.max(0, invoiceAmount - totalPaid);
+
         const message = `*Invoice Details*\n\n` +
             `*Client:* ${client?.clientName || 'N/A'}\n` +
             `*Invoice Number:* ${generatedInvoiceNumber}\n` +
-            `*Service Charges:* ₹${(Number(paymentDetails.serviceCharges) || 0).toFixed(2)}/month\n` +
-            `*Total Paid:* ₹${(Number(paymentDetails.totalPaid) || 0).toFixed(2)}\n` +
-            `*Due Amount:* ₹${(Number(paymentDetails.currentBalance) || 0).toFixed(2)}\n` +
+            `*Invoice Amount:* ₹${invoiceAmount.toFixed(2)}\n` +
+            `*Total Paid:* ₹${totalPaid.toFixed(2)}\n` +
+            `*Due Amount:* ₹${dueAmount.toFixed(2)}\n` +
             `*Last Payment:* ${paymentDetails.lastPayment ? `₹${(Number(paymentDetails.lastPayment.amount) || 0).toFixed(2)} on ${formatDate(paymentDetails.lastPayment.date)}` : 'No payments'}\n` +
             `*Next Payment Due:* ${paymentDetails.nextPaymentDate ? formatDate(paymentDetails.nextPaymentDate.toISOString()) : 'N/A'}\n` +
             `*Generated Date:* ${new Date().toLocaleDateString()}\n\n` +
@@ -596,7 +601,7 @@ const ShareInvoice = ({
         );
     }
 
-    // Custom Invoice Form Modal
+    // Custom Invoice Form Modal - FIXED
     const CustomInvoiceForm = () => (
         <div className="modal fade show" style={{ display: 'block', backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 1060 }}>
             <div className="modal-dialog modal-lg modal-dialog-centered">
@@ -640,6 +645,21 @@ const ShareInvoice = ({
                                 />
                             </div>
                             <div className="col-md-6">
+                                <label className="form-label"><strong>Invoice Amount (₹)</strong></label>
+                                <input
+                                    type="number"
+                                    className="form-control"
+                                    value={invoiceData.invoiceAmount}
+                                    onChange={(e) => setInvoiceData(prev => ({ ...prev, invoiceAmount: e.target.value }))}
+                                    placeholder="Enter invoice amount"
+                                    step="0.01"
+                                    min="0"
+                                />
+                                <small className="form-text text-muted">
+                                    Default: ₹{parseFloat(client?.serviceCharges) || 0}
+                                </small>
+                            </div>
+                            <div className="col-md-4">
                                 <label className="form-label"><strong>Gap if any</strong></label>
                                 <input
                                     type="text"
@@ -649,8 +669,8 @@ const ShareInvoice = ({
                                     placeholder="Enter any service gaps..."
                                 />
                             </div>
-                            <div className="col-md-6">
-                                <label className="form-label"><strong>Traveling Charges</strong></label>
+                            <div className="col-md-4">
+                                <label className="form-label"><strong>Traveling Charges (₹)</strong></label>
                                 <input
                                     type="number"
                                     className="form-control"
@@ -660,8 +680,8 @@ const ShareInvoice = ({
                                     step="0.01"
                                 />
                             </div>
-                            <div className="col-md-6">
-                                <label className="form-label"><strong>Extra Charges</strong></label>
+                            <div className="col-md-4">
+                                <label className="form-label"><strong>Extra Charges (₹)</strong></label>
                                 <input
                                     type="number"
                                     className="form-control"
@@ -818,6 +838,9 @@ const ShareInvoice = ({
                     </div>
                     <small className="text-muted">
                         Invoice: <strong className="text-primary">{generatedInvoiceNumber}</strong> |
+                        Invoice Amount: <strong className="text-info">
+                            ₹{(Number(invoiceData.invoiceAmount) || Number(client?.serviceCharges) || 0).toFixed(2)}
+                        </strong> |
                         Due: <strong className={paymentDetails.currentBalance > 0 ? 'text-warning' : 'text-success'}>
                             ₹{(Number(paymentDetails.currentBalance) || 0).toFixed(2)}
                         </strong> |

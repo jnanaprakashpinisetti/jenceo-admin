@@ -10,8 +10,17 @@ const ShareInvoice = ({
     const iframeRef = useRef(null);
     const [showInvoiceModal, setShowInvoiceModal] = useState(false);
     const [showCustomInvoiceForm, setShowCustomInvoiceForm] = useState(false);
-    const [invoiceHistory, setInvoiceHistory] = useState([]);
+    const [invoiceHistory, setInvoiceHistory] = useState(() => {
+        // Load from localStorage to persist history
+        const savedHistory = localStorage.getItem(`invoiceHistory_${client?.idNo}`);
+        return savedHistory ? JSON.parse(savedHistory) : [];
+    });
     const [activeTab, setActiveTab] = useState('preview'); // 'preview' or 'history'
+    const [invoiceCounter, setInvoiceCounter] = useState(() => {
+        // Load counter from localStorage
+        const savedCounter = localStorage.getItem(`invoiceCounter_${client?.idNo}`);
+        return savedCounter ? parseInt(savedCounter) : 0;
+    });
 
     const [invoiceData, setInvoiceData] = useState({
         serviceDate: '',
@@ -27,6 +36,20 @@ const ShareInvoice = ({
 
     const headerImage = "https://firebasestorage.googleapis.com/v0/b/jenceo-admin.firebasestorage.app/o/Shop-Images%2FJenCeo-Trades.svg?alt=media&token=da7ab6ec-826f-41b2-ba2a-0a7d0f405997";
     const defaultCustomerPhoto = "https://firebasestorage.googleapis.com/v0/b/jenceo-admin.firebasestorage.app/o/OfficeFiles%2FSample-Photo.jpg?alt=media&token=01855b47-c9c2-490e-b400-05851192dde7";
+
+    // Save history to localStorage whenever it changes
+    useEffect(() => {
+        if (client?.idNo) {
+            localStorage.setItem(`invoiceHistory_${client.idNo}`, JSON.stringify(invoiceHistory));
+        }
+    }, [invoiceHistory, client]);
+
+    // Save counter to localStorage whenever it changes
+    useEffect(() => {
+        if (client?.idNo) {
+            localStorage.setItem(`invoiceCounter_${client.idNo}`, invoiceCounter.toString());
+        }
+    }, [invoiceCounter, client]);
 
     const handleOpenInvoice = () => {
         setShowInvoiceModal(true);
@@ -52,13 +75,11 @@ const ShareInvoice = ({
         };
 
         setInvoiceHistory(prev => [newInvoice, ...prev]);
-        console.log('Invoice saved to history:', newInvoice);
     };
 
     const handleApplyCustomInvoice = (formData) => {
         setInvoiceData(formData);
         setShowCustomInvoiceForm(false);
-        saveInvoiceToHistory();
         
         setTimeout(() => {
             if (iframeRef.current) {
@@ -121,10 +142,32 @@ const ShareInvoice = ({
         const year = now.getFullYear().toString().slice(-2);
         const month = now.toLocaleString('en-US', { month: 'short' });
         const clientId = client?.idNo || '01';
-        const day = now.getDate();
 
-        return `${clientId}-${month}-${year}`;
-    }, [billNumber, client]);
+        // Count invoices for this month to add index
+        const currentMonthYear = `${month}-${year}`;
+        const monthInvoices = invoiceHistory.filter(inv => 
+            inv.invoiceNumber.includes(currentMonthYear)
+        );
+        const monthIndex = monthInvoices.length + 1;
+
+        // Format: JC00062-Dec-25, JC00062-Dec-25-2, JC00062-Dec-25-3, etc.
+        return `${clientId}-${month}-${year}${monthIndex > 1 ? `-${monthIndex}` : ''}`;
+    }, [billNumber, client, invoiceHistory]);
+
+    // Increment counter when a new invoice is saved
+    useEffect(() => {
+        if (invoiceHistory.length > 0) {
+            const latestInvoice = invoiceHistory[0];
+            if (latestInvoice && latestInvoice.invoiceNumber === generatedInvoiceNumber) {
+                // Only increment if this is a brand new invoice (not from history)
+                const currentMonthYear = new Date().toLocaleString('en-US', { month: 'short' }) + '-' + new Date().getFullYear().toString().slice(-2);
+                const monthInvoices = invoiceHistory.filter(inv => 
+                    inv.invoiceNumber.includes(currentMonthYear)
+                );
+                setInvoiceCounter(monthInvoices.length);
+            }
+        }
+    }, [invoiceHistory, generatedInvoiceNumber]);
 
     const formatDate = (dateString) => {
         if (!dateString) return 'N/A';
@@ -202,11 +245,21 @@ const ShareInvoice = ({
 
     const formatINR = (value) => {
         const n = Number(value || 0);
-        if (!isFinite(n)) return "₹0";
+        if (!isFinite(n)) return "₹0.00";
         try {
-            return "₹" + n.toLocaleString("en-IN", { maximumFractionDigits: 0 });
+            return "₹" + n.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
         } catch {
-            return "₹" + String(n);
+            return "₹" + n.toFixed(2);
+        }
+    };
+
+    const formatAmount = (value) => {
+        const n = Number(value || 0);
+        if (!isFinite(n)) return "0.00";
+        try {
+            return n.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        } catch {
+            return n.toFixed(2);
         }
     };
 
@@ -222,8 +275,8 @@ const ShareInvoice = ({
 
         // Use custom invoice data if available
         const gapInfo = invoiceData.gapIfAny || client?.gapIfAny || 'None';
-        const travelingCharges = invoiceData.travelingCharges ? `₹${Number(invoiceData.travelingCharges).toFixed(2)}` : '₹0.00';
-        const extraCharges = invoiceData.extraCharges ? `₹${Number(invoiceData.extraCharges).toFixed(2)}` : '₹0.00';
+        const travelingCharges = invoiceData.travelingCharges ? formatINR(invoiceData.travelingCharges) : '₹0.00';
+        const extraCharges = invoiceData.extraCharges ? formatINR(invoiceData.extraCharges) : '₹0.00';
         const serviceDate = invoiceData.serviceDate ? formatDate(invoiceData.serviceDate) : startingDate;
         const autoFillDate = invoiceData.serviceDate ? formatDate(calculateAutoFillDate(invoiceData.serviceDate)) : (client?.startingDate ? formatDate(calculateAutoFillDate(client.startingDate)) : 'N/A');
         const invoiceDate = invoiceData.invoiceDate ? formatDate(invoiceData.invoiceDate) : currentDate;
@@ -237,7 +290,7 @@ const ShareInvoice = ({
         const paymentSummaryHTML = paymentDetails.lastPayment ? `
             <div class="payment-card last-payment">
                 <div class="payment-label">Last Payment</div>
-                <div class="payment-amount last-payment">₹${(Number(paymentDetails.lastPayment.amount) || 0).toFixed(2)}</div>
+                <div class="payment-amount last-payment">${formatINR(paymentDetails.lastPayment.amount)}</div>
                 <small class="muted">${paymentDetails.lastPayment.date ? formatDate(paymentDetails.lastPayment.date) : 'N/A'} • ${paymentDetails.lastPayment.method}</small>
             </div>
         ` : `
@@ -407,6 +460,34 @@ const ShareInvoice = ({
             color: #555
         }
         
+        /* Save button styles */
+        .save-section {
+            margin: 20px 0;
+            text-align: center;
+        }
+        
+        .save-button {
+            background: linear-gradient(135deg, #02acf2 0%, #0266f2 100%);
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            font-size: 14px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        
+        .save-button:hover {
+            background: linear-gradient(135deg, #0266f2 0%, #02acf2 100%);
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(2, 102, 242, 0.3);
+        }
+        
+        .save-button:active {
+            transform: translateY(0);
+        }
+        
         /* Mobile Responsive */
         @media only screen and (max-width: 767px) {
             .page { padding: 10px; }
@@ -517,7 +598,7 @@ const ShareInvoice = ({
                     </div>
                     <div class="custom-invoice-item">
                         <div class="custom-invoice-label">Invoice Amount</div>
-                        <div class="custom-invoice-value" style="color: red; font-weight: bold;">₹${invoiceAmount.toFixed(2)}</div>
+                        <div class="custom-invoice-value" style="color: red; font-weight: bold;">${formatINR(invoiceAmount)}</div>
                     </div>
                     <div class="custom-invoice-item">
                         <div class="custom-invoice-label">Gap if Any</div>
@@ -555,9 +636,17 @@ const ShareInvoice = ({
 
     <div class="thank-you">
         <h3 style="color:#02acf2; margin-bottom:8px; font-size: 18px;">Thank You for Your Trust!</h3>
-        <p style="margin:0; font-size: 12px;">We appreciate your trust and look forward to continuing to serve you.</p>
+        <p style="margin:0; font-size: 12px;">Dear <strong>${clientName}</strong> (ID: ${clientId}),</p>
+        <p style="margin:5px 0; font-size: 12px;">We appreciate your trust in our <strong>${serviceType}</strong> services and look forward to continuing to serve you.</p>
         <p style="margin:5px 0 0 0; font-size: 14px;"><strong>JenCeo Home Care & Traders</strong></p>
         <p style="margin:0; font-size:10px; color:#666">Quality Service | Trusted Care | Client Satisfaction</p>
+    </div>
+
+    <!-- Save Button Section -->
+    <div class="save-section" id="save-section">
+        <button class="save-button" onclick="window.parent.postMessage({type: 'SAVE_INVOICE'}, '*')">
+            <i class="bi bi-save me-1"></i> Save Invoice to History
+        </button>
     </div>
 
     <div class="footer">
@@ -603,13 +692,13 @@ const ShareInvoice = ({
                 if (navigator.canShare && navigator.canShare({ files: [file] })) {
                     await navigator.share({
                         title: `Invoice - ${client?.clientName || 'Client'} - ${generatedInvoiceNumber}`,
-                        text: `Invoice for ${client?.clientName || 'Client'} - Invoice Amount: ₹${(Number(invoiceData.invoiceAmount) || Number(client?.serviceCharges) || 0).toFixed(2)} - Due: ₹${(Number(paymentDetails.currentBalance) || 0).toFixed(2)}`,
+                        text: `Invoice for ${client?.clientName || 'Client'} - Invoice Amount: ₹${formatAmount(invoiceData.invoiceAmount || client?.serviceCharges || 0)} - Due: ₹${formatAmount(paymentDetails.currentBalance || 0)}`,
                         files: [file]
                     });
                 } else {
                     await navigator.share({
                         title: `Invoice - ${client?.clientName || 'Client'} - ${generatedInvoiceNumber}`,
-                        text: `Invoice for ${client?.clientName || 'Client'} - Invoice Amount: ₹${(Number(invoiceData.invoiceAmount) || Number(client?.serviceCharges) || 0).toFixed(2)} - Due: ₹${(Number(paymentDetails.currentBalance) || 0).toFixed(2)}\nInvoice Number: ${generatedInvoiceNumber}`
+                        text: `Invoice for ${client?.clientName || 'Client'} - Invoice Amount: ₹${formatAmount(invoiceData.invoiceAmount || client?.serviceCharges || 0)} - Due: ₹${formatAmount(paymentDetails.currentBalance || 0)}\nInvoice Number: ${generatedInvoiceNumber}`
                     });
                 }
             } else {
@@ -645,10 +734,10 @@ const ShareInvoice = ({
         const message = `*Invoice Details*\n\n` +
             `*Client:* ${client?.clientName || 'N/A'}\n` +
             `*Invoice Number:* ${generatedInvoiceNumber}\n` +
-            `*Invoice Amount:* ₹${invoiceAmount.toFixed(2)}\n` +
-            `*Total Paid:* ₹${totalPaid.toFixed(2)}\n` +
-            `*Due Amount:* ₹${dueAmount.toFixed(2)}\n` +
-            `*Last Payment:* ${paymentDetails.lastPayment ? `₹${(Number(paymentDetails.lastPayment.amount) || 0).toFixed(2)} on ${formatDate(paymentDetails.lastPayment.date)}` : 'No payments'}\n` +
+            `*Invoice Amount:* ₹${formatAmount(invoiceAmount)}\n` +
+            `*Total Paid:* ₹${formatAmount(totalPaid)}\n` +
+            `*Due Amount:* ₹${formatAmount(dueAmount)}\n` +
+            `*Last Payment:* ${paymentDetails.lastPayment ? `₹${formatAmount(paymentDetails.lastPayment.amount)} on ${formatDate(paymentDetails.lastPayment.date)}` : 'No payments'}\n` +
             `*Next Payment Due:* ${paymentDetails.nextPaymentDate ? formatDate(paymentDetails.nextPaymentDate.toISOString()) : 'N/A'}\n` +
             `*Generated Date:* ${new Date().toLocaleDateString()}\n\n` +
             `Thank you for your trust in our services!`;
@@ -659,7 +748,21 @@ const ShareInvoice = ({
         window.open(whatsappUrl, '_blank');
     };
 
-    // Initialize iframe content when modal opens
+    // Handle message from iframe for saving invoice
+    useEffect(() => {
+        const handleMessage = (event) => {
+            if (event.data.type === 'SAVE_INVOICE') {
+                saveInvoiceToHistory();
+            }
+        };
+
+        window.addEventListener('message', handleMessage);
+        return () => {
+            window.removeEventListener('message', handleMessage);
+        };
+    }, [saveInvoiceToHistory]);
+
+    // Initialize iframe content when modal opens or invoiceData changes
     useEffect(() => {
         if (showInvoiceModal && iframeRef.current) {
             iframeRef.current.srcdoc = buildInvoiceHTML();
@@ -758,7 +861,7 @@ const ShareInvoice = ({
                                         min="0"
                                     />
                                     <small className="form-text text-danger">
-                                        Default: ₹{parseFloat(client?.serviceCharges) || 0}
+                                        Default: ₹{formatAmount(parseFloat(client?.serviceCharges) || 0)}
                                     </small>
                                 </div>
                                 <div className="col-md-4">
@@ -846,7 +949,7 @@ const ShareInvoice = ({
     // Invoice History Table Component
     const InvoiceHistoryTable = () => (
         <div className="invoice-history-table p-3">
-            <h5 className="mb-3">Invoice History</h5>
+            <h5 className="mb-3">Invoice History ({invoiceHistory.length})</h5>
             <div className="table-responsive" style={{ maxHeight: '500px', overflowY: 'auto' }}>
                 <table className="table table-sm table-hover" style={{ fontSize: '12px' }}>
                     <thead className="table-light" style={{ position: 'sticky', top: 0, zIndex: 1 }}>
@@ -865,14 +968,15 @@ const ShareInvoice = ({
                                 <td><strong>{invoice.invoiceNumber}</strong></td>
                                 <td>{formatDate(invoice.date)}</td>
                                 <td>{invoice.clientName}</td>
-                                <td className="text-success">₹{invoice.amount.toFixed(2)}</td>
+                                <td className="text-success">₹{formatAmount(invoice.amount)}</td>
                                 <td>{formatDate(invoice.data.serviceDate)}</td>
                                 <td>
                                     <button 
-                                        className="btn btn-sm btn-outline-primary"
+                                        className="btn btn-sm btn-outline-primary me-1"
                                         onClick={() => {
                                             setInvoiceData(invoice.data);
                                             setActiveTab('preview');
+                                            // Force rebuild of iframe with the selected invoice data
                                             setTimeout(() => {
                                                 if (iframeRef.current) {
                                                     iframeRef.current.srcdoc = buildInvoiceHTML();
@@ -928,7 +1032,7 @@ const ShareInvoice = ({
 
             <div className="modal-card">
                 <div className="mb-3">
-                    <h4 className=" text-info">Invoice - {generatedInvoiceNumber}</h4>
+                    <h4 className="text-info">Invoice - {generatedInvoiceNumber}</h4>
                     <div className="d-flex gap-2 align-items-center">
                         <button
                             type="button"
@@ -992,17 +1096,29 @@ const ShareInvoice = ({
 
                 <div className="modal-card-body bill-wrapper">
                     {activeTab === 'preview' ? (
-                        <iframe
-                            ref={iframeRef}
-                            title="Invoice Preview"
-                            style={{
-                                width: "100%",
-                                height: "700px",
-                                border: "1px solid #e5e5e5",
-                                borderRadius: 8,
-                                background: "white"
-                            }}
-                        />
+                        <>
+                            <iframe
+                                ref={iframeRef}
+                                title="Invoice Preview"
+                                style={{
+                                    width: "100%",
+                                    height: "650px",
+                                    border: "1px solid #e5e5e5",
+                                    borderRadius: 8,
+                                    background: "white"
+                                }}
+                            />
+                            <div className="mt-3 text-center">
+                                <button
+                                    type="button"
+                                    className="btn btn-primary"
+                                    onClick={saveInvoiceToHistory}
+                                >
+                                    <i className="bi bi-save me-1"></i>
+                                    Save Invoice to History
+                                </button>
+                            </div>
+                        </>
                     ) : (
                         <InvoiceHistoryTable />
                     )}

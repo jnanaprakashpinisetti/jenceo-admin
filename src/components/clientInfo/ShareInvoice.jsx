@@ -13,11 +13,11 @@ const ShareInvoice = ({
     // Custom invoice form modal state
     const [showCustomInvoiceForm, setShowCustomInvoiceForm] = useState(false);
 
-    // Invoice data state
+    // Invoice data state - only used for the final invoice
     const [invoiceData, setInvoiceData] = useState({
         serviceDate: '',
         invoiceDate: new Date().toISOString().split('T')[0],
-        invoiceAmount: '', // Added invoice amount field
+        invoiceAmount: '',
         gapIfAny: '',
         travelingCharges: '',
         extraCharges: '',
@@ -41,25 +41,16 @@ const ShareInvoice = ({
         return date.toISOString().split('T')[0];
     };
 
-    // Handle service date change - FIXED
-    const handleServiceDateChange = (e) => {
-        const serviceDate = e.target.value;
-        const autoFillDate = calculateAutoFillDate(serviceDate);
-
-        setInvoiceData(prev => ({
-            ...prev,
-            serviceDate,
-            autoFillDate
-        }));
-    };
-
     // Apply custom invoice settings
-    const handleApplyCustomInvoice = () => {
+    const handleApplyCustomInvoice = (formData) => {
+        setInvoiceData(formData);
         setShowCustomInvoiceForm(false);
         // Rebuild the iframe with new data
-        if (iframeRef.current) {
-            iframeRef.current.srcdoc = buildInvoiceHTML();
-        }
+        setTimeout(() => {
+            if (iframeRef.current) {
+                iframeRef.current.srcdoc = buildInvoiceHTML();
+            }
+        }, 100);
     };
 
     const getPaymentDetails = () => {
@@ -226,7 +217,7 @@ const ShareInvoice = ({
         const travelingCharges = invoiceData.travelingCharges ? `₹${Number(invoiceData.travelingCharges).toFixed(2)}` : '₹0.00';
         const extraCharges = invoiceData.extraCharges ? `₹${Number(invoiceData.extraCharges).toFixed(2)}` : '₹0.00';
         const serviceDate = invoiceData.serviceDate ? formatDate(invoiceData.serviceDate) : startingDate;
-        const autoFillDate = invoiceData.autoFillDate ? formatDate(invoiceData.autoFillDate) : 'N/A';
+        const autoFillDate = invoiceData.autoFillDate ? formatDate(invoiceData.autoFillDate) : (invoiceData.serviceDate ? formatDate(calculateAutoFillDate(invoiceData.serviceDate)) : 'N/A');
         const invoiceDate = invoiceData.invoiceDate ? formatDate(invoiceData.invoiceDate) : currentDate;
 
         // Calculate due amount from invoice amount minus total paid
@@ -311,7 +302,7 @@ const ShareInvoice = ({
   @media print{.page{border:none;margin:0;width:100%}}
   .header-img{width:100%;max-height:120px;object-fit:contain;margin-bottom:6px}
   .photo-box{display:block;align-items:center;text-align:center}
-  .photo-box .rating{background: #f5f5f5; padding: 3px; border-radius: 5px;}
+  .photo-box .rating{background: #f5f5f5; padding: 3px; border-radius: 5px; font-size:14px}
   .photo-box img{width:130px;height:130px;object-fit:cover;border-radius:6px;border:1px solid #ccc}
   
   .payment-summary {display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin: 20px 0}
@@ -407,14 +398,13 @@ const ShareInvoice = ({
       <div class="payment-summary">
         ${paymentSummaryHTML}
         
-   
-        
-        <div class="payment-card next-payment">
-          <div class="payment-label">Next Payment Due</div>
-          <div class="payment-amount next-payment">${paymentDetails.nextPaymentDate ? formatDate(paymentDetails.nextPaymentDate.toISOString()) : 'N/A'}</div>
-          <small class="muted">Every 30 days Cycle</small>
-        </div>
      
+        <div class="payment-card total-paid">
+        <div class="payment-label">Next Payment Due</div>
+                    <div class="payment-amount next-payment">${paymentDetails.nextPaymentDate ? formatDate(paymentDetails.nextPaymentDate.toISOString()) : 'N/A'}</div>
+          <small class="muted">Every 30 days Cycle</small>
+
+        </div>
         
       </div>
     </div>
@@ -437,16 +427,14 @@ const ShareInvoice = ({
             <div class="custom-invoice-label">Invoice Date</div>
             <div class="custom-invoice-value">${invoiceDate}</div>
           </div>
-      
           <div class="custom-invoice-item">
             <div class="custom-invoice-label">Due Amount</div>
-            <div class="custom-invoice-value" style="color: #ff6b6b; font-weight: bold;">₹${invoiceAmount.toFixed(2)}</div>
+            <div class="custom-invoice-value" style="color: #ff6b6b; font-weight: bold;">₹${dueAmount.toFixed(2)}</div>
           </div>
           <div class="custom-invoice-item">
             <div class="custom-invoice-label">Gap if Any</div>
             <div class="custom-invoice-value">${gapInfo}</div>
           </div>
-   
           <div class="custom-invoice-item">
             <div class="custom-invoice-label">Extra Charges</div>
             <div class="custom-invoice-value">${extraCharges}</div>
@@ -461,8 +449,6 @@ const ShareInvoice = ({
       </div>
     </div>
   </div>
-
- 
 
   ${invoiceData.additionalComments ? `
   <div class="sec">
@@ -601,148 +587,188 @@ const ShareInvoice = ({
         );
     }
 
-    // Custom Invoice Form Modal - FIXED
-    const CustomInvoiceForm = () => (
-        <div className="modal fade show" style={{ display: 'block', backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 1060 }}>
-            <div className="modal-dialog modal-lg modal-dialog-centered">
-                <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-                    <div className="modal-header bg-primary text-white">
-                        <h5 className="modal-title">Custom Invoice Details</h5>
-                        <button
-                            type="button"
-                            className="btn-close btn-close-white"
-                            onClick={() => setShowCustomInvoiceForm(false)}
-                        />
-                    </div>
-                    <div className="modal-body">
-                        <div className="row g-3">
-                            <div className="col-md-6">
-                                <label className="form-label"><strong>Service Date</strong></label>
-                                <input
-                                    type="date"
-                                    className="form-control"
-                                    value={invoiceData.serviceDate}
-                                    onChange={handleServiceDateChange}
-                                />
-                            </div>
-                            <div className="col-md-6">
-                                <label className="form-label"><strong>Auto-fill (30 days from Service Date)</strong></label>
-                                <input
-                                    type="date"
-                                    className="form-control"
-                                    value={invoiceData.autoFillDate || calculateAutoFillDate(invoiceData.serviceDate)}
-                                    disabled
-                                    readOnly
-                                />
-                            </div>
-                            <div className="col-md-6">
-                                <label className="form-label"><strong>Invoice Date</strong></label>
-                                <input
-                                    type="date"
-                                    className="form-control"
-                                    value={invoiceData.invoiceDate}
-                                    onChange={(e) => setInvoiceData(prev => ({ ...prev, invoiceDate: e.target.value }))}
-                                />
-                            </div>
-                            <div className="col-md-6">
-                                <label className="form-label"><strong>Invoice Amount (₹)</strong></label>
-                                <input
-                                    type="number"
-                                    className="form-control"
-                                    value={invoiceData.invoiceAmount}
-                                    onChange={(e) => setInvoiceData(prev => ({ ...prev, invoiceAmount: e.target.value }))}
-                                    placeholder="Enter invoice amount"
-                                    step="0.01"
-                                    min="0"
-                                />
-                                <small className="form-text text-muted">
-                                    Default: ₹{parseFloat(client?.serviceCharges) || 0}
-                                </small>
-                            </div>
-                            <div className="col-md-4">
-                                <label className="form-label"><strong>Gap if any</strong></label>
-                                <input
-                                    type="text"
-                                    className="form-control"
-                                    value={invoiceData.gapIfAny}
-                                    onChange={(e) => setInvoiceData(prev => ({ ...prev, gapIfAny: e.target.value }))}
-                                    placeholder="Enter any service gaps..."
-                                />
-                            </div>
-                            <div className="col-md-4">
-                                <label className="form-label"><strong>Traveling Charges (₹)</strong></label>
-                                <input
-                                    type="number"
-                                    className="form-control"
-                                    value={invoiceData.travelingCharges}
-                                    onChange={(e) => setInvoiceData(prev => ({ ...prev, travelingCharges: e.target.value }))}
-                                    placeholder="₹0.00"
-                                    step="0.01"
-                                />
-                            </div>
-                            <div className="col-md-4">
-                                <label className="form-label"><strong>Extra Charges (₹)</strong></label>
-                                <input
-                                    type="number"
-                                    className="form-control"
-                                    value={invoiceData.extraCharges}
-                                    onChange={(e) => setInvoiceData(prev => ({ ...prev, extraCharges: e.target.value }))}
-                                    placeholder="₹0.00"
-                                    step="0.01"
-                                />
-                            </div>
-                            <div className="col-12">
-                                <label className="form-label"><strong>Service Remarks</strong></label>
-                                <input
-                                    type="text"
-                                    className="form-control"
-                                    value={invoiceData.serviceRemarks}
-                                    onChange={(e) => setInvoiceData(prev => ({ ...prev, serviceRemarks: e.target.value }))}
-                                    placeholder="Service remarks..."
-                                />
-                            </div>
-                            <div className="col-12">
-                                <label className="form-label"><strong>Additional Comments</strong></label>
-                                <textarea
-                                    className="form-control"
-                                    rows="3"
-                                    value={invoiceData.additionalComments}
-                                    onChange={(e) => setInvoiceData(prev => ({ ...prev, additionalComments: e.target.value }))}
-                                    placeholder="Enter any additional comments or notes..."
-                                />
-                            </div>
-                            <div className="col-12">
-                                <label className="form-label"><strong>Remarks</strong></label>
-                                <textarea
-                                    className="form-control"
-                                    rows="3"
-                                    value={invoiceData.remarks}
-                                    onChange={(e) => setInvoiceData(prev => ({ ...prev, remarks: e.target.value }))}
-                                    placeholder="Enter remarks..."
-                                />
+    // Custom Invoice Form Modal - FIXED with local state
+    const CustomInvoiceForm = () => {
+        const [formData, setFormData] = useState({
+            serviceDate: invoiceData.serviceDate || '',
+            invoiceDate: invoiceData.invoiceDate || new Date().toISOString().split('T')[0],
+            invoiceAmount: invoiceData.invoiceAmount || '',
+            gapIfAny: invoiceData.gapIfAny || '',
+            travelingCharges: invoiceData.travelingCharges || '',
+            extraCharges: invoiceData.extraCharges || '',
+            remarks: invoiceData.remarks || '',
+            additionalComments: invoiceData.additionalComments || '',
+            serviceRemarks: invoiceData.serviceRemarks || '',
+        });
+
+        const handleServiceDateChange = (e) => {
+            const serviceDate = e.target.value;
+            const autoFillDate = calculateAutoFillDate(serviceDate);
+
+            setFormData(prev => ({
+                ...prev,
+                serviceDate,
+                autoFillDate
+            }));
+        };
+
+        const handleInputChange = (e) => {
+            const { name, value } = e.target;
+            setFormData(prev => ({
+                ...prev,
+                [name]: value
+            }));
+        };
+
+        const handleApply = () => {
+            handleApplyCustomInvoice(formData);
+        };
+
+        const calculateFormAutoFillDate = () => {
+            return formData.serviceDate ? calculateAutoFillDate(formData.serviceDate) : '';
+        };
+
+        return (
+            <div className="modal fade show" style={{ display: 'block', backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 1060 }}>
+                <div className="modal-dialog modal-lg modal-dialog-centered">
+                    <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+                        <div className="modal-header bg-primary text-white">
+                            <h5 className="modal-title">Custom Invoice Details</h5>
+                            <button
+                                type="button"
+                                className="btn-close btn-close-white"
+                                onClick={() => setShowCustomInvoiceForm(false)}
+                            />
+                        </div>
+                        <div className="modal-body">
+                            <div className="row g-3">
+                                <div className="col-md-6">
+                                    <label className="form-label"><strong>Service Date</strong></label>
+                                    <input
+                                        type="date"
+                                        className="form-control"
+                                        name="serviceDate"
+                                        value={formData.serviceDate}
+                                        onChange={handleServiceDateChange}
+                                    />
+                                </div>
+                                <div className="col-md-6">
+                                    <label className="form-label"><strong>Auto-fill (30 days from Service Date)</strong></label>
+                                    <input
+                                        type="date"
+                                        className="form-control"
+                                        value={calculateFormAutoFillDate()}
+                                        disabled
+                                        readOnly
+                                    />
+                                </div>
+                                <div className="col-md-6">
+                                    <label className="form-label"><strong>Invoice Date</strong></label>
+                                    <input
+                                        type="date"
+                                        className="form-control"
+                                        name="invoiceDate"
+                                        value={formData.invoiceDate}
+                                        onChange={handleInputChange}
+                                    />
+                                </div>
+                                <div className="col-md-6">
+                                    <label className="form-label"><strong>Invoice Amount (₹)</strong></label>
+                                    <input
+                                        type="number"
+                                        className="form-control"
+                                        name="invoiceAmount"
+                                        value={formData.invoiceAmount}
+                                        onChange={handleInputChange}
+                                        placeholder="Enter invoice amount"
+                                        step="0.01"
+                                        min="0"
+                                    />
+                                    <small className="form-text  text-danger">
+                                        Default: ₹{parseFloat(client?.serviceCharges) || 0}
+                                    </small>
+                                </div>
+                                <div className="col-md-4">
+                                    <label className="form-label"><strong>Gap if any</strong></label>
+                                    <input
+                                        type="text"
+                                        className="form-control"
+                                        name="gapIfAny"
+                                        value={formData.gapIfAny}
+                                        onChange={handleInputChange}
+                                        placeholder="Enter any service gaps..."
+                                    />
+                                </div>
+                                <div className="col-md-4">
+                                    <label className="form-label"><strong>Traveling Charges (₹)</strong></label>
+                                    <input
+                                        type="number"
+                                        className="form-control"
+                                        name="travelingCharges"
+                                        value={formData.travelingCharges}
+                                        onChange={handleInputChange}
+                                        placeholder="₹0.00"
+                                        step="0.01"
+                                    />
+                                </div>
+                                <div className="col-md-4">
+                                    <label className="form-label"><strong>Extra Charges (₹)</strong></label>
+                                    <input
+                                        type="number"
+                                        className="form-control"
+                                        name="extraCharges"
+                                        value={formData.extraCharges}
+                                        onChange={handleInputChange}
+                                        placeholder="₹0.00"
+                                        step="0.01"
+                                    />
+                                </div>
+
+                                <div className="col-md-6">
+                                    <label className="form-label"><strong>Additional Comments</strong></label>
+                                    <textarea
+                                        className="form-control"
+                                        rows="3"
+                                        name="additionalComments"
+                                        value={formData.additionalComments}
+                                        onChange={handleInputChange}
+                                        placeholder="Enter any additional comments or notes..."
+                                    />
+                                </div>
+                                <div className="col-md-6">
+                                    <label className="form-label"><strong>Remarks</strong></label>
+                                    <textarea
+                                        className="form-control"
+                                        rows="3"
+                                        name="remarks"
+                                        value={formData.remarks}
+                                        onChange={handleInputChange}
+                                        placeholder="Enter remarks..."
+                                    />
+                                </div>
                             </div>
                         </div>
-                    </div>
-                    <div className="modal-footer">
-                        <button
-                            type="button"
-                            className="btn btn-secondary"
-                            onClick={() => setShowCustomInvoiceForm(false)}
-                        >
-                            Cancel
-                        </button>
-                        <button
-                            type="button"
-                            className="btn btn-primary"
-                            onClick={handleApplyCustomInvoice}
-                        >
-                            Apply to Invoice
-                        </button>
+                        <div className="modal-footer">
+                            <button
+                                type="button"
+                                className="btn btn-secondary"
+                                onClick={() => setShowCustomInvoiceForm(false)}
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                type="button"
+                                className="btn btn-primary"
+                                onClick={handleApply}
+                            >
+                                Apply to Invoice
+                            </button>
+                        </div>
                     </div>
                 </div>
             </div>
-        </div>
-    );
+        );
+    };
 
     return (
         <>

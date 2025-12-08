@@ -429,7 +429,7 @@ const ShareInvoice = ({
           </div>
           <div class="custom-invoice-item">
             <div class="custom-invoice-label">Due Amount</div>
-            <div class="custom-invoice-value" style="color: #ff6b6b; font-weight: bold;">₹${dueAmount.toFixed(2)}</div>
+            <div class="custom-invoice-value" style="color: #ff6b6b; font-weight: bold;">₹${invoiceAmount.toFixed(2)}</div>
           </div>
           <div class="custom-invoice-item">
             <div class="custom-invoice-label">Gap if Any</div>

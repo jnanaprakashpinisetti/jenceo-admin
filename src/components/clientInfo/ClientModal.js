@@ -10,6 +10,7 @@
 import React, { useEffect, useState, useRef } from "react";
 import firebaseDB from "../../firebase";
 import { useAuth } from "../../context/AuthContext";
+import ShareInvoice from "./ShareInvoice";
 
 
 const removalReasonOptions = [
@@ -1131,7 +1132,7 @@ const ClientModal = ({
 
       payload.fullAuditLogs = Array.isArray(payload.fullAuditLogs) ? payload.fullAuditLogs : [];
 
- 
+
 
 
       if (fullEntry) {
@@ -1368,6 +1369,7 @@ const ClientModal = ({
                   ["payments", `Payments (${(formData.payments || []).length})`],
                   ["detailinfo", "Detail-Info"],
                   ["biodata", "Biodata"],
+                  ["invoice", "Invoice"],
                 ].map(([key, label]) => (
                   <li key={key} className="nav-item" role="presentation">
                     <button className={`nav-link ${activeTab === key ? "active" : ""}`} onClick={() => setActiveTab(key)}>
@@ -2351,6 +2353,7 @@ const ClientModal = ({
                   </div>
                 )}
 
+
                 {/* Biodata */}
                 {activeTab === "biodata" && (
                   <div>
@@ -2375,6 +2378,17 @@ const ClientModal = ({
                     </div>
 
                     <iframe ref={bioIframeRef} title="biodata" style={{ width: "100%", height: 520, border: "1px solid #e5e5e5", borderRadius: 6 }} />
+                  </div>
+                )}
+
+                {/* Invoice */}
+                {activeTab === "invoice" && (
+                  <div>
+                    <ShareInvoice
+                      client={formData}
+                      payments={formData.payments || []}
+                      billTitle="Client Invoice"
+                    />
                   </div>
                 )}
               </div>

@@ -448,7 +448,7 @@ const ItemsList = ({
         return (
             <div className="text-center py-5">
                 <div className="text-muted mb-3">
-                    <i className="bi bi-cart3" style={{fontSize: '3rem'}}></i>
+                    <i className="bi bi-cart3" style={{ fontSize: '3rem' }}></i>
                 </div>
                 <h5 className="text-muted">No Items Found</h5>
                 <p className="text-muted">No items have been added for this customer yet.</p>
@@ -481,7 +481,7 @@ const ItemsList = ({
                         borderRadius: "12px"
                     }}>
                         <div className="card-body py-3">
-                            <i className="bi bi-coin text-warning mb-2" style={{fontSize: '2rem'}}></i>
+                            <i className="bi bi-coin text-warning mb-2" style={{ fontSize: '2rem' }}></i>
                             <h6 className="text-white mb-1">Total Balance</h6>
                             <h5 className="text-white fw-bold">₹{totalAmount.toFixed(2)}</h5>
                         </div>
@@ -493,7 +493,7 @@ const ItemsList = ({
                         borderRadius: "12px"
                     }}>
                         <div className="card-body py-3">
-                            <i className="bi bi-clock text-warning mb-2" style={{fontSize: '2rem'}}></i>
+                            <i className="bi bi-clock text-warning mb-2" style={{ fontSize: '2rem' }}></i>
                             <h6 className="text-white mb-1">Pending Amount</h6>
                             <h5 className="text-white fw-bold">₹{pendingStats.pendingAmount.toFixed(2)}</h5>
                         </div>
@@ -505,7 +505,7 @@ const ItemsList = ({
                         borderRadius: "12px"
                     }}>
                         <div className="card-body py-3">
-                            <i className="bi bi-calendar-day text-info mb-2" style={{fontSize: '2rem'}}></i>
+                            <i className="bi bi-calendar-day text-info mb-2" style={{ fontSize: '2rem' }}></i>
                             <h6 className="text-white mb-1">Pending Days</h6>
                             <h5 className="text-white fw-bold">{pendingStats.pendingDays} days</h5>
                         </div>
@@ -517,7 +517,7 @@ const ItemsList = ({
                         borderRadius: "12px"
                     }}>
                         <div className="card-body py-3">
-                            <i className="bi bi-cart3 text-success mb-2" style={{fontSize: '2rem'}}></i>
+                            <i className="bi bi-cart3 text-success mb-2" style={{ fontSize: '2rem' }}></i>
                             <h6 className="text-white mb-1">Pending Items</h6>
                             <h5 className="text-white fw-bold">{pendingStats.totalItems}</h5>
                         </div>
@@ -916,7 +916,7 @@ const ItemsList = ({
                     <div className="card-body p-0">
                         {paidDates.length === 0 ? (
                             <div className="text-center py-5 text-muted">
-                                <i className="bi bi-receipt" style={{fontSize: '3rem'}}></i>
+                                <i className="bi bi-receipt" style={{ fontSize: '3rem' }}></i>
                                 <p>No paid items found</p>
                             </div>
                         ) : (
@@ -940,7 +940,7 @@ const ItemsList = ({
                                             {paginatedPaidDates.map((paymentDate, index) => {
                                                 const paidDateData = paidItemsByPaymentDate[paymentDate];
                                                 const globalIndex = (oldItemsPage - 1) * oldItemsPerPage + index + 1;
-                                                
+
                                                 return (
                                                     <tr
                                                         key={paymentDate}
@@ -1001,7 +1001,7 @@ const ItemsList = ({
                                     <div className="text-warning small">
                                         Showing {paginatedPaidDates.length} of {paidDates.length} payment dates
                                     </div>
-                                    <div className="d-flex gap-2 align-items-center">
+                                    <div className="d-flex gap-2 align-items-center border-0">
                                         <div className="btn-group">
                                             <button
                                                 className="btn btn-outline-light btn-sm"
@@ -1021,6 +1021,8 @@ const ItemsList = ({
                                                 <i className="bi bi-chevron-right"></i>
                                             </button>
                                         </div>
+                                    </div>
+                                    <div>
                                         <select
                                             className="form-select form-select-sm w-auto"
                                             value={oldItemsPerPage}

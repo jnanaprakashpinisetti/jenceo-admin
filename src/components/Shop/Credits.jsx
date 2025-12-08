@@ -77,11 +77,33 @@ const CustomerList = () => {
                     // Calculate balance from customer items
                     const balance = calculateBalanceFromItems(customerData);
 
-                    // Get latest reminder date
-                    const latestReminder = getLatestReminder(customerData);
+                    // Get latest reminder date - IMPROVED: Check both Firebase structure and BasicDetails reminders
+                    let latestReminderDate = '';
+                    let reminderStatus = 'none';
 
-                    // Get reminder status
-                    const reminderStatus = latestReminder.date ? getReminderStatus(latestReminder.date) : 'none';
+                    // Check for reminders in the customer data (BasicDetails.jsx saves them here)
+                    if (customerData.reminders) {
+                        let remindersArray = [];
+
+                        if (Array.isArray(customerData.reminders)) {
+                            remindersArray = customerData.reminders;
+                        } else if (typeof customerData.reminders === 'object') {
+                            // Convert object to array
+                            remindersArray = Object.values(customerData.reminders);
+                        }
+
+                        if (remindersArray.length > 0) {
+                            // Sort by date descending to get the latest reminder
+                            const validReminders = remindersArray.filter(r => r && r.date);
+                            if (validReminders.length > 0) {
+                                const sortedReminders = validReminders.sort((a, b) =>
+                                    new Date(b.date) - new Date(a.date)
+                                );
+                                latestReminderDate = sortedReminders[0].date;
+                                reminderStatus = getReminderStatus(latestReminderDate);
+                            }
+                        }
+                    }
 
                     customersList.push({
                         id: customerId,
@@ -91,10 +113,12 @@ const CustomerList = () => {
                         character: customerData.character || 'average',
                         mobileNo: customerData.mobileNo || '',
                         place: customerData.place || '',
-                        reminderDate: latestReminder.date || '',
+                        reminderDate: latestReminderDate,
                         reminderStatus: reminderStatus,
                         balance: balance,
                         isDeleted: customerData.isDeleted || false,
+                        deletedAt: customerData.deletedAt || '',
+                        deletedBy: customerData.deletedBy || 'unknown',
                         ...customerData
                     });
                 }
@@ -112,26 +136,6 @@ const CustomerList = () => {
 
         loadCustomers();
     }, [refreshTrigger]);
-
-    // Get latest reminder from customer data
-    const getLatestReminder = (customerData) => {
-        if (!customerData.reminders) return { date: '', status: 'none' };
-
-        // Handle both array and object formats
-        let reminders = [];
-        if (Array.isArray(customerData.reminders)) {
-            reminders = customerData.reminders;
-        } else if (typeof customerData.reminders === 'object') {
-            reminders = Object.values(customerData.reminders);
-        }
-
-        // Sort by date descending and get the latest
-        const sortedReminders = reminders
-            .filter(r => r && r.date)
-            .sort((a, b) => new Date(b.date) - new Date(a.date));
-
-        return sortedReminders[0] || { date: '', status: 'none' };
-    };
 
     // Get reminder status based on date (same as BasicDetails.jsx)
     const getReminderStatus = (dateString) => {
@@ -153,15 +157,81 @@ const CustomerList = () => {
         return 'future';
     };
 
-    // Get reminder status color and label
+    // Get reminder status color and label with button styling
     const getReminderStatusInfo = (status) => {
         switch (status) {
-            case 'today': return { color: 'warning', label: 'Today', bgColor: 'rgba(245, 158, 11, 0.3)' };
-            case 'tomorrow': return { color: 'info', label: 'Tomorrow', bgColor: 'rgba(59, 130, 246, 0.3)' };
-            case 'overdue': return { color: 'danger', label: 'Overdue', bgColor: 'rgba(239, 68, 68, 0.3)' };
-            case 'upcoming': return { color: 'success', label: 'Upcoming', bgColor: 'rgba(16, 185, 129, 0.3)' };
-            case 'future': return { color: 'secondary', label: 'Future', bgColor: 'rgba(100, 116, 139, 0.3)' };
-            default: return { color: 'secondary', label: 'No Reminder', bgColor: 'rgba(100, 116, 139, 0.3)' };
+            case 'today':
+                return {
+                    color: 'warning',
+                    label: 'Today',
+                    bgColor: 'rgba(245, 158, 11, 0.3)',
+                    buttonStyle: {
+                        background: "linear-gradient(135deg, #f59e0b 0%, #d97706 100%)",
+                        border: "2px solid rgba(245, 158, 11, 0.8)",
+                        color: "white",
+                        fontWeight: "bold"
+                    }
+                };
+            case 'tomorrow':
+                return {
+                    color: 'info',
+                    label: 'Tomorrow',
+                    bgColor: 'rgba(59, 130, 246, 0.3)',
+                    buttonStyle: {
+                        background: "linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%)",
+                        border: "2px solid rgba(59, 130, 246, 0.8)",
+                        color: "white",
+                        fontWeight: "bold"
+                    }
+                };
+            case 'overdue':
+                return {
+                    color: 'danger',
+                    label: 'Overdue',
+                    bgColor: 'rgba(239, 68, 68, 0.3)',
+                    buttonStyle: {
+                        background: "linear-gradient(135deg, #ef4444 0%, #dc2626 100%)",
+                        border: "2px solid rgba(239, 68, 68, 0.8)",
+                        color: "white",
+                        fontWeight: "bold"
+                    }
+                };
+            case 'upcoming':
+                return {
+                    color: 'success',
+                    label: 'Upcoming',
+                    bgColor: 'rgba(16, 185, 129, 0.3)',
+                    buttonStyle: {
+                        background: "linear-gradient(135deg, #10b981 0%, #059669 100%)",
+                        border: "2px solid rgba(16, 185, 129, 0.8)",
+                        color: "white",
+                        fontWeight: "bold"
+                    }
+                };
+            case 'future':
+                return {
+                    color: 'secondary',
+                    label: 'Future',
+                    bgColor: 'rgba(100, 116, 139, 0.3)',
+                    buttonStyle: {
+                        background: "linear-gradient(135deg, #64748b 0%, #475569 100%)",
+                        border: "2px solid rgba(100, 116, 139, 0.8)",
+                        color: "white",
+                        fontWeight: "bold"
+                    }
+                };
+            default:
+                return {
+                    color: 'secondary',
+                    label: 'No Reminder',
+                    bgColor: 'rgba(100, 116, 139, 0.3)',
+                    buttonStyle: {
+                        background: "linear-gradient(135deg, #6b7280 0%, #4b5563 100%)",
+                        border: "2px solid rgba(107, 114, 128, 0.8)",
+                        color: "white",
+                        fontWeight: "bold"
+                    }
+                };
         }
     };
 
@@ -268,16 +338,18 @@ const CustomerList = () => {
         setShowDeleteModal(true);
     };
 
-    // Confirm delete (soft delete)
+    // Confirm delete (soft delete) - FIXED: Use authUser's name instead of email
     const confirmDelete = async () => {
         if (!customerToDelete) return;
 
         try {
             const correctPath = `Shop/CreditData/${customerToDelete.id}`;
+            const deletedBy = authUser?.displayName || authUser?.email || 'Unknown User';
+
             await firebaseDB.child(correctPath).update({
                 isDeleted: true,
                 deletedAt: new Date().toISOString(),
-                deletedBy: authUser?.email || 'unknown'
+                deletedBy: deletedBy  // Store the user's name or email
             });
 
             // Refresh data
@@ -296,7 +368,8 @@ const CustomerList = () => {
             const correctPath = `Shop/CreditData/${customerId}`;
             await firebaseDB.child(correctPath).update({
                 isDeleted: false,
-                restoredAt: new Date().toISOString()
+                restoredAt: new Date().toISOString(),
+                restoredBy: authUser?.displayName || authUser?.email || 'Unknown User'
             });
 
             // Refresh data
@@ -350,7 +423,7 @@ const CustomerList = () => {
             await firebaseDB.child(correctPath).update({
                 ...updatedData,
                 updatedAt: new Date().toISOString(),
-                updatedBy: authUser?.email || 'unknown'
+                updatedBy: authUser?.displayName || authUser?.email || 'Unknown User'
             });
 
             // Refresh data
@@ -388,6 +461,41 @@ const CustomerList = () => {
     // Refresh customer data
     const refreshCustomerData = () => {
         setRefreshTrigger(prev => prev + 1);
+    };
+
+    // Handle row click in deleted customers modal (same as main list)
+    const handleDeletedCustomerRowClick = (customer) => {
+        setSelectedCustomer(customer);
+        setShowModal(true);
+    };
+
+    // Handle edit in deleted customers modal
+    const handleDeletedCustomerEdit = (customer, e) => {
+        e.stopPropagation();
+        setCustomerToEdit(customer);
+        setShowEditModal(true);
+    };
+
+    // Handle add items in deleted customers modal
+    const handleDeletedCustomerAddItems = (customer, e) => {
+        e.stopPropagation();
+        setSelectedCustomer(customer);
+        setShowShopForm(true);
+    };
+
+    // Format date for display
+    const formatDateDisplay = (dateString) => {
+        if (!dateString) return 'N/A';
+        try {
+            const date = new Date(dateString);
+            return date.toLocaleDateString('en-US', {
+                year: 'numeric',
+                month: 'short',
+                day: 'numeric'
+            });
+        } catch (error) {
+            return 'N/A';
+        }
     };
 
     return (
@@ -637,16 +745,27 @@ const CustomerList = () => {
                                         <td className="text-center">
                                             {customer.reminderDate ? (
                                                 <span className="badge bg-warning text-dark">
-                                                    {new Date(customer.reminderDate).toLocaleDateString()}
+                                                    {formatDateDisplay(customer.reminderDate)}
                                                 </span>
                                             ) : (
                                                 <span className="badge bg-secondary">No Reminder</span>
                                             )}
                                         </td>
                                         <td className="text-center">
-                                            <span className={`badge bg-${reminderStatusInfo.color}`}>
+                                            <button
+                                                className="btn btn-sm"
+                                                style={{
+                                                    ...reminderStatusInfo.buttonStyle,
+                                                    borderRadius: "20px",
+                                                    padding: "5px 15px",
+                                                    fontSize: "0.75rem"
+                                                }}
+                                                onClick={(e) => e.stopPropagation()}
+                                                title={`Reminder: ${reminderStatusInfo.label}`}
+                                            >
+                                                <i className="bi bi-bell me-1"></i>
                                                 {reminderStatusInfo.label}
-                                            </span>
+                                            </button>
                                         </td>
                                         <td className="text-center">
                                             <div className="d-flex justify-content-center gap-2">
@@ -930,9 +1049,9 @@ const CustomerList = () => {
                 </div>
             )}
 
-            {/* Deleted Customers Modal */}
+            {/* Deleted Customers Modal - UPDATED with same functionality */}
             {showDeletedCustomersModal && (
-                <div className="modal fade show d-block" tabIndex="-1" style={{ backgroundColor: 'rgba(0,0,0,0.9)' }}>
+                <div className="modal fade show d-block" tabIndex="-1" style={{ backgroundColor: 'rgba(0,0,0,0.9)', zIndex: 1 }}>
                     <div className="modal-dialog modal-xl modal-dialog-centered">
                         <div className="modal-content border-0 shadow-lg" style={{
                             background: "linear-gradient(135deg, rgba(30, 41, 59, 0.95) 0%, rgba(15, 23, 42, 0.95) 100%)",
@@ -972,60 +1091,130 @@ const CustomerList = () => {
                                                     <th className="text-center">ID No</th>
                                                     <th className="text-center">Mobile No</th>
                                                     <th className="text-center">Balance</th>
+                                                    <th className="text-center">Reminder Date</th>
                                                     <th className="text-center">Deleted Date</th>
                                                     <th className="text-center">Deleted By</th>
                                                     <th className="text-center">Actions</th>
                                                 </tr>
                                             </thead>
                                             <tbody>
-                                                {deletedCustomers.map((customer, index) => (
-                                                    <tr key={customer.id}>
-                                                        <td className="text-center fw-bold">{index + 1}</td>
-                                                        <td>
-                                                            <div className="d-flex align-items-center">
-                                                                <i className="bi bi-user-circle text-muted me-2"></i>
-                                                                <strong>{customer.name || "Unnamed"}</strong>
-                                                            </div>
-                                                        </td>
-                                                        <td className="text-center">
-                                                            <span className="text-info">{customer.idNo || "N/A"}</span>
-                                                        </td>
-                                                        <td className="text-center">
-                                                            {customer.mobileNo ? formatPhoneNumber(customer.mobileNo) : "N/A"}
-                                                        </td>
-                                                        <td className="text-center">
-                                                            <span className={`badge ${customer.balance > 0 ? 'bg-danger' : 'bg-success'}`}>
-                                                                ₹{customer.balance?.toFixed(2) || '0.00'}
-                                                            </span>
-                                                        </td>
-                                                        <td className="text-center">
-                                                            <span className="badge bg-secondary">
-                                                                {customer.deletedAt ? new Date(customer.deletedAt).toLocaleDateString() : 'Unknown'}
-                                                            </span>
-                                                        </td>
-                                                        <td className="text-center">
-                                                            <span className="text-muted">{customer.deletedBy || 'Unknown'}</span>
-                                                        </td>
-                                                        <td className="text-center">
-                                                            <div className="d-flex justify-content-center gap-2">
-                                                                <button
-                                                                    className="btn btn-sm btn-success px-2"
-                                                                    onClick={() => handleRestoreCustomer(customer.id)}
-                                                                    title="Restore Customer"
-                                                                >
-                                                                    <i className="bi bi-arrow-counterclockwise"></i>
-                                                                </button>
-                                                                {/* <button
-                                                                    className="btn btn-sm btn-danger px-2"
-                                                                    onClick={() => handlePermanentDelete(customer.id)}
-                                                                    title="Permanently Delete"
-                                                                >
-                                                                    <i className="bi bi-trash-fill"></i>
-                                                                </button> */}
-                                                            </div>
-                                                        </td>
-                                                    </tr>
-                                                ))}
+                                                {deletedCustomers.map((customer, index) => {
+                                                    const characterInfo = getCharacterInfo(customer.character);
+                                                    const reminderStatusInfo = getReminderStatusInfo(customer.reminderStatus);
+
+                                                    return (
+                                                        <tr
+                                                            key={customer.id}
+                                                            style={{
+                                                                background: index % 2 === 0
+                                                                    ? "rgba(30, 41, 59, 0.7)"
+                                                                    : "rgba(51, 65, 85, 0.7)",
+                                                                cursor: "pointer"
+                                                            }}
+                                                            onClick={() => handleDeletedCustomerRowClick(customer)}
+                                                        >
+                                                            <td className="text-center fw-bold">{index + 1}</td>
+                                                            <td>
+                                                                <div className="d-flex align-items-center">
+                                                                    <i className="bi bi-user-circle text-muted me-2"></i>
+                                                                    <strong>{customer.name || "Unnamed"}</strong>
+                                                                </div>
+                                                            </td>
+                                                            <td className="text-center">
+                                                                <span className="text-info">{customer.idNo || "N/A"}</span>
+                                                            </td>
+                                                            <td className="text-center">
+                                                                {customer.mobileNo ? formatPhoneNumber(customer.mobileNo) : "N/A"}
+                                                            </td>
+                                                            <td className="text-center">
+                                                                <span className={`badge ${customer.balance > 0 ? 'bg-danger' : 'bg-success'}`}>
+                                                                    ₹{customer.balance?.toFixed(2) || '0.00'}
+                                                                </span>
+                                                            </td>
+                                                            <td className="text-center">
+                                                                {customer.reminderDate ? (
+                                                                    <button
+                                                                        className="btn btn-sm"
+                                                                        style={{
+                                                                            ...reminderStatusInfo.buttonStyle,
+                                                                            borderRadius: "20px",
+                                                                            padding: "3px 10px",
+                                                                            fontSize: "0.7rem"
+                                                                        }}
+                                                                        onClick={(e) => e.stopPropagation()}
+                                                                        title={`Reminder: ${reminderStatusInfo.label}`}
+                                                                    >
+                                                                        <i className="bi bi-bell me-1"></i>
+                                                                        {formatDateDisplay(customer.reminderDate)}
+                                                                    </button>
+                                                                ) : (
+                                                                    <span className="badge bg-secondary">No Reminder</span>
+                                                                )}
+                                                            </td>
+                                                            <td className="text-center">
+                                                                <span className="badge bg-secondary">
+                                                                    {customer.deletedAt ? formatDateDisplay(customer.deletedAt) : 'Unknown'}
+                                                                </span>
+                                                            </td>
+                                                            <td className="text-center">
+                                                                <span className="text-info">{customer.deletedBy || 'Unknown'}</span>
+                                                            </td>
+                                                            <td className="text-center">
+                                                                <div className="d-flex justify-content-center gap-2">
+                                                                    {/* <button
+                                                                        className="btn btn-sm btn-warning px-2"
+                                                                        onClick={(e) => handleDeletedCustomerEdit(customer, e)}
+                                                                        title="Edit Customer"
+                                                                        style={{
+                                                                            background: "linear-gradient(135deg, #f59e0b 0%, #d97706 100%)",
+                                                                            border: "none",
+                                                                            borderRadius: "5px"
+                                                                        }}
+                                                                    >
+                                                                        <i className="bi bi-pencil"></i>
+                                                                    </button> */}
+                                                                    {/* <button
+                                                                        className="btn btn-sm btn-success px-2"
+                                                                        onClick={(e) => handleDeletedCustomerAddItems(customer, e)}
+                                                                        title="Add Items"
+                                                                        style={{
+                                                                            background: "linear-gradient(135deg, #10b981 0%, #059669 100%)",
+                                                                            border: "none",
+                                                                            borderRadius: "5px"
+                                                                        }}
+                                                                    >
+                                                                        <i className="bi bi-cart-plus"></i>
+                                                                    </button> */}
+                                                                    <button
+                                                                        className="btn btn-sm btn-success px-2"
+                                                                        onClick={(e) => {
+                                                                            e.stopPropagation();
+                                                                            handleRestoreCustomer(customer.id);
+                                                                        }}
+                                                                        title="Restore Customer"
+                                                                        style={{
+                                                                            background: "linear-gradient(135deg, #10b981 0%, #059669 100%)",
+                                                                            border: "none",
+                                                                            borderRadius: "5px"
+                                                                        }}
+                                                                    >
+                                                                        <i className="bi bi-arrow-counterclockwise"></i>
+                                                                    </button>
+                                                                    {/* <button
+                                                                        className="btn btn-sm btn-danger px-2"
+                                                                        onClick={(e) => {
+                                                                            e.stopPropagation();
+                                                                            handlePermanentDelete(customer.id);
+                                                                        }}
+                                                                        title="Permanently Delete"
+                                                                    >
+                                                                        <i className="bi bi-trash-fill"></i>
+                                                                    </button> */}
+                                                                </div>
+                                                            </td>
+                                                        </tr>
+                                                    );
+                                                })}
                                             </tbody>
                                         </table>
                                     </div>

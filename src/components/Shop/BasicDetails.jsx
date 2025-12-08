@@ -1,6 +1,7 @@
 // src/components/Customer/BasicDetails.jsx
 import React, { useMemo, useState, useEffect, useCallback } from 'react';
 import PropTypes from 'prop-types';
+import firebaseDB from '../../firebase'; // Add this import
 
 const BasicDetails = ({ customer, totalAmount, paymentHistory, PurchaseItems, Payments, Balance }) => {
     const [selectedPayment, setSelectedPayment] = useState(null);
@@ -21,29 +22,31 @@ const BasicDetails = ({ customer, totalAmount, paymentHistory, PurchaseItems, Pa
     const [reminders, setReminders] = useState([]);
     const [isLoadingReminders, setIsLoadingReminders] = useState(false);
 
-    // Load reminders from Firebase/localStorage on component mount
+    // Load reminders from Firebase - FIXED to save to customer data
     useEffect(() => {
         const loadReminders = async () => {
             setIsLoadingReminders(true);
             try {
-                // Try Firebase first if available
-                if (window.firebase) {
-                    const db = window.firebase.database();
-                    const remindersRef = db.ref(`customers/${customer?.id}/reminders`);
-                    const snapshot = await remindersRef.once('value');
-                    if (snapshot.exists()) {
-                        const remindersData = snapshot.val();
-                        const remindersList = Object.keys(remindersData).map(key => ({
-                            id: key,
-                            ...remindersData[key]
+                if (customer?.id) {
+                    const correctPath = `Shop/CreditData/${customer.id}`;
+                    const snapshot = await firebaseDB.child(correctPath).once('value');
+                    const customerData = snapshot.val();
+                    
+                    if (customerData && customerData.reminders) {
+                        let remindersList = [];
+                        if (Array.isArray(customerData.reminders)) {
+                            remindersList = customerData.reminders;
+                        } else if (typeof customerData.reminders === 'object') {
+                            remindersList = Object.values(customerData.reminders);
+                        }
+                        
+                        // Update status based on current date
+                        const updatedReminders = remindersList.map(reminder => ({
+                            ...reminder,
+                            status: getReminderStatus(reminder.date)
                         }));
-                        setReminders(remindersList);
-                    }
-                } else {
-                    // Fallback to localStorage
-                    const savedReminders = localStorage.getItem(`customer_reminders_${customer?.id}`);
-                    if (savedReminders) {
-                        setReminders(JSON.parse(savedReminders));
+                        
+                        setReminders(updatedReminders);
                     }
                 }
             } catch (error) {
@@ -63,35 +66,23 @@ const BasicDetails = ({ customer, totalAmount, paymentHistory, PurchaseItems, Pa
         }
     }, [customer?.id]);
 
-    // Save reminders to Firebase/localStorage
-    const saveReminders = async (remindersList) => {
+    // Save reminders to Firebase customer data
+    const saveRemindersToCustomer = async (remindersList) => {
         try {
-            // Try Firebase first
-            if (window.firebase && customer?.id) {
-                const db = window.firebase.database();
-                const remindersRef = db.ref(`customers/${customer.id}/reminders`);
-
-                // Convert array to object for Firebase
-                const remindersObj = {};
-                remindersList.forEach(reminder => {
-                    remindersObj[reminder.id] = {
-                        date: reminder.date,
-                        customerId: reminder.customerId,
-                        customerName: reminder.customerName,
-                        pendingAmount: reminder.pendingAmount,
-                        status: reminder.status,
-                        createdAt: reminder.createdAt,
-                        updatedAt: new Date().toISOString()
-                    };
+            if (customer?.id) {
+                const correctPath = `Shop/CreditData/${customer.id}`;
+                
+                // Update the customer's reminders in Firebase
+                await firebaseDB.child(correctPath).update({
+                    reminders: remindersList.reduce((acc, reminder, index) => {
+                        acc[index] = reminder;
+                        return acc;
+                    }, {}),
+                    lastReminderUpdate: new Date().toISOString()
                 });
-
-                await remindersRef.set(remindersObj);
-            } else {
-                // Fallback to localStorage
-                localStorage.setItem(`customer_reminders_${customer?.id}`, JSON.stringify(remindersList));
             }
         } catch (error) {
-            console.error('Error saving reminders:', error);
+            console.error('Error saving reminders to customer:', error);
             // Fallback to localStorage
             localStorage.setItem(`customer_reminders_${customer?.id}`, JSON.stringify(remindersList));
         }
@@ -115,10 +106,10 @@ const BasicDetails = ({ customer, totalAmount, paymentHistory, PurchaseItems, Pa
             );
             if (hasChanges) {
                 setReminders(updatedReminders);
-                saveReminders(updatedReminders);
+                saveRemindersToCustomer(updatedReminders);
             }
         }
-    }, [reminders.length]); // Update when reminders array changes
+    }, [reminders.length]);
 
     // Get character badge color and label
     const getCharacterInfo = (character) => {
@@ -274,7 +265,7 @@ const BasicDetails = ({ customer, totalAmount, paymentHistory, PurchaseItems, Pa
         return 'future';
     };
 
-    // FIXED: Set reminder function with calendar and save to Firebase
+    // FIXED: Set reminder function with calendar and save to Firebase customer data
     const handleSetReminder = async () => {
         const today = new Date().toISOString().split('T')[0];
         const defaultDate = new Date();
@@ -297,7 +288,7 @@ const BasicDetails = ({ customer, totalAmount, paymentHistory, PurchaseItems, Pa
 
         const updatedReminders = [...reminders, newReminder];
         setReminders(updatedReminders);
-        await saveReminders(updatedReminders);
+        await saveRemindersToCustomer(updatedReminders);
 
         alert(`Reminder set for ${new Date(reminderDateInput).toLocaleDateString()}`);
     };
@@ -675,7 +666,7 @@ const BasicDetails = ({ customer, totalAmount, paymentHistory, PurchaseItems, Pa
     const handleRemoveReminder = async (reminderId) => {
         const updatedReminders = reminders.filter(r => r.id !== reminderId);
         setReminders(updatedReminders);
-        await saveReminders(updatedReminders);
+        await saveRemindersToCustomer(updatedReminders);
     };
 
     // FIXED: Date formatting function for both full and short formats

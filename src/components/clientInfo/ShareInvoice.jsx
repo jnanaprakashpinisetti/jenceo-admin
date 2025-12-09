@@ -80,7 +80,7 @@ const ShareInvoice = ({
     const handleApplyCustomInvoice = (formData) => {
         setInvoiceData(formData);
         setShowCustomInvoiceForm(false);
-        
+
         setTimeout(() => {
             if (iframeRef.current) {
                 iframeRef.current.srcdoc = buildInvoiceHTML();
@@ -145,7 +145,7 @@ const ShareInvoice = ({
 
         // Count invoices for this month to add index
         const currentMonthYear = `${month}-${year}`;
-        const monthInvoices = invoiceHistory.filter(inv => 
+        const monthInvoices = invoiceHistory.filter(inv =>
             inv.invoiceNumber.includes(currentMonthYear)
         );
         const monthIndex = monthInvoices.length + 1;
@@ -161,7 +161,7 @@ const ShareInvoice = ({
             if (latestInvoice && latestInvoice.invoiceNumber === generatedInvoiceNumber) {
                 // Only increment if this is a brand new invoice (not from history)
                 const currentMonthYear = new Date().toLocaleString('en-US', { month: 'short' }) + '-' + new Date().getFullYear().toString().slice(-2);
-                const monthInvoices = invoiceHistory.filter(inv => 
+                const monthInvoices = invoiceHistory.filter(inv =>
                     inv.invoiceNumber.includes(currentMonthYear)
                 );
                 setInvoiceCounter(monthInvoices.length);
@@ -557,7 +557,7 @@ const ShareInvoice = ({
         <div class="photo-box">
             <img src="${defaultCustomerPhoto}" alt="Client" />
             <div class="rating" style="margin-top: 8px; padding:4px">
-                Mr / Mrs/ Kum. <strong>${clientName}</strong>
+                Mr / Mrs / Kum. <strong>${clientName}</strong>
             </div>
         </div>
     </div>
@@ -642,12 +642,7 @@ const ShareInvoice = ({
         <p style="margin:0; font-size:10px; color:#666">Quality Service | Trusted Care | Client Satisfaction</p>
     </div>
 
-    <!-- Save Button Section -->
-    <div class="save-section" id="save-section">
-        <button class="save-button" onclick="window.parent.postMessage({type: 'SAVE_INVOICE'}, '*')">
-            <i class="bi bi-save me-1"></i> Save Invoice to History
-        </button>
-    </div>
+ 
 
     <div class="footer">
         <div>Invoice Ref: ${generatedInvoiceNumber}</div>
@@ -971,7 +966,7 @@ const ShareInvoice = ({
                                 <td className="text-success">₹{formatAmount(invoice.amount)}</td>
                                 <td>{formatDate(invoice.data.serviceDate)}</td>
                                 <td>
-                                    <button 
+                                    <button
                                         className="btn btn-sm btn-outline-primary me-1"
                                         onClick={() => {
                                             setInvoiceData(invoice.data);
@@ -1042,7 +1037,7 @@ const ShareInvoice = ({
                             <i className="bi bi-pencil-square me-1"></i>
                             Custom Invoice
                         </button>
-                        
+
                         <button
                             type="button"
                             className="btn btn-outline-primary btn-sm"

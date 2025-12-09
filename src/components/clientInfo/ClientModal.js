@@ -1272,24 +1272,32 @@ const ClientModal = ({
 
       <div class="section">
         <h3>Basic Info</h3>
+         <div className="table-responsive">
         <table><tbody>${renderPairs(basicFields)}</tbody></table>
+      </div>
       </div>
 
       <div class="section">
         <h3>Address</h3>
+         <div className="table-responsive">
         <table><tbody>${renderPairs(addressFields)}</tbody></table>
+      </div>
       </div>
 
       <div class="section">
         <h3>Care Recipient Details</h3>
+         <div className="table-responsive">
         <table><tbody>${renderPairs(careFields)}</tbody></table>
+      </div>
       </div>
 
 
       <div class="section">
         <h3>Payments</h3>
+         <div className="table-responsive">
         <table class="payments-table"><thead><tr><th>#</th><th>Date</th><th>Method</th><th>Paid</th><th>Balance</th><th>Receipt</th><th>Refund</th></tr></thead><tbody>${paymentsRows}</tbody>
         <tfoot><tr><th colspan="3">Totals</th><th>${formatINR(totalPaid).replace('\u20B9', '&#8377;')}</th><th>${formatINR(totalBalance).replace('\u20B9', '&#8377;')}</th><th></th><th>${formatINR(totalRefund).replace('\u20B9', '&#8377;')}</th></tr></tfoot></table>
+      </div>
       </div>
 
     </div>
@@ -1441,35 +1449,37 @@ const ClientModal = ({
                       </div>
                     ) : (
                       // view mode: show table-like read-only rows
-                      <table className="readonly-table">
-                        <tbody>
-                          <tr>
-                            <th className="readonly-row-label">ID No</th>
-                            <td>{formData.idNo || "—"}</td>
-                            <th className="readonly-row-label">Client Name</th>
-                            <td>{formData.clientName || "—"}</td>
-                          </tr>
-                          <tr>
-                            <th className="readonly-row-label">Gender</th>
-                            <td>{formData.gender || "—"}</td>
-                            <th className="readonly-row-label">Care Of</th>
-                            <td>{formData.careOf || "—"}</td>
+                      <div className="table-responsive">
+                        <table className="readonly-table">
+                          <tbody>
+                            <tr>
+                              <th className="readonly-row-label">ID No</th>
+                              <td>{formData.idNo || "—"}</td>
+                              <th className="readonly-row-label">Client Name</th>
+                              <td>{formData.clientName || "—"}</td>
+                            </tr>
+                            <tr>
+                              <th className="readonly-row-label">Gender</th>
+                              <td>{formData.gender || "—"}</td>
+                              <th className="readonly-row-label">Care Of</th>
+                              <td>{formData.careOf || "—"}</td>
 
-                          </tr>
-                          <tr>
-                            <th className="readonly-row-label">Mobile 1</th>
-                            <td>{formData.mobileNo1 || "—"}</td>
-                            <th className="readonly-row-label">Mobile 2</th>
-                            <td>{formData.mobileNo2 || "—"}</td>
-                          </tr>
-                          <tr>
-                            <th className="readonly-row-label">Location</th>
-                            <td>{formData.location || "—"}</td>
-                            <th className="readonly-row-label">Google Location</th>
-                            <td>{formData.googleLocation || "—"}</td>
-                          </tr>
-                        </tbody>
-                      </table>
+                            </tr>
+                            <tr>
+                              <th className="readonly-row-label">Mobile 1</th>
+                              <td>{formData.mobileNo1 || "—"}</td>
+                              <th className="readonly-row-label">Mobile 2</th>
+                              <td>{formData.mobileNo2 || "—"}</td>
+                            </tr>
+                            <tr>
+                              <th className="readonly-row-label">Location</th>
+                              <td>{formData.location || "—"}</td>
+                              <th className="readonly-row-label">Google Location</th>
+                              <td>{formData.googleLocation || "—"}</td>
+                            </tr>
+                          </tbody>
+                        </table>
+                      </div>
                     )}
                   </div>
                 )}
@@ -1513,34 +1523,36 @@ const ClientModal = ({
                         </div>
                       </div>
                     ) : (
-                      <table className="readonly-table">
-                        <tbody>
-                          <tr>
-                            <th className="readonly-row-label">Door No</th>
-                            <td>{formData.dNo || "—"}</td>
-                            <th className="readonly-row-label">Landmark</th>
-                            <td>{formData.landMark || "—"}</td>
-                          </tr>
-                          <tr>
-                            <th className="readonly-row-label">Street</th>
-                            <td>{formData.street || "—"}</td>
-                            <th className="readonly-row-label">Village/Town</th>
-                            <td>{formData.villageTown || "—"}</td>
-                          </tr>
-                          <tr>
-                            <th className="readonly-row-label">Mandal</th>
-                            <td>{formData.mandal || "—"}</td>
-                            <th className="readonly-row-label">District</th>
-                            <td>{formData.district || "—"}</td>
-                          </tr>
-                          <tr>
-                            <th className="readonly-row-label">State</th>
-                            <td>{formData.state || "—"}</td>
-                            <th className="readonly-row-label">Pin Code</th>
-                            <td>{formData.pincode || "—"}</td>
-                          </tr>
-                        </tbody>
-                      </table>
+                      <div className="table-responsive">
+                        <table className="readonly-table">
+                          <tbody>
+                            <tr>
+                              <th className="readonly-row-label">Door No</th>
+                              <td>{formData.dNo || "—"}</td>
+                              <th className="readonly-row-label">Landmark</th>
+                              <td>{formData.landMark || "—"}</td>
+                            </tr>
+                            <tr>
+                              <th className="readonly-row-label">Street</th>
+                              <td>{formData.street || "—"}</td>
+                              <th className="readonly-row-label">Village/Town</th>
+                              <td>{formData.villageTown || "—"}</td>
+                            </tr>
+                            <tr>
+                              <th className="readonly-row-label">Mandal</th>
+                              <td>{formData.mandal || "—"}</td>
+                              <th className="readonly-row-label">District</th>
+                              <td>{formData.district || "—"}</td>
+                            </tr>
+                            <tr>
+                              <th className="readonly-row-label">State</th>
+                              <td>{formData.state || "—"}</td>
+                              <th className="readonly-row-label">Pin Code</th>
+                              <td>{formData.pincode || "—"}</td>
+                            </tr>
+                          </tbody>
+                        </table>
+                      </div>
                     )}
                   </div>
                 )}
@@ -1603,34 +1615,36 @@ const ClientModal = ({
 
                       </div>
                     ) : (
-                      <table className="readonly-table">
-                        <tbody>
-                          <tr>
-                            <th className="readonly-row-label">Type of Service</th>
-                            <td>{formData.typeOfService || "—"}</td>
-                            <th className="readonly-row-label">Service Charges</th>
-                            <td>{formData.serviceCharges || "—"}</td>
-                          </tr>
-                          <tr>
-                            <th className="readonly-row-label">Service Period</th>
-                            <td>{formData.servicePeriod || "—"}</td>
-                            <th className="readonly-row-label">Service Remarks</th>
-                            <td>{formData.serviceRemarks || "—"}</td>
-                          </tr>
-                          <tr>
-                            <th className="readonly-row-label">Starting Date</th>
-                            <td>{formData.startingDate || "—"}</td>
-                            <th className="readonly-row-label">Ending Date</th>
-                            <td>{formData.endingDate || "—"}</td>
-                          </tr>
-                          <tr>
-                            <th className="readonly-row-label">Page No</th>
-                            <td>{formData.pageNo || "—"}</td>
-                            <th className="readonly-row-label">Gap If Any</th>
-                            <td>{formData.gapIfAny || "—"}</td>
-                          </tr>
-                        </tbody>
-                      </table>
+                      <div className="table-responsive">
+                        <table className="readonly-table">
+                          <tbody>
+                            <tr>
+                              <th className="readonly-row-label">Type of Service</th>
+                              <td>{formData.typeOfService || "—"}</td>
+                              <th className="readonly-row-label">Service Charges</th>
+                              <td>{formData.serviceCharges || "—"}</td>
+                            </tr>
+                            <tr>
+                              <th className="readonly-row-label">Service Period</th>
+                              <td>{formData.servicePeriod || "—"}</td>
+                              <th className="readonly-row-label">Service Remarks</th>
+                              <td>{formData.serviceRemarks || "—"}</td>
+                            </tr>
+                            <tr>
+                              <th className="readonly-row-label">Starting Date</th>
+                              <td>{formData.startingDate || "—"}</td>
+                              <th className="readonly-row-label">Ending Date</th>
+                              <td>{formData.endingDate || "—"}</td>
+                            </tr>
+                            <tr>
+                              <th className="readonly-row-label">Page No</th>
+                              <td>{formData.pageNo || "—"}</td>
+                              <th className="readonly-row-label">Gap If Any</th>
+                              <td>{formData.gapIfAny || "—"}</td>
+                            </tr>
+                          </tbody>
+                        </table>
+                      </div>
                     )}
                   </div>
                 )}
@@ -1675,29 +1689,31 @@ const ClientModal = ({
                         </div>
                       </div>
                     ) : (
-                      <table className="readonly-table">
-                        <tbody>
-                          <tr>
-                            <th className="readonly-row-label">Care Recipient</th>
-                            <td>{formData.patientName || "—"}</td>
-                            <th className="readonly-row-label">Age</th>
-                            <td>{formData.patientAge || "—"}</td>
-                          </tr>
-                          <tr>
-                            <th className="readonly-row-label">Service Status</th>
-                            <td>{formData.serviceStatus || "—"}</td>
-                            <th className="readonly-row-label">Dropper Name</th>
-                            <td>{formData.dropperName || "—"}</td>
-                          </tr>
-                          <tr>
-                            <th className="readonly-row-label">About Care Recipient</th>
-                            <td>{formData.aboutPatent || "—"}</td>
-                            <th className="readonly-row-label">About Wokr</th>
-                            <td>{formData.aboutWork || "—"}</td>
-                          </tr>
+                      <div className="table-responsive">
+                        <table className="readonly-table">
+                          <tbody>
+                            <tr>
+                              <th className="readonly-row-label">Care Recipient</th>
+                              <td>{formData.patientName || "—"}</td>
+                              <th className="readonly-row-label">Age</th>
+                              <td>{formData.patientAge || "—"}</td>
+                            </tr>
+                            <tr>
+                              <th className="readonly-row-label">Service Status</th>
+                              <td>{formData.serviceStatus || "—"}</td>
+                              <th className="readonly-row-label">Dropper Name</th>
+                              <td>{formData.dropperName || "—"}</td>
+                            </tr>
+                            <tr>
+                              <th className="readonly-row-label">About Care Recipient</th>
+                              <td>{formData.aboutPatent || "—"}</td>
+                              <th className="readonly-row-label">About Wokr</th>
+                              <td>{formData.aboutWork || "—"}</td>
+                            </tr>
 
-                        </tbody>
-                      </table>
+                          </tbody>
+                        </table>
+                      </div>
                     )}
                   </div>
                 )}
@@ -1778,43 +1794,48 @@ const ClientModal = ({
                             </div>
                           ) : (
                             <>
-                              <table className="readonly-table mb-0">
-                                <tbody>
-                                  <tr>
-                                    <th className="readonly-row-label">ID No</th>
-                                    <td>{w.workerIdNo || "—"}</td>
-                                    <th className="readonly-row-label">Name</th>
-                                    <td>{w.cName || "—"}</td>
-                                  </tr>
-                                  <tr>
-                                    <th className="readonly-row-label">Basic Salary</th>
-                                    <td>{formatINR(w.basicSalary)}</td>
-                                    <th className="readonly-row-label">Total Days</th>
-                                    <td>{w.totalDays || "—"}</td>
-                                  </tr>
-                                  <tr>
-                                    <th className="readonly-row-label">Starting Date</th>
-                                    <td>{(w.startingDate)}</td>
-                                    <th className="readonly-row-label">Ending Date</th>
-                                    <td>{w.endingDate || "—"}</td>
-                                  </tr>
-                                  <tr>
-                                    <th className="readonly-row-label">Mobile-1</th>
-                                    <td>{(w.mobile1)}</td>
-                                    <th className="readonly-row-label">Mobile-2</th>
-                                    <td>{w.mobile2 || "—"}</td>
-                                  </tr>
-                                  <tr>
-                                    <th className="readonly-row-label">Remarks</th>
-                                    <td colSpan={3}>{w.remarks || "—"}</td>
-                                  </tr>
-                                </tbody>
-                              </table>
+
+                              <div className="table-responsive">
+
+                                <table className="readonly-table mb-0">
+                                  <tbody>
+                                    <tr>
+                                      <th className="readonly-row-label">ID No</th>
+                                      <td>{w.workerIdNo || "—"}</td>
+                                      <th className="readonly-row-label">Name</th>
+                                      <td>{w.cName || "—"}</td>
+                                    </tr>
+                                    <tr>
+                                      <th className="readonly-row-label">Basic Salary</th>
+                                      <td>{formatINR(w.basicSalary)}</td>
+                                      <th className="readonly-row-label">Total Days</th>
+                                      <td>{w.totalDays || "—"}</td>
+                                    </tr>
+                                    <tr>
+                                      <th className="readonly-row-label">Starting Date</th>
+                                      <td>{(w.startingDate)}</td>
+                                      <th className="readonly-row-label">Ending Date</th>
+                                      <td>{w.endingDate || "—"}</td>
+                                    </tr>
+                                    <tr>
+                                      <th className="readonly-row-label">Mobile-1</th>
+                                      <td>{(w.mobile1)}</td>
+                                      <th className="readonly-row-label">Mobile-2</th>
+                                      <td>{w.mobile2 || "—"}</td>
+                                    </tr>
+                                    <tr>
+                                      <th className="readonly-row-label">Remarks</th>
+                                      <td colSpan={3}>{w.remarks || "—"}</td>
+                                    </tr>
+                                  </tbody>
+                                </table>
+                              </div>
                               <small className="small-text d-block text-primary mt-2">
                                 Added by {addedByDisplay} • {formatDDMMYY(addedAtDisplay)} {formatTime12h(addedAtDisplay)}
                               </small>
 
                             </>
+
                           )}
 
                           <div className="mt-2 d-flex justify-content-end">
@@ -1951,32 +1972,34 @@ const ClientModal = ({
                             ) : (
                               // view mode: show payment as read-only table
                               <>
-                                <table className="readonly-table mb-0">
-                                  <tbody>
-                                    <tr>
-                                      <th className="readonly-row-label">Method</th>
-                                      <td>{p.paymentMethod || "—"}</td>
-                                      <th className="readonly-row-label">Date</th>
-                                      <td>{p.date ? new Date(p.date).toLocaleDateString() : "—"}</td>
-                                    </tr>
-                                    <tr>
-                                      <th className="readonly-row-label">Paid Amount</th>
-                                      <td>{formatINR(p.paidAmount)}</td>
-                                      <th className="readonly-row-label">Balance</th>
-                                      <td>{formatINR(p.balance)}</td>
-                                    </tr>
-                                    <tr>
-                                      <th className="readonly-row-label">Receipt</th>
-                                      <td>{p.receptNo || "—"}</td>
-                                      <th className="readonly-row-label">Refund</th>
-                                      <td><span className="refund-amount">{p.refund ? formatINR(p.refundAmount) : "—"}</span></td>
-                                    </tr>
-                                    <tr>
-                                      <th className="readonly-row-label">Remarks</th>
-                                      <td colSpan={3}>{p.remarks || "—"}</td>
-                                    </tr>
-                                  </tbody>
-                                </table>
+                                <div className="table-responsive">
+                                  <table className="readonly-table mb-0">
+                                    <tbody>
+                                      <tr>
+                                        <th className="readonly-row-label">Method</th>
+                                        <td>{p.paymentMethod || "—"}</td>
+                                        <th className="readonly-row-label">Date</th>
+                                        <td>{p.date ? new Date(p.date).toLocaleDateString() : "—"}</td>
+                                      </tr>
+                                      <tr>
+                                        <th className="readonly-row-label">Paid Amount</th>
+                                        <td>{formatINR(p.paidAmount)}</td>
+                                        <th className="readonly-row-label">Balance</th>
+                                        <td>{formatINR(p.balance)}</td>
+                                      </tr>
+                                      <tr>
+                                        <th className="readonly-row-label">Receipt</th>
+                                        <td>{p.receptNo || "—"}</td>
+                                        <th className="readonly-row-label">Refund</th>
+                                        <td><span className="refund-amount">{p.refund ? formatINR(p.refundAmount) : "—"}</span></td>
+                                      </tr>
+                                      <tr>
+                                        <th className="readonly-row-label">Remarks</th>
+                                        <td colSpan={3}>{p.remarks || "—"}</td>
+                                      </tr>
+                                    </tbody>
+                                  </table>
+                                </div>
                                 <small className="small-text d-block text-primary mt-2">
                                   Added by {addedByDisplay} • {formatDDMMYY(addedAtDisplay)} {formatTime12h(addedAtDisplay)}
                                 </small>

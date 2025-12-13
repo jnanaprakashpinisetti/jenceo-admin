@@ -80,7 +80,8 @@ const ShareInvoice = ({
         
         return invoiceHistory.some(invoice => {
             return invoice.data.serviceDate === invoiceData.serviceDate &&
-                   invoice.clientId === client?.idNo;
+                   invoice.clientId === client?.idNo &&
+                   invoice.id !== editingInvoiceId; // Exclude current invoice being edited
         });
     };
 
@@ -1249,7 +1250,7 @@ const ShareInvoice = ({
                                     <td>{invoice.clientName}</td>
                                     <td className="text-success">
                                         <div>₹{formatAmount(invoiceTotal)}</div>
-                                        <small className="small-text text-warning">
+                                        <small className="text-muted">
                                             Base: ₹{formatAmount(invoice.data.invoiceAmount || client?.serviceCharges || 0)}
                                         </small>
                                     </td>
@@ -1410,19 +1411,6 @@ const ShareInvoice = ({
                     </div>
                 </div>
 
-                {/* Save Message Alert */}
-                {saveMessage.text && (
-                    <div className={`alert alert-${saveMessage.type === 'error' ? 'danger' : 'success'} alert-dismissible fade show`} role="alert">
-                        {saveMessage.type === 'error' ? (
-                            <i className="bi bi-exclamation-triangle-fill me-2"></i>
-                        ) : (
-                            <i className="bi bi-check-circle-fill me-2"></i>
-                        )}
-                        {saveMessage.text}
-                        <button type="button" className="btn-close" onClick={() => setSaveMessage({ type: '', text: '' })}></button>
-                    </div>
-                )}
-
                 {/* Tabs for Preview and History */}
                 <div className="border-bottom">
                     <ul className="nav nav-tabs">
@@ -1468,6 +1456,20 @@ const ShareInvoice = ({
                                     background: "white"
                                 }}
                             />
+                            
+                            {/* Moved Save Message Alert here - above the save button */}
+                            {saveMessage.text && (
+                                <div className={`alert alert-${saveMessage.type === 'error' ? 'danger' : 'success'} alert-dismissible fade show mt-3`} role="alert" style={{ maxWidth: '600px', margin: '15px auto' }}>
+                                    {saveMessage.type === 'error' ? (
+                                        <i className="bi bi-exclamation-triangle-fill me-2"></i>
+                                    ) : (
+                                        <i className="bi bi-check-circle-fill me-2"></i>
+                                    )}
+                                    {saveMessage.text}
+                                    <button type="button" className="btn-close" onClick={() => setSaveMessage({ type: '', text: '' })}></button>
+                                </div>
+                            )}
+                            
                             <div className="mt-3 text-center">
                                 <button
                                     type="button"
@@ -1511,7 +1513,21 @@ const ShareInvoice = ({
                             </div>
                         </>
                     ) : (
-                        <InvoiceHistoryTable />
+                        <>
+                            {/* Save Message for History Tab */}
+                            {saveMessage.text && (
+                                <div className={`alert alert-${saveMessage.type === 'error' ? 'danger' : 'success'} alert-dismissible fade show mb-3`} role="alert">
+                                    {saveMessage.type === 'error' ? (
+                                        <i className="bi bi-exclamation-triangle-fill me-2"></i>
+                                    ) : (
+                                        <i className="bi bi-check-circle-fill me-2"></i>
+                                    )}
+                                    {saveMessage.text}
+                                    <button type="button" className="btn-close" onClick={() => setSaveMessage({ type: '', text: '' })}></button>
+                                </div>
+                            )}
+                            <InvoiceHistoryTable />
+                        </>
                     )}
                 </div>
             </div>

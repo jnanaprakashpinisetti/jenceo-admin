@@ -21,6 +21,7 @@ const ShareInvoice = ({
         const savedCounter = localStorage.getItem(`invoiceCounter_${client?.idNo}`);
         return savedCounter ? parseInt(savedCounter) : 0;
     });
+    const [saveMessage, setSaveMessage] = useState({ type: '', text: '' });
 
     const [invoiceData, setInvoiceData] = useState({
         serviceDate: '',
@@ -32,6 +33,7 @@ const ShareInvoice = ({
         remarks: '',
         additionalComments: '',
         serviceRemarks: '',
+        nextPaymentDate: '' // NEW: Custom next payment date
     });
 
     const headerImage = "https://firebasestorage.googleapis.com/v0/b/jenceo-admin.firebasestorage.app/o/Shop-Images%2FJenCeo-Trades.svg?alt=media&token=da7ab6ec-826f-41b2-ba2a-0a7d0f405997";
@@ -58,11 +60,32 @@ const ShareInvoice = ({
     const calculateAutoFillDate = (serviceDate) => {
         if (!serviceDate) return '';
         const date = new Date(serviceDate);
-        date.setDate(date.getDate() + 30);
+        date.setDate(date.getDate() + 29);
         return date.toISOString().split('T')[0];
     };
 
+    const isDuplicateInvoice = (invoiceData) => {
+        // Check if an invoice with same details already exists
+        return invoiceHistory.some(invoice => {
+            return invoice.data.serviceDate === invoiceData.serviceDate &&
+                   parseFloat(invoice.data.invoiceAmount) === parseFloat(invoiceData.invoiceAmount || client?.serviceCharges || 0) &&
+                   invoice.data.gapIfAny === invoiceData.gapIfAny &&
+                   parseFloat(invoice.data.travelingCharges || 0) === parseFloat(invoiceData.travelingCharges || 0) &&
+                   parseFloat(invoice.data.extraCharges || 0) === parseFloat(invoiceData.extraCharges || 0);
+        });
+    };
+
     const saveInvoiceToHistory = () => {
+        // Check for duplicate invoice
+        if (isDuplicateInvoice(invoiceData)) {
+            setSaveMessage({
+                type: 'error',
+                text: 'This invoice already exists in history!'
+            });
+            setTimeout(() => setSaveMessage({ type: '', text: '' }), 20000);
+            return;
+        }
+
         const newInvoice = {
             id: Date.now(),
             invoiceNumber: generatedInvoiceNumber,
@@ -75,6 +98,13 @@ const ShareInvoice = ({
         };
 
         setInvoiceHistory(prev => [newInvoice, ...prev]);
+        
+        setSaveMessage({
+            type: 'success',
+            text: 'Invoice saved successfully to history!'
+        });
+        
+        setTimeout(() => setSaveMessage({ type: '', text: '' }), 3000);
     };
 
     const handleApplyCustomInvoice = (formData) => {
@@ -104,7 +134,7 @@ const ShareInvoice = ({
         if (lastPayment && lastPayment.date) {
             try {
                 const lastDate = new Date(lastPayment.date);
-                lastDate.setDate(lastDate.getDate() + 30);
+                lastDate.setDate(lastDate.getDate() + 29);
                 nextPaymentDate = lastDate;
             } catch (e) {
                 console.warn("Invalid last payment date:", lastPayment.date);
@@ -112,7 +142,7 @@ const ShareInvoice = ({
         } else if (client?.startingDate) {
             try {
                 const startDate = new Date(client.startingDate);
-                startDate.setDate(startDate.getDate() + 30);
+                startDate.setDate(startDate.getDate() + 29);
                 nextPaymentDate = startDate;
             } catch (e) {
                 console.warn("Invalid starting date:", client.startingDate);
@@ -191,54 +221,88 @@ const ShareInvoice = ({
             }
         };
 
+        // NEW: Responsive div-based layout instead of table
         return `
-            <div class="biodata-table-section" style="margin: 20px 0;">
+            <div class="biodata-section" style="margin: 20px 0;">
                 <h4 style="background: linear-gradient(135deg, #02acf2 0%, #0266f2 100%); color: white; padding: 12px 15px; margin: 0; font-size: 16px; border-radius: 5px 5px 0 0;">Client Details</h4>
-                <div class="table-responsive" style="overflow-x: auto; -webkit-overflow-scrolling: touch;">
-                    <table style="width: 100%; border-collapse: collapse; font-size: 12px; background: #f8f9fa; min-width: 600px;">
-                        <tbody>
-                            <!-- Basic Info -->
-                            <tr style="background: #e9ecef;">
-                                <td colspan="4" style="padding: 8px; font-weight: bold; border: 1px solid #dee2e6; color:#0266f2">Basic Information</td>
-                            </tr>
-                            <tr>
-                                <td style="width: 25%; padding: 8px; border: 1px solid #dee2e6; font-weight: bold; background: #f1f3f4;">ID No</td>
-                                <td style="width: 25%; padding: 8px; border: 1px solid #dee2e6;">${safe(client?.idNo)}</td>
-                                <td style="width: 25%; padding: 8px; border: 1px solid #dee2e6; font-weight: bold; background: #f1f3f4;">Client Name</td>
-                                <td style="width: 25%; padding: 8px; border: 1px solid #dee2e6;">${safe(client?.clientName)}</td>
-                            </tr>
-                            <tr>
-                                <td style="padding: 8px; border: 1px solid #dee2e6; font-weight: bold; background: #f1f3f4;">Mobile No 2</td>
-                                <td style="padding: 8px; border: 1px solid #dee2e6;">${safe(client?.mobileNo2)}</td>
-                                <td style="padding: 8px; border: 1px solid #dee2e6; font-weight: bold; background: #f1f3f4;">Gender</td>
-                                <td style="padding: 8px; border: 1px solid #dee2e6;">${safe(client?.gender)}</td>
-                            </tr>
-                            
-                            <!-- Service Details -->
-                            <tr style="background: #e9ecef;">
-                                <td colspan="4" style="padding: 8px; font-weight: bold; border: 1px solid #dee2e6; color:#0266f2">Service Details</td>
-                            </tr>
-                            <tr>
-                                <td style="padding: 8px; border: 1px solid #dee2e6; font-weight: bold; background: #f1f3f4;">Type of Service</td>
-                                <td style="padding: 8px; border: 1px solid #dee2e6;">${safe(client?.typeOfService)}</td>
-                                <td style="padding: 8px; border: 1px solid #dee2e6; font-weight: bold; background: #f1f3f4;">Service Charges</td>
-                                <td style="padding: 8px; border: 1px solid #dee2e6; color:#0266f2"><strong>${formatINR(client?.serviceCharges)}</strong> for 30 Days</td>
-                            </tr>
-                            <tr>
-                                <td style="padding: 8px; border: 1px solid #dee2e6; font-weight: bold; background: #f1f3f4;">Starting Date</td>
-                                <td style="padding: 8px; border: 1px solid #dee2e6;">${safe(client?.startingDate)}</td>
-                                <td style="padding: 8px; border: 1px solid #dee2e6; font-weight: bold; background: #f1f3f4;">Ending Date</td>
-                                <td style="padding: 8px; border: 1px solid #dee2e6;">${safe(client?.endingDate)}</td>
-                            </tr>
-                            <tr>
-                                <td style="padding: 8px; border: 1px solid #dee2e6; font-weight: bold; background: #f1f3f4;">Service Status</td>
-                                <td style="padding: 8px; border: 1px solid #dee2e6;">${safe(client?.serviceStatus)}</td>
-                                <td style="padding: 8px; border: 1px solid #dee2e6; font-weight: bold; background: #f1f3f4;">Dropper Name</td>
-                                <td style="padding: 8px; border: 1px solid #dee2e6;">${safe(client?.dropperName)}</td>
-                            </tr>
-                        </tbody>
-                    </table>
+                <div style="background: #f8f9fa; border: 1px solid #dee2e6; border-top: none; border-radius: 0 0 5px 5px; padding: 15px;">
+                    
+                    <!-- Basic Information Section -->
+                    <div class="section-header" style="background: #e9ecef; padding: 8px 12px; margin: -15px -15px 12px -15px; font-weight: bold; color: #0266f2; border-bottom: 1px solid #dee2e6;">
+                        Basic Information
+                    </div>
+                    
+                    <div class="grid-layout" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 12px; margin-bottom: 20px;">
+                        <div class="info-item" style="background: white; padding: 10px; border-radius: 6px; border: 1px solid #e5e5e5;">
+                            <div style="font-size: 11px; color: #666; margin-bottom: 4px;">ID No</div>
+                            <div style="font-weight: bold; color: #333;">${safe(client?.idNo)}</div>
+                        </div>
+                        <div class="info-item" style="background: white; padding: 10px; border-radius: 6px; border: 1px solid #e5e5e5;">
+                            <div style="font-size: 11px; color: #666; margin-bottom: 4px;">Client Name</div>
+                            <div style="font-weight: bold; color: #333;">${safe(client?.clientName)}</div>
+                        </div>
+                        <div class="info-item" style="background: white; padding: 10px; border-radius: 6px; border: 1px solid #e5e5e5;">
+                            <div style="font-size: 11px; color: #666; margin-bottom: 4px;">Mobile No 2</div>
+                            <div style="font-weight: bold; color: #333;">${safe(client?.mobileNo2)}</div>
+                        </div>
+                        <div class="info-item" style="background: white; padding: 10px; border-radius: 6px; border: 1px solid #e5e5e5;">
+                            <div style="font-size: 11px; color: #666; margin-bottom: 4px;">Gender</div>
+                            <div style="font-weight: bold; color: #333;">${safe(client?.gender)}</div>
+                        </div>
+                    </div>
+                    
+                    <!-- Service Details Section -->
+                    <div class="section-header" style="background: #e9ecef; padding: 8px 12px; margin: 0 -15px 12px -15px; font-weight: bold; color: #0266f2; border-bottom: 1px solid #dee2e6;">
+                        Service Details
+                    </div>
+                    
+                    <div class="grid-layout" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 12px;">
+                        <div class="info-item" style="background: white; padding: 10px; border-radius: 6px; border: 1px solid #e5e5e5;">
+                            <div style="font-size: 11px; color: #666; margin-bottom: 4px;">Type of Service</div>
+                            <div style="font-weight: bold; color: #333;">${safe(client?.typeOfService)}</div>
+                        </div>
+                        <div class="info-item" style="background: white; padding: 10px; border-radius: 6px; border: 1px solid #e5e5e5; background: linear-gradient(135deg, #f0f8ff 0%, #e6f2ff 100%);">
+                            <div style="font-size: 11px; color: #666; margin-bottom: 4px;">Service Charges</div>
+                            <div style="font-weight: bold; color: #0266f2; font-size: 14px;">${formatINR(client?.serviceCharges)} <span style="font-size: 10px; color: #666;">for 30 Days</span></div>
+                        </div>
+                        <div class="info-item" style="background: white; padding: 10px; border-radius: 6px; border: 1px solid #e5e5e5;">
+                            <div style="font-size: 11px; color: #666; margin-bottom: 4px;">Starting Date</div>
+                            <div style="font-weight: bold; color: #333;">${safe(client?.startingDate)}</div>
+                        </div>
+                        <div class="info-item" style="background: white; padding: 10px; border-radius: 6px; border: 1px solid #e5e5e5;">
+                            <div style="font-size: 11px; color: #666; margin-bottom: 4px;">Ending Date</div>
+                            <div style="font-weight: bold; color: #333;">${safe(client?.endingDate)}</div>
+                        </div>
+                        <div class="info-item" style="background: white; padding: 10px; border-radius: 6px; border: 1px solid #e5e5e5;">
+                            <div style="font-size: 11px; color: #666; margin-bottom: 4px;">Service Status</div>
+                            <div style="font-weight: bold; color: #333;">${safe(client?.serviceStatus)}</div>
+                        </div>
+                        <div class="info-item" style="background: white; padding: 10px; border-radius: 6px; border: 1px solid #e5e5e5;">
+                            <div style="font-size: 11px; color: #666; margin-bottom: 4px;">Dropper Name</div>
+                            <div style="font-weight: bold; color: #333;">${safe(client?.dropperName)}</div>
+                        </div>
+                    </div>
+                    
                 </div>
+                
+                <style>
+                    @media (max-width: 768px) {
+                        .grid-layout {
+                            grid-template-columns: 1fr !important;
+                        }
+                        .info-item {
+                            margin-bottom: 8px;
+                        }
+                        .biodata-section {
+                            margin: 15px 0 !important;
+                        }
+                    }
+                    @media (max-width: 480px) {
+                        .info-item {
+                            padding: 8px !important;
+                        }
+                    }
+                </style>
             </div>
         `;
     };
@@ -275,16 +339,22 @@ const ShareInvoice = ({
 
         // Use custom invoice data if available
         const gapInfo = invoiceData.gapIfAny || client?.gapIfAny || 'None';
-        const travelingCharges = invoiceData.travelingCharges ? formatINR(invoiceData.travelingCharges) : '₹0.00';
-        const extraCharges = invoiceData.extraCharges ? formatINR(invoiceData.extraCharges) : '₹0.00';
+        const travelingCharges = parseFloat(invoiceData.travelingCharges) || 0;
+        const extraCharges = parseFloat(invoiceData.extraCharges) || 0;
         const serviceDate = invoiceData.serviceDate ? formatDate(invoiceData.serviceDate) : startingDate;
         const autoFillDate = invoiceData.serviceDate ? formatDate(calculateAutoFillDate(invoiceData.serviceDate)) : (client?.startingDate ? formatDate(calculateAutoFillDate(client.startingDate)) : 'N/A');
         const invoiceDate = invoiceData.invoiceDate ? formatDate(invoiceData.invoiceDate) : currentDate;
-
-        // Calculate due amount
         const invoiceAmount = parseFloat(invoiceData.invoiceAmount) || parseFloat(client?.serviceCharges) || 0;
+        
+        // Calculate total amount (Invoice Amount + Traveling Charges + Extra Charges)
+        const totalAmount = invoiceAmount + travelingCharges + extraCharges;
+        
         const totalPaid = paymentDetails.totalPaid || 0;
-        const dueAmount = Math.max(0, invoiceAmount - totalPaid);
+        const dueAmount = Math.max(0, totalAmount - totalPaid);
+        
+        // Use custom next payment date if provided, otherwise use calculated one
+        const nextPaymentDate = invoiceData.nextPaymentDate ? formatDate(invoiceData.nextPaymentDate) : 
+                               (paymentDetails.nextPaymentDate ? formatDate(paymentDetails.nextPaymentDate.toISOString()) : 'N/A');
 
         // Build payment summary HTML
         const paymentSummaryHTML = paymentDetails.lastPayment ? `
@@ -329,13 +399,6 @@ const ShareInvoice = ({
             overflow-x: auto;
             -webkit-overflow-scrolling: touch;
             margin: 10px 0;
-        }
-        
-        .biodata-table-section table {
-            width: 100%;
-            border-collapse: collapse;
-            font-size: 12px;
-            min-width: 600px;
         }
         
         .custom-invoice-section {
@@ -416,19 +479,11 @@ const ShareInvoice = ({
         .payment-amount.service-charges {color: #ff922b}
         .payment-amount.total-paid {color: #cc5de8}
         
-        .biodata-table-section {
+        .biodata-section {
             margin: 15px 0;
             border: 1px solid #dee2e6;
             border-radius: 8px;
             overflow: hidden;
-        }
-        
-        .biodata-table-section h4 {
-            background: linear-gradient(135deg, #02acf2 0%, #0266f2 100%);
-            color: white;
-            padding: 10px 12px;
-            margin: 0;
-            font-size: 14px;
         }
         
         .thank-you {
@@ -458,6 +513,45 @@ const ShareInvoice = ({
             font-size: 11px; 
             line-height: 1.5; 
             color: #555
+        }
+        
+        /* Total amount section */
+        .total-amount-section {
+            margin-top: 15px;
+            padding: 15px;
+            background: linear-gradient(135deg, #fff5f5 0%, #ffecec 100%);
+            border-radius: 8px;
+            border: 2px solid #ff6b6b;
+        }
+        
+        .total-amount-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+        }
+        
+        .total-item {
+            padding: 10px;
+            background: white;
+            border-radius: 6px;
+            text-align: center;
+        }
+        
+        .total-label {
+            font-size: 12px;
+            color: #666;
+            margin-bottom: 5px;
+        }
+        
+        .total-value {
+            font-size: 18px;
+            font-weight: bold;
+        }
+        
+        .grand-total {
+            font-size: 22px;
+            font-weight: bold;
+            color: #ff6b6b;
         }
         
         /* Save button styles */
@@ -520,6 +614,7 @@ const ShareInvoice = ({
                 gap: 4px;
             }
             .footer div { margin: 2px 0; }
+            .total-amount-grid { grid-template-columns: 1fr; }
         }
         
         @media only screen and (max-width: 480px) {
@@ -536,6 +631,12 @@ const ShareInvoice = ({
             }
             .thank-you h3 {
                 font-size: 16px;
+            }
+            .total-item {
+                padding: 8px;
+            }
+            .grand-total {
+                font-size: 18px;
             }
         }
     </style>
@@ -572,7 +673,7 @@ const ShareInvoice = ({
                 
                 <div class="payment-card next-payment">
                     <div class="payment-label">Next Payment Due</div>
-                    <div class="payment-amount next-payment">${paymentDetails.nextPaymentDate ? formatDate(paymentDetails.nextPaymentDate.toISOString()) : 'N/A'}</div>
+                    <div class="payment-amount next-payment">${nextPaymentDate}</div>
                     <small class="muted">Every 30 days Cycle</small>
                 </div>
             </div>
@@ -598,7 +699,7 @@ const ShareInvoice = ({
                     </div>
                     <div class="custom-invoice-item">
                         <div class="custom-invoice-label">Invoice Amount</div>
-                        <div class="custom-invoice-value" style="color: red; font-weight: bold;">${formatINR(invoiceAmount)}</div>
+                        <div class="custom-invoice-value" style="color: #0266f2; font-weight: bold;">${formatINR(invoiceAmount)}</div>
                     </div>
                     <div class="custom-invoice-item">
                         <div class="custom-invoice-label">Gap if Any</div>
@@ -606,11 +707,15 @@ const ShareInvoice = ({
                     </div>
                     <div class="custom-invoice-item">
                         <div class="custom-invoice-label">Traveling Charges</div>
-                        <div class="custom-invoice-value" style="color: #0266f2;">${travelingCharges}</div>
+                        <div class="custom-invoice-value" style="color: #0266f2;">${formatINR(travelingCharges)}</div>
                     </div>
                     <div class="custom-invoice-item">
                         <div class="custom-invoice-label">Extra Charges</div>
-                        <div class="custom-invoice-value" style="color: #0266f2;">${extraCharges}</div>
+                        <div class="custom-invoice-value" style="color: #0266f2;">${formatINR(extraCharges)}</div>
+                    </div>
+                    <div class="custom-invoice-item">
+                        <div class="total-label">Grand Total</div>
+                        <div class="total-value grand-total">${formatINR(totalAmount)}</div>
                     </div>
                 </div>
                 ${invoiceData.remarks ? `
@@ -723,17 +828,23 @@ const ShareInvoice = ({
     const handleShareToWhatsApp = () => {
         saveInvoiceToHistory();
         const invoiceAmount = parseFloat(invoiceData.invoiceAmount) || parseFloat(client?.serviceCharges) || 0;
+        const travelingCharges = parseFloat(invoiceData.travelingCharges) || 0;
+        const extraCharges = parseFloat(invoiceData.extraCharges) || 0;
+        const totalAmount = invoiceAmount + travelingCharges + extraCharges;
         const totalPaid = paymentDetails.totalPaid || 0;
-        const dueAmount = Math.max(0, invoiceAmount - totalPaid);
+        const dueAmount = Math.max(0, totalAmount - totalPaid);
 
         const message = `*Invoice Details*\n\n` +
             `*Client:* ${client?.clientName || 'N/A'}\n` +
             `*Invoice Number:* ${generatedInvoiceNumber}\n` +
             `*Invoice Amount:* ₹${formatAmount(invoiceAmount)}\n` +
+            `*Traveling Charges:* ₹${formatAmount(travelingCharges)}\n` +
+            `*Extra Charges:* ₹${formatAmount(extraCharges)}\n` +
+            `*Total Amount:* ₹${formatAmount(totalAmount)}\n` +
             `*Total Paid:* ₹${formatAmount(totalPaid)}\n` +
             `*Due Amount:* ₹${formatAmount(dueAmount)}\n` +
             `*Last Payment:* ${paymentDetails.lastPayment ? `₹${formatAmount(paymentDetails.lastPayment.amount)} on ${formatDate(paymentDetails.lastPayment.date)}` : 'No payments'}\n` +
-            `*Next Payment Due:* ${paymentDetails.nextPaymentDate ? formatDate(paymentDetails.nextPaymentDate.toISOString()) : 'N/A'}\n` +
+            `*Next Payment Due:* ${invoiceData.nextPaymentDate ? formatDate(invoiceData.nextPaymentDate) : (paymentDetails.nextPaymentDate ? formatDate(paymentDetails.nextPaymentDate.toISOString()) : 'N/A')}\n` +
             `*Generated Date:* ${new Date().toLocaleDateString()}\n\n` +
             `Thank you for your trust in our services!`;
 
@@ -775,11 +886,14 @@ const ShareInvoice = ({
         const handleServiceDateChange = (e) => {
             const serviceDate = e.target.value;
             const autoFillDate = calculateAutoFillDate(serviceDate);
+            const nextPaymentDate = new Date(autoFillDate);
+            nextPaymentDate.setDate(nextPaymentDate.getDate() + 1);
 
             setFormData(prev => ({
                 ...prev,
                 serviceDate,
-                autoFillDate
+                autoFillDate,
+                nextPaymentDate: nextPaymentDate.toISOString().split('T')[0]
             }));
         };
 
@@ -797,6 +911,16 @@ const ShareInvoice = ({
 
         const calculateFormAutoFillDate = () => {
             return formData.serviceDate ? calculateAutoFillDate(formData.serviceDate) : '';
+        };
+
+        const calculateNextPaymentDate = () => {
+            const autoFillDate = calculateFormAutoFillDate();
+            if (autoFillDate) {
+                const nextDate = new Date(autoFillDate);
+                nextDate.setDate(nextDate.getDate() + 1);
+                return nextDate.toISOString().split('T')[0];
+            }
+            return '';
         };
 
         return (
@@ -859,7 +983,21 @@ const ShareInvoice = ({
                                         Default: ₹{formatAmount(parseFloat(client?.serviceCharges) || 0)}
                                     </small>
                                 </div>
-                                <div className="col-md-4">
+                                <div className="col-md-6">
+                                    <label className="form-label"><strong>Next Payment Due Date</strong></label>
+                                    <input
+                                        type="date"
+                                        className="form-control"
+                                        name="nextPaymentDate"
+                                        value={formData.nextPaymentDate || calculateNextPaymentDate()}
+                                        onChange={handleInputChange}
+                                        placeholder="Select next payment due date"
+                                    />
+                                    <small className="form-text small-text">
+                                        Default: Day after auto-fill date
+                                    </small>
+                                </div>
+                                <div className="col-md-6">
                                     <label className="form-label"><strong>Gap if any</strong></label>
                                     <input
                                         type="text"
@@ -870,7 +1008,7 @@ const ShareInvoice = ({
                                         placeholder="Enter any service gaps..."
                                     />
                                 </div>
-                                <div className="col-md-4">
+                                <div className="col-md-6">
                                     <label className="form-label"><strong>Traveling Charges (₹)</strong></label>
                                     <input
                                         type="number"
@@ -882,7 +1020,7 @@ const ShareInvoice = ({
                                         step="0.01"
                                     />
                                 </div>
-                                <div className="col-md-4">
+                                <div className="col-md-6">
                                     <label className="form-label"><strong>Extra Charges (₹)</strong></label>
                                     <input
                                         type="number"
@@ -894,7 +1032,6 @@ const ShareInvoice = ({
                                         step="0.01"
                                     />
                                 </div>
-
                                 <div className="col-md-6">
                                     <label className="form-label"><strong>Additional Comments</strong></label>
                                     <textarea
@@ -1064,6 +1201,19 @@ const ShareInvoice = ({
                         </button>
                     </div>
                 </div>
+
+                {/* Save Message Alert */}
+                {saveMessage.text && (
+                    <div className={`alert alert-${saveMessage.type === 'error' ? 'danger' : 'success'} alert-dismissible fade show`} role="alert">
+                        {saveMessage.type === 'error' ? (
+                            <i className="bi bi-exclamation-triangle-fill me-2"></i>
+                        ) : (
+                            <i className="bi bi-check-circle-fill me-2"></i>
+                        )}
+                        {saveMessage.text}
+                        <button type="button" className="btn-close" onClick={() => setSaveMessage({ type: '', text: '' })}></button>
+                    </div>
+                )}
 
                 {/* Tabs for Preview and History */}
                 <div className="border-bottom">

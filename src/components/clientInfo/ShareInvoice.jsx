@@ -15,13 +15,22 @@ const ShareInvoice = ({
         const savedHistory = localStorage.getItem(`invoiceHistory_${client?.idNo}`);
         return savedHistory ? JSON.parse(savedHistory) : [];
     });
-    const [activeTab, setActiveTab] = useState('preview'); // 'preview' or 'history'
+    const [deletedInvoices, setDeletedInvoices] = useState(() => {
+        // Load deleted invoices from localStorage
+        const savedDeleted = localStorage.getItem(`deletedInvoices_${client?.idNo}`);
+        return savedDeleted ? JSON.parse(savedDeleted) : [];
+    });
+    const [activeTab, setActiveTab] = useState('preview'); // 'preview', 'history', or 'deleted'
     const [invoiceCounter, setInvoiceCounter] = useState(() => {
         // Load counter from localStorage
         const savedCounter = localStorage.getItem(`invoiceCounter_${client?.idNo}`);
         return savedCounter ? parseInt(savedCounter) : 0;
     });
     const [saveMessage, setSaveMessage] = useState({ type: '', text: '' });
+    const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+    const [invoiceToDelete, setInvoiceToDelete] = useState(null);
+    const [showRestoreConfirm, setShowRestoreConfirm] = useState(false);
+    const [invoiceToRestore, setInvoiceToRestore] = useState(null);
 
     const [invoiceData, setInvoiceData] = useState({
         serviceDate: '',
@@ -46,8 +55,9 @@ const ShareInvoice = ({
     useEffect(() => {
         if (client?.idNo) {
             localStorage.setItem(`invoiceHistory_${client.idNo}`, JSON.stringify(invoiceHistory));
+            localStorage.setItem(`deletedInvoices_${client.idNo}`, JSON.stringify(deletedInvoices));
         }
-    }, [invoiceHistory, client]);
+    }, [invoiceHistory, deletedInvoices, client]);
 
     // Save counter to localStorage whenever it changes
     useEffect(() => {
@@ -101,13 +111,14 @@ const ShareInvoice = ({
             // Update existing invoice
             setInvoiceHistory(prev => prev.map(invoice => {
                 if (invoice.id === editingInvoiceId) {
-                    return {
+                    const updatedInvoice = {
                         ...invoice,
                         amount: totalAmount,
                         data: { ...invoiceData },
                         paymentDetails: { ...paymentDetails },
                         updatedAt: new Date().toISOString().split('T')[0]
                     };
+                    return updatedInvoice;
                 }
                 return invoice;
             }));
@@ -117,6 +128,14 @@ const ShareInvoice = ({
                 text: 'Invoice updated successfully!'
             });
             setTimeout(() => setSaveMessage({ type: '', text: '' }), 3000);
+            
+            // Refresh the preview after update
+            setTimeout(() => {
+                if (iframeRef.current) {
+                    iframeRef.current.srcdoc = buildInvoiceHTML();
+                }
+            }, 100);
+            
             return;
         }
 
@@ -140,7 +159,10 @@ const ShareInvoice = ({
             data: { ...invoiceData },
             paymentDetails: { ...paymentDetails },
             createdAt: new Date().toISOString().split('T')[0],
-            updatedAt: new Date().toISOString().split('T')[0]
+            updatedAt: new Date().toISOString().split('T')[0],
+            isDeleted: false,
+            deletedAt: null,
+            deletedBy: null
         };
 
         setInvoiceHistory(prev => [newInvoice, ...prev]);
@@ -150,7 +172,7 @@ const ShareInvoice = ({
             text: 'Invoice saved successfully to history!'
         });
         
-        setTimeout(() => setSaveMessage({ type: '', text: '' }), 3000);
+        setTimeout(() => setSaveMessage({ type: '', text: '' }), 5000);
     };
 
     const handleApplyCustomInvoice = (formData) => {
@@ -169,6 +191,7 @@ const ShareInvoice = ({
         
         setShowCustomInvoiceForm(false);
 
+        // Immediately update the preview
         setTimeout(() => {
             if (iframeRef.current) {
                 iframeRef.current.srcdoc = buildInvoiceHTML();
@@ -267,6 +290,22 @@ const ShareInvoice = ({
         try {
             const date = new Date(dateString);
             return date.toLocaleDateString('en-IN');
+        } catch (error) {
+            return dateString;
+        }
+    };
+
+    const formatDateTime = (dateString) => {
+        if (!dateString) return 'N/A';
+        try {
+            const date = new Date(dateString);
+            return date.toLocaleString('en-IN', {
+                day: '2-digit',
+                month: 'short',
+                year: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit'
+            });
         } catch (error) {
             return dateString;
         }
@@ -934,6 +973,70 @@ const ShareInvoice = ({
         window.open(whatsappUrl, '_blank');
     };
 
+    // Handle delete invoice with confirmation
+    const handleDeleteInvoice = (invoice) => {
+        setInvoiceToDelete(invoice);
+        setShowDeleteConfirm(true);
+    };
+
+    // Confirm delete invoice
+    const confirmDeleteInvoice = () => {
+        if (invoiceToDelete) {
+            // Perform soft delete
+            const updatedInvoice = {
+                ...invoiceToDelete,
+                isDeleted: true,
+                deletedAt: new Date().toISOString(),
+                deletedBy: 'User'
+            };
+
+            // Remove from history and add to deleted invoices
+            setInvoiceHistory(prev => prev.filter(inv => inv.id !== invoiceToDelete.id));
+            setDeletedInvoices(prev => [updatedInvoice, ...prev]);
+
+            setSaveMessage({
+                type: 'success',
+                text: `Invoice #${invoiceToDelete.invoiceNumber} moved to deleted invoices.`
+            });
+            setTimeout(() => setSaveMessage({ type: '', text: '' }), 5000);
+        }
+        
+        setShowDeleteConfirm(false);
+        setInvoiceToDelete(null);
+    };
+
+    // Handle restore invoice with confirmation
+    const handleRestoreInvoice = (invoice) => {
+        setInvoiceToRestore(invoice);
+        setShowRestoreConfirm(true);
+    };
+
+    // Confirm restore invoice
+    const confirmRestoreInvoice = () => {
+        if (invoiceToRestore) {
+            // Perform restore
+            const restoredInvoice = {
+                ...invoiceToRestore,
+                isDeleted: false,
+                deletedAt: null,
+                deletedBy: null
+            };
+
+            // Remove from deleted and add back to history
+            setDeletedInvoices(prev => prev.filter(inv => inv.id !== invoiceToRestore.id));
+            setInvoiceHistory(prev => [restoredInvoice, ...prev]);
+
+            setSaveMessage({
+                type: 'success',
+                text: `Invoice #${invoiceToRestore.invoiceNumber} restored successfully.`
+            });
+            setTimeout(() => setSaveMessage({ type: '', text: '' }), 5000);
+        }
+        
+        setShowRestoreConfirm(false);
+        setInvoiceToRestore(null);
+    };
+
     // Handle message from iframe for saving invoice
     useEffect(() => {
         const handleMessage = (event) => {
@@ -962,6 +1065,119 @@ const ShareInvoice = ({
             setEditingInvoiceId(null);
         }
     }, [showInvoiceModal]);
+
+    // Delete Confirmation Modal
+    const DeleteConfirmationModal = () => (
+        <div className="modal fade show" style={{ display: 'block', backgroundColor: 'rgba(0,0,0,0.9)', zIndex: 1070 }}>
+            <div className="modal-dialog modal-dialog-centered">
+                <div className="modal-content">
+                    <div className="modal-header bg-danger text-white">
+                        <h5 className="modal-title">
+                            <i className="bi bi-exclamation-triangle me-2"></i>
+                            Confirm Delete
+                        </h5>
+                    </div>
+                    <div className="modal-body">
+                        <div className="alert alert-danger">
+                            <i className="bi bi-exclamation-triangle-fill me-2"></i>
+                            <strong>Warning!</strong> Are you sure you want to delete this invoice?
+                        </div>
+                        
+                        {invoiceToDelete && (
+                            <div className="card">
+                                <div className="card-body">
+                                    <h6 className="card-title">Invoice Details</h6>
+                                    <p className="card-text mb-1"><strong>Invoice #:</strong> {invoiceToDelete.invoiceNumber}</p>
+                                    <p className="card-text mb-1"><strong>Client:</strong> {invoiceToDelete.clientName}</p>
+                                    <p className="card-text mb-1"><strong>Amount:</strong> ₹{formatAmount(invoiceToDelete.amount)}</p>
+                                    <p className="card-text mb-0"><strong>Service Date:</strong> {formatDate(invoiceToDelete.data.serviceDate)}</p>
+                                </div>
+                            </div>
+                        )}
+                        
+                        <div className="alert alert-info mt-3 text-info">
+                            <i className="bi bi-info-circle me-2"></i>
+                            <strong>Note:</strong> This will move the invoice to the deleted archive. You can restore it later if needed.
+                        </div>
+                    </div>
+                    <div className="modal-footer">
+                        <button
+                            type="button"
+                            className="btn btn-secondary"
+                            onClick={() => {
+                                setShowDeleteConfirm(false);
+                                setInvoiceToDelete(null);
+                            }}
+                        >
+                            Cancel
+                        </button>
+                        <button
+                            type="button"
+                            className="btn btn-danger"
+                            onClick={confirmDeleteInvoice}
+                        >
+                            <i className="bi bi-trash me-1"></i>
+                            Delete Invoice
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+
+    // Restore Confirmation Modal
+    const RestoreConfirmationModal = () => (
+        <div className="modal fade show" style={{ display: 'block', backgroundColor: 'rgba(0,0,0,0.9)', zIndex: 1070 }}>
+            <div className="modal-dialog modal-dialog-centered">
+                <div className="modal-content">
+                    <div className="modal-header bg-success text-white">
+                        <h5 className="modal-title">
+                            <i className="bi bi-check-circle me-2"></i>
+                            Confirm Restore
+                        </h5>
+                    </div>
+                    <div className="modal-body">
+                        <div className="alert alert-success">
+                            <i className="bi bi-check-circle-fill me-2"></i>
+                            <strong>Restore Invoice</strong> Are you sure you want to restore this invoice?
+                        </div>
+                        
+                        {invoiceToRestore && (
+                            <div className="card">
+                                <div className="card-body">
+                                    <h6 className="card-title">Invoice Details</h6>
+                                    <p className="card-text mb-1"><strong>Invoice #:</strong> {invoiceToRestore.invoiceNumber}</p>
+                                    <p className="card-text mb-1"><strong>Client:</strong> {invoiceToRestore.clientName}</p>
+                                    <p className="card-text mb-1"><strong>Amount:</strong> ₹{formatAmount(invoiceToRestore.amount)}</p>
+                                    <p className="card-text mb-0"><strong>Deleted On:</strong> {formatDate(invoiceToRestore.deletedAt)}</p>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                    <div className="modal-footer">
+                        <button
+                            type="button"
+                            className="btn btn-secondary"
+                            onClick={() => {
+                                setShowRestoreConfirm(false);
+                                setInvoiceToRestore(null);
+                            }}
+                        >
+                            Cancel
+                        </button>
+                        <button
+                            type="button"
+                            className="btn btn-success"
+                            onClick={confirmRestoreInvoice}
+                        >
+                            <i className="bi bi-arrow-counterclockwise me-1"></i>
+                            Restore Invoice
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
 
     // Custom Invoice Form Component
     const CustomInvoiceForm = ({ invoiceData, onApply, onClose }) => {
@@ -1068,9 +1284,9 @@ const ShareInvoice = ({
                                         required
                                     />
                                     {existingInvoice && (
-                                        <small className="form-text text-info">
+                                        <small className="form-text text-danger text-bold">
                                             <i className="bi bi-exclamation-triangle me-1"></i>
-                                            Invoice for this date already exists. Editing will update it.
+                                            <strong>Invoice for this date already exists. Editing will update it.</strong>
                                         </small>
                                     )}
                                 </div>
@@ -1208,26 +1424,6 @@ const ShareInvoice = ({
     // Invoice History Table Component
     const InvoiceHistoryTable = () => (
         <div className="invoice-history-table p-3">
-            <div className="d-flex justify-content-between align-items-center mb-3">
-                <h5 className="mb-0">Invoice History ({invoiceHistory.length})</h5>
-                {invoiceHistory.length > 0 && (
-                    <button
-                        className="btn btn-sm btn-outline-secondary"
-                        onClick={() => {
-                            localStorage.removeItem(`invoiceHistory_${client?.idNo}`);
-                            setInvoiceHistory([]);
-                            setSaveMessage({
-                                type: 'success',
-                                text: 'Invoice history cleared successfully!'
-                            });
-                            setTimeout(() => setSaveMessage({ type: '', text: '' }), 3000);
-                        }}
-                    >
-                        <i className="bi bi-trash me-1"></i>
-                        Clear History
-                    </button>
-                )}
-            </div>
             <div className="table-responsive" style={{ maxHeight: '500px', overflowY: 'auto' }}>
                 <table className="table table-sm table-hover" style={{ fontSize: '12px' }}>
                     <thead className="table-light" style={{ position: 'sticky', top: 0, zIndex: 1 }}>
@@ -1237,6 +1433,7 @@ const ShareInvoice = ({
                             <th>Client</th>
                             <th>Amount</th>
                             <th>Service Date</th>
+                            <th>Status</th>
                             <th>Actions</th>
                         </tr>
                     </thead>
@@ -1250,11 +1447,14 @@ const ShareInvoice = ({
                                     <td>{invoice.clientName}</td>
                                     <td className="text-success">
                                         <div>₹{formatAmount(invoiceTotal)}</div>
-                                        <small className="text-muted">
+                                        <small className="small-text text-warning">
                                             Base: ₹{formatAmount(invoice.data.invoiceAmount || client?.serviceCharges || 0)}
                                         </small>
                                     </td>
                                     <td>{formatDate(invoice.data.serviceDate)}</td>
+                                    <td>
+                                        <span className="badge bg-success">Active</span>
+                                    </td>
                                     <td>
                                         <button
                                             className="btn btn-sm btn-outline-primary me-1"
@@ -1263,7 +1463,6 @@ const ShareInvoice = ({
                                                 setIsEditingExisting(true);
                                                 setEditingInvoiceId(invoice.id);
                                                 setActiveTab('preview');
-                                                // Force rebuild of iframe with the selected invoice data
                                                 setTimeout(() => {
                                                     if (iframeRef.current) {
                                                         iframeRef.current.srcdoc = buildInvoiceHTML();
@@ -1286,14 +1485,7 @@ const ShareInvoice = ({
                                         </button>
                                         <button
                                             className="btn btn-sm btn-outline-danger"
-                                            onClick={() => {
-                                                setInvoiceHistory(prev => prev.filter(inv => inv.id !== invoice.id));
-                                                setSaveMessage({
-                                                    type: 'success',
-                                                    text: 'Invoice deleted successfully!'
-                                                });
-                                                setTimeout(() => setSaveMessage({ type: '', text: '' }), 3000);
-                                            }}
+                                            onClick={() => handleDeleteInvoice(invoice)}
                                             title="Delete this invoice"
                                         >
                                             <i className="bi bi-trash"></i>
@@ -1304,7 +1496,7 @@ const ShareInvoice = ({
                         })}
                         {invoiceHistory.length === 0 && (
                             <tr>
-                                <td colSpan="6" className="text-center text-muted py-4">
+                                <td colSpan="7" className="text-center small-text text-warning py-4">
                                     <i className="bi bi-receipt me-2"></i>
                                     No invoices generated yet
                                 </td>
@@ -1316,11 +1508,95 @@ const ShareInvoice = ({
         </div>
     );
 
+    // Deleted Invoices Table Component
+    const DeletedInvoicesTable = () => (
+        <div className="deleted-invoices-table p-3">
+            <div className="alert alert-warning mb-3">
+                <i className="bi bi-exclamation-triangle-fill me-2"></i>
+                <strong>Deleted Invoices Archive</strong> - These invoices have been soft-deleted and can be restored.
+            </div>
+            
+            <div className="table-responsive" style={{ maxHeight: '500px', overflowY: 'auto' }}>
+                <table className="table table-sm table-hover" style={{ fontSize: '12px' }}>
+                    <thead className="table-light" style={{ position: 'sticky', top: 0, zIndex: 1 }}>
+                        <tr>
+                            <th>Invoice #</th>
+                            <th>Date</th>
+                            <th>Client</th>
+                            <th>Amount</th>
+                            <th>Service Date</th>
+                            <th>Deleted On</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {deletedInvoices.map((invoice) => {
+                            const invoiceTotal = calculateTotalAmount(invoice.data);
+                            return (
+                                <tr key={invoice.id} className="table-secondary">
+                                    <td><strong>{invoice.invoiceNumber}</strong></td>
+                                    <td>{formatDate(invoice.date)}</td>
+                                    <td>{invoice.clientName}</td>
+                                    <td className="text-success">
+                                        <div>₹{formatAmount(invoiceTotal)}</div>
+                                        <small className="small-text text-warning">
+                                            Base: ₹{formatAmount(invoice.data.invoiceAmount || client?.serviceCharges || 0)}
+                                        </small>
+                                    </td>
+                                    <td>{formatDate(invoice.data.serviceDate)}</td>
+                                    <td>
+                                        <div>{formatDate(invoice.deletedAt)}</div>
+                                        <small className="small-text">By: {invoice.deletedBy || 'User'}</small>
+                                    </td>
+                                    <td>
+                                        <button
+                                            className="btn btn-sm btn-outline-success me-1"
+                                            onClick={() => handleRestoreInvoice(invoice)}
+                                            title="Restore this invoice"
+                                        >
+                                            <i className="bi bi-arrow-counterclockwise"></i>
+                                        </button>
+                                        <button
+                                            className="btn btn-sm btn-outline-info"
+                                            onClick={() => {
+                                                setInvoiceData(invoice.data);
+                                                handleDownloadInvoice();
+                                            }}
+                                            title="Download this invoice"
+                                        >
+                                            <i className="bi bi-download"></i>
+                                        </button>
+                                    </td>
+                                </tr>
+                            );
+                        })}
+                        {deletedInvoices.length === 0 && (
+                            <tr>
+                                <td colSpan="7" className="text-center small-text text-warning py-4">
+                                    <i className="bi bi-trash me-2"></i>
+                                    No deleted invoices found
+                                </td>
+                            </tr>
+                        )}
+                    </tbody>
+                </table>
+            </div>
+            
+            {deletedInvoices.length > 0 && (
+                <div className="alert alert-info mt-3 text-info">
+                    <i className="bi bi-info-circle me-2"></i>
+                    <strong>Note:</strong> {deletedInvoices.length} invoice(s) in deleted archive. 
+                    These are soft-deleted and can be restored if needed.
+                </div>
+            )}
+        </div>
+    );
+
     if (!showInvoiceModal) {
         return (
             <div className="text-center p-4">
                 <h5 className="mb-3">Invoice Generation</h5>
-                <p className="text-muted mb-4">Generate and share invoice for this client</p>
+                <p className="small-text text-warning mb-4">Generate and share invoice for this client</p>
                 <button
                     type="button"
                     className="btn btn-primary btn-lg"
@@ -1335,6 +1611,9 @@ const ShareInvoice = ({
 
     return (
         <>
+            {showDeleteConfirm && <DeleteConfirmationModal />}
+            {showRestoreConfirm && <RestoreConfirmationModal />}
+            
             {showCustomInvoiceForm && (
                 <CustomInvoiceForm
                     invoiceData={invoiceData}
@@ -1411,7 +1690,7 @@ const ShareInvoice = ({
                     </div>
                 </div>
 
-                {/* Tabs for Preview and History */}
+                {/* Tabs for Preview, History, and Deleted */}
                 <div className="border-bottom">
                     <ul className="nav nav-tabs">
                         <li className="nav-item">
@@ -1437,6 +1716,19 @@ const ShareInvoice = ({
                             >
                                 <i className="bi bi-clock-history me-1"></i>
                                 History ({invoiceHistory.length})
+                            </button>
+                        </li>
+                        <li className="nav-item">
+                            <button
+                                className={`nav-link ${activeTab === 'deleted' ? 'active' : ''}`}
+                                onClick={() => {
+                                    setActiveTab('deleted');
+                                    setIsEditingExisting(false);
+                                    setEditingInvoiceId(null);
+                                }}
+                            >
+                                <i className="bi bi-trash me-1"></i>
+                                Deleted ({deletedInvoices.length})
                             </button>
                         </li>
                     </ul>
@@ -1512,7 +1804,7 @@ const ShareInvoice = ({
                                 )}
                             </div>
                         </>
-                    ) : (
+                    ) : activeTab === 'history' ? (
                         <>
                             {/* Save Message for History Tab */}
                             {saveMessage.text && (
@@ -1527,6 +1819,22 @@ const ShareInvoice = ({
                                 </div>
                             )}
                             <InvoiceHistoryTable />
+                        </>
+                    ) : (
+                        <>
+                            {/* Save Message for Deleted Tab */}
+                            {saveMessage.text && (
+                                <div className={`alert alert-${saveMessage.type === 'error' ? 'danger' : 'success'} alert-dismissible fade show mb-3`} role="alert">
+                                    {saveMessage.type === 'error' ? (
+                                        <i className="bi bi-exclamation-triangle-fill me-2"></i>
+                                    ) : (
+                                        <i className="bi bi-check-circle-fill me-2"></i>
+                                    )}
+                                    {saveMessage.text}
+                                    <button type="button" className="btn-close" onClick={() => setSaveMessage({ type: '', text: '' })}></button>
+                                </div>
+                            )}
+                            <DeletedInvoicesTable />
                         </>
                     )}
                 </div>

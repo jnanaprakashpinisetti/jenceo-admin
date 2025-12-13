@@ -36,6 +36,9 @@ const ShareInvoice = ({
         nextPaymentDate: '' // NEW: Custom next payment date
     });
 
+    const [isEditingExisting, setIsEditingExisting] = useState(false);
+    const [editingInvoiceId, setEditingInvoiceId] = useState(null);
+
     const headerImage = "https://firebasestorage.googleapis.com/v0/b/jenceo-admin.firebasestorage.app/o/Shop-Images%2FJenCeo-Trades.svg?alt=media&token=da7ab6ec-826f-41b2-ba2a-0a7d0f405997";
     const defaultCustomerPhoto = "https://firebasestorage.googleapis.com/v0/b/jenceo-admin.firebasestorage.app/o/OfficeFiles%2FSample-Photo.jpg?alt=media&token=01855b47-c9c2-490e-b400-05851192dde7";
 
@@ -64,25 +67,65 @@ const ShareInvoice = ({
         return date.toISOString().split('T')[0];
     };
 
+    const calculateTotalAmount = (data) => {
+        const invoiceAmount = parseFloat(data.invoiceAmount) || parseFloat(client?.serviceCharges) || 0;
+        const travelingCharges = parseFloat(data.travelingCharges) || 0;
+        const extraCharges = parseFloat(data.extraCharges) || 0;
+        return invoiceAmount + travelingCharges + extraCharges;
+    };
+
     const isDuplicateInvoice = (invoiceData) => {
-        // Check if an invoice with same details already exists
+        // Only check for duplicate based on service date
+        if (!invoiceData.serviceDate) return false;
+        
         return invoiceHistory.some(invoice => {
             return invoice.data.serviceDate === invoiceData.serviceDate &&
-                   parseFloat(invoice.data.invoiceAmount) === parseFloat(invoiceData.invoiceAmount || client?.serviceCharges || 0) &&
-                   invoice.data.gapIfAny === invoiceData.gapIfAny &&
-                   parseFloat(invoice.data.travelingCharges || 0) === parseFloat(invoiceData.travelingCharges || 0) &&
-                   parseFloat(invoice.data.extraCharges || 0) === parseFloat(invoiceData.extraCharges || 0);
+                   invoice.clientId === client?.idNo;
         });
     };
 
+    const findExistingInvoiceByServiceDate = (serviceDate) => {
+        if (!serviceDate) return null;
+        return invoiceHistory.find(invoice => 
+            invoice.data.serviceDate === serviceDate && 
+            invoice.clientId === client?.idNo
+        );
+    };
+
     const saveInvoiceToHistory = () => {
-        // Check for duplicate invoice
+        const totalAmount = calculateTotalAmount(invoiceData);
+        
+        // Check if we're editing an existing invoice
+        if (isEditingExisting && editingInvoiceId) {
+            // Update existing invoice
+            setInvoiceHistory(prev => prev.map(invoice => {
+                if (invoice.id === editingInvoiceId) {
+                    return {
+                        ...invoice,
+                        amount: totalAmount,
+                        data: { ...invoiceData },
+                        paymentDetails: { ...paymentDetails },
+                        updatedAt: new Date().toISOString().split('T')[0]
+                    };
+                }
+                return invoice;
+            }));
+            
+            setSaveMessage({
+                type: 'success',
+                text: 'Invoice updated successfully!'
+            });
+            setTimeout(() => setSaveMessage({ type: '', text: '' }), 3000);
+            return;
+        }
+
+        // Check for duplicate invoice based only on service date
         if (isDuplicateInvoice(invoiceData)) {
             setSaveMessage({
                 type: 'error',
-                text: 'This invoice already exists in history!'
+                text: `Invoice with service date ${formatDate(invoiceData.serviceDate)} already exists! Update existing invoice instead.`
             });
-            setTimeout(() => setSaveMessage({ type: '', text: '' }), 20000);
+            setTimeout(() => setSaveMessage({ type: '', text: '' }), 5000);
             return;
         }
 
@@ -90,11 +133,13 @@ const ShareInvoice = ({
             id: Date.now(),
             invoiceNumber: generatedInvoiceNumber,
             date: new Date().toISOString().split('T')[0],
-            amount: parseFloat(invoiceData.invoiceAmount) || parseFloat(client?.serviceCharges) || 0,
+            amount: totalAmount,
             clientName: client?.clientName || '',
             clientId: client?.idNo || '',
             data: { ...invoiceData },
-            paymentDetails: { ...paymentDetails }
+            paymentDetails: { ...paymentDetails },
+            createdAt: new Date().toISOString().split('T')[0],
+            updatedAt: new Date().toISOString().split('T')[0]
         };
 
         setInvoiceHistory(prev => [newInvoice, ...prev]);
@@ -108,7 +153,19 @@ const ShareInvoice = ({
     };
 
     const handleApplyCustomInvoice = (formData) => {
-        setInvoiceData(formData);
+        const existingInvoice = findExistingInvoiceByServiceDate(formData.serviceDate);
+        
+        if (existingInvoice) {
+            setIsEditingExisting(true);
+            setEditingInvoiceId(existingInvoice.id);
+            // Keep the original invoice number when editing
+            setInvoiceData(formData);
+        } else {
+            setIsEditingExisting(false);
+            setEditingInvoiceId(null);
+            setInvoiceData(formData);
+        }
+        
         setShowCustomInvoiceForm(false);
 
         setTimeout(() => {
@@ -167,6 +224,11 @@ const ShareInvoice = ({
 
     const generatedInvoiceNumber = useMemo(() => {
         if (billNumber) return billNumber;
+        if (isEditingExisting && editingInvoiceId) {
+            // Keep original invoice number when editing
+            const existingInvoice = invoiceHistory.find(inv => inv.id === editingInvoiceId);
+            if (existingInvoice) return existingInvoice.invoiceNumber;
+        }
 
         const now = new Date();
         const year = now.getFullYear().toString().slice(-2);
@@ -182,11 +244,11 @@ const ShareInvoice = ({
 
         // Format: JC00062-Dec-25, JC00062-Dec-25-2, JC00062-Dec-25-3, etc.
         return `${clientId}-${month}-${year}${monthIndex > 1 ? `-${monthIndex}` : ''}`;
-    }, [billNumber, client, invoiceHistory]);
+    }, [billNumber, client, invoiceHistory, isEditingExisting, editingInvoiceId]);
 
     // Increment counter when a new invoice is saved
     useEffect(() => {
-        if (invoiceHistory.length > 0) {
+        if (invoiceHistory.length > 0 && !isEditingExisting) {
             const latestInvoice = invoiceHistory[0];
             if (latestInvoice && latestInvoice.invoiceNumber === generatedInvoiceNumber) {
                 // Only increment if this is a brand new invoice (not from history)
@@ -197,7 +259,7 @@ const ShareInvoice = ({
                 setInvoiceCounter(monthInvoices.length);
             }
         }
-    }, [invoiceHistory, generatedInvoiceNumber]);
+    }, [invoiceHistory, generatedInvoiceNumber, isEditingExisting]);
 
     const formatDate = (dateString) => {
         if (!dateString) return 'N/A';
@@ -221,7 +283,6 @@ const ShareInvoice = ({
             }
         };
 
-        // NEW: Responsive div-based layout instead of table
         return `
             <div class="biodata-section" style="margin: 20px 0;">
                 <h4 style="background: linear-gradient(135deg, #02acf2 0%, #0266f2 100%); color: white; padding: 12px 15px; margin: 0; font-size: 16px; border-radius: 5px 5px 0 0;">Client Details</h4>
@@ -347,7 +408,7 @@ const ShareInvoice = ({
         const invoiceAmount = parseFloat(invoiceData.invoiceAmount) || parseFloat(client?.serviceCharges) || 0;
         
         // Calculate total amount (Invoice Amount + Traveling Charges + Extra Charges)
-        const totalAmount = invoiceAmount + travelingCharges + extraCharges;
+        const totalAmount = calculateTotalAmount(invoiceData);
         
         const totalPaid = paymentDetails.totalPaid || 0;
         const dueAmount = Math.max(0, totalAmount - totalPaid);
@@ -582,6 +643,23 @@ const ShareInvoice = ({
             transform: translateY(0);
         }
         
+        .invoice-status {
+            padding: 4px 8px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: bold;
+        }
+        
+        .status-editing {
+            background: #fff3cd;
+            color: #856404;
+        }
+        
+        .status-new {
+            background: #d4edda;
+            color: #155724;
+        }
+        
         /* Mobile Responsive */
         @media only screen and (max-width: 767px) {
             .page { padding: 10px; }
@@ -651,7 +729,9 @@ const ShareInvoice = ({
             <div class="subtitle">JenCeo Home Care Services & Traders</div>
             <div class="meta">
                 <div><strong>Invoice Date:</strong> ${invoiceDate}</div>
-                <div><strong>Invoice Number:</strong> ${generatedInvoiceNumber}</div>
+                <div><strong>Invoice Number:</strong> ${generatedInvoiceNumber} 
+                    ${isEditingExisting ? '<span class="invoice-status status-editing" style="margin-left: 8px;">EDITING</span>' : ''}
+                </div>
                 <div><strong>Client ID:</strong> ${clientId}</div>
             </div>
         </div>
@@ -747,8 +827,6 @@ const ShareInvoice = ({
         <p style="margin:0; font-size:10px; color:#666">Quality Service | Trusted Care | Client Satisfaction</p>
     </div>
 
- 
-
     <div class="footer">
         <div>Invoice Ref: ${generatedInvoiceNumber}</div>
         <div>Generated On: ${currentDate}</div>
@@ -830,13 +908,14 @@ const ShareInvoice = ({
         const invoiceAmount = parseFloat(invoiceData.invoiceAmount) || parseFloat(client?.serviceCharges) || 0;
         const travelingCharges = parseFloat(invoiceData.travelingCharges) || 0;
         const extraCharges = parseFloat(invoiceData.extraCharges) || 0;
-        const totalAmount = invoiceAmount + travelingCharges + extraCharges;
+        const totalAmount = calculateTotalAmount(invoiceData);
         const totalPaid = paymentDetails.totalPaid || 0;
         const dueAmount = Math.max(0, totalAmount - totalPaid);
 
         const message = `*Invoice Details*\n\n` +
             `*Client:* ${client?.clientName || 'N/A'}\n` +
             `*Invoice Number:* ${generatedInvoiceNumber}\n` +
+            `*Service Date:* ${formatDate(invoiceData.serviceDate)}\n` +
             `*Invoice Amount:* ₹${formatAmount(invoiceAmount)}\n` +
             `*Traveling Charges:* ₹${formatAmount(travelingCharges)}\n` +
             `*Extra Charges:* ₹${formatAmount(extraCharges)}\n` +
@@ -873,14 +952,28 @@ const ShareInvoice = ({
         if (showInvoiceModal && iframeRef.current) {
             iframeRef.current.srcdoc = buildInvoiceHTML();
         }
-    }, [showInvoiceModal, invoiceData]);
+    }, [showInvoiceModal, invoiceData, isEditingExisting]);
+
+    // Reset editing state when closing modal or changing tabs
+    useEffect(() => {
+        if (!showInvoiceModal) {
+            setIsEditingExisting(false);
+            setEditingInvoiceId(null);
+        }
+    }, [showInvoiceModal]);
 
     // Custom Invoice Form Component
     const CustomInvoiceForm = ({ invoiceData, onApply, onClose }) => {
         const [formData, setFormData] = useState(invoiceData);
+        const [existingInvoice, setExistingInvoice] = useState(null);
 
         useEffect(() => {
             setFormData(invoiceData);
+            // Check if there's an existing invoice for this service date
+            if (invoiceData.serviceDate) {
+                const existing = findExistingInvoiceByServiceDate(invoiceData.serviceDate);
+                setExistingInvoice(existing);
+            }
         }, [invoiceData]);
 
         const handleServiceDateChange = (e) => {
@@ -889,11 +982,22 @@ const ShareInvoice = ({
             const nextPaymentDate = new Date(autoFillDate);
             nextPaymentDate.setDate(nextPaymentDate.getDate() + 1);
 
+            // Check for existing invoice
+            const existing = findExistingInvoiceByServiceDate(serviceDate);
+            setExistingInvoice(existing);
+
             setFormData(prev => ({
                 ...prev,
                 serviceDate,
                 autoFillDate,
-                nextPaymentDate: nextPaymentDate.toISOString().split('T')[0]
+                nextPaymentDate: nextPaymentDate.toISOString().split('T')[0],
+                // If editing existing invoice, keep original values
+                invoiceAmount: existing ? (existing.data.invoiceAmount || prev.invoiceAmount) : prev.invoiceAmount,
+                travelingCharges: existing ? (existing.data.travelingCharges || prev.travelingCharges) : prev.travelingCharges,
+                extraCharges: existing ? (existing.data.extraCharges || prev.extraCharges) : prev.extraCharges,
+                gapIfAny: existing ? (existing.data.gapIfAny || prev.gapIfAny) : prev.gapIfAny,
+                remarks: existing ? (existing.data.remarks || prev.remarks) : prev.remarks,
+                additionalComments: existing ? (existing.data.additionalComments || prev.additionalComments) : prev.additionalComments
             }));
         };
 
@@ -928,7 +1032,14 @@ const ShareInvoice = ({
                 <div className="modal-dialog modal-lg modal-dialog-centered">
                     <div className="modal-content" onClick={(e) => e.stopPropagation()}>
                         <div className="modal-header bg-primary text-white">
-                            <h5 className="modal-title">Custom Invoice Details</h5>
+                            <h5 className="modal-title">
+                                {existingInvoice ? 'Edit Invoice' : 'Custom Invoice Details'}
+                                {existingInvoice && (
+                                    <span className="badge bg-warning ms-2">
+                                        Editing Existing Invoice
+                                    </span>
+                                )}
+                            </h5>
                             <button
                                 type="button"
                                 className="btn-close btn-close-white"
@@ -936,16 +1047,31 @@ const ShareInvoice = ({
                             />
                         </div>
                         <div className="modal-body">
+                            {existingInvoice && (
+                                <div className="alert alert-info alert-dismissible fade show text-info" role="alert">
+                                    <i className="bi bi-info-circle me-2"></i>
+                                    <strong>Editing existing invoice:</strong> Invoice #{existingInvoice.invoiceNumber} for service date {formatDate(existingInvoice.data.serviceDate)}. 
+                                    Changes will update the existing invoice.
+                                </div>
+                            )}
+                            
                             <div className="row g-3">
                                 <div className="col-md-6">
-                                    <label className="form-label"><strong>Service Date</strong></label>
+                                    <label className="form-label"><strong>Service Date *</strong></label>
                                     <input
                                         type="date"
                                         className="form-control"
                                         name="serviceDate"
                                         value={formData.serviceDate}
                                         onChange={handleServiceDateChange}
+                                        required
                                     />
+                                    {existingInvoice && (
+                                        <small className="form-text text-info">
+                                            <i className="bi bi-exclamation-triangle me-1"></i>
+                                            Invoice for this date already exists. Editing will update it.
+                                        </small>
+                                    )}
                                 </div>
                                 <div className="col-md-6">
                                     <label className="form-label"><strong>Auto-fill (30 days from Service Date)</strong></label>
@@ -1032,7 +1158,7 @@ const ShareInvoice = ({
                                         step="0.01"
                                     />
                                 </div>
-                                <div className="col-md-6">
+                                <div className="col-md-12">
                                     <label className="form-label"><strong>Additional Comments</strong></label>
                                     <textarea
                                         className="form-control"
@@ -1043,7 +1169,7 @@ const ShareInvoice = ({
                                         placeholder="Enter any additional comments or notes..."
                                     />
                                 </div>
-                                <div className="col-md-6">
+                                <div className="col-md-12">
                                     <label className="form-label"><strong>Remarks</strong></label>
                                     <textarea
                                         className="form-control"
@@ -1066,10 +1192,10 @@ const ShareInvoice = ({
                             </button>
                             <button
                                 type="button"
-                                className="btn btn-primary"
+                                className={`btn ${existingInvoice ? 'btn-warning' : 'btn-primary'}`}
                                 onClick={handleApply}
                             >
-                                Apply to Invoice
+                                {existingInvoice ? 'Update Invoice' : 'Apply to Invoice'}
                             </button>
                         </div>
                     </div>
@@ -1081,7 +1207,26 @@ const ShareInvoice = ({
     // Invoice History Table Component
     const InvoiceHistoryTable = () => (
         <div className="invoice-history-table p-3">
-            <h5 className="mb-3">Invoice History ({invoiceHistory.length})</h5>
+            <div className="d-flex justify-content-between align-items-center mb-3">
+                <h5 className="mb-0">Invoice History ({invoiceHistory.length})</h5>
+                {invoiceHistory.length > 0 && (
+                    <button
+                        className="btn btn-sm btn-outline-secondary"
+                        onClick={() => {
+                            localStorage.removeItem(`invoiceHistory_${client?.idNo}`);
+                            setInvoiceHistory([]);
+                            setSaveMessage({
+                                type: 'success',
+                                text: 'Invoice history cleared successfully!'
+                            });
+                            setTimeout(() => setSaveMessage({ type: '', text: '' }), 3000);
+                        }}
+                    >
+                        <i className="bi bi-trash me-1"></i>
+                        Clear History
+                    </button>
+                )}
+            </div>
             <div className="table-responsive" style={{ maxHeight: '500px', overflowY: 'auto' }}>
                 <table className="table table-sm table-hover" style={{ fontSize: '12px' }}>
                     <thead className="table-light" style={{ position: 'sticky', top: 0, zIndex: 1 }}>
@@ -1095,32 +1240,67 @@ const ShareInvoice = ({
                         </tr>
                     </thead>
                     <tbody>
-                        {invoiceHistory.map((invoice) => (
-                            <tr key={invoice.id}>
-                                <td><strong>{invoice.invoiceNumber}</strong></td>
-                                <td>{formatDate(invoice.date)}</td>
-                                <td>{invoice.clientName}</td>
-                                <td className="text-success">₹{formatAmount(invoice.amount)}</td>
-                                <td>{formatDate(invoice.data.serviceDate)}</td>
-                                <td>
-                                    <button
-                                        className="btn btn-sm btn-outline-primary me-1"
-                                        onClick={() => {
-                                            setInvoiceData(invoice.data);
-                                            setActiveTab('preview');
-                                            // Force rebuild of iframe with the selected invoice data
-                                            setTimeout(() => {
-                                                if (iframeRef.current) {
-                                                    iframeRef.current.srcdoc = buildInvoiceHTML();
-                                                }
-                                            }, 100);
-                                        }}
-                                    >
-                                        View
-                                    </button>
-                                </td>
-                            </tr>
-                        ))}
+                        {invoiceHistory.map((invoice) => {
+                            const invoiceTotal = calculateTotalAmount(invoice.data);
+                            return (
+                                <tr key={invoice.id}>
+                                    <td><strong>{invoice.invoiceNumber}</strong></td>
+                                    <td>{formatDate(invoice.date)}</td>
+                                    <td>{invoice.clientName}</td>
+                                    <td className="text-success">
+                                        <div>₹{formatAmount(invoiceTotal)}</div>
+                                        <small className="small-text text-warning">
+                                            Base: ₹{formatAmount(invoice.data.invoiceAmount || client?.serviceCharges || 0)}
+                                        </small>
+                                    </td>
+                                    <td>{formatDate(invoice.data.serviceDate)}</td>
+                                    <td>
+                                        <button
+                                            className="btn btn-sm btn-outline-primary me-1"
+                                            onClick={() => {
+                                                setInvoiceData(invoice.data);
+                                                setIsEditingExisting(true);
+                                                setEditingInvoiceId(invoice.id);
+                                                setActiveTab('preview');
+                                                // Force rebuild of iframe with the selected invoice data
+                                                setTimeout(() => {
+                                                    if (iframeRef.current) {
+                                                        iframeRef.current.srcdoc = buildInvoiceHTML();
+                                                    }
+                                                }, 100);
+                                            }}
+                                            title="Edit this invoice"
+                                        >
+                                            <i className="bi bi-pencil"></i>
+                                        </button>
+                                        <button
+                                            className="btn btn-sm btn-outline-success me-1"
+                                            onClick={() => {
+                                                setInvoiceData(invoice.data);
+                                                handleDownloadInvoice();
+                                            }}
+                                            title="Download this invoice"
+                                        >
+                                            <i className="bi bi-download"></i>
+                                        </button>
+                                        <button
+                                            className="btn btn-sm btn-outline-danger"
+                                            onClick={() => {
+                                                setInvoiceHistory(prev => prev.filter(inv => inv.id !== invoice.id));
+                                                setSaveMessage({
+                                                    type: 'success',
+                                                    text: 'Invoice deleted successfully!'
+                                                });
+                                                setTimeout(() => setSaveMessage({ type: '', text: '' }), 3000);
+                                            }}
+                                            title="Delete this invoice"
+                                        >
+                                            <i className="bi bi-trash"></i>
+                                        </button>
+                                    </td>
+                                </tr>
+                            );
+                        })}
                         {invoiceHistory.length === 0 && (
                             <tr>
                                 <td colSpan="6" className="text-center text-muted py-4">
@@ -1164,15 +1344,23 @@ const ShareInvoice = ({
 
             <div className="modal-card">
                 <div className="mb-3">
-                    <h4 className="text-info">Invoice - {generatedInvoiceNumber}</h4>
-                    <div className="d-flex gap-2 align-items-center">
+                    <h4 className="text-info">
+                        Invoice - {generatedInvoiceNumber}
+                        {isEditingExisting && (
+                            <span className="badge bg-warning ms-2">
+                                <i className="bi bi-pencil me-1"></i>
+                                Editing
+                            </span>
+                        )}
+                    </h4>
+                    <div className="d-flex flex-wrap gap-2 align-items-center">
                         <button
                             type="button"
-                            className="btn btn-warning btn-sm"
+                            className={`btn btn-sm ${isEditingExisting ? 'btn-warning' : 'btn-primary'}`}
                             onClick={() => setShowCustomInvoiceForm(true)}
                         >
                             <i className="bi bi-pencil-square me-1"></i>
-                            Custom Invoice
+                            {isEditingExisting ? 'Edit Invoice' : 'Custom Invoice'}
                         </button>
 
                         <button
@@ -1193,8 +1381,28 @@ const ShareInvoice = ({
                         </button>
                         <button
                             type="button"
+                            className="btn btn-outline-info btn-sm"
+                            onClick={handlePrintInvoice}
+                        >
+                            <i className="bi bi-printer me-1"></i>
+                            Print
+                        </button>
+                        <button
+                            type="button"
+                            className="btn btn-outline-warning btn-sm"
+                            onClick={handleShareToWhatsApp}
+                        >
+                            <i className="bi bi-whatsapp me-1"></i>
+                            WhatsApp
+                        </button>
+                        <button
+                            type="button"
                             className="btn btn-outline-secondary btn-sm"
-                            onClick={() => setShowInvoiceModal(false)}
+                            onClick={() => {
+                                setIsEditingExisting(false);
+                                setEditingInvoiceId(null);
+                                setShowInvoiceModal(false);
+                            }}
                         >
                             <i className="bi bi-x me-1"></i>
                             Close
@@ -1225,12 +1433,19 @@ const ShareInvoice = ({
                             >
                                 <i className="bi bi-eye me-1"></i>
                                 Preview
+                                {isEditingExisting && (
+                                    <span className="badge bg-warning ms-1">Editing</span>
+                                )}
                             </button>
                         </li>
                         <li className="nav-item">
                             <button
                                 className={`nav-link ${activeTab === 'history' ? 'active' : ''}`}
-                                onClick={() => setActiveTab('history')}
+                                onClick={() => {
+                                    setActiveTab('history');
+                                    setIsEditingExisting(false);
+                                    setEditingInvoiceId(null);
+                                }}
                             >
                                 <i className="bi bi-clock-history me-1"></i>
                                 History ({invoiceHistory.length})
@@ -1256,12 +1471,43 @@ const ShareInvoice = ({
                             <div className="mt-3 text-center">
                                 <button
                                     type="button"
-                                    className="btn btn-primary"
+                                    className={`btn ${isEditingExisting ? 'btn-warning' : 'btn-primary'}`}
                                     onClick={saveInvoiceToHistory}
                                 >
                                     <i className="bi bi-save me-1"></i>
-                                    Save Invoice to History
+                                    {isEditingExisting ? 'Update Invoice' : 'Save Invoice to History'}
                                 </button>
+                                {isEditingExisting && (
+                                    <button
+                                        type="button"
+                                        className="btn btn-outline-secondary ms-2"
+                                        onClick={() => {
+                                            setIsEditingExisting(false);
+                                            setEditingInvoiceId(null);
+                                            // Reset to default invoice data
+                                            setInvoiceData({
+                                                serviceDate: '',
+                                                invoiceDate: new Date().toISOString().split('T')[0],
+                                                invoiceAmount: '',
+                                                gapIfAny: '',
+                                                travelingCharges: '',
+                                                extraCharges: '',
+                                                remarks: '',
+                                                additionalComments: '',
+                                                serviceRemarks: '',
+                                                nextPaymentDate: ''
+                                            });
+                                            setTimeout(() => {
+                                                if (iframeRef.current) {
+                                                    iframeRef.current.srcdoc = buildInvoiceHTML();
+                                                }
+                                            }, 100);
+                                        }}
+                                    >
+                                        <i className="bi bi-x-circle me-1"></i>
+                                        Cancel Edit
+                                    </button>
+                                )}
                             </div>
                         </>
                     ) : (

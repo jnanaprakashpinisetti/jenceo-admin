@@ -340,16 +340,27 @@ const ShareInvoice = ({
                         </div>
                         <div class="info-item" style="background: white; padding: 10px; border-radius: 6px; border: 1px solid #e5e5e5;">
                             <div style="font-size: 11px; color: #666; margin-bottom: 4px;">Client Name</div>
-                            <div style="font-weight: bold; color: #333;">${safe(client?.clientName)}</div>
-                        </div>
-                        <div class="info-item" style="background: white; padding: 10px; border-radius: 6px; border: 1px solid #e5e5e5;">
-                            <div style="font-size: 11px; color: #666; margin-bottom: 4px;">Mobile No 2</div>
-                            <div style="font-weight: bold; color: #333;">${safe(client?.mobileNo2)}</div>
+                            <div style="font-weight: bold; color: #333;">${safe(client?.clientName)} Gaaru</div>
                         </div>
                         <div class="info-item" style="background: white; padding: 10px; border-radius: 6px; border: 1px solid #e5e5e5;">
                             <div style="font-size: 11px; color: #666; margin-bottom: 4px;">Gender</div>
                             <div style="font-weight: bold; color: #333;">${safe(client?.gender)}</div>
                         </div>
+
+                        <div class="info-item" style="background: white; padding: 10px; border-radius: 6px; border: 1px solid #e5e5e5;">
+                            <div style="font-size: 11px; color: #666; margin-bottom: 4px;">Mobile No 1</div>
+                            <div style="font-weight: bold; color: #333;">${safe(client?.mobileNo1)}</div>
+                        </div>
+                        <div class="info-item" style="background: white; padding: 10px; border-radius: 6px; border: 1px solid #e5e5e5;">
+                            <div style="font-size: 11px; color: #666; margin-bottom: 4px;">Mobile No 2</div>
+                            <div style="font-weight: bold; color: #333;">${safe(client?.mobileNo2)}</div>
+                        </div>
+
+                           <div class="info-item" style="background: white; padding: 10px; border-radius: 6px; border: 1px solid #e5e5e5;">
+                            <div style="font-size: 11px; color: #666; margin-bottom: 4px;">Location</div>
+                            <div style="font-weight: bold; color: #333;">${safe(client?.location)}</div>
+                        </div>
+                  
                     </div>
                     
                     <!-- Service Details Section -->
@@ -376,7 +387,7 @@ const ShareInvoice = ({
                         </div>
                         <div class="info-item" style="background: white; padding: 10px; border-radius: 6px; border: 1px solid #e5e5e5;">
                             <div style="font-size: 11px; color: #666; margin-bottom: 4px;">Service Status</div>
-                            <div style="font-weight: bold; color: #333;">${safe(client?.serviceStatus)}</div>
+                            <div style="font-weight: bold; color: #333; text-transform: capitalize;">${safe(client?.serviceStatus)}</div>
                         </div>
                         <div class="info-item" style="background: white; padding: 10px; border-radius: 6px; border: 1px solid #e5e5e5;">
                             <div style="font-size: 11px; color: #666; margin-bottom: 4px;">Dropper Name</div>
@@ -435,6 +446,7 @@ const ShareInvoice = ({
         const clientLocation = client?.location || 'N/A';
         const clientMobile = client?.mobileNo1 || 'N/A';
         const serviceType = client?.typeOfService || 'N/A';
+        const patentName = client?.patientName || 'N/A';
         const serviceCharges = client?.serviceCharges || '0';
         const startingDate = client?.startingDate ? formatDate(client.startingDate) : 'N/A';
 
@@ -861,10 +873,11 @@ const ShareInvoice = ({
 
     <div class="thank-you">
         <h3 style="color:#02acf2; margin-bottom:8px; font-size: 18px;">Thank You for Your Trust!</h3>
-        <p style="margin:0; font-size: 12px;">Dear <strong>${clientName}</strong> (ID: ${clientId}),</p>
-        <p style="margin:5px 0; font-size: 12px;">We appreciate your trust in our <strong>${serviceType}</strong> services and look forward to continuing to serve you.</p>
-        <p style="margin:5px 0 0 0; font-size: 14px;"><strong>JenCeo Home Care & Traders</strong></p>
-        <p style="margin:0; font-size:10px; color:#666">Quality Service | Trusted Care | Client Satisfaction</p>
+        <p style="margin:0; font-size: 12px;">Dear <strong>${clientName}</strong> Gaaru</p>
+        <p style="margin:5px 0; font-size: 12px;">It was our privilege to support you during this time for <strong>${patentName}, (${serviceType})</strong></p>
+        <p style="margin:5px 0; font-size: 12px;">We wholeheartedly wish you a complete recovery and pray to God for your good health, strength, and a peaceful, happy family life.</p>
+        <p style="margin:5px 0 0 0; font-size: 14px;"><strong>JenCeo Home Care & Management</strong></p>
+        <p style="margin:0; font-size:10px; color:#02acf2; margin-top:10px">Quality Service | Trusted Care | Client Satisfaction</p>
     </div>
 
     <div class="footer">
@@ -1197,7 +1210,7 @@ const ShareInvoice = ({
             const serviceDate = e.target.value;
             const autoFillDate = calculateAutoFillDate(serviceDate);
             const nextPaymentDate = new Date(autoFillDate);
-            nextPaymentDate.setDate(nextPaymentDate.getDate() + 1);
+            nextPaymentDate.setDate(nextPaymentDate.getDate());
 
             // Check for existing invoice
             const existing = findExistingInvoiceByServiceDate(serviceDate);
@@ -1265,7 +1278,7 @@ const ShareInvoice = ({
                         </div>
                         <div className="modal-body">
                             {existingInvoice && (
-                                <div className="alert alert-info alert-dismissible fade show text-info" role="alert">
+                                <div className="alert alert-danger alert-dismissible fade show text-black" role="alert">
                                     <i className="bi bi-info-circle me-2"></i>
                                     <strong>Editing existing invoice:</strong> Invoice #{existingInvoice.invoiceNumber} for service date {formatDate(existingInvoice.data.serviceDate)}. 
                                     Changes will update the existing invoice.

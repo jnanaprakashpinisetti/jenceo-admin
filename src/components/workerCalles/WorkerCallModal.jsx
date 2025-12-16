@@ -1666,6 +1666,9 @@ export default function WorkerCallModal({
                                     <option value="Negotiable">
                                       Negotiable
                                     </option>
+                                    <option value="Not Intrest">
+                                      Not Intrest
+                                    </option>
                                   </select>
                                 </div>
 

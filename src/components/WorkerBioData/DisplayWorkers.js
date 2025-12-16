@@ -3,7 +3,7 @@ import firebaseDB from '../../firebase';
 import editIcon from '../../assets/eidt.svg';
 import viewIcon from '../../assets/view.svg';
 import deleteIcon from '../../assets/delete.svg';
-import WorkerModal from './WorkerModal';
+import WorkerModal from './Modal/WorkerModal';
 
 const LANG_OPTIONS = [
     "Telugu", "English", "Hindi", "Urdu", "Kannada", "Malayalam", "Tamil", "Bengali", "Marathi"

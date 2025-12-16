@@ -469,7 +469,7 @@ const TimesheetTable = ({ employee }) => {
   }
 
   return (
-    <div className="timesheet-table-container">
+    <div className="timesheet-table-container modal-card bg-dark p-3 rounded-4">
       {/* Debug Info */}
       <div className="alert alert-dark bg-dark text-light border-secondary mb-3">
         {/* Year Selection */}

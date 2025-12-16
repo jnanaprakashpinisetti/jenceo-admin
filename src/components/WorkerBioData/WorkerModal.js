@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import firebaseDB, { storageRef, uploadFile, getDownloadURL } from "../../firebase";
 import { useAuth } from "../../context/AuthContext";
-import TimesheetTable from "./TimesheetTable ";
+import TimesheetTable from "./TimesheetTable";
 
 const SKILL_OPTIONS = [
     "Nursing",

@@ -439,7 +439,7 @@ export default function WorkerCalleDisplay({ permissions: permissionsProp }) {
 
   // Filters
   const [searchTerm, setSearchTerm] = useState("");
-  const [selectedSkills, setSelectedSkills] = useState([]);  
+  const [selectedSkills, setSelectedSkills] = useState([]);
   const [selectedRoles, setSelectedRoles] = useState([]);
   const [selectedLanguages, setSelectedLanguages] = useState([]);
   const [selectedGender, setSelectedGender] = useState([]);
@@ -497,7 +497,8 @@ export default function WorkerCalleDisplay({ permissions: permissionsProp }) {
     "1 Week",
     "15 Days",
     "Flexible",
-    "Negotiable"
+    "Negotiable",
+    "Not Intrest"
   ];
 
   // Selected Joining Types (multi-select)
@@ -798,6 +799,7 @@ export default function WorkerCalleDisplay({ permissions: permissionsProp }) {
       if (/(^|\s)15\s*day/.test(t) || t === "half month") return "15 days";
       if (/(flex|any|open)/.test(t)) return "flexible";
       if (/(nego|discuss)/.test(t)) return "negotiable";
+      if (/(not|no)/.test(t)) return "Not intrest";
       return t; // keep unknowns so they can still match if options list grows
     };
 
@@ -3059,17 +3061,18 @@ export default function WorkerCalleDisplay({ permissions: permissionsProp }) {
                         <td>
                           {joiningType ? (
                             <span
-                              className={`badge ${joiningType.toLowerCase().includes("immediate")
-                                ? "bg-success"
-                                : joiningType.toLowerCase().includes("15")
-                                  ? "bg-warning text-dark"
-                                  : joiningType.toLowerCase().includes("30")
-                                    ? "bg-info"
-                                    : joiningType
-                                      .toLowerCase()
-                                      .includes("flexible")
-                                      ? "bg-primary"
-                                      : "bg-secondary"
+                              className={`badge ${joiningType.toLowerCase().includes("not intrest") ||
+                                  joiningType.toLowerCase().includes("not interested")
+                                  ? "bg-danger"
+                                  : joiningType.toLowerCase().includes("immediate")
+                                    ? "bg-success"
+                                    : joiningType.toLowerCase().includes("15")
+                                      ? "bg-warning text-dark"
+                                      : joiningType.toLowerCase().includes("30")
+                                        ? "bg-info"
+                                        : joiningType.toLowerCase().includes("flexible")
+                                          ? "bg-primary"
+                                          : "bg-secondary"
                                 } opacity-50`}
                             >
                               {joiningType}
@@ -3078,6 +3081,7 @@ export default function WorkerCalleDisplay({ permissions: permissionsProp }) {
                             <span className="text-muted">—</span>
                           )}
                         </td>
+
                         <td style={{ maxWidth: "150px" }}>
                           <div className="d-flex flex-wrap gap-2 justify-content-center">
                             {getWorkerSkills(w)

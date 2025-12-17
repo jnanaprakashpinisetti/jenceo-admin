@@ -179,7 +179,6 @@ const QualificationSkills = ({
                                 { value: "Housekeeping", label: "Housekeeping" },
                                 { value: "Old Age Care", label: "Old Age Care" },
                                 { value: "Any Duty", label: "Any Duty" },
-                                { value: "Others", label: "Others" },
                             ]
                         )}
                     </div>
@@ -216,7 +215,7 @@ const QualificationSkills = ({
                     </div>
                 </div>
 
-                {/* Row 3: Skill accordions */}
+                {/* Row 3: Nursing Skills (only when Primary Skill is Nursing) */}
                 <div className="mt-3">
                     {String(formData.primarySkill || "").toLowerCase() === "nursing" && (
                         <>
@@ -251,40 +250,41 @@ const QualificationSkills = ({
                             )}
                         </>
                     )}
+                </div>
 
-                    {String(formData.primarySkill || "").toLowerCase() === "others" && (
-                        <>
-                            <h6 className="mb-2">
-                                <span className="badge bg-warning text-dark me-2">Primary: Others</span>
-                                <small className="text-muted">Select applicable skills</small>
-                            </h6>
+                {/* Row 4: Other Skills (ALWAYS VISIBLE) */}
+                <div className="row mt-3">
+                    <div className="col-md-12">
+                        <h6 className="mb-2">
+                            <span className="badge bg-warning text-dark me-2">Other Skills</span>
+                            <small className="text-muted">Select additional skills from different categories</small>
+                        </h6>
 
-                            {isEditMode ? (
-                                <SkillAccordion
-                                    idPrefix="others"
-                                    sections={OTHER_SECTIONS}
-                                    selected={Array.isArray(formData.otherSkills) ? formData.otherSkills : []}
-                                    onToggle={(skill) => {
-                                        setFormData((p) => {
-                                            const arr = Array.isArray(p.otherSkills) ? p.otherSkills.slice() : [];
-                                            const has = arr.includes(skill);
-                                            return { ...p, otherSkills: has ? arr.filter((x) => x !== skill) : [...arr, skill] };
-                                        });
-                                        setHasUnsavedChanges(true);
-                                    }}
-                                />
-                            ) : (
-                                <div className="d-flex flex-wrap">
-                                    {(Array.isArray(formData.otherSkills) ? formData.otherSkills : []).map((s) => (
-                                        <Chip key={s}>{s}</Chip>
-                                    ))}
-                                    {(!formData.otherSkills || formData.otherSkills.length === 0) && (
-                                        <div className="text-muted">No other skills selected.</div>
-                                    )}
-                                </div>
-                            )}
-                        </>
-                    )}
+                        {isEditMode ? (
+                            <SkillAccordion
+                                idPrefix="others"
+                                sections={OTHER_SECTIONS}
+                                selected={Array.isArray(formData.otherSkills) ? formData.otherSkills : []}
+                                onToggle={(skill) => {
+                                    setFormData((p) => {
+                                        const arr = Array.isArray(p.otherSkills) ? p.otherSkills.slice() : [];
+                                        const has = arr.includes(skill);
+                                        return { ...p, otherSkills: has ? arr.filter((x) => x !== skill) : [...arr, skill] };
+                                    });
+                                    setHasUnsavedChanges(true);
+                                }}
+                            />
+                        ) : (
+                            <div className="d-flex flex-wrap">
+                                {(Array.isArray(formData.otherSkills) ? formData.otherSkills : []).map((s) => (
+                                    <Chip key={s}>{s}</Chip>
+                                ))}
+                                {(!formData.otherSkills || formData.otherSkills.length === 0) && (
+                                    <div className="text-muted">No other skills selected.</div>
+                                )}
+                            </div>
+                        )}
+                    </div>
                 </div>
             </div>
         </div>

@@ -1,4 +1,4 @@
-import React, { useEffect } from "react";
+import React, { useEffect, useState } from "react";
 
 const headerImage = "https://firebasestorage.googleapis.com/v0/b/jenceo-admin.firebasestorage.app/o/OfficeFiles%2FHeadder.svg?alt=media&token=fa65a3ab-ba03-4959-bc36-e293c6db48ae";
 
@@ -6,7 +6,52 @@ const Biodata = ({ formData, iframeRef, canEdit }) => {
     const safe = (v, fallback = "—") => (v !== undefined && v !== null && String(v).trim() !== "" ? v : fallback);
     const formatLine = (...parts) => parts.filter(Boolean).join(" ");
     
-    const buildBiodataHTML = (opts = { hideSensitive: false }) => {
+    // State to track which skills user has removed in preview
+    const [removedSkills, setRemovedSkills] = useState({
+        otherSkills: new Set(),
+        nursingSkills: new Set(),
+        workingSkills: new Set()
+    });
+    
+    // Function to save removed skills to localStorage (temporary)
+    const saveRemovedSkills = () => {
+        localStorage.setItem('biodata_removed_skills', JSON.stringify({
+            otherSkills: Array.from(removedSkills.otherSkills),
+            nursingSkills: Array.from(removedSkills.nursingSkills),
+            workingSkills: Array.from(removedSkills.workingSkills)
+        }));
+        alert("Changes saved! Removed skills will not appear in downloaded/shared biodata.");
+    };
+    
+    // Function to load removed skills from localStorage
+    const loadRemovedSkills = () => {
+        const saved = localStorage.getItem('biodata_removed_skills');
+        if (saved) {
+            try {
+                const parsed = JSON.parse(saved);
+                setRemovedSkills({
+                    otherSkills: new Set(parsed.otherSkills || []),
+                    nursingSkills: new Set(parsed.nursingSkills || []),
+                    workingSkills: new Set(parsed.workingSkills || [])
+                });
+            } catch (e) {
+                console.error('Failed to load removed skills:', e);
+            }
+        }
+    };
+    
+    // Function to reset removed skills
+    const resetRemovedSkills = () => {
+        setRemovedSkills({
+            otherSkills: new Set(),
+            nursingSkills: new Set(),
+            workingSkills: new Set()
+        });
+        localStorage.removeItem('biodata_removed_skills');
+        alert("All skill removals have been reset.");
+    };
+    
+    const buildBiodataHTML = (opts = { hideSensitive: false, isPreview: false }) => {
         const fullName = formatLine(safe(formData.firstName, ""), safe(formData.lastName, "")).trim() || "—";
         const ageText = formData.years ? `${formData.years} Years` : "—";
         const dobText = formData.dateOfBirth ? new Date(formData.dateOfBirth).toLocaleDateString() : "—";
@@ -22,6 +67,26 @@ const Biodata = ({ formData, iframeRef, canEdit }) => {
                     <span style="color:#666; font-size:12px; margin-left:6px">(${val}/5)</span>`;
         };
 
+        // Get skills from formData (these come from WorkerBioDataForm.js)
+        const otherSkillsFromForm = Array.isArray(formData.otherSkills) ? formData.otherSkills.filter(Boolean) : [];
+        const nursingSkillsFromForm = Array.isArray(formData.nursingSkills) ? formData.nursingSkills.filter(Boolean) : [];
+        const workingSkillsFromForm = Array.isArray(formData.workingSkills) ? formData.workingSkills.filter(Boolean) : [];
+        
+        // Filter out removed skills if not in preview mode
+        let otherSkillsToShow = [...otherSkillsFromForm];
+        let nursingSkillsToShow = [...nursingSkillsFromForm];
+        let workingSkillsToShow = [...workingSkillsFromForm];
+        
+        if (!opts.isPreview) {
+            // For download/share, remove the skills user has marked for removal
+            otherSkillsToShow = otherSkillsToShow.filter(skill => !removedSkills.otherSkills.has(skill));
+            nursingSkillsToShow = nursingSkillsToShow.filter(skill => !removedSkills.nursingSkills.has(skill));
+            workingSkillsToShow = workingSkillsToShow.filter(skill => !removedSkills.workingSkills.has(skill));
+        }
+        
+        // Combine nursing and other skills for Technical Skills section
+        const technicalSkills = [...nursingSkillsToShow, ...otherSkillsToShow];
+        
         const permAddr = `
             <div class="addr-line">
                 <div class="row">
@@ -131,7 +196,6 @@ const Biodata = ({ formData, iframeRef, canEdit }) => {
         const pskill = safe(formData.primarySkill);
         const mtongue = safe(formData.motherTongue || formData.motherTung);
         const langs = safe(formData.languages);
-        const otherSkills = Array.isArray(formData.workingSkills) ? formData.workingSkills.filter(Boolean) : [];
         const workExperience = safe(formData.workExperince);
         const rightNow = new Date();
         const metaDate = rightNow.toLocaleDateString();
@@ -154,10 +218,71 @@ const Biodata = ({ formData, iframeRef, canEdit }) => {
             </div>
         `;
 
-        const chips = (items) =>
-            items.length
-                ? `<div class="tags">${items.map((s) => `<span class="tag">${String(s).trim()}</span>`).join("")}</div>`
-                : `<div class="muted">—</div>`;
+        const chips = (items, skillType = 'other') => {
+            if (!items.length) return `<div class="muted">—</div>`;
+            
+            const itemsHtml = items.map((s) => {
+                const itemText = String(s).trim();
+                if (!opts.isPreview) {
+                    return `<span class="tag">${itemText}</span>`;
+                }
+                // Use a unique ID to avoid JavaScript escaping issues
+                const skillId = encodeURIComponent(itemText.replace(/[^a-zA-Z0-9]/g, '_'));
+                return `<span class="tag removable-tag" data-skill-id="${skillId}" data-skill="${itemText}" data-type="${skillType}">
+                    ${itemText}
+                    <button type="button" class="tag-remove-btn" onclick="removeSkill('${skillId}')">×</button>
+                </span>`;
+            }).join("");
+            
+            return `<div class="tags">${itemsHtml}</div>`;
+        };
+
+        // Add script for handling skill removal - FIXED to prevent page reload
+        const removalScript = opts.isPreview ? `
+            <script>
+                function removeSkill(skillId) {
+                    try {
+                        const tagElement = document.querySelector('[data-skill-id="' + skillId + '"]');
+                        if (tagElement) {
+                            const skill = tagElement.getAttribute('data-skill');
+                            const skillType = tagElement.getAttribute('data-type');
+                            
+                            // Remove the tag from UI immediately
+                            tagElement.remove();
+                            
+                            // Send message to parent React component
+                            window.parent.postMessage({
+                                type: 'REMOVE_SKILL',
+                                skill: skill,
+                                skillType: skillType
+                            }, '*');
+                        }
+                    } catch (e) {
+                        console.error('Error removing skill:', e);
+                    }
+                    return false;
+                }
+                
+                // Add click event listener to all remove buttons
+                document.addEventListener('DOMContentLoaded', function() {
+                    // Also attach event listeners to handle any dynamic content
+                    const handleRemoveClick = function(e) {
+                        if (e.target.classList.contains('tag-remove-btn')) {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            const tag = e.target.closest('.removable-tag');
+                            if (tag) {
+                                const skillId = tag.getAttribute('data-skill-id');
+                                removeSkill(skillId);
+                            }
+                            return false;
+                        }
+                    };
+                    
+                    document.addEventListener('click', handleRemoveClick);
+                });
+            </script>
+        ` : '';
 
         const html = `
 <!doctype html>
@@ -199,11 +324,17 @@ const Biodata = ({ formData, iframeRef, canEdit }) => {
   /* Two even columns area */
   .two-col{display:grid;grid-template-columns:1fr 1fr;gap:12px}
   .tags{display:flex;flex-wrap:wrap;gap:6px}
-  .tag{border:1px solid #02acf2;color:#02acf2;font-size:12px;padding:3px 8px;border-radius:999px}
+  .tag{border:1px solid #02acf2;color:#02acf2;font-size:12px;padding:3px 8px;border-radius:999px;display:inline-flex;align-items:center;gap:4px}
+  .removable-tag{position:relative;padding-right:24px}
+  .tag-remove-btn{background:none;border:none;color:inherit;font-size:16px;cursor:pointer;padding:0;margin-left:4px;line-height:1;position:absolute;right:4px;top:50%;transform:translateY(-50%);}
+  .tag-remove-btn:hover{color:#dc3545}
   .muted{color:#777}
   .footer{margin :20px -20px -20px -20px;font-size:10px; color:#fff;display:flex;justify-content:space-between; background-color:#02acf2; padding:10px 20px}
   .blue {color:#02acf2}
-  @media print{.page{border:none;margin:0;width:100%}}
+  @media print{
+    .page{border:none;margin:0;width:100%}
+    .tag-remove-btn{display:none !important}
+  }
   .header-img{width:100%;max-height:120px;object-fit:contain;margin-bottom:6px}
   /* photo box on the right */
   .photo-box{display:block;align-items:center;text-align:center}
@@ -323,10 +454,20 @@ const Biodata = ({ formData, iframeRef, canEdit }) => {
             <div class="kv-value blue"><strong>${pskill}</strong></div>
         </div>
 
+        ${workingSkillsToShow.length > 0 ? `
         <div class="kv-row">
-            <div class="kv-label">Other Skills</div><div class="kv-colon">:</div>
-            <div class="kv-value">${chips(otherSkills)}</div>
+            <div class="kv-label">Secondary Skills</div><div class="kv-colon">:</div>
+            <div class="kv-value">${chips(workingSkillsToShow, 'working')}</div>
         </div>
+        ` : ''}
+        
+        ${technicalSkills.length > 0 ? `
+        <div class="kv-row">
+            <div class="kv-label">Technical Skills</div><div class="kv-colon">:</div>
+            <div class="kv-value">${chips(technicalSkills, 'other')}</div>
+        </div>
+        ` : ''}
+        
         <div class="kv-row">
             <div class="kv-label">Experience</div><div class="kv-colon">:</div>
             <div class="kv-value blue"><strong>${workExperience}</strong></div>
@@ -351,6 +492,7 @@ const Biodata = ({ formData, iframeRef, canEdit }) => {
     </div>
 </div>
 <script>window.focus && window.focus();</script>
+${removalScript}
 </body>
 </html>
 `;
@@ -358,7 +500,7 @@ const Biodata = ({ formData, iframeRef, canEdit }) => {
     };
 
     const handleDownloadBiodata = () => {
-        const html = buildBiodataHTML({ hideSensitive: true });
+        const html = buildBiodataHTML({ hideSensitive: true, isPreview: false });
         const blob = new Blob([html], { type: 'text/html' });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
@@ -374,7 +516,7 @@ const Biodata = ({ formData, iframeRef, canEdit }) => {
 
     const handleShareBiodata = async () => {
         try {
-            const html = buildBiodataHTML({ hideSensitive: true });
+            const html = buildBiodataHTML({ hideSensitive: true, isPreview: false });
             const blob = new Blob([html], { type: 'text/html' });
 
             if (navigator.share) {
@@ -391,18 +533,45 @@ const Biodata = ({ formData, iframeRef, canEdit }) => {
             handleDownloadBiodata();
         }
     };
+    
+    // Handle skill removal from iframe
+    useEffect(() => {
+        const handleMessage = (event) => {
+            if (event.data && event.data.type === 'REMOVE_SKILL') {
+                const { skill, skillType } = event.data;
+                setRemovedSkills(prev => {
+                    const newSet = new Set(prev[skillType === 'nursing' ? 'nursingSkills' : 
+                                           skillType === 'working' ? 'workingSkills' : 'otherSkills']);
+                    newSet.add(skill);
+                    return {
+                        ...prev,
+                        [skillType === 'nursing' ? 'nursingSkills' : 
+                         skillType === 'working' ? 'workingSkills' : 'otherSkills']: newSet
+                    };
+                });
+            }
+        };
+        
+        window.addEventListener('message', handleMessage);
+        return () => window.removeEventListener('message', handleMessage);
+    }, []);
+    
+    // Load removed skills on component mount
+    useEffect(() => {
+        loadRemovedSkills();
+    }, []);
 
     useEffect(() => {
         if (iframeRef.current) {
             const doc = iframeRef.current;
-            doc.srcdoc = buildBiodataHTML({ hideSensitive: false });
+            doc.srcdoc = buildBiodataHTML({ hideSensitive: false, isPreview: true });
         }
-    }, [formData]);
+    }, [formData, removedSkills]);
 
     return (
         <div className="modal-card">
-            <div className="modal-card-header d-flex align-items-center justify-content-between">
-                <h4 className="mb-0">Biodata (Preview)</h4>
+            <div className="modal-card-header">
+                <h4 className=" ">Biodata (Preview)</h4>
                 <div className="d-flex gap-2">
                     <button
                         type="button"
@@ -410,6 +579,22 @@ const Biodata = ({ formData, iframeRef, canEdit }) => {
                         onClick={handleDownloadBiodata}
                     >
                         Download
+                    </button>
+                    <button
+                        type="button"
+                        className="btn btn-outline-success btn-sm"
+                        onClick={saveRemovedSkills}
+                        title="Save removed skills for download/share"
+                    >
+                        Save Changes
+                    </button>
+                    <button
+                        type="button"
+                        className="btn btn-outline-warning btn-sm"
+                        onClick={resetRemovedSkills}
+                        title="Reset all skill removals"
+                    >
+                        Reset
                     </button>
                     <button
                         type="button"
@@ -422,6 +607,13 @@ const Biodata = ({ formData, iframeRef, canEdit }) => {
             </div>
 
             <div className="modal-card-body biodata-wrapper">
+                <div className="alert alert-info alert-sm mb-2 text-info">
+                    <small>
+                        <i className="bi bi-info-circle me-1"></i>
+                        Click the X button to remove skills you don't want in the final biodata. 
+                        Click "Save Changes" to apply removals before downloading or sharing.
+                    </small>
+                </div>
                 <iframe
                     ref={iframeRef}
                     title="Biodata Preview"

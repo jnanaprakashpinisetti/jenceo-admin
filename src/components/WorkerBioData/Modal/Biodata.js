@@ -245,6 +245,49 @@ const Biodata = ({ formData, iframeRef, canEdit }) => {
             return itemsHtml ? `<div class="tags">${itemsHtml}</div>` : `<div class="muted">—</div>`;
         };
 
+        // NEW FUNCTION: chipsForTechnicalSkills to handle both nursing and other skills
+        const chipsForTechnicalSkills = () => {
+            if (!nursingSkillsToShow.length && !otherSkillsToShow.length) {
+                return `<div class="muted">—</div>`;
+            }
+            
+            let itemsHtml = '';
+            
+            // Process nursing skills
+            nursingSkillsToShow.forEach(s => {
+                const itemText = String(s).trim();
+                if (!opts.isPreview) {
+                    itemsHtml += `<span class="tag">${itemText}</span>`;
+                } else {
+                    const shouldShow = !removedSkills.nursingSkills.has(itemText);
+                    if (shouldShow) {
+                        itemsHtml += `<span class="tag removable-tag" data-skill="${itemText.replace(/"/g, '&quot;')}" data-type="nursing">
+                            ${itemText}
+                            <button type="button" class="tag-remove-btn" onclick="removeSkill(this)">×</button>
+                        </span>`;
+                    }
+                }
+            });
+            
+            // Process other skills
+            otherSkillsToShow.forEach(s => {
+                const itemText = String(s).trim();
+                if (!opts.isPreview) {
+                    itemsHtml += `<span class="tag">${itemText}</span>`;
+                } else {
+                    const shouldShow = !removedSkills.otherSkills.has(itemText);
+                    if (shouldShow) {
+                        itemsHtml += `<span class="tag removable-tag" data-skill="${itemText.replace(/"/g, '&quot;')}" data-type="other">
+                            ${itemText}
+                            <button type="button" class="tag-remove-btn" onclick="removeSkill(this)">×</button>
+                        </span>`;
+                    }
+                }
+            });
+            
+            return itemsHtml ? `<div class="tags">${itemsHtml}</div>` : `<div class="muted">—</div>`;
+        };
+
         // Add script for handling skill removal - SIMPLIFIED approach
         const removalScript = opts.isPreview ? `
             <script>
@@ -483,7 +526,7 @@ const Biodata = ({ formData, iframeRef, canEdit }) => {
         ${technicalSkills.length > 0 ? `
         <div class="kv-row">
             <div class="kv-label">Technical Skills</div><div class="kv-colon">:</div>
-            <div class="kv-value">${chips(technicalSkills, 'other')}</div>
+            <div class="kv-value">${chipsForTechnicalSkills()}</div>
         </div>
         ` : ''}
         

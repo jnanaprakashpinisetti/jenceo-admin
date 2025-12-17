@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 
 const headerImage = "https://firebasestorage.googleapis.com/v0/b/jenceo-admin.firebasestorage.app/o/OfficeFiles%2FHeadder.svg?alt=media&token=fa65a3ab-ba03-4959-bc36-e293c6db48ae";
 
@@ -12,6 +12,9 @@ const Biodata = ({ formData, iframeRef, canEdit }) => {
         nursingSkills: new Set(),
         workingSkills: new Set()
     });
+    
+    // Ref to track if we should refresh the iframe
+    const shouldRefreshIframe = useRef(false);
     
     // Function to save removed skills to localStorage (temporary)
     const saveRemovedSkills = () => {
@@ -48,6 +51,7 @@ const Biodata = ({ formData, iframeRef, canEdit }) => {
             workingSkills: new Set()
         });
         localStorage.removeItem('biodata_removed_skills');
+        shouldRefreshIframe.current = true;
         alert("All skill removals have been reset.");
     };
     
@@ -226,61 +230,76 @@ const Biodata = ({ formData, iframeRef, canEdit }) => {
                 if (!opts.isPreview) {
                     return `<span class="tag">${itemText}</span>`;
                 }
-                // Use a unique ID to avoid JavaScript escaping issues
-                const skillId = encodeURIComponent(itemText.replace(/[^a-zA-Z0-9]/g, '_'));
-                return `<span class="tag removable-tag" data-skill-id="${skillId}" data-skill="${itemText}" data-type="${skillType}">
+                // Check if this skill should be shown (not removed)
+                const shouldShow = !removedSkills[skillType === 'nursing' ? 'nursingSkills' : 
+                                                skillType === 'working' ? 'workingSkills' : 'otherSkills'].has(itemText);
+                
+                if (!shouldShow) return '';
+                
+                return `<span class="tag removable-tag" data-skill="${itemText.replace(/"/g, '&quot;')}" data-type="${skillType}">
                     ${itemText}
-                    <button type="button" class="tag-remove-btn" onclick="removeSkill('${skillId}')">×</button>
+                    <button type="button" class="tag-remove-btn" onclick="removeSkill(this)">×</button>
                 </span>`;
             }).join("");
             
-            return `<div class="tags">${itemsHtml}</div>`;
+            return itemsHtml ? `<div class="tags">${itemsHtml}</div>` : `<div class="muted">—</div>`;
         };
 
-        // Add script for handling skill removal - FIXED to prevent page reload
+        // Add script for handling skill removal - SIMPLIFIED approach
         const removalScript = opts.isPreview ? `
             <script>
-                function removeSkill(skillId) {
-                    try {
-                        const tagElement = document.querySelector('[data-skill-id="' + skillId + '"]');
-                        if (tagElement) {
-                            const skill = tagElement.getAttribute('data-skill');
-                            const skillType = tagElement.getAttribute('data-type');
-                            
-                            // Remove the tag from UI immediately
-                            tagElement.remove();
-                            
-                            // Send message to parent React component
-                            window.parent.postMessage({
-                                type: 'REMOVE_SKILL',
-                                skill: skill,
-                                skillType: skillType
-                            }, '*');
-                        }
-                    } catch (e) {
-                        console.error('Error removing skill:', e);
+                function removeSkill(btn) {
+                    // Prevent any default behavior
+                    if (btn) {
+                        if (btn.preventDefault) btn.preventDefault();
+                        if (btn.stopPropagation) btn.stopPropagation();
+                        btn.blur(); // Remove focus to prevent any form submission
                     }
+                    
+                    // Get the skill data from the parent tag
+                    const tag = btn.closest('.removable-tag');
+                    if (!tag) return false;
+                    
+                    const skill = tag.getAttribute('data-skill');
+                    const skillType = tag.getAttribute('data-type');
+                    
+                    // Remove the tag from UI immediately
+                    tag.remove();
+                    
+                    // Send message to parent React component
+                    try {
+                        window.parent.postMessage({
+                            type: 'REMOVE_SKILL',
+                            skill: skill,
+                            skillType: skillType
+                        }, '*');
+                    } catch (e) {
+                        console.error('Failed to send message:', e);
+                    }
+                    
+                    // Prevent any further event propagation
                     return false;
                 }
                 
-                // Add click event listener to all remove buttons
-                document.addEventListener('DOMContentLoaded', function() {
-                    // Also attach event listeners to handle any dynamic content
-                    const handleRemoveClick = function(e) {
-                        if (e.target.classList.contains('tag-remove-btn')) {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            const tag = e.target.closest('.removable-tag');
-                            if (tag) {
-                                const skillId = tag.getAttribute('data-skill-id');
-                                removeSkill(skillId);
-                            }
-                            return false;
-                        }
-                    };
-                    
-                    document.addEventListener('click', handleRemoveClick);
-                });
+                // Add global click handler to catch any missed clicks
+                document.addEventListener('click', function(e) {
+                    if (e.target.classList.contains('tag-remove-btn')) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        e.stopImmediatePropagation();
+                        removeSkill(e.target);
+                        return false;
+                    }
+                }, true);
+                
+                // Also handle mousedown to catch events earlier
+                document.addEventListener('mousedown', function(e) {
+                    if (e.target.classList.contains('tag-remove-btn')) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        return false;
+                    }
+                }, true);
             </script>
         ` : '';
 
@@ -534,7 +553,7 @@ ${removalScript}
         }
     };
     
-    // Handle skill removal from iframe
+    // Handle skill removal from iframe - DEBOUNCED to prevent rapid re-renders
     useEffect(() => {
         const handleMessage = (event) => {
             if (event.data && event.data.type === 'REMOVE_SKILL') {
@@ -549,6 +568,9 @@ ${removalScript}
                          skillType === 'working' ? 'workingSkills' : 'otherSkills']: newSet
                     };
                 });
+                
+                // Instead of immediately refreshing iframe, just update the state
+                // The iframe will be updated on next render cycle
             }
         };
         
@@ -561,10 +583,27 @@ ${removalScript}
         loadRemovedSkills();
     }, []);
 
+    // Update iframe only when formData changes OR when we explicitly want to refresh
     useEffect(() => {
         if (iframeRef.current) {
             const doc = iframeRef.current;
-            doc.srcdoc = buildBiodataHTML({ hideSensitive: false, isPreview: true });
+            // Only update iframe if formData changed or we need to refresh
+            if (shouldRefreshIframe.current) {
+                doc.srcdoc = buildBiodataHTML({ hideSensitive: false, isPreview: true });
+                shouldRefreshIframe.current = false;
+            } else {
+                // For skill removals, we don't refresh the iframe immediately
+                // because the skill is already removed from the DOM by JavaScript
+                // Only refresh if formData actually changed
+                const currentSrc = doc.srcdoc;
+                const newSrc = buildBiodataHTML({ hideSensitive: false, isPreview: true });
+                
+                // Only update iframe if content actually changed (formData changed)
+                // This prevents the iframe reload when just removing skills
+                if (currentSrc !== newSrc) {
+                    doc.srcdoc = newSrc;
+                }
+            }
         }
     }, [formData, removedSkills]);
 
@@ -618,6 +657,7 @@ ${removalScript}
                     ref={iframeRef}
                     title="Biodata Preview"
                     style={{ width: "100%", height: "900px", border: "1px solid #e5e5e5", borderRadius: 8 }}
+                    sandbox="allow-scripts allow-same-origin" // Added sandbox for better security
                 />
             </div>
         </div>

@@ -167,7 +167,7 @@ const SkillAccordion = ({ idPrefix, sections, selected = [], onToggle }) => {
                                 <strong className={`me-2 text-${sec.color}`}>●</strong>
                                 {sec.title}
                                 {activeCount > 0 && (
-                                    <span className="badge ms-2 bg-outline border text-muted">
+                                    <span className="badge ms-2 bg-outline border small-text">
                                         {activeCount} selected
                                     </span>
                                 )}

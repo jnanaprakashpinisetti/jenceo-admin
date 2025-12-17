@@ -222,7 +222,7 @@ const Biodata = ({ formData, iframeRef, canEdit }) => {
     .subtitle {font-size: 10px; text-align: center;}
     .meta {justify-content: center; margin-top: 10px; margin-bottom: 15px;}
     .photo-box {margin-top: 15px;}
-    .photo-box img {width: 100px; height: 100px;}
+    .photo-box img {width: 150px !important; height: 150px !important;}
     .kv-row {display: flex; padding: 8px;}
     .kv-label {min-width:35%; font-weight: 600; margin-bottom: 5px; display: block; font-size: 12px;}
     .kv-value {font-size: 13px;}

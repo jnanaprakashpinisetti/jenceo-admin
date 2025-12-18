@@ -176,7 +176,7 @@ const PayInfoTab = ({ formData, hasPayments, hasWorkDetails }) => {
                                 <div className="card-body">
                                     <div className="row">
                                         <div className="col-md-4 text-center">
-                                            <div className="p-3 bg-light rounded">
+                                            <div className="p-3 bg-light rounded h-100 align-content-center">
                                                 <div className="text-muted">Gross Salary</div>
                                                 <div className="h4 fw-bold text-success">
                                                     ₹{(() => {
@@ -195,7 +195,7 @@ const PayInfoTab = ({ formData, hasPayments, hasWorkDetails }) => {
                                             </div>
                                         </div>
                                         <div className="col-md-4 text-center">
-                                            <div className="p-3 bg-light rounded">
+                                            <div className="p-3 bg-light rounded h-100 align-content-center">
                                                 <div className="text-muted">Total Deductions</div>
                                                 <div className="h4 fw-bold text-danger">
                                                     ₹{(() => {

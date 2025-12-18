@@ -1,0 +1,107 @@
+.staffBasicInfo {
+
+    .card {
+        background-color: transparent;
+    }
+
+    .text-muted {
+        color: #444 !important;
+    }
+
+    /* Timeline Layout */
+    .timeline-item {
+        position: relative;
+        padding-left: 40px;
+    }
+
+    .timeline-marker {
+        position: absolute;
+        left: 0;
+        top: 10px;
+        width: 30px;
+        height: 30px;
+        border-radius: 50%;
+        background: white;
+        border: 2px solid #dee2e6;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 2;
+    }
+
+    .timeline-marker i {
+        font-size: 14px;
+    }
+
+    .timeline-content {
+        position: relative;
+        border-left: 2px solid #dee2e6;
+        padding-left: 20px;
+        margin-left: 15px;
+    }
+
+    .timeline-content::before {
+        content: '';
+        position: absolute;
+        left: -2px;
+        top: 15px;
+        width: 10px;
+        height: 2px;
+        background: #dee2e6;
+    }
+
+    /* Avatar styles */
+    .avatar-wrapper {
+        position: relative;
+    }
+
+    .avatar-placeholder {
+        position: relative;
+    }
+
+    /* Status indicator */
+    .status-indicator {
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+        display: inline-block;
+    }
+
+ 
+
+    /* Form input styling */
+    .input-group-text {
+        transition: all 0.2s ease;
+    }
+
+    .input-group:focus-within .input-group-text {
+        background-color: #e9ecef;
+        border-color: #86b7fe;
+    }
+
+    /* History section */
+    .history-section {
+        max-height: 400px;
+        overflow-y: auto;
+        padding-right: 10px;
+    }
+
+    /* Custom scrollbar */
+    .history-section::-webkit-scrollbar {
+        width: 6px;
+    }
+
+    .history-section::-webkit-scrollbar-track {
+        background: #f1f1f1;
+        border-radius: 3px;
+    }
+
+    .history-section::-webkit-scrollbar-thumb {
+        background: #c1c1c1;
+        border-radius: 3px;
+    }
+
+    .history-section::-webkit-scrollbar-thumb:hover {
+        background: #a8a8a8;
+    }
+}

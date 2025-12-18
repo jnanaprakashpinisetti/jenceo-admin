@@ -1939,437 +1939,530 @@ const StaffModal = ({ staff, isOpen, onClose, onSave, onDelete, isEditMode }) =>
                             <div className="tab-content p-3 staffDataEdit">
                                 {/* Basic */}
                                 {activeTab === "basic" && (
-                                    <div className="modal-card">
-                                        {/* Status and Superior Info */}
-                                        <div className="row status mb-4 bg-light p-3 border-radius-4">
-                                            <div className="col-md-4">
-                                                <label className="form-label">
-                                                    <strong>Status</strong>
-                                                </label>
-
-                                                {isEditMode ? (
-                                                    <select className="form-select" value={status} onChange={(e) => setStatus(e.target.value)}>
-                                                        <option value="On Duty">On Duty</option>
-                                                        <option value="Off Duty">Off Duty</option>
-                                                        <option value="Resigned">Resigned</option>
-                                                        <option value="Absconder">Absconder</option>
-                                                        <option value="Terminated">Terminated</option>
-                                                    </select>
-                                                ) : (
-                                                    <div>
-                                                        <span
-                                                            className={`badge px-3 py-2`}
-                                                            style={{
-                                                                fontSize: "1rem",
-                                                                backgroundColor:
-                                                                    status === "On Duty"
-                                                                        ? "green"
-                                                                        : status === "Off Duty"
-                                                                            ? "gray"
-                                                                            : status === "Terminated"
-                                                                                ? "red"
-                                                                                : status === "Resigned"
-                                                                                    ? "brown"
-                                                                                    : "red",
-                                                                color: "white",
-                                                            }}
-                                                        >
-                                                            {status}
-                                                        </span>
-                                                    </div>
-                                                )}
-                                            </div>
-
-                                            {/* Superior Info */}
-                                            <div className="col-md-8">
-                                                <div className="d-flex">
-                                                    <div className="me-3">
-                                                        {formData.superiorPhoto ? (
-                                                            <img
-                                                                src={formData.superiorPhoto}
-                                                                alt="Superior"
-                                                                style={{
-                                                                    width: "60px",
-                                                                    height: "60px",
-                                                                    borderRadius: "50%",
-                                                                    objectFit: "cover",
-                                                                    border: "2px solid #dee2e6"
-                                                                }}
-                                                                className="img-fluid"
-                                                                onError={(e) => {
-                                                                    console.error("Failed to load superior photo:", formData.superiorPhoto);
-                                                                    e.target.src = "https://firebasestorage.googleapis.com/v0/b/jenceo-admin.firebasestorage.app/o/OfficeFiles%2FSample-Photo.jpg?alt=media&token=01855b47-c9c2-490e-b400-05851192dde7";
-                                                                }}
-                                                            />
-                                                        ) : (
-                                                            <div
-                                                                style={{
-                                                                    width: "60px",
-                                                                    height: "60px",
-                                                                    borderRadius: "50%",
-                                                                    backgroundColor: "#f8f9fa",
-                                                                    display: "flex",
-                                                                    alignItems: "center",
-                                                                    justifyContent: "center",
-                                                                    border: "2px dashed #dee2e6"
-                                                                }}
+                                    <div className="modal-card staffBasicInfo">
+                                        {/* Status and Superior Info Card */}
+                                        <div className="card mb-4 border-0 shadow-sm" style={{ background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)" }}>
+                                            <div className="card-body text-white p-4">
+                                                <div className="row align-items-center">
+                                                    {/* Status Section */}
+                                                    <div className="col-md-4 mb-3 mb-md-0">
+                                                        <h6 className="mb-2 fw-semibold opacity-90">Status</h6>
+                                                        {isEditMode ? (
+                                                            <select
+                                                                className="form-select form-select-sm bg-white text-dark"
+                                                                value={status}
+                                                                onChange={(e) => setStatus(e.target.value)}
+                                                                style={{ maxWidth: "200px" }}
                                                             >
-                                                                <span className="small-text">No Photo</span>
+                                                                <option value="On Duty">On Duty</option>
+                                                                <option value="Off Duty">Off Duty</option>
+                                                                <option value="Resigned">Resigned</option>
+                                                                <option value="Absconder">Absconder</option>
+                                                                <option value="Terminated">Terminated</option>
+                                                            </select>
+                                                        ) : (
+                                                            <div className="d-flex align-items-center">
+                                                                <div className={`status-indicator me-2 ${status === "On Duty" ? "bg-success" : status === "Off Duty" ? "bg-secondary" : "bg-danger"}`}></div>
+                                                                <span className="badge bg-white text-dark px-3 py-2 fw-semibold">
+                                                                    {status}
+                                                                </span>
                                                             </div>
                                                         )}
                                                     </div>
 
-                                                    <div className="flex-grow-1">
-                                                        <div className="row">
-                                                            <div className="col-md-6">
-                                                                {renderInputField("Superior ID", "superiorId", formData.superiorId, "text", "", false, {
-                                                                    onBlur: handleSuperiorLookup,
-                                                                    disabled: lockBasic
-                                                                })}
-                                                                {formData.superiorId && !formData.superiorName && (
-                                                                    <div className="form-text">Enter Superior ID and blur to fetch details</div>
+                                                    {/* Superior Info Section */}
+                                                    <div className="col-md-8">
+                                                        <div className="d-flex align-items-center">
+                                                            {/* Superior Avatar */}
+                                                            <div className="position-relative me-3">
+                                                                {formData.superiorPhoto ? (
+                                                                    <div className="avatar-wrapper">
+                                                                        <img
+                                                                            src={formData.superiorPhoto}
+                                                                            alt="Superior"
+                                                                            className="rounded-circle border-3 border-white shadow"
+                                                                            style={{
+                                                                                width: "70px",
+                                                                                height: "70px",
+                                                                                objectFit: "cover"
+                                                                            }}
+                                                                            onError={(e) => {
+                                                                                e.target.src = "https://firebasestorage.googleapis.com/v0/b/jenceo-admin.firebasestorage.app/o/OfficeFiles%2FSample-Photo.jpg?alt=media&token=01855b47-c9c2-490e-b400-05851192dde7";
+                                                                            }}
+                                                                        />
+                                                                        <div className="position-absolute bottom-0 end-0 bg-primary rounded-circle p-1 border border-2 border-white">
+                                                                            <i className="fas fa-user-check text-white" style={{ fontSize: "12px" }}></i>
+                                                                        </div>
+                                                                    </div>
+                                                                ) : (
+                                                                    <div className="avatar-placeholder rounded-circle border-3 border-white d-flex align-items-center justify-content-center shadow"
+                                                                        style={{
+                                                                            width: "70px",
+                                                                            height: "70px",
+                                                                            background: "rgba(255, 255, 255, 0.2)"
+                                                                        }}>
+                                                                        <i className="fas fa-user text-white" style={{ fontSize: "24px" }}></i>
+                                                                    </div>
                                                                 )}
                                                             </div>
-                                                            <div className="col-md-6">
-                                                                <div className="form-group">
-                                                                    <label className="form-label">Superior Name</label>
-                                                                    <input
-                                                                        type="text"
-                                                                        className="form-control bg-light"
-                                                                        value={formData.superiorName || ""}
-                                                                        readOnly
-                                                                        placeholder="Will auto-fill from Superior ID"
-                                                                    />
-                                                                </div>
-                                                            </div>
-                                                        </div>
 
-                                                        {formData.superiorName && (
-                                                            <div className="mt-2">
-                                                                <small className="small-text">
-                                                                    Reporting to: <strong>{formData.superiorName}</strong>
-                                                                    {formData.superiorId && ` (ID: ${formData.superiorId})`}
-                                                                </small>
-                                                            </div>
-                                                        )}
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </div>
-
-                                        <div className="modal-card-header d-flex align-items-center justify-content-between">
-                                            <h4 className="mb-0">Basic Information</h4>
-                                            {isSuperAdmin && (
-                                                <button
-                                                    type="button"
-                                                    className={`btn btn-sm ${superAdminUnlock ? "btn-warning" : "btn-outline-warning"}`}
-                                                    onClick={() => setSuperAdminUnlock(v => !v)}
-                                                    title="Super Admin unlock for sensitive fields"
-                                                >
-                                                    {superAdminUnlock ? "Lock Sensitive Fields" : "Unlock Sensitive Fields"}
-                                                </button>
-                                            )}
-                                        </div>
-
-                                        <div className="modal-card-body">
-                                            {/* Photo lives ONLY in Basic Info now */}
-                                            <div className="row align-items-start">
-                                                <div className="col-md-4">
-                                                    <div className="">
-                                                        <label className="form-label center">
-                                                            <strong>Staff Photo</strong>
-                                                        </label>
-                                                        <div className="text-center">
-                                                            {formData.employeePhotoUrl ? (
-                                                                <img
-                                                                    src={formData.employeePhotoUrl}
-                                                                    alt="Staff"
-                                                                    style={{ maxWidth: "300px", maxHeight: "300px", objectFit: "cover" }}
-                                                                    className="rounded img-fluid "
-                                                                />
-                                                            ) : (
-                                                                <div className="text-muted ">No photo selected</div>
-                                                            )}
-
-                                                            {isEditMode && (
-                                                                <div className="d-flex flex-column align-items-center gap-2 mt-3">
-                                                                    <input
-                                                                        type="file"
-                                                                        accept="image/*"
-                                                                        onChange={handlePhotoChange}
-                                                                        className="form-control"
-                                                                        style={{ maxWidth: 320 }}
-                                                                    />
-                                                                    {formData.employeePhotoUrl && (
-                                                                        <button
-                                                                            type="button"
-                                                                            className="btn btn-outline-secondary btn-sm"
-                                                                            onClick={() =>
-                                                                                setFormData((prev) => ({
-                                                                                    ...prev,
-                                                                                    employeePhotoFile: undefined,
-                                                                                    employeePhotoUrl: null,
-                                                                                }))
-                                                                            }
-                                                                        >
-                                                                            Remove Photo
-                                                                        </button>
-                                                                    )}
-                                                                </div>
-                                                            )}
-                                                        </div>
-
-                                                        {/* ID Proof File Upload Section - Similar to BasicInformation.js */}
-                                                        <div className="mt-4">
-                                                            <label className="form-label center">
-                                                                <strong>ID Proof Files</strong>
-                                                                <small className="text-muted ms-1">(max 5 files, 200KB each)</small>
-                                                            </label>
-
-                                                            {isEditMode ? (
-                                                                <>
-                                                                    <div className="mb-2">
-                                                                        <input
-                                                                            type="file"
-                                                                            className="form-control"
-                                                                            onChange={handleIdProofChange}
-                                                                            accept=".jpg,.jpeg,.png,.gif,.pdf"
-                                                                            multiple
-                                                                        />
-                                                                        <div className="form-text">
-                                                                            Upload ID proofs (PDF/JPG/PNG/GIF, max 200KB each)
+                                                            {/* Superior Details */}
+                                                            <div className="flex-grow-1">
+                                                                <h6 className="mb-2 fw-semibold opacity-90">Reporting Manager</h6>
+                                                                <div className="bg-white rounded p-3 shadow-sm">
+                                                                    <div className="row g-2">
+                                                                        <div className="col-md-6">
+                                                                            <div className="input-group input-group-sm">
+                                                                                <span className="input-group-text bg-light border-0">
+                                                                                    <i className="fas fa-id-badge text-primary"></i>
+                                                                                </span>
+                                                                                <input
+                                                                                    type="text"
+                                                                                    className="form-control border-0"
+                                                                                    placeholder="Superior ID"
+                                                                                    name="superiorId"
+                                                                                    value={formData.superiorId || ""}
+                                                                                    onChange={handleInputChange}
+                                                                                    onBlur={handleSuperiorLookup}
+                                                                                    disabled={lockBasic}
+                                                                                />
+                                                                            </div>
+                                                                        </div>
+                                                                        <div className="col-md-6">
+                                                                            <div className="input-group input-group-sm">
+                                                                                <span className="input-group-text bg-light border-0">
+                                                                                    <i className="fas fa-user text-primary"></i>
+                                                                                </span>
+                                                                                <input
+                                                                                    type="text"
+                                                                                    className="form-control border-0 bg-light"
+                                                                                    value={formData.superiorName || ""}
+                                                                                    readOnly
+                                                                                    placeholder="Manager Name"
+                                                                                />
+                                                                            </div>
                                                                         </div>
                                                                     </div>
 
-                                                                    {/* Display uploaded ID proof files */}
-                                                                    {formData.idProofFiles && formData.idProofFiles.length > 0 && (
-                                                                        <div className="mb-3">
-                                                                            <small className="text-muted d-block mb-2">Uploaded ID Proofs:</small>
-                                                                            <div className="d-flex flex-wrap gap-2">
-                                                                                {formData.idProofFiles.map((file, index) => (
-                                                                                    <div key={index} className="border rounded p-2 d-flex align-items-center">
-                                                                                        <span className="me-2">
-                                                                                            {file.type === 'application/pdf' ? '📄' : '🖼️'}
-                                                                                        </span>
-                                                                                        <span className="text-truncate" style={{ maxWidth: "150px" }}>
-                                                                                            {file.name}
-                                                                                        </span>
-                                                                                        <button
-                                                                                            type="button"
-                                                                                            className="btn btn-sm btn-outline-danger ms-2"
-                                                                                            onClick={() => removeIdProofFile(index)}
-                                                                                            title="Remove file"
-                                                                                        >
-                                                                                            ×
-                                                                                        </button>
-                                                                                    </div>
-                                                                                ))}
-                                                                            </div>
+                                                                    {formData.superiorName && (
+                                                                        <div className="mt-2 d-flex align-items-center">
+                                                                            <i className="fas fa-arrow-right text-success me-2"></i>
+                                                                            <small className="text-muted">
+                                                                                Reports to <strong className="text-dark">{formData.superiorName}</strong>
+                                                                                {formData.superiorId && <span className="ms-1">(ID: {formData.superiorId})</span>}
+                                                                            </small>
                                                                         </div>
                                                                     )}
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
 
-                                                                    {/* Display existing ID proofs from database */}
-                                                                    {formData.idProof && formData.idProof.length > 0 && (
+                                        {/* Main Content Card */}
+                                        <div className="card border-0 shadow-sm">
+                                            <div className="card-header bg-white border-0 py-3">
+                                                <div className="d-flex justify-content-between align-items-center">
+                                                    <h4 className="mb-0 fw-bold text-primary">
+                                                        <i className="fas fa-id-card me-2"></i>
+                                                        Basic Information
+                                                    </h4>
+                                                    {isSuperAdmin && (
+                                                        <button
+                                                            type="button"
+                                                            className={`btn ${superAdminUnlock ? "btn-warning" : "btn-outline-warning"} btn-sm`}
+                                                            onClick={() => setSuperAdminUnlock(v => !v)}
+                                                            title="Super Admin unlock for sensitive fields"
+                                                        >
+                                                            <i className={`fas ${superAdminUnlock ? "fa-lock-open" : "fa-lock"} me-1`}></i>
+                                                            {superAdminUnlock ? "Lock Fields" : "Unlock Fields"}
+                                                        </button>
+                                                    )}
+                                                </div>
+                                            </div>
+
+                                            <div className="card-body">
+                                                <div className="row">
+                                                    {/* Left Column - Photo & ID Proofs */}
+                                                    <div className="col-md-4 mb-4 mb-md-0">
+                                                        {/* Staff Photo Card */}
+                                                        <div className="card border mb-4">
+                                                            <div className="card-header bg-light py-2">
+                                                                <h6 className="mb-0 fw-semibold">
+                                                                    <i className="fas fa-camera me-2"></i>
+                                                                    Staff Photo
+                                                                </h6>
+                                                            </div>
+                                                            <div className="card-body text-center p-3">
+                                                                <div className="staff-photo-container mb-3">
+                                                                    {formData.employeePhotoUrl ? (
+                                                                        <img
+                                                                            src={formData.employeePhotoUrl}
+                                                                            alt="Staff"
+                                                                            className="rounded shadow img-fluid"
+                                                                            style={{
+                                                                                maxWidth: "100%",
+                                                                                maxHeight: "250px",
+                                                                                objectFit: "cover",
+                                                                                border: "3px solid #f8f9fa"
+                                                                            }}
+                                                                        />
+                                                                    ) : (
+                                                                        <div className="photo-placeholder rounded d-flex flex-column align-items-center justify-content-center p-5"
+                                                                            style={{
+                                                                                background: "linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%)",
+                                                                                minHeight: "200px"
+                                                                            }}>
+                                                                            <i className="fas fa-user-circle text-muted mb-2" style={{ fontSize: "48px" }}></i>
+                                                                            <span className="text-muted">No photo selected</span>
+                                                                        </div>
+                                                                    )}
+                                                                </div>
+
+                                                                {isEditMode && (
+                                                                    <div className="d-grid gap-2">
+                                                                        <label className="btn btn-outline-primary btn-sm">
+                                                                            <i className="fas fa-upload me-1"></i>
+                                                                            Upload Photo
+                                                                            <input
+                                                                                type="file"
+                                                                                accept="image/*"
+                                                                                onChange={handlePhotoChange}
+                                                                                className="d-none"
+                                                                            />
+                                                                        </label>
+                                                                        {formData.employeePhotoUrl && (
+                                                                            <button
+                                                                                type="button"
+                                                                                className="btn btn-outline-danger btn-sm"
+                                                                                onClick={() =>
+                                                                                    setFormData((prev) => ({
+                                                                                        ...prev,
+                                                                                        employeePhotoFile: undefined,
+                                                                                        employeePhotoUrl: null,
+                                                                                    }))
+                                                                                }
+                                                                            >
+                                                                                <i className="fas fa-trash me-1"></i>
+                                                                                Remove Photo
+                                                                            </button>
+                                                                        )}
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                        </div>
+
+                                                        {/* ID Proofs Card */}
+                                                        <div className="card border">
+                                                            <div className="card-header bg-light py-2">
+                                                                <h6 className="mb-0 fw-semibold">
+                                                                    <i className="fas fa-id-card-alt me-2"></i>
+                                                                    ID Proof Files
+                                                                    <small className="text-muted ms-1">(max 5 files)</small>
+                                                                </h6>
+                                                            </div>
+                                                            <div className="card-body p-3">
+                                                                {isEditMode ? (
+                                                                    <>
                                                                         <div className="mb-3">
-                                                                            <small className="text-muted d-block mb-2">Existing ID Proofs:</small>
-                                                                            <div className="d-flex flex-wrap gap-2">
-                                                                                {formData.idProof.map((proof, index) => (
-                                                                                    <div key={index} className="border rounded p-2 d-flex align-items-center">
-                                                                                        <span className="me-2">
-                                                                                            {proof.type === 'application/pdf' ? '📄' : '🖼️'}
-                                                                                        </span>
-                                                                                        <a
-                                                                                            href={proof.url}
-                                                                                            target="_blank"
-                                                                                            rel="noopener noreferrer"
-                                                                                            className="text-truncate text-decoration-none"
-                                                                                            style={{ maxWidth: "150px" }}
-                                                                                            title={proof.name || "ID Proof"}
-                                                                                        >
-                                                                                            {proof.name || `ID Proof ${index + 1}`}
-                                                                                        </a>
-                                                                                        {isEditMode && (
+                                                                            <label className="btn btn-outline-secondary btn-sm w-100">
+                                                                                <i className="fas fa-cloud-upload-alt me-1"></i>
+                                                                                Upload ID Proofs
+                                                                                <input
+                                                                                    type="file"
+                                                                                    className="d-none"
+                                                                                    onChange={handleIdProofChange}
+                                                                                    accept=".jpg,.jpeg,.png,.gif,.pdf"
+                                                                                    multiple
+                                                                                />
+                                                                            </label>
+                                                                            <div className="form-text text-center">
+                                                                                PDF/JPG/PNG/GIF, max 200KB each
+                                                                            </div>
+                                                                        </div>
+
+                                                                        {/* Uploaded Files */}
+                                                                        {formData.idProofFiles && formData.idProofFiles.length > 0 && (
+                                                                            <div className="mb-3">
+                                                                                <small className="text-muted d-block mb-2">New Uploads:</small>
+                                                                                <div className="list-group list-group-flush">
+                                                                                    {formData.idProofFiles.map((file, index) => (
+                                                                                        <div key={index} className="list-group-item px-2 py-1 d-flex justify-content-between align-items-center">
+                                                                                            <div className="d-flex align-items-center">
+                                                                                                <i className={`fas ${file.type === 'application/pdf' ? 'fa-file-pdf text-danger' : 'fa-file-image text-success'} me-2`}></i>
+                                                                                                <span className="text-truncate" style={{ maxWidth: "150px" }}>
+                                                                                                    {file.name}
+                                                                                                </span>
+                                                                                            </div>
                                                                                             <button
                                                                                                 type="button"
-                                                                                                className="btn btn-sm btn-outline-danger ms-2"
-                                                                                                onClick={() => removeExistingIdProof(index)}
-                                                                                                title="Remove proof"
+                                                                                                className="btn btn-sm btn-outline-danger"
+                                                                                                onClick={() => removeIdProofFile(index)}
+                                                                                                title="Remove file"
                                                                                             >
-                                                                                                ×
+                                                                                                <i className="fas fa-times"></i>
                                                                                             </button>
-                                                                                        )}
-                                                                                    </div>
-                                                                                ))}
+                                                                                        </div>
+                                                                                    ))}
+                                                                                </div>
                                                                             </div>
-                                                                        </div>
-                                                                    )}
-                                                                </>
-                                                            ) : (
-                                                                /* View mode: Show existing ID proofs */
-                                                                <div className="mb-3">
-                                                                    {formData.idProof && formData.idProof.length > 0 ? (
-                                                                        <div className="d-flex flex-wrap gap-2">
-                                                                            {formData.idProof.map((proof, index) => (
-                                                                                <div key={index} className="border rounded p-2 d-flex align-items-center">
-                                                                                    <span className="me-2">
-                                                                                        {proof.type === 'application/pdf' ? '📄' : '🖼️'}
-                                                                                    </span>
+                                                                        )}
+
+                                                                        {/* Existing Proofs */}
+                                                                        {formData.idProof && formData.idProof.length > 0 && (
+                                                                            <div>
+                                                                                <small className="text-muted d-block mb-2">Existing Proofs:</small>
+                                                                                <div className="list-group list-group-flush">
+                                                                                    {formData.idProof.map((proof, index) => (
+                                                                                        <div key={index} className="list-group-item px-2 py-1 d-flex justify-content-between align-items-center">
+                                                                                            <a
+                                                                                                href={proof.url}
+                                                                                                target="_blank"
+                                                                                                rel="noopener noreferrer"
+                                                                                                className="text-decoration-none d-flex align-items-center"
+                                                                                            >
+                                                                                                <i className={`fas ${proof.type === 'application/pdf' ? 'fa-file-pdf text-danger' : 'fa-file-image text-success'} me-2`}></i>
+                                                                                                <span className="text-truncate" style={{ maxWidth: "150px" }}>
+                                                                                                    {proof.name || `ID Proof ${index + 1}`}
+                                                                                                </span>
+                                                                                            </a>
+                                                                                            {isEditMode && (
+                                                                                                <button
+                                                                                                    type="button"
+                                                                                                    className="btn btn-sm btn-outline-danger"
+                                                                                                    onClick={() => removeExistingIdProof(index)}
+                                                                                                    title="Remove proof"
+                                                                                                >
+                                                                                                    <i className="fas fa-times"></i>
+                                                                                                </button>
+                                                                                            )}
+                                                                                        </div>
+                                                                                    ))}
+                                                                                </div>
+                                                                            </div>
+                                                                        )}
+                                                                    </>
+                                                                ) : (
+                                                                    /* View Mode */
+                                                                    <div>
+                                                                        {formData.idProof && formData.idProof.length > 0 ? (
+                                                                            <div className="list-group list-group-flush">
+                                                                                {formData.idProof.map((proof, index) => (
                                                                                     <a
+                                                                                        key={index}
                                                                                         href={proof.url}
                                                                                         target="_blank"
                                                                                         rel="noopener noreferrer"
-                                                                                        className="text-truncate text-decoration-none"
-                                                                                        style={{ maxWidth: "150px" }}
-                                                                                        title={proof.name || "ID Proof"}
+                                                                                        className="list-group-item list-group-item-action px-2 py-2 d-flex align-items-center"
                                                                                     >
-                                                                                        {proof.name || `ID Proof ${index + 1}`}
+                                                                                        <i className={`fas ${proof.type === 'application/pdf' ? 'fa-file-pdf text-danger' : 'fa-file-image text-success'} me-2`}></i>
+                                                                                        <span className="text-truncate">
+                                                                                            {proof.name || `ID Proof ${index + 1}`}
+                                                                                        </span>
+                                                                                        <i className="fas fa-external-link-alt ms-auto text-muted"></i>
                                                                                     </a>
-                                                                                </div>
-                                                                            ))}
-                                                                        </div>
-                                                                    ) : (
-                                                                        <div className="text-muted">No ID proofs uploaded</div>
-                                                                    )}
-                                                                </div>
-                                                            )}
-                                                        </div>
-                                                    </div>
-                                                </div>
-
-                                                <div className="col-md-8">
-                                                    <div className="row">
-                                                        <div className="col-md-6">
-                                                            {renderInputField("ID No", "idNo", formData.idNo || formData.employeeId, "text", "", true)}
-                                                        </div>
-                                                    </div>
-
-                                                    <div className="row">
-                                                        <div className="col-md-6">{renderInputField("First Name", "firstName", formData.firstName, "text", "", false, { disabled: lockBasic })}</div>
-                                                        <div className="col-md-6">{renderInputField("Last Name", "lastName", formData.lastName, "text", "", false, { disabled: lockBasic })}</div>
-                                                    </div>
-
-                                                    <div className="row">
-                                                        <div className="col-md-6">
-                                                            {renderSelectField("Gender", "gender", formData.gender, [
-                                                                { value: "Male", label: "Male" },
-                                                                { value: "Female", label: "Female" },
-                                                                { value: "Other", label: "Other" },
-                                                            ], { disabled: lockBasic })}
-                                                        </div>
-                                                        <div className="col-md-6">{renderInputField("Care Of", "co", formData.co)}</div>
-                                                    </div>
-
-                                                    <div className="row">
-                                                        <div className="col-md-6">
-                                                            {renderInputField("Date of Birth", "dateOfBirth", formData.dateOfBirth, "date", "", false, {
-                                                                min: DOB_MIN, max: DOB_MAX, disabled: lockBasic
-                                                            })}
-                                                        </div>
-                                                        <div className="col-md-6">
-                                                            {renderInputField("Age", "years", formData.years, "number")}
-                                                        </div>
-                                                    </div>
-                                                    <div className="row">
-                                                        <div className="col-md-4">
-                                                            {renderInputField("Department", "department", formData.department, "text", "", false, { disabled: lockBasic })}
-                                                        </div>
-                                                        <div className="col-md-4">
-                                                            {renderInputField("Designation", "designation", formData.designation, "text", "", false, { disabled: lockBasic })}
-                                                        </div>
-                                                        <div className="col-md-4">
-                                                            {renderInputField("Role", "role", formData.role, "text", "", false, { disabled: lockBasic })}
-                                                        </div>
-                                                    </div>
-                                                    <div className="row">
-                                                        <div className="col-md-6">
-                                                            {renderInputField("Date of Joining", "date", formData.date || formData.dateOfJoining, "date", "", false, { disabled: lockBasic })}
-                                                        </div>
-                                                        <div className="col-md-6">
-                                                            {renderInputField("Page No", "pageNo", formData.pageNo)}
-                                                        </div>
-                                                    </div>
-
-                                                    <div className="row">
-                                                        <div className="col-md-6">
-                                                            {renderInputField("Basic Salary", "basicSalary", formData.basicSalary, "number", "", false, { disabled: lockBasic })}
-                                                        </div>
-                                                        <div className="col-md-6">
-                                                            {renderInputField("Allowance", "allowance", formData.allowance, "number")}
-                                                        </div>
-                                                    </div>
-
-                                                    <div className="row">
-                                                        <div className="col-md-6">{renderPhoneField("Mobile 1", "mobileNo1", formData.mobileNo1)}</div>
-                                                        <div className="col-md-6">{renderPhoneField("Mobile 2", "mobileNo2", formData.mobileNo2)}</div>
-                                                    </div>
-
-                                                    {/* ID Proofs Section */}
-                                                    <div className="mt-4">
-                                                        <label className="form-label">
-                                                            <strong>ID Proofs</strong>
-                                                        </label>
-                                                        <div className="row">
-                                                            <div className="col-md-6">
-                                                                {renderInputField("PAN No", "panNo", formData.panNo, "text", "ABCDE1234F", false, {
-                                                                    maxLength: 10,
-                                                                    pattern: "[A-Z]{5}[0-9]{4}[A-Z]{1}"
-                                                                })}
-                                                            </div>
-                                                            <div className="col-md-6">
-                                                                {renderInputField("Aadhar No", "aadharNo", formData.aadharNo, "tel", "", false, {
-                                                                    inputMode: "numeric",
-                                                                    maxLength: 12,
-                                                                    pattern: "^[0-9]{12}$",
-                                                                })}
-                                                            </div>
-                                                        </div>
-                                                        <div className="row mt-2">
-                                                            <div className="col-md-6">
-                                                                {renderInputField("PF No", "pfNo", formData.pfNo)}
-                                                            </div>
-                                                            <div className="col-md-6">
-                                                                {renderInputField("Insurance No", "insuranceNo", formData.insuranceNo)}
-                                                            </div>
-                                                        </div>
-                                                        <div className="row mt-2">
-                                                            <div className="col-md-6">
-                                                                {renderInputField("Health Card No", "healthCardNo", formData.healthCardNo)}
-                                                            </div>
-                                                            <div className="col-md-6">
-                                                                {renderInputField("Driving License", "drivingLicense", formData.drivingLicense)}
-                                                            </div>
-                                                        </div>
-                                                    </div>
-                                                </div>
-
-                                                <div className="row mt-3">
-                                                    <div className="col-md-12">
-                                                        <label className="form-label">
-                                                            <strong>About Employee</strong>
-                                                        </label>
-                                                        {isEditMode ? (
-                                                            <textarea
-                                                                className="form-control"
-                                                                name="aboutEmployee"
-                                                                value={formData.aboutEmployee || ""}
-                                                                onChange={handleInputChange}
-                                                                rows="3"
-                                                                placeholder="Enter details about the employee..."
-                                                            />
-                                                        ) : (
-                                                            <div className="form-control bg-light" style={{ minHeight: '100px' }}>
-                                                                {formData.aboutEmployee ? (
-                                                                    <div className="p-2">{formData.aboutEmployee}</div>
-                                                                ) : (
-                                                                    "No information provided"
+                                                                                ))}
+                                                                            </div>
+                                                                        ) : (
+                                                                            <div className="text-center py-3">
+                                                                                <i className="fas fa-folder-open text-muted mb-2" style={{ fontSize: "32px" }}></i>
+                                                                                <p className="text-muted mb-0">No ID proofs uploaded</p>
+                                                                            </div>
+                                                                        )}
+                                                                    </div>
                                                                 )}
                                                             </div>
-                                                        )}
+                                                        </div>
+                                                    </div>
+
+                                                    {/* Right Column - Form Fields */}
+                                                    <div className="col-md-8">
+                                                        {/* Personal Details Card */}
+                                                        <div className="card border mb-4">
+                                                            <div className="card-header bg-light py-2">
+                                                                <h6 className="mb-0 fw-semibold">
+                                                                    <i className="fas fa-user-circle me-2"></i>
+                                                                    Personal Details
+                                                                </h6>
+                                                            </div>
+                                                            <div className="card-body">
+                                                                <div className="row g-3">
+                                                                    <div className="col-md-6">
+                                                                        {renderInputField("ID No", "idNo", formData.idNo || formData.employeeId, "text", "", true)}
+                                                                    </div>
+                                                                    <div className="col-md-6">
+                                                                        {renderInputField("Page No", "pageNo", formData.pageNo, "number")}
+                                                                    </div>
+                                                                    <div className="col-md-6">
+                                                                        {renderInputField("First Name", "firstName", formData.firstName, "text", "", false, { disabled: lockBasic })}
+                                                                    </div>
+                                                                    <div className="col-md-6">
+                                                                        {renderInputField("Last Name", "lastName", formData.lastName, "text", "", false, { disabled: lockBasic })}
+                                                                    </div>
+                                                                    <div className="col-md-4">
+                                                                        {renderSelectField("Gender", "gender", formData.gender, [
+                                                                            { value: "Male", label: "Male" },
+                                                                            { value: "Female", label: "Female" },
+                                                                            { value: "Other", label: "Other" },
+                                                                        ], { disabled: lockBasic })}
+                                                                    </div>
+                                                                    <div className="col-md-4">
+                                                                        {renderInputField("Care Of", "co", formData.co, "text", "Father/Guardian Name")}
+                                                                    </div>
+                                                                    <div className="col-md-4">
+                                                                        {renderInputField("Age", "years", formData.years, "number", "", false, { min: 18, max: 100 })}
+                                                                    </div>
+                                                                    <div className="col-md-6">
+                                                                        {renderInputField("Date of Birth", "dateOfBirth", formData.dateOfBirth, "date", "", false, {
+                                                                            min: DOB_MIN, max: DOB_MAX, disabled: lockBasic
+                                                                        })}
+                                                                    </div>
+                                                                    <div className="col-md-6">
+                                                                        {renderInputField("Date of Joining", "date", formData.date || formData.dateOfJoining, "date", "", false, { disabled: lockBasic })}
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+
+                                                        {/* Job Details Card */}
+                                                        <div className="card border mb-4">
+                                                            <div className="card-header bg-light py-2">
+                                                                <h6 className="mb-0 fw-semibold">
+                                                                    <i className="fas fa-briefcase me-2"></i>
+                                                                    Job Details
+                                                                </h6>
+                                                            </div>
+                                                            <div className="card-body">
+                                                                <div className="row g-3">
+                                                                    <div className="col-md-4">
+                                                                        {renderInputField("Department", "department", formData.department, "text", "", false, { disabled: lockBasic })}
+                                                                    </div>
+                                                                    <div className="col-md-4">
+                                                                        {renderInputField("Designation", "designation", formData.designation, "text", "", false, { disabled: lockBasic })}
+                                                                    </div>
+                                                                    <div className="col-md-4">
+                                                                        {renderInputField("Role", "role", formData.role, "text", "", false, { disabled: lockBasic })}
+                                                                    </div>
+                                                                    <div className="col-md-6">
+                                                                        {renderInputField("Basic Salary", "basicSalary", formData.basicSalary, "number", "", false, { disabled: lockBasic })}
+                                                                    </div>
+                                                                    <div className="col-md-6">
+                                                                        {renderInputField("Allowance", "allowance", formData.allowance, "number", "Other allowances")}
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+
+                                                        {/* Contact Details Card */}
+                                                        <div className="card border mb-4">
+                                                            <div className="card-header bg-light py-2">
+                                                                <h6 className="mb-0 fw-semibold">
+                                                                    <i className="fas fa-phone-alt me-2"></i>
+                                                                    Contact Details
+                                                                </h6>
+                                                            </div>
+                                                            <div className="card-body">
+                                                                <div className="row g-3">
+                                                                    <div className="col-md-6">
+                                                                        {renderPhoneField("Mobile 1", "mobileNo1", formData.mobileNo1, "Primary mobile")}
+                                                                    </div>
+                                                                    <div className="col-md-6">
+                                                                        {renderPhoneField("Mobile 2", "mobileNo2", formData.mobileNo2, "Alternate mobile")}
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+
+                                                        {/* Official ID Proofs Card */}
+                                                        <div className="card border mb-4">
+                                                            <div className="card-header bg-light py-2">
+                                                                <h6 className="mb-0 fw-semibold">
+                                                                    <i className="fas fa-passport me-2"></i>
+                                                                    Official ID Proofs
+                                                                </h6>
+                                                            </div>
+                                                            <div className="card-body">
+                                                                <div className="row g-3">
+                                                                    <div className="col-md-6">
+                                                                        {renderInputField("PAN No", "panNo", formData.panNo, "text", "ABCDE1234F", false, {
+                                                                            maxLength: 10,
+                                                                            pattern: "[A-Z]{5}[0-9]{4}[A-Z]{1}"
+                                                                        })}
+                                                                    </div>
+                                                                    <div className="col-md-6">
+                                                                        {renderInputField("Aadhar No", "aadharNo", formData.aadharNo, "tel", "", false, {
+                                                                            inputMode: "numeric",
+                                                                            maxLength: 12,
+                                                                            pattern: "^[0-9]{12}$",
+                                                                        })}
+                                                                    </div>
+                                                                    <div className="col-md-6">
+                                                                        {renderInputField("PF No", "pfNo", formData.pfNo, "text", "PF Account Number")}
+                                                                    </div>
+                                                                    <div className="col-md-6">
+                                                                        {renderInputField("Insurance No", "insuranceNo", formData.insuranceNo, "text", "Insurance Number")}
+                                                                    </div>
+                                                                    <div className="col-md-6">
+                                                                        {renderInputField("Health Card No", "healthCardNo", formData.healthCardNo, "text", "Health Card Number")}
+                                                                    </div>
+                                                                    <div className="col-md-6">
+                                                                        {renderInputField("Driving License", "drivingLicense", formData.drivingLicense, "text", "DL Number")}
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+
+                                                        {/* About Employee Card */}
+                                                        <div className="card border">
+                                                            <div className="card-header bg-light py-2">
+                                                                <h6 className="mb-0 fw-semibold">
+                                                                    <i className="fas fa-sticky-note me-2"></i>
+                                                                    About Employee
+                                                                </h6>
+                                                            </div>
+                                                            <div className="card-body">
+                                                                {isEditMode ? (
+                                                                    <textarea
+                                                                        className="form-control"
+                                                                        name="aboutEmployee"
+                                                                        value={formData.aboutEmployee || ""}
+                                                                        onChange={handleInputChange}
+                                                                        rows="4"
+                                                                        placeholder="Enter additional details, notes, or comments about the employee..."
+                                                                        style={{ resize: "vertical" }}
+                                                                    />
+                                                                ) : (
+                                                                    <div className="p-3 bg-light rounded">
+                                                                        {formData.aboutEmployee ? (
+                                                                            <div className="text-dark">{formData.aboutEmployee}</div>
+                                                                        ) : (
+                                                                            <div className="text-center text-muted py-3">
+                                                                                <i className="fas fa-info-circle mb-2" style={{ fontSize: "32px" }}></i>
+                                                                                <p className="mb-0">No additional information provided</p>
+                                                                            </div>
+                                                                        )}
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                        </div>
                                                     </div>
                                                 </div>
-                                                <div className="row mt-3">
-                                                    <h5>Return / Remove comments</h5>
-                                                    <div className="history-section mb-3">
+                                            </div>
+                                        </div>
+
+                                        {/* History/Comments Section Card */}
+                                        {(!staff || Object.keys(staff).length > 0) && (
+                                            <div className="card border-0 shadow-sm mt-4">
+                                                <div className="card-header bg-white border-0 py-3">
+                                                    <h5 className="mb-0 fw-bold text-primary">
+                                                        <i className="fas fa-history me-2"></i>
+                                                        History & Comments
+                                                    </h5>
+                                                </div>
+                                                <div className="card-body">
+                                                    <div className="history-section">
                                                         {(() => {
                                                             const entries = [];
 
@@ -2436,45 +2529,52 @@ const StaffModal = ({ staff, isOpen, onClose, onSave, onDelete, isEditMode }) =>
                                                             entries.sort((a, b) => new Date(b.time) - new Date(a.time));
 
                                                             if (entries.length === 0) {
-                                                                return <div className="no-comments">No removed or returned comments.</div>;
+                                                                return (
+                                                                    <div className="text-center py-4">
+                                                                        <i className="fas fa-comment-slash text-muted mb-3" style={{ fontSize: "48px" }}></i>
+                                                                        <h6 className="text-muted">No history records found</h6>
+                                                                        <p className="text-muted small">No removal or return comments recorded.</p>
+                                                                    </div>
+                                                                );
                                                             }
 
                                                             return entries.map((e, idx) => (
-                                                                <div className="action-comments" key={`${e.type}-${idx}`}>
-                                                                    <div className="action-comments-header">
-                                                                        <strong
-                                                                            className={`action-type ${e.type === "Removal"
-                                                                                ? "action-type-removal"
-                                                                                : e.type === "Return"
-                                                                                    ? "action-type-return"
-                                                                                    : "action-type-revert"
-                                                                                }`}
-                                                                        >
-                                                                            {e.type}
-                                                                        </strong>
-
-                                                                        {e.user && <span className="action-user">by {e.user}</span>}
-                                                                        {e.time && (
-                                                                            <span className="action-time">
-                                                                                {new Date(e.time).toLocaleString()}
-                                                                            </span>
-                                                                        )}
+                                                                <div className="timeline-item mb-3" key={`${e.type}-${idx}`}>
+                                                                    <div className="timeline-marker">
+                                                                        <i className={`fas ${e.type === "Removal" ? "fa-user-times text-danger" : e.type === "Return" ? "fa-user-check text-success" : "fa-undo text-warning"}`}></i>
                                                                     </div>
-
-                                                                    <div className="action-comments-body">
-                                                                        {e.reason && (
-                                                                            <div className="action-row">
-                                                                                <span className="label">Reason:</span>
-                                                                                <span className="value">{e.reason}</span>
+                                                                    <div className="timeline-content card border">
+                                                                        <div className="card-body p-3">
+                                                                            <div className="d-flex justify-content-between align-items-center mb-2">
+                                                                                <span className={`badge ${e.type === "Removal" ? "bg-danger" : e.type === "Return" ? "bg-success" : "bg-warning"} px-3 py-1`}>
+                                                                                    {e.type}
+                                                                                </span>
+                                                                                <small className="text-muted">
+                                                                                    <i className="fas fa-clock me-1"></i>
+                                                                                    {e.time ? new Date(e.time).toLocaleString() : "Unknown date"}
+                                                                                </small>
                                                                             </div>
-                                                                        )}
-
-                                                                        {e.comment && (
-                                                                            <div className="action-row">
-                                                                                <span className="label">Comment:</span>
-                                                                                <div className="value comment-text">{e.comment}</div>
+                                                                            <div className="mb-2">
+                                                                                <small className="text-muted">
+                                                                                    <i className="fas fa-user me-1"></i>
+                                                                                    By: {e.user || "Unknown"}
+                                                                                </small>
                                                                             </div>
-                                                                        )}
+                                                                            {e.reason && (
+                                                                                <div className="mb-2">
+                                                                                    <strong>Reason:</strong>
+                                                                                    <div className="ms-2 text-dark">{e.reason}</div>
+                                                                                </div>
+                                                                            )}
+                                                                            {e.comment && (
+                                                                                <div>
+                                                                                    <strong>Comment:</strong>
+                                                                                    <div className="ms-2 text-dark bg-light p-2 rounded mt-1">
+                                                                                        {e.comment}
+                                                                                    </div>
+                                                                                </div>
+                                                                            )}
+                                                                        </div>
                                                                     </div>
                                                                 </div>
                                                             ));
@@ -2482,7 +2582,7 @@ const StaffModal = ({ staff, isOpen, onClose, onSave, onDelete, isEditMode }) =>
                                                     </div>
                                                 </div>
                                             </div>
-                                        </div>
+                                        )}
                                     </div>
                                 )}
 

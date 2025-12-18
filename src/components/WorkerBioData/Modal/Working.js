@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 
 const Working = ({
     formData,
@@ -11,7 +11,7 @@ const Working = ({
 }) => {
     const [showWorkForm, setShowWorkForm] = useState(false);
     const [editingWorkIndex, setEditingWorkIndex] = useState(null);
-    const [editWorkDraft, setEditWorkDraft] = useState({ toDate: "", days: "", remarks: "" });
+    const [validationErrors, setValidationErrors] = useState({});
     const [newWork, setNewWork] = useState({
         clientId: "",
         clientName: "",
@@ -24,307 +24,612 @@ const Working = ({
         __locked: false,
     });
 
-    const updateNewWork = (field, val) =>
-        setNewWork((w) => ({ ...w, [field]: val }));
-
-    const resetWorkDraft = () => setNewWork({
-        clientId: "",
-        clientName: "",
-        location: "",
-        days: "",
-        fromDate: "",
-        toDate: "",
-        serviceType: "",
-        remarks: "",
-        __locked: false,
+    const [editWorkDraft, setEditWorkDraft] = useState({ 
+        toDate: "", 
+        days: "", 
+        remarks: "" 
     });
 
-    const validateNewWork = () => {
-        const e = {};
-        if (!newWork.clientId) e.clientId = "Client ID required";
-        if (!newWork.clientName) e.clientName = "Client name required";
-        if (!newWork.fromDate) e.fromDate = "From date required";
-        if (newWork.fromDate && newWork.toDate && new Date(newWork.fromDate) > new Date(newWork.toDate)) {
-            e.toDate = "To date must be after From date";
+    // Common service types
+    const serviceTypes = [
+        "Home Care",
+        "Nursing Care",
+        "Elderly Care",
+        "Post-Operative Care",
+        "Critical Care",
+        "Physiotherapy",
+        "Palliative Care",
+        "Live-in Care",
+        "Other"
+    ];
+
+    // Update new work field
+    const updateNewWork = (field, value) => {
+        setNewWork(prev => ({ ...prev, [field]: value }));
+        // Clear validation error for this field
+        if (validationErrors[field]) {
+            setValidationErrors(prev => ({ ...prev, [field]: "" }));
         }
-        if (!newWork.serviceType) e.serviceType = "Service type required";
-        return e;
     };
 
-    const addWorkFromForm = () => {
-        const errs = validateNewWork();
-        if (Object.keys(errs).length) {
-            alert("Fix Work Form: " + Object.values(errs).join(", "));
-            return;
-        }
+    // Reset form to initial state
+    const resetWorkForm = () => {
+        setNewWork({
+            clientId: "",
+            clientName: "",
+            location: "",
+            days: "",
+            fromDate: "",
+            toDate: "",
+            serviceType: "",
+            remarks: "",
+            __locked: false,
+        });
+        setValidationErrors({});
+    };
+
+    // Validate form fields
+    const validateWorkForm = () => {
+        const errors = {};
         
-        const stampAuthorOnRow = (row) => ({
+        if (!newWork.clientId.trim()) errors.clientId = "Client ID is required";
+        if (!newWork.clientName.trim()) errors.clientName = "Client name is required";
+        if (!newWork.fromDate) errors.fromDate = "From date is required";
+        if (!newWork.serviceType) errors.serviceType = "Service type is required";
+        
+        // Validate date range
+        if (newWork.fromDate && newWork.toDate) {
+            const fromDate = new Date(newWork.fromDate);
+            const toDate = new Date(newWork.toDate);
+            if (fromDate > toDate) {
+                errors.toDate = "To date must be after From date";
+            }
+        }
+
+        setValidationErrors(errors);
+        return Object.keys(errors).length === 0;
+    };
+
+    // Calculate days between dates
+    const calculateDays = (fromDate, toDate) => {
+        if (!fromDate || !toDate) return "";
+        const from = new Date(fromDate);
+        const to = new Date(toDate);
+        const diffTime = Math.abs(to - from);
+        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
+        return diffDays.toString();
+    };
+
+    // Auto-calculate days when dates change
+    useEffect(() => {
+        if (newWork.fromDate && newWork.toDate) {
+            const days = calculateDays(newWork.fromDate, newWork.toDate);
+            updateNewWork("days", days);
+        }
+    }, [newWork.fromDate, newWork.toDate]);
+
+    // Add stamp with user info and timestamp
+    const addAuditStamp = (row) => {
+        const timestamp = new Date().toISOString();
+        return {
             ...row,
             addedByName: effectiveUserName,
-            addedAt: new Date().toISOString(),
+            addedAt: timestamp,
             createdByName: effectiveUserName,
-            createdAt: new Date().toISOString(),
-        });
+            createdAt: timestamp
+        };
+    };
 
-        const row = stampAuthorOnRow(newWork);
-        setFormData((prev) => ({
+    // Add new work record
+    const handleAddWork = () => {
+        if (!validateWorkForm()) {
+            return;
+        }
+
+        const workData = {
+            ...newWork,
+            days: newWork.days || calculateDays(newWork.fromDate, newWork.toDate) || "0"
+        };
+
+        const workWithAudit = addAuditStamp(workData);
+
+        setFormData(prev => ({
             ...prev,
-            workDetails: [...(prev.workDetails || []), { ...row }]
+            workDetails: [...(prev.workDetails || []), workWithAudit]
         }));
+
         setHasUnsavedChanges(true);
         setShowWorkForm(false);
-        resetWorkDraft();
+        resetWorkForm();
     };
 
-    const startEditWork = (idx) => {
-        const w = (formData.workDetails || [])[idx] || {};
+    // Start editing a work record
+    const startEditWork = (index) => {
+        const work = (formData.workDetails || [])[index];
+        if (!work) return;
+
         setEditWorkDraft({
-            toDate: w.toDate || "",
-            days: (w.days ?? "").toString(),
-            remarks: w.remarks || ""
+            toDate: work.toDate || "",
+            days: (work.days || "").toString(),
+            remarks: work.remarks || ""
         });
-        setEditingWorkIndex(idx);
+        setEditingWorkIndex(index);
     };
 
+    // Cancel editing
     const cancelEditWork = () => {
         setEditingWorkIndex(null);
         setEditWorkDraft({ toDate: "", days: "", remarks: "" });
     };
 
-    const saveEditWork = () => {
+    // Save edited work
+    const handleSaveEditWork = () => {
         if (editingWorkIndex == null) return;
+
+        const originalWork = formData.workDetails?.[editingWorkIndex];
+        if (!originalWork || originalWork.__locked) {
+            alert("This work record is locked and cannot be edited.");
+            return;
+        }
+
+        // Validate edit
+        if (editWorkDraft.toDate && editWorkDraft.toDate < originalWork.fromDate) {
+            alert("To date must be after the from date.");
+            return;
+        }
+
         setFormData(prev => {
-            const arr = [...(prev.workDetails || [])];
-            const w = { ...arr[editingWorkIndex] };
+            const updatedWorkDetails = [...(prev.workDetails || [])];
+            const updatedWork = { ...updatedWorkDetails[editingWorkIndex] };
 
-            if (editWorkDraft.toDate !== "") w.toDate = editWorkDraft.toDate;
-            if (editWorkDraft.days !== "") w.days = editWorkDraft.days.replace(/\D/g, "");
-            w.remarks = editWorkDraft.remarks;
+            // Update fields if provided
+            if (editWorkDraft.toDate !== "") updatedWork.toDate = editWorkDraft.toDate;
+            if (editWorkDraft.days !== "") updatedWork.days = editWorkDraft.days.replace(/\D/g, "");
+            if (editWorkDraft.remarks !== undefined) updatedWork.remarks = editWorkDraft.remarks;
 
-            arr[editingWorkIndex] = w;
-            return { ...prev, workDetails: arr };
+            updatedWorkDetails[editingWorkIndex] = updatedWork;
+            return { ...prev, workDetails: updatedWorkDetails };
         });
+
         setHasUnsavedChanges(true);
         cancelEditWork();
     };
 
-    const removeWorkSection = (index) => {
-        setFormData((prev) => {
-            const list = [...(prev.workDetails || [])];
-            if (list[index]?.__locked) return prev;
-            list.splice(index, 1);
-            return { ...prev, workDetails: list.length ? list : [] };
-        });
-        setHasUnsavedChanges(true);
+    // Remove work record
+    const handleRemoveWork = (index) => {
+        const work = formData.workDetails?.[index];
+        if (work?.__locked) {
+            alert("This work record is locked and cannot be removed.");
+            return;
+        }
+
+        if (window.confirm("Are you sure you want to remove this work record?")) {
+            setFormData(prev => {
+                const updatedWorkDetails = [...(prev.workDetails || [])];
+                updatedWorkDetails.splice(index, 1);
+                return { ...prev, workDetails: updatedWorkDetails };
+            });
+            setHasUnsavedChanges(true);
+        }
     };
 
+    // Format date for display
+    const formatDateDisplay = (dateString) => {
+        if (!dateString) return "—";
+        try {
+            return new Date(dateString).toLocaleDateString('en-IN', {
+                day: '2-digit',
+                month: 'short',
+                year: 'numeric'
+            });
+        } catch {
+            return dateString;
+        }
+    };
+
+    const workDetails = formData.workDetails || [];
+
     return (
-        <div className="modal-card mt-3">
-            <div className="modal-card-header d-flex justify-content-between align-items-center">
-                <strong>Working</strong>
+        <div className="card">
+            <div className="card-header bg-info text-white d-flex justify-content-between align-items-center">
+                <h4 className="mb-0">
+                    <i className="bi bi-briefcase me-2"></i>
+                    Work Details
+                </h4>
                 {canEdit && (
                     <button
                         type="button"
-                        className="btn btn-outline-primary btn-sm"
-                        onClick={() => setShowWorkForm((s) => !s)}
+                        className={`btn btn-sm ${showWorkForm ? 'btn-outline-light' : 'btn-light'}`}
+                        onClick={() => {
+                            setShowWorkForm(!showWorkForm);
+                            if (showWorkForm) resetWorkForm();
+                        }}
                     >
-                        {showWorkForm ? "Close" : "+ Add Work"}
+                        <i className={`bi ${showWorkForm ? 'bi-x-lg' : 'bi-plus-lg'} me-1`}></i>
+                        {showWorkForm ? "Close Form" : "Add Work"}
                     </button>
                 )}
             </div>
 
-            <div className="modal-card-body">
+            <div className="card-body">
+                {/* Add Work Form */}
                 {canEdit && showWorkForm && (
-                    <div className="border rounded p-3 mb-3 bg-light">
-                        <div className="row">
-                            <div className="col-md-3 mb-2">
-                                <label className="form-label"><strong>Client ID</strong><span className="star">*</span></label>
-                                <input
-                                    className="form-control form-control-sm"
-                                    value={newWork.clientId || ""}
-                                    onChange={(e) => updateNewWork("clientId", e.target.value)}
-                                />
-                            </div>
-                            <div className="col-md-3 mb-2">
-                                <label className="form-label"><strong>Client Name</strong><span className="star">*</span></label>
-                                <input
-                                    className="form-control form-control-sm"
-                                    value={newWork.clientName || ""}
-                                    onChange={(e) => updateNewWork("clientName", e.target.value)}
-                                />
-                            </div>
-                            <div className="col-md-3 mb-2">
-                                <label className="form-label"><strong>Location</strong></label>
-                                <input
-                                    className="form-control form-control-sm"
-                                    value={newWork.location || ""}
-                                    onChange={(e) => updateNewWork("location", e.target.value)}
-                                />
-                            </div>
-                            <div className="col-md-3 mb-2">
-                                <label className="form-label"><strong>Days</strong> </label>
-                                <input
-                                    className="form-control form-control-sm"
-                                    value={newWork.days || ""}
-                                    onChange={(e) => updateNewWork("days", e.target.value.replace(/\D/g, ""))}
-                                />
-                            </div>
+                    <div className="card border-info mb-4">
+                        <div className="card-header bg-light">
+                            <h5 className="mb-0 text-info">
+                                <i className="bi bi-plus-circle me-2"></i>
+                                Add New Work Record
+                            </h5>
                         </div>
+                        <div className="card-body">
+                            <div className="row g-3">
+                                {/* Client ID */}
+                                <div className="col-md-6 col-lg-4">
+                                    <label className="form-label fw-semibold">
+                                        Client ID <span className="text-danger">*</span>
+                                    </label>
+                                    <input
+                                        type="text"
+                                        className={`form-control ${validationErrors.clientId ? 'is-invalid' : ''}`}
+                                        value={newWork.clientId}
+                                        onChange={(e) => updateNewWork("clientId", e.target.value)}
+                                        placeholder="Enter client ID"
+                                    />
+                                    {validationErrors.clientId && (
+                                        <div className="invalid-feedback">{validationErrors.clientId}</div>
+                                    )}
+                                </div>
 
-                        <div className="row">
-                            <div className="col-md-3 mb-2">
-                                <label className="form-label"><strong>From</strong><span className="star">*</span></label>
-                                <input
-                                    type="date"
-                                    className="form-control form-control-sm"
-                                    value={newWork.fromDate || ""}
-                                    onChange={(e) => updateNewWork("fromDate", e.target.value)}
-                                />
-                            </div>
-                            <div className="col-md-3 mb-2">
-                                <label className="form-label"><strong>To</strong> </label>
-                                <input
-                                    type="date"
-                                    className="form-control form-control-sm"
-                                    value={newWork.toDate || ""}
-                                    onChange={(e) => updateNewWork("toDate", e.target.value)}
-                                />
-                            </div>
-                            <div className="col-md-3 mb-2">
-                                <label className="form-label"><strong>Service Type</strong><span className="star">*</span></label>
-                                <input
-                                    className="form-control form-control-sm"
-                                    value={newWork.serviceType || ""}
-                                    onChange={(e) => updateNewWork("serviceType", e.target.value)}
-                                />
-                            </div>
-                            <div className="col-md-3 mb-2">
-                                <label className="form-label"><strong>Remarks</strong></label>
-                                <textarea
-                                    className="form-control form-control-sm"
-                                    value={newWork.remarks || ""}
-                                    onChange={(e) => updateNewWork("remarks", e.target.value)}
-                                />
-                            </div>
-                        </div>
+                                {/* Client Name */}
+                                <div className="col-md-6 col-lg-4">
+                                    <label className="form-label fw-semibold">
+                                        Client Name <span className="text-danger">*</span>
+                                    </label>
+                                    <input
+                                        type="text"
+                                        className={`form-control ${validationErrors.clientName ? 'is-invalid' : ''}`}
+                                        value={newWork.clientName}
+                                        onChange={(e) => updateNewWork("clientName", e.target.value)}
+                                        placeholder="Enter client name"
+                                    />
+                                    {validationErrors.clientName && (
+                                        <div className="invalid-feedback">{validationErrors.clientName}</div>
+                                    )}
+                                </div>
 
-                        <div className="d-flex gap-2 justify-content-end">
-                            <button className="btn btn-secondary btn-sm" onClick={() => { setShowWorkForm(false); resetWorkDraft(); }}>
-                                Cancel
-                            </button>
-                            <button className="btn btn-primary btn-sm" onClick={addWorkFromForm}>
-                                Save Work
-                            </button>
+                                {/* Location */}
+                                <div className="col-md-6 col-lg-4">
+                                    <label className="form-label fw-semibold">Location</label>
+                                    <input
+                                        type="text"
+                                        className="form-control"
+                                        value={newWork.location}
+                                        onChange={(e) => updateNewWork("location", e.target.value)}
+                                        placeholder="Enter location"
+                                    />
+                                </div>
+
+                                {/* From Date */}
+                                <div className="col-md-6 col-lg-3">
+                                    <label className="form-label fw-semibold">
+                                        From Date <span className="text-danger">*</span>
+                                    </label>
+                                    <input
+                                        type="date"
+                                        className={`form-control ${validationErrors.fromDate ? 'is-invalid' : ''}`}
+                                        value={newWork.fromDate}
+                                        onChange={(e) => updateNewWork("fromDate", e.target.value)}
+                                    />
+                                    {validationErrors.fromDate && (
+                                        <div className="invalid-feedback">{validationErrors.fromDate}</div>
+                                    )}
+                                </div>
+
+                                {/* To Date */}
+                                <div className="col-md-6 col-lg-3">
+                                    <label className="form-label fw-semibold">To Date</label>
+                                    <input
+                                        type="date"
+                                        className={`form-control ${validationErrors.toDate ? 'is-invalid' : ''}`}
+                                        value={newWork.toDate}
+                                        onChange={(e) => updateNewWork("toDate", e.target.value)}
+                                        min={newWork.fromDate}
+                                    />
+                                    {validationErrors.toDate && (
+                                        <div className="invalid-feedback">{validationErrors.toDate}</div>
+                                    )}
+                                </div>
+
+                                {/* Days */}
+                                <div className="col-md-4 col-lg-2">
+                                    <label className="form-label fw-semibold">Days</label>
+                                    <input
+                                        type="number"
+                                        className="form-control"
+                                        value={newWork.days}
+                                        min="1"
+                                        onChange={(e) => updateNewWork("days", e.target.value)}
+                                        placeholder="Auto-calculated"
+                                        readOnly={!!(newWork.fromDate && newWork.toDate)}
+                                    />
+                                </div>
+
+                                {/* Service Type */}
+                                <div className="col-md-8 col-lg-4">
+                                    <label className="form-label fw-semibold">
+                                        Service Type <span className="text-danger">*</span>
+                                    </label>
+                                    <select
+                                        className={`form-select ${validationErrors.serviceType ? 'is-invalid' : ''}`}
+                                        value={newWork.serviceType}
+                                        onChange={(e) => updateNewWork("serviceType", e.target.value)}
+                                    >
+                                        <option value="">Select Service Type</option>
+                                        {serviceTypes.map(type => (
+                                            <option key={type} value={type}>{type}</option>
+                                        ))}
+                                    </select>
+                                    {validationErrors.serviceType && (
+                                        <div className="invalid-feedback">{validationErrors.serviceType}</div>
+                                    )}
+                                </div>
+
+                                {/* Remarks */}
+                                <div className="col-12">
+                                    <label className="form-label fw-semibold">Remarks</label>
+                                    <textarea
+                                        className="form-control"
+                                        rows="2"
+                                        value={newWork.remarks}
+                                        onChange={(e) => updateNewWork("remarks", e.target.value)}
+                                        placeholder="Any additional remarks..."
+                                    />
+                                </div>
+                            </div>
+
+                            <div className="d-flex justify-content-end gap-2 mt-4">
+                                <button
+                                    type="button"
+                                    className="btn btn-outline-secondary"
+                                    onClick={() => {
+                                        setShowWorkForm(false);
+                                        resetWorkForm();
+                                    }}
+                                >
+                                    <i className="bi bi-x-lg me-1"></i> Cancel
+                                </button>
+                                <button
+                                    type="button"
+                                    className="btn btn-info text-white"
+                                    onClick={handleAddWork}
+                                >
+                                    <i className="bi bi-check-lg me-1"></i> Add Work Record
+                                </button>
+                            </div>
                         </div>
                     </div>
                 )}
 
-                {(formData.workDetails?.length ?? 0) === 0 ? (
-                    <div className="text-muted text-center">No work entries added yet.</div>
+                {/* Summary Stats */}
+                {workDetails.length > 0 && (
+                    <div className="row g-3 mb-4">
+                        <div className="col-md-4">
+                            <div className="card bg-light">
+                                <div className="card-body text-center py-3">
+                                    <div className="text-muted small">Total Assignments</div>
+                                    <div className="h3 text-info fw-bold">{workDetails.length}</div>
+                                </div>
+                            </div>
+                        </div>
+                        <div className="col-md-4">
+                            <div className="card bg-light">
+                                <div className="card-body text-center py-3">
+                                    <div className="text-muted small">Total Days Worked</div>
+                                    <div className="h3 text-primary fw-bold">
+                                        {workDetails.reduce((sum, work) => sum + (parseInt(work.days) || 0), 0)}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div className="col-md-4">
+                            <div className="card bg-light">
+                                <div className="card-body text-center py-3">
+                                    <div className="text-muted small">Active Services</div>
+                                    <div className="h3 text-success fw-bold">
+                                        {[...new Set(workDetails.map(w => w.serviceType))].length}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {/* Work Details Table */}
+                {workDetails.length === 0 ? (
+                    <div className="alert alert-info text-center text-info">
+                        <i className="bi bi-info-circle me-2"></i>
+                        No work records found. Click "Add Work" to record work assignments.
+                    </div>
                 ) : (
-                    <div className="table-responsive">
-                        <table className="table table-sm table-bordered align-middle">
-                            <thead className="table-dark">
-                                <tr>
-                                    <th>#</th>
-                                    <th>Client ID</th>
-                                    <th>Client Name</th>
-                                    <th>Location</th>
-                                    <th>Days</th>
-                                    <th>From</th>
-                                    <th>To</th>
-                                    <th>Service Type</th>
-                                    <th>Remarks</th>
-                                    <th>Added By</th>
-                                    {canEdit && <th>Action</th>}
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {(formData.workDetails || []).map((w, i) => (
-                                    <tr key={i}>
-                                        <td>{i + 1}</td>
-                                        <td>{w.clientId || "—"}</td>
-                                        <td>{w.clientName || "—"}</td>
-                                        <td>{w.location || "—"}</td>
-                                        <td>{w.days || "—"}</td>
-                                        <td>{w.fromDate || "—"}</td>
-                                        <td>{w.toDate || "—"}</td>
-                                        <td>{w.serviceType || "—"}</td>
-                                        <td style={{ maxWidth: 240, whiteSpace: 'pre-wrap' }}>{w.remarks || "—"}</td>
-                                        <td className="small text-muted">
-                                            {(w.addedByName || w.createdByName || effectiveUserName)}<br />
-                                            <span>{formatDDMMYY(w.addedAt || w.createdAt)} {formatTime12h(w.addedAt || w.createdAt)}</span>
-                                        </td>
-                                        {canEdit && (
+                    <>
+                        <div className="table-responsive">
+                            <table className="table table-hover table-bordered align-middle">
+                                <thead className="table-info">
+                                    <tr>
+                                        <th width="40">#</th>
+                                        <th width="100">Client ID</th>
+                                        <th>Client Name</th>
+                                        <th>Location</th>
+                                        <th width="80">Days</th>
+                                        <th width="120">From Date</th>
+                                        <th width="120">To Date</th>
+                                        <th width="150">Service Type</th>
+                                        <th>Remarks</th>
+                                        <th width="140">Added By</th>
+                                        {canEdit && <th width="120">Actions</th>}
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {workDetails.map((work, index) => (
+                                        <tr key={index} className={work.__locked ? "table-secondary" : ""}>
+                                            <td className="text-center fw-semibold">{index + 1}</td>
                                             <td>
-                                                {!w.__locked ? (
-                                                    <button
-                                                        className="btn btn-outline-warning btn-sm"
-                                                        onClick={() => startEditWork(i)}
-                                                    >
-                                                        Edit
-                                                    </button>
+                                                <span className="badge bg-dark">#{work.clientId}</span>
+                                            </td>
+                                            <td className="fw-semibold">{work.clientName || "—"}</td>
+                                            <td>{work.location || "—"}</td>
+                                            <td className="text-center">
+                                                <span className="badge bg-primary">{work.days || "—"}</span>
+                                            </td>
+                                            <td>
+                                                <span className="badge bg-success">{formatDateDisplay(work.fromDate)}</span>
+                                            </td>
+                                            <td>
+                                                {work.toDate ? (
+                                                    <span className="badge bg-warning text-dark">{formatDateDisplay(work.toDate)}</span>
                                                 ) : (
-                                                    <span className="badge bg-secondary">Locked</span>
+                                                    <span className="badge bg-secondary">Ongoing</span>
                                                 )}
                                             </td>
-                                        )}
+                                            <td>
+                                                <span className="badge bg-info text-white">{work.serviceType || "—"}</span>
+                                            </td>
+                                            <td style={{ maxWidth: '200px' }}>
+                                                <div className="text-truncate" title={work.remarks}>
+                                                    {work.remarks || "—"}
+                                                </div>
+                                            </td>
+                                            <td className="small">
+                                                <div className="fw-semibold">{work.addedByName || work.createdByName || effectiveUserName}</div>
+                                                <div className="text-muted">
+                                                    {formatDDMMYY(work.addedAt || work.createdAt)}<br />
+                                                    {formatTime12h(work.addedAt || work.createdAt)}
+                                                </div>
+                                            </td>
+                                            {canEdit && (
+                                                <td>
+                                                    <div className="d-flex gap-1">
+                                                        {!work.__locked ? (
+                                                            <>
+                                                                <button
+                                                                    className="btn btn-outline-warning btn-sm"
+                                                                    onClick={() => startEditWork(index)}
+                                                                    title="Edit work record"
+                                                                >
+                                                                    <i className="bi bi-pencil"></i>
+                                                                </button>
+                                                                <button
+                                                                    className="btn btn-outline-danger btn-sm"
+                                                                    onClick={() => handleRemoveWork(index)}
+                                                                    title="Remove work record"
+                                                                >
+                                                                    <i className="bi bi-trash"></i>
+                                                                </button>
+                                                            </>
+                                                        ) : (
+                                                            <span className="badge bg-secondary" title="Locked record">
+                                                                <i className="bi bi-lock me-1"></i>Locked
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                </td>
+                                            )}
+                                        </tr>
+                                    ))}
+                                </tbody>
+                                <tfoot className="table-active">
+                                    <tr className="fw-bold">
+                                        <td colSpan="4" className="text-end">Totals:</td>
+                                        <td className="text-center">
+                                            {workDetails.reduce((sum, work) => sum + (parseInt(work.days) || 0), 0)}
+                                        </td>
+                                        <td colSpan={canEdit ? "6" : "5"} className="text-center">
+                                            <span className="badge bg-dark">
+                                                Total Records: {workDetails.length}
+                                            </span>
+                                        </td>
                                     </tr>
-                                ))}
-                            </tbody>
-                        </table>
+                                </tfoot>
+                            </table>
+                        </div>
 
-                        {/* Inline edit panel */}
-                        {canEdit && editingWorkIndex != null && (
-                            <div className="border rounded p-3 mt-3 bg-light">
-                                <div className="d-flex justify-content-between align-items-center mb-2">
-                                    <strong>Edit Work (Row #{editingWorkIndex + 1})</strong>
-                                    <small className="text-muted">
-                                        You can edit <em>To date</em>, <em>Days</em>, and <em>Remarks</em> only.
-                                    </small>
+                        {/* Edit Form */}
+                        {canEdit && editingWorkIndex !== null && (
+                            <div className="card border-warning mt-4">
+                                <div className="card-header bg-warning text-dark">
+                                    <h5 className="mb-0">
+                                        <i className="bi bi-pencil-square me-2"></i>
+                                        Edit Work Record (Row #{editingWorkIndex + 1})
+                                    </h5>
                                 </div>
+                                <div className="card-body">
+                                    <div className="alert alert-warning mb-3">
+                                        <i className="bi bi-exclamation-triangle me-2"></i>
+                                        You can only edit <strong>To Date</strong>, <strong>Days</strong>, and <strong>Remarks</strong> fields.
+                                    </div>
+                                    
+                                    <div className="row g-3">
+                                        <div className="col-md-4">
+                                            <label className="form-label fw-semibold">
+                                                To Date <small className="text-muted">(optional)</small>
+                                            </label>
+                                            <input
+                                                type="date"
+                                                className="form-control"
+                                                value={editWorkDraft.toDate}
+                                                onChange={(e) => setEditWorkDraft(prev => ({ ...prev, toDate: e.target.value }))}
+                                                min={formData.workDetails?.[editingWorkIndex]?.fromDate}
+                                            />
+                                        </div>
 
-                                <div className="row">
-                                    <div className="col-md-3 mb-2">
-                                        <label className="form-label"><strong>To date</strong> <small className="text-muted">(optional)</small></label>
-                                        <input
-                                            type="date"
-                                            className="form-control form-control-sm"
-                                            value={editWorkDraft.toDate || ""}
-                                            onChange={(e) => setEditWorkDraft(d => ({ ...d, toDate: e.target.value }))}
-                                        />
+                                        <div className="col-md-4">
+                                            <label className="form-label fw-semibold">
+                                                Days <small className="text-muted">(optional)</small>
+                                            </label>
+                                            <input
+                                                type="number"
+                                                className="form-control"
+                                                value={editWorkDraft.days}
+                                                onChange={(e) => setEditWorkDraft(prev => ({ 
+                                                    ...prev, 
+                                                    days: e.target.value.replace(/\D/g, "") 
+                                                }))}
+                                                min="1"
+                                            />
+                                        </div>
+
+                                        <div className="col-md-4">
+                                            <label className="form-label fw-semibold">Remarks</label>
+                                            <input
+                                                type="text"
+                                                className="form-control"
+                                                value={editWorkDraft.remarks}
+                                                onChange={(e) => setEditWorkDraft(prev => ({ ...prev, remarks: e.target.value }))}
+                                                placeholder="Update remarks..."
+                                            />
+                                        </div>
                                     </div>
 
-                                    <div className="col-md-3 mb-2">
-                                        <label className="form-label"><strong>Days</strong> <small className="text-muted">(optional)</small></label>
-                                        <input
-                                            className="form-control form-control-sm"
-                                            value={editWorkDraft.days || ""}
-                                            onChange={(e) =>
-                                                setEditWorkDraft(d => ({ ...d, days: e.target.value.replace(/\D/g, "") }))
-                                            }
-                                            maxLength={2}
-                                            inputMode="numeric"
-                                        />
+                                    <div className="d-flex justify-content-end gap-2 mt-4">
+                                        <button
+                                            type="button"
+                                            className="btn btn-outline-secondary"
+                                            onClick={cancelEditWork}
+                                        >
+                                            <i className="bi bi-x-lg me-1"></i> Cancel
+                                        </button>
+                                        <button
+                                            type="button"
+                                            className="btn btn-warning"
+                                            onClick={handleSaveEditWork}
+                                        >
+                                            <i className="bi bi-check-lg me-1"></i> Save Changes
+                                        </button>
                                     </div>
-
-                                    <div className="col-md-6 mb-2">
-                                        <label className="form-label"><strong>Remarks</strong></label>
-                                        <input
-                                            className="form-control form-control-sm"
-                                            value={editWorkDraft.remarks || ""}
-                                            onChange={(e) => setEditWorkDraft(d => ({ ...d, remarks: e.target.value }))}
-                                        />
-                                    </div>
-                                </div>
-
-                                <div className="d-flex gap-2 justify-content-end">
-                                    <button className="btn btn-secondary btn-sm" onClick={cancelEditWork}>Cancel</button>
-                                    <button className="btn btn-primary btn-sm" onClick={saveEditWork}>Save</button>
                                 </div>
                             </div>
                         )}
-                    </div>
+                    </>
                 )}
             </div>
         </div>

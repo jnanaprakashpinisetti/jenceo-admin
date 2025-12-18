@@ -238,7 +238,7 @@ const WorkerModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode }
                 onConfirm={confirmState.onConfirm}
             />
 
-            <div className={`modal fade show ${modalClass}`} style={{ display: "block", backgroundColor: "rgba(0, 0, 0, 0.9)" }}>
+            <div className={`modal fade show workerBiodata ${modalClass}`} style={{ display: "block", backgroundColor: "rgba(0, 0, 0, 0.9)" }}>
                 <div className="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
                     <div className="modal-content">
                         <div className="modal-header bg-secondary text-white">

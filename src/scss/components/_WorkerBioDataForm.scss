@@ -386,3 +386,48 @@
     border-bottom: 2px solid #17599b;
     ;
 }
+
+.workerBiodata{
+    .card {
+        background-color: transparent !important;
+    }
+
+    .text-muted{
+        color: #444 !important;
+    }
+
+    .form-control  {
+        align-content: center;
+        padding-left: 5px;
+    }
+    .input-group-text {
+        background-color: #c9ccd0;
+        border: none;
+    }
+
+    .section-divider {
+        position: relative;
+    }
+    
+    .section-title {
+        font-weight: 600;
+        margin-bottom: 1rem;
+        padding-bottom: 0.5rem;
+        position: relative;
+    }
+    
+    .section-title::after {
+        content: '';
+        position: absolute;
+        bottom: 0;
+        left: 0;
+        width: 40px;
+        height: 2px;
+        background-color: currentColor;
+        opacity: 0.5;
+    }
+    
+    .section-divider + .section-divider {
+        margin-top: 1.5rem;
+    }
+}

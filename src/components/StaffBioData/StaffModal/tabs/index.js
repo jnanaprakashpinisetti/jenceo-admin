@@ -1,0 +1,13 @@
+export { default as BasicTab } from './BasicTab';
+export { default as AddressTab } from './AddressTab';
+export { default as PersonalTab } from './PersonalTab';
+export { default as QualificationTab } from './QualificationTab';
+export { default as HealthTab } from './HealthTab';
+export { default as EmergencyTab } from './EmergencyTab';
+export { default as JobTab } from './JobTab';
+export { default as BankTab } from './BankTab';
+export { default as PaymentTab } from './PaymentTab';
+export { default as WorkingTab } from './WorkingTab';
+export { default as PayInfoTab } from './PayInfoTab';
+export { default as FullDataTab } from './FullDataTab';
+export { default as BiodataTab } from './BiodataTab';

@@ -4,6 +4,8 @@ import BaseModal, { AlertModal, ConfirmModal } from "./Common/BaseModal";
 import MultiSelectDropdown from "./Common/MultiSelectDropdown";
 import SkillAccordion from "./Common/SkillAccordion";
 import Chip from "./Common/Chip";
+// Add these imports at the top of WorkerModal.js
+import { storageRef, uploadFile, getDownloadURL } from "../../../firebase";
 
 // Import tab components
 import BasicInfo from "./BasicInfo";
@@ -21,6 +23,9 @@ import Biodata from "./Biodata";
 
 import { getEffectiveUserId, getEffectiveUserName, toISO, formatDDMMYY, formatTime12h, blankPayment, blankWork, stampAuthorOnRow } from "./utils/helpers";
 import { validateBasic, validateAddress, validatePersonal, validatePayments, validateWork } from "./utils/validation";
+
+// Add firebaseDB import at the top
+import firebaseDB from "../../../firebase";
 
 // Shared constants
 export const LANGUAGE_OPTIONS = [
@@ -47,6 +52,8 @@ const WorkerModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode }
     const [returnReasonOpen, setReturnReasonOpen] = useState(false);
     const [reasonForm, setReasonForm] = useState({ reasonType: "", comment: "", for: "" });
     const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+    // Add setIsSaving state here
+    const [isSaving, setIsSaving] = useState(false);
     const iframeRef = useRef(null);
 
     const { user: authUser } = useAuth?.() || {};
@@ -71,8 +78,12 @@ const WorkerModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode }
 
     useEffect(() => {
         if (employee) {
+            // Extract the Firebase key - it might be passed as .key, .id, or might be the object's key itself
+            const key = employee.key || employee.id || employee.recordId || (employee.idNo ? employee.idNo : null);
+            
             setFormData({
                 ...employee,
+                key: key, // Ensure key is always set
                 secondarySkills: Array.isArray(employee.secondarySkills) ? employee.secondarySkills : [],
                 workingSkills: Array.isArray(employee.workingSkills) ? employee.workingSkills : [],
                 healthIssues: Array.isArray(employee.healthIssues) ? employee.healthIssues : [],
@@ -82,7 +93,8 @@ const WorkerModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode }
                 basicSalary: employee.basicSalary ?? "",
                 payments: Array.isArray(employee.payments) ? employee.payments : [],
                 workDetails: Array.isArray(employee.workDetails) ? employee.workDetails : [],
-                employeePhotoUrl: employee.employeePhoto || null,
+                employeePhotoUrl: employee.employeePhoto || employee.employeePhotoUrl || null,
+                idProofUrl: employee.idProof || employee.idProofUrl || null,
             });
             setStatus(employee.status || "On Duty");
         } else {
@@ -104,39 +116,86 @@ const WorkerModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode }
         setHasUnsavedChanges(true);
     };
 
+    // Fixed handleSaveClick with proper state management
     const handleSaveClick = async () => {
-        const validationMap = {
-            basic: validateBasic,
-            address: validateAddress,
-            personal: validatePersonal,
-            payment: validatePayments,
-            working: validateWork,
-        };
-
-        const validator = validationMap[activeTab];
-        if (validator) {
-            const { ok, errs } = validator(formData, {
-                DOB_MIN, DOB_MAX, DOM_MIN, DOM_MAX, PAY_MIN, PAY_MAX
-            });
-            if (!ok) {
-                openAlert("Validation Error", errs.join(", "), "danger");
-                return;
-            }
-        }
-
         try {
-            const payload = {
+            setIsSaving(true);
+            
+            // Validate we have a key before proceeding
+            if (!formData.key && !formData.idNo) {
+                throw new Error("Employee key or ID number is missing. Cannot save.");
+            }
+            
+            // Upload employee photo if exists
+            let photoURL = formData.employeePhotoUrl; // Keep existing URL if no new file
+            if (formData.employeePhotoFile instanceof File) {
+                const photoExt = formData.employeePhotoFile.name.split('.').pop();
+                const photoFileName = `employee-photos/${formData.idNo || 'unknown'}-${Date.now()}.${photoExt}`;
+                const photoFileRef = storageRef.child(photoFileName);
+                const photoSnapshot = await uploadFile(photoFileRef, formData.employeePhotoFile);
+                photoURL = await getDownloadURL(photoSnapshot.ref);
+            }
+            
+            // Upload ID proof if exists
+            let idProofURL = formData.idProofUrl; // Keep existing URL if no new file
+            if (formData.idProofFile instanceof File) {
+                const idExt = formData.idProofFile.name.split('.').pop();
+                const idFileName = `id-proofs/${formData.idNo || 'unknown'}-${Date.now()}.${idExt}`;
+                const idFileRef = storageRef.child(idFileName);
+                const idSnapshot = await uploadFile(idFileRef, formData.idProofFile);
+                idProofURL = await getDownloadURL(idSnapshot.ref);
+            }
+            
+            // Prepare data for saving (remove File objects, add URLs)
+            const dataToSave = {
                 ...formData,
-                status,
-                payments: (formData.payments || []).map((r) => stampAuthorOnRow(r, effectiveUserName)),
-                workDetails: (formData.workDetails || []).map((r) => stampAuthorOnRow(r, effectiveUserName)),
+                employeePhoto: photoURL,
+                employeePhotoUrl: photoURL,
+                idProof: idProofURL,
+                status: status, // Ensure status is saved
+                // Remove file objects as they can't be stored in Firestore
+                employeePhotoFile: undefined,
+                idProofFile: undefined,
+                // Preserve the preview fields
+                employeePhotoPreview: undefined,
+                idProofPreview: undefined,
+                // Add timestamp if needed
+                lastUpdatedAt: new Date().toISOString(),
+                lastUpdatedBy: effectiveUserName
             };
-
-            await Promise.resolve(onSave && onSave(payload));
+            
+            // Remove undefined values and the key (which shouldn't be in the data itself)
+            const cleanDataToSave = { ...dataToSave };
+            delete cleanDataToSave.key; // Remove the key from the data payload
+            Object.keys(cleanDataToSave).forEach(key => {
+                if (cleanDataToSave[key] === undefined) {
+                    delete cleanDataToSave[key];
+                }
+            });
+            
+            // Determine the path to save to - use idNo as fallback if key doesn't exist
+            const savePath = formData.key || formData.idNo;
+            
+            if (!savePath) {
+                throw new Error("Cannot save: No key or ID number available");
+            }
+            
+            // Save to Firebase
+            await firebaseDB.child("EmployeeBioData").child(savePath).update(cleanDataToSave);
+            
+            setIsSaving(false);
             setHasUnsavedChanges(false);
-            openAlert("Saved", "Changes have been saved successfully.", "success");
+            
+            if (onSave) {
+                onSave({ ...cleanDataToSave, key: savePath }); // Notify parent component with the key
+            }
+            
+            onClose();
+            
         } catch (error) {
-            openAlert("Error", `Failed to save changes: ${error.message}`, "danger");
+            console.error("Error saving employee:", error);
+            setIsSaving(false);
+            alert("Failed to save: " + error.message);
         }
     };
 
@@ -341,8 +400,13 @@ const WorkerModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode }
                                 <button type="button" className="btn btn-secondary" onClick={handleCloseWithConfirmation}>
                                     Close
                                 </button>
-                                <button type="button" className="btn btn-primary" onClick={handleSaveClick}>
-                                    {isEditMode ? "Save Changes" : "Save"}
+                                <button 
+                                    type="button" 
+                                    className="btn btn-primary" 
+                                    onClick={handleSaveClick}
+                                    disabled={isSaving}
+                                >
+                                    {isSaving ? "Saving..." : (isEditMode ? "Save Changes" : "Save")}
                                 </button>
                             </div>
                         </div>

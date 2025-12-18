@@ -99,6 +99,20 @@ const Payment = ({
         }).format(num);
     };
 
+    // Format date for display
+    const formatDateDisplay = (dateString) => {
+        if (!dateString) return "—";
+        try {
+            return new Date(dateString).toLocaleDateString('en-IN', {
+                day: '2-digit',
+                month: 'short',
+                year: 'numeric'
+            });
+        } catch {
+            return dateString;
+        }
+    };
+
     // Add stamp with user info and timestamp
     const addAuditStamp = (row) => {
         const timestamp = new Date().toISOString();
@@ -107,10 +121,7 @@ const Payment = ({
             addedByName: effectiveUserName,
             addedAt: timestamp,
             createdByName: effectiveUserName,
-            createdAt: timestamp,
-            // Format amount for display
-            formattedAmount: formatCurrency(row.amount),
-            formattedBalance: formatCurrency(row.balanceAmount)
+            createdAt: timestamp
         };
     };
 
@@ -135,6 +146,18 @@ const Payment = ({
         }));
 
         setHasUnsavedChanges(true);
+        setShowPaymentForm(false);
+        resetPaymentForm();
+    };
+
+    // Open add payment modal
+    const openAddPaymentModal = () => {
+        resetPaymentForm();
+        setShowPaymentForm(true);
+    };
+
+    // Close add payment modal
+    const closeAddPaymentModal = () => {
         setShowPaymentForm(false);
         resetPaymentForm();
     };
@@ -170,217 +193,200 @@ const Payment = ({
     const payments = formData.payments || [];
 
     return (
-        <div className="card">
-            <div className="card-header bg-primary text-white d-flex justify-content-between align-items-center">
-                <h4 className="mb-0">
-                    <i className="bi bi-cash-coin me-2"></i>
-                    Payments
-                </h4>
-                {canEdit && (
-                    <button
-                        type="button"
-                        className={`btn btn-sm ${showPaymentForm ? 'btn-outline-light' : 'btn-light'}`}
-                        onClick={() => {
-                            setShowPaymentForm(!showPaymentForm);
-                            if (showPaymentForm) resetPaymentForm();
-                        }}
-                    >
-                        <i className={`bi ${showPaymentForm ? 'bi-x-lg' : 'bi-plus-lg'} me-1`}></i>
-                        {showPaymentForm ? "Close Form" : "Add Payment"}
-                    </button>
-                )}
-            </div>
+        <>
+            {/* Add Payment Modal */}
+            {showPaymentForm && (
+                <div className="modal show d-block" tabIndex="-1" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}>
+                    <div className="modal-dialog modal-lg modal-dialog-centered">
+                        <div className="modal-content">
+                            <div className="modal-header bg-primary text-white">
+                                <h5 className="modal-title">
+                                    <i className="bi bi-plus-circle me-2"></i>
+                                    Add New Payment
+                                </h5>
+                                <button 
+                                    type="button" 
+                                    className="btn-close btn-close-white" 
+                                    onClick={closeAddPaymentModal}
+                                ></button>
+                            </div>
+                            <div className="modal-body">
+                                <div className="row g-3">
+                                    {/* Date */}
+                                    <div className="col-md-6">
+                                        <label className="form-label fw-semibold">
+                                            Date <span className="text-danger">*</span>
+                                        </label>
+                                        <input
+                                            type="date"
+                                            className={`form-control ${validationErrors.date ? 'is-invalid' : ''}`}
+                                            value={newPayment.date}
+                                            min={PAY_MIN}
+                                            max={PAY_MAX}
+                                            onChange={(e) => updateNewPayment("date", e.target.value)}
+                                        />
+                                        {validationErrors.date && (
+                                            <div className="invalid-feedback">{validationErrors.date}</div>
+                                        )}
+                                    </div>
 
-            <div className="card-body">
-                {/* Add Payment Form */}
-                {canEdit && showPaymentForm && (
-                    <div className="card border-primary mb-4">
-                        <div className="card-header bg-light">
-                            <h5 className="mb-0 text-primary">
-                                <i className="bi bi-plus-circle me-2"></i>
-                                Add New Payment
-                            </h5>
-                        </div>
-                        <div className="card-body">
-                            <div className="row g-3">
-                                {/* Date */}
-                                <div className="col-md-4 col-lg-3">
-                                    <label className="form-label fw-semibold">
-                                        Date <span className="text-danger">*</span>
-                                    </label>
-                                    <input
-                                        type="date"
-                                        className={`form-control ${validationErrors.date ? 'is-invalid' : ''}`}
-                                        value={newPayment.date}
-                                        min={PAY_MIN}
-                                        max={PAY_MAX}
-                                        onChange={(e) => updateNewPayment("date", e.target.value)}
-                                    />
-                                    {validationErrors.date && (
-                                        <div className="invalid-feedback">{validationErrors.date}</div>
-                                    )}
-                                </div>
-
-                                {/* Client Name */}
-                                <div className="col-md-8 col-lg-5">
-                                    <label className="form-label fw-semibold">
-                                        Client Name <span className="text-danger">*</span>
-                                    </label>
-                                    <input
-                                        type="text"
-                                        className={`form-control ${validationErrors.clientName ? 'is-invalid' : ''}`}
-                                        value={newPayment.clientName}
-                                        onChange={(e) => updateNewPayment("clientName", e.target.value)}
-                                        placeholder="Enter client name"
-                                    />
-                                    {validationErrors.clientName && (
-                                        <div className="invalid-feedback">{validationErrors.clientName}</div>
-                                    )}
-                                </div>
-
-                                {/* Days */}
-                                <div className="col-md-4 col-lg-2">
-                                    <label className="form-label fw-semibold">
-                                        Days <span className="text-danger">*</span>
-                                    </label>
-                                    <input
-                                        type="number"
-                                        className={`form-control ${validationErrors.days ? 'is-invalid' : ''}`}
-                                        value={newPayment.days}
-                                        min="1"
-                                        max="31"
-                                        onChange={(e) => updateNewPayment("days", e.target.value)}
-                                        placeholder="Days"
-                                    />
-                                    {validationErrors.days && (
-                                        <div className="invalid-feedback">{validationErrors.days}</div>
-                                    )}
-                                </div>
-
-                                {/* Amount */}
-                                <div className="col-md-4 col-lg-3">
-                                    <label className="form-label fw-semibold">
-                                        Amount <span className="text-danger">*</span>
-                                    </label>
-                                    <div className="input-group">
-                                        <span className="input-group-text">₹</span>
+                                    {/* Client Name */}
+                                    <div className="col-md-6">
+                                        <label className="form-label fw-semibold">
+                                            Client Name <span className="text-danger">*</span>
+                                        </label>
                                         <input
                                             type="text"
-                                            className={`form-control ${validationErrors.amount ? 'is-invalid' : ''}`}
-                                            value={newPayment.amount}
-                                            onChange={(e) => updateNewPayment("amount", e.target.value.replace(/\D/g, ""))}
-                                            placeholder="Amount"
+                                            className={`form-control ${validationErrors.clientName ? 'is-invalid' : ''}`}
+                                            value={newPayment.clientName}
+                                            onChange={(e) => updateNewPayment("clientName", e.target.value)}
+                                            placeholder="Enter client name"
                                         />
+                                        {validationErrors.clientName && (
+                                            <div className="invalid-feedback">{validationErrors.clientName}</div>
+                                        )}
                                     </div>
-                                    {validationErrors.amount && (
-                                        <div className="invalid-feedback">{validationErrors.amount}</div>
-                                    )}
-                                </div>
 
-                                {/* Balance */}
-                                <div className="col-md-4 col-lg-3">
-                                    <label className="form-label fw-semibold">Balance Amount</label>
-                                    <div className="input-group">
-                                        <span className="input-group-text">₹</span>
+                                    {/* Days */}
+                                    <div className="col-md-4">
+                                        <label className="form-label fw-semibold">
+                                            Days <span className="text-danger">*</span>
+                                        </label>
+                                        <input
+                                            type="number"
+                                            className={`form-control ${validationErrors.days ? 'is-invalid' : ''}`}
+                                            value={newPayment.days}
+                                            min="1"
+                                            max="31"
+                                            onChange={(e) => updateNewPayment("days", e.target.value)}
+                                            placeholder="Days"
+                                        />
+                                        {validationErrors.days && (
+                                            <div className="invalid-feedback">{validationErrors.days}</div>
+                                        )}
+                                    </div>
+
+                                    {/* Amount */}
+                                    <div className="col-md-4">
+                                        <label className="form-label fw-semibold">
+                                            Amount <span className="text-danger">*</span>
+                                        </label>
+                                        <div className="input-group">
+                                            <span className="input-group-text">₹</span>
+                                            <input
+                                                type="text"
+                                                className={`form-control ${validationErrors.amount ? 'is-invalid' : ''}`}
+                                                value={newPayment.amount}
+                                                onChange={(e) => updateNewPayment("amount", e.target.value.replace(/\D/g, ""))}
+                                                placeholder="Amount"
+                                            />
+                                        </div>
+                                        {validationErrors.amount && (
+                                            <div className="invalid-feedback">{validationErrors.amount}</div>
+                                        )}
+                                    </div>
+
+                                    {/* Balance */}
+                                    <div className="col-md-4">
+                                        <label className="form-label fw-semibold">Balance Amount</label>
+                                        <div className="input-group">
+                                            <span className="input-group-text">₹</span>
+                                            <input
+                                                type="text"
+                                                className="form-control"
+                                                value={newPayment.balanceAmount}
+                                                onChange={(e) => updateNewPayment("balanceAmount", e.target.value.replace(/\D/g, ""))}
+                                                placeholder="Balance"
+                                            />
+                                        </div>
+                                    </div>
+
+                                    {/* Payment Type */}
+                                    <div className="col-md-6">
+                                        <label className="form-label fw-semibold">
+                                            Payment Type <span className="text-danger">*</span>
+                                        </label>
+                                        <select
+                                            className={`form-select ${validationErrors.typeOfPayment ? 'is-invalid' : ''}`}
+                                            value={newPayment.typeOfPayment}
+                                            onChange={(e) => updateNewPayment("typeOfPayment", e.target.value)}
+                                        >
+                                            <option value="">Select Type</option>
+                                            {paymentTypes.map(type => (
+                                                <option key={type.value} value={type.value}>
+                                                    {type.label}
+                                                </option>
+                                            ))}
+                                        </select>
+                                        {validationErrors.typeOfPayment && (
+                                            <div className="invalid-feedback">{validationErrors.typeOfPayment}</div>
+                                        )}
+                                    </div>
+
+                                    {/* Payment For */}
+                                    <div className="col-md-6">
+                                        <label className="form-label fw-semibold">
+                                            Payment For <span className="text-danger">*</span>
+                                        </label>
+                                        <select
+                                            className={`form-select ${validationErrors.status ? 'is-invalid' : ''}`}
+                                            value={newPayment.status}
+                                            onChange={(e) => updateNewPayment("status", e.target.value)}
+                                        >
+                                            <option value="">Select Purpose</option>
+                                            {paymentForOptions.map(option => (
+                                                <option key={option.value} value={option.value}>
+                                                    {option.label}
+                                                </option>
+                                            ))}
+                                        </select>
+                                        {validationErrors.status && (
+                                            <div className="invalid-feedback">{validationErrors.status}</div>
+                                        )}
+                                    </div>
+
+                                    {/* Receipt No */}
+                                    <div className="col-md-6">
+                                        <label className="form-label fw-semibold">Receipt Number</label>
                                         <input
                                             type="text"
                                             className="form-control"
-                                            value={newPayment.balanceAmount}
-                                            onChange={(e) => updateNewPayment("balanceAmount", e.target.value.replace(/\D/g, ""))}
-                                            placeholder="Balance"
+                                            value={newPayment.receiptNo}
+                                            onChange={(e) => updateNewPayment("receiptNo", e.target.value)}
+                                            placeholder="Enter receipt number"
+                                        />
+                                    </div>
+
+                                    {/* Timesheet ID */}
+                                    <div className="col-md-6">
+                                        <label className="form-label fw-semibold">Timesheet ID</label>
+                                        <input
+                                            type="text"
+                                            className="form-control"
+                                            value={newPayment.timesheetID}
+                                            onChange={(e) => updateNewPayment("timesheetID", e.target.value)}
+                                            placeholder="Enter timesheet ID"
+                                        />
+                                    </div>
+
+                                    {/* Remarks */}
+                                    <div className="col-12">
+                                        <label className="form-label fw-semibold">Remarks</label>
+                                        <textarea
+                                            className="form-control"
+                                            rows="3"
+                                            value={newPayment.remarks}
+                                            onChange={(e) => updateNewPayment("remarks", e.target.value)}
+                                            placeholder="Any additional remarks..."
                                         />
                                     </div>
                                 </div>
-
-                                {/* Payment Type */}
-                                <div className="col-md-6 col-lg-4">
-                                    <label className="form-label fw-semibold">
-                                        Payment Type <span className="text-danger">*</span>
-                                    </label>
-                                    <select
-                                        className={`form-select ${validationErrors.typeOfPayment ? 'is-invalid' : ''}`}
-                                        value={newPayment.typeOfPayment}
-                                        onChange={(e) => updateNewPayment("typeOfPayment", e.target.value)}
-                                    >
-                                        <option value="">Select Type</option>
-                                        {paymentTypes.map(type => (
-                                            <option key={type.value} value={type.value}>
-                                                {type.label}
-                                            </option>
-                                        ))}
-                                    </select>
-                                    {validationErrors.typeOfPayment && (
-                                        <div className="invalid-feedback">{validationErrors.typeOfPayment}</div>
-                                    )}
-                                </div>
-
-                                {/* Payment For */}
-                                <div className="col-md-6 col-lg-4">
-                                    <label className="form-label fw-semibold">
-                                        Payment For <span className="text-danger">*</span>
-                                    </label>
-                                    <select
-                                        className={`form-select ${validationErrors.status ? 'is-invalid' : ''}`}
-                                        value={newPayment.status}
-                                        onChange={(e) => updateNewPayment("status", e.target.value)}
-                                    >
-                                        <option value="">Select Purpose</option>
-                                        {paymentForOptions.map(option => (
-                                            <option key={option.value} value={option.value}>
-                                                {option.label}
-                                            </option>
-                                        ))}
-                                    </select>
-                                    {validationErrors.status && (
-                                        <div className="invalid-feedback">{validationErrors.status}</div>
-                                    )}
-                                </div>
-
-                                {/* Receipt No */}
-                                <div className="col-md-6 col-lg-4">
-                                    <label className="form-label fw-semibold">Receipt Number</label>
-                                    <input
-                                        type="text"
-                                        className="form-control"
-                                        value={newPayment.receiptNo}
-                                        onChange={(e) => updateNewPayment("receiptNo", e.target.value)}
-                                        placeholder="Enter receipt number"
-                                    />
-                                </div>
-
-                                {/* Timesheet ID */}
-                                <div className="col-md-6 col-lg-4">
-                                    <label className="form-label fw-semibold">Timesheet ID</label>
-                                    <input
-                                        type="text"
-                                        className="form-control"
-                                        value={newPayment.timesheetID}
-                                        onChange={(e) => updateNewPayment("timesheetID", e.target.value)}
-                                        placeholder="Enter timesheet ID"
-                                    />
-                                </div>
-
-                                {/* Remarks */}
-                                <div className="col-12">
-                                    <label className="form-label fw-semibold">Remarks</label>
-                                    <textarea
-                                        className="form-control"
-                                        rows="2"
-                                        value={newPayment.remarks}
-                                        onChange={(e) => updateNewPayment("remarks", e.target.value)}
-                                        placeholder="Any additional remarks..."
-                                    />
-                                </div>
                             </div>
-
-                            <div className="d-flex justify-content-end gap-2 mt-4">
+                            <div className="modal-footer">
                                 <button
                                     type="button"
-                                    className="btn btn-outline-secondary"
-                                    onClick={() => {
-                                        setShowPaymentForm(false);
-                                        resetPaymentForm();
-                                    }}
+                                    className="btn btn-secondary"
+                                    onClick={closeAddPaymentModal}
                                 >
                                     <i className="bi bi-x-lg me-1"></i> Cancel
                                 </button>
@@ -394,52 +400,72 @@ const Payment = ({
                             </div>
                         </div>
                     </div>
-                )}
+                </div>
+            )}
 
-                {/* Summary Cards */}
-                {payments.length > 0 && (
-                    <div className="row g-3 mb-4">
-                        <div className="col-md-4">
-                            <div className="card bg-light">
-                                <div className="card-body text-center py-3">
-                                    <div className="text-small small">Total Payments</div>
-                                    <div className="h3 text-primary fw-bold">{payments.length}</div>
-                                </div>
-                            </div>
-                        </div>
-                        <div className="col-md-4">
-                            <div className="card bg-success">
-                                <div className="card-body text-center py-3">
-                                    <div className="small">Total Amount</div>
-                                    <div className="h3 fw-bold">{formatCurrency(totals.totalAmount)}</div>
-                                </div>
-                            </div>
-                        </div>
-                        <div className="col-md-4">
-                            <div className={`card ${totals.totalBalance > 0 ? 'bg-danger' : 'bg-success'}`}>
-                                <div className="card-body text-center py-3">
-                                    <div className="small">Total Balance</div>
-                                    <div className="h3 fw-bold">{formatCurrency(totals.totalBalance)}</div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                )}
+            {/* Main Payment Component */}
+            <div className="card">
+                <div className="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+                    <h4 className="mb-0">
+                        <i className="bi bi-cash-coin me-2"></i>
+                        Payments
+                    </h4>
+                    {canEdit && (
+                        <button
+                            type="button"
+                            className="btn btn-light btn-sm"
+                            onClick={openAddPaymentModal}
+                        >
+                            <i className="bi bi-plus-lg me-1"></i>
+                            Add Payment
+                        </button>
+                    )}
+                </div>
 
-                {/* Payments Table */}
-                {payments.length === 0 ? (
-                    <div className="alert alert-info text-center text-info">
-                        <i className="bi bi-info-circle me-2"></i>
-                        No payments recorded yet. Click "Add Payment" to get started.
-                    </div>
-                ) : (
-                    <>
+                <div className="card-body">
+                    {/* Summary Cards */}
+                    {payments.length > 0 && (
+                        <div className="row g-3 mb-4">
+                            <div className="col-md-4">
+                                <div className="card bg-light">
+                                    <div className="card-body text-center py-3">
+                                        <div className="text-muted small">Total Payments</div>
+                                        <div className="h3 text-primary fw-bold">{payments.length}</div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div className="col-md-4">
+                                <div className="card bg-success">
+                                    <div className="card-body text-center py-3">
+                                        <div className="small">Total Amount</div>
+                                        <div className="h3 fw-bold">{formatCurrency(totals.totalAmount)}</div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div className="col-md-4">
+                                <div className={`card ${totals.totalBalance > 0 ? 'bg-danger' : 'bg-success'}`}>
+                                    <div className="card-body text-center py-3">
+                                        <div className="small">Total Balance</div>
+                                        <div className="h3 fw-bold">{formatCurrency(totals.totalBalance)}</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Payments Table */}
+                    {payments.length === 0 ? (
+                        <div className="alert alert-info text-center">
+                            <i className="bi bi-info-circle me-2"></i>
+                            No payments recorded yet. Click "Add Payment" to get started.
+                        </div>
+                    ) : (
                         <div className="table-responsive">
                             <table className="table table-hover table-bordered align-middle">
                                 <thead className="table-dark">
                                     <tr>
                                         <th width="40">#</th>
-                                        <th width="100">Date</th>
+                                        <th width="120">Date</th>
                                         <th>Client</th>
                                         <th width="70">Days</th>
                                         <th width="120">Amount</th>
@@ -458,7 +484,7 @@ const Payment = ({
                                         <tr key={index} className={payment.__locked ? "table-secondary" : ""}>
                                             <td className="text-center fw-semibold">{index + 1}</td>
                                             <td>
-                                                <span className="badge bg-primary">{payment.date || "—"}</span>
+                                                <span className="badge bg-primary">{formatDateDisplay(payment.date)}</span>
                                             </td>
                                             <td className="fw-semibold">{payment.clientName || "—"}</td>
                                             <td className="text-center">
@@ -553,10 +579,10 @@ const Payment = ({
                                 </tfoot>
                             </table>
                         </div>
-                    </>
-                )}
+                    )}
+                </div>
             </div>
-        </div>
+        </>
     );
 };
 

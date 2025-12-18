@@ -13,14 +13,18 @@ const Working = ({
     const [showEditModal, setShowEditModal] = useState(false);
     const [editingWorkIndex, setEditingWorkIndex] = useState(null);
     const [validationErrors, setValidationErrors] = useState({});
+    const [clientOptions, setClientOptions] = useState([]);
+    const [clientSearchTerm, setClientSearchTerm] = useState("");
+    const [showClientDropdown, setShowClientDropdown] = useState(false);
     const [newWork, setNewWork] = useState({
         clientId: "",
         clientName: "",
         location: "",
-        days: "",
+        serviceType: "",
         fromDate: "",
         toDate: "",
-        serviceType: "",
+        timesheetID: "",
+        days: "",
         remarks: "",
         __locked: false,
     });
@@ -28,6 +32,7 @@ const Working = ({
     const [editWorkDraft, setEditWorkDraft] = useState({ 
         toDate: "", 
         days: "", 
+        timesheetID: "",
         remarks: "" 
     });
 
@@ -44,9 +49,61 @@ const Working = ({
         "Other"
     ];
 
+    // Mock client data - in real app, this would come from API
+    const mockClients = [
+        { clientId: "CL001", clientName: "John Doe", location: "New York" },
+        { clientId: "CL002", clientName: "Jane Smith", location: "Los Angeles" },
+        { clientId: "CL003", clientName: "Robert Johnson", location: "Chicago" },
+        { clientId: "CL004", clientName: "Mary Williams", location: "Houston" },
+        { clientId: "CL005", clientName: "Michael Brown", location: "Phoenix" },
+    ];
+
+    // Load client options
+    useEffect(() => {
+        // In real app, fetch from API
+        setClientOptions(mockClients);
+    }, []);
+
+    // Filter clients based on search term
+    const filteredClients = clientOptions.filter(client =>
+        client.clientId?.toLowerCase().includes(clientSearchTerm.toLowerCase()) ||
+        client.clientName?.toLowerCase().includes(clientSearchTerm.toLowerCase()) ||
+        client.location?.toLowerCase().includes(clientSearchTerm.toLowerCase())
+    );
+
+    // Handle client selection
+    const handleClientSelect = (client) => {
+        setNewWork(prev => ({
+            ...prev,
+            clientId: client.clientId,
+            clientName: client.clientName,
+            location: client.location
+        }));
+        setClientSearchTerm(`${client.clientId} - ${client.clientName}`);
+        setShowClientDropdown(false);
+    };
+
     // Update new work field
     const updateNewWork = (field, value) => {
-        setNewWork(prev => ({ ...prev, [field]: value }));
+        const updatedWork = { ...newWork, [field]: value };
+        
+        // If client ID changes manually, try to find and auto-fill
+        if (field === "clientId" && value) {
+            const foundClient = clientOptions.find(client => 
+                client.clientId.toLowerCase() === value.toLowerCase()
+            );
+            if (foundClient) {
+                updatedWork.clientName = foundClient.clientName;
+                updatedWork.location = foundClient.location;
+            } else {
+                // Clear auto-filled fields if client not found
+                updatedWork.clientName = "";
+                updatedWork.location = "";
+            }
+        }
+        
+        setNewWork(updatedWork);
+        
         // Clear validation error for this field
         if (validationErrors[field]) {
             setValidationErrors(prev => ({ ...prev, [field]: "" }));
@@ -59,13 +116,16 @@ const Working = ({
             clientId: "",
             clientName: "",
             location: "",
-            days: "",
+            serviceType: "",
             fromDate: "",
             toDate: "",
-            serviceType: "",
+            timesheetID: "",
+            days: "",
             remarks: "",
             __locked: false,
         });
+        setClientSearchTerm("");
+        setShowClientDropdown(false);
         setValidationErrors({});
     };
 
@@ -105,7 +165,7 @@ const Working = ({
     useEffect(() => {
         if (newWork.fromDate && newWork.toDate) {
             const days = calculateDays(newWork.fromDate, newWork.toDate);
-            updateNewWork("days", days);
+            setNewWork(prev => ({ ...prev, days }));
         }
     }, [newWork.fromDate, newWork.toDate]);
 
@@ -164,6 +224,7 @@ const Working = ({
         setEditWorkDraft({
             toDate: work.toDate || "",
             days: (work.days || "").toString(),
+            timesheetID: work.timesheetID || "",
             remarks: work.remarks || ""
         });
         setEditingWorkIndex(index);
@@ -174,7 +235,7 @@ const Working = ({
     const closeEditModal = () => {
         setShowEditModal(false);
         setEditingWorkIndex(null);
-        setEditWorkDraft({ toDate: "", days: "", remarks: "" });
+        setEditWorkDraft({ toDate: "", days: "", timesheetID: "", remarks: "" });
     };
 
     // Save edited work
@@ -201,6 +262,7 @@ const Working = ({
             // Update fields if provided
             if (editWorkDraft.toDate !== "") updatedWork.toDate = editWorkDraft.toDate;
             if (editWorkDraft.days !== "") updatedWork.days = editWorkDraft.days.replace(/\D/g, "");
+            if (editWorkDraft.timesheetID !== undefined) updatedWork.timesheetID = editWorkDraft.timesheetID;
             if (editWorkDraft.remarks !== undefined) updatedWork.remarks = editWorkDraft.remarks;
 
             updatedWorkDetails[editingWorkIndex] = updatedWork;
@@ -249,10 +311,10 @@ const Working = ({
         <>
             {/* Add Work Modal */}
             {showAddModal && (
-                <div className="modal show d-block" tabIndex="-1" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}>
+                <div className="modal show d-block" tabIndex="-1" style={{ backgroundColor: 'rgba(0,0,0,0.9)' }}>
                     <div className="modal-dialog modal-lg modal-dialog-centered">
-                        <div className="modal-content">
-                            <div className="modal-header bg-info text-white">
+                        <div className="modal-content bg-dark text-white border-secondary">
+                            <div className="modal-header bg-dark border-secondary">
                                 <h5 className="modal-title">
                                     <i className="bi bi-plus-circle me-2"></i>
                                     Add New Work Record
@@ -265,94 +327,101 @@ const Working = ({
                             </div>
                             <div className="modal-body">
                                 <div className="row g-3">
-                                    {/* Client ID */}
+                                    {/* Client Search - Similar to WorkerSearch */}
                                     <div className="col-md-6">
                                         <label className="form-label fw-semibold">
                                             Client ID <span className="text-danger">*</span>
                                         </label>
-                                        <input
-                                            type="text"
-                                            className={`form-control ${validationErrors.clientId ? 'is-invalid' : ''}`}
-                                            value={newWork.clientId}
-                                            onChange={(e) => updateNewWork("clientId", e.target.value)}
-                                            placeholder="Enter client ID"
-                                        />
+                                        <div className="position-relative">
+                                            <div className="input-group">
+                                                <span className="input-group-text bg-dark border-secondary">
+                                                    <i className="bi bi-search text-warning"></i>
+                                                </span>
+                                                <input
+                                                    type="text"
+                                                    className={`form-control bg-dark text-white border-secondary ${validationErrors.clientId ? 'is-invalid' : ''}`}
+                                                    placeholder="Search by Client ID or Name..."
+                                                    value={clientSearchTerm}
+                                                    onChange={(e) => {
+                                                        setClientSearchTerm(e.target.value);
+                                                        setShowClientDropdown(true);
+                                                    }}
+                                                    onFocus={() => setShowClientDropdown(true)}
+                                                />
+                                            </div>
+
+                                            {/* Client Dropdown */}
+                                            {showClientDropdown && clientSearchTerm && (
+                                                <div 
+                                                    className="position-absolute top-100 start-0 end-0 bg-dark border border-secondary rounded mt-1 z-3"
+                                                    style={{ maxHeight: '300px', overflowY: 'auto' }}
+                                                >
+                                                    {filteredClients.map(client => (
+                                                        <div
+                                                            key={client.clientId}
+                                                            className="p-3 border-bottom border-secondary hover-bg-secondary"
+                                                            onClick={() => handleClientSelect(client)}
+                                                            style={{cursor:'pointer'}}
+                                                        >
+                                                            <div className="d-flex justify-content-between align-items-center">
+                                                                <div>
+                                                                    <strong className="text-white">{client.clientId} - {client.clientName}</strong>
+                                                                    <div className="text-info small">
+                                                                        Location: {client.location}
+                                                                    </div>
+                                                                </div>
+                                                                <div className="text-end">
+                                                                    <i className="bi bi-chevron-right text-warning"></i>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    ))}
+                                                    {filteredClients.length === 0 && (
+                                                        <div className="p-3 text-muted text-center">No clients found</div>
+                                                    )}
+                                                </div>
+                                            )}
+
+                                            {/* Click outside to close */}
+                                            {showClientDropdown && (
+                                                <div 
+                                                    className="position-fixed top-0 left-0 w-100 h-100" 
+                                                    style={{ zIndex: 2 }}
+                                                    onClick={() => setShowClientDropdown(false)}
+                                                />
+                                            )}
+                                        </div>
                                         {validationErrors.clientId && (
-                                            <div className="invalid-feedback">{validationErrors.clientId}</div>
+                                            <div className="invalid-feedback d-block">{validationErrors.clientId}</div>
                                         )}
                                     </div>
 
-                                    {/* Client Name */}
+                                    {/* Client Name (auto-filled) */}
                                     <div className="col-md-6">
                                         <label className="form-label fw-semibold">
                                             Client Name <span className="text-danger">*</span>
                                         </label>
                                         <input
                                             type="text"
-                                            className={`form-control ${validationErrors.clientName ? 'is-invalid' : ''}`}
+                                            className={`form-control bg-dark text-white border-secondary ${validationErrors.clientName ? 'is-invalid' : ''}`}
                                             value={newWork.clientName}
-                                            onChange={(e) => updateNewWork("clientName", e.target.value)}
-                                            placeholder="Enter client name"
+                                            readOnly
+                                            placeholder="Auto-filled from Client ID"
                                         />
                                         {validationErrors.clientName && (
-                                            <div className="invalid-feedback">{validationErrors.clientName}</div>
+                                            <div className="invalid-feedback d-block">{validationErrors.clientName}</div>
                                         )}
                                     </div>
 
-                                    {/* Location */}
+                                    {/* Location (auto-filled) */}
                                     <div className="col-md-6">
                                         <label className="form-label fw-semibold">Location</label>
                                         <input
                                             type="text"
-                                            className="form-control"
+                                            className="form-control bg-dark text-white border-secondary"
                                             value={newWork.location}
-                                            onChange={(e) => updateNewWork("location", e.target.value)}
-                                            placeholder="Enter location"
-                                        />
-                                    </div>
-
-                                    {/* From Date */}
-                                    <div className="col-md-6">
-                                        <label className="form-label fw-semibold">
-                                            From Date <span className="text-danger">*</span>
-                                        </label>
-                                        <input
-                                            type="date"
-                                            className={`form-control ${validationErrors.fromDate ? 'is-invalid' : ''}`}
-                                            value={newWork.fromDate}
-                                            onChange={(e) => updateNewWork("fromDate", e.target.value)}
-                                        />
-                                        {validationErrors.fromDate && (
-                                            <div className="invalid-feedback">{validationErrors.fromDate}</div>
-                                        )}
-                                    </div>
-
-                                    {/* To Date */}
-                                    <div className="col-md-6">
-                                        <label className="form-label fw-semibold">To Date</label>
-                                        <input
-                                            type="date"
-                                            className={`form-control ${validationErrors.toDate ? 'is-invalid' : ''}`}
-                                            value={newWork.toDate}
-                                            onChange={(e) => updateNewWork("toDate", e.target.value)}
-                                            min={newWork.fromDate}
-                                        />
-                                        {validationErrors.toDate && (
-                                            <div className="invalid-feedback">{validationErrors.toDate}</div>
-                                        )}
-                                    </div>
-
-                                    {/* Days */}
-                                    <div className="col-md-6">
-                                        <label className="form-label fw-semibold">Days</label>
-                                        <input
-                                            type="number"
-                                            className="form-control"
-                                            value={newWork.days}
-                                            min="1"
-                                            onChange={(e) => updateNewWork("days", e.target.value)}
-                                            placeholder="Auto-calculated"
-                                            readOnly={!!(newWork.fromDate && newWork.toDate)}
+                                            readOnly
+                                            placeholder="Auto-filled from Client ID"
                                         />
                                     </div>
 
@@ -362,25 +431,93 @@ const Working = ({
                                             Service Type <span className="text-danger">*</span>
                                         </label>
                                         <select
-                                            className={`form-select ${validationErrors.serviceType ? 'is-invalid' : ''}`}
+                                            className={`form-select bg-dark text-white border-secondary ${validationErrors.serviceType ? 'is-invalid' : ''}`}
                                             value={newWork.serviceType}
                                             onChange={(e) => updateNewWork("serviceType", e.target.value)}
                                         >
-                                            <option value="">Select Service Type</option>
+                                            <option value="" className="bg-dark">Select Service Type</option>
                                             {serviceTypes.map(type => (
-                                                <option key={type} value={type}>{type}</option>
+                                                <option key={type} value={type} className="bg-dark">{type}</option>
                                             ))}
                                         </select>
                                         {validationErrors.serviceType && (
-                                            <div className="invalid-feedback">{validationErrors.serviceType}</div>
+                                            <div className="invalid-feedback d-block">{validationErrors.serviceType}</div>
                                         )}
+                                    </div>
+
+                                    {/* From Date and To Date in one row */}
+                                    <div className="col-md-6">
+                                        <label className="form-label fw-semibold">
+                                            From Date <span className="text-danger">*</span>
+                                        </label>
+                                        <input
+                                            type="date"
+                                            className={`form-control bg-dark text-white border-secondary ${validationErrors.fromDate ? 'is-invalid' : ''}`}
+                                            value={newWork.fromDate}
+                                            onChange={(e) => updateNewWork("fromDate", e.target.value)}
+                                        />
+                                        {validationErrors.fromDate && (
+                                            <div className="invalid-feedback d-block">{validationErrors.fromDate}</div>
+                                        )}
+                                    </div>
+
+                                    <div className="col-md-6">
+                                        <label className="form-label fw-semibold">To Date</label>
+                                        <input
+                                            type="date"
+                                            className={`form-control bg-dark text-white border-secondary ${validationErrors.toDate ? 'is-invalid' : ''}`}
+                                            value={newWork.toDate}
+                                            onChange={(e) => updateNewWork("toDate", e.target.value)}
+                                            min={newWork.fromDate}
+                                        />
+                                        {validationErrors.toDate && (
+                                            <div className="invalid-feedback d-block">{validationErrors.toDate}</div>
+                                        )}
+                                    </div>
+
+                                    {/* Timesheet ID and Days in one row */}
+                                    <div className="col-md-6">
+                                        <label className="form-label fw-semibold">Timesheet ID</label>
+                                        <input
+                                            type="text"
+                                            className="form-control bg-dark text-white border-secondary"
+                                            value={newWork.timesheetID}
+                                            onChange={(e) => updateNewWork("timesheetID", e.target.value)}
+                                            placeholder="Enter timesheet ID"
+                                        />
+                                    </div>
+
+                                    <div className="col-md-6">
+                                        <label className="form-label fw-semibold">Days</label>
+                                        <div className="input-group">
+                                            <input
+                                                type="number"
+                                                className="form-control bg-dark text-white border-secondary"
+                                                value={newWork.days}
+                                                readOnly={!!(newWork.fromDate && newWork.toDate)}
+                                                placeholder="Auto-calculated from dates"
+                                            />
+                                            <button
+                                                type="button"
+                                                className="btn btn-outline-warning border-secondary"
+                                                onClick={() => {
+                                                    if (newWork.fromDate && newWork.toDate) {
+                                                        const days = calculateDays(newWork.fromDate, newWork.toDate);
+                                                        updateNewWork("days", days);
+                                                    }
+                                                }}
+                                                title="Calculate days"
+                                            >
+                                                <i className="bi bi-calculator"></i>
+                                            </button>
+                                        </div>
                                     </div>
 
                                     {/* Remarks */}
                                     <div className="col-12">
                                         <label className="form-label fw-semibold">Remarks</label>
                                         <textarea
-                                            className="form-control"
+                                            className="form-control bg-dark text-white border-secondary"
                                             rows="3"
                                             value={newWork.remarks}
                                             onChange={(e) => updateNewWork("remarks", e.target.value)}
@@ -389,17 +526,17 @@ const Working = ({
                                     </div>
                                 </div>
                             </div>
-                            <div className="modal-footer">
+                            <div className="modal-footer bg-dark border-secondary">
                                 <button
                                     type="button"
-                                    className="btn btn-secondary"
+                                    className="btn btn-outline-secondary"
                                     onClick={closeAddWorkModal}
                                 >
                                     <i className="bi bi-x-lg me-1"></i> Cancel
                                 </button>
                                 <button
                                     type="button"
-                                    className="btn btn-info text-white"
+                                    className="btn btn-info"
                                     onClick={handleAddWork}
                                 >
                                     <i className="bi bi-check-lg me-1"></i> Add Work Record
@@ -412,24 +549,24 @@ const Working = ({
 
             {/* Edit Work Modal */}
             {showEditModal && editingWorkIndex !== null && (
-                <div className="modal show d-block" tabIndex="-1" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}>
+                <div className="modal show d-block" tabIndex="-1" style={{ backgroundColor: 'rgba(0,0,0,0.9)' }}>
                     <div className="modal-dialog modal-lg modal-dialog-centered">
-                        <div className="modal-content">
-                            <div className="modal-header bg-warning text-dark">
+                        <div className="modal-content bg-dark text-white border-secondary">
+                            <div className="modal-header bg-dark border-warning">
                                 <h5 className="modal-title">
                                     <i className="bi bi-pencil-square me-2"></i>
                                     Edit Work Record (Row #{editingWorkIndex + 1})
                                 </h5>
                                 <button 
                                     type="button" 
-                                    className="btn-close" 
+                                    className="btn-close btn-close-white" 
                                     onClick={closeEditModal}
                                 ></button>
                             </div>
                             <div className="modal-body">
-                                <div className="alert alert-warning mb-3">
+                                <div className="alert alert-warning bg-dark border-warning text-warning mb-3">
                                     <i className="bi bi-exclamation-triangle me-2"></i>
-                                    You can only edit <strong>To Date</strong>, <strong>Days</strong>, and <strong>Remarks</strong> fields.
+                                    You can only edit <strong>To Date</strong>, <strong>Timesheet ID</strong>, <strong>Days</strong>, and <strong>Remarks</strong> fields.
                                 </div>
                                 
                                 <div className="row g-3">
@@ -439,10 +576,24 @@ const Working = ({
                                         </label>
                                         <input
                                             type="date"
-                                            className="form-control"
+                                            className="form-control bg-dark text-white border-secondary"
                                             value={editWorkDraft.toDate}
                                             onChange={(e) => setEditWorkDraft(prev => ({ ...prev, toDate: e.target.value }))}
                                             min={formData.workDetails?.[editingWorkIndex]?.fromDate}
+                                        />
+                                    </div>
+
+                                    <div className="col-md-6">
+                                        <label className="form-label fw-semibold">Timesheet ID</label>
+                                        <input
+                                            type="text"
+                                            className="form-control bg-dark text-white border-secondary"
+                                            value={editWorkDraft.timesheetID}
+                                            onChange={(e) => setEditWorkDraft(prev => ({ 
+                                                ...prev, 
+                                                timesheetID: e.target.value 
+                                            }))}
+                                            placeholder="Update timesheet ID"
                                         />
                                     </div>
 
@@ -452,7 +603,7 @@ const Working = ({
                                         </label>
                                         <input
                                             type="number"
-                                            className="form-control"
+                                            className="form-control bg-dark text-white border-secondary"
                                             value={editWorkDraft.days}
                                             onChange={(e) => setEditWorkDraft(prev => ({ 
                                                 ...prev, 
@@ -462,10 +613,29 @@ const Working = ({
                                         />
                                     </div>
 
+                                    <div className="col-md-6">
+                                        <label className="form-label fw-semibold">Calculate Days</label>
+                                        <button
+                                            type="button"
+                                            className="btn btn-outline-warning w-100"
+                                            onClick={() => {
+                                                const work = formData.workDetails?.[editingWorkIndex];
+                                                const toDate = editWorkDraft.toDate || work?.toDate;
+                                                const fromDate = work?.fromDate;
+                                                if (fromDate && toDate) {
+                                                    const days = calculateDays(fromDate, toDate);
+                                                    setEditWorkDraft(prev => ({ ...prev, days }));
+                                                }
+                                            }}
+                                        >
+                                            <i className="bi bi-calculator me-1"></i> Calculate from Dates
+                                        </button>
+                                    </div>
+
                                     <div className="col-12">
                                         <label className="form-label fw-semibold">Remarks</label>
                                         <textarea
-                                            className="form-control"
+                                            className="form-control bg-dark text-white border-secondary"
                                             rows="3"
                                             value={editWorkDraft.remarks}
                                             onChange={(e) => setEditWorkDraft(prev => ({ ...prev, remarks: e.target.value }))}
@@ -474,7 +644,7 @@ const Working = ({
                                     </div>
                                 </div>
                             </div>
-                            <div className="modal-footer">
+                            <div className="modal-footer bg-dark border-secondary">
                                 <button
                                     type="button"
                                     className="btn btn-outline-secondary"
@@ -496,8 +666,8 @@ const Working = ({
             )}
 
             {/* Main Work Component */}
-            <div className="card">
-                <div className="card-header bg-info text-white d-flex justify-content-between align-items-center">
+            <div className="card bg-dark text-white border-secondary">
+                <div className="card-header bg-dark border-secondary d-flex justify-content-between align-items-center">
                     <h4 className="mb-0">
                         <i className="bi bi-briefcase me-2"></i>
                         Work Details
@@ -505,7 +675,7 @@ const Working = ({
                     {canEdit && (
                         <button
                             type="button"
-                            className="btn btn-light btn-sm"
+                            className="btn btn-outline-info btn-sm"
                             onClick={openAddWorkModal}
                         >
                             <i className="bi bi-plus-lg me-1"></i>
@@ -519,17 +689,17 @@ const Working = ({
                     {workDetails.length > 0 && (
                         <div className="row g-3 mb-4">
                             <div className="col-md-4">
-                                <div className="card bg-light">
+                                <div className="card bg-dark border-info">
                                     <div className="card-body text-center py-3">
-                                        <div className="text-muted small">Total Assignments</div>
+                                        <div className="text-info small">Total Assignments</div>
                                         <div className="h3 text-info fw-bold">{workDetails.length}</div>
                                     </div>
                                 </div>
                             </div>
                             <div className="col-md-4">
-                                <div className="card bg-light">
+                                <div className="card bg-dark border-primary">
                                     <div className="card-body text-center py-3">
-                                        <div className="text-muted small">Total Days Worked</div>
+                                        <div className="text-primary small">Total Days Worked</div>
                                         <div className="h3 text-primary fw-bold">
                                             {workDetails.reduce((sum, work) => sum + (parseInt(work.days) || 0), 0)}
                                         </div>
@@ -537,9 +707,9 @@ const Working = ({
                                 </div>
                             </div>
                             <div className="col-md-4">
-                                <div className="card bg-light">
+                                <div className="card bg-dark border-success">
                                     <div className="card-body text-center py-3">
-                                        <div className="text-muted small">Active Services</div>
+                                        <div className="text-success small">Active Services</div>
                                         <div className="h3 text-success fw-bold">
                                             {[...new Set(workDetails.map(w => w.serviceType))].length}
                                         </div>
@@ -551,23 +721,24 @@ const Working = ({
 
                     {/* Work Details Table */}
                     {workDetails.length === 0 ? (
-                        <div className="alert alert-info text-center">
+                        <div className="alert alert-info border-info text-info text-center">
                             <i className="bi bi-info-circle me-2"></i>
                             No work records found. Click "Add Work" to record work assignments.
                         </div>
                     ) : (
                         <div className="table-responsive">
-                            <table className="table table-hover table-bordered align-middle">
+                            <table className="table table-dark table-hover table-bordered align-middle">
                                 <thead className="table-info">
                                     <tr>
                                         <th width="40">#</th>
                                         <th width="100">Client ID</th>
                                         <th>Client Name</th>
                                         <th>Location</th>
-                                        <th width="80">Days</th>
-                                        <th width="120">From Date</th>
-                                        <th width="120">To Date</th>
                                         <th width="150">Service Type</th>
+                                        <th width="100">From Date</th>
+                                        <th width="100">To Date</th>
+                                        <th width="100">Timesheet ID</th>
+                                        <th width="80">Days</th>
                                         <th>Remarks</th>
                                         <th width="140">Added By</th>
                                         {canEdit && <th width="120">Actions</th>}
@@ -578,12 +749,12 @@ const Working = ({
                                         <tr key={index} className={work.__locked ? "table-secondary" : ""}>
                                             <td className="text-center fw-semibold">{index + 1}</td>
                                             <td>
-                                                <span className="badge bg-dark">#{work.clientId}</span>
+                                                <span className="badge bg-dark border border-info">#{work.clientId}</span>
                                             </td>
                                             <td className="fw-semibold">{work.clientName || "—"}</td>
                                             <td>{work.location || "—"}</td>
-                                            <td className="text-center">
-                                                <span className="badge bg-primary">{work.days || "—"}</span>
+                                            <td>
+                                                <span className="badge bg-info text-dark">{work.serviceType || "—"}</span>
                                             </td>
                                             <td>
                                                 <span className="badge bg-success">{formatDateDisplay(work.fromDate)}</span>
@@ -596,7 +767,14 @@ const Working = ({
                                                 )}
                                             </td>
                                             <td>
-                                                <span className="badge bg-info text-white">{work.serviceType || "—"}</span>
+                                                {work.timesheetID ? (
+                                                    <small className="text-muted">#{work.timesheetID}</small>
+                                                ) : (
+                                                    "—"
+                                                )}
+                                            </td>
+                                            <td className="text-center">
+                                                <span className="badge bg-primary">{work.days || "—"}</span>
                                             </td>
                                             <td style={{ maxWidth: '200px' }}>
                                                 <div className="text-truncate" title={work.remarks}>
@@ -616,14 +794,14 @@ const Working = ({
                                                         {!work.__locked ? (
                                                             <>
                                                                 <button
-                                                                    className="btn btn-outline-warning btn-sm"
+                                                                    className="btn btn-outline-warning btn-sm border-warning"
                                                                     onClick={() => startEditWork(index)}
                                                                     title="Edit work record"
                                                                 >
                                                                     <i className="bi bi-pencil"></i>
                                                                 </button>
                                                                 <button
-                                                                    className="btn btn-outline-danger btn-sm"
+                                                                    className="btn btn-outline-danger btn-sm border-danger"
                                                                     onClick={() => handleRemoveWork(index)}
                                                                     title="Remove work record"
                                                                 >
@@ -631,7 +809,7 @@ const Working = ({
                                                                 </button>
                                                             </>
                                                         ) : (
-                                                            <span className="badge bg-secondary" title="Locked record">
+                                                            <span className="badge bg-secondary border border-light" title="Locked record">
                                                                 <i className="bi bi-lock me-1"></i>Locked
                                                             </span>
                                                         )}
@@ -643,12 +821,12 @@ const Working = ({
                                 </tbody>
                                 <tfoot className="table-active">
                                     <tr className="fw-bold">
-                                        <td colSpan="4" className="text-end">Totals:</td>
+                                        <td colSpan="8" className="text-end">Totals:</td>
                                         <td className="text-center">
                                             {workDetails.reduce((sum, work) => sum + (parseInt(work.days) || 0), 0)}
                                         </td>
-                                        <td colSpan={canEdit ? "6" : "5"} className="text-center">
-                                            <span className="badge bg-dark">
+                                        <td colSpan={canEdit ? "3" : "2"} className="text-center">
+                                            <span className="badge bg-dark border border-light">
                                                 Total Records: {workDetails.length}
                                             </span>
                                         </td>

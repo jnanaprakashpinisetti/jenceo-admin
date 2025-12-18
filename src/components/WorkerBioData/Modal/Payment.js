@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 
 const Payment = ({
     formData,
@@ -9,14 +9,19 @@ const Payment = ({
     effectiveUserName,
     formatDDMMYY,
     formatTime12h,
-    setHasUnsavedChanges
+    setHasUnsavedChanges,
+    clients = [] // Pass clients list from parent component
 }) => {
     const [showPaymentForm, setShowPaymentForm] = useState(false);
     const [validationErrors, setValidationErrors] = useState({});
+    const [clientSearch, setClientSearch] = useState("");
+    const [clientList, setClientList] = useState([]);
+    const [showClientDropdown, setShowClientDropdown] = useState(false);
     const [newPayment, setNewPayment] = useState({
         date: "",
-        clientName: "",
         days: "",
+        clientId: "",
+        clientName: "",
         amount: "",
         balanceAmount: "",
         typeOfPayment: "",
@@ -26,6 +31,18 @@ const Payment = ({
         remarks: "",
         __locked: false,
     });
+
+    // Mock client data if no clients provided
+    const MOCK_CLIENTS = [
+        { id: "CL001", name: "John Smith", phone: "9876543210" },
+        { id: "CL002", name: "Sarah Johnson", phone: "9876543211" },
+        { id: "CL003", name: "Robert Williams", phone: "9876543212" },
+        { id: "CL004", name: "Emily Davis", phone: "9876543213" },
+        { id: "CL005", name: "Michael Brown", phone: "9876543214" },
+    ];
+
+    // Use provided clients or mock data
+    const allClients = clients.length > 0 ? clients : MOCK_CLIENTS;
 
     const paymentTypes = [
         { value: "cash", label: "Cash" },
@@ -41,6 +58,78 @@ const Payment = ({
         { value: "other", label: "Other" }
     ];
 
+    // Filter clients based on search term
+    const filteredClients = useMemo(() => {
+        if (!clientSearch.trim()) return [];
+        
+        const term = clientSearch.toLowerCase();
+        return allClients.filter(client => 
+            client.id?.toLowerCase().includes(term) ||
+            client.name?.toLowerCase().includes(term) ||
+            client.phone?.includes(term)
+        ).slice(0, 5);
+    }, [allClients, clientSearch]);
+
+    // Select a client from dropdown
+    const selectClient = (client) => {
+        setNewPayment(prev => ({
+            ...prev,
+            clientId: client.id,
+            clientName: client.name
+        }));
+        setClientSearch("");
+        setClientList([]);
+        setShowClientDropdown(false);
+        
+        // Clear validation errors
+        setValidationErrors(prev => ({
+            ...prev,
+            clientId: "",
+            clientName: ""
+        }));
+    };
+
+    // Handle client ID input - auto-fill name when ID matches
+    const handleClientIdChange = (clientId) => {
+        setNewPayment(prev => ({ ...prev, clientId }));
+        
+        // Find client by ID and auto-fill name
+        if (clientId.trim()) {
+            const foundClient = allClients.find(client => 
+                client.id.toLowerCase() === clientId.toLowerCase().trim()
+            );
+            
+            if (foundClient) {
+                setNewPayment(prev => ({ 
+                    ...prev, 
+                    clientName: foundClient.name,
+                    clientId: foundClient.id // Ensure exact ID format
+                }));
+            } else {
+                // Clear name if no client found
+                setNewPayment(prev => ({ ...prev, clientName: "" }));
+            }
+        } else {
+            setNewPayment(prev => ({ ...prev, clientName: "" }));
+        }
+        
+        // Clear validation error
+        if (validationErrors.clientId) {
+            setValidationErrors(prev => ({ ...prev, clientId: "" }));
+        }
+    };
+
+    // Handle client name search input
+    const handleClientSearchChange = (value) => {
+        setClientSearch(value);
+        setShowClientDropdown(true);
+        
+        // If user clears search, hide dropdown
+        if (!value.trim()) {
+            setShowClientDropdown(false);
+        }
+    };
+
     // Update new payment field
     const updateNewPayment = (field, value) => {
         setNewPayment(prev => ({ ...prev, [field]: value }));
@@ -54,8 +143,9 @@ const Payment = ({
     const resetPaymentForm = () => {
         setNewPayment({
             date: "",
-            clientName: "",
             days: "",
+            clientId: "",
+            clientName: "",
             amount: "",
             balanceAmount: "",
             typeOfPayment: "",
@@ -65,6 +155,9 @@ const Payment = ({
             remarks: "",
             __locked: false,
         });
+        setClientSearch("");
+        setClientList([]);
+        setShowClientDropdown(false);
         setValidationErrors({});
     };
 
@@ -73,10 +166,13 @@ const Payment = ({
         const errors = {};
         
         if (!newPayment.date.trim()) errors.date = "Date is required";
-        if (!newPayment.clientName.trim()) errors.clientName = "Client name is required";
+        if (!newPayment.days) errors.days = "Days is required";
         
         const days = parseInt(newPayment.days);
         if (!newPayment.days || isNaN(days) || days <= 0) errors.days = "Enter valid number of days";
+        
+        if (!newPayment.clientId.trim()) errors.clientId = "Client ID is required";
+        if (!newPayment.clientName.trim()) errors.clientName = "Client name is required";
         
         const amount = parseInt(newPayment.amount.replace(/\D/g, ""));
         if (!newPayment.amount || isNaN(amount) || amount <= 0) errors.amount = "Enter valid amount";
@@ -196,13 +292,13 @@ const Payment = ({
         <>
             {/* Add Payment Modal */}
             {showPaymentForm && (
-                <div className="modal show d-block" tabIndex="-1" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}>
+                <div className="modal show d-block" tabIndex="-1" style={{ backgroundColor: 'rgba(0,0,0,0.9)' }}>
                     <div className="modal-dialog modal-lg modal-dialog-centered">
-                        <div className="modal-content">
-                            <div className="modal-header bg-primary text-white">
-                                <h5 className="modal-title">
-                                    <i className="bi bi-plus-circle me-2"></i>
-                                    Add New Payment
+                        <div className="modal-content bg-dark text-light border border-secondary">
+                            <div className="modal-header bg-dark border-secondary">
+                                <h5 className="modal-title d-flex align-items-center">
+                                    <i className="bi bi-plus-circle text-info me-2"></i>
+                                    <span className="text-light">Add New Payment</span>
                                 </h5>
                                 <button 
                                     type="button" 
@@ -212,14 +308,15 @@ const Payment = ({
                             </div>
                             <div className="modal-body">
                                 <div className="row g-3">
-                                    {/* Date */}
+                                    {/* Date and Days in one row */}
                                     <div className="col-md-6">
-                                        <label className="form-label fw-semibold">
+                                        <label className="form-label fw-semibold text-light">
+                                            <i className="bi bi-calendar text-info me-1"></i>
                                             Date <span className="text-danger">*</span>
                                         </label>
                                         <input
                                             type="date"
-                                            className={`form-control ${validationErrors.date ? 'is-invalid' : ''}`}
+                                            className={`form-control bg-dark text-light border-secondary ${validationErrors.date ? 'is-invalid' : ''}`}
                                             value={newPayment.date}
                                             min={PAY_MIN}
                                             max={PAY_MAX}
@@ -229,32 +326,14 @@ const Payment = ({
                                             <div className="invalid-feedback">{validationErrors.date}</div>
                                         )}
                                     </div>
-
-                                    {/* Client Name */}
                                     <div className="col-md-6">
-                                        <label className="form-label fw-semibold">
-                                            Client Name <span className="text-danger">*</span>
-                                        </label>
-                                        <input
-                                            type="text"
-                                            className={`form-control ${validationErrors.clientName ? 'is-invalid' : ''}`}
-                                            value={newPayment.clientName}
-                                            onChange={(e) => updateNewPayment("clientName", e.target.value)}
-                                            placeholder="Enter client name"
-                                        />
-                                        {validationErrors.clientName && (
-                                            <div className="invalid-feedback">{validationErrors.clientName}</div>
-                                        )}
-                                    </div>
-
-                                    {/* Days */}
-                                    <div className="col-md-4">
-                                        <label className="form-label fw-semibold">
+                                        <label className="form-label fw-semibold text-light">
+                                            <i className="bi bi-calendar-day text-info me-1"></i>
                                             Days <span className="text-danger">*</span>
                                         </label>
                                         <input
                                             type="number"
-                                            className={`form-control ${validationErrors.days ? 'is-invalid' : ''}`}
+                                            className={`form-control bg-dark text-light border-secondary ${validationErrors.days ? 'is-invalid' : ''}`}
                                             value={newPayment.days}
                                             min="1"
                                             max="31"
@@ -266,16 +345,124 @@ const Payment = ({
                                         )}
                                     </div>
 
-                                    {/* Amount */}
-                                    <div className="col-md-4">
-                                        <label className="form-label fw-semibold">
+                                    {/* Client ID and Name in separate inputs */}
+                                    <div className="col-md-6">
+                                        <label className="form-label fw-semibold text-light">
+                                            <i className="bi bi-person-badge text-info me-1"></i>
+                                            Client ID <span className="text-danger">*</span>
+                                        </label>
+                                        <input
+                                            type="text"
+                                            className={`form-control bg-dark text-light border-secondary ${validationErrors.clientId ? 'is-invalid' : ''}`}
+                                            value={newPayment.clientId}
+                                            onChange={(e) => handleClientIdChange(e.target.value)}
+                                            placeholder="Enter Client ID (e.g., CL001)"
+                                        />
+                                        {validationErrors.clientId && (
+                                            <div className="invalid-feedback">{validationErrors.clientId}</div>
+                                        )}
+                                        {newPayment.clientId && newPayment.clientName && (
+                                            <div className="mt-2 p-2 border border-success rounded bg-dark">
+                                                <div className="d-flex align-items-center">
+                                                    <i className="bi bi-check-circle text-success me-2"></i>
+                                                    <div>
+                                                        <small className="text-muted">Auto-filled from ID:</small>
+                                                        <div className="text-success fw-bold">{newPayment.clientName}</div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    <div className="col-md-6">
+                                        <label className="form-label fw-semibold text-light">
+                                            <i className="bi bi-person text-info me-1"></i>
+                                            Client Name <span className="text-danger">*</span>
+                                        </label>
+                                        <div className="position-relative">
+                                            <input
+                                                type="text"
+                                                className={`form-control bg-dark text-light border-secondary ${validationErrors.clientName ? 'is-invalid' : ''}`}
+                                                value={newPayment.clientName}
+                                                onChange={(e) => updateNewPayment("clientName", e.target.value)}
+                                                onFocus={() => setShowClientDropdown(true)}
+                                                placeholder="Enter Client Name or Search..."
+                                            />
+                                            {validationErrors.clientName && (
+                                                <div className="invalid-feedback">{validationErrors.clientName}</div>
+                                            )}
+
+                                            {/* Client Search Dropdown */}
+                                            {showClientDropdown && (
+                                                <div 
+                                                    className="position-absolute top-100 start-0 end-0 bg-dark border border-secondary rounded mt-1 z-3"
+                                                    style={{ maxHeight: '250px', overflowY: 'auto' }}
+                                                >
+                                                    {/* Search input inside dropdown */}
+                                                    <div className="p-2 border-bottom border-secondary">
+                                                        <div className="input-group input-group-sm">
+                                                            <span className="input-group-text bg-dark border-secondary">
+                                                                <i className="bi bi-search text-info"></i>
+                                                            </span>
+                                                            <input
+                                                                type="text"
+                                                                className="form-control bg-dark text-white border-secondary"
+                                                                placeholder="Search by name or ID..."
+                                                                value={clientSearch}
+                                                                onChange={(e) => handleClientSearchChange(e.target.value)}
+                                                            />
+                                                        </div>
+                                                    </div>
+
+                                                    {/* Client list */}
+                                                    {filteredClients.map(client => (
+                                                        <div
+                                                            key={client.id}
+                                                            className={`p-2 border-bottom border-secondary hover-bg-secondary`}
+                                                            onClick={() => selectClient(client)}
+                                                            style={{cursor:'pointer'}}
+                                                        >
+                                                            <div className="d-flex justify-content-between align-items-center">
+                                                                <div>
+                                                                    <strong className="text-white">{client.name}</strong>
+                                                                    <div className="text-info small">
+                                                                        ID: {client.id}
+                                                                    </div>
+                                                                </div>
+                                                                <div className="text-end">
+                                                                    <div className="text-muted small">{client.phone}</div>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    ))}
+                                                    
+                                                    {filteredClients.length === 0 && clientSearch && (
+                                                        <div className="p-3 text-muted text-center">
+                                                            No clients found for "{clientSearch}"
+                                                        </div>
+                                                    )}
+                                                    
+                                                    {!clientSearch && (
+                                                        <div className="p-3 text-muted text-center">
+                                                            Start typing to search clients
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+
+                                    {/* Amount and Balance in one row */}
+                                    <div className="col-md-6">
+                                        <label className="form-label fw-semibold text-light">
+                                            <i className="bi bi-cash text-info me-1"></i>
                                             Amount <span className="text-danger">*</span>
                                         </label>
                                         <div className="input-group">
-                                            <span className="input-group-text">₹</span>
+                                            <span className="input-group-text bg-dark text-light border-secondary">₹</span>
                                             <input
                                                 type="text"
-                                                className={`form-control ${validationErrors.amount ? 'is-invalid' : ''}`}
+                                                className={`form-control bg-dark text-light border-secondary ${validationErrors.amount ? 'is-invalid' : ''}`}
                                                 value={newPayment.amount}
                                                 onChange={(e) => updateNewPayment("amount", e.target.value.replace(/\D/g, ""))}
                                                 placeholder="Amount"
@@ -285,15 +472,16 @@ const Payment = ({
                                             <div className="invalid-feedback">{validationErrors.amount}</div>
                                         )}
                                     </div>
-
-                                    {/* Balance */}
-                                    <div className="col-md-4">
-                                        <label className="form-label fw-semibold">Balance Amount</label>
+                                    <div className="col-md-6">
+                                        <label className="form-label fw-semibold text-light">
+                                            <i className="bi bi-wallet text-info me-1"></i>
+                                            Balance Amount
+                                        </label>
                                         <div className="input-group">
-                                            <span className="input-group-text">₹</span>
+                                            <span className="input-group-text bg-dark text-light border-secondary">₹</span>
                                             <input
                                                 type="text"
-                                                className="form-control"
+                                                className="form-control bg-dark text-light border-secondary"
                                                 value={newPayment.balanceAmount}
                                                 onChange={(e) => updateNewPayment("balanceAmount", e.target.value.replace(/\D/g, ""))}
                                                 placeholder="Balance"
@@ -301,19 +489,20 @@ const Payment = ({
                                         </div>
                                     </div>
 
-                                    {/* Payment Type */}
+                                    {/* Payment Type and Payment For */}
                                     <div className="col-md-6">
-                                        <label className="form-label fw-semibold">
+                                        <label className="form-label fw-semibold text-light">
+                                            <i className="bi bi-credit-card text-info me-1"></i>
                                             Payment Type <span className="text-danger">*</span>
                                         </label>
                                         <select
-                                            className={`form-select ${validationErrors.typeOfPayment ? 'is-invalid' : ''}`}
+                                            className={`form-select bg-dark text-light border-secondary ${validationErrors.typeOfPayment ? 'is-invalid' : ''}`}
                                             value={newPayment.typeOfPayment}
                                             onChange={(e) => updateNewPayment("typeOfPayment", e.target.value)}
                                         >
-                                            <option value="">Select Type</option>
+                                            <option value="" className="bg-dark">Select Type</option>
                                             {paymentTypes.map(type => (
-                                                <option key={type.value} value={type.value}>
+                                                <option key={type.value} value={type.value} className="bg-dark">
                                                     {type.label}
                                                 </option>
                                             ))}
@@ -322,20 +511,19 @@ const Payment = ({
                                             <div className="invalid-feedback">{validationErrors.typeOfPayment}</div>
                                         )}
                                     </div>
-
-                                    {/* Payment For */}
                                     <div className="col-md-6">
-                                        <label className="form-label fw-semibold">
+                                        <label className="form-label fw-semibold text-light">
+                                            <i className="bi bi-tag text-info me-1"></i>
                                             Payment For <span className="text-danger">*</span>
                                         </label>
                                         <select
-                                            className={`form-select ${validationErrors.status ? 'is-invalid' : ''}`}
+                                            className={`form-select bg-dark text-light border-secondary ${validationErrors.status ? 'is-invalid' : ''}`}
                                             value={newPayment.status}
                                             onChange={(e) => updateNewPayment("status", e.target.value)}
                                         >
-                                            <option value="">Select Purpose</option>
+                                            <option value="" className="bg-dark">Select Purpose</option>
                                             {paymentForOptions.map(option => (
-                                                <option key={option.value} value={option.value}>
+                                                <option key={option.value} value={option.value} className="bg-dark">
                                                     {option.label}
                                                 </option>
                                             ))}
@@ -345,24 +533,28 @@ const Payment = ({
                                         )}
                                     </div>
 
-                                    {/* Receipt No */}
+                                    {/* Receipt No and Timesheet ID */}
                                     <div className="col-md-6">
-                                        <label className="form-label fw-semibold">Receipt Number</label>
+                                        <label className="form-label fw-semibold text-light">
+                                            <i className="bi bi-receipt text-info me-1"></i>
+                                            Receipt Number
+                                        </label>
                                         <input
                                             type="text"
-                                            className="form-control"
+                                            className="form-control bg-dark text-light border-secondary"
                                             value={newPayment.receiptNo}
                                             onChange={(e) => updateNewPayment("receiptNo", e.target.value)}
                                             placeholder="Enter receipt number"
                                         />
                                     </div>
-
-                                    {/* Timesheet ID */}
                                     <div className="col-md-6">
-                                        <label className="form-label fw-semibold">Timesheet ID</label>
+                                        <label className="form-label fw-semibold text-light">
+                                            <i className="bi bi-clock-history text-info me-1"></i>
+                                            Timesheet ID
+                                        </label>
                                         <input
                                             type="text"
-                                            className="form-control"
+                                            className="form-control bg-dark text-light border-secondary"
                                             value={newPayment.timesheetID}
                                             onChange={(e) => updateNewPayment("timesheetID", e.target.value)}
                                             placeholder="Enter timesheet ID"
@@ -371,9 +563,12 @@ const Payment = ({
 
                                     {/* Remarks */}
                                     <div className="col-12">
-                                        <label className="form-label fw-semibold">Remarks</label>
+                                        <label className="form-label fw-semibold text-light">
+                                            <i className="bi bi-chat-left-text text-info me-1"></i>
+                                            Remarks
+                                        </label>
                                         <textarea
-                                            className="form-control"
+                                            className="form-control bg-dark text-light border-secondary"
                                             rows="3"
                                             value={newPayment.remarks}
                                             onChange={(e) => updateNewPayment("remarks", e.target.value)}
@@ -382,17 +577,17 @@ const Payment = ({
                                     </div>
                                 </div>
                             </div>
-                            <div className="modal-footer">
+                            <div className="modal-footer bg-dark border-secondary">
                                 <button
                                     type="button"
-                                    className="btn btn-secondary"
+                                    className="btn btn-outline-secondary"
                                     onClick={closeAddPaymentModal}
                                 >
                                     <i className="bi bi-x-lg me-1"></i> Cancel
                                 </button>
                                 <button
                                     type="button"
-                                    className="btn btn-primary"
+                                    className="btn btn-info text-dark"
                                     onClick={handleAddPayment}
                                 >
                                     <i className="bi bi-check-lg me-1"></i> Add Payment
@@ -404,16 +599,16 @@ const Payment = ({
             )}
 
             {/* Main Payment Component */}
-            <div className="card">
-                <div className="card-header bg-primary text-white d-flex justify-content-between align-items-center">
-                    <h4 className="mb-0">
-                        <i className="bi bi-cash-coin me-2"></i>
-                        Payments
+            <div className="card bg-dark text-light border-secondary">
+                <div className="card-header bg-dark border-secondary d-flex justify-content-between align-items-center">
+                    <h4 className="mb-0 d-flex align-items-center">
+                        <i className="bi bi-cash-coin text-info me-2"></i>
+                        <span className="text-light">Payments</span>
                     </h4>
                     {canEdit && (
                         <button
                             type="button"
-                            className="btn btn-light btn-sm"
+                            className="btn btn-info btn-sm text-dark"
                             onClick={openAddPaymentModal}
                         >
                             <i className="bi bi-plus-lg me-1"></i>
@@ -427,10 +622,10 @@ const Payment = ({
                     {payments.length > 0 && (
                         <div className="row g-3 mb-4">
                             <div className="col-md-4">
-                                <div className="card bg-light">
+                                <div className="card bg-secondary">
                                     <div className="card-body text-center py-3">
-                                        <div className="text-muted small">Total Payments</div>
-                                        <div className="h3 text-primary fw-bold">{payments.length}</div>
+                                        <div className="text-light-50 small">Total Payments</div>
+                                        <div className="h3 text-info fw-bold">{payments.length}</div>
                                     </div>
                                 </div>
                             </div>
@@ -455,19 +650,20 @@ const Payment = ({
 
                     {/* Payments Table */}
                     {payments.length === 0 ? (
-                        <div className="alert alert-info text-center">
-                            <i className="bi bi-info-circle me-2"></i>
-                            No payments recorded yet. Click "Add Payment" to get started.
+                        <div className="alert alert-info text-center border-secondary">
+                            <i className="bi bi-info-circle text-info me-2"></i>
+                            <span className="text-light">No payments recorded yet. Click "Add Payment" to get started.</span>
                         </div>
                     ) : (
                         <div className="table-responsive">
-                            <table className="table table-hover table-bordered align-middle">
-                                <thead className="table-dark">
+                            <table className="table table-dark table-hover table-bordered align-middle border-secondary">
+                                <thead className="bg-secondary">
                                     <tr>
                                         <th width="40">#</th>
                                         <th width="120">Date</th>
-                                        <th>Client</th>
-                                        <th width="70">Days</th>
+                                        <th width="100">Days</th>
+                                        <th width="100">Client ID</th>
+                                        <th>Client Name</th>
                                         <th width="120">Amount</th>
                                         <th width="120">Balance</th>
                                         <th width="100">Type</th>
@@ -481,15 +677,16 @@ const Payment = ({
                                 </thead>
                                 <tbody>
                                     {payments.map((payment, index) => (
-                                        <tr key={index} className={payment.__locked ? "table-secondary" : ""}>
+                                        <tr key={index} className={payment.__locked ? "bg-secondary" : ""}>
                                             <td className="text-center fw-semibold">{index + 1}</td>
                                             <td>
-                                                <span className="badge bg-primary">{formatDateDisplay(payment.date)}</span>
+                                                <span className="badge bg-info text-dark">{formatDateDisplay(payment.date)}</span>
                                             </td>
-                                            <td className="fw-semibold">{payment.clientName || "—"}</td>
                                             <td className="text-center">
-                                                <span className="badge bg-info">{payment.days || "—"}</span>
+                                                <span className="badge bg-dark border border-info">{payment.days || "—"}</span>
                                             </td>
+                                            <td className="fw-semibold text-info">{payment.clientId || "—"}</td>
+                                            <td className="fw-semibold">{payment.clientName || "—"}</td>
                                             <td className="text-end fw-bold text-success">
                                                 {formatCurrency(payment.amount)}
                                             </td>
@@ -501,7 +698,7 @@ const Payment = ({
                                             <td>
                                                 <span className={`badge ${
                                                     payment.typeOfPayment === 'cash' ? 'bg-success' :
-                                                    payment.typeOfPayment === 'online' ? 'bg-info' :
+                                                    payment.typeOfPayment === 'online' ? 'bg-info text-dark' :
                                                     'bg-secondary'
                                                 }`}>
                                                     {payment.typeOfPayment || "—"}
@@ -514,7 +711,7 @@ const Payment = ({
                                             </td>
                                             <td>
                                                 {payment.receiptNo ? (
-                                                    <span className="badge bg-dark">#{payment.receiptNo}</span>
+                                                    <span className="badge bg-dark border border-info">#{payment.receiptNo}</span>
                                                 ) : (
                                                     "—"
                                                 )}
@@ -532,8 +729,8 @@ const Payment = ({
                                                 </div>
                                             </td>
                                             <td className="small">
-                                                <div className="fw-semibold">{payment.addedByName || payment.createdByName || effectiveUserName}</div>
-                                                <div className="text-muted">
+                                                <div className="fw-semibold text-info">{payment.addedByName || payment.createdByName || effectiveUserName}</div>
+                                                <div className="text-light-50">
                                                     {formatDDMMYY(payment.addedAt || payment.createdAt)}<br />
                                                     {formatTime12h(payment.addedAt || payment.createdAt)}
                                                 </div>
@@ -558,20 +755,21 @@ const Payment = ({
                                         </tr>
                                     ))}
                                 </tbody>
-                                <tfoot className="table-active">
+                                <tfoot className="bg-secondary">
                                     <tr className="fw-bold">
-                                        <td colSpan="3" className="text-end">Totals:</td>
+                                        <td colSpan="2" className="text-end">Totals:</td>
                                         <td className="text-center">
                                             {payments.reduce((sum, p) => sum + (parseInt(p.days) || 0), 0)}
                                         </td>
+                                        <td colSpan="2"></td>
                                         <td className="text-end text-success">{formatCurrency(totals.totalAmount)}</td>
                                         <td className="text-end">
                                             <span className={totals.totalBalance > 0 ? 'text-danger' : 'text-success'}>
                                                 {formatCurrency(totals.totalBalance)}
                                             </span>
                                         </td>
-                                        <td colSpan={canEdit ? "7" : "6"} className="text-center">
-                                            <span className="badge bg-dark">
+                                        <td colSpan={canEdit ? "6" : "5"} className="text-center">
+                                            <span className="badge bg-dark border border-info">
                                                 Total Records: {payments.length}
                                             </span>
                                         </td>

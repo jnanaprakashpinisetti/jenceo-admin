@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 
 
 
@@ -24,6 +24,8 @@ const STATE_DISTRICTS = {
 };
 const PresentAddress = ({ formData, errors, handleChange, handleBlur, nextStep, prevStep }) => {
   const [sameAsPermanent, setSameAsPermanent] = useState(false);
+  const initialMount = useRef(true);
+  
 
   // Effect to handle checkbox state changes
   useEffect(() => {

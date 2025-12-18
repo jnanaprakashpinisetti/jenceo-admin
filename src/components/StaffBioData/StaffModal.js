@@ -274,6 +274,64 @@ const StaffModal = ({ staff, isOpen, onClose, onSave, onDelete, isEditMode }) =>
         }
     };
 
+    // Handle ID Proof file uploads
+    const handleIdProofChange = (e) => {
+        const files = Array.from(e.target.files || []);
+
+        const currentCount = formData.idProofFiles?.length || 0;
+        const existingCount = formData.idProof?.length || 0;
+
+        if (currentCount + existingCount + files.length > 5) {
+            alert("Maximum 5 ID proof files allowed");
+            return;
+        }
+
+        const validFiles = [];
+        const invalidFiles = [];
+
+        files.forEach(file => {
+            const validImage = ["image/jpeg", "image/jpg", "image/png", "image/gif"];
+            const validPdf = "application/pdf";
+
+            if ((validImage.includes(file.type) || file.type === validPdf) && file.size <= 200 * 1024) {
+                validFiles.push(file);
+            } else {
+                invalidFiles.push(file.name);
+            }
+        });
+
+        if (invalidFiles.length > 0) {
+            alert(`Invalid files: ${invalidFiles.join(", ")}. Only PDF/JPG/PNG/GIF up to 200KB each`);
+        }
+
+        if (validFiles.length > 0) {
+            setFormData(prev => ({
+                ...prev,
+                idProofFiles: [...(prev.idProofFiles || []), ...validFiles]
+            }));
+        }
+    };
+
+    // Remove ID Proof file
+    const removeIdProofFile = (index) => {
+        setFormData(prev => ({
+            ...prev,
+            idProofFiles: prev.idProofFiles.filter((_, i) => i !== index)
+        }));
+    };
+
+    // Remove existing ID proof from database
+    const removeExistingIdProof = (index) => {
+        setFormData(prev => {
+            const updatedProofs = [...prev.idProof];
+            updatedProofs.splice(index, 1);
+            return {
+                ...prev,
+                idProof: updatedProofs
+            };
+        });
+    };
+
     //   if (!isOpen) return null;
 
     /* -------------------------------- Handlers --------------------------------- */
@@ -1132,6 +1190,8 @@ const StaffModal = ({ staff, isOpen, onClose, onSave, onDelete, isEditMode }) =>
   </div>
 </div>
 
+
+
     <div class="decleration">
         <p><strong>Declaration:</strong> I hereby declare that the information provided in this document regarding my personal information, experience, skills,
     health reports and qualifications is true, complete, and accurate to the best of my knowledge. I understand that any misrepresentation
@@ -1717,7 +1777,7 @@ const StaffModal = ({ staff, isOpen, onClose, onSave, onDelete, isEditMode }) =>
                                 {activeTab === "basic" && (
                                     <div className="modal-card">
                                         {/* Status */}
-                                        <div className="row  status">
+                                        <div className="row status">
                                             <div className="col-md-4">
                                                 <label className="form-label">
                                                     <strong>Status</strong>
@@ -1818,6 +1878,121 @@ const StaffModal = ({ staff, isOpen, onClose, onSave, onDelete, isEditMode }) =>
                                                                 </div>
                                                             )}
                                                         </div>
+
+                                                        {/* ID Proof File Upload Section - Similar to BasicInformation.js */}
+                                                        <div className="mt-4">
+                                                            <label className="form-label center">
+                                                                <strong>ID Proof Files</strong>
+                                                                <small className="text-muted ms-1">(max 5 files, 200KB each)</small>
+                                                            </label>
+
+                                                            {isEditMode ? (
+                                                                <>
+                                                                    <div className="mb-2">
+                                                                        <input
+                                                                            type="file"
+                                                                            className="form-control"
+                                                                            onChange={handleIdProofChange}
+                                                                            accept=".jpg,.jpeg,.png,.gif,.pdf"
+                                                                            multiple
+                                                                        />
+                                                                        <div className="form-text">
+                                                                            Upload ID proofs (PDF/JPG/PNG/GIF, max 200KB each)
+                                                                        </div>
+                                                                    </div>
+
+                                                                    {/* Display uploaded ID proof files */}
+                                                                    {formData.idProofFiles && formData.idProofFiles.length > 0 && (
+                                                                        <div className="mb-3">
+                                                                            <small className="text-muted d-block mb-2">Uploaded ID Proofs:</small>
+                                                                            <div className="d-flex flex-wrap gap-2">
+                                                                                {formData.idProofFiles.map((file, index) => (
+                                                                                    <div key={index} className="border rounded p-2 d-flex align-items-center">
+                                                                                        <span className="me-2">
+                                                                                            {file.type === 'application/pdf' ? '📄' : '🖼️'}
+                                                                                        </span>
+                                                                                        <span className="text-truncate" style={{ maxWidth: "150px" }}>
+                                                                                            {file.name}
+                                                                                        </span>
+                                                                                        <button
+                                                                                            type="button"
+                                                                                            className="btn btn-sm btn-outline-danger ms-2"
+                                                                                            onClick={() => removeIdProofFile(index)}
+                                                                                            title="Remove file"
+                                                                                        >
+                                                                                            ×
+                                                                                        </button>
+                                                                                    </div>
+                                                                                ))}
+                                                                            </div>
+                                                                        </div>
+                                                                    )}
+
+                                                                    {/* Display existing ID proofs from database */}
+                                                                    {formData.idProof && formData.idProof.length > 0 && (
+                                                                        <div className="mb-3">
+                                                                            <small className="text-muted d-block mb-2">Existing ID Proofs:</small>
+                                                                            <div className="d-flex flex-wrap gap-2">
+                                                                                {formData.idProof.map((proof, index) => (
+                                                                                    <div key={index} className="border rounded p-2 d-flex align-items-center">
+                                                                                        <span className="me-2">
+                                                                                            {proof.type === 'application/pdf' ? '📄' : '🖼️'}
+                                                                                        </span>
+                                                                                        <a
+                                                                                            href={proof.url}
+                                                                                            target="_blank"
+                                                                                            rel="noopener noreferrer"
+                                                                                            className="text-truncate text-decoration-none"
+                                                                                            style={{ maxWidth: "150px" }}
+                                                                                            title={proof.name || "ID Proof"}
+                                                                                        >
+                                                                                            {proof.name || `ID Proof ${index + 1}`}
+                                                                                        </a>
+                                                                                        {isEditMode && (
+                                                                                            <button
+                                                                                                type="button"
+                                                                                                className="btn btn-sm btn-outline-danger ms-2"
+                                                                                                onClick={() => removeExistingIdProof(index)}
+                                                                                                title="Remove proof"
+                                                                                            >
+                                                                                                ×
+                                                                                            </button>
+                                                                                        )}
+                                                                                    </div>
+                                                                                ))}
+                                                                            </div>
+                                                                        </div>
+                                                                    )}
+                                                                </>
+                                                            ) : (
+                                                                /* View mode: Show existing ID proofs */
+                                                                <div className="mb-3">
+                                                                    {formData.idProof && formData.idProof.length > 0 ? (
+                                                                        <div className="d-flex flex-wrap gap-2">
+                                                                            {formData.idProof.map((proof, index) => (
+                                                                                <div key={index} className="border rounded p-2 d-flex align-items-center">
+                                                                                    <span className="me-2">
+                                                                                        {proof.type === 'application/pdf' ? '📄' : '🖼️'}
+                                                                                    </span>
+                                                                                    <a
+                                                                                        href={proof.url}
+                                                                                        target="_blank"
+                                                                                        rel="noopener noreferrer"
+                                                                                        className="text-truncate text-decoration-none"
+                                                                                        style={{ maxWidth: "150px" }}
+                                                                                        title={proof.name || "ID Proof"}
+                                                                                    >
+                                                                                        {proof.name || `ID Proof ${index + 1}`}
+                                                                                    </a>
+                                                                                </div>
+                                                                            ))}
+                                                                        </div>
+                                                                    ) : (
+                                                                        <div className="text-muted">No ID proofs uploaded</div>
+                                                                    )}
+                                                                </div>
+                                                            )}
+                                                        </div>
                                                     </div>
                                                 </div>
 
@@ -1865,24 +2040,6 @@ const StaffModal = ({ staff, isOpen, onClose, onSave, onDelete, isEditMode }) =>
                                                             {renderInputField("Role", "role", formData.role, "text", "", false, { disabled: lockBasic })}
                                                         </div>
                                                     </div>
-
-
-                                                    <div className="row">
-                                                        <div className="col-md-6">
-                                                            {renderInputField("Aadhar No", "aadharNo", formData.aadharNo, "tel", "", false, {
-                                                                inputMode: "numeric",
-                                                                maxLength: 12,
-                                                                pattern: "^[0-9]{12}$",
-                                                            })}
-                                                        </div>
-                                                        <div className="col-md-6">{renderInputField("Local ID", "localId", formData.localId)}</div>
-                                                    </div>
-
-                                                    <div className="row">
-                                                        <div className="col-md-6">{renderPhoneField("Mobile 1", "mobileNo1", formData.mobileNo1)}</div>
-                                                        <div className="col-md-6">{renderPhoneField("Mobile 2", "mobileNo2", formData.mobileNo2)}</div>
-                                                    </div>
-
                                                     <div className="row">
                                                         <div className="col-md-6">
                                                             {renderInputField("Date of Joining", "date", formData.date || formData.dateOfJoining, "date", "", false, { disabled: lockBasic })}
@@ -1900,29 +2057,79 @@ const StaffModal = ({ staff, isOpen, onClose, onSave, onDelete, isEditMode }) =>
                                                             {renderInputField("Allowance", "allowance", formData.allowance, "number")}
                                                         </div>
                                                     </div>
+
+                                                    <div className="row">
+                                                        <div className="col-md-6">{renderPhoneField("Mobile 1", "mobileNo1", formData.mobileNo1)}</div>
+                                                        <div className="col-md-6">{renderPhoneField("Mobile 2", "mobileNo2", formData.mobileNo2)}</div>
+                                                    </div>
+
+                                                    {/* ID Proofs Section */}
+                                                    <div className="mt-4">
+                                                        <label className="form-label">
+                                                            <strong>ID Proofs</strong>
+                                                        </label>
+                                                        <div className="row">
+                                                            <div className="col-md-6">
+                                                                {renderInputField("PAN No", "panNo", formData.panNo, "text", "ABCDE1234F", false, {
+                                                                    maxLength: 10,
+                                                                    pattern: "[A-Z]{5}[0-9]{4}[A-Z]{1}"
+                                                                })}
+                                                            </div>
+                                                            <div className="col-md-6">
+                                                                {renderInputField("Aadhar No", "aadharNo", formData.aadharNo, "tel", "", false, {
+                                                                    inputMode: "numeric",
+                                                                    maxLength: 12,
+                                                                    pattern: "^[0-9]{12}$",
+                                                                })}
+                                                            </div>
+                                                        </div>
+                                                        <div className="row mt-2">
+                                                            <div className="col-md-6">
+                                                                {renderInputField("PF No", "pfNo", formData.pfNo)}
+                                                            </div>
+                                                            <div className="col-md-6">
+                                                                {renderInputField("Insurance No", "insuranceNo", formData.insuranceNo)}
+                                                            </div>
+                                                        </div>
+                                                        <div className="row mt-2">
+                                                            <div className="col-md-6">
+                                                                {renderInputField("Health Card No", "healthCardNo", formData.healthCardNo)}
+                                                            </div>
+                                                            <div className="col-md-6">
+                                                                {renderInputField("Driving License", "drivingLicense", formData.drivingLicense)}
+                                                            </div>
+                                                        </div>
+                                                    </div>
                                                 </div>
 
-                                                <div className="row">
+                                                <div className="row mt-3">
                                                     <div className="col-md-12">
                                                         <label className="form-label">
-                                                            <strong>About Staff & Skills</strong>
+                                                            <strong>About Employee</strong>
                                                         </label>
                                                         {isEditMode ? (
                                                             <textarea
                                                                 className="form-control"
-                                                                name="aboutEmployeee"
-                                                                value={formData.aboutEmployeee || ""}
+                                                                name="aboutEmployee"
+                                                                value={formData.aboutEmployee || ""}
                                                                 onChange={handleInputChange}
                                                                 rows="3"
+                                                                placeholder="Enter details about the employee..."
                                                             />
                                                         ) : (
-                                                            <div className="form-control bg-light">{String(formData.aboutEmployeee || "N/A")}</div>
+                                                            <div className="form-control bg-light" style={{ minHeight: '100px' }}>
+                                                                {formData.aboutEmployee ? (
+                                                                    <div className="p-2">{formData.aboutEmployee}</div>
+                                                                ) : (
+                                                                    "No information provided"
+                                                                )}
+                                                            </div>
                                                         )}
                                                     </div>
                                                 </div>
                                                 <div className="row mt-3">
                                                     <h5>Return / Remove comments</h5>
-                                                    <div className="history-section">
+                                                    <div className="history-section mb-3">
                                                         {(() => {
                                                             const entries = [];
 
@@ -2034,7 +2241,6 @@ const StaffModal = ({ staff, isOpen, onClose, onSave, onDelete, isEditMode }) =>
                                                         })()}
                                                     </div>
                                                 </div>
-
                                             </div>
                                         </div>
                                     </div>
@@ -2809,25 +3015,341 @@ const StaffModal = ({ staff, isOpen, onClose, onSave, onDelete, isEditMode }) =>
                                 )}
 
                                 {/* Full Info */}
+                                {/* Full Info */}
                                 {activeTab === "pay-info" && (
                                     <div className="modal-card ">
                                         <div className="modal-card-header">
-                                            <h4 className="mb-0">Full Info</h4>
+                                            <h4 className="mb-0">Full Info - Salary, Payments & Work Details</h4>
                                         </div>
                                         <div className="modal-card-body">
-                                            <h5>Payment Details</h5>
+
+                                            {/* Salary Breakdown Section */}
+                                            <div className="salary-breakdown-section mb-4">
+                                                <h5 className="border-bottom pb-2 mb-3">Salary Breakdown</h5>
+
+                                                <div className="row">
+                                                    {/* Earnings */}
+                                                    <div className="col-md-6">
+                                                        <div className="card h-100">
+                                                            <div className="card-header bg-success text-white">
+                                                                <strong>Earnings</strong>
+                                                            </div>
+                                                            <div className="card-body">
+                                                                <div className="row mb-2">
+                                                                    <div className="col-6">Basic Salary:</div>
+                                                                    <div className="col-6 text-end">
+                                                                        ₹{parseFloat(formData.basicSalary || 0).toFixed(2)}
+                                                                    </div>
+                                                                </div>
+                                                                <div className="row mb-2">
+                                                                    <div className="col-6">HRA:</div>
+                                                                    <div className="col-6 text-end">
+                                                                        ₹{parseFloat(formData.hra || 0).toFixed(2)}
+                                                                    </div>
+                                                                </div>
+                                                                <div className="row mb-2">
+                                                                    <div className="col-6">Allowance:</div>
+                                                                    <div className="col-6 text-end">
+                                                                        ₹{parseFloat(formData.allowance || 0).toFixed(2)}
+                                                                    </div>
+                                                                </div>
+                                                                <div className="row mb-2">
+                                                                    <div className="col-6">Travel Allowance:</div>
+                                                                    <div className="col-6 text-end">
+                                                                        ₹{parseFloat(formData.travelAllowance || 0).toFixed(2)}
+                                                                    </div>
+                                                                </div>
+                                                                <div className="row mb-2">
+                                                                    <div className="col-6">Medical Allowance:</div>
+                                                                    <div className="col-6 text-end">
+                                                                        ₹{parseFloat(formData.medicalAllowance || 0).toFixed(2)}
+                                                                    </div>
+                                                                </div>
+                                                                <div className="row mb-2">
+                                                                    <div className="col-6">Special Allowance:</div>
+                                                                    <div className="col-6 text-end">
+                                                                        ₹{parseFloat(formData.specialAllowance || 0).toFixed(2)}
+                                                                    </div>
+                                                                </div>
+                                                                <div className="row mb-2">
+                                                                    <div className="col-6">Incentives:</div>
+                                                                    <div className="col-6 text-end">
+                                                                        ₹{parseFloat(formData.incentives || 0).toFixed(2)}
+                                                                    </div>
+                                                                </div>
+                                                                <div className="row mb-2">
+                                                                    <div className="col-6">Bonus:</div>
+                                                                    <div className="col-6 text-end">
+                                                                        ₹{parseFloat(formData.bonus || 0).toFixed(2)}
+                                                                    </div>
+                                                                </div>
+                                                                <div className="row mb-2">
+                                                                    <div className="col-6">Overtime Pay:</div>
+                                                                    <div className="col-6 text-end">
+                                                                        ₹{parseFloat(formData.overtimePay || 0).toFixed(2)}
+                                                                    </div>
+                                                                </div>
+                                                                <hr />
+                                                                <div className="row fw-bold">
+                                                                    <div className="col-6">Total Earnings:</div>
+                                                                    <div className="col-6 text-end text-success">
+                                                                        ₹{(parseFloat(formData.basicSalary || 0) +
+                                                                            parseFloat(formData.hra || 0) +
+                                                                            parseFloat(formData.allowance || 0) +
+                                                                            parseFloat(formData.travelAllowance || 0) +
+                                                                            parseFloat(formData.medicalAllowance || 0) +
+                                                                            parseFloat(formData.specialAllowance || 0) +
+                                                                            parseFloat(formData.incentives || 0) +
+                                                                            parseFloat(formData.bonus || 0) +
+                                                                            parseFloat(formData.overtimePay || 0)).toFixed(2)}
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+
+                                                    {/* Deductions */}
+                                                    <div className="col-md-6">
+                                                        <div className="card h-100">
+                                                            <div className="card-header bg-danger text-white">
+                                                                <strong>Deductions</strong>
+                                                            </div>
+                                                            <div className="card-body">
+                                                                <div className="row mb-2">
+                                                                    <div className="col-6">PF Contribution (Employee):</div>
+                                                                    <div className="col-6 text-end">
+                                                                        ₹{parseFloat(formData.pfEmployee || 0).toFixed(2)}
+                                                                    </div>
+                                                                </div>
+                                                                <div className="row mb-2">
+                                                                    <div className="col-6">ESI Contribution (Employee):</div>
+                                                                    <div className="col-6 text-end">
+                                                                        ₹{parseFloat(formData.esiEmployee || 0).toFixed(2)}
+                                                                    </div>
+                                                                </div>
+                                                                <div className="row mb-2">
+                                                                    <div className="col-6">Professional Tax:</div>
+                                                                    <div className="col-6 text-end">
+                                                                        ₹{parseFloat(formData.professionalTax || 0).toFixed(2)}
+                                                                    </div>
+                                                                </div>
+                                                                <div className="row mb-2">
+                                                                    <div className="col-6">Income Tax (TDS):</div>
+                                                                    <div className="col-6 text-end">
+                                                                        ₹{parseFloat(formData.tds || 0).toFixed(2)}
+                                                                    </div>
+                                                                </div>
+                                                                <div className="row mb-2">
+                                                                    <div className="col-6">Advance Deduction:</div>
+                                                                    <div className="col-6 text-end">
+                                                                        ₹{parseFloat(formData.advanceDeduction || 0).toFixed(2)}
+                                                                    </div>
+                                                                </div>
+                                                                <div className="row mb-2">
+                                                                    <div className="col-6">Loan Deduction:</div>
+                                                                    <div className="col-6 text-end">
+                                                                        ₹{parseFloat(formData.loanDeduction || 0).toFixed(2)}
+                                                                    </div>
+                                                                </div>
+                                                                <div className="row mb-2">
+                                                                    <div className="col-6">Other Deductions:</div>
+                                                                    <div className="col-6 text-end">
+                                                                        ₹{parseFloat(formData.otherDeductions || 0).toFixed(2)}
+                                                                    </div>
+                                                                </div>
+                                                                <div className="row mb-2">
+                                                                    <div className="col-6">Leave Deduction:</div>
+                                                                    <div className="col-6 text-end">
+                                                                        ₹{parseFloat(formData.leaveDeduction || 0).toFixed(2)}
+                                                                    </div>
+                                                                </div>
+                                                                <hr />
+                                                                <div className="row fw-bold">
+                                                                    <div className="col-6">Total Deductions:</div>
+                                                                    <div className="col-6 text-end text-danger">
+                                                                        ₹{(parseFloat(formData.pfEmployee || 0) +
+                                                                            parseFloat(formData.esiEmployee || 0) +
+                                                                            parseFloat(formData.professionalTax || 0) +
+                                                                            parseFloat(formData.tds || 0) +
+                                                                            parseFloat(formData.advanceDeduction || 0) +
+                                                                            parseFloat(formData.loanDeduction || 0) +
+                                                                            parseFloat(formData.otherDeductions || 0) +
+                                                                            parseFloat(formData.leaveDeduction || 0)).toFixed(2)}
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+
+                                                {/* Net Salary Summary */}
+                                                <div className="row mt-4">
+                                                    <div className="col-md-12">
+                                                        <div className="card">
+                                                            <div className="card-header bg-primary text-white">
+                                                                <strong>Net Salary Summary</strong>
+                                                            </div>
+                                                            <div className="card-body">
+                                                                <div className="row">
+                                                                    <div className="col-md-4 text-center">
+                                                                        <div className="p-3 bg-light rounded">
+                                                                            <div className="text-muted">Gross Salary</div>
+                                                                            <div className="h4 fw-bold text-success">
+                                                                                ₹{(() => {
+                                                                                    const basic = parseFloat(formData.basicSalary || 0);
+                                                                                    const hra = parseFloat(formData.hra || 0);
+                                                                                    const allowance = parseFloat(formData.allowance || 0);
+                                                                                    const travel = parseFloat(formData.travelAllowance || 0);
+                                                                                    const medical = parseFloat(formData.medicalAllowance || 0);
+                                                                                    const special = parseFloat(formData.specialAllowance || 0);
+                                                                                    const incentives = parseFloat(formData.incentives || 0);
+                                                                                    const bonus = parseFloat(formData.bonus || 0);
+                                                                                    const overtime = parseFloat(formData.overtimePay || 0);
+                                                                                    return (basic + hra + allowance + travel + medical + special + incentives + bonus + overtime).toFixed(2);
+                                                                                })()}
+                                                                            </div>
+                                                                        </div>
+                                                                    </div>
+                                                                    <div className="col-md-4 text-center">
+                                                                        <div className="p-3 bg-light rounded">
+                                                                            <div className="text-muted">Total Deductions</div>
+                                                                            <div className="h4 fw-bold text-danger">
+                                                                                ₹{(() => {
+                                                                                    const pf = parseFloat(formData.pfEmployee || 0);
+                                                                                    const esi = parseFloat(formData.esiEmployee || 0);
+                                                                                    const ptax = parseFloat(formData.professionalTax || 0);
+                                                                                    const tds = parseFloat(formData.tds || 0);
+                                                                                    const advance = parseFloat(formData.advanceDeduction || 0);
+                                                                                    const loan = parseFloat(formData.loanDeduction || 0);
+                                                                                    const other = parseFloat(formData.otherDeductions || 0);
+                                                                                    const leave = parseFloat(formData.leaveDeduction || 0);
+                                                                                    return (pf + esi + ptax + tds + advance + loan + other + leave).toFixed(2);
+                                                                                })()}
+                                                                            </div>
+                                                                        </div>
+                                                                    </div>
+                                                                    <div className="col-md-4 text-center">
+                                                                        <div className="p-3 bg-primary rounded text-white">
+                                                                            <div>Net Payable Salary</div>
+                                                                            <div className="h4 fw-bold">
+                                                                                ₹{(() => {
+                                                                                    // Total Earnings
+                                                                                    const gross = parseFloat(formData.basicSalary || 0) +
+                                                                                        parseFloat(formData.hra || 0) +
+                                                                                        parseFloat(formData.allowance || 0) +
+                                                                                        parseFloat(formData.travelAllowance || 0) +
+                                                                                        parseFloat(formData.medicalAllowance || 0) +
+                                                                                        parseFloat(formData.specialAllowance || 0) +
+                                                                                        parseFloat(formData.incentives || 0) +
+                                                                                        parseFloat(formData.bonus || 0) +
+                                                                                        parseFloat(formData.overtimePay || 0);
+
+                                                                                    // Total Deductions
+                                                                                    const deductions = parseFloat(formData.pfEmployee || 0) +
+                                                                                        parseFloat(formData.esiEmployee || 0) +
+                                                                                        parseFloat(formData.professionalTax || 0) +
+                                                                                        parseFloat(formData.tds || 0) +
+                                                                                        parseFloat(formData.advanceDeduction || 0) +
+                                                                                        parseFloat(formData.loanDeduction || 0) +
+                                                                                        parseFloat(formData.otherDeductions || 0) +
+                                                                                        parseFloat(formData.leaveDeduction || 0);
+
+                                                                                    return (gross - deductions).toFixed(2);
+                                                                                })()}
+                                                                            </div>
+                                                                            <small>Payable after all deductions</small>
+                                                                        </div>
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+
+                                                {/* Employer Contributions */}
+                                                <div className="row mt-4">
+                                                    <div className="col-md-12">
+                                                        <div className="card">
+                                                            <div className="card-header bg-info text-white">
+                                                                <strong>Employer Contributions</strong>
+                                                            </div>
+                                                            <div className="card-body">
+                                                                <div className="row">
+                                                                    <div className="col-md-4">
+                                                                        <div className="row mb-2">
+                                                                            <div className="col-8">PF (Employer 12%):</div>
+                                                                            <div className="col-4 text-end">
+                                                                                ₹{parseFloat(formData.pfEmployer || 0).toFixed(2)}
+                                                                            </div>
+                                                                        </div>
+                                                                        <div className="row mb-2">
+                                                                            <div className="col-8">ESI (Employer 3.25%):</div>
+                                                                            <div className="col-4 text-end">
+                                                                                ₹{parseFloat(formData.esiEmployer || 0).toFixed(2)}
+                                                                            </div>
+                                                                        </div>
+                                                                    </div>
+                                                                    <div className="col-md-4">
+                                                                        <div className="row mb-2">
+                                                                            <div className="col-8">Gratuity:</div>
+                                                                            <div className="col-4 text-end">
+                                                                                ₹{parseFloat(formData.gratuity || 0).toFixed(2)}
+                                                                            </div>
+                                                                        </div>
+                                                                        <div className="row mb-2">
+                                                                            <div className="col-8">Bonus (Employer):</div>
+                                                                            <div className="col-4 text-end">
+                                                                                ₹{parseFloat(formData.employerBonus || 0).toFixed(2)}
+                                                                            </div>
+                                                                        </div>
+                                                                    </div>
+                                                                    <div className="col-md-4">
+                                                                        <div className="p-3 bg-light rounded">
+                                                                            <div className="text-muted">Total Employer Cost</div>
+                                                                            <div className="h5 fw-bold text-info">
+                                                                                ₹{(() => {
+                                                                                    const pfEmp = parseFloat(formData.pfEmployer || 0);
+                                                                                    const esiEmp = parseFloat(formData.esiEmployer || 0);
+                                                                                    const gratuity = parseFloat(formData.gratuity || 0);
+                                                                                    const empBonus = parseFloat(formData.employerBonus || 0);
+                                                                                    return (pfEmp + esiEmp + gratuity + empBonus).toFixed(2);
+                                                                                })()}
+                                                                            </div>
+                                                                        </div>
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            {/* Payment Details */}
+                                            <h5 className="border-bottom pb-2 mb-3">Payment Details</h5>
                                             {hasPayments() ? (
-                                                <div className="table-responsive mb-3">
+                                                <div className="table-responsive mb-4">
                                                     <table className="table table-sm table-bordered table-dark table-hover">
-                                                        <thead><tr><th>Date</th><th>Client</th><th>Days</th><th>Amount</th><th>Balance</th><th>Type</th><th>Receipt</th><th>Remarks</th>  <th>Added By</th></tr></thead>
+                                                        <thead>
+                                                            <tr>
+                                                                <th>Date</th>
+                                                                <th>Client</th>
+                                                                <th>Days</th>
+                                                                <th>Amount</th>
+                                                                <th>Balance</th>
+                                                                <th>Type</th>
+                                                                <th>Receipt</th>
+                                                                <th>Remarks</th>
+                                                                <th>Added By</th>
+                                                            </tr>
+                                                        </thead>
                                                         <tbody>
                                                             {(formData.payments || []).map((p, i) => (
                                                                 <tr key={i}>
                                                                     <td>{p.date || "N/A"}</td>
                                                                     <td>{p.clientName || "N/A"}</td>
                                                                     <td>{p.days || "N/A"}</td>
-                                                                    <td>{p.amount || 0}</td>
-                                                                    <td>{p.balanceAmount || 0}</td>
+                                                                    <td>₹{p.amount || 0}</td>
+                                                                    <td>₹{p.balanceAmount || 0}</td>
                                                                     <td>{p.typeOfPayment || "N/A"}</td>
                                                                     <td>{p.receiptNo || "N/A"}</td>
                                                                     <td>{p.remarks || "N/A"}</td>
@@ -2855,25 +3377,40 @@ const StaffModal = ({ staff, isOpen, onClose, onSave, onDelete, isEditMode }) =>
                                                                 const count = (formData.payments || []).length;
 
                                                                 return (
-                                                                    <tr className="fw-bold">
+                                                                    <tr className="fw-bold table-active">
                                                                         <td colSpan="3" className="text-end">Totals:</td>
-                                                                        <td>{totalAmount}</td>
-                                                                        <td>{totalBalance}</td>
+                                                                        <td>₹{totalAmount.toFixed(2)}</td>
+                                                                        <td>₹{totalBalance.toFixed(2)}</td>
                                                                         <td colSpan="4">Payments Count: {count}</td>
                                                                     </tr>
                                                                 );
                                                             })()}
                                                         </tbody>
-
                                                     </table>
                                                 </div>
-                                            ) : (<div className="text-muted">No payment records available.</div>)}
+                                            ) : (
+                                                <div className="alert alert-warning mb-4">
+                                                    No payment records available.
+                                                </div>
+                                            )}
 
-                                            <h5>Work Details</h5>
+                                            {/* Work Details */}
+                                            <h5 className="border-bottom pb-2 mb-3">Work Details</h5>
                                             {hasWorkDetails() ? (
-                                                <div className="table-responsive mb-3">
+                                                <div className="table-responsive">
                                                     <table className="table table-sm table-bordered table-dark table-hover">
-                                                        <thead><tr><th>Client ID</th><th>Client Name</th><th>Location</th><th>From</th><th>To</th><th>Days</th><th>Service</th></tr></thead>
+                                                        <thead>
+                                                            <tr>
+                                                                <th>Client ID</th>
+                                                                <th>Client Name</th>
+                                                                <th>Location</th>
+                                                                <th>From</th>
+                                                                <th>To</th>
+                                                                <th>Days</th>
+                                                                <th>Service</th>
+                                                                <th>Remarks</th>
+                                                            </tr>
+                                                        </thead>
                                                         <tbody>
                                                             {(formData.workDetails || []).map((w, i) => (
                                                                 <tr key={i}>
@@ -2884,12 +3421,17 @@ const StaffModal = ({ staff, isOpen, onClose, onSave, onDelete, isEditMode }) =>
                                                                     <td>{w.toDate || 'N/A'}</td>
                                                                     <td>{w.days || 'N/A'}</td>
                                                                     <td>{w.serviceType || 'N/A'}</td>
+                                                                    <td>{w.remarks || 'N/A'}</td>
                                                                 </tr>
                                                             ))}
                                                         </tbody>
                                                     </table>
                                                 </div>
-                                            ) : (<div className="text-muted">No work records available.</div>)}
+                                            ) : (
+                                                <div className="alert alert-warning">
+                                                    No work records available.
+                                                </div>
+                                            )}
                                         </div>
                                     </div>
                                 )}

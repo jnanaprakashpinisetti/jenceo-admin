@@ -639,7 +639,7 @@ const StaffModal = ({ staff, isOpen, onClose, onSave, onDelete, isEditMode }) =>
             </BaseModal>
 
             {/* Main Modal */}
-            <div className={`modal fade show ${modalClass}`} style={{ display: "block", backgroundColor: "rgba(0, 0, 0, 0.81)" }}>
+            <div className={`staffModal modal fade show ${modalClass}`} style={{ display: "block", backgroundColor: "rgba(0, 0, 0, 0.81)" }}>
                 <div className="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
                     <div className="modal-content">
                         <div className="modal-header bg-secondary text-white">

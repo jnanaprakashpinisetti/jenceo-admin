@@ -2,6 +2,10 @@
 
     .card {
         background-color: transparent;
+
+        .form-control {
+            padding: 0;
+        }
     }
 
     .text-muted {
@@ -67,7 +71,7 @@
         display: inline-block;
     }
 
- 
+
 
     /* Form input styling */
     .input-group-text {

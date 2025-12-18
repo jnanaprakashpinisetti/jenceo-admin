@@ -3,7 +3,7 @@ import firebaseDB from '../../firebase';
 import editIcon from '../../assets/eidt.svg';
 import viewIcon from '../../assets/view.svg';
 import deleteIcon from '../../assets/delete.svg';
-import StaffModal from './StaffModal';
+import StaffModal from './StaffModal/StaffModal';
 
 export default function DisplayWorkers() {
     const [employees, setEmployees] = useState([]);

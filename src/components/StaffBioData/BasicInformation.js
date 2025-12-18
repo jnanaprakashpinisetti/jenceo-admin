@@ -1,6 +1,6 @@
 // BasicInformation.js
 import React, { useMemo, useState } from "react";
-import firebaseDB from "../../firebase"; // <-- added
+import firebaseDB from "../../firebase";
 
 const BasicInformation = ({
   formData,
@@ -8,10 +8,15 @@ const BasicInformation = ({
   handleChange,
   handleBlur,
   handleFileChange,
+  handleIdProofChange,
+  removeIdProofFile,
   nextStep,
 }) => {
   const [showIdExistsModal, setShowIdExistsModal] = useState(false);
   const [existingEmployee, setExistingEmployee] = useState(null);
+  
+  // State for upload progress
+  const [uploadProgress, setUploadProgress] = useState({});
 
   // Calculate max date for 18 years ago
   const maxDateString = useMemo(() => {
@@ -47,7 +52,6 @@ const BasicInformation = ({
   };
 
   // Real ID check using Firebase Realtime Database
-  // Returns an object { name, ... } if found, otherwise null
   const checkIdExists = async (idNo) => {
     if (!idNo) return null;
     try {
@@ -58,7 +62,6 @@ const BasicInformation = ({
         .once("value");
       if (snapshot.exists()) {
         const val = snapshot.val();
-        // take the first match
         const firstKey = Object.keys(val)[0];
         const existing = val[firstKey];
         const name = `${existing.firstName || ""} ${existing.lastName || ""}`.trim() || existing.name || "";
@@ -82,6 +85,22 @@ const BasicInformation = ({
       }
     }
     nextStep();
+  };
+
+  // Format file size
+  const formatFileSize = (bytes) => {
+    if (bytes < 1024) return bytes + ' bytes';
+    else if (bytes < 1048576) return (bytes / 1024).toFixed(1) + ' KB';
+    else return (bytes / 1048576).toFixed(1) + ' MB';
+  };
+
+  // Get file icon based on type
+  const getFileIcon = (fileType) => {
+    if (fileType.includes('pdf')) return 'far fa-file-pdf text-danger';
+    if (fileType.includes('image')) return 'far fa-file-image text-success';
+    if (fileType.includes('jpeg') || fileType.includes('jpg')) return 'far fa-file-image text-warning';
+    if (fileType.includes('png')) return 'far fa-file-image text-info';
+    return 'far fa-file text-secondary';
   };
 
   return (
@@ -139,10 +158,9 @@ const BasicInformation = ({
                 </div>
               </div>
 
-              <div className=" text-center">
+              <div className="text-center">
                 <p className="label mb-0">Staff Name</p>
                 <p className="val"><strong>{existingEmployee?.name || "N/A"}</strong></p>
-
               </div>
             </div>
 
@@ -153,12 +171,9 @@ const BasicInformation = ({
               >
                 Close
               </button>
-
-
             </div>
           </div>
         </div>
-
       )}
 
       <div className="form-card-header mb-4">
@@ -167,7 +182,7 @@ const BasicInformation = ({
       <hr />
       <div className="row g-3">
         {/* Staff Photo - Optional */}
-        <div className="col-12">
+        <div className="col-md-6">
           <label htmlFor="employeePhoto" className="form-label">
             Staff Photo <small className="text-muted">(optional)</small>
           </label>
@@ -186,7 +201,7 @@ const BasicInformation = ({
               target="_blank"
               rel="noopener noreferrer"
               className="ms-1"
-               style={{ fontSize: "9px", color: "#f2f2f2", marginTop: "5px" }}
+              style={{ fontSize: "9px", color: "#f2f2f2" }}
             >
               View sample photo
             </a>
@@ -194,6 +209,112 @@ const BasicInformation = ({
           {errors.employeePhoto && <div className="invalid-feedback">{errors.employeePhoto}</div>}
         </div>
 
+        {/* ID Proof Documents */}
+        <div className="col-md-6">
+          <label htmlFor="idProof" className="form-label">
+            ID Proof <span className="star">*</span>
+            <span className="ms-2" data-bs-toggle="tooltip" data-bs-placement="top" 
+                  title="Acceptable documents: Aadhar Card, PAN Card, Passport, Driver's License, Voter ID, or any government-issued ID in PDF or image format.">
+              <i className="bi bi-info-circle text-primary" style={{ cursor: "pointer" }}></i>
+            </span>
+          </label>
+          <input
+            type="file"
+            className={`form-control ${errors.idProof ? "is-invalid" : ""}`}
+            id="idProof"
+            name="idProof"
+            onChange={handleIdProofChange}
+            multiple
+            accept=".pdf,.jpg,.jpeg,.png,.gif"
+          />
+             <small className="text-muted ms-2">
+              (Upload 1-5 files, PDF/JPG/PNG/up to 200KB each)
+            </small>
+          {errors.idProof && <div className="invalid-feedback">{errors.idProof}</div>}
+          
+          {/* Uploaded files preview */}
+          {formData.idProofFiles && formData.idProofFiles.length > 0 && (
+            <div className="mt-3">
+              <small className="text-muted">
+                Uploaded files ({formData.idProofFiles.length}/5):
+              </small>
+              <div className="mt-2">
+                {formData.idProofFiles.map((file, index) => (
+                  <div 
+                    key={index} 
+                    className="border rounded p-2 mb-2 d-flex align-items-center justify-content-between bg-light text-dark"
+                  >
+                    <div className="d-flex align-items-center">
+                      {file.type.startsWith('image/') && formData.idProofPreviews?.[index] ? (
+                        <div className="me-2 position-relative">
+                          <img 
+                            src={formData.idProofPreviews[index]} 
+                            alt="Preview" 
+                            style={{
+                              width: '40px', 
+                              height: '40px', 
+                              objectFit: 'cover',
+                              borderRadius: '4px'
+                            }}
+                          />
+                          <span className="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-info">
+                            <i className="fas fa-image fa-xs"></i>
+                          </span>
+                        </div>
+                      ) : (
+                        <div className="me-2">
+                          <i className={`${getFileIcon(file.type)} fa-2x`}></i>
+                        </div>
+                      )}
+                      <div>
+                        <div className="fw-bold" style={{ fontSize: '0.85rem' }}>
+                          {file.name.length > 25 ? file.name.substring(0, 25) + '...' : file.name}
+                        </div>
+                        <div className="small-text" style={{ fontSize: '0.75rem' }}>
+                          {formatFileSize(file.size)} • {file.type.split('/')[1].toUpperCase()}
+                        </div>
+                        {/* Upload progress bar */}
+                        {uploadProgress[file.name] !== undefined && (
+                          <div className="progress mt-1" style={{ height: '4px' }}>
+                            <div 
+                              className="progress-bar progress-bar-striped progress-bar-animated" 
+                              role="progressbar" 
+                              style={{ width: `${uploadProgress[file.name]}%` }}
+                              aria-valuenow={uploadProgress[file.name]} 
+                              aria-valuemin="0" 
+                              aria-valuemax="100"
+                            >
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                    <button 
+                      type="button"
+                      className="btn btn-sm btn-outline-danger"
+                      onClick={() => removeIdProofFile(index)}
+                      title="Remove file"
+                      style={{ border: 'none', background: 'transparent' }}
+                    >
+                      <i className="bi bi-x-lg" style={{ fontSize: '1.2rem', color: '#dc3545' }}></i>
+                    </button>
+                  </div>
+                ))}
+              </div>
+              
+              {/* File count warning */}
+              {formData.idProofFiles.length >= 5 && (
+                <div className="alert alert-warning mt-2 py-2" style={{ fontSize: '0.8rem' }}>
+                  <i className="fas fa-exclamation-triangle me-1"></i>
+                  Maximum 5 files reached. Remove some files to upload more.
+                </div>
+              )}
+            </div>
+          )}
+          
+        </div>
+
+        {/* Rest of the form fields remain the same */}
         <div className="col-md-6">
           <label htmlFor="idNo" className="form-label">
             ID Number <span className="star">*</span>
@@ -223,7 +344,6 @@ const BasicInformation = ({
             value={formData.date}
             onChange={handleChange}
             onBlur={handleBlur}
-            // min={new Date(Date.now() - 20 * 24 * 60 * 60 * 1000).toISOString().split("T")[0]}
             max={new Date().toISOString().split("T")[0]}
           />
           {errors.date && <div className="invalid-feedback">{errors.date}</div>}
@@ -376,13 +496,44 @@ const BasicInformation = ({
           </div>
           {errors.mobileNo2 && <div className="invalid-feedback">{errors.mobileNo2}</div>}
         </div>
+        
+        {/* Aadhar Number */}
+        <div className="col-md-6">
+          <label htmlFor="aadharNo" className="form-label">
+            Aadhar Number <small className="text-muted">(optional)</small>
+          </label>
+          <input
+            type="tel"
+            inputMode="numeric"
+            pattern="[0-9]*"
+            className="form-control"
+            id="aadharNo"
+            name="aadharNo"
+            value={formData.aadharNo || ""}
+            onChange={handleChange}
+            onBlur={handleBlur}
+            maxLength={12}
+            placeholder="12-digit Aadhar number"
+          />
+        </div>
+        
+        {/* Local ID */}
+        <div className="col-md-6">
+          <label htmlFor="localId" className="form-label">
+            Local ID <small className="text-muted">(optional)</small>
+          </label>
+          <input
+            type="text"
+            className="form-control"
+            id="localId"
+            name="localId"
+            value={formData.localId || ""}
+            onChange={handleChange}
+            onBlur={handleBlur}
+            placeholder="Any local/company ID"
+          />
+        </div>
       </div>
-
-      {/* <div className="d-flex justify-content-end mt-3">
-        <button type="button" className="btn btn-primary" onClick={handleNextStep}>
-          Next
-        </button>
-      </div> */}
     </div>
   );
 };

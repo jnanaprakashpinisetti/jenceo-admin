@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { storageRef, uploadFile, getDownloadURL } from "../../firebase";
 import { useAuth } from "../../context/AuthContext";
+import firebaseDB from "../../firebase";
 
 
 
@@ -311,6 +312,155 @@ const StaffModal = ({ staff, isOpen, onClose, onSave, onDelete, isEditMode }) =>
             }));
         }
     };
+
+    // Handle superior ID lookup
+    // Handle superior ID lookup
+    const handleSuperiorLookup = async (e) => {
+        const superiorId = e.target.value.trim();
+
+        if (!superiorId) {
+            setFormData(prev => ({
+                ...prev,
+                superiorName: "",
+                superiorPhoto: ""
+            }));
+            return;
+        }
+
+        try {
+            // Helper function to get download URL for Firebase Storage references
+            const getDownloadUrl = (storagePath) => {
+                if (!storagePath) return "";
+
+                // If it's already a download URL, return it
+                if (storagePath.includes('firebasestorage.googleapis.com')) {
+                    return storagePath;
+                }
+
+                // If it's a storage reference (gs://...), convert to download URL
+                if (storagePath.startsWith('gs://')) {
+                    // Extract bucket and file path
+                    const matches = storagePath.match(/gs:\/\/([^\/]+)\/(.+)/);
+                    if (matches) {
+                        const bucket = matches[1];
+                        const filePath = matches[2];
+                        // Encode the file path properly
+                        const encodedPath = encodeURIComponent(filePath);
+                        return `https://firebasestorage.googleapis.com/v0/b/${bucket}/o/${encodedPath}?alt=media`;
+                    }
+                }
+
+                // If it's a storage reference without gs://
+                if (storagePath.includes('/staff-photos/')) {
+                    // Clean up the path
+                    let cleanPath = storagePath.replace('gs://jenceo-admin.firebasestorage.app/', '');
+                    if (cleanPath.startsWith('/')) cleanPath = cleanPath.substring(1);
+                    const encodedPath = encodeURIComponent(cleanPath);
+                    return `https://firebasestorage.googleapis.com/v0/b/jenceo-admin.firebasestorage.app/o/${encodedPath}?alt=media`;
+                }
+
+                return storagePath;
+            };
+
+            // Fetch superior details from Firebase - check StaffBioData first
+            const snapshot = await firebaseDB
+                .child("StaffBioData")
+                .orderByChild("idNo")
+                .equalTo(superiorId)
+                .once("value");
+
+            if (snapshot.exists()) {
+                const data = snapshot.val();
+                const firstKey = Object.keys(data)[0];
+                const superior = data[firstKey];
+
+                const superiorName = `${superior.firstName || ""} ${superior.lastName || ""}`.trim();
+                // Get photo from employeePhoto field and convert to proper URL
+                let superiorPhoto = "";
+
+                if (superior.employeePhoto) {
+                    superiorPhoto = getDownloadUrl(superior.employeePhoto);
+                    console.log("Superior photo URL:", superiorPhoto);
+                } else if (superior.employeePhotoUrl) {
+                    superiorPhoto = getDownloadUrl(superior.employeePhotoUrl);
+                    console.log("Superior photo URL (from employeePhotoUrl):", superiorPhoto);
+                } else {
+                    // Fallback to default photo
+                    superiorPhoto = "https://firebasestorage.googleapis.com/v0/b/jenceo-admin.firebasestorage.app/o/OfficeFiles%2FSample-Photo.jpg?alt=media&token=01855b47-c9c2-490e-b400-05851192dde7";
+                }
+
+                setFormData(prev => ({
+                    ...prev,
+                    superiorName,
+                    superiorPhoto
+                }));
+            } else {
+                // Try other database nodes
+                const nodes = ["EmployeeData", "Staffs", "WorkerBioData"];
+                let found = false;
+
+                for (const node of nodes) {
+                    try {
+                        const altSnapshot = await firebaseDB
+                            .child(node)
+                            .orderByChild("idNo")
+                            .equalTo(superiorId)
+                            .once("value");
+
+                        if (altSnapshot.exists()) {
+                            const data = altSnapshot.val();
+                            const firstKey = Object.keys(data)[0];
+                            const superior = data[firstKey];
+
+                            const superiorName = `${superior.firstName || superior.name || ""} ${superior.lastName || ""}`.trim();
+                            // Try different photo field names and convert to proper URL
+                            let superiorPhoto = "";
+
+                            if (superior.employeePhoto) {
+                                superiorPhoto = getDownloadUrl(superior.employeePhoto);
+                            } else if (superior.photo) {
+                                superiorPhoto = getDownloadUrl(superior.photo);
+                            } else if (superior.employeePhotoUrl) {
+                                superiorPhoto = getDownloadUrl(superior.employeePhotoUrl);
+                            } else {
+                                superiorPhoto = "https://firebasestorage.googleapis.com/v0/b/jenceo-admin.firebasestorage.app/o/OfficeFiles%2FSample-Photo.jpg?alt=media&token=01855b47-c9c2-490e-b400-05851192dde7";
+                            }
+
+                            setFormData(prev => ({
+                                ...prev,
+                                superiorName,
+                                superiorPhoto
+                            }));
+                            found = true;
+                            break;
+                        }
+                    } catch (err) {
+                        console.error(`Error checking node ${node}:`, err);
+                        continue;
+                    }
+                }
+
+                if (!found) {
+                    setFormData(prev => ({
+                        ...prev,
+                        superiorName: "",
+                        superiorPhoto: ""
+                    }));
+                    alert("No staff found with this Superior ID");
+                }
+            }
+        } catch (error) {
+            console.error("Error looking up superior:", error);
+            setFormData(prev => ({
+                ...prev,
+                superiorName: "",
+                superiorPhoto: ""
+            }));
+            alert("Error looking up superior details");
+        }
+    };
+
+
 
     // Remove ID Proof file
     const removeIdProofFile = (index) => {
@@ -1411,27 +1561,41 @@ const StaffModal = ({ staff, isOpen, onClose, onSave, onDelete, isEditMode }) =>
     /* ------------------------------ render helpers ----------------------------- */
     const Err = ({ msg }) => (msg ? <div className="text-danger mt-1" style={{ fontSize: ".85rem" }}>{msg}</div> : null);
 
-    const renderInputField = (label, name, value, type = "text", placeholder = "", hardDisabled = false, extraProps = {}) => (
-        <div className="">
-            <label className="form-label">
-                <strong>{label}</strong>
-            </label>
-            {isEditMode ? (
-                <input
-                    type={type}
-                    className="form-control form-control-sm"
-                    name={name}
-                    value={value || ""}
-                    onChange={handleInputChange}
-                    disabled={hardDisabled || extraProps?.disabled === true}
-                    placeholder={placeholder}
-                    {...extraProps}
-                />
-            ) : (
-                <div className="form-control form-control-sm bg-light">{String(value || "N/A")}</div>
-            )}
-        </div>
-    );
+    // Update renderInputField to support onBlur
+    const renderInputField = (label, name, value, type = "text", placeholder = "", required = false, extraProps = {}) => {
+        const isDisabled = extraProps.disabled || (!isEditMode);
+        const inputProps = {
+            type,
+            className: `form-control ${!isEditMode ? 'bg-light' : ''}`,
+            name,
+            value: value || "",
+            onChange: handleInputChange,
+            placeholder,
+            required,
+            disabled: isDisabled,
+            ...extraProps
+        };
+
+        if (!isEditMode) {
+            return (
+                <div className="form-group">
+                    <label className="form-label"><strong>{label}</strong></label>
+                    <div className="form-control bg-light">
+                        {value || <span className="text-muted">Not provided</span>}
+                    </div>
+                </div>
+            );
+        }
+
+        return (
+            <div className="form-group">
+                <label className="form-label">
+                    <strong>{label}</strong> {required && <span className="text-danger">*</span>}
+                </label>
+                <input {...inputProps} />
+            </div>
+        );
+    };
 
     const renderPhoneField = (label, name, value, extraProps = {}) => {
         const digitsOnly = String(value || "").replace(/\D/g, "");
@@ -1776,8 +1940,8 @@ const StaffModal = ({ staff, isOpen, onClose, onSave, onDelete, isEditMode }) =>
                                 {/* Basic */}
                                 {activeTab === "basic" && (
                                     <div className="modal-card">
-                                        {/* Status */}
-                                        <div className="row status">
+                                        {/* Status and Superior Info */}
+                                        <div className="row status mb-4 bg-light p-3 border-radius-4">
                                             <div className="col-md-4">
                                                 <label className="form-label">
                                                     <strong>Status</strong>
@@ -1814,6 +1978,82 @@ const StaffModal = ({ staff, isOpen, onClose, onSave, onDelete, isEditMode }) =>
                                                         </span>
                                                     </div>
                                                 )}
+                                            </div>
+
+                                            {/* Superior Info */}
+                                            <div className="col-md-8">
+                                                <div className="d-flex">
+                                                    <div className="me-3">
+                                                        {formData.superiorPhoto ? (
+                                                            <img
+                                                                src={formData.superiorPhoto}
+                                                                alt="Superior"
+                                                                style={{
+                                                                    width: "60px",
+                                                                    height: "60px",
+                                                                    borderRadius: "50%",
+                                                                    objectFit: "cover",
+                                                                    border: "2px solid #dee2e6"
+                                                                }}
+                                                                className="img-fluid"
+                                                                onError={(e) => {
+                                                                    console.error("Failed to load superior photo:", formData.superiorPhoto);
+                                                                    e.target.src = "https://firebasestorage.googleapis.com/v0/b/jenceo-admin.firebasestorage.app/o/OfficeFiles%2FSample-Photo.jpg?alt=media&token=01855b47-c9c2-490e-b400-05851192dde7";
+                                                                }}
+                                                            />
+                                                        ) : (
+                                                            <div
+                                                                style={{
+                                                                    width: "60px",
+                                                                    height: "60px",
+                                                                    borderRadius: "50%",
+                                                                    backgroundColor: "#f8f9fa",
+                                                                    display: "flex",
+                                                                    alignItems: "center",
+                                                                    justifyContent: "center",
+                                                                    border: "2px dashed #dee2e6"
+                                                                }}
+                                                            >
+                                                                <span className="small-text">No Photo</span>
+                                                            </div>
+                                                        )}
+                                                    </div>
+
+                                                    <div className="flex-grow-1">
+                                                        <div className="row">
+                                                            <div className="col-md-6">
+                                                                {renderInputField("Superior ID", "superiorId", formData.superiorId, "text", "", false, {
+                                                                    onBlur: handleSuperiorLookup,
+                                                                    disabled: lockBasic
+                                                                })}
+                                                                {formData.superiorId && !formData.superiorName && (
+                                                                    <div className="form-text">Enter Superior ID and blur to fetch details</div>
+                                                                )}
+                                                            </div>
+                                                            <div className="col-md-6">
+                                                                <div className="form-group">
+                                                                    <label className="form-label">Superior Name</label>
+                                                                    <input
+                                                                        type="text"
+                                                                        className="form-control bg-light"
+                                                                        value={formData.superiorName || ""}
+                                                                        readOnly
+                                                                        placeholder="Will auto-fill from Superior ID"
+                                                                    />
+                                                                </div>
+                                                            </div>
+                                                        </div>
+
+                                                        {formData.superiorName && (
+                                                            <div className="mt-2">
+                                                                <small className="small-text">
+                                                                    Reporting to: <strong>{formData.superiorName}</strong>
+                                                                    {formData.superiorId && ` (ID: ${formData.superiorId})`}
+                                                                </small>
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                </div>
                                             </div>
                                         </div>
 

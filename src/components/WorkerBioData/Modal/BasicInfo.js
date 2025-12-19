@@ -136,9 +136,7 @@ const BasicInfo = ({
             </label>
             {canEdit ? (
                 <div className="input-group">
-                    <span className="input-group-text">
-                        <i className={`bi ${icon}`}></i>
-                    </span>
+                   
                     <input
                         type={type}
                         className={"form-control form-control-sm" + (isEditMode ? " " : "")}
@@ -150,9 +148,7 @@ const BasicInfo = ({
                 </div>
             ) : (
                 <div className="input-group">
-                    <span className="input-group-text">
-                        <i className={`bi ${icon}`}></i>
-                    </span>
+                 
                     <div className="form-control form-control-sm bg-light">{String(value || "N/A")}</div>
                 </div>
             )}
@@ -170,9 +166,7 @@ const BasicInfo = ({
                 </label>
                 {canEdit ? (
                     <div className="input-group">
-                        <span className="input-group-text">
-                            <i className="bi bi-plus-slash-minus"></i>91
-                        </span>
+                      
                         <input
                             type="tel"
                             className={"form-control form-control-sm" + (isEditMode ? " " : "")}
@@ -187,9 +181,7 @@ const BasicInfo = ({
                     </div>
                 ) : (
                     <div className="input-group">
-                        <span className="input-group-text">
-                            <i className={`bi ${icon}`}></i>
-                        </span>
+                        
                         <div className="form-control form-control-sm bg-light d-flex align-items-center justify-content-between">
                             <span>{value || "N/A"}</span>
                             <div>
@@ -226,9 +218,7 @@ const BasicInfo = ({
             </label>
             {canEdit ? (
                 <div className="input-group">
-                    <span className="input-group-text">
-                        <i className={`bi ${icon}`}></i>
-                    </span>
+                     
                     <select className={"form-select form-control-sm" + (isEditMode ? " mb-2" : "")} name={name} value={value || ""} onChange={handleInputChange}>
                         <option value="">Select {label}</option>
                         {options.map((option) => (
@@ -240,9 +230,7 @@ const BasicInfo = ({
                 </div>
             ) : (
                 <div className="input-group">
-                    <span className="input-group-text">
-                        <i className={`bi ${icon}`}></i>
-                    </span>
+                   
                     <div className="form-control form-control-sm bg-light">{String(value || "N/A")}</div>
                 </div>
             )}
@@ -404,9 +392,7 @@ const BasicInfo = ({
                                 </label>
                                 {canEdit ? (
                                     <div className="input-group">
-                                        <span className="input-group-text">
-                                            <i className="bi bi-clipboard-check"></i>
-                                        </span>
+                                        
                                         <select className="form-select" value={status} onChange={(e) => setStatus(e.target.value)}>
                                             <option value="On Duty">On Duty</option>
                                             <option value="Off Duty">Off Duty</option>
@@ -417,9 +403,7 @@ const BasicInfo = ({
                                     </div>
                                 ) : (
                                     <div className="input-group">
-                                        <span className="input-group-text">
-                                            <i className="bi bi-clipboard-check"></i>
-                                        </span>
+                                       
                                         <div className="form-control bg-light">
                                             <span
                                                 className={`badge px-3 py-2`}
@@ -499,7 +483,7 @@ const BasicInfo = ({
                                     <img
                                         src={formData.employeePhotoUrl}
                                         alt="Employee"
-                                        style={{ maxWidth: "100%", maxHeight: "250px", objectFit: "cover" }}
+                                        style={{ maxWidth: "100%", maxHeight: "250px", objectFit: "cover", border: "1px solid #f5eeee", padding: "5px" }}
                                         className="rounded img-fluid mb-3"
                                     />
                                     {canEdit && (
@@ -824,9 +808,7 @@ const BasicInfo = ({
                         </label>
                         {canEdit ? (
                             <div className="input-group">
-                                <span className="input-group-text">
-                                    <i className="bi bi-chat-left-text"></i>
-                                </span>
+                                
                                 <textarea
                                     className="form-control"
                                     name="aboutEmployeee"

@@ -681,7 +681,7 @@ const TimesheetTable = ({ employee }) => {
                   {allTimesheets.length === 0 ? (
                     <div>
                       <h5 className="text-info">No Timesheets Found</h5>
-                      <p className="text-muted">
+                      <p className="small-text text-info opacity-50">
                         This employee doesn't have any timesheets yet.
                         <br />
                         <small>Employee ID: {employee?.id}</small>

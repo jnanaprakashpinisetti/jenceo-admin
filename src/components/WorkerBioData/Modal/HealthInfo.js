@@ -71,7 +71,7 @@ const HealthInfo = ({ formData, setFormData, canEdit, handleInputChange }) => {
                     </div>
                     <div className="d-flex flex-wrap gap-2">
                         {(formData[field] || []).map((item, index) => (
-                            <div key={index} className="badge bg-primary bg-opacity-10 text-primary border border-primary border-opacity-25 d-flex align-items-center p-2">
+                            <div key={index} className="badge bg-primary bg-opacity-10 text-white border border-primary border-opacity-25 d-flex align-items-center p-2">
                                 <i className="bi bi-check-circle me-1"></i>
                                 {item}
                                 {canEdit && (
@@ -96,7 +96,7 @@ const HealthInfo = ({ formData, setFormData, canEdit, handleInputChange }) => {
                     {(formData[field] || []).length ? (
                         <div className="d-flex flex-wrap gap-2">
                             {(formData[field] || []).map((item, index) => (
-                                <span key={index} className="badge bg-primary bg-opacity-10 text-primary border border-primary border-opacity-25 p-2">
+                                <span key={index} className="badge bg-primary bg-opacity-10 text-white border border-primary border-opacity-25 p-2">
                                     <i className="bi bi-check-circle me-1"></i>
                                     {item}
                                 </span>

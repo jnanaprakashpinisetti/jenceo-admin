@@ -9,9 +9,7 @@ const BankDetails = ({ formData, canEdit, handleInputChange }) => {
             </label>
             {canEdit ? (
                 <div className="input-group">
-                    <span className="input-group-text">
-                        <i className={`bi ${icon}`}></i>
-                    </span>
+                  
                     <input
                         type={type}
                         className="form-control form-control-sm"
@@ -23,9 +21,7 @@ const BankDetails = ({ formData, canEdit, handleInputChange }) => {
                 </div>
             ) : (
                 <div className="input-group">
-                    <span className="input-group-text">
-                        <i className={`bi ${icon}`}></i>
-                    </span>
+                 
                     <div className="form-control form-control-sm bg-light">{String(value || "N/A")}</div>
                 </div>
             )}
@@ -43,9 +39,7 @@ const BankDetails = ({ formData, canEdit, handleInputChange }) => {
                 </label>
                 {canEdit ? (
                     <div className="input-group">
-                        <span className="input-group-text">
-                            <i className={`bi ${icon}`}></i>
-                        </span>
+                      
                         <input
                             type="tel"
                             className="form-control form-control-sm"
@@ -59,9 +53,7 @@ const BankDetails = ({ formData, canEdit, handleInputChange }) => {
                     </div>
                 ) : (
                     <div className="input-group">
-                        <span className="input-group-text">
-                            <i className={`bi ${icon}`}></i>
-                        </span>
+                      
                         <div className="form-control form-control-sm bg-light d-flex align-items-center justify-content-between">
                             <span>{value || "N/A"}</span>
                             {canCall && (

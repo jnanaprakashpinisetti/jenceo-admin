@@ -1,6 +1,6 @@
-// StaffBioDataForm.js - FULLY FIXED VERSION
+// StaffBioDataForm.js - UPDATED VERSION with single ID proof file
 import React, { useEffect, useRef, useState, useCallback } from "react";
-import firebaseDB, { storageRef, uploadFile } from "../../firebase";
+import firebaseDB, { storageRef, uploadFile, getDownloadURL } from "../../firebase";
 
 import BasicInformation from "./BasicInformation";
 import PermanentAddress from "./PermanentAddress";
@@ -106,10 +106,9 @@ const initialFormData = {
   password: "",
   role: "",
   
-  // ID Proof fields
-  idProof: [],
-  idProofFiles: [],
-  idProofPreviews: [],
+  // ID Proof fields - SINGLE FILE like WorkerBioDataForm
+  idProof: null,
+  idProofFile: null,
   
   // Salary Profile fields
   salaryBreakdown: {
@@ -422,81 +421,7 @@ const StaffBioDataForm = ({ isOpen = false, onClose = () => { }, onSaved }) => {
     }
   }, []);
 
-  // Handle ID Proof file uploads
-  const handleIdProofChange = useCallback((e) => {
-    const files = Array.from(e.target.files || []);
-    
-    const currentCount = formData.idProofFiles?.length || 0;
-    if (currentCount + files.length > 5) {
-      setErrors(prev => ({
-        ...prev,
-        idProof: "Maximum 5 ID proof files allowed"
-      }));
-      return;
-    }
-    
-    const validFiles = [];
-    const invalidFiles = [];
-    
-    files.forEach(file => {
-      const validImage = ["image/jpeg", "image/jpg", "image/png", "image/gif"];
-      const validPdf = "application/pdf";
-      
-      if ((validImage.includes(file.type) || file.type === validPdf) && file.size <= 200 * 1024) {
-        validFiles.push(file);
-      } else {
-        invalidFiles.push(file.name);
-      }
-    });
-    
-    if (invalidFiles.length > 0) {
-      setErrors(prev => ({
-        ...prev,
-        idProof: `Invalid files: ${invalidFiles.join(", ")}. Only PDF/JPG/PNG up to 200KB each`
-      }));
-    }
-    
-    if (validFiles.length > 0) {
-      const imagePreviews = [];
-      validFiles.forEach(file => {
-        if (file.type.startsWith('image/')) {
-          const reader = new FileReader();
-          reader.onload = (e) => {
-            imagePreviews.push(e.target.result);
-            if (imagePreviews.length === validFiles.filter(f => f.type.startsWith('image/')).length) {
-              setFormData(prev => ({
-                ...prev,
-                idProofPreviews: [...(prev.idProofPreviews || []), ...imagePreviews]
-              }));
-            }
-          };
-          reader.readAsDataURL(file);
-        }
-      });
-      
-      setFormData(prev => ({
-        ...prev,
-        idProofFiles: [...(prev.idProofFiles || []), ...validFiles]
-      }));
-      
-      setErrors(prev => {
-        const newErrors = { ...prev };
-        delete newErrors.idProof;
-        return newErrors;
-      });
-    }
-  }, [formData.idProofFiles]);
-
-  // Remove ID Proof file
-  const removeIdProofFile = useCallback((index) => {
-    setFormData(prev => ({
-      ...prev,
-      idProofFiles: prev.idProofFiles.filter((_, i) => i !== index),
-      idProofPreviews: prev.idProofPreviews.filter((_, i) => i !== index)
-    }));
-  }, []);
-
-  // Central change handler - FIXED to prevent infinite loops
+  // Central change handler - UPDATED for single ID proof file
   const handleChange = useCallback((e) => {
     if (!e || !e.target) return;
     const { name, value, type, checked } = e.target;
@@ -552,6 +477,53 @@ const StaffBioDataForm = ({ isOpen = false, onClose = () => { }, onSaved }) => {
         return newErrors;
       });
       
+      return;
+    }
+
+    // Handle file uploads - UPDATED for single ID proof file
+    if (type === "file") {
+      const file = e.target.files?.[0] || null;
+      
+      if (!file) {
+        setFormData((prev) => ({ 
+          ...prev, 
+          [name === "employeePhoto" ? "employeePhotoFile" : "idProofFile"]: null 
+        }));
+        return;
+      }
+      
+      const validImage = ["image/jpeg", "image/jpg", "image/png", "image/gif"];
+      const validPdf = "application/pdf";
+      
+      if (name === "employeePhoto") {
+        if (!validImage.includes(file.type)) {
+          setErrors((prev) => ({ ...prev, employeePhoto: "Only JPG/PNG/GIF allowed" }));
+          return;
+        }
+        if (file.size > 100 * 1024) {
+          setErrors((prev) => ({ ...prev, employeePhoto: "Image must be less than 100KB" }));
+          return;
+        }
+        setFormData((prev) => ({ ...prev, employeePhotoFile: file }));
+      }
+      
+      if (name === "idProof") {
+        if (file.type !== validPdf && !validImage.includes(file.type)) {
+          setErrors((prev) => ({ ...prev, idProof: "Only PDF or JPG/PNG images allowed" }));
+          return;
+        }
+        if (file.size > 150 * 1024) {
+          setErrors((prev) => ({ ...prev, idProof: "File must be less than 150KB" }));
+          return;
+        }
+        setFormData((prev) => ({ ...prev, idProofFile: file }));
+      }
+      
+      setErrors((prev) => { 
+        const newErrors = { ...prev };
+        if (newErrors[name]) delete newErrors[name];
+        return newErrors;
+      });
       return;
     }
 
@@ -617,34 +589,6 @@ const StaffBioDataForm = ({ isOpen = false, onClose = () => { }, onSaved }) => {
           [field]: value
         }
       }));
-      return;
-    }
-
-    // Handle file upload for employee photo
-    if (type === "file" && name === "employeePhoto") {
-      const file = e.target.files?.[0] || null;
-      if (!file) {
-        setFormData((prev) => ({ ...prev, employeePhotoFile: null }));
-        return;
-      }
-      
-      const validTypes = ["image/jpeg", "image/jpg", "image/png", "image/gif"];
-      if (!validTypes.includes(file.type)) {
-        setErrors((prev) => ({ ...prev, employeePhoto: "Only JPG/PNG/GIF allowed" }));
-        return;
-      }
-      
-      if (file.size > 100 * 1024) {
-        setErrors((prev) => ({ ...prev, employeePhoto: "Image must be less than 100KB" }));
-        return;
-      }
-      
-      setFormData((prev) => ({ ...prev, employeePhotoFile: file }));
-      setErrors((prev) => { 
-        const newErrors = { ...prev };
-        delete newErrors.employeePhoto;
-        return newErrors;
-      });
       return;
     }
 
@@ -764,7 +708,7 @@ const StaffBioDataForm = ({ isOpen = false, onClose = () => { }, onSaved }) => {
     setErrors((prev) => ({ ...prev, ...fieldErrors }));
   }, [validateMobileNumber, validatePincode, isOver18, checkDuplicateId, findStaffByIdNo]);
 
-  // Validation for each step
+  // Validation for each step - UPDATED for single ID proof
   const checkValidationForStep = useCallback((s) => {
     const e = {};
     switch (s) {
@@ -795,10 +739,11 @@ const StaffBioDataForm = ({ isOpen = false, onClose = () => { }, onSaved }) => {
           e.mobileNo2 = "Mobile number must be 10 digits";
         }
         
-        if (!formData.idProofFiles || formData.idProofFiles.length === 0) {
-          e.idProof = "At least one ID proof document is required";
-        } else if (formData.idProofFiles.length > 5) {
-          e.idProof = "Maximum 5 ID proof documents allowed";
+        // UPDATED: Single ID proof validation
+        if (!formData.idProofFile) {
+          e.idProof = "ID proof document is required";
+        } else if (formData.idProofFile.size > 150 * 1024) {
+          e.idProof = "ID proof must be less than 150KB";
         }
         
         if (formData.employeePhotoFile) {
@@ -987,7 +932,7 @@ const StaffBioDataForm = ({ isOpen = false, onClose = () => { }, onSaved }) => {
     return true;
   }, [checkValidationForStep, mapErrorsForChildren, checkDuplicateId, formData.idNo]);
 
-  // Main submission handler - FIXED to handle undefined values
+  // Main submission handler - UPDATED for single ID proof file
   const handlePrimaryAction = useCallback(async (ev) => {
     ev?.preventDefault?.();
     
@@ -1004,54 +949,25 @@ const StaffBioDataForm = ({ isOpen = false, onClose = () => { }, onSaved }) => {
     
     try {
       let photoURL = DEFAULT_PHOTO_URL;
-      let idProofURLs = [];
+      let idProofURL = null;
       
       // Upload employee photo
-     if (formData.idProofFiles && formData.idProofFiles.length > 0) {
-       for (const file of formData.idProofFiles) {
-         try {
-           const filePath = `Staff-ID-Proof/${formData.idNo}/${Date.now()}-${file.name}`;
-           const fileRef = storageRef.child(filePath);
-
-           const result = await uploadFile(fileRef, file);
-
-           idProofURLs.push({
-             url: result.downloadURL,
-             name: file.name,
-             type: file.type,
-             size: file.size,
-             path: filePath
-           });
-         } catch (err) {
-           console.error("ID Proof upload failed:", err);
-         }
-       }
-     }
+      if (formData.employeePhotoFile) {
+        const ext = formData.employeePhotoFile.name.split(".").pop();
+        const fileName = `employee-photos/${(formData.idNo || "unknown")}-${Date.now()}.${ext}`;
+        const fileRef = storageRef.child(fileName);
+        const snap = await uploadFile(fileRef, formData.employeePhotoFile);
+        photoURL = await getDownloadURL(snap.ref);
+      }
       
-      // Upload ID proof files
-    {formData.idProof && formData.idProof.length > 0 && (
-  <div className="list-group list-group-flush">
-    {formData.idProof.map((proof, index) => (
-      <a
-        key={index}
-        href={proof.url}
-        target="_blank"
-        rel="noopener noreferrer"
-        className="list-group-item d-flex align-items-center"
-      >
-        <i className={`fas ${
-          proof.type === "application/pdf"
-            ? "fa-file-pdf text-danger"
-            : "fa-file-image text-success"
-        } me-2`} />
-        <span className="text-truncate">
-          {proof.name || `ID Proof ${index + 1}`}
-        </span>
-      </a>
-    ))}
-  </div>
-)}
-
+      // Upload ID proof file (single file)
+      if (formData.idProofFile) {
+        const ext = formData.idProofFile.name.split(".").pop();
+        const fileName = `id-proofs/${(formData.idNo || "unknown")}-${Date.now()}.${ext}`;
+        const fileRef = storageRef.child(fileName);
+        const snap = await uploadFile(fileRef, formData.idProofFile);
+        idProofURL = await getDownloadURL(snap.ref);
+      }
       
       // Calculate salary totals
       const salaryBreakdown = { ...formData.salaryBreakdown };
@@ -1086,7 +1002,7 @@ const StaffBioDataForm = ({ isOpen = false, onClose = () => { }, onSaved }) => {
       const submitData = {
         ...formData,
         employeePhoto: photoURL, // Always has a value
-        idProof: idProofURLs,
+        idProof: idProofURL, // Single URL instead of array
         salaryBreakdown: {
           basic: String(basic),
           hra: String(hra),
@@ -1114,8 +1030,7 @@ const StaffBioDataForm = ({ isOpen = false, onClose = () => { }, onSaved }) => {
 
       // Remove temporary file fields
       delete submitData.employeePhotoFile;
-      delete submitData.idProofFiles;
-      delete submitData.idProofPreviews;
+      delete submitData.idProofFile;
 
       // Clean undefined values before submission
       const cleanedData = cleanUndefinedValues(submitData);
@@ -1176,8 +1091,6 @@ const StaffBioDataForm = ({ isOpen = false, onClose = () => { }, onSaved }) => {
       handleChange,
       handleBlur,
       handleFileChange: handleChange,
-      handleIdProofChange,
-      removeIdProofFile,
       nextStep: () => setStep((p) => Math.min(TOTAL_STEPS, p + 1)),
       prevStep: () => setStep((p) => Math.max(1, p - 1)),
       uploadProgress,
@@ -1198,7 +1111,7 @@ const StaffBioDataForm = ({ isOpen = false, onClose = () => { }, onSaved }) => {
       case 12: return <SalaryProfile {...common} handleSubmit={handlePrimaryAction} isSubmitting={isSubmitting} />;
       default: return null;
     }
-  }, [formData, errors, handleChange, handleBlur, handleIdProofChange, removeIdProofFile, uploadProgress, handlePrimaryAction, isSubmitting, mapErrorsForChildren]);
+  }, [formData, errors, handleChange, handleBlur, uploadProgress, handlePrimaryAction, isSubmitting, mapErrorsForChildren]);
 
   // Success Modal Component
   const SuccessModal = useCallback(({ open, onClose, info }) => {

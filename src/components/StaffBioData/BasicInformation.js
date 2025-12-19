@@ -7,22 +7,22 @@ const BasicInformation = ({
   errors,
   handleChange,
   handleBlur,
-  handleFileChange,
-  handleIdProofChange,
-  removeIdProofFile,
+  setErrors, // Add setErrors to props
   nextStep,
 }) => {
   const [showIdExistsModal, setShowIdExistsModal] = useState(false);
   const [existingEmployee, setExistingEmployee] = useState(null);
-  
-  // State for upload progress
-  const [uploadProgress, setUploadProgress] = useState({});
 
   // Calculate max date for 18 years ago
   const maxDateString = useMemo(() => {
     const maxDate = new Date();
     maxDate.setFullYear(maxDate.getFullYear() - 18);
     return maxDate.toISOString().split("T")[0];
+  }, []);
+
+  // Set current date for date of joining
+  const currentDateString = useMemo(() => {
+    return new Date().toISOString().split("T")[0];
   }, []);
 
   // Auto-calculate years based on date of birth
@@ -40,8 +40,7 @@ const BasicInformation = ({
 
   // Handle date of birth change
   const handleDobChange = (e) => {
-    handleChange(e); // Update dateOfBirth in parent form data
-    // Auto-update years field
+    handleChange(e);
     const years = calculateAge(e.target.value);
     handleChange({
       target: {
@@ -49,6 +48,176 @@ const BasicInformation = ({
         value: years,
       },
     });
+  };
+
+  // Handle file change for employee photo
+  const handleEmployeePhotoChange = (e) => {
+    const { name, files } = e.target;
+    const file = files?.[0] || null;
+    
+    if (!file) {
+      handleChange({
+        target: {
+          name: "employeePhotoFile",
+          value: null,
+        },
+      });
+      return;
+    }
+
+    // Validate file type for employee photo
+    const validImageTypes = ["image/jpeg", "image/jpg", "image/png", "image/gif"];
+    
+    if (!validImageTypes.includes(file.type)) {
+      setErrors(prev => ({ ...prev, [name]: "Only JPG/PNG/GIF images allowed" }));
+      return;
+    }
+
+    // Validate file size (150KB max)
+    if (file.size > 150 * 1024) {
+      setErrors(prev => ({ ...prev, [name]: "File must be less than 150KB" }));
+      return;
+    }
+
+    // Clear any previous errors for this field
+    setErrors(prev => {
+      const newErrors = { ...prev };
+      delete newErrors[name];
+      return newErrors;
+    });
+
+    // Update form data
+    handleChange({
+      target: {
+        name: "employeePhotoFile",
+        value: file,
+      },
+    });
+  };
+
+  // Handle file change for ID proof (multiple files)
+  const handleIdProofChange = (e) => {
+    const { files } = e.target;
+    
+    if (!files || files.length === 0) {
+      handleChange({
+        target: {
+          name: "idProofFiles",
+          value: [],
+        },
+      });
+      handleChange({
+        target: {
+          name: "idProofPreviews",
+          value: [],
+        },
+      });
+      return;
+    }
+
+    // Check maximum files limit (5)
+    if (files.length > 5) {
+      setErrors(prev => ({ ...prev, idProof: "Maximum 5 files allowed" }));
+      return;
+    }
+
+    const validImageTypes = ["image/jpeg", "image/jpg", "image/png", "image/gif"];
+    const validPdfType = "application/pdf";
+    const newFiles = [];
+    const newPreviews = [];
+
+    // Validate each file
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      
+      // Validate file type
+      if (file.type !== validPdfType && !validImageTypes.includes(file.type)) {
+        setErrors(prev => ({ ...prev, idProof: "Only PDF or JPG/PNG/GIF files allowed" }));
+        return;
+      }
+
+      // Validate file size (200KB max)
+      if (file.size > 200 * 1024) {
+        setErrors(prev => ({ ...prev, idProof: `File "${file.name}" must be less than 200KB` }));
+        return;
+      }
+
+      newFiles.push(file);
+      
+      // Create preview for image files
+      if (file.type.startsWith('image/')) {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          newPreviews.push(e.target.result);
+          // Update previews when all images are loaded
+          if (newPreviews.length === newFiles.filter(f => f.type.startsWith('image/')).length) {
+            handleChange({
+              target: {
+                name: "idProofPreviews",
+                value: [...newPreviews],
+              },
+            });
+          }
+        };
+        reader.readAsDataURL(file);
+      }
+    }
+
+    // Clear any previous errors
+    setErrors(prev => {
+      const newErrors = { ...prev };
+      delete newErrors.idProof;
+      return newErrors;
+    });
+
+    // Update form data
+    handleChange({
+      target: {
+        name: "idProofFiles",
+        value: newFiles,
+      },
+    });
+  };
+
+  // Remove ID proof file
+  const removeIdProofFile = (index) => {
+    const newFiles = [...formData.idProofFiles];
+    newFiles.splice(index, 1);
+    
+    const newPreviews = [...(formData.idProofPreviews || [])];
+    if (newPreviews[index]) {
+      newPreviews.splice(index, 1);
+    }
+    
+    handleChange({
+      target: {
+        name: "idProofFiles",
+        value: newFiles,
+      },
+    });
+    
+    handleChange({
+      target: {
+        name: "idProofPreviews",
+        value: newPreviews,
+      },
+    });
+  };
+
+  // Format file size
+  const formatFileSize = (bytes) => {
+    if (bytes < 1024) return bytes + ' bytes';
+    else if (bytes < 1048576) return (bytes / 1024).toFixed(1) + ' KB';
+    else return (bytes / 1048576).toFixed(1) + ' MB';
+  };
+
+  // Get file icon based on type
+  const getFileIcon = (fileType) => {
+    if (fileType.includes('pdf')) return 'far fa-file-pdf text-danger';
+    if (fileType.includes('image')) return 'far fa-file-image text-success';
+    if (fileType.includes('jpeg') || fileType.includes('jpg')) return 'far fa-file-image text-warning';
+    if (fileType.includes('png')) return 'far fa-file-image text-info';
+    return 'far fa-file text-secondary';
   };
 
   // Real ID check using Firebase Realtime Database
@@ -85,22 +254,6 @@ const BasicInformation = ({
       }
     }
     nextStep();
-  };
-
-  // Format file size
-  const formatFileSize = (bytes) => {
-    if (bytes < 1024) return bytes + ' bytes';
-    else if (bytes < 1048576) return (bytes / 1024).toFixed(1) + ' KB';
-    else return (bytes / 1048576).toFixed(1) + ' MB';
-  };
-
-  // Get file icon based on type
-  const getFileIcon = (fileType) => {
-    if (fileType.includes('pdf')) return 'far fa-file-pdf text-danger';
-    if (fileType.includes('image')) return 'far fa-file-image text-success';
-    if (fileType.includes('jpeg') || fileType.includes('jpg')) return 'far fa-file-image text-warning';
-    if (fileType.includes('png')) return 'far fa-file-image text-info';
-    return 'far fa-file text-secondary';
   };
 
   return (
@@ -191,7 +344,7 @@ const BasicInformation = ({
             className={`form-control ${errors.employeePhoto ? "is-invalid" : ""}`}
             id="employeePhoto"
             name="employeePhoto"
-            onChange={handleFileChange}
+            onChange={handleEmployeePhotoChange}
             accept=".jpg,.jpeg,.png,.gif"
           />
           <div style={{ fontSize: "9px", color: "#f2f2f2", marginTop: "5px" }}>
@@ -273,20 +426,6 @@ const BasicInformation = ({
                         <div className="small-text" style={{ fontSize: '0.75rem' }}>
                           {formatFileSize(file.size)} • {file.type.split('/')[1].toUpperCase()}
                         </div>
-                        {/* Upload progress bar */}
-                        {uploadProgress[file.name] !== undefined && (
-                          <div className="progress mt-1" style={{ height: '4px' }}>
-                            <div 
-                              className="progress-bar progress-bar-striped progress-bar-animated" 
-                              role="progressbar" 
-                              style={{ width: `${uploadProgress[file.name]}%` }}
-                              aria-valuenow={uploadProgress[file.name]} 
-                              aria-valuemin="0" 
-                              aria-valuemax="100"
-                            >
-                            </div>
-                          </div>
-                        )}
                       </div>
                     </div>
                     <button 
@@ -314,7 +453,7 @@ const BasicInformation = ({
           
         </div>
 
-        {/* Rest of the form fields remain the same */}
+        {/* Rest of the form fields */}
         <div className="col-md-6">
           <label htmlFor="idNo" className="form-label">
             ID Number <span className="star">*</span>
@@ -341,10 +480,11 @@ const BasicInformation = ({
             className={`form-control ${errors.date ? "is-invalid" : ""}`}
             id="date"
             name="date"
-            value={formData.date}
+            value={formData.date || currentDateString}
             onChange={handleChange}
             onBlur={handleBlur}
-            max={new Date().toISOString().split("T")[0]}
+            min={new Date(Date.now() - 20 * 24 * 60 * 60 * 1000).toISOString().split("T")[0]}
+            max={currentDateString}
           />
           {errors.date && <div className="invalid-feedback">{errors.date}</div>}
         </div>

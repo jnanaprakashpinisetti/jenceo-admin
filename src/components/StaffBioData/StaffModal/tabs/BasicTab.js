@@ -11,11 +11,6 @@ const BasicTab = ({
     setStatus,
     handleInputChange,
     handlePhotoChange,
-    handleIdProofChange,
-    removeIdProofFile,
-    removeExistingIdProof,
-    handleSuperiorLookup: handleSuperiorLookupProp,
-    staff,
     onSaveSuccess // NEW: Callback for successful save
 }) => {
     const { user: authUser } = useAuth() || {};
@@ -25,6 +20,9 @@ const BasicTab = ({
         authUser?.permissions?.canManageAll === true;
     
     const [superAdminUnlock, setSuperAdminUnlock] = useState(false);
+    const [idModalOpen, setIdModalOpen] = useState(false);
+    const [idModalSrc, setIdModalSrc] = useState(null);
+    const [idModalType, setIdModalType] = useState("image");
     const lockBasic = isEditMode && (!isSuperAdmin || !superAdminUnlock);
 
     // Enhanced superior lookup with photo handling
@@ -132,6 +130,107 @@ const BasicTab = ({
             }));
             alert("Error looking up superior details");
         }
+    };
+
+    // ID Proof Functions from BasicInfo.js
+    const handleViewId = () => {
+        const src = formData.idProofUrl || formData.idProofPreview || null;
+        if (!src) return;
+        const t = formData.idProofFile?.type === "application/pdf" ? "pdf" : "image";
+        setIdModalSrc(src);
+        setIdModalType(t);
+        setIdModalOpen(true);
+    };
+
+    const handleDownloadId = async () => {
+        try {
+            if (formData.idProofFile instanceof File) {
+                const file = formData.idProofFile;
+                const a = document.createElement("a");
+                a.href = URL.createObjectURL(file);
+                a.download = file.name || "id-proof";
+                document.body.appendChild(a);
+                a.click();
+                a.remove();
+                URL.revokeObjectURL(a.href);
+                return;
+            }
+
+            const src = formData.idProofUrl || formData.idProofPreview;
+            if (!src) return;
+
+            const res = await fetch(src, { mode: "cors" });
+            const blob = await res.blob();
+            const a = document.createElement("a");
+            const url = URL.createObjectURL(blob);
+            const guessedName = (formData.idProofUrl && formData.idProofUrl.split("/").pop().split("?")[0]) ||
+                (idModalType === "pdf" ? "id-proof.pdf" : "id-proof.jpg");
+            a.href = url;
+            a.download = guessedName || "id-proof";
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            URL.revokeObjectURL(url);
+        } catch (e) {
+            const src = formData.idProofUrl || formData.idProofPreview;
+            if (src) window.open(src, "_blank", "noopener,noreferrer");
+        }
+    };
+
+    const handleIdProofChange = (e) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        const allowedTypes = ['application/pdf', 'image/jpeg', 'image/jpg', 'image/png'];
+        const fileExtension = file.name.toLowerCase().split('.').pop();
+        const allowedExtensions = ['pdf', 'jpg', 'jpeg', 'png'];
+
+        if (!allowedTypes.includes(file.type) && !allowedExtensions.includes(fileExtension)) {
+            alert('Please select a PDF, JPG, or PNG file only.');
+            e.target.value = '';
+            return;
+        }
+
+        if (file.size > 150 * 1024) {
+            alert('File size must be less than 150KB.');
+            e.target.value = '';
+            return;
+        }
+
+        setFormData(prev => ({
+            ...prev,
+            idProofFile: file,
+            idProofError: null
+        }));
+
+        if (file.type.startsWith('image/')) {
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                setFormData(prev => ({
+                    ...prev,
+                    idProofPreview: e.target.result,
+                    idProofError: null
+                }));
+            };
+            reader.readAsDataURL(file);
+        } else {
+            setFormData(prev => ({
+                ...prev,
+                idProofPreview: null,
+                idProofError: null
+            }));
+        }
+    };
+
+    // Remove existing ID proof
+    const removeIdProof = () => {
+        setFormData(prev => ({
+            ...prev,
+            idProofFile: undefined,
+            idProofUrl: null,
+            idProofPreview: null,
+            idProofError: null,
+        }));
     };
 
     // Render input field helper
@@ -324,7 +423,7 @@ const BasicTab = ({
                                                         value={formData.superiorId || ""}
                                                         onChange={handleInputChange}
                                                         onBlur={handleSuperiorLookup}
-                                                        disabled={!isEditMode} // FIXED: Only disable in view mode
+                                                        disabled={!isEditMode}
                                                     />
                                                 </div>
                                             </div>
@@ -347,7 +446,7 @@ const BasicTab = ({
 
                                         {formData.superiorName && (
                                             <div className="mt-2 d-flex align-items-center">
-                                                <i className="bi bi-arrow-rightt text-success me-2"></i>
+                                                <i className="bi bi-arrow-right text-success me-2"></i>
                                                 <small className="text-muted">
                                                     Reports to <strong className="text-dark">{formData.superiorName}</strong>
                                                     {formData.superiorId && <span className="ms-1">(ID: {formData.superiorId})</span>}
@@ -455,147 +554,76 @@ const BasicTab = ({
                                 </div>
                             </div>
 
-                            {/* ID Proofs Card */}
+                            {/* ID Proof Card - Updated like BasicInfo.js */}
                             <div className="card border">
-                                <div className="card-header bg-light py-2">
-                                    <h6 className="mb-0 fw-semibold">
-                                        <i className="bi bi-card-text-alt me-2"></i>
-                                        ID Proof Files
-                                        <small className="text-muted ms-1">(max 5 files)</small>
-                                    </h6>
+                                <div className="card-header bg-warning text-white py-2 d-flex align-items-center">
+                                    <i className="bi bi-file-earmark-text me-2"></i>
+                                    <h6 className="mb-0 fw-semibold">ID Proof Document</h6>
                                 </div>
-                                <div className="card-body p-3">
-                                    {isEditMode ? (
-                                        <>
-                                            <div className="mb-3">
-                                                <label className="btn btn-outline-secondary btn-sm w-100">
-                                                    <i className="bi bi-cloud-arrow-up me-1"></i>
-                                                    Upload ID Proofs
-                                                    <input
-                                                        type="file"
-                                                        className="d-none"
-                                                        onChange={handleIdProofChange}
-                                                        accept=".jpg,.jpeg,.png,.gif,.pdf"
-                                                        multiple
-                                                    />
-                                                </label>
-                                                <div className="form-text text-center">
-                                                    PDF/JPG/PNG/GIF, max 200KB each
-                                                </div>
-                                            </div>
-
-                                            {/* Uploaded Files - FIXED: Check for both arrays */}
-                                            {(formData.idProofFiles && formData.idProofFiles.length > 0) && (
-                                                <div className="mb-3">
-                                                    <small className="text-muted d-block mb-2">New Uploads:</small>
-                                                    <div className="list-group list-group-flush">
-                                                        {formData.idProofFiles.map((file, index) => (
-                                                            <div key={index} className="list-group-item px-2 py-1 d-flex justify-content-between align-items-center">
-                                                                <div className="d-flex align-items-center">
-                                                                    <i className={`fas ${file.type === 'application/pdf' ? 'fa-file-pdf text-danger' : 'fa-file-image text-success'} me-2`}></i>
-                                                                    <span className="text-truncate" style={{ maxWidth: "150px" }}>
-                                                                        {file.name}
-                                                                    </span>
-                                                                </div>
-                                                                <button
-                                                                    type="button"
-                                                                    className="btn btn-sm btn-outline-danger"
-                                                                    onClick={() => removeIdProofFile(index)}
-                                                                    title="Remove file"
-                                                                >
-                                                                    <i className="bi bi-x"></i>
-                                                                </button>
-                                                            </div>
-                                                        ))}
-                                                    </div>
-                                                </div>
-                                            )}
-
-                                            {/* Existing Proofs - FIXED: Check for both arrays */}
-                                            {(formData.idProof && formData.idProof.length > 0) && (
-                                                <div>
-                                                    <small className="text-muted d-block mb-2">Existing Proofs:</small>
-                                                    <div className="list-group list-group-flush">
-                                                        {formData.idProof.map((proof, index) => (
-                                                            <div key={index} className="list-group-item px-2 py-1 d-flex justify-content-between align-items-center">
-                                                                <a
-                                                                    href={proof.url}
-                                                                    target="_blank"
-                                                                    rel="noopener noreferrer"
-                                                                    className="text-decoration-none d-flex align-items-center"
-                                                                >
-                                                                    <i className={`fas ${proof.type === 'application/pdf' ? 'fa-file-pdf text-danger' : 'fa-file-image text-success'} me-2`}></i>
-                                                                    <span className="text-truncate" style={{ maxWidth: "150px" }}>
-                                                                        {proof.name || `ID Proof ${index + 1}`}
-                                                                    </span>
-                                                                </a>
-                                                                {isEditMode && (
-                                                                    <button
-                                                                        type="button"
-                                                                        className="btn btn-sm btn-outline-danger"
-                                                                        onClick={() => removeExistingIdProof(index)}
-                                                                        title="Remove proof"
-                                                                    >
-                                                                        <i className="bi bi-x"></i>
-                                                                    </button>
-                                                                )}
-                                                            </div>
-                                                        ))}
-                                                    </div>
-                                                </div>
-                                            )}
-
-                                            {/* No ID Proofs Message */}
-                                            {(!formData.idProofFiles || formData.idProofFiles.length === 0) && 
-                                             (!formData.idProof || formData.idProof.length === 0) && (
-                                                <div className="text-center py-3">
-                                                    <i className="bi bi-folder text-muted mb-2" style={{ fontSize: "32px" }}></i>
-                                                    <p className="text-muted mb-0">No ID proofs uploaded</p>
-                                                </div>
-                                            )}
-                                        </>
-                                    ) : (
-                                        /* View Mode - FIXED: Check for both arrays */
-                                        <div>
-                                            {(formData.idProof && formData.idProof.length > 0) || 
-                                             (formData.idProofFiles && formData.idProofFiles.length > 0) ? (
-                                                <div className="list-group list-group-flush">
-                                                    {/* Display existing proofs */}
-                                                    {formData.idProof && formData.idProof.map((proof, index) => (
-                                                        <a
-                                                            key={`existing-${index}`}
-                                                            href={proof.url}
-                                                            target="_blank"
-                                                            rel="noopener noreferrer"
-                                                            className="list-group-item list-group-item-action px-2 py-2 d-flex align-items-center"
-                                                        >
-                                                            <i className={`fas ${proof.type === 'application/pdf' ? 'fa-file-pdf text-danger' : 'fa-file-image text-success'} me-2`}></i>
-                                                            <span className="text-truncate">
-                                                                {proof.name || `ID Proof ${index + 1}`}
-                                                            </span>
-                                                            <i className="bi bi-box-arrow-up-right ms-auto text-muted"></i>
-                                                        </a>
-                                                    ))}
-                                                    {/* Display newly uploaded files (if saved) */}
-                                                    {formData.idProofFiles && formData.idProofFiles.map((file, index) => (
-                                                        <div 
-                                                            key={`new-${index}`}
-                                                            className="list-group-item px-2 py-2 d-flex align-items-center"
-                                                        >
-                                                            <i className={`fas ${file.type === 'application/pdf' ? 'fa-file-pdf text-danger' : 'fa-file-image text-success'} me-2`}></i>
-                                                            <span className="text-truncate">
-                                                                {file.name}
-                                                            </span>
-                                                            <span className="badge bg-info ms-2">New</span>
-                                                        </div>
-                                                    ))}
+                                <div className="card-body text-center p-3">
+                                    {formData.idProofUrl || formData.idProofPreview ? (
+                                        <div className="d-flex flex-column align-items-center">
+                                            {(formData.idProofUrl?.toLowerCase().includes(".pdf") ||
+                                                formData.idProofFile?.type === "application/pdf") ? (
+                                                <div className="border rounded p-4 bg-light mb-3">
+                                                    <i className="bi bi-file-earmark-pdf-fill text-danger" style={{ fontSize: "3rem" }} />
+                                                    <div className="mt-2">PDF Document</div>
                                                 </div>
                                             ) : (
-                                                <div className="text-center py-3">
-                                                    <i className="bi bi-folder text-muted mb-2" style={{ fontSize: "32px" }}></i>
-                                                    <p className="text-muted mb-0">No ID proofs uploaded</p>
-                                                </div>
+                                                <img
+                                                    src={formData.idProofUrl || formData.idProofPreview}
+                                                    alt="ID Proof"
+                                                    style={{ maxWidth: "100%", maxHeight: "200px", objectFit: "contain" }}
+                                                    className="rounded img-fluid mb-3"
+                                                />
                                             )}
+                                            <div className="d-flex gap-2 justify-content-center">
+                                                <button
+                                                    type="button"
+                                                    className="btn btn-outline-primary btn-sm"
+                                                    onClick={handleViewId}
+                                                    title="View full ID"
+                                                >
+                                                    <i className="bi bi-eye me-1" /> View
+                                                </button>
+                                                {isEditMode && (
+                                                    <button
+                                                        type="button"
+                                                        className="btn btn-outline-danger btn-sm"
+                                                        onClick={removeIdProof}
+                                                        title="Remove ID Proof"
+                                                    >
+                                                        <i className="bi bi-trash me-1" /> Remove
+                                                    </button>
+                                                )}
+                                                <button
+                                                    type="button"
+                                                    className="btn btn-outline-success btn-sm"
+                                                    onClick={handleDownloadId}
+                                                    title="Download ID Proof"
+                                                >
+                                                    <i className="bi bi-download me-1" /> Download
+                                                </button>
+                                            </div>
+                                        </div>
+                                    ) : (
+                                        <div className="text-center py-4">
+                                            <i className="bi bi-file-earmark fs-1 text-muted mb-3"></i>
+                                            <p className="text-muted">No ID proof uploaded</p>
+                                        </div>
+                                    )}
+                                    {isEditMode && (
+                                        <div className="mt-3">
+                                            <input
+                                                type="file"
+                                                accept=".pdf,.jpg,.jpeg,.png"
+                                                onChange={handleIdProofChange}
+                                                className="form-control"
+                                            />
+                                            <small className="text-muted d-block mt-2">
+                                                <i className="bi bi-info-circle me-1"></i>
+                                                PDF, JPG, PNG only (max 150KB)
+                                            </small>
                                         </div>
                                     )}
                                 </div>
@@ -631,7 +659,7 @@ const BasicTab = ({
                                                 { value: "Male", label: "Male" },
                                                 { value: "Female", label: "Female" },
                                                 { value: "Other", label: "Other" },
-                                            ], { disabled: lockBasic })}
+                                            ])}
                                         </div>
                                         <div className="col-md-4">
                                             {renderInputField("Care Of", "co", formData.co, "text", "Father/Guardian Name")}
@@ -641,8 +669,8 @@ const BasicTab = ({
                                         </div>
                                         <div className="col-md-6">
                                             {renderInputField("Date of Birth", "dateOfBirth", formData.dateOfBirth, "date", "", false, {
-                                                                                min: DOB_MIN, max: DOB_MAX, disabled: lockBasic
-                                                                            })}
+                                                min: DOB_MIN, max: DOB_MAX, disabled: lockBasic
+                                            })}
                                         </div>
                                         <div className="col-md-6">
                                             {renderInputField("Date of Joining", "date", formData.date || formData.dateOfJoining, "date", "", false, { disabled: lockBasic })}
@@ -777,133 +805,47 @@ const BasicTab = ({
                 </div>
             </div>
 
-            {/* History/Comments Section Card */}
-            {(!staff || Object.keys(staff).length > 0) && (
-                <div className="card border-0 shadow-sm mt-4">
-                    <div className="card-header bg-white border-0 py-3">
-                        <h5 className="mb-0 fw-bold text-primary">
-                            <i className="bi bi-clock-history me-2"></i>
-                            History & Comments
-                        </h5>
-                    </div>
-                    <div className="card-body">
-                        <div className="history-section">
-                            {(() => {
-                                const entries = [];
-
-                                // ✅ 1. Load history arrays if present
-                                const removalHistory = staff?.removalHistory
-                                    ? Object.values(staff.removalHistory)
-                                    : [];
-                                const returnHistory = staff?.returnHistory
-                                    ? Object.values(staff.returnHistory)
-                                    : [];
-
-                                removalHistory.forEach((h) =>
-                                    entries.push({
-                                        type: "Removal",
-                                        reason: h.removalReason,
-                                        comment: h.removalComment,
-                                        user: h.removedBy,
-                                        time: h.removedAt,
-                                    })
-                                );
-
-                                returnHistory.forEach((h) =>
-                                    entries.push({
-                                        type: "Return",
-                                        reason: h.reason,
-                                        comment: h.comment,
-                                        user: h.returnedBy || h.userStamp,
-                                        time: h.returnedAt || h.timestamp,
-                                    })
-                                );
-
-                                // ✅ 2. Fallback to legacy formData (for older records)
-                                if (formData?.removalReason || formData?.removalComment || formData?.removedBy) {
-                                    entries.push({
-                                        type: "Removal",
-                                        reason: formData.removalReason,
-                                        comment: formData.removalComment,
-                                        user: formData.removedBy,
-                                        time: formData.removedAt,
-                                    });
-                                }
-
-                                if (formData?.revertReason || formData?.revertComment || formData?.revertedBy) {
-                                    entries.push({
-                                        type: "Revert",
-                                        reason: formData.revertReason,
-                                        comment: formData.revertComment,
-                                        user: formData.revertedBy,
-                                        time: formData.revertedAt,
-                                    });
-                                }
-
-                                if (formData?.__returnInfo) {
-                                    entries.push({
-                                        type: "Return",
-                                        reason: formData.__returnInfo.reasonType,
-                                        comment: formData.__returnInfo.comment,
-                                        user: formData.__returnInfo.returnedBy || formData.__returnInfo.userStamp,
-                                        time: formData.__returnInfo.returnedAt || formData.__returnInfo.timestamp,
-                                    });
-                                }
-
-                                // ✅ 3. Sort entries by time (latest first)
-                                entries.sort((a, b) => new Date(b.time) - new Date(a.time));
-
-                                if (entries.length === 0) {
-                                    return (
-                                        <div className="text-center py-4">
-                                            <i className="bi bi-chat-left-text text-muted mb-3" style={{ fontSize: "48px" }}></i>
-                                            <h6 className="text-muted">No history records found</h6>
-                                            <p className="text-muted small">No removal or return comments recorded.</p>
-                                        </div>
-                                    );
-                                }
-
-                                return entries.map((e, idx) => (
-                                    <div className="timeline-item mb-3" key={`${e.type}-${idx}`}>
-                                        <div className="timeline-marker">
-                                            <i className={`fas ${e.type === "Removal" ? "fa-user-times text-danger" : e.type === "Return" ? "fa-user-check text-success" : "fa-undo text-warning"}`}></i>
-                                        </div>
-                                        <div className="timeline-content card border">
-                                            <div className="card-body p-3">
-                                                <div className="d-flex justify-content-between align-items-center mb-2">
-                                                    <span className={`badge ${e.type === "Removal" ? "bg-danger" : e.type === "Return" ? "bg-success" : "bg-warning"} px-3 py-1`}>
-                                                        {e.type}
-                                                    </span>
-                                                    <small className="text-muted">
-                                                        <i className="bi bi-clock me-1"></i>
-                                                        {e.time ? new Date(e.time).toLocaleString() : "Unknown date"}
-                                                    </small>
-                                                </div>
-                                                <div className="mb-2">
-                                                    <small className="text-muted">
-                                                        <i className="bi bi-person me-1"></i>
-                                                        By: {e.user || "Unknown"}
-                                                    </small>
-                                                </div>
-                                                {e.reason && (
-                                                    <div className="mb-2">
-                                                        <strong>Reason:</strong>
-                                                        <div className="ms-2 text-dark">{e.reason}</div>
-                                                    </div>
-                                                )}
-                                                {e.comment && (
-                                                    <div>
-                                                        <strong>Comment:</strong>
-                                                        <div className="ms-2 text-dark bg-light p-2 rounded mt-1">
-                                                            {e.comment}
-                                                        </div>
-                                                    </div>
-                                                )}
-                                            </div>
-                                        </div>
-                                    </div>
-                                ));
-                            })()}
+            {/* ID Proof Modal */}
+            {idModalOpen && idModalSrc && (
+                <div
+                    className="modal fade show d-block"
+                    tabIndex="-1"
+                    aria-modal="true"
+                    role="dialog"
+                    style={{ background: "rgba(0,0,0,0.8)", zIndex: 3001 }}
+                    onClick={() => setIdModalOpen(false)}
+                >
+                    <div className="modal-dialog modal-xl modal-dialog-centered" onClick={(e) => e.stopPropagation()}>
+                        <div className="modal-content" style={{ background: "#0b1220", color: "#e2e8f0" }}>
+                            <div className="modal-header">
+                                <h5 className="modal-title">
+                                    <i className="bi bi-file-earmark-text me-2"></i>ID Proof
+                                </h5>
+                                <button type="button" className="btn-close btn-close-white" onClick={() => setIdModalOpen(false)} />
+                            </div>
+                            <div className="modal-body" style={{ maxHeight: "80vh", overflow: "auto" }}>
+                                {idModalType === "pdf" ? (
+                                    <embed
+                                        src={idModalSrc}
+                                        type="application/pdf"
+                                        style={{ width: "100%", height: "75vh", borderRadius: 8 }}
+                                    />
+                                ) : (
+                                    <img
+                                        src={idModalSrc}
+                                        alt="ID Proof"
+                                        style={{ width: "100%", height: "auto", borderRadius: 8, objectFit: "contain" }}
+                                    />
+                                )}
+                            </div>
+                            <div className="modal-footer">
+                                <button className="btn btn-outline-secondary" onClick={() => setIdModalOpen(false)}>
+                                    <i className="bi bi-x-circle me-1"></i> Close
+                                </button>
+                                <button className="btn btn-primary" onClick={handleDownloadId}>
+                                    <i className="bi bi-download me-1" /> Download
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </div>

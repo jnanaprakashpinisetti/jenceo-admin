@@ -1078,8 +1078,7 @@ const ShareInvoice = ({
             <div class="meta">
                 <div><strong>Invoice Date:</strong> ${invoiceDate}</div>
                 <div><strong>Invoice Number:</strong> ${generatedInvoiceNumber} 
-                    ${isEditingExisting ? '<span class="invoice-status status-editing" style="margin-left: 8px;">EDITING</span>' : ''}
-                    ${invoiceData.thankYouType !== 'default' ? `<span class="thank-you-type-indicator type-${invoiceData.thankYouType}" style="margin-left: 8px;">${invoiceData.thankYouType.toUpperCase()}</span>` : ''}
+                ${invoiceData.thankYouType && invoiceData.thankYouType !== 'default' ? `<span class="thank-you-type-indicator type-${invoiceData.thankYouType}" style="margin-left: 8px;">${invoiceData.thankYouType.toUpperCase()}</span>` : ''}
                 </div>
                 <div><strong>Client ID:</strong> ${clientId}</div>
             </div>
@@ -1420,7 +1419,6 @@ const ShareInvoice = ({
     }, [showInvoiceModal]);
 
     // Thank You Message Form Component
-   // Thank You Message Form Component - FIXED VERSION
 const ThankYouMessageForm = ({ onClose }) => {
     // Use local state that doesn't interfere with parent
     const [tempThankYouType, setTempThankYouType] = useState(invoiceData.thankYouType || 'default');
@@ -2304,7 +2302,7 @@ const ThankYouMessageForm = ({ onClose }) => {
                                 invoiceData.thankYouType === 'custom' ? 'bg-danger' :
                                 'bg-light text-dark'
                             } ms-2`}>
-                                {invoiceData.thankYouType.toUpperCase()} MESSAGE
+                                {invoiceData.thankYouType && invoiceData.thankYouType.toUpperCase()} MESSAGE
                             </span>
                         )}
                     </h4>

@@ -128,7 +128,7 @@ const ShareInvoice = ({
     // Determine service type from client data
     const determineServiceType = () => {
         const serviceType = client?.typeOfService?.toLowerCase() || '';
-        
+
         if (serviceType.includes('baby') || serviceType.includes('child') || serviceType.includes('infant')) {
             return 'babyCare';
         } else if (serviceType.includes('maid') || serviceType.includes('housekeeping') || serviceType.includes('house maid')) {
@@ -183,17 +183,17 @@ const ShareInvoice = ({
                 .orderByChild("idNo")
                 .equalTo(client.idNo)
                 .once("value");
-            
+
             if (snap.exists()) {
                 const clientData = snap.val();
                 const clientKey = Object.keys(clientData)[0];
                 const clientInvoices = clientData[clientKey]?.invoices || [];
-                
+
                 if (clientInvoices.length > 0) {
                     // Merge Firebase invoices with local storage
                     const localInvoices = JSON.parse(localStorage.getItem(`invoiceHistory_${client.idNo}`)) || [];
                     const mergedInvoices = [...clientInvoices, ...localInvoices];
-                    
+
                     // Remove duplicates by invoiceNumber
                     const uniqueInvoices = mergedInvoices.reduce((acc, current) => {
                         const x = acc.find(item => item.invoiceNumber === current.invoiceNumber);
@@ -202,7 +202,7 @@ const ShareInvoice = ({
                         }
                         return acc;
                     }, []);
-                    
+
                     setInvoiceHistory(uniqueInvoices);
                     localStorage.setItem(`invoiceHistory_${client.idNo}`, JSON.stringify(uniqueInvoices));
                 }
@@ -233,25 +233,25 @@ const ShareInvoice = ({
     const isDuplicateInvoice = (invoiceData) => {
         // Only check for duplicate based on service date
         if (!invoiceData.serviceDate) return false;
-        
+
         return invoiceHistory.some(invoice => {
             return invoice.data.serviceDate === invoiceData.serviceDate &&
-                   invoice.clientId === client?.idNo &&
-                   invoice.id !== editingInvoiceId; // Exclude current invoice being edited
+                invoice.clientId === client?.idNo &&
+                invoice.id !== editingInvoiceId; // Exclude current invoice being edited
         });
     };
 
     const findExistingInvoiceByServiceDate = (serviceDate) => {
         if (!serviceDate) return null;
-        return invoiceHistory.find(invoice => 
-            invoice.data.serviceDate === serviceDate && 
+        return invoiceHistory.find(invoice =>
+            invoice.data.serviceDate === serviceDate &&
             invoice.clientId === client?.idNo
         );
     };
 
     const saveInvoiceToHistory = async () => {
         const totalAmount = calculateTotalAmount(invoiceData);
-        
+
         // Check if we're editing an existing invoice
         if (isEditingExisting && editingInvoiceId) {
             // Update existing invoice
@@ -268,24 +268,24 @@ const ShareInvoice = ({
                 }
                 return invoice;
             }));
-            
+
             setSaveMessage({
                 type: 'success',
                 text: 'Invoice updated successfully!'
             });
-            
+
             // Save to Firebase
             await saveInvoiceToFirebase();
-            
+
             setTimeout(() => setSaveMessage({ type: '', text: '' }), 3000);
-            
+
             // Refresh the preview after update
             setTimeout(() => {
                 if (iframeRef.current) {
                     iframeRef.current.srcdoc = buildInvoiceHTML();
                 }
             }, 100);
-            
+
             return;
         }
 
@@ -316,15 +316,15 @@ const ShareInvoice = ({
         };
 
         setInvoiceHistory(prev => [newInvoice, ...prev]);
-        
+
         // Save to Firebase
         await saveInvoiceToFirebase(newInvoice);
-        
+
         setSaveMessage({
             type: 'success',
             text: 'Invoice saved successfully to history!'
         });
-        
+
         setTimeout(() => setSaveMessage({ type: '', text: '' }), 5000);
     };
 
@@ -336,16 +336,16 @@ const ShareInvoice = ({
                 .orderByChild("idNo")
                 .equalTo(client.idNo)
                 .once("value");
-            
+
             if (snap.exists()) {
                 const clientData = snap.val();
                 const clientKey = Object.keys(clientData)[0];
-                
+
                 // Get existing invoices or create empty array
                 const existingInvoices = clientData[clientKey]?.invoices || [];
-                
+
                 let updatedInvoices;
-                
+
                 if (isEditingExisting && editingInvoiceId) {
                     // Update existing invoice
                     updatedInvoices = existingInvoices.map(invoice => {
@@ -367,7 +367,7 @@ const ShareInvoice = ({
                 } else {
                     updatedInvoices = existingInvoices;
                 }
-                
+
                 // Update the client record with new invoices array
                 await firebaseDB
                     .child(`ClientData/${clientKey}`)
@@ -375,7 +375,7 @@ const ShareInvoice = ({
                         invoices: updatedInvoices,
                         lastInvoiceUpdate: new Date().toISOString()
                     });
-                
+
                 console.log("Invoice saved to Firebase successfully");
             }
         } catch (error) {
@@ -385,7 +385,7 @@ const ShareInvoice = ({
 
     const handleApplyCustomInvoice = (formData) => {
         const existingInvoice = findExistingInvoiceByServiceDate(formData.serviceDate);
-        
+
         if (existingInvoice) {
             setIsEditingExisting(true);
             setEditingInvoiceId(existingInvoice.id);
@@ -404,7 +404,7 @@ const ShareInvoice = ({
                 customThankYou: invoiceData.customThankYou
             });
         }
-        
+
         setShowCustomInvoiceForm(false);
 
         // Immediately update the preview
@@ -422,7 +422,7 @@ const ShareInvoice = ({
             ...prev,
             thankYouType: type
         }));
-        
+
         // If not custom, clear custom message
         if (type !== 'custom') {
             setCustomThankYouMessage('');
@@ -433,7 +433,7 @@ const ShareInvoice = ({
         }
     };
 
-   
+
     const getPaymentDetails = () => {
         const validPayments = payments.filter(p => p && !p.__adjustment);
         const lastPayment = validPayments.length > 0 ? validPayments[validPayments.length - 1] : null;
@@ -706,16 +706,16 @@ const ShareInvoice = ({
         const autoFillDate = invoiceData.serviceDate ? formatDate(calculateAutoFillDate(invoiceData.serviceDate)) : (client?.startingDate ? formatDate(calculateAutoFillDate(client.startingDate)) : 'N/A');
         const invoiceDate = invoiceData.invoiceDate ? formatDate(invoiceData.invoiceDate) : currentDate;
         const invoiceAmount = parseFloat(invoiceData.invoiceAmount) || parseFloat(client?.serviceCharges) || 0;
-        
+
         // Calculate total amount (Invoice Amount + Traveling Charges + Extra Charges)
         const totalAmount = calculateTotalAmount(invoiceData);
-        
+
         const totalPaid = paymentDetails.totalPaid || 0;
         const dueAmount = Math.max(0, totalAmount - totalPaid);
-        
+
         // Use custom next payment date if provided, otherwise use calculated one
-        const nextPaymentDate = invoiceData.nextPaymentDate ? formatDate(invoiceData.nextPaymentDate) : 
-                               (paymentDetails.nextPaymentDate ? formatDate(paymentDetails.nextPaymentDate.toISOString()) : 'N/A');
+        const nextPaymentDate = invoiceData.nextPaymentDate ? formatDate(invoiceData.nextPaymentDate) :
+            (paymentDetails.nextPaymentDate ? formatDate(paymentDetails.nextPaymentDate.toISOString()) : 'N/A');
 
         // Get thank you message based on selection
         const thankYouMessage = getCurrentThankYouMessage();
@@ -1312,7 +1312,7 @@ const ShareInvoice = ({
             });
             setTimeout(() => setSaveMessage({ type: '', text: '' }), 5000);
         }
-        
+
         setShowDeleteConfirm(false);
         setInvoiceToDelete(null);
     };
@@ -1347,7 +1347,7 @@ const ShareInvoice = ({
             });
             setTimeout(() => setSaveMessage({ type: '', text: '' }), 5000);
         }
-        
+
         setShowRestoreConfirm(false);
         setInvoiceToRestore(null);
     };
@@ -1360,14 +1360,14 @@ const ShareInvoice = ({
                 .orderByChild("idNo")
                 .equalTo(client.idNo)
                 .once("value");
-            
+
             if (snap.exists()) {
                 const clientData = snap.val();
                 const clientKey = Object.keys(clientData)[0];
-                
+
                 // Get existing invoices
                 const existingInvoices = clientData[clientKey]?.invoices || [];
-                
+
                 // Update the specific invoice
                 const updatedInvoices = existingInvoices.map(existingInvoice => {
                     if (existingInvoice.id === invoice.id) {
@@ -1375,7 +1375,7 @@ const ShareInvoice = ({
                     }
                     return existingInvoice;
                 });
-                
+
                 // Update in Firebase
                 await firebaseDB
                     .child(`ClientData/${clientKey}`)
@@ -1419,257 +1419,253 @@ const ShareInvoice = ({
     }, [showInvoiceModal]);
 
     // Thank You Message Form Component
-const ThankYouMessageForm = ({ onClose }) => {
-    // Use local state that doesn't interfere with parent
-    const [tempThankYouType, setTempThankYouType] = useState(invoiceData.thankYouType || 'default');
-    const [tempCustomMessage, setTempCustomMessage] = useState(invoiceData.customThankYou || '');
+    const ThankYouMessageForm = ({ onClose }) => {
+        // Use local state that doesn't interfere with parent
+        const [tempThankYouType, setTempThankYouType] = useState(invoiceData.thankYouType || 'default');
+        const [tempCustomMessage, setTempCustomMessage] = useState(invoiceData.customThankYou || '');
 
-    // Sync with parent ONLY when modal opens
-    useEffect(() => {
-        if (showThankYouMessageForm) {
-            setTempThankYouType(invoiceData.thankYouType || 'default');
-            setTempCustomMessage(invoiceData.customThankYou || '');
-        }
-    }, [showThankYouMessageForm]);
+        // Sync with parent ONLY when modal opens
+        useEffect(() => {
+            if (showThankYouMessageForm) {
+                setTempThankYouType(invoiceData.thankYouType || 'default');
+                setTempCustomMessage(invoiceData.customThankYou || '');
+            }
+        }, [showThankYouMessageForm]);
 
-    const handleTypeChange = (type) => {
-        setTempThankYouType(type);
-        // Clear custom message if switching away from custom type
-        if (type !== 'custom') {
-            setTempCustomMessage('');
-        }
-    };
-
-    const handleApply = () => {
-        // Update parent state directly WITHOUT triggering re-render cycles
-        const updateData = () => {
-            if (tempThankYouType === 'custom' && tempCustomMessage.trim()) {
-                return {
-                    thankYouType: 'custom',
-                    customThankYou: tempCustomMessage
-                };
-            } else {
-                return {
-                    thankYouType: tempThankYouType,
-                    customThankYou: ''
-                };
+        const handleTypeChange = (type) => {
+            setTempThankYouType(type);
+            // Clear custom message if switching away from custom type
+            if (type !== 'custom') {
+                setTempCustomMessage('');
             }
         };
 
-        // Update invoiceData in one go
-        setInvoiceData(prev => ({
-            ...prev,
-            ...updateData()
-        }));
+        const handleApply = () => {
+            // Update parent state directly WITHOUT triggering re-render cycles
+            setInvoiceData(prev => {
+                if (tempThankYouType === 'custom' && tempCustomMessage.trim()) {
+                    return {
+                        ...prev,
+                        thankYouType: 'custom',
+                        customThankYou: tempCustomMessage
+                    };
+                } else {
+                    return {
+                        ...prev,
+                        thankYouType: tempThankYouType,
+                        customThankYou: ''
+                    };
+                }
+            });
 
-        // Close the modal first
-        setShowThankYouMessageForm(false);
-        
-        // Wait for modal to close, then update preview
-        setTimeout(() => {
-            if (iframeRef.current) {
-                iframeRef.current.srcdoc = buildInvoiceHTML();
+            // Close the modal first
+            setShowThankYouMessageForm(false);
+
+            // Wait for modal to close, then update preview
+            setTimeout(() => {
+                if (iframeRef.current) {
+                    iframeRef.current.srcdoc = buildInvoiceHTML();
+                }
+            }, 50);
+        };
+
+        const getMessagePreview = () => {
+            if (tempThankYouType === 'custom') {
+                return tempCustomMessage || 'Enter your custom message...';
             }
-        }, 50);
-    };
+            return thankYouMessages[tempThankYouType]?.message || thankYouMessages.default.message;
+        };
 
-    const getMessagePreview = () => {
-        if (tempThankYouType === 'custom') {
-            return tempCustomMessage || 'Enter your custom message...';
-        }
-        return thankYouMessages[tempThankYouType]?.message || thankYouMessages.default.message;
-    };
-
-    return (
-        <div className="modal fade show" style={{ display: 'block', backgroundColor: 'rgba(0,0,0,0.9)', zIndex: 1060 }}>
-            <div className="modal-dialog modal-lg modal-dialog-centered invoiceRadio">
-                <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-                    <div className="modal-header bg-primary text-white">
-                        <h5 className="modal-title">
-                            <i className="bi bi-chat-heart me-2"></i>
-                            Select Thank You Message
-                        </h5>
-                        <button
-                            type="button"
-                            className="btn-close btn-close-white"
-                            onClick={onClose}
-                        />
-                    </div>
-                    <div className="modal-body">
-                        <div className="row">
-                            <div className="col-md-6">
-                                <h6 className="mb-3">Select Message Type</h6>
-                                <div className="form-check mb-2">
-                                    <input
-                                        className="form-check-input"
-                                        type="radio"
-                                        name="thankYouType"
-                                        id="defaultType"
-                                        value="default"
-                                        checked={tempThankYouType === 'default'}
-                                        onChange={(e) => handleTypeChange(e.target.value)}
-                                    />
-                                    <label className="form-check-label" htmlFor="defaultType">
-                                        <strong>Default Message</strong>
-                                        <small className="d-block text-muted">Generic thank you message for all services</small>
-                                    </label>
-                                </div>
-                                
-                                <div className="form-check mb-2">
-                                    <input
-                                        className="form-check-input"
-                                        type="radio"
-                                        name="thankYouType"
-                                        id="patientCare"
-                                        value="patientCare"
-                                        checked={tempThankYouType === 'patientCare'}
-                                        onChange={(e) => handleTypeChange(e.target.value)}
-                                    />
-                                    <label className="form-check-label" htmlFor="patientCare">
-                                        <strong>Patient Care</strong>
-                                        <small className="d-block text-muted">For nursing and patient care services</small>
-                                    </label>
-                                </div>
-                                
-                                <div className="form-check mb-2">
-                                    <input
-                                        className="form-check-input"
-                                        type="radio"
-                                        name="thankYouType"
-                                        id="babyCare"
-                                        value="babyCare"
-                                        checked={tempThankYouType === 'babyCare'}
-                                        onChange={(e) => handleTypeChange(e.target.value)}
-                                    />
-                                    <label className="form-check-label" htmlFor="babyCare">
-                                        <strong>Baby Care</strong>
-                                        <small className="d-block text-muted">For infant and child care services</small>
-                                    </label>
-                                </div>
-                                
-                                <div className="form-check mb-2">
-                                    <input
-                                        className="form-check-input"
-                                        type="radio"
-                                        name="thankYouType"
-                                        id="houseMaid"
-                                        value="houseMaid"
-                                        checked={tempThankYouType === 'houseMaid'}
-                                        onChange={(e) => handleTypeChange(e.target.value)}
-                                    />
-                                    <label className="form-check-label" htmlFor="houseMaid">
-                                        <strong>House Maid</strong>
-                                        <small className="d-block text-muted">For housekeeping and maid services</small>
-                                    </label>
-                                </div>
-                                
-                                <div className="form-check mb-2">
-                                    <input
-                                        className="form-check-input"
-                                        type="radio"
-                                        name="thankYouType"
-                                        id="elderlyCare"
-                                        value="elderlyCare"
-                                        checked={tempThankYouType === 'elderlyCare'}
-                                        onChange={(e) => handleTypeChange(e.target.value)}
-                                    />
-                                    <label className="form-check-label" htmlFor="elderlyCare">
-                                        <strong>Elderly Care</strong>
-                                        <small className="d-block text-muted">For senior citizen care services</small>
-                                    </label>
-                                </div>
-                                
-                                <div className="form-check mb-3">
-                                    <input
-                                        className="form-check-input"
-                                        type="radio"
-                                        name="thankYouType"
-                                        id="custom"
-                                        value="custom"
-                                        checked={tempThankYouType === 'custom'}
-                                        onChange={(e) => handleTypeChange(e.target.value)}
-                                    />
-                                    <label className="form-check-label" htmlFor="custom">
-                                        <strong>Custom Message</strong>
-                                        <small className="d-block text-muted">Write your own thank you message</small>
-                                    </label>
-                                </div>
-                                
-                                {tempThankYouType === 'custom' && (
-                                    <div className="mb-3">
-                                        <label className="form-label">
-                                            <strong>Custom Thank You Message</strong>
-                                        </label>
-                                        <textarea
-                                            className="form-control"
-                                            rows="6"
-                                            value={tempCustomMessage}
-                                            onChange={(e) => setTempCustomMessage(e.target.value)}
-                                            placeholder="Enter your custom thank you message here..."
+        return (
+            <div className="modal fade show" style={{ display: 'block', backgroundColor: 'rgba(0,0,0,0.9)', zIndex: 1060 }}>
+                <div className="modal-dialog modal-lg modal-dialog-centered invoiceRadio">
+                    <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+                        <div className="modal-header bg-primary text-white">
+                            <h5 className="modal-title">
+                                <i className="bi bi-chat-heart me-2"></i>
+                                Select Thank You Message
+                            </h5>
+                            <button
+                                type="button"
+                                className="btn-close btn-close-white"
+                                onClick={onClose}
+                            />
+                        </div>
+                        <div className="modal-body">
+                            <div className="row">
+                                <div className="col-md-6">
+                                    <h6 className="mb-3">Select Message Type</h6>
+                                    <div className="form-check mb-2">
+                                        <input
+                                            className="form-check-input"
+                                            type="radio"
+                                            name="thankYouType"
+                                            id="defaultType"
+                                            value="default"
+                                            checked={tempThankYouType === 'default'}
+                                            onChange={(e) => handleTypeChange(e.target.value)}
                                         />
-                                        <small className="text-muted">
-                                            You can use HTML tags like &lt;strong&gt;, &lt;br&gt;, &lt;em&gt; for formatting
-                                        </small>
+                                        <label className="form-check-label" htmlFor="defaultType">
+                                            <strong>Default Message</strong>
+                                            <small className="d-block text-muted">Generic thank you message for all services</small>
+                                        </label>
                                     </div>
-                                )}
-                            </div>
-                            
-                            <div className="col-md-6">
-                                <h6 className="mb-3">Message Preview</h6>
-                                <div className="card">
-                                    <div className="card-header bg-light">
-                                        <strong>Preview</strong>
+
+                                    <div className="form-check mb-2">
+                                        <input
+                                            className="form-check-input"
+                                            type="radio"
+                                            name="thankYouType"
+                                            id="patientCare"
+                                            value="patientCare"
+                                            checked={tempThankYouType === 'patientCare'}
+                                            onChange={(e) => handleTypeChange(e.target.value)}
+                                        />
+                                        <label className="form-check-label" htmlFor="patientCare">
+                                            <strong>Patient Care</strong>
+                                            <small className="d-block text-muted">For nursing and patient care services</small>
+                                        </label>
                                     </div>
-                                    <div className="card-body" style={{ maxHeight: '400px', overflowY: 'auto' }}>
-                                        <div className="thank-you-preview">
-                                            <h5 style={{ color: '#02acf2', marginBottom: '15px' }}>
-                                                {tempThankYouType === 'custom' ? 'Thank You Message' : thankYouMessages[tempThankYouType]?.title || 'Thank You for Your Trust!'}
-                                            </h5>
-                                            <div dangerouslySetInnerHTML={{ 
-                                                __html: getMessagePreview().replace(
-                                                    client?.clientName || 'Client',
-                                                    `<strong>${client?.clientName || 'Client'}</strong>`
-                                                )
-                                            }} />
+
+                                    <div className="form-check mb-2">
+                                        <input
+                                            className="form-check-input"
+                                            type="radio"
+                                            name="thankYouType"
+                                            id="babyCare"
+                                            value="babyCare"
+                                            checked={tempThankYouType === 'babyCare'}
+                                            onChange={(e) => handleTypeChange(e.target.value)}
+                                        />
+                                        <label className="form-check-label" htmlFor="babyCare">
+                                            <strong>Baby Care</strong>
+                                            <small className="d-block text-muted">For infant and child care services</small>
+                                        </label>
+                                    </div>
+
+                                    <div className="form-check mb-2">
+                                        <input
+                                            className="form-check-input"
+                                            type="radio"
+                                            name="thankYouType"
+                                            id="houseMaid"
+                                            value="houseMaid"
+                                            checked={tempThankYouType === 'houseMaid'}
+                                            onChange={(e) => handleTypeChange(e.target.value)}
+                                        />
+                                        <label className="form-check-label" htmlFor="houseMaid">
+                                            <strong>House Maid</strong>
+                                            <small className="d-block text-muted">For housekeeping and maid services</small>
+                                        </label>
+                                    </div>
+
+                                    <div className="form-check mb-2">
+                                        <input
+                                            className="form-check-input"
+                                            type="radio"
+                                            name="thankYouType"
+                                            id="elderlyCare"
+                                            value="elderlyCare"
+                                            checked={tempThankYouType === 'elderlyCare'}
+                                            onChange={(e) => handleTypeChange(e.target.value)}
+                                        />
+                                        <label className="form-check-label" htmlFor="elderlyCare">
+                                            <strong>Elderly Care</strong>
+                                            <small className="d-block text-muted">For senior citizen care services</small>
+                                        </label>
+                                    </div>
+
+                                    <div className="form-check mb-3">
+                                        <input
+                                            className="form-check-input"
+                                            type="radio"
+                                            name="thankYouType"
+                                            id="custom"
+                                            value="custom"
+                                            checked={tempThankYouType === 'custom'}
+                                            onChange={(e) => handleTypeChange(e.target.value)}
+                                        />
+                                        <label className="form-check-label" htmlFor="custom">
+                                            <strong>Custom Message</strong>
+                                            <small className="d-block text-muted">Write your own thank you message</small>
+                                        </label>
+                                    </div>
+
+                                    {tempThankYouType === 'custom' && (
+                                        <div className="mb-3">
+                                            <label className="form-label">
+                                                <strong>Custom Thank You Message</strong>
+                                            </label>
+                                            <textarea
+                                                className="form-control"
+                                                rows="6"
+                                                value={tempCustomMessage}
+                                                onChange={(e) => setTempCustomMessage(e.target.value)}
+                                                placeholder="Enter your custom thank you message here..."
+                                            />
+                                            <small className="text-muted">
+                                                You can use HTML tags like &lt;strong&gt;, &lt;br&gt;, &lt;em&gt; for formatting
+                                            </small>
+                                        </div>
+                                    )}
+                                </div>
+
+                                <div className="col-md-6">
+                                    <h6 className="mb-3">Message Preview</h6>
+                                    <div className="card">
+                                        <div className="card-header bg-light">
+                                            <strong>Preview</strong>
+                                        </div>
+                                        <div className="card-body" style={{ maxHeight: '400px', overflowY: 'auto' }}>
+                                            <div className="thank-you-preview">
+                                                <h5 style={{ color: '#02acf2', marginBottom: '15px' }}>
+                                                    {tempThankYouType === 'custom' ? 'Thank You Message' : thankYouMessages[tempThankYouType]?.title || 'Thank You for Your Trust!'}
+                                                </h5>
+                                                <div dangerouslySetInnerHTML={{
+                                                    __html: getMessagePreview().replace(
+                                                        client?.clientName || 'Client',
+                                                        `<strong>${client?.clientName || 'Client'}</strong>`
+                                                    )
+                                                }} />
+                                            </div>
                                         </div>
                                     </div>
-                                </div>
-                                
-                                <div className="mt-3">
-                                    <div className="alert alert-info text-info">
-                                        <i className="bi bi-info-circle me-2"></i>
-                                        <strong>Current Service Type:</strong> {client?.typeOfService || 'Not specified'}
-                                        <br/>
-                                        <strong>Auto-detected:</strong> {determineServiceType().toUpperCase()}
-                                        <br/>
-                                        <strong>Selected Type:</strong> {tempThankYouType.toUpperCase()}
+
+                                    <div className="mt-3">
+                                        <div className="alert alert-info text-info">
+                                            <i className="bi bi-info-circle me-2"></i>
+                                            <strong>Current Service Type:</strong> {client?.typeOfService || 'Not specified'}
+                                            <br />
+                                            <strong>Auto-detected:</strong> {determineServiceType().toUpperCase()}
+                                            <br />
+                                            <strong>Selected Type:</strong> {tempThankYouType.toUpperCase()}
+                                        </div>
                                     </div>
                                 </div>
                             </div>
                         </div>
-                    </div>
-                    <div className="modal-footer">
-                        <button
-                            type="button"
-                            className="btn btn-secondary"
-                            onClick={onClose}
-                        >
-                            Cancel
-                        </button>
-                        <button
-                            type="button"
-                            className="btn btn-primary"
-                            onClick={handleApply}
-                        >
-                            <i className="bi bi-check-lg me-1"></i>
-                            Apply Message
-                        </button>
+                        <div className="modal-footer">
+                            <button
+                                type="button"
+                                className="btn btn-secondary"
+                                onClick={onClose}
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                type="button"
+                                className="btn btn-primary"
+                                onClick={handleApply}
+                            >
+                                <i className="bi bi-check-lg me-1"></i>
+                                Apply Message
+                            </button>
+                        </div>
                     </div>
                 </div>
             </div>
-        </div>
-    );
-};
+        );
+    };
 
     // Delete Confirmation Modal
     const DeleteConfirmationModal = () => (
@@ -1687,7 +1683,7 @@ const ThankYouMessageForm = ({ onClose }) => {
                             <i className="bi bi-exclamation-triangle-fill me-2"></i>
                             <strong>Warning!</strong> Are you sure you want to delete this invoice?
                         </div>
-                        
+
                         {invoiceToDelete && (
                             <div className="card">
                                 <div className="card-body">
@@ -1699,7 +1695,7 @@ const ThankYouMessageForm = ({ onClose }) => {
                                 </div>
                             </div>
                         )}
-                        
+
                         <div className="alert alert-info mt-3 text-info">
                             <i className="bi bi-info-circle me-2"></i>
                             <strong>Note:</strong> This will move the invoice to the deleted archive. You can restore it later if needed.
@@ -1746,7 +1742,7 @@ const ThankYouMessageForm = ({ onClose }) => {
                             <i className="bi bi-check-circle-fill me-2"></i>
                             <strong>Restore Invoice</strong> Are you sure you want to restore this invoice?
                         </div>
-                        
+
                         {invoiceToRestore && (
                             <div className="card">
                                 <div className="card-body">
@@ -1874,11 +1870,11 @@ const ThankYouMessageForm = ({ onClose }) => {
                             {existingInvoice && (
                                 <div className="alert alert-danger alert-dismissible fade show text-black" role="alert">
                                     <i className="bi bi-info-circle me-2"></i>
-                                    <strong>Editing existing invoice:</strong> Invoice #{existingInvoice.invoiceNumber} for service date {formatDate(existingInvoice.data.serviceDate)}. 
+                                    <strong>Editing existing invoice:</strong> Invoice #{existingInvoice.invoiceNumber} for service date {formatDate(existingInvoice.data.serviceDate)}.
                                     Changes will update the existing invoice.
                                 </div>
                             )}
-                            
+
                             <div className="row g-3">
                                 <div className="col-md-6">
                                     <label className="form-label"><strong>Service Date *</strong></label>
@@ -2061,14 +2057,13 @@ const ThankYouMessageForm = ({ onClose }) => {
                                     </td>
                                     <td>{formatDate(invoice.data.serviceDate)}</td>
                                     <td>
-                                        <span className={`badge ${
-                                            thankYouType === 'patientCare' ? 'bg-success' :
-                                            thankYouType === 'babyCare' ? 'bg-info' :
-                                            thankYouType === 'houseMaid' ? 'bg-warning text-dark' :
-                                            thankYouType === 'elderlyCare' ? 'bg-secondary' :
-                                            thankYouType === 'custom' ? 'bg-danger' :
-                                            'bg-light text-dark'
-                                        }`}>
+                                        <span className={`badge ${thankYouType === 'patientCare' ? 'bg-success' :
+                                                thankYouType === 'babyCare' ? 'bg-info' :
+                                                    thankYouType === 'houseMaid' ? 'bg-warning text-dark' :
+                                                        thankYouType === 'elderlyCare' ? 'bg-secondary' :
+                                                            thankYouType === 'custom' ? 'bg-danger' :
+                                                                'bg-light text-dark'
+                                            }`}>
                                             {thankYouType.toUpperCase()}
                                         </span>
                                     </td>
@@ -2152,7 +2147,7 @@ const ThankYouMessageForm = ({ onClose }) => {
                 <i className="bi bi-exclamation-triangle-fill me-2"></i>
                 <strong>Deleted Invoices Archive</strong> - These invoices have been soft-deleted and can be restored.
             </div>
-            
+
             <div className="table-responsive" style={{ maxHeight: '500px', overflowY: 'auto' }}>
                 <table className="table table-sm table-hover" style={{ fontSize: '12px' }}>
                     <thead className="table-light" style={{ position: 'sticky', top: 0, zIndex: 1 }}>
@@ -2236,11 +2231,11 @@ const ThankYouMessageForm = ({ onClose }) => {
                     </tbody>
                 </table>
             </div>
-            
+
             {deletedInvoices.length > 0 && (
                 <div className="alert alert-info mt-3 text-info">
                     <i className="bi bi-info-circle me-2"></i>
-                    <strong>Note:</strong> {deletedInvoices.length} invoice(s) in deleted archive. 
+                    <strong>Note:</strong> {deletedInvoices.length} invoice(s) in deleted archive.
                     These are soft-deleted and can be restored if needed.
                 </div>
             )}
@@ -2268,7 +2263,7 @@ const ThankYouMessageForm = ({ onClose }) => {
         <>
             {showDeleteConfirm && <DeleteConfirmationModal />}
             {showRestoreConfirm && <RestoreConfirmationModal />}
-            
+
             {showCustomInvoiceForm && (
                 <CustomInvoiceForm
                     invoiceData={invoiceData}
@@ -2276,7 +2271,7 @@ const ThankYouMessageForm = ({ onClose }) => {
                     onClose={() => setShowCustomInvoiceForm(false)}
                 />
             )}
-            
+
             {showThankYouMessageForm && (
                 <ThankYouMessageForm
                     onClose={() => setShowThankYouMessageForm(false)}
@@ -2294,14 +2289,13 @@ const ThankYouMessageForm = ({ onClose }) => {
                             </span>
                         )}
                         {invoiceData.thankYouType && invoiceData.thankYouType !== 'default' && (
-                            <span className={`badge ${
-                                invoiceData.thankYouType === 'patientCare' ? 'bg-success' :
-                                invoiceData.thankYouType === 'babyCare' ? 'bg-info' :
-                                invoiceData.thankYouType === 'houseMaid' ? 'bg-warning text-dark' :
-                                invoiceData.thankYouType === 'elderlyCare' ? 'bg-secondary' :
-                                invoiceData.thankYouType === 'custom' ? 'bg-danger' :
-                                'bg-light text-dark'
-                            } ms-2`}>
+                            <span className={`badge ${invoiceData.thankYouType === 'patientCare' ? 'bg-success' :
+                                    invoiceData.thankYouType === 'babyCare' ? 'bg-info' :
+                                        invoiceData.thankYouType === 'houseMaid' ? 'bg-warning text-dark' :
+                                            invoiceData.thankYouType === 'elderlyCare' ? 'bg-secondary' :
+                                                invoiceData.thankYouType === 'custom' ? 'bg-danger' :
+                                                    'bg-light text-dark'
+                                } ms-2`}>
                                 {invoiceData.thankYouType && invoiceData.thankYouType.toUpperCase()} MESSAGE
                             </span>
                         )}
@@ -2315,18 +2309,18 @@ const ThankYouMessageForm = ({ onClose }) => {
                             <i className="bi bi-pencil-square me-1"></i>
                             {isEditingExisting ? 'Edit Invoice' : 'Custom Invoice'}
                         </button>
-                        
+
                         <button
-    type="button"
-    className="btn btn-sm btn-info"
-    onClick={() => {
-        // Set the form to show
-        setShowThankYouMessageForm(true);
-    }}
->
-    <i className="bi bi-chat-heart me-1"></i>
-    Thank You Message
-</button>
+                            type="button"
+                            className="btn btn-sm btn-info"
+                            onClick={() => {
+                                // Set the form to show
+                                setShowThankYouMessageForm(true);
+                            }}
+                        >
+                            <i className="bi bi-chat-heart me-1"></i>
+                            Thank You Message
+                        </button>
 
                         <button
                             type="button"
@@ -2433,7 +2427,7 @@ const ThankYouMessageForm = ({ onClose }) => {
                                     background: "white"
                                 }}
                             />
-                            
+
                             {/* Moved Save Message Alert here - above the save button */}
                             {saveMessage.text && (
                                 <div className={`alert alert-${saveMessage.type === 'error' ? 'danger' : 'success'} alert-dismissible fade show mt-3`} role="alert" style={{ maxWidth: '600px', margin: '15px auto' }}>
@@ -2446,7 +2440,7 @@ const ThankYouMessageForm = ({ onClose }) => {
                                     <button type="button" className="btn-close" onClick={() => setSaveMessage({ type: '', text: '' })}></button>
                                 </div>
                             )}
-                            
+
                             <div className="mt-3 text-center">
                                 <button
                                     type="button"
@@ -2475,30 +2469,21 @@ const ThankYouMessageForm = ({ onClose }) => {
                                                 additionalComments: '',
                                                 serviceRemarks: '',
                                                 nextPaymentDate: '',
-                                                thankYouType: determineServiceType(),
+                                                thankYouType: determineServiceType(), // Reset to auto-detected type
                                                 customThankYou: ''
                                             });
 
-                                            const handleApply = () => {
-                                                setInvoiceData(prev => {
-                                                    if (tempThankYouType === 'custom' && tempCustomMessage.trim()) {
-                                                        return {
-                                                            ...prev,
-                                                            thankYouType: 'custom',
-                                                            customThankYou: tempCustomMessage
-                                                        };
-                                                    }
-                                                    return {
-                                                        ...prev,
-                                                        thankYouType: tempThankYouType,
-                                                        customThankYou: ''
-                                                    };
-                                                });
-                                            
-                                                // Just close the modal
+                                            // Clear any custom thank you message form state if open
+                                            if (showThankYouMessageForm) {
                                                 setShowThankYouMessageForm(false);
-                                            };
-                                            
+                                            }
+
+                                            // Refresh the preview
+                                            setTimeout(() => {
+                                                if (iframeRef.current) {
+                                                    iframeRef.current.srcdoc = buildInvoiceHTML();
+                                                }
+                                            }, 100);
                                         }}
                                     >
                                         <i className="bi bi-x-circle me-1"></i>

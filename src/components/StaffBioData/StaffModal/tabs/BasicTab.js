@@ -558,7 +558,7 @@ const BasicTab = ({
                             <div className="card border">
                                 <div className="card-header bg-warning text-white py-2 d-flex align-items-center">
                                     <i className="bi bi-file-earmark-text me-2"></i>
-                                    <h6 className="mb-0 fw-semibold">ID Proof Document</h6>
+                                    <h6 className="mb-0 fw-semibold text-secondary">ID Proof Document</h6>
                                 </div>
                                 <div className="card-body text-center p-3">
                                     {formData.idProofUrl || formData.idProofPreview ? (

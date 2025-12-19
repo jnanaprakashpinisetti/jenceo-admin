@@ -48,6 +48,7 @@ const PaymentsTab = ({
     refundRemarks: ""
   });
   const [balanceData, setBalanceData] = useState({
+    paymentIndex: "",
     amount: "",
     date: new Date().toISOString().split('T')[0],
     method: "cash",
@@ -90,7 +91,25 @@ const PaymentsTab = ({
     return (fallback && String(fallback).trim()) || "System";
   };
 
-  // Fix: Handle add payment correctly
+  // Get all payments (excluding adjustments) sorted by date descending (newest first)
+  const allPayments = (formData.payments || [])
+    .map((p, originalIndex) => ({ ...p, originalIndex }))
+    .filter(p => !p?.__adjustment);
+
+  // For display: sort in descending order (newest first)
+  const payments = [...allPayments].sort((a, b) => {
+    const dateA = a.date ? new Date(a.date) : new Date(0);
+    const dateB = b.date ? new Date(b.date) : new Date(0);
+    return dateB - dateA;
+  });
+
+  // For operations: keep original order
+  const originalPayments = [...allPayments].sort((a, b) => a.originalIndex - b.originalIndex);
+
+  // Get payments with positive balance for balance payment dropdown
+  const paymentsWithBalance = originalPayments.filter(p => Number(p.balance || 0) > 0);
+
+  // Handle add payment correctly
   const handleAddPayment = () => {
     if (!newPaymentData.paidAmount || parseFloat(newPaymentData.paidAmount) <= 0) {
       alert("Please enter a valid payment amount");
@@ -113,21 +132,20 @@ const PaymentsTab = ({
       refundDate: "",
       refundPaymentMethod: "",
       refundRemarks: "",
-      __locked: false, // Important: mark as unlocked
+      __locked: false,
       addedByName: effectiveUserName,
       addedAt: now.toISOString(),
       createdByName: effectiveUserName,
       createdAt: now.toISOString()
     };
 
-    // Use the addPayment function from props instead of direct state manipulation
-    addPayment(); // This will add an empty payment
+    // Use the addPayment function from props
+    addPayment();
 
-    // Then update the newly added payment with our data
+    // Update the newly added payment with our data
     setFormData(prev => {
       const payments = [...(prev.payments || [])];
       if (payments.length > 0) {
-        // Update the first unlocked (newly added) payment
         const newIndex = payments.findIndex(p => !p.__locked);
         if (newIndex >= 0) {
           payments[newIndex] = { ...payments[newIndex], ...newPayment };
@@ -155,7 +173,7 @@ const PaymentsTab = ({
     const { paymentIndex, refundAmount, refundDate, refundPaymentMethod, refundRemarks } = refundData;
     const idx = parseInt(paymentIndex);
 
-    if (idx >= 0 && idx < payments.length && refundAmount > 0) {
+    if (idx >= 0 && idx < originalPayments.length && refundAmount > 0) {
       setFormData(prev => {
         const payments = [...prev.payments];
         const paymentIdx = payments.findIndex((p, i) => i === idx);
@@ -186,65 +204,69 @@ const PaymentsTab = ({
     }
   };
 
-  // Fix: Handle balance payment correctly
+  // Improved: Handle balance payment same as refund
   const handleApplyBalancePayment = () => {
-    const { amount, date, method, remarks } = balanceData;
-    const paymentAmount = parseFloat(amount);
+    const { paymentIndex, amount, date, method, remarks } = balanceData;
+    const idx = parseInt(paymentIndex);
 
-    if (paymentAmount <= 0) {
-      alert("Please enter a valid payment amount");
-      return;
-    }
+    if (idx >= 0 && idx < originalPayments.length && amount > 0) {
+      const selectedPayment = originalPayments[idx];
+      const currentBalance = Number(selectedPayment.balance || 0);
+      const paymentAmount = parseFloat(amount);
 
-    const lastBalance = getLastBalance();
-    const newBalance = Math.max(0, lastBalance - paymentAmount);
-
-    // Create adjustment payment for balance payment
-    const adjustment = {
-      __adjustment: true,
-      __type: "balance",
-      date: date || new Date().toISOString().split('T')[0],
-      paymentMethod: method || "cash",
-      paidAmount: paymentAmount,
-      balance: newBalance,
-      receptNo: "",
-      remarks: remarks || "Balance Payment",
-      refund: false,
-      refundAmount: 0,
-      addedByName: effectiveUserName,
-      addedAt: new Date().toISOString()
-    };
-
-    // Update the last visible payment's balance
-    const idx = getLastVisiblePaymentIndex();
-    setFormData(prev => {
-      const payments = [...prev.payments];
-
-      // Update balance of the last visible payment
-      if (idx >= 0 && idx < payments.length) {
-        payments[idx] = {
-          ...payments[idx],
-          balance: newBalance
-        };
+      if (paymentAmount <= 0 || paymentAmount > currentBalance) {
+        alert(`Please enter a valid amount between 0 and ${currentBalance}`);
+        return;
       }
 
-      // Add adjustment payment
-      payments.push(adjustment);
-      const next = { ...prev, payments };
-      markDirty(next);
-      return next;
-    });
+      const newBalance = currentBalance - paymentAmount;
 
-    setBalanceData({
-      amount: "",
-      date: new Date().toISOString().split('T')[0],
-      method: "cash",
-      remarks: ""
-    });
-    setShowBalanceModal(false);
+      // Update the selected payment's balance
+      setFormData(prev => {
+        const payments = [...prev.payments];
+        const paymentIdx = payments.findIndex((p, i) => i === idx);
+        if (paymentIdx >= 0) {
+          payments[paymentIdx] = {
+            ...payments[paymentIdx],
+            balance: newBalance.toString()
+          };
 
-    // Update the balance state
-    setSelectedAction("");
+          // Add adjustment entry for tracking
+          if (paymentAmount > 0) {
+            const adjustment = {
+              __adjustment: true,
+              __type: "balance",
+              date: date || new Date().toISOString().split('T')[0],
+              paymentMethod: method || "cash",
+              paidAmount: paymentAmount,
+              balance: newBalance,
+              receptNo: "",
+              remarks: remarks || `Balance payment for payment #${idx + 1}`,
+              refund: false,
+              refundAmount: 0,
+              addedByName: effectiveUserName,
+              addedAt: new Date().toISOString()
+            };
+            payments.push(adjustment);
+          }
+
+          const next = { ...prev, payments };
+          markDirty(next);
+          return next;
+        }
+        return prev;
+      });
+
+      setBalanceData({
+        paymentIndex: "",
+        amount: "",
+        date: new Date().toISOString().split('T')[0],
+        method: "cash",
+        remarks: ""
+      });
+      setShowBalanceModal(false);
+      setSelectedAction("");
+    }
   };
 
   const handleNewPaymentChange = (e) => {
@@ -265,38 +287,47 @@ const PaymentsTab = ({
 
   const handleBalanceChange = (e) => {
     const { name, value } = e.target;
-    setBalanceData(prev => ({
-      ...prev,
-      [name]: value
-    }));
+    setBalanceData(prev => {
+      const updated = { ...prev, [name]: value };
+      
+      // Auto-fill amount when payment is selected
+      if (name === 'paymentIndex' && value !== "") {
+        const idx = parseInt(value);
+        if (idx >= 0 && idx < originalPayments.length) {
+          const selectedPayment = originalPayments[idx];
+          updated.amount = selectedPayment.balance || "";
+        }
+      }
+      
+      return updated;
+    });
   };
 
-  // Fix: Get payments and sort them in descending order (newest first)
-  const payments = (formData.payments || [])
-    .map((p, originalIndex) => ({ p, originalIndex }))
-    .filter(({ p }) => !p?.__adjustment)
-    .sort((a, b) => {
-      // Sort by date descending (newest first)
-      const dateA = a.p.date ? new Date(a.p.date) : new Date(0);
-      const dateB = b.p.date ? new Date(b.p.date) : new Date(0);
-      return dateB - dateA;
-    });
-
-  // Fix: Sort payments with reminders by nearest date first
+  // Get payments with reminders sorted by nearest date first
   const paymentsWithReminders = payments
-    .filter(({ p }) => p.reminderDate)
+    .filter(p => p.reminderDate)
     .sort((a, b) => {
-      const dateA = a.p.reminderDate ? new Date(a.p.reminderDate) : new Date('9999-12-31');
-      const dateB = b.p.reminderDate ? new Date(b.p.reminderDate) : new Date('9999-12-31');
+      const dateA = a.reminderDate ? new Date(a.reminderDate) : new Date('9999-12-31');
+      const dateB = b.reminderDate ? new Date(b.reminderDate) : new Date('9999-12-31');
       return dateA - dateB; // Nearest first
     });
 
-  const refundedPayments = payments.filter(({ p }) => p.refund || Number(p.refundAmount || 0) > 0);
+  const refundedPayments = payments.filter(p => p.refund || Number(p.refundAmount || 0) > 0);
 
   // Calculate totals
-  const totalPaid = payments.reduce((sum, { p }) => sum + (Number(p.paidAmount) || 0), 0);
-  const totalBalance = payments.reduce((sum, { p }) => sum + (Number(p.balance) || 0), 0);
-  const totalRefund = refundedPayments.reduce((sum, { p }) => sum + (Number(p.refundAmount) || 0), 0);
+  const totalPaid = payments.reduce((sum, p) => sum + (Number(p.paidAmount) || 0), 0);
+  const totalBalance = payments.reduce((sum, p) => sum + (Number(p.balance) || 0), 0);
+  const totalRefund = refundedPayments.reduce((sum, p) => sum + (Number(p.refundAmount) || 0), 0);
+
+  // Get adjustment payments
+  const adjustmentPayments = (formData.payments || []).filter(p => p?.__adjustment);
+
+  // Handle clear all reminders with confirmation
+  const handleClearAllReminders = () => {
+    if (window.confirm("Are you sure you want to clear all reminder dates from all payments?")) {
+      removeAllPaymentReminders();
+    }
+  };
 
   return (
     <div>
@@ -412,13 +443,13 @@ const PaymentsTab = ({
             <button
               className="btn btn-success btn-lg w-100 d-flex align-items-center justify-content-center"
               onClick={() => setShowBalanceModal(true)}
-              disabled={getLastBalance() <= 0}
+              disabled={paymentsWithBalance.length === 0}
             >
               <i className="bi bi-check-circle me-2"></i>
               Balance Payment
-              {getLastBalance() > 0 && (
+              {paymentsWithBalance.length > 0 && (
                 <span className="badge bg-light text-dark ms-2">
-                  {formatINR(getLastBalance())}
+                  {paymentsWithBalance.length} pending
                 </span>
               )}
             </button>
@@ -440,7 +471,7 @@ const PaymentsTab = ({
               <button
                 type="button"
                 className="btn btn-outline-danger btn-sm"
-                onClick={removeAllPaymentReminders}
+                onClick={handleClearAllReminders}
                 title="Clear reminder date from all payments"
               >
                 <i className="bi bi-calendar-x me-1"></i>
@@ -478,7 +509,7 @@ const PaymentsTab = ({
                   Upcoming Reminders
                 </h6>
                 <div className="d-flex flex-wrap gap-2">
-                  {paymentsWithReminders.slice(0, 3).map(({ p }, idx) => (
+                  {paymentsWithReminders.slice(0, 3).map((p, idx) => (
                     <div key={idx} className="badge bg-info text-dark">
                       {formatDDMMYY(p.reminderDate)} - {formatINR(p.paidAmount)}
                     </div>
@@ -521,17 +552,19 @@ const PaymentsTab = ({
                 Refunded ({refundedPayments.length})
               </button>
             </li>
-            <li className="nav-item" role="presentation">
-              <button
-                className="nav-link"
-                data-bs-toggle="tab"
-                data-bs-target="#adjustments"
-                type="button"
-              >
-                <i className="bi bi-gear me-1"></i>
-                Adjustments
-              </button>
-            </li>
+            {adjustmentPayments.length > 0 && (
+              <li className="nav-item" role="presentation">
+                <button
+                  className="nav-link"
+                  data-bs-toggle="tab"
+                  data-bs-target="#adjustments"
+                  type="button"
+                >
+                  <i className="bi bi-gear me-1"></i>
+                  Adjustments ({adjustmentPayments.length})
+                </button>
+              </li>
+            )}
             {paymentsWithReminders.length > 0 && (
               <li className="nav-item" role="presentation">
                 <button
@@ -550,7 +583,7 @@ const PaymentsTab = ({
 
         <div className="card-body">
           <div className="tab-content">
-            {/* All Payments Tab */}
+            {/* All Payments Tab - NEWEST FIRST */}
             <div className="tab-pane fade show active" id="all-payments">
               {payments.length === 0 ? (
                 <div className="text-center py-5">
@@ -569,7 +602,7 @@ const PaymentsTab = ({
                 </div>
               ) : (
                 <div className="row g-3">
-                  {payments.map(({ p, originalIndex }, idx) => {
+                  {payments.map((p, idx) => {
                     const locked = !!p.__locked;
                     const addedByDisplay = p.addedByName ||
                       resolveUserName(p) ||
@@ -581,36 +614,35 @@ const PaymentsTab = ({
                     const hasRefund = p.refund || Number(p.refundAmount || 0) > 0;
                     const hasReminder = p.reminderDate;
 
-                    // Determine card header color based on status
-                    let headerClass = "bg-light";
-                    if (hasRefund) headerClass = "bg-warning text-dark";
-                    else if (hasReminder) headerClass = "bg-info text-white";
-                    else if (Number(p.balance || 0) > 0) headerClass = "bg-danger text-white";
-                    else headerClass = "bg-success text-white";
-
                     return (
-                      <div key={originalIndex} className="col-md-6 col-lg-4">
+                      <div key={p.originalIndex} className="col-md-6 col-lg-4">
                         <div className={`card h-100 border shadow-sm hover-lift ${hasRefund ? 'border-warning' : 'border-light'}`}>
-                          <div className={`card-header bg-warning d-flex justify-content-between align-items-center py-2`}>
+                          <div className={`card-header ${hasRefund ? 'bg-warning' : hasReminder ? 'bg-info' : Number(p.balance || 0) > 0 ? 'bg-danger' : 'bg-success'} d-flex justify-content-between align-items-center py-2 text-white`}>
                             <div className="d-flex align-items-center gap-2">
                               <span className="badge bg-dark">#{payments.length - idx}</span>
                               {hasRefund && (
-                                <span className="badge bg-danger">
+                                <span className="badge bg-dark">
                                   <i className="bi bi-arrow-return-left me-1"></i>
                                   Refunded
                                 </span>
                               )}
                               {hasReminder && (
-                                <span className="badge bg-info">
+                                <span className="badge bg-light text-dark">
                                   <i className="bi bi-bell me-1"></i>
                                   Reminder
+                                </span>
+                              )}
+                              {Number(p.balance || 0) > 0 && (
+                                <span className="badge bg-warning text-dark">
+                                  <i className="bi bi-clock me-1"></i>
+                                  Balance: {formatINR(p.balance)}
                                 </span>
                               )}
                             </div>
                             {editMode && !locked && (
                               <button
                                 className="btn btn-sm btn-outline-light"
-                                onClick={() => removePayment(originalIndex)}
+                                onClick={() => removePayment(p.originalIndex)}
                                 title="Remove payment"
                               >
                                 <i className="bi bi-trash"></i>
@@ -675,7 +707,7 @@ const PaymentsTab = ({
                             )}
 
                             {hasRefund && (
-                              <div className="mt-3 pt-2 border-top border-danger bg-danger bg-opacity-10 p-2 rounded ">
+                              <div className="mt-3 pt-2 border-top border-danger bg-danger bg-opacity-10 p-2 rounded">
                                 <small className="text-danger d-block">
                                   <i className="bi bi-arrow-return-left me-1"></i>
                                   Refund Details
@@ -690,14 +722,15 @@ const PaymentsTab = ({
                             )}
 
                             <div className="mt-3 pt-2 border-top">
-                              <small className="text-muted">
-                                <i className="bi bi-person-circle me-1"></i>
-                                Added by {addedByDisplay}
-                              </small>
-                              <br />
-                              <small className="text-muted">
-                                <i className="bi bi-clock me-1"></i>
-                                {formatDDMMYY(addedAtDisplay)} {formatTime12h(addedAtDisplay)}
+                              <small className="text-muted d-flex justify-content-between">
+                                <span>
+                                  <i className="bi bi-person-circle me-1"></i>
+                                  {addedByDisplay}
+                                </span>
+                                <span>
+                                  <i className="bi bi-clock me-1"></i>
+                                  {formatDDMMYY(addedAtDisplay)} {formatTime12h(addedAtDisplay)}
+                                </span>
                               </small>
                             </div>
                           </div>
@@ -732,13 +765,13 @@ const PaymentsTab = ({
                       </tr>
                     </thead>
                     <tbody>
-                      {refundedPayments.map(({ p, originalIndex }, idx) => {
+                      {refundedPayments.map((p, idx) => {
                         const addedByDisplay = p.addedByName ||
                           resolveUserName(p) ||
                           resolveAddedByFromUsers(p, usersMap) ||
                           effectiveUserName;
                         return (
-                          <tr key={originalIndex} className={idx % 2 === 0 ? 'table-light' : ''}>
+                          <tr key={p.originalIndex} className={idx % 2 === 0 ? 'table-light' : ''}>
                             <td>{refundedPayments.length - idx}</td>
                             <td>{p.date ? formatDDMMYY(p.date) : "—"}</td>
                             <td>{p.refundDate ? formatDDMMYY(p.refundDate) : "—"}</td>
@@ -758,7 +791,7 @@ const PaymentsTab = ({
                     <tfoot className="table-warning">
                       <tr>
                         <th colSpan="3">Total Refunded</th>
-                        <th>{formatINR(refundedPayments.reduce((sum, { p }) => sum + (Number(p.paidAmount) || 0), 0))}</th>
+                        <th>{formatINR(refundedPayments.reduce((sum, p) => sum + (Number(p.paidAmount) || 0), 0))}</th>
                         <th className="text-danger">{formatINR(totalRefund)}</th>
                         <th colSpan="3"></th>
                       </tr>
@@ -768,9 +801,15 @@ const PaymentsTab = ({
               )}
             </div>
 
-            {/* Adjustments Tab */}
-            <div className="tab-pane fade" id="adjustments">
-              {Array.isArray(formData.payments) && formData.payments.some(x => x?.__adjustment) ? (
+            {/* Adjustments Tab - Now shows balance payment adjustments */}
+            {adjustmentPayments.length > 0 && (
+              <div className="tab-pane fade" id="adjustments">
+                <div className="alert alert-info text-info">
+                  <i className="bi bi-info-circle me-2"></i>
+                  <strong>About Adjustments:</strong> This tab shows balance payments made against outstanding balances. 
+                  When you use the "Balance Payment" feature, it creates an adjustment entry here for tracking purposes.
+                </div>
+                
                 <div className="table-responsive">
                   <table className="table table-hover">
                     <thead className="table-info">
@@ -785,23 +824,23 @@ const PaymentsTab = ({
                       </tr>
                     </thead>
                     <tbody>
-                      {formData.payments.filter(x => x?.__adjustment).map((a, i) => {
-                        const type = a.__type === "refund" ? "Refund" : "Balance Paid";
-                        const amt = a.__type === "refund" ? a.refundAmount : a.paidAmount;
+                      {adjustmentPayments.map((a, i) => {
+                        const type = a.__type === "balance" ? "Balance Paid" : "Adjustment";
+                        const amt = a.paidAmount || 0;
                         const addedByDisplay = a.addedByName || effectiveUserName;
                         return (
                           <tr key={i} className={i % 2 === 0 ? 'table-light' : ''}>
                             <td>{i + 1}</td>
                             <td>
-                              <span className={`badge ${type === 'Refund' ? 'bg-warning' : 'bg-success'}`}>
+                              <span className="badge bg-success">
                                 {type}
                               </span>
                             </td>
                             <td>{a.date ? formatDDMMYY(a.date) : "—"}</td>
-                            <td className={type === 'Refund' ? 'text-danger fw-bold' : 'text-success fw-bold'}>
+                            <td className="text-success fw-bold">
                               {formatINR(amt)}
                             </td>
-                            <td>{a.__type === "refund" ? (a.refundPaymentMethod || "—") : (a.paymentMethod || "—")}</td>
+                            <td>{a.paymentMethod || "—"}</td>
                             <td>{a.remarks || "—"}</td>
                             <td>{addedByDisplay}</td>
                           </tr>
@@ -810,13 +849,8 @@ const PaymentsTab = ({
                     </tbody>
                   </table>
                 </div>
-              ) : (
-                <div className="text-center py-5">
-                  <i className="bi bi-gear text-muted" style={{ fontSize: '3rem' }}></i>
-                  <h5 className="mt-3 text-muted">No Adjustments</h5>
-                </div>
-              )}
-            </div>
+              </div>
+            )}
 
             {/* Reminders Tab */}
             {paymentsWithReminders.length > 0 && (
@@ -836,7 +870,7 @@ const PaymentsTab = ({
                       </tr>
                     </thead>
                     <tbody>
-                      {paymentsWithReminders.map(({ p }, idx) => {
+                      {paymentsWithReminders.map((p, idx) => {
                         const today = new Date();
                         const reminderDate = p.reminderDate ? new Date(p.reminderDate) : null;
                         const daysRemaining = reminderDate ? Math.ceil((reminderDate - today) / (1000 * 60 * 60 * 24)) : null;
@@ -1028,9 +1062,9 @@ const PaymentsTab = ({
                     onChange={handleRefundChange}
                   >
                     <option value="">-- Select Payment --</option>
-                    {payments.map(({ p }, idx) => (
+                    {originalPayments.map((p, idx) => (
                       <option key={idx} value={idx}>
-                        Payment #{payments.length - idx} - {formatINR(p.paidAmount)} on {p.date ? formatDDMMYY(p.date) : ''}
+                        Payment #{idx + 1} - {formatINR(p.paidAmount)} on {p.date ? formatDDMMYY(p.date) : ''}
                       </option>
                     ))}
                   </select>
@@ -1109,10 +1143,10 @@ const PaymentsTab = ({
         </div>
       )}
 
-      {/* Balance Payment Modal */}
+      {/* Balance Payment Modal - UPDATED: Same as refund modal */}
       {showBalanceModal && (
         <div className="modal-backdrop-custom" onClick={() => setShowBalanceModal(false)}>
-          <div className="modal-card-custom" onClick={(e) => e.stopPropagation()}>
+          <div className="modal-card-custom modal-lg" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header-custom bg-success text-white">
               <h5 className="mb-0">
                 <i className="bi bi-check-circle me-2"></i>
@@ -1123,21 +1157,63 @@ const PaymentsTab = ({
               </button>
             </div>
             <div className="modal-body-custom">
-              <div className="alert alert-info">
+              <div className="alert alert-info text-info">
                 <i className="bi bi-info-circle me-2"></i>
-                Current Balance: <strong>{formatINR(getLastBalance())}</strong>
+                <strong>Note:</strong> Select a payment with outstanding balance to make a partial/full payment against it.
+                This will reduce the balance on the selected payment and create an adjustment entry.
               </div>
 
               <div className="row g-3">
                 <div className="col-md-6">
-                  <label className="form-label"><strong>Payment Date</strong></label>
+                  <label className="form-label"><strong>Select Payment with Balance</strong> <span className="text-danger">*</span></label>
+                  <select
+                    className="form-control"
+                    name="paymentIndex"
+                    value={balanceData.paymentIndex}
+                    onChange={handleBalanceChange}
+                  >
+                    <option value="">-- Select Payment with Balance --</option>
+                    {paymentsWithBalance.map((p, idx) => (
+                      <option key={p.originalIndex} value={p.originalIndex}>
+                        Payment #{p.originalIndex + 1} - {formatINR(p.paidAmount)} (Balance: {formatINR(p.balance)}) on {p.date ? formatDDMMYY(p.date) : ''}
+                      </option>
+                    ))}
+                  </select>
+                  {paymentsWithBalance.length === 0 && (
+                    <div className="form-text text-warning">
+                      No payments with outstanding balance found.
+                    </div>
+                  )}
+                </div>
+
+                <div className="col-md-6">
+                  <label className="form-label"><strong>Payment Date</strong> <span className="text-danger">*</span></label>
                   <input
                     className="form-control"
                     name="date"
                     type="date"
                     value={balanceData.date}
                     onChange={handleBalanceChange}
+                    required
                   />
+                </div>
+
+                <div className="col-md-6">
+                  <label className="form-label"><strong>Amount to Pay</strong> <span className="text-danger">*</span></label>
+                  <input
+                    className="form-control"
+                    name="amount"
+                    type="number"
+                    placeholder="Enter payment amount"
+                    value={balanceData.amount}
+                    onChange={handleBalanceChange}
+                    required
+                  />
+                  {balanceData.paymentIndex && (
+                    <div className="form-text">
+                      Maximum: {formatINR(originalPayments[parseInt(balanceData.paymentIndex)]?.balance || 0)}
+                    </div>
+                  )}
                 </div>
 
                 <div className="col-md-6">
@@ -1151,24 +1227,8 @@ const PaymentsTab = ({
                     <option value="cash">Cash</option>
                     <option value="online">Online</option>
                     <option value="check">Check</option>
+                    <option value="other">Other</option>
                   </select>
-                </div>
-
-                <div className="col-12">
-                  <label className="form-label"><strong>Amount to Pay</strong> <span className="text-danger">*</span></label>
-                  <input
-                    className="form-control"
-                    name="amount"
-                    type="number"
-                    placeholder="Enter payment amount"
-                    value={balanceData.amount}
-                    onChange={handleBalanceChange}
-                    max={getLastBalance()}
-                    required
-                  />
-                  <div className="form-text">
-                    Maximum: {formatINR(getLastBalance())}
-                  </div>
                 </div>
 
                 <div className="col-12">
@@ -1177,7 +1237,7 @@ const PaymentsTab = ({
                     className="form-control"
                     name="remarks"
                     rows="2"
-                    placeholder="Payment remarks"
+                    placeholder="Payment remarks (optional)"
                     value={balanceData.remarks}
                     onChange={handleBalanceChange}
                   />
@@ -1194,10 +1254,11 @@ const PaymentsTab = ({
               <button
                 className="btn btn-success"
                 onClick={handleApplyBalancePayment}
-                disabled={!balanceData.amount || parseFloat(balanceData.amount) <= 0 || parseFloat(balanceData.amount) > getLastBalance()}
+                disabled={!balanceData.paymentIndex || !balanceData.amount || parseFloat(balanceData.amount) <= 0 || 
+                  (balanceData.paymentIndex && parseFloat(balanceData.amount) > parseFloat(originalPayments[parseInt(balanceData.paymentIndex)]?.balance || 0))}
               >
                 <i className="bi bi-check-circle me-1"></i>
-                Process Payment
+                Process Balance Payment
               </button>
             </div>
           </div>

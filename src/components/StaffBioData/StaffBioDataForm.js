@@ -1007,81 +1007,51 @@ const StaffBioDataForm = ({ isOpen = false, onClose = () => { }, onSaved }) => {
       let idProofURLs = [];
       
       // Upload employee photo
-      if (formData.employeePhotoFile) {
-        try {
-          const ext = formData.employeePhotoFile.name.split(".").pop();
-          const fileName = `staff-photos/${(formData.idNo || "unknown")}-${Date.now()}.${ext}`;
-          const fileRef = storageRef.child(fileName);
-          
-          setUploadProgress(prev => ({
-            ...prev,
-            [formData.employeePhotoFile.name]: 0
-          }));
-          
-          const result = await uploadFile(
-            fileRef, 
-            formData.employeePhotoFile,
-            (progress) => {
-              setUploadProgress(prev => ({
-                ...prev,
-                [formData.employeePhotoFile.name]: progress
-              }));
-            }
-          );
-          
-          // Ensure we have a valid URL
-          photoURL = result?.downloadURL || DEFAULT_PHOTO_URL;
-        } catch (photoError) {
-          console.error("Photo upload failed:", photoError);
-          photoURL = DEFAULT_PHOTO_URL;
-        }
-      }
+     if (formData.idProofFiles && formData.idProofFiles.length > 0) {
+       for (const file of formData.idProofFiles) {
+         try {
+           const filePath = `Staff-ID-Proof/${formData.idNo}/${Date.now()}-${file.name}`;
+           const fileRef = storageRef.child(filePath);
+
+           const result = await uploadFile(fileRef, file);
+
+           idProofURLs.push({
+             url: result.downloadURL,
+             name: file.name,
+             type: file.type,
+             size: file.size,
+             path: filePath
+           });
+         } catch (err) {
+           console.error("ID Proof upload failed:", err);
+         }
+       }
+     }
       
       // Upload ID proof files
-      if (formData.idProofFiles && formData.idProofFiles.length > 0) {
-        for (const file of formData.idProofFiles) {
-          try {
-            const ext = file.name.split(".").pop();
-            const fileName = `id-proofs/${(formData.idNo || "unknown")}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}.${ext}`;
-            const fileRef = storageRef.child(fileName);
-            
-            setUploadProgress(prev => ({
-              ...prev,
-              [file.name]: 0
-            }));
-            
-            const result = await uploadFile(
-              fileRef, 
-              file,
-              (progress) => {
-                setUploadProgress(prev => ({
-                  ...prev,
-                  [file.name]: progress
-                }));
-              }
-            );
-            
-            idProofURLs.push({
-              url: result?.downloadURL || "",
-              name: file.name,
-              type: file.type,
-              size: file.size
-            });
-            
-            setUploadProgress(prev => ({
-              ...prev,
-              [file.name]: 100
-            }));
-          } catch (error) {
-            console.error(`Failed to upload ${file.name}:`, error);
-            setUploadProgress(prev => ({
-              ...prev,
-              [file.name]: -1
-            }));
-            // Continue with other files even if one fails
-          }
-        }
-      }
+    {formData.idProof && formData.idProof.length > 0 && (
+  <div className="list-group list-group-flush">
+    {formData.idProof.map((proof, index) => (
+      <a
+        key={index}
+        href={proof.url}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="list-group-item d-flex align-items-center"
+      >
+        <i className={`fas ${
+          proof.type === "application/pdf"
+            ? "fa-file-pdf text-danger"
+            : "fa-file-image text-success"
+        } me-2`} />
+        <span className="text-truncate">
+          {proof.name || `ID Proof ${index + 1}`}
+        </span>
+      </a>
+    ))}
+  </div>
+)}
+
       
       // Calculate salary totals
       const salaryBreakdown = { ...formData.salaryBreakdown };

@@ -673,3 +673,9 @@
   .wb-modal-card { width: min(960px, 98vw); }
 }
 
+.invoiceRadio {
+    .form-check-input:checked{
+        background-color: #0d6efd !important;
+    }
+}
+

@@ -4,7 +4,7 @@ import firebaseDB from "../../firebase";
 import editIcon from "../../assets/eidt.svg";
 import viewIcon from "../../assets/view.svg";
 import returnIcon from "../../assets/return.svg";
-import ClientModal from "./ClientModal";
+import ClientModal from "./ClientModal/ClientModal";
 
 export default function DisplayExitClient() {
   const [clients, setClients] = useState([]);

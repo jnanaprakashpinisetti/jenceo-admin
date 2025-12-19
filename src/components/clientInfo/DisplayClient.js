@@ -4,7 +4,7 @@ import firebaseDB from '../../firebase';
 import editIcon from '../../assets/eidt.svg';
 import viewIcon from '../../assets/view.svg';
 import deleteIcon from '../../assets/delete.svg';
-import ClientModal from './ClientModal';
+import ClientModal from './ClientModal/ClientModal';
 import { useAuth } from "../../context/AuthContext";
 
 /**

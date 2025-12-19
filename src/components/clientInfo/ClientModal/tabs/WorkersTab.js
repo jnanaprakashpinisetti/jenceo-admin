@@ -12,7 +12,7 @@ const WorkersTab = ({
   formatDDMMYY,
   formatTime12h,
   formatINR,
-  updateWorker, // NEW: For editing existing workers
+  updateWorker,
 }) => {
   const [showWorkerModal, setShowWorkerModal] = useState(false);
   const [newWorkerData, setNewWorkerData] = useState({
@@ -29,13 +29,12 @@ const WorkersTab = ({
     totalAmount: ""
   });
   const [isLoadingWorker, setIsLoadingWorker] = useState(false);
-  const [editingIndex, setEditingIndex] = useState(null); // NEW: Track which worker we're editing
+  const [editingIndex, setEditingIndex] = useState(null);
   const [validationErrors, setValidationErrors] = useState({});
 
   const resolveAddedByFromUsers = (obj, users) => {
     if (!obj || !users) return effectiveUserName || "System";
     
-    // Try to find user by ID from common user ID fields
     const candidateIds = [
       obj.user_key, obj.userKey, obj.userId, obj.uid,
       obj.addedById, obj.createdById, obj.addedByUid, obj.createdByUid,
@@ -56,7 +55,6 @@ const WorkersTab = ({
   const resolveUserName = (obj, fallback) => {
     if (!obj) return fallback || effectiveUserName || "System";
     
-    // Try direct name fields first
     const tryKeys = [
       "addedByName", "addedBy", "userName", "username", "createdByName", "createdBy",
       "enteredBy", "enteredByName", "created_user", "updatedBy", "ownerName",
@@ -67,7 +65,6 @@ const WorkersTab = ({
       if (v && String(v).trim()) return String(v).trim().replace(/@.*/, "");
     }
     
-    // Try nested user object
     const u = obj.user;
     if (u) {
       const tryUser = [u.name, u.displayName, u.username, u.email];
@@ -79,13 +76,11 @@ const WorkersTab = ({
     return fallback || effectiveUserName || "System";
   };
 
-  // Fetch worker data when ID is entered
   const fetchWorkerData = async (idNo) => {
     if (!idNo || idNo.length < 2) return;
     
     setIsLoadingWorker(true);
     try {
-      // Try the API endpoint
       const response = await fetch(`/api/EmployeeBioData/key/${idNo}`);
       
       if (response.ok) {
@@ -110,7 +105,6 @@ const WorkersTab = ({
           }
         } else {
           console.log("Worker API returned non-JSON response");
-          // Try local workers as fallback
           const workers = formData.workers || [];
           const localWorkerData = workers.find(w => w.workerIdNo === idNo);
           if (localWorkerData) {
@@ -127,7 +121,6 @@ const WorkersTab = ({
       }
     } catch (error) {
       console.log("Error fetching worker data:", error);
-      // Try local workers as fallback
       const workers = formData.workers || [];
       const localWorkerData = workers.find(w => w.workerIdNo === idNo);
       if (localWorkerData) {
@@ -143,7 +136,6 @@ const WorkersTab = ({
     }
   };
 
-  // Calculate total days from start and end dates
   const calculateTotalDays = (startDate, endDate) => {
     if (!startDate || !endDate) return "";
     
@@ -153,21 +145,19 @@ const WorkersTab = ({
     if (start > end) return "0";
     
     const timeDiff = end.getTime() - start.getTime();
-    const dayDiff = Math.ceil(timeDiff / (1000 * 3600 * 24)) + 1; // +1 to include both start and end days
+    const dayDiff = Math.ceil(timeDiff / (1000 * 3600 * 24)) + 1;
     
     return dayDiff.toString();
   };
 
-  // Check if worker is completed (end date has passed)
   const isWorkerCompleted = (worker) => {
     if (!worker.endingDate) return false;
     const endingDate = new Date(worker.endingDate);
     const today = new Date();
-    today.setHours(0, 0, 0, 0); // Compare only dates, not times
+    today.setHours(0, 0, 0, 0);
     return endingDate < today;
   };
 
-  // Handle ID input change with debounce
   useEffect(() => {
     const delayDebounceFn = setTimeout(() => {
       if (newWorkerData.workerIdNo && newWorkerData.workerIdNo.length >= 2) {
@@ -178,7 +168,6 @@ const WorkersTab = ({
     return () => clearTimeout(delayDebounceFn);
   }, [newWorkerData.workerIdNo]);
 
-  // Calculate total amount when basic salary or extra amount changes
   useEffect(() => {
     const basic = parseFloat(newWorkerData.basicSalary) || 0;
     const extra = parseFloat(newWorkerData.extraAmount) || 0;
@@ -190,7 +179,6 @@ const WorkersTab = ({
     }));
   }, [newWorkerData.basicSalary, newWorkerData.extraAmount]);
 
-  // Calculate total days when dates change
   useEffect(() => {
     if (newWorkerData.startingDate && newWorkerData.endingDate) {
       const totalDays = calculateTotalDays(newWorkerData.startingDate, newWorkerData.endingDate);
@@ -208,7 +196,6 @@ const WorkersTab = ({
       [name]: value
     }));
     
-    // Clear validation error for this field
     if (validationErrors[name]) {
       setValidationErrors(prev => ({
         ...prev,
@@ -247,9 +234,9 @@ const WorkersTab = ({
         ? calculateTotalDays(newWorkerData.startingDate, newWorkerData.endingDate) 
         : "");
     
-    // Create worker object matching the expected format
+    // Create the complete worker object
     const worker = {
-      id: Date.now(),
+      id: Date.now(), // Always use new ID
       workerIdNo: newWorkerData.workerIdNo,
       cName: newWorkerData.cName,
       basicSalary: newWorkerData.basicSalary,
@@ -264,29 +251,33 @@ const WorkersTab = ({
       addedById: null,
       addedByName: effectiveUserName,
       addedAt: new Date().toISOString(),
-      __locked: false // Important: mark as unlocked so it can be edited
     };
     
-    // If we're editing, call updateWorker; otherwise, addWorker
+    // Handle both ADD and EDIT
     if (editingIndex !== null) {
-      updateWorker(editingIndex, worker);
+      // UPDATE existing worker
+      const updatedWorkers = [...(formData.workers || [])];
+      updatedWorkers[editingIndex] = worker;
+      handleChange({
+        target: {
+          name: 'workers',
+          value: updatedWorkers
+        }
+      });
     } else {
-      // Create a new worker with addWorker
-      addWorker(); // This creates an empty worker
-      
-      // Then immediately update it with our data
-      // We need to find the newly added worker and update it
-      const workers = formData.workers || [];
-      const newWorkerIndex = workers.findIndex(w => !w.__locked);
-      if (newWorkerIndex !== -1) {
-        updateWorker(newWorkerIndex, worker);
-      }
+      // ADD new worker
+      const updatedWorkers = [...(formData.workers || []), worker];
+      handleChange({
+        target: {
+          name: 'workers',
+          value: updatedWorkers
+        }
+      });
     }
     
     handleModalClose();
   };
 
-  // NEW: Function to handle editing a worker
   const handleEditWorker = (index) => {
     const workers = formData.workers || [];
     if (index >= 0 && index < workers.length) {
@@ -304,15 +295,30 @@ const WorkersTab = ({
         extraAmount: worker.extraAmount || "0",
         totalAmount: worker.totalAmount || worker.basicSalary || ""
       });
-      setEditingIndex(index); // Store the index we're editing
+      setEditingIndex(index);
       setValidationErrors({});
       setShowWorkerModal(true);
     }
   };
 
+  const handleRemoveWorker = (index) => {
+    if (typeof removeWorker === 'function') {
+      removeWorker(index);
+    } else {
+      // Fallback if removeWorker is not provided
+      const updatedWorkers = (formData.workers || []).filter((_, i) => i !== index);
+      handleChange({
+        target: {
+          name: 'workers',
+          value: updatedWorkers
+        }
+      });
+    }
+  };
+
   const handleModalClose = () => {
     setShowWorkerModal(false);
-    setEditingIndex(null); // Reset editing index
+    setEditingIndex(null);
     setValidationErrors({});
     setNewWorkerData({
       workerIdNo: "",
@@ -337,12 +343,12 @@ const WorkersTab = ({
   const totalAmount = workers.reduce((sum, w) => sum + (Number(w.totalAmount) || (Number(w.basicSalary) || 0) + (Number(w.extraAmount) || 0)), 0);
   const totalDays = workers.reduce((sum, w) => sum + (Number(w.totalDays) || 0), 0);
 
-  // Sort workers in reverse order (newest first) - #9, #8, #7...
+  // Sort workers in reverse order
   const sortedWorkers = [...workers].reverse();
 
   return (
     <div>
-      {/* Stats Overview Cards - Matching PaymentsTab */}
+      {/* Stats Overview Cards */}
       <div className="row mb-4">
         <div className="col-md-3 col-sm-6 mb-3">
           <div className="card text-white shadow border-0" style={{background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)'}}>
@@ -422,7 +428,7 @@ const WorkersTab = ({
             <button 
               className="btn btn-primary btn-lg w-100 d-flex align-items-center justify-content-center"
               onClick={() => {
-                setEditingIndex(null); // Clear any editing state
+                setEditingIndex(null);
                 setShowWorkerModal(true);
               }}
             >
@@ -475,7 +481,7 @@ const WorkersTab = ({
         
         <div className="card-body">
           <div className="tab-content">
-            {/* All Workers Tab */}
+            {/* All Workers Tab - FIXED: Pure card layout */}
             <div className="tab-pane fade show active" id="all-workers">
               {workers.length === 0 ? (
                 <div className="text-center py-5">
@@ -495,10 +501,7 @@ const WorkersTab = ({
               ) : (
                 <div className="row g-3">
                   {sortedWorkers.map((w, idx) => {
-                    const originalIndex = workers.length - 1 - idx; // Calculate original index
-                    const locked = !!w.__locked;
-                    
-                    // Use the same logic as PaymentsTab for added by
+                    const originalIndex = workers.length - 1 - idx;
                     const addedByDisplay = w.addedByName || 
                       resolveUserName(w) ||
                       resolveAddedByFromUsers(w, usersMap) ||
@@ -539,17 +542,11 @@ const WorkersTab = ({
                                   Upcoming
                                 </span>
                               )}
-                              {locked && (
-                                <span className="badge bg-danger">
-                                  <i className="bi bi-lock me-1"></i>
-                                  Locked
-                                </span>
-                              )}
                             </div>
-                            {editMode && !locked && (
+                            {editMode && (
                               <button 
                                 className="btn btn-sm btn-outline-light"
-                                onClick={() => removeWorker(originalIndex)}
+                                onClick={() => handleRemoveWorker(originalIndex)}
                                 title="Remove worker"
                               >
                                 <i className="bi bi-trash"></i>
@@ -627,7 +624,7 @@ const WorkersTab = ({
                             
                             <hr className="my-2" />
                             
-                            {/* Date Information in One Row */}
+                            {/* Date Information */}
                             <div className="mb-3">
                               <small className="text-muted d-block mb-2">Work Period</small>
                               <div className="d-flex justify-content-between align-items-center bg-light p-2 rounded">
@@ -656,7 +653,7 @@ const WorkersTab = ({
                               </div>
                             </div>
                             
-                            {/* Remarks as Text Area */}
+                            {/* Remarks */}
                             {w.remarks && (
                               <div className="mt-3 pt-2 border-top">
                                 <small className="text-muted d-block">Remarks</small>
@@ -669,7 +666,7 @@ const WorkersTab = ({
                             
                             <hr className="my-2" />
                             
-                            {/* Added By Information - Fixed */}
+                            {/* Added By Information */}
                             <div className="mt-2 pt-2">
                               <small className="text-muted d-flex align-items-center">
                                 <i className="bi bi-person-circle me-1"></i>
@@ -688,14 +685,12 @@ const WorkersTab = ({
                                 <small className="text-muted">
                                   {editMode ? "Click edit to modify" : "View only"}
                                 </small>
-                                {!locked && (
-                                  <button 
-                                    className="btn btn-sm btn-outline-primary"
-                                    onClick={() => handleEditWorker(originalIndex)}
-                                  >
-                                    <i className="bi bi-pencil me-1"></i> Edit
-                                  </button>
-                                )}
+                                <button 
+                                  className="btn btn-sm btn-outline-primary"
+                                  onClick={() => handleEditWorker(originalIndex)}
+                                >
+                                  <i className="bi bi-pencil me-1"></i> Edit
+                                </button>
                               </div>
                             </div>
                           )}
@@ -707,7 +702,7 @@ const WorkersTab = ({
               )}
             </div>
             
-            {/* Active Workers Tab - Filter using isWorkerCompleted */}
+            {/* Active Workers Tab - Table view */}
             <div className="tab-pane fade" id="active-workers">
               {workers.filter(w => !isWorkerCompleted(w)).length === 0 ? (
                 <div className="text-center py-5">
@@ -777,7 +772,7 @@ const WorkersTab = ({
               )}
             </div>
             
-            {/* Completed Workers Tab */}
+            {/* Completed Workers Tab - Table view */}
             <div className="tab-pane fade" id="completed">
               {workers.filter(isWorkerCompleted).length === 0 ? (
                 <div className="text-center py-5">
@@ -842,185 +837,184 @@ const WorkersTab = ({
 
       {/* Add/Edit Worker Modal */}
       {showWorkerModal && (
-        <div className="modal-backdrop-custom" onClick={handleModalClose}>
-          <div className="modal-card-custom modal-lg" onClick={(e) => e.stopPropagation()}>
-            <div className="modal-header-custom" style={{background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)'}}>
-              <h5 className="mb-0 text-white">
-                <i className="bi bi-plus-circle me-2"></i>
-                {editingIndex !== null ? "Edit Worker" : "Add New Worker"}
-              </h5>
-              <button className="btn-close-custom" onClick={handleModalClose}>
-                <i className="bi bi-x-lg text-white"></i>
-              </button>
-            </div>
-            <div className="modal-body-custom">
-              <div className="row g-3">
-                <div className="col-md-6">
-                  <label className="form-label"><strong>ID No *</strong></label>
-                  <div className="input-group">
+        <div className="modal fade show" style={{ display: 'block', backgroundColor: 'rgba(0,0,0,0.5)' }}>
+          <div className="modal-dialog modal-dialog-centered modal-lg">
+            <div className="modal-content">
+              <div className="modal-header bg-primary text-white">
+                <h5 className="modal-title">
+                  <i className="bi bi-plus-circle me-2"></i>
+                  {editingIndex !== null ? "Edit Worker" : "Add New Worker"}
+                </h5>
+                <button type="button" className="btn-close btn-close-white" onClick={handleModalClose}></button>
+              </div>
+              <div className="modal-body">
+                <div className="row g-3">
+                  <div className="col-md-6">
+                    <label className="form-label"><strong>ID No *</strong></label>
+                    <div className="input-group">
+                      <input 
+                        className={`form-control ${validationErrors.workerIdNo ? 'is-invalid' : ''}`}
+                        name="workerIdNo"
+                        value={newWorkerData.workerIdNo}
+                        onChange={handleNewWorkerChange}
+                        placeholder="Enter Worker ID"
+                      />
+                      {isLoadingWorker && (
+                        <span className="input-group-text">
+                          <div className="spinner-border spinner-border-sm" role="status">
+                            <span className="visually-hidden">Loading...</span>
+                          </div>
+                        </span>
+                      )}
+                    </div>
+                    {validationErrors.workerIdNo && (
+                      <div className="invalid-feedback d-block">{validationErrors.workerIdNo}</div>
+                    )}
+                    <small className="text-info">Enter ID to auto-fill worker details</small>
+                  </div>
+                  
+                  <div className="col-md-6">
+                    <label className="form-label"><strong>Name *</strong></label>
                     <input 
-                      className={`form-control ${validationErrors.workerIdNo ? 'is-invalid' : ''}`}
-                      name="workerIdNo"
-                      value={newWorkerData.workerIdNo}
+                      className={`form-control ${validationErrors.cName ? 'is-invalid' : ''}`}
+                      name="cName"
+                      value={newWorkerData.cName}
                       onChange={handleNewWorkerChange}
-                      placeholder="Enter Worker ID"
+                      placeholder="Worker name"
                     />
-                    {isLoadingWorker && (
-                      <span className="input-group-text">
-                        <div className="spinner-border spinner-border-sm" role="status">
-                          <span className="visually-hidden">Loading...</span>
-                        </div>
-                      </span>
+                    {validationErrors.cName && (
+                      <div className="invalid-feedback d-block">{validationErrors.cName}</div>
                     )}
                   </div>
-                  {validationErrors.workerIdNo && (
-                    <div className="invalid-feedback d-block">{validationErrors.workerIdNo}</div>
-                  )}
-                  <small className="text-info">Enter ID to auto-fill worker details</small>
-                </div>
-                
-                <div className="col-md-6">
-                  <label className="form-label"><strong>Name *</strong></label>
-                  <input 
-                    className={`form-control ${validationErrors.cName ? 'is-invalid' : ''}`}
-                    name="cName"
-                    value={newWorkerData.cName}
-                    onChange={handleNewWorkerChange}
-                    placeholder="Worker name"
-                  />
-                  {validationErrors.cName && (
-                    <div className="invalid-feedback d-block">{validationErrors.cName}</div>
-                  )}
-                </div>
-                
-                <div className="col-md-4">
-                  <label className="form-label"><strong>Basic Salary *</strong></label>
-                  <input 
-                    className={`form-control ${validationErrors.basicSalary ? 'is-invalid' : ''}`}
-                    name="basicSalary"
-                    type="number"
-                    placeholder="Basic salary"
-                    value={newWorkerData.basicSalary}
-                    onChange={handleNewWorkerChange}
-                    min="0"
-                    step="0.01"
-                  />
-                  {validationErrors.basicSalary && (
-                    <div className="invalid-feedback d-block">{validationErrors.basicSalary}</div>
-                  )}
-                </div>
-                
-                <div className="col-md-4">
-                  <label className="form-label"><strong>Extra Amount</strong></label>
-                  <input 
-                    className="form-control"
-                    name="extraAmount"
-                    type="number"
-                    placeholder="Extra amount"
-                    value={newWorkerData.extraAmount}
-                    onChange={handleNewWorkerChange}
-                    min="0"
-                    step="0.01"
-                  />
-                </div>
-                
-                <div className="col-md-4">
-                  <label className="form-label"><strong>Total Amount</strong></label>
-                  <input 
-                    className="form-control bg-light"
-                    name="totalAmount"
-                    type="number"
-                    value={newWorkerData.totalAmount}
-                    readOnly
-                    style={{ fontWeight: 'bold' }}
-                  />
-                </div>
-                
-                <div className="col-md-6">
-                  <label className="form-label"><strong>Mobile-1</strong></label>
-                  <input 
-                    className="form-control"
-                    name="mobile1"
-                    type="tel"
-                    placeholder="Primary mobile"
-                    value={newWorkerData.mobile1}
-                    onChange={handleNewWorkerChange}
-                  />
-                </div>
-                
-                <div className="col-md-6">
-                  <label className="form-label"><strong>Mobile-2</strong></label>
-                  <input 
-                    className="form-control"
-                    name="mobile2"
-                    type="tel"
-                    placeholder="Alternate mobile"
-                    value={newWorkerData.mobile2}
-                    onChange={handleNewWorkerChange}
-                  />
-                </div>
-                
-                <div className="col-md-4">
-                  <label className="form-label"><strong>Starting Date</strong></label>
-                  <input 
-                    className="form-control"
-                    name="startingDate"
-                    type="date"
-                    value={newWorkerData.startingDate}
-                    onChange={handleNewWorkerChange}
-                  />
-                </div>
-                
-                <div className="col-md-4">
-                  <label className="form-label"><strong>Ending Date</strong></label>
-                  <input 
-                    className="form-control"
-                    name="endingDate"
-                    type="date"
-                    value={newWorkerData.endingDate}
-                    onChange={handleNewWorkerChange}
-                  />
-                </div>
-                
-                <div className="col-md-4">
-                  <label className="form-label"><strong>Total Days</strong></label>
-                  <input 
-                    className="form-control bg-light"
-                    name="totalDays"
-                    type="number"
-                    value={newWorkerData.totalDays}
-                    readOnly
-                  />
-                </div>
-                
-                <div className="col-md-12">
-                  <label className="form-label"><strong>Remarks</strong></label>
-                  <textarea 
-                    className="form-control"
-                    name="remarks"
-                    value={newWorkerData.remarks}
-                    onChange={handleNewWorkerChange}
-                    placeholder="Any remarks about this worker"
-                    rows="3"
-                  />
+                  
+                  <div className="col-md-4">
+                    <label className="form-label"><strong>Basic Salary *</strong></label>
+                    <input 
+                      className={`form-control ${validationErrors.basicSalary ? 'is-invalid' : ''}`}
+                      name="basicSalary"
+                      type="number"
+                      placeholder="Basic salary"
+                      value={newWorkerData.basicSalary}
+                      onChange={handleNewWorkerChange}
+                      min="0"
+                      step="0.01"
+                    />
+                    {validationErrors.basicSalary && (
+                      <div className="invalid-feedback d-block">{validationErrors.basicSalary}</div>
+                    )}
+                  </div>
+                  
+                  <div className="col-md-4">
+                    <label className="form-label"><strong>Extra Amount</strong></label>
+                    <input 
+                      className="form-control"
+                      name="extraAmount"
+                      type="number"
+                      placeholder="Extra amount"
+                      value={newWorkerData.extraAmount}
+                      onChange={handleNewWorkerChange}
+                      min="0"
+                      step="0.01"
+                    />
+                  </div>
+                  
+                  <div className="col-md-4">
+                    <label className="form-label"><strong>Total Amount</strong></label>
+                    <input 
+                      className="form-control bg-light"
+                      name="totalAmount"
+                      type="number"
+                      value={newWorkerData.totalAmount}
+                      readOnly
+                      style={{ fontWeight: 'bold' }}
+                    />
+                  </div>
+                  
+                  <div className="col-md-6">
+                    <label className="form-label"><strong>Mobile-1</strong></label>
+                    <input 
+                      className="form-control"
+                      name="mobile1"
+                      type="tel"
+                      placeholder="Primary mobile"
+                      value={newWorkerData.mobile1}
+                      onChange={handleNewWorkerChange}
+                    />
+                  </div>
+                  
+                  <div className="col-md-6">
+                    <label className="form-label"><strong>Mobile-2</strong></label>
+                    <input 
+                      className="form-control"
+                      name="mobile2"
+                      type="tel"
+                      placeholder="Alternate mobile"
+                      value={newWorkerData.mobile2}
+                      onChange={handleNewWorkerChange}
+                    />
+                  </div>
+                  
+                  <div className="col-md-4">
+                    <label className="form-label"><strong>Starting Date</strong></label>
+                    <input 
+                      className="form-control"
+                      name="startingDate"
+                      type="date"
+                      value={newWorkerData.startingDate}
+                      onChange={handleNewWorkerChange}
+                    />
+                  </div>
+                  
+                  <div className="col-md-4">
+                    <label className="form-label"><strong>Ending Date</strong></label>
+                    <input 
+                      className="form-control"
+                      name="endingDate"
+                      type="date"
+                      value={newWorkerData.endingDate}
+                      onChange={handleNewWorkerChange}
+                    />
+                  </div>
+                  
+                  <div className="col-md-4">
+                    <label className="form-label"><strong>Total Days</strong></label>
+                    <input 
+                      className="form-control bg-light"
+                      name="totalDays"
+                      type="number"
+                      value={newWorkerData.totalDays}
+                      readOnly
+                    />
+                  </div>
+                  
+                  <div className="col-md-12">
+                    <label className="form-label"><strong>Remarks</strong></label>
+                    <textarea 
+                      className="form-control"
+                      name="remarks"
+                      value={newWorkerData.remarks}
+                      onChange={handleNewWorkerChange}
+                      placeholder="Any remarks about this worker"
+                      rows="3"
+                    />
+                  </div>
                 </div>
               </div>
-            </div>
-            <div className="modal-footer-custom">
-              <button 
-                className="btn btn-secondary"
-                onClick={handleModalClose}
-              >
-                Cancel
-              </button>
-              <button 
-                className="btn btn-primary"
-                onClick={handleAddWorker}
-                disabled={!newWorkerData.workerIdNo || !newWorkerData.cName || !newWorkerData.basicSalary}
-              >
-                <i className="bi bi-check-circle me-1"></i>
-                {editingIndex !== null ? "Update Worker" : "Save Worker"}
-              </button>
+              <div className="modal-footer">
+                <button 
+                  className="btn btn-secondary"
+                  onClick={handleModalClose}
+                >
+                  Cancel
+                </button>
+                <button 
+                  className="btn btn-primary"
+                  onClick={handleAddWorker}
+                >
+                  <i className="bi bi-check-circle me-1"></i>
+                  {editingIndex !== null ? "Update Worker" : "Save Worker"}
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -1045,92 +1039,16 @@ const WorkersTab = ({
           box-shadow: 0 5px 15px rgba(0,0,0,0.1) !important;
         }
         
-        .modal-backdrop-custom {
-          position: fixed;
-          top: 0;
-          left: 0;
-          right: 0;
-          bottom: 0;
-          background-color: rgba(0,0,0,0.5);
-          z-index: 1050;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-        }
-        
-        .modal-card-custom {
-          background: white;
-          border-radius: 8px;
-          box-shadow: 0 20px 60px rgba(0,0,0,0.3);
-          animation: modalSlideIn 0.3s ease;
-          max-width: 95%;
-          max-height: 90vh;
-          overflow-y: auto;
-          border: 1px solid #dee2e6;
-        }
-        
-        .modal-lg {
-          width: 800px;
-        }
-        
-        .modal-header-custom {
-          padding: 1rem 1.5rem;
-          border-bottom: 1px solid #dee2e6;
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-        }
-        
-        .modal-body-custom {
-          padding: 1.5rem;
-          max-height: 60vh;
-          overflow-y: auto;
-        }
-        
-        .modal-footer-custom {
-          padding: 1rem 1.5rem;
-          border-top: 1px solid #dee2e6;
-          display: flex;
-          justify-content: flex-end;
-          gap: 0.5rem;
-        }
-        
-        .btn-close-custom {
-          background: none;
-          border: none;
-          font-size: 1.5rem;
-          cursor: pointer;
-          opacity: 0.7;
-          transition: opacity 0.2s;
-        }
-        
-        .btn-close-custom:hover {
-          opacity: 1;
-        }
-        
-        @keyframes modalSlideIn {
-          from {
-            opacity: 0;
-            transform: translateY(-30px);
-          }
-          to {
-            opacity: 1;
-            transform: translateY(0);
-          }
-        }
-        
         .table-hover tbody tr:hover {
           background-color: rgba(0, 123, 255, 0.05);
         }
         
-        /* Status badges */
         .badge {
           padding: 0.35em 0.65em;
           font-size: 0.75em;
           font-weight: 600;
         }
         
-        /* Card improvements */
         .card {
           border-radius: 8px;
           overflow: hidden;

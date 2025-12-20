@@ -15,7 +15,6 @@ import logo from "../assets/jencio-logo.svg";
 import logoicon from "../assets/jenceo-icon.svg";
 import toggle from "../assets/toggle.svg";
 import close from "../assets/close.svg";
-// import arrow from "../assets/arrow.svg"; // (optional) was used for a collapsed sidebar button
 
 // —— Menu icons
 import home from "../assets/home.svg";
@@ -59,6 +58,8 @@ import WorkerCallDelete from "../pages/WorkerCallDelete";
 
 import ClientInfo from "../pages/ClientInfo";
 import ClientExit from "../pages/ClientExit";
+import HomeCareClient from "../pages/HomeCareClient";
+import HomeCareClientExit from "../pages/HomeCareClientExit";
 
 import Enquiry from "../pages/Enquiry";
 import EnquiryExit from "../pages/EnquiryExit";
@@ -77,6 +78,10 @@ import SearchResults from "../pages/SearchResults";
 import Profile from "../pages/Profile";
 import TimesheetEntryPage from "../pages/TimesheetEntryPage ";
 import TimesheetDashboard from "../pages/TimesheetDashboard ";
+
+// Import new Home Care pages
+import HomeCareWorker from "../pages/HomeCareWorker";
+import HomeCareWorkerExit from "../pages/HomeCareWorkerExit";
 
 // FIXED: Move PermRoute outside the component to prevent re-renders
 const PermRoute = ({ allowed, children }) => {
@@ -128,6 +133,12 @@ export default function LeftNav() {
   const canWorkerCallData = hasPerm("Worker Call Data");
   const canWorkerCallDelete = hasPerm("Worker Call Data"); // Delete typically part of Worker Call Data
 
+  // Home Care - New permissions
+  const canHomeCareClient = hasPerm("Home Care Client");
+  const canHomeCareClientExit = hasPerm("Home Care Client"); // Exit typically part of Home Care Client
+  const canHomeCareWorker = hasPerm("Home Care Workers");
+  const canHomeCareWorkerExit = hasPerm("Home Care Workers"); // Exit typically part of Home Care Workers
+
   // Client
   const canClientData = hasPerm("Client Data");
   const canClientExit = hasPerm("Client Data"); // Client exit typically part of Client Data
@@ -155,13 +166,12 @@ export default function LeftNav() {
   const [isShow, setIsShow] = useState(false); // mobile menu
   const [query, setQuery] = useState("");
 
-  
-
   // collapsible groups
   const [open, setOpen] = useState({
     management: true,
     staff: true,
     workers: true,
+    homeCare: false,
     client: true,
     enquiry: false,
     hospital: false,
@@ -266,11 +276,6 @@ export default function LeftNav() {
         <button type="button" className="navbar-brand" onClick={() => {}}>
           <img src={isActive ? logoicon : logo} alt="JenCeo Logo" />
         </button>
-
-        {/* Optional desktop collapse button you had commented earlier */}
-        {/* <button className="slide" type="button" onClick={toggleSide} aria-label="Toggle sidebar" title="Collapse sidebar">
-          <img src={arrow} alt="arrow" />
-        </button> */}
 
         <button
           className="navbar-toggler"
@@ -579,6 +584,55 @@ export default function LeftNav() {
               </>
             )}
 
+            {/* Home Care - Combined Section */}
+            {(canHomeCareClient || canHomeCareClientExit || canHomeCareWorker || canHomeCareWorkerExit) && (
+              <>
+                <li className="nav-item">
+                  <button className="groupBtn btn btn-sm" onClick={() => toggleGroup("homeCare")} type="button">
+                    <span>Home Care</span>
+                    <span style={{ opacity: 0.7 }}>{open.homeCare ? "▾" : "▸"}</span>
+                  </button>
+                </li>
+                {open.homeCare && <div className="mt-2" />}
+                {open.homeCare && (
+                  <>
+                    {/* Home Care Client Section */}
+                    {canHomeCareClient && (
+                      <li className="nav-item">
+                        <NavLink to="HomeCareClient" className="nav-link" title="Home Care Client" onClick={onNavClick}>
+                          <img src={client} alt="" /> <span className="ms-1">Home Care Client</span>
+                        </NavLink>
+                      </li>
+                    )}
+                    {canHomeCareClientExit && (
+                      <li className="nav-item">
+                        <NavLink to="HomeCareClientExit" className="nav-link" title="Home Care Client Exit" onClick={onNavClick}>
+                          <img src={ClientExitIcon} alt="" /> <span className="ms-1">Home Care Client Exit</span>
+                        </NavLink>
+                      </li>
+                    )}
+                    
+                    {/* Home Care Workers Section */}
+                    {canHomeCareWorker && (
+                      <li className="nav-item">
+                        <NavLink to="HomeCareWorker" className="nav-link" title="Home Care Workers" onClick={onNavClick}>
+                          <img src={workerData} alt="" /> <span className="ms-1">Home Care Workers</span>
+                        </NavLink>
+                      </li>
+                    )}
+                    {canHomeCareWorkerExit && (
+                      <li className="nav-item">
+                        <NavLink to="HomeCareWorkerExit" className="nav-link" title="Home Care Worker Exit" onClick={onNavClick}>
+                          <img src={workerExit} alt="" /> <span className="ms-1">Home Care Worker Exit</span>
+                        </NavLink>
+                      </li>
+                    )}
+                  </>
+                )}
+                <hr className="mt-3" />
+              </>
+            )}
+
             {/* Enquiry */}
             {(canEnquiry || canEnquiryExit) && (
               <>
@@ -617,7 +671,7 @@ export default function LeftNav() {
                 <li className="nav-item">
                   <button className="groupBtn btn btn-sm" onClick={() => toggleGroup("hospital")} type="button">
                     <span>Hospital</span>
-                    <span style={{ opacity: 0.7 }}>{open.hospital ? "▾" : "▸"}</span> {/* Fixed: removed extra } */}
+                    <span style={{ opacity: 0.7 }}>{open.hospital ? "▾" : "▸"}</span>
                   </button>
                 </li>
                 {open.hospital && <div className="mt-2" />}
@@ -739,6 +793,12 @@ export default function LeftNav() {
         <Route path="EmployeeAggrement" element={<PermRoute allowed={canWorkerAgreement}><EmployeeAggrement /></PermRoute>} />
         <Route path="WorkerCallsData" element={<PermRoute allowed={canWorkerCallData}><WorkerCallsData /></PermRoute>} />
         <Route path="WorkerCallDelete" element={<PermRoute allowed={canWorkerCallDelete}><WorkerCallDelete /></PermRoute>} />
+
+        {/* Home Care */}
+        <Route path="HomeCareClient" element={<PermRoute allowed={canHomeCareClient}><HomeCareClient /></PermRoute>} />
+        <Route path="HomeCareClientExit" element={<PermRoute allowed={canHomeCareClientExit}><HomeCareClientExit /></PermRoute>} />
+        <Route path="HomeCareWorker" element={<PermRoute allowed={canHomeCareWorker}><HomeCareWorker /></PermRoute>} />
+        <Route path="HomeCareWorkerExit" element={<PermRoute allowed={canHomeCareWorkerExit}><HomeCareWorkerExit /></PermRoute>} />
 
         {/* Investments */}
         <Route path="Investments" element={<PermRoute allowed={canInvestments}><Investments /></PermRoute>} />

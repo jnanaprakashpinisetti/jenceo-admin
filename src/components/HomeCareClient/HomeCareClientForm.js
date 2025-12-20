@@ -9,11 +9,11 @@ import firebaseDB from "../../firebase";
 import { useAuth } from "../../context/AuthContext";
 
 // Helper: compute next HM id from an array of ids
-function computeNextHMIdFromList(ids = [], defaultPrefix = "HM-", padLength = 2) {
+function computeNextHMIdFromList(ids = [], defaultPrefix = "HK-", padLength = 2) {
   let maxNum = 0;
   ids.forEach((s) => {
     if (!s) return;
-    const m = String(s).trim().match(/^HM-(\d+)$/);
+    const m = String(s).trim().match(/^HK-(\d+)$/);
     if (!m) return;
     const num = parseInt(m[1], 10) || 0;
     if (num > maxNum) maxNum = num;
@@ -23,14 +23,14 @@ function computeNextHMIdFromList(ids = [], defaultPrefix = "HM-", padLength = 2)
   return `${defaultPrefix}${padded}`;
 }
 
-// Scan HomeCare/ClientData to find all id candidates and compute next id
+// Scan HouseKeeping/ClientData to find all id candidates and compute next id
 async function fetchLastHomeCareClientId(firebaseDBRef) {
   try {
     const ids = [];
 
-    // Read HomeCare/ClientData
+    // Read HouseKeeping/ClientData
     try {
-      const snap = await firebaseDBRef.child("HomeCare/ClientData").once("value");
+      const snap = await firebaseDBRef.child("HouseKeeping/ClientData").once("value");
       if (snap.exists()) {
         snap.forEach((child) => {
           const v = child.val() || {};
@@ -39,24 +39,24 @@ async function fetchLastHomeCareClientId(firebaseDBRef) {
         });
       }
     } catch (e) {
-      console.warn("fetch HomeCare/ClientData failed", e);
+      console.warn("fetch HouseKeeping/ClientData failed", e);
     }
 
-    if (ids.length === 0) return "HM-01";
+    if (ids.length === 0) return "HK-01";
 
     let padLen = 2;
     ids.forEach((s) => {
-      const m = String(s).trim().match(/^HM-(\d+)$/);
+      const m = String(s).trim().match(/^HK-(\d+)$/);
       if (m) {
         const digitsLen = m[1].length;
         if (digitsLen > padLen) padLen = digitsLen;
       }
     });
 
-    return computeNextHMIdFromList(ids, "HM-", padLen);
+    return computeNextHMIdFromList(ids, "HK-", padLen);
   } catch (err) {
     console.warn("fetchLastHomeCareClientId error", err);
-    return "HM-01";
+    return "HK-01";
   }
 }
 
@@ -305,8 +305,8 @@ export default function HomeCareClientForm({ isOpen, onClose }) {
       if (!formData.idNo || !formData.idNo.trim()) {
         newErrors.idNo = "ID No is required";
         isValid = false;
-      } else if (!/^HM-\d{2,}$/.test(formData.idNo)) {
-        newErrors.idNo = "ID No must be (e.g., HM-01)";
+      } else if (!/^HK-\d{2,}$/.test(formData.idNo)) {
+        newErrors.idNo = "ID No must be (e.g., HK-01)";
         isValid = false;
       }
       if (!formData.clientName || !formData.clientName.trim()) {
@@ -502,7 +502,7 @@ export default function HomeCareClientForm({ isOpen, onClose }) {
     if (step === 1) {
       try {
         const idToCheck = (formData.idNo || "").trim();
-        const queryRef = firebaseDB.child("HomeCare/ClientData").orderByChild("idNo").equalTo(idToCheck);
+        const queryRef = firebaseDB.child("HouseKeeping/ClientData").orderByChild("idNo").equalTo(idToCheck);
         const snap = await queryRef.once("value");
         if (snap.exists()) {
           let foundName = "";
@@ -624,7 +624,7 @@ export default function HomeCareClientForm({ isOpen, onClose }) {
     };
 
     try {
-      const newRef = await firebaseDB.child("HomeCare/ClientData").push(dataToSave);
+      const newRef = await firebaseDB.child("HouseKeeping/ClientData").push(dataToSave);
       if (newRef && newRef.key) {
         setSubmittedClientData({ idNo: formData.idNo, clientName: formData.clientName });
         setShowModal(true);

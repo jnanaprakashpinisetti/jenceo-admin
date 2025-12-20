@@ -108,6 +108,15 @@ const HomeCarePaymentDetails = ({ formData, handleChange, addPayment, removePaym
           </div>
 
           <div className="row">
+                        <div className="col-md-4">
+              <div className="form-group">
+                <label><strong>Payment Date</strong> <span className="text-danger">*</span></label>
+                <input type="date" className={`form-control ${getErr(index, "date") ? "is-invalid" : ""}`} 
+                  name="date" value={payment.date || ""} onChange={(e) => handleChange(e, "payments", index)} 
+                  id={`date-${index}`} />
+                {getErr(index, "date") && <div className="invalid-feedback">{getErr(index, "date")}</div>}
+              </div>
+            </div>
             <div className="col-md-4">
               <div className="form-group">
                 <label><strong>Reminder Days</strong></label>
@@ -130,15 +139,7 @@ const HomeCarePaymentDetails = ({ formData, handleChange, addPayment, removePaym
               </div>
             </div>
 
-            <div className="col-md-4">
-              <div className="form-group">
-                <label><strong>Payment Date</strong> <span className="text-danger">*</span></label>
-                <input type="date" className={`form-control ${getErr(index, "date") ? "is-invalid" : ""}`} 
-                  name="date" value={payment.date || ""} onChange={(e) => handleChange(e, "payments", index)} 
-                  id={`date-${index}`} />
-                {getErr(index, "date") && <div className="invalid-feedback">{getErr(index, "date")}</div>}
-              </div>
-            </div>
+
           </div>
 
           <div className="row mt-2">

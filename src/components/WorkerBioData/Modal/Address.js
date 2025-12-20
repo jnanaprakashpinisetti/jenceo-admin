@@ -30,7 +30,9 @@ const Address = ({ formData, canEdit, handleInputChange }) => {
 
     return (
         <>
-            {/* Permanent Address Card */}
+<div className="row">
+<div className="col-md-6">
+                {/* Permanent Address Card */}
             <div className="card shadow-sm border-primary mb-4">
                 <div className="card-header bg-primary text-white d-flex align-items-center">
                     <i className="bi bi-house-door-fill me-2 fs-5"></i>
@@ -85,7 +87,12 @@ const Address = ({ formData, canEdit, handleInputChange }) => {
                 </div>
             </div>
 
-            {/* Present Address Card */}
+           
+
+</div>
+
+<div className="col-md-6">
+ {/* Present Address Card */}
             <div className="card shadow-sm border-success">
                 <div className="card-header bg-success text-white d-flex align-items-center">
                     <i className="bi bi-house-fill me-2 fs-5"></i>
@@ -139,6 +146,8 @@ const Address = ({ formData, canEdit, handleInputChange }) => {
                     </div>
                 </div>
             </div>
+</div>
+</div>
 
             {/* Help/Info Card */}
             <div className="card shadow-sm border-info mt-4">

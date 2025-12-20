@@ -718,7 +718,7 @@ const Payment = ({
                                             </td>
                                             <td>
                                                 {payment.timesheetID ? (
-                                                    <small className="text-muted">#{payment.timesheetID}</small>
+                                                    <small className="small-text text-light-50">#{payment.timesheetID}</small>
                                                 ) : (
                                                     "—"
                                                 )}
@@ -768,7 +768,7 @@ const Payment = ({
                                                 {formatCurrency(totals.totalBalance)}
                                             </span>
                                         </td>
-                                        <td colSpan={canEdit ? "6" : "5"} className="text-center">
+                                        <td colSpan={canEdit ? "6" : "6"} className="text-center">
                                             <span className="badge bg-dark border border-info">
                                                 Total Records: {payments.length}
                                             </span>

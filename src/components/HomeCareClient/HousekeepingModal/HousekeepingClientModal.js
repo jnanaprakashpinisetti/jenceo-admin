@@ -8,7 +8,7 @@ import { useAuth } from "../../../context/AuthContext";
 import BasicInfoTab from "./tabs/BasicInfoTab";
 import AddressTab from "./tabs/AddressTab";
 import ServiceTab from "./tabs/ServiceTab";
-import PatientTab from "./tabs/PatientTab";
+import ServiceScheduleTab from "./tabs/ServiceScheduleTab";
 import WorkersTab from "./tabs/WorkerTab";
 import PaymentsTab from "./tabs/PaymentsTab";
 import DetailInfoTab from "./tabs/DetailInfoTab";
@@ -714,7 +714,7 @@ const HousekeepingClientModal = ({
                   ["basic", "Basic Info"],
                   ["address", "Address"],
                   ["service", "Service Details"],
-                  ["patient", "Service Schedule"],
+                  ["serviceSchedule", "Service Schedule"],
                   ["workers", `Workers (${(formData.workers || []).length})`],
                   ["payments", `Payments (${(formData.payments || []).length})`],
                   ["detailinfo", "Detail-Info"],
@@ -756,8 +756,8 @@ const HousekeepingClientModal = ({
                   />
                 )}
 
-                {activeTab === "patient" && (
-                  <PatientTab
+                {activeTab === "serviceSchedule" && (
+                  <ServiceScheduleTab
                     formData={formData}
                     editMode={editMode}
                     handleChange={handleChange}

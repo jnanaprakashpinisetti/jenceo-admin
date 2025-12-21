@@ -5,6 +5,7 @@ import editIcon from '../../assets/eidt.svg';
 import viewIcon from '../../assets/view.svg';
 import deleteIcon from '../../assets/delete.svg';
 import { useAuth } from "../../context/AuthContext";
+import HousekeepingClientModal from './HousekeepingModal/HousekeepingClientModal';
 
 /**
  * DisplayHouseKeepingClient component
@@ -948,8 +949,8 @@ export default function DisplayHouseKeepingClient() {
       )}
 
       {/* Client View/Edit Modal - You can create this later */}
-      {/* {selectedClient && (
-        <HouseKeepingClientModal
+      {selectedClient && (
+        <HousekeepingClientModal
           client={selectedClient}
           isOpen={isModalOpen}
           onClose={handleCloseModal}
@@ -957,7 +958,7 @@ export default function DisplayHouseKeepingClient() {
           onDelete={() => { }}
           isEditMode={isEditMode}
         />
-      )} */}
+      )}
 
       {/* Delete Confirmation Modal */}
       {showDeleteConfirm && clientToDelete && (

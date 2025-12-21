@@ -1,9 +1,9 @@
  import React from "react";
 
-const PatientTab = ({ formData, editMode, handleChange }) => {
+const ServiceSchedule = ({ formData, editMode, handleChange }) => {
   return (
     <div>
-      <div className="alert alert-info">
+      <div className="alert alert-info text-info">
         <i className="bi bi-info-circle me-2"></i>
         <strong>Note:</strong> This tab is specific to Care Recipients. For Housekeeping, this tab is not applicable.
       </div>
@@ -13,7 +13,7 @@ const PatientTab = ({ formData, editMode, handleChange }) => {
           <div className="col-md-12">
             <div className="card">
               <div className="card-header bg-info text-white">
-                <h5 className="mb-0">Housekeeping Service Details</h5>
+                <h5 className="mb-0">Housekeeping Service Details payments</h5>
               </div>
               <div className="card-body">
                 <div className="row">
@@ -57,7 +57,7 @@ const PatientTab = ({ formData, editMode, handleChange }) => {
           <div className="col-md-12">
             <div className="card">
               <div className="card-header bg-info text-white">
-                <h5 className="mb-0">Housekeeping Service Details</h5>
+                <h5 className="mb-0">Housekeeping Service Details p2</h5>
               </div>
               <div className="card-body">
                 <div className="row">
@@ -103,5 +103,5 @@ const PatientTab = ({ formData, editMode, handleChange }) => {
   );
 };
 
-export default PatientTab;
+export default ServiceSchedule;
  

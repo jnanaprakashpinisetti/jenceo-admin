@@ -187,7 +187,7 @@ const AddressTab = ({ formData, editMode, handleChange }) => {
 
                 {/* Full Address Summary Card */}
                 <div className="col-12">
-                  <div className="  rounded p-3 bg-secondary  ">
+                  <div className="  rounded p-3 bg-secondary bg-opacity-10 ">
                     <div className="text-muted small mb-1">Complete Address</div>
                     <div className="fw-semibold">
                       {formData.dNo || ""} {formData.street ? `, ${formData.street}` : ""}

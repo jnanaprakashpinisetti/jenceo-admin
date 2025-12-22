@@ -332,7 +332,7 @@ export default function DisplayClient() {
     return () => offs.forEach((fn) => fn());
   }, []);
 
-  // === Live join latest payment per client from DB (handles ClientData/<id>/Payments) ===
+  // === Live join latest payment per client from DB (handles ClientData/HomeCare/<id>/Payments) ===
   useEffect(() => {
     if (!Array.isArray(clients) || clients.length === 0) return;
 
@@ -341,7 +341,7 @@ export default function DisplayClient() {
       if (!c?.id) return;
 
       // listen to lowercase path (your DB uses "payments")
-      const payRefLower = firebaseDB.child(`ClientData/${c.id}/payments`);
+      const payRefLower = firebaseDB.child(`ClientData/HomeCare/${c.id}/payments`);
       const handlerLower = payRefLower.limitToLast(1).on("value", (snap) => {
         let latest = null;
         snap.forEach((child) => (latest = { id: child.key, ...child.val() }));
@@ -362,7 +362,7 @@ export default function DisplayClient() {
       });
 
       // OPTIONAL: also listen to legacy UPPERCASE path if you truly have some records there.
-      const payRefUpper = firebaseDB.child(`ClientData/${c.id}/Payments`);
+      const payRefUpper = firebaseDB.child(`ClientData/HomeCare/${c.id}/Payments`);
       const handlerUpper = payRefUpper.limitToLast(1).on("value", (snap) => {
         let latest = null;
         snap.forEach((child) => (latest = { id: child.key, ...child.val() }));
@@ -562,7 +562,7 @@ export default function DisplayClient() {
 
   // Fetch + live updates (kept your realtime listener)
   useEffect(() => {
-    const ref = firebaseDB.child('ClientData');
+    const ref = firebaseDB.child('ClientData/HomeCare');
     const handler = ref.on('value', (snapshot) => {
       try {
         if (snapshot.exists()) {
@@ -683,7 +683,7 @@ export default function DisplayClient() {
 
   const handleSave = async (updatedClient) => {
     try {
-      await firebaseDB.child(`ClientData/${updatedClient.id}`).update(updatedClient);
+      await firebaseDB.child(`ClientData/HomeCare/${updatedClient.id}`).update(updatedClient);
       setIsModalOpen(false);
       setShowSaveModal(true);
     } catch (err) {
@@ -1050,9 +1050,9 @@ export default function DisplayClient() {
                     const movedAt = new Date().toISOString();
                     const removalEntry = { removedAt: movedAt, removedBy: (window?.CURRENT_USER_NAME || 'System'), removalReason: removalForm.reason, removalComment: removalForm.comment.trim() };
 
-                    await firebaseDB.child(`ExitClients/${id}`).set({ ...payload, originalId: id, movedAt });
-                    await firebaseDB.child(`ExitClients/${id}/removalHistory`).push(removalEntry);
-                    await firebaseDB.child(`ClientData/${id}`).remove();
+                    await firebaseDB.child(`ClientData/HomeCare/ExitClients/${id}`).set({ ...payload, originalId: id, movedAt });
+                    await firebaseDB.child(`ClientData/HomeCare/ExitClients/${id}/removalHistory`).push(removalEntry);
+                    await firebaseDB.child(`ClientData/HomeCare/${id}`).remove();
 
                     setShowRemovalDetailsModal(false);
                     setShowMovedModal(true);

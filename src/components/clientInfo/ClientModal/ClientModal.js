@@ -634,13 +634,13 @@ const ClientModal = ({
       for (let i = 0; i < count; i += 1) {
         tasks.push(
           firebaseDB
-            .child(`ClientData/${key}/payments/${i}/reminderDate`)
+            .child(`ClientData/HomeCare/${key}/payments/${i}/reminderDate`)
             .remove()
             .catch(() => { }),
         );
         tasks.push(
           firebaseDB
-            .child(`ClientData/${key}/payments/${i}/remindeDate`)
+            .child(`ClientData/HomeCare/${key}/payments/${i}/remindeDate`)
             .remove()
             .catch(() => { }),
         );
@@ -677,7 +677,7 @@ const ClientModal = ({
     const key = formData?.id || formData?.recordId || formData?.clientId || client?.id || client?.key;
     if (key) {
       await firebaseDB
-        .child(`ClientData/${key}/payments/${idx}`)
+        .child(`ClientData/HomeCare/${key}/payments/${idx}`)
         .update({ reminderDate: bulkReminderDate });
     }
   };
@@ -1060,9 +1060,9 @@ const ClientModal = ({
                     };
                     
                     if (id) {
-                      await firebaseDB.child(`ExitClients/${id}/removalHistory`).push(removalEntry);
+                      await firebaseDB.child(`ClientData/HomeCare/ExitClients/${id}/removalHistory`).push(removalEntry);
                     } else {
-                      const newRef = firebaseDB.child(`ExitClients`).push();
+                      const newRef = firebaseDB.child(`ClientData/HomeCare/ExitClients`).push();
                       await newRef.set({ removalHistory: { [newRef.key]: removalEntry }, movedAt: new Date().toISOString() });
                     }
                     

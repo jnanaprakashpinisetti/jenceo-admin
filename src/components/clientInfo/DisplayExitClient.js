@@ -30,7 +30,7 @@ export default function DisplayExitClient() {
 
   useEffect(() => {
     // load exit clients
-    const ref = firebaseDB.child("ExitClients");
+    const ref = firebaseDB.child("ClientData/HomeCare/ExitClients");
     ref.on("value", (snapshot) => {
       if (snapshot.exists()) {
         const arr = [];
@@ -58,7 +58,7 @@ export default function DisplayExitClient() {
     const clientRec = { ...client };
     if (id) {
       try {
-        const snap = await firebaseDB.child(`ExitClients/${id}`).once("value");
+        const snap = await firebaseDB.child(`ClientData/HomeCare/ExitClients/${id}`).once("value");
         const val = snap.val();
         if (val && val.returnHistory) clientRec.returnHistory = Object.values(val.returnHistory);
       } catch (e) {
@@ -124,27 +124,27 @@ export default function DisplayExitClient() {
       };
 
       // 1) restore to active ClientData
-      await firebaseDB.child(`ClientData/${id}`).set({
+      await firebaseDB.child(`ClientData/HomeCare/${id}`).set({
         ...payload,
         restoredFromExit: true,
       });
 
       // 2) append to ClientData/{id}/returnHistory
       try {
-        await firebaseDB.child(`ClientData/${id}/returnHistory`).push(entry);
+        await firebaseDB.child(`ClientData/HomeCare${id}/returnHistory`).push(entry);
       } catch (err) {
         console.warn("push to ClientData returnHistory failed", err);
       }
 
-      // 3) append to ExitClients/{id}/returnHistory (non-fatal)
+      // 3) append to ClientData/HomeCare/ExitClients/{id}/returnHistory (non-fatal)
       try {
-        await firebaseDB.child(`ExitClients/${id}/returnHistory`).push(entry);
+        await firebaseDB.child(`ClientData/HomeCare/ExitClients/${id}/returnHistory`).push(entry);
       } catch (err) {
         console.warn("push to ExitClients returnHistory failed", err);
       }
 
       // 4) remove ExitClients node
-      await firebaseDB.child(`ExitClients/${id}`).remove();
+      await firebaseDB.child(`ClientData/HomeCare/ExitClients/${id}`).remove();
 
       closeActionDetails();
       setShowSuccessModal(true);

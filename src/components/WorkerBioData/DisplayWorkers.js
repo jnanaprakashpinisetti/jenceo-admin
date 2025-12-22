@@ -1,3 +1,4 @@
+// DisplayWorkers.js
 import React, { useState, useEffect, useRef } from 'react';
 import firebaseDB from '../../firebase';
 import editIcon from '../../assets/eidt.svg';
@@ -24,7 +25,7 @@ const NURSING_TASKS = [
     "Wound Dressing",
     "Catheter Care",
     "Catheterization",
-    "Ryle’s Tube / NG Feeding",
+    "Ryle's Tube / NG Feeding",
     "Ryles/Nasogastric Feeding",
     "NG Tube Care",
     "PEG Feeding",
@@ -40,40 +41,63 @@ const NURSING_TASKS = [
     "Post-Operative Care",
 ];
 
+// Department configuration
+const DEPARTMENTS = {
+    "Home Care": "EmployeeBioData",
+    "Housekeeping": "WorkerData/Housekeeping",
+    "Office & Administrative": "WorkerData/Office",
+    "Customer Service": "WorkerData/Customer",
+    "Management & Supervision": "WorkerData/Management",
+    "Security": "WorkerData/Security",
+    "Driving & Logistics": "WorkerData/Driving",
+    "Technical & Maintenance": "WorkerData/Technical",
+    "Retail & Sales": "WorkerData/Retail",
+    "Industrial & Labor": "WorkerData/Industrial",
+    "Others": "WorkerData/Others"
+};
+
+const DEPARTMENT_ORDER = [
+    "Home Care",
+    "Housekeeping",
+    "Office & Administrative",
+    "Customer Service",
+    "Management & Supervision",
+    "Security",
+    "Driving & Logistics",
+    "Technical & Maintenance",
+    "Retail & Sales",
+    "Industrial & Labor",
+    "Others"
+];
 
 export default function DisplayWorkers() {
-    const [employees, setEmployees] = useState([]);
-    const [filteredEmployees, setFilteredEmployees] = useState([]);
+    const [allEmployees, setAllEmployees] = useState({});
+    const [filteredEmployees, setFilteredEmployees] = useState({});
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [selectedEmployee, setSelectedEmployee] = useState(null);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [isEditMode, setIsEditMode] = useState(false);
+    const [activeTab, setActiveTab] = useState("Home Care");
 
     // New unified filters
-    const [skillMode, setSkillMode] = useState("single"); // 'single' (Any) or 'multi' (All)
+    const [skillMode, setSkillMode] = useState("single");
     const [ageRange, setAgeRange] = useState({ min: "", max: "" });
     const [experienceRange, setExperienceRange] = useState({ min: "", max: "" });
-    const [dutyFilter, setDutyFilter] = useState("All"); // All | On Duty | Off Duty
+    const [dutyFilter, setDutyFilter] = useState("All");
     const [selectedLanguages, setSelectedLanguages] = useState([]);
     const [selectedHouseSkills, setSelectedHouseSkills] = useState([]);
     const [showJobRoles, setShowJobRoles] = useState(false);
 
     const [selectedRoles, setSelectedRoles] = useState([]);
     const [selectedGender, setSelectedGender] = useState([]);
-    const [reminderFilter, setReminderFilter] = useState("");
     const [selectedSource, setSelectedSource] = useState("All");
     const [timeFormat, setTimeFormat] = useState("all");
 
     // Show panel only when "Nursing" pill is active
     const [showNursingPanel, setShowNursingPanel] = useState(false);
-
-    // Selected nursing sub-tasks
     const [selectedNursingTasks, setSelectedNursingTasks] = useState([]);
-
-    // Match logic: 'all' = worker must have ALL selected; 'any' = at least ONE
-    const [nursingTasksMode, setNursingTasksMode] = useState("all"); // 'all' | 'any'
-
+    const [nursingTasksMode, setNursingTasksMode] = useState("all");
 
     // Search and filters
     const [searchTerm, setSearchTerm] = useState('');
@@ -89,15 +113,14 @@ export default function DisplayWorkers() {
         'Elder Care': false,
         Diaper: false,
         'Patient Care': false,
-        Cook: false,
         Others: false,
-
     });
 
     // Pagination state
     const [currentPage, setCurrentPage] = useState(1);
     const [rowsPerPage, setRowsPerPage] = useState(10);
     const [totalPages, setTotalPages] = useState(1);
+    const [employeeCounts, setEmployeeCounts] = useState({});
 
     const normalizeArray = (v) =>
         Array.isArray(v)
@@ -105,7 +128,6 @@ export default function DisplayWorkers() {
             : v
                 ? String(v).split(",").map((s) => s.trim()).filter(Boolean)
                 : [];
-
 
     // Return canonical NURSING_TASKS that match the employee's canonical list
     const getWorkerNursingTasks = (w) => {
@@ -119,15 +141,14 @@ export default function DisplayWorkers() {
             w?.primarySkills,
             w?.otherSkills,
             w?.additionalSkills,
-            w?.nursingSkills, // Add this if it exists
+            w?.nursingSkills,
         ];
 
         // Flatten all skills and convert to lowercase for comparison
         const allSkills = []
             .concat(...pools.map(normalizeArray))
             .map(s => String(s).toLowerCase().trim())
-            .filter(s => s); // Remove empty strings
-
+            .filter(s => s);
 
         // Return only the nursing tasks that actually exist in the worker's skills
         const foundTasks = NURSING_TASKS.filter(nursingTask => {
@@ -149,175 +170,241 @@ export default function DisplayWorkers() {
         return foundTasks;
     };
 
-
+    // Fetch all employees from all departments
     useEffect(() => {
-        const fetchEmployees = () => {
+        const fetchAllEmployees = async () => {
+            setLoading(true);
             try {
-                firebaseDB.child("EmployeeBioData").on('value', (snapshot) => {
-                    if (snapshot.exists()) {
-                        const employeesData = [];
-                        snapshot.forEach((childSnapshot) => {
-                            employeesData.push({
-                                id: childSnapshot.key,
-                                ...childSnapshot.val()
+                const employeesByDept = {};
+                const counts = {};
+                
+                for (const [deptName, dbPath] of Object.entries(DEPARTMENTS)) {
+                    try {
+                        const snapshot = await firebaseDB.child(dbPath).once('value');
+                        if (snapshot.exists()) {
+                            const employeesData = [];
+                            snapshot.forEach((childSnapshot) => {
+                                employeesData.push({
+                                    id: childSnapshot.key,
+                                    department: deptName,
+                                    dbPath: dbPath,
+                                    ...childSnapshot.val()
+                                });
                             });
-                        });
-
-                        // Sort employees by ID number in descending order
-                        const sortedEmployees = sortEmployeesDescending(employeesData);
-                        setEmployees(sortedEmployees);
-                        setFilteredEmployees(sortedEmployees);
-                        setTotalPages(Math.ceil(sortedEmployees.length / rowsPerPage));
-                    } else {
-                        setEmployees([]);
-                        setFilteredEmployees([]);
-                        setTotalPages(1);
+                            
+                            // Sort employees by ID number in descending order
+                            const sortedEmployees = sortEmployeesDescending(employeesData);
+                            employeesByDept[deptName] = sortedEmployees;
+                            counts[deptName] = sortedEmployees.length;
+                        } else {
+                            employeesByDept[deptName] = [];
+                            counts[deptName] = 0;
+                        }
+                    } catch (err) {
+                        console.error(`Error fetching ${deptName}:`, err);
+                        employeesByDept[deptName] = [];
+                        counts[deptName] = 0;
                     }
-                    setLoading(false);
-                });
+                }
+                
+                setAllEmployees(employeesByDept);
+                setFilteredEmployees(employeesByDept);
+                setEmployeeCounts(counts);
+                
+                // Calculate total pages for active tab
+                const activeEmployees = employeesByDept[activeTab] || [];
+                setTotalPages(Math.ceil(activeEmployees.length / rowsPerPage));
+                setLoading(false);
             } catch (err) {
                 setError(err.message);
                 setLoading(false);
             }
         };
 
-        fetchEmployees();
+        fetchAllEmployees();
+    }, []);
 
-        return () => {
-            firebaseDB.child("EmployeeBioData").off('value');
-        };
-    }, []); // eslint-disable-line
-
-    // Filter employees based on search term and filters
     // Filter employees based on search term and filters
     useEffect(() => {
-        let filtered = employees;
+        const applyFilters = (employees) => {
+            let filtered = [...employees];
 
-        // — Search —
-        if (searchTerm) {
-            const term = searchTerm.toLowerCase();
-            filtered = filtered.filter((employee) =>
-                (employee.firstName && employee.firstName.toLowerCase().includes(term)) ||
-                (employee.lastName && employee.lastName.toLowerCase().includes(term)) ||
-                (employee.idNo && employee.idNo.toLowerCase().includes(term)) ||
-                (employee.employeeId && employee.employeeId.toLowerCase().includes(term)) ||
-                (employee.primarySkill && employee.primarySkill.toLowerCase().includes(term)) ||
-                (employee.gender && employee.gender.toLowerCase().includes(term))
-            );
-        }
-
-        // — Gender —
-        const activeGenderFilters = Object.keys(genderFilters).filter((key) => genderFilters[key]);
-        if (activeGenderFilters.length > 0) {
-            filtered = filtered.filter(
-                (employee) => employee.gender && activeGenderFilters.includes(employee.gender)
-            );
-        }
-
-        // — Primary “skillFilters” (checkbox group on the left) —
-        const activeSkillFilters = Object.keys(skillFilters).filter((key) => skillFilters[key]);
-        if (activeSkillFilters.length > 0) {
-            filtered = filtered.filter(
-                (employee) => employee.primarySkill && activeSkillFilters.includes(employee.primarySkill)
-            );
-        }
-
-        // === New unified filters start ===
-
-        // Duty
-        if (dutyFilter !== "All") {
-            filtered = filtered.filter((e) => (e.status || "On Duty") === dutyFilter);
-        }
-
-        // Languages & Housekeeping skills with Any/All logic
-        const hasLangSel = selectedLanguages.length > 0;
-        const hasHouseSel = selectedHouseSkills.length > 0;
-        const normArr = (v) =>
-            Array.isArray(v)
-                ? v
-                : typeof v === "string"
-                    ? v.split(",").map((s) => s.trim()).filter(Boolean)
-                    : [];
-
-        filtered = filtered.filter((e) => {
-            // Languages
-            const langs = normArr(e.languages || e.language || e.knownLanguages || e.speaks).map((s) =>
-                s.toLowerCase()
-            );
-            const wantLangs = selectedLanguages.map((s) => s.toLowerCase());
-            if (hasLangSel) {
-                if (skillMode === "single") {
-                    if (!wantLangs.some((s) => langs.includes(s))) return false;
-                } else {
-                    if (!wantLangs.every((s) => langs.includes(s))) return false;
-                }
+            // — Search —
+            if (searchTerm) {
+                const term = searchTerm.toLowerCase();
+                filtered = filtered.filter((employee) =>
+                    (employee.firstName && employee.firstName.toLowerCase().includes(term)) ||
+                    (employee.lastName && employee.lastName.toLowerCase().includes(term)) ||
+                    (employee.idNo && employee.idNo.toLowerCase().includes(term)) ||
+                    (employee.employeeId && employee.employeeId.toLowerCase().includes(term)) ||
+                    (employee.primarySkill && employee.primarySkill.toLowerCase().includes(term)) ||
+                    (employee.gender && employee.gender.toLowerCase().includes(term))
+                );
             }
 
-            // Housekeeping skills (check all common fields like in WorkerCalleDisplay)
-            const skillsArr = []
-                .concat(
-                    normArr(e.houseSkills),
-                    normArr(e.skills),
-                    normArr(e.otherSkills),
-                    normArr(e.primarySkill),     // sometimes a single value
-                    normArr(e.primarySkills),    // array in many records
-                    normArr(e.homeCareSkills)    // <-- this was missing; caused nurses to be dropped
-                )
-                .map((s) => String(s).toLowerCase());
-
-            const wantSkills = selectedHouseSkills.map((s) => s.toLowerCase());
-            if (hasHouseSel) {
-                if (skillMode === "single") {
-                    if (!wantSkills.some((s) => skillsArr.includes(s))) return false;
-                } else {
-                    if (!wantSkills.every((s) => skillsArr.includes(s))) return false;
-                }
+            // — Gender —
+            const activeGenderFilters = Object.keys(genderFilters).filter((key) => genderFilters[key]);
+            if (activeGenderFilters.length > 0) {
+                filtered = filtered.filter(
+                    (employee) => employee.gender && activeGenderFilters.includes(employee.gender)
+                );
             }
 
-            // Age
-            const calcAge = (dob, fallback) => {
-                if (fallback != null && !isNaN(fallback)) return Number(fallback);
-                const d = new Date(dob);
-                if (!(d instanceof Date) || isNaN(d.getTime())) return null;
-                const today = new Date();
-                let a = today.getFullYear() - d.getFullYear();
-                const m = today.getMonth() - d.getMonth();
-                if (m < 0 || (m === 0 && today.getDate() < d.getDate())) a--;
-                return a;
-            };
-            const age = calcAge(e.dateOfBirth || e.dob || e.birthDate, e.age);
-            if (ageRange.min && age != null && age < parseInt(ageRange.min, 10)) return false;
-            if (ageRange.max && age != null && age > parseInt(ageRange.max, 10)) return false;
-
-            // Experience
-            const takeNum = (v) => {
-                if (v == null) return null;
-                const m = String(v).match(/(\d+(?:\.\d+)?)/);
-                return m ? Number(m[1]) : null;
-            };
-            const rawExp = takeNum(e.workExperince || e.experience || e.expYears || e.totalExperience || e.years);
-            const minRaw = String(experienceRange.min ?? "").trim();
-            const maxRaw = String(experienceRange.max ?? "").trim();
-            const minActive = minRaw !== "" && !Number.isNaN(Number(minRaw));
-            const maxActive = maxRaw !== "" && !Number.isNaN(Number(maxRaw));
-            if (minActive || maxActive) {
-                if (rawExp == null || Number.isNaN(rawExp)) return false;
-                const years = Math.max(0, rawExp);
-                if (minActive && years < Number(minRaw)) return false;
-                if (maxActive && years > Number(maxRaw)) return false;
+            // — Primary "skillFilters" —
+            const activeSkillFilters = Object.keys(skillFilters).filter((key) => skillFilters[key]);
+            if (activeSkillFilters.length > 0) {
+                filtered = filtered.filter(
+                    (employee) => employee.primarySkill && activeSkillFilters.includes(employee.primarySkill)
+                );
             }
 
-            return true;
-        });
+            // === New unified filters start ===
 
-        // === Nursing sub-tasks filter (Home Care “Nursing” pill) ===
-        const nursingSelected = selectedHouseSkills.map((s) => s.toLowerCase()).includes("nursing");
+            // Duty
+            if (dutyFilter !== "All") {
+                filtered = filtered.filter((e) => (e.status || "On Duty") === dutyFilter);
+            }
 
-        if (nursingSelected && selectedNursingTasks.length > 0) {
+            // Languages & Housekeeping skills with Any/All logic
+            const hasLangSel = selectedLanguages.length > 0;
+            const hasHouseSel = selectedHouseSkills.length > 0;
+            const normArr = (v) =>
+                Array.isArray(v)
+                    ? v
+                    : typeof v === "string"
+                        ? v.split(",").map((s) => s.trim()).filter(Boolean)
+                        : [];
 
             filtered = filtered.filter((e) => {
-                // First, check if this employee has nursing in their skills
-                const hasNursingSkill = () => {
+                // Languages
+                const langs = normArr(e.languages || e.language || e.knownLanguages || e.speaks).map((s) =>
+                    s.toLowerCase()
+                );
+                const wantLangs = selectedLanguages.map((s) => s.toLowerCase());
+                if (hasLangSel) {
+                    if (skillMode === "single") {
+                        if (!wantLangs.some((s) => langs.includes(s))) return false;
+                    } else {
+                        if (!wantLangs.every((s) => langs.includes(s))) return false;
+                    }
+                }
+
+                // Housekeeping skills
+                const skillsArr = []
+                    .concat(
+                        normArr(e.houseSkills),
+                        normArr(e.skills),
+                        normArr(e.otherSkills),
+                        normArr(e.primarySkill),
+                        normArr(e.primarySkills),
+                        normArr(e.homeCareSkills)
+                    )
+                    .map((s) => String(s).toLowerCase());
+
+                const wantSkills = selectedHouseSkills.map((s) => s.toLowerCase());
+                if (hasHouseSel) {
+                    if (skillMode === "single") {
+                        if (!wantSkills.some((s) => skillsArr.includes(s))) return false;
+                    } else {
+                        if (!wantSkills.every((s) => skillsArr.includes(s))) return false;
+                    }
+                }
+
+                // Age
+                const calcAge = (dob, fallback) => {
+                    if (fallback != null && !isNaN(fallback)) return Number(fallback);
+                    const d = new Date(dob);
+                    if (!(d instanceof Date) || isNaN(d.getTime())) return null;
+                    const today = new Date();
+                    let a = today.getFullYear() - d.getFullYear();
+                    const m = today.getMonth() - d.getMonth();
+                    if (m < 0 || (m === 0 && today.getDate() < d.getDate())) a--;
+                    return a;
+                };
+                const age = calcAge(e.dateOfBirth || e.dob || e.birthDate, e.age);
+                if (ageRange.min && age != null && age < parseInt(ageRange.min, 10)) return false;
+                if (ageRange.max && age != null && age > parseInt(ageRange.max, 10)) return false;
+
+                // Experience
+                const takeNum = (v) => {
+                    if (v == null) return null;
+                    const m = String(v).match(/(\d+(?:\.\d+)?)/);
+                    return m ? Number(m[1]) : null;
+                };
+                const rawExp = takeNum(e.workExperince || e.experience || e.expYears || e.totalExperience || e.years);
+                const minRaw = String(experienceRange.min ?? "").trim();
+                const maxRaw = String(experienceRange.max ?? "").trim();
+                const minActive = minRaw !== "" && !Number.isNaN(Number(minRaw));
+                const maxActive = maxRaw !== "" && !Number.isNaN(Number(maxRaw));
+                if (minActive || maxActive) {
+                    if (rawExp == null || Number.isNaN(rawExp)) return false;
+                    const years = Math.max(0, rawExp);
+                    if (minActive && years < Number(minRaw)) return false;
+                    if (maxActive && years > Number(maxRaw)) return false;
+                }
+
+                return true;
+            });
+
+            // === Nursing sub-tasks filter ===
+            const nursingSelected = selectedHouseSkills.map((s) => s.toLowerCase()).includes("nursing");
+
+            if (nursingSelected && selectedNursingTasks.length > 0) {
+                filtered = filtered.filter((e) => {
+                    // Check if this employee has nursing in their skills
+                    const hasNursingSkill = () => {
+                        const normArr = (v) =>
+                            Array.isArray(v)
+                                ? v
+                                : typeof v === "string"
+                                    ? v.split(",").map((s) => s.trim()).filter(Boolean)
+                                    : [];
+
+                        const allSkills = []
+                            .concat(
+                                normArr(e.houseSkills),
+                                normArr(e.skills),
+                                normArr(e.otherSkills),
+                                normArr(e.primarySkill),
+                                normArr(e.primarySkills),
+                                normArr(e.homeCareSkills),
+                                normArr(e.nursingWorks)
+                            )
+                            .map((s) => String(s).toLowerCase());
+
+                        return allSkills.includes("nursing");
+                    };
+
+                    if (!hasNursingSkill()) {
+                        return false;
+                    }
+
+                    const workerTasks = getWorkerNursingTasks(e);
+
+                    if (nursingTasksMode === "all") {
+                        const hasAllTasks = selectedNursingTasks.every(task =>
+                            workerTasks.some(workerTask =>
+                                workerTask.toLowerCase() === task.toLowerCase()
+                            )
+                        );
+                        return hasAllTasks;
+                    } else {
+                        const hasAnyTask = selectedNursingTasks.some(task =>
+                            workerTasks.some(workerTask =>
+                                workerTask.toLowerCase() === task.toLowerCase()
+                            )
+                        );
+                        return hasAnyTask;
+                    }
+                });
+            }
+
+            // === Other Skills (Job Roles) ===
+            const hasOtherSel = selectedRoles.length > 0;
+            if (hasOtherSel) {
+                const wantOther = selectedRoles.map((s) => s.toLowerCase());
+
+                filtered = filtered.filter((e) => {
                     const normArr = (v) =>
                         Array.isArray(v)
                             ? v
@@ -331,89 +418,36 @@ export default function DisplayWorkers() {
                             normArr(e.skills),
                             normArr(e.otherSkills),
                             normArr(e.primarySkill),
-                            normArr(e.primarySkills),
                             normArr(e.homeCareSkills),
-                            normArr(e.nursingWorks)
+                            normArr(e.nursingWorks),
+                            normArr(e.additionalSkills),
+                            normArr(e.jobRoles),
                         )
                         .map((s) => String(s).toLowerCase());
 
-                    return allSkills.includes("nursing");
-                };
+                    return skillMode === "single"
+                        ? wantOther.some((s) => allSkills.includes(s))
+                        : wantOther.every((s) => allSkills.includes(s));
+                });
+            }
 
-                // If employee doesn't have nursing skill, skip
-                if (!hasNursingSkill()) {
-                    return false;
-                }
+            return filtered;
+        };
 
-                // Now check nursing tasks
-                const workerTasks = getWorkerNursingTasks(e);
-
-                if (nursingTasksMode === "all") {
-                    const hasAllTasks = selectedNursingTasks.every(task =>
-                        workerTasks.some(workerTask =>
-                            workerTask.toLowerCase() === task.toLowerCase()
-                        )
-                    );
-                    return hasAllTasks;
-                } else {
-                    const hasAnyTask = selectedNursingTasks.some(task =>
-                        workerTasks.some(workerTask =>
-                            workerTask.toLowerCase() === task.toLowerCase()
-                        )
-                    );
-                    return hasAnyTask;
-                }
-            });
-
-        }
-
-
-
-
-        // === Other Skills (Job Roles) — works with Any / Multi like others ===
-        const hasOtherSel = selectedRoles.length > 0;
-        if (hasOtherSel) {
-            const wantOther = selectedRoles.map((s) => s.toLowerCase());
-
-            filtered = filtered.filter((e) => {
-                // unify all skill sources the employees might use
-                const normArr = (v) =>
-                    Array.isArray(v)
-                        ? v
-                        : typeof v === "string"
-                            ? v.split(",").map((s) => s.trim()).filter(Boolean)
-                            : [];
-
-                const allSkills = []
-                    .concat(
-                        normArr(e.houseSkills),
-                        normArr(e.skills),
-                        normArr(e.otherSkills),
-                        normArr(e.primarySkill),          // sometimes stored as a single value
-                        normArr(e.homeCareSkills),
-                        normArr(e.nursingWorks),
-                        normArr(e.additionalSkills),
-                        normArr(e.jobRoles),              // in case you store them here
-                    )
-                    .map((s) => String(s).toLowerCase());
-
-                // respect your skillMode switch:
-                //  - "single" -> ANY selected role must match
-                //  - "multi"  -> ALL selected roles must match
-                return skillMode === "single"
-                    ? wantOther.some((s) => allSkills.includes(s))
-                    : wantOther.every((s) => allSkills.includes(s));
-            });
-        }
-
-
-        // === New unified filters end ===
-
-        setFilteredEmployees(filtered);
-        setTotalPages(Math.ceil(filtered.length / rowsPerPage));
+        // Apply filters to all departments
+        const newFiltered = {};
+        Object.keys(allEmployees).forEach(dept => {
+            newFiltered[dept] = applyFilters(allEmployees[dept]);
+        });
+        
+        setFilteredEmployees(newFiltered);
+        
+        // Calculate total pages for active tab
+        const activeEmployees = newFiltered[activeTab] || [];
+        setTotalPages(Math.ceil(activeEmployees.length / rowsPerPage));
         setCurrentPage(1);
     }, [
-        employees,
+        allEmployees,
         searchTerm,
         genderFilters,
         skillFilters,
@@ -427,7 +461,15 @@ export default function DisplayWorkers() {
         selectedNursingTasks,
         nursingTasksMode,
         selectedRoles,
+        activeTab
     ]);
+
+    // Update total pages when active tab or rowsPerPage changes
+    useEffect(() => {
+        const activeEmployees = filteredEmployees[activeTab] || [];
+        setTotalPages(Math.ceil(activeEmployees.length / rowsPerPage));
+        setCurrentPage(1);
+    }, [filteredEmployees, activeTab, rowsPerPage]);
 
     // Toggle Housekeeping Skill pill (drives Nursing panel)
     const handleHouseSkillClick = (s) => {
@@ -448,14 +490,6 @@ export default function DisplayWorkers() {
         });
     };
 
-
-
-
-    // Update total pages when rowsPerPage changes
-    useEffect(() => {
-        setTotalPages(Math.ceil(filteredEmployees.length / rowsPerPage));
-    }, [filteredEmployees, rowsPerPage]);
-
     const sortEmployeesDescending = (employeesData) => {
         return employeesData.sort((a, b) => {
             // Get the ID numbers
@@ -469,9 +503,36 @@ export default function DisplayWorkers() {
                 return numB - numA;
             }
 
-            // For numeric IDs
-            if (!isNaN(idA) && !isNaN(idB)) {
-                return parseInt(idB) - parseInt(idA);
+            // For other prefixes
+            const prefixMap = {
+                "HKW-": "Housekeeping",
+                "OW-": "Office & Administrative",
+                "CW-": "Customer Service",
+                "MW-": "Management & Supervision",
+                "SW-": "Security",
+                "DW-": "Driving & Logistics",
+                "TW-": "Technical & Maintenance",
+                "RW-": "Retail & Sales",
+                "IW-": "Industrial & Labor"
+            };
+
+            // Try to extract numbers from any prefix format
+            const extractNumber = (id) => {
+                for (const prefix in prefixMap) {
+                    if (id.startsWith(prefix)) {
+                        return parseInt(id.replace(prefix, '')) || 0;
+                    }
+                }
+                // Try to find any number at the end
+                const match = id.match(/(\d+)$/);
+                return match ? parseInt(match[1]) : 0;
+            };
+
+            const numA = extractNumber(idA);
+            const numB = extractNumber(idB);
+            
+            if (numA !== numB) {
+                return numB - numA;
             }
 
             // For string IDs
@@ -480,9 +541,12 @@ export default function DisplayWorkers() {
     };
 
     // Calculate current employees to display
-    const indexOfLastEmployee = currentPage * rowsPerPage;
-    const indexOfFirstEmployee = indexOfLastEmployee - rowsPerPage;
-    const currentEmployees = filteredEmployees.slice(indexOfFirstEmployee, indexOfLastEmployee);
+    const currentEmployees = () => {
+        const employees = filteredEmployees[activeTab] || [];
+        const indexOfLastEmployee = currentPage * rowsPerPage;
+        const indexOfFirstEmployee = indexOfLastEmployee - rowsPerPage;
+        return employees.slice(indexOfFirstEmployee, indexOfLastEmployee);
+    };
 
     // Change page
     const paginate = (pageNumber) => setCurrentPage(pageNumber);
@@ -553,9 +617,9 @@ export default function DisplayWorkers() {
     const [employeeToDelete, setEmployeeToDelete] = useState(null);
     const [showDeleteReasonModal, setShowDeleteReasonModal] = useState(false);
     const [showDeleteSuccessModal, setShowDeleteSuccessModal] = useState(false);
-    const [deleteError, setDeleteError] = useState(null); // server/general error
-    const [reasonError, setReasonError] = useState(null); // inline for select
-    const [commentError, setCommentError] = useState(null); // inline for textarea
+    const [deleteError, setDeleteError] = useState(null);
+    const [reasonError, setReasonError] = useState(null);
+    const [commentError, setCommentError] = useState(null);
     const [deleteReasonForm, setDeleteReasonForm] = useState({ reasonType: "", comment: "" });
 
     // refs for validation focusing
@@ -570,7 +634,6 @@ export default function DisplayWorkers() {
 
     const closeDeleteConfirm = () => {
         setShowDeleteConfirm(false);
-        // keep employeeToDelete until modal closed/handled
     };
 
     // Check if any filter is active
@@ -579,9 +642,9 @@ export default function DisplayWorkers() {
         Object.values(skillFilters).some(Boolean) ||
         selectedLanguages.length ||
         selectedHouseSkills.length ||
-        selectedNursingTasks.length ||     // <— NEW: nursing sub-tasks
-        (nursingTasksMode !== "all") ||    // <— NEW: mode switched to ANY
-        selectedRoles.length ||            // <— NEW: other skills selected
+        selectedNursingTasks.length ||
+        (nursingTasksMode !== "all") ||
+        selectedRoles.length ||
         dutyFilter !== "All" ||
         skillMode !== "single" ||
         ageRange.min || ageRange.max ||
@@ -592,16 +655,13 @@ export default function DisplayWorkers() {
     const canon = (s) => String(s || "")
         .toLowerCase()
         .normalize("NFKD")
-        .replace(/[\u0300-\u036f]/g, "")   // strip diacritics
-        .replace(/['’`"]/g, "")            // quotes
-        .replace(/[^a-z0-9]+/g, " ")       // collapse punctuation to spaces
-        .replace(/\s+/g, " ")              // collapse spaces
+        .replace(/[\u0300-\u036f]/g, "")
+        .replace(/[''`"]/g, "")
+        .replace(/[^a-z0-9]+/g, " ")
+        .replace(/\s+/g, " ")
         .trim();
 
-
-
-    // Aliases: map canonical needles -> array of canonical patterns considered equivalent
-    // Aliases: map canonical needles -> array of canonical patterns considered equivalent
+    // Aliases map
     const NURSING_ALIASES = {
         [canon("Ryle's Tube / NG Feeding")]: [
             canon("Ryle's Tube / NG Feeding"),
@@ -644,10 +704,10 @@ export default function DisplayWorkers() {
         setSelectedLanguages([]);
         setSelectedHouseSkills([]);
         setSelectedNursingTasks([]);
-        setNursingTasksMode("all");       // ensure back to ALL
+        setNursingTasksMode("all");
         setShowNursingPanel(false);
-        setSelectedRoles([]);             // <— clear Other Skills
-        setShowJobRoles(false);           // <— collapse Other Skills panel
+        setSelectedRoles([]);
+        setShowJobRoles(false);
         setDutyFilter("All");
         setSkillMode("single");
         setAgeRange({ min: "", max: "" });
@@ -655,19 +715,16 @@ export default function DisplayWorkers() {
         setSearchTerm("");
     };
 
-
-
     // When user confirms on the first confirm -> open reason modal
     const handleDeleteConfirmProceed = (e) => {
         if (e && e.preventDefault) e.preventDefault();
         setShowDeleteConfirm(false);
         setDeleteReasonForm({ reasonType: "", comment: "" });
-        setDeleteError(null); // CLEAR previous server errors when opening reason modal
+        setDeleteError(null);
         setReasonError(null);
         setCommentError(null);
         setShowDeleteReasonModal(true);
 
-        // focus the select (reason) short delay to ensure element mounted
         setTimeout(() => {
             if (reasonSelectRef.current) reasonSelectRef.current.focus();
         }, 50);
@@ -688,7 +745,6 @@ export default function DisplayWorkers() {
             ok = false;
         }
 
-        // focus first invalid field and scroll into view
         setTimeout(() => {
             if (!ok) {
                 if (reasonError && reasonSelectRef.current) {
@@ -701,7 +757,6 @@ export default function DisplayWorkers() {
                     commentRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
                     return;
                 }
-                // If errors set in this tick, choose based on current form fields:
                 if (!deleteReasonForm.reasonType && reasonSelectRef.current) {
                     reasonSelectRef.current.focus();
                     reasonSelectRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -730,21 +785,20 @@ export default function DisplayWorkers() {
             return;
         }
 
-        const { id } = employeeToDelete;
+        const { id, dbPath } = employeeToDelete;
         try {
             // read employee data
-            const snapshot = await firebaseDB.child(`EmployeeBioData/${id}`).once("value");
+            const snapshot = await firebaseDB.child(`${dbPath}/${id}`).once("value");
             const employeeData = snapshot.val();
             if (!employeeData) {
                 setDeleteError("Employee data not found");
-                // keep modal open for user
                 return;
             }
 
             // attach removal metadata
             const payloadToExit = { ...employeeData };
 
-            // Save employee record under ExitEmployees (without top-level removal fields)
+            // Save employee record under ExitEmployees
             await firebaseDB.child(`ExitEmployees/${id}`).set(payloadToExit);
 
             // push removal entry into the item's removalHistory array
@@ -755,7 +809,16 @@ export default function DisplayWorkers() {
                 removalComment: deleteReasonForm.comment ? deleteReasonForm.comment.trim() : ''
             };
             await firebaseDB.child(`ExitEmployees/${id}/removalHistory`).push(removalEntry);
-            await firebaseDB.child(`EmployeeBioData/${id}`).remove();
+            
+            // Remove from original location
+            await firebaseDB.child(`${dbPath}/${id}`).remove();
+            
+            // Update local state
+            setAllEmployees(prev => ({
+                ...prev,
+                [employeeToDelete.department]: prev[employeeToDelete.department].filter(emp => emp.id !== id)
+            }));
+            
             // success -> close modal, clear states and show success modal
             setShowDeleteReasonModal(false);
             setEmployeeToDelete(null);
@@ -765,33 +828,13 @@ export default function DisplayWorkers() {
             setCommentError(null);
         } catch (err) {
             console.error(err);
-            // keep the reason modal open and show server error (and allow retry)
             setDeleteError('Error deleting employee: ' + (err.message || err));
-        }
-    };
-
-    const handleDelete = async (employeeId) => {
-        try {
-            const employeeRef = firebaseDB.child(`EmployeeBioData/${employeeId}`);
-            const snapshot = await employeeRef.once('value');
-            const employeeData = snapshot.val();
-
-            if (employeeData) {
-                await firebaseDB.child(`ExitEmployees/${employeeId}`).set(employeeData);
-                const removalEntrySimple = { removedAt: new Date().toISOString(), removedBy: 'UI', removalReason: '', removalComment: '' };
-                await firebaseDB.child(`ExitEmployees/${employeeId}/removalHistory`).push(removalEntrySimple);
-
-                await employeeRef.remove();
-                alert('Employee moved to ExitEmployees successfully!');
-            }
-        } catch (err) {
-            setError('Error deleting employee: ' + err.message);
         }
     };
 
     const handleSave = async (updatedEmployee) => {
         try {
-            await firebaseDB.child(`EmployeeBioData/${updatedEmployee.id}`).update(updatedEmployee);
+            await firebaseDB.child(`${updatedEmployee.dbPath}/${updatedEmployee.id}`).update(updatedEmployee);
             setIsModalOpen(false);
         } catch (err) {
             setError('Error updating employee: ' + err.message);
@@ -807,33 +850,87 @@ export default function DisplayWorkers() {
     if (loading) return <div className="text-center my-5">Loading employees...</div>;
     if (error) return <div className="alert alert-danger">Error: {error}</div>;
 
+    // Get current tab employees
+    const activeEmployees = filteredEmployees[activeTab] || [];
+    const currentTabEmployees = currentEmployees();
+    const totalFiltered = activeEmployees.length;
+
     return (
         <div className='displayWorker'>
-            {/* Search Bar */}
-            <div className="row mb-3">
-                <div className="col-md-6 m-auto">
-                    <div className="input-group">
-                        <span className="input-group-text">
-                            <i className="bi bi-search"></i>
-                        </span>
-                        <input
-                            type="text"
-                            className="form-control search-bar"
-                            placeholder="Search by name, ID, skill, or gender..."
-                            value={searchTerm}
-                            onChange={handleSearchChange}
-                        />
+            {/* Department Tabs */}
+            <div className="row mb-4">
+                <div className="col-12">
+                    <div className="p-3 bg-dark border border-secondary rounded-3 border-opacity-">
+                        <h5 className="mb-3 text-center text-warning">Departments</h5>
+                        <div className="d-flex flex-wrap gap-2 justify-content-center">
+                            {DEPARTMENT_ORDER.map(dept => {
+                                const count = employeeCounts[dept] || 0;
+                                const filteredCount = (filteredEmployees[dept] || []).length;
+                                const isActive = activeTab === dept;
+                                return (
+                                    <button
+                                        key={dept}
+                                        type="button"
+                                        className={`btn btn-sm ${isActive ? "btn-warning" : "btn-outline-warning"} position-relative`}
+                                        onClick={() => {
+                                            setActiveTab(dept);
+                                            setCurrentPage(1);
+                                        }}
+                                    >
+                                        {dept}
+                                        <span className="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger">
+                                            {filteredCount}
+                                            <span className="visually-hidden">employees</span>
+                                        </span>
+                                        {!isActive && count > 0 && (
+                                            <small className="d-block text-muted">Total: {count}</small>
+                                        )}
+                                    </button>
+                                );
+                            })}
+                        </div>
                     </div>
                 </div>
             </div>
 
-            {/* Unified Filters Row (added) */}
+            {/* Active Department Info */}
+            <div className="row mb-3">
+                <div className="col-12">
+                    <div className="p-3 bg-dark border border-warning rounded-3 border-opacity-25">
+                        <div className="row align-items-center">
+                            <div className="col-md-3">
+                                <h4 className="text-warning mb-0">{activeTab}</h4>
+                                <p className="text-info mb-0">
+                                    Total: {employeeCounts[activeTab] || 0} | 
+                                    Showing: {totalFiltered} {totalFiltered !== (employeeCounts[activeTab] || 0) ? `(Filtered)` : ''}
+                                </p>
+                            </div>
+                            <div className="col-md-9">
+                                <div className="input-group">
+                                    <span className="input-group-text">
+                                        <i className="bi bi-search"></i>
+                                    </span>
+                                    <input
+                                        type="text"
+                                        className="form-control search-bar"
+                                        placeholder={`Search ${activeTab} employees...`}
+                                        value={searchTerm}
+                                        onChange={handleSearchChange}
+                                    />
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            {/* Unified Filters Row */}
             <div className="row mb-4">
                 <div className="col-12">
-                    <div className="p-3 bg-dark border border-secondary rounded-3  workerFilter">
+                    <div className="p-3 bg-dark border border-secondary rounded-3 border-opacity-25  workerFilter">
                         <div className="row g-3 align-items-center">
                             {/* Gender */}
-                            <div className="col-lg-2 col-md-3 text-center">
+                            <div className="col-lg-1 col-md-3 text-center">
                                 <label className="form-label text-warning small mb-2">Gender</label>
                                 <div className="d-flex gap-2 justify-content-center">
                                     {["Male", "Female"].map(g => {
@@ -957,7 +1054,7 @@ export default function DisplayWorkers() {
                                         onChange={(e) => {
                                             const val = e.target.checked;
                                             setShowJobRoles(val);
-                                            if (!val) setSelectedRoles([]);    // <— clear on close
+                                            if (!val) setSelectedRoles([]);
                                         }}
                                     />
                                     <label
@@ -970,11 +1067,9 @@ export default function DisplayWorkers() {
                             </div>
 
                             {/* Reset filter */}
-
                             <div className="col-lg-2 col-md-4 text-center">
                                 <label className="form-label small mb-2 text-warning">Reset Filters</label>
                                 <div className="d-flex flex-column align-items-center gap-2">
-                                    {/* Reset button */}
                                     <button
                                         type="button"
                                         className={`btn btn-outline-warning btn-sm mt-2 reset-btn ${hasActiveFilters ? "btn-pulse" : ""}`}
@@ -984,16 +1079,15 @@ export default function DisplayWorkers() {
                                     </button>
                                 </div>
                             </div>
-
                         </div>
                     </div>
                 </div>
             </div>
 
-            {/* Languages & Housekeeping Skills Row (two columns) */}
+            {/* Languages & Housekeeping Skills Row */}
             <div className="row g-3 mb-4">
                 <div className="col-md-6">
-                    <div className="p-3 bg-dark border border-secondary rounded-3 h-100">
+                    <div className="p-3 bg-dark border border-secondary rounded-3 border-opacity-25 h-100">
                         <h6 className="mb-2 text-info">Languages</h6>
                         <div className="d-flex flex-wrap gap-2">
                             {LANG_OPTIONS.map(l => {
@@ -1013,7 +1107,7 @@ export default function DisplayWorkers() {
                     </div>
                 </div>
                 <div className="col-md-6">
-                    <div className="p-3 bg-dark border border-secondary rounded-3 h-100">
+                    <div className="p-3 bg-dark border border-secondary rounded-3 border-opacity-25 h-100">
                         <h6 className="mb-2 text-warning">Housekeeping Skills</h6>
                         <div className="d-flex flex-wrap gap-2">
                             {HOUSE_SKILL_OPTIONS.map(s => {
@@ -1027,10 +1121,8 @@ export default function DisplayWorkers() {
                                     >
                                         {s}
                                     </button>
-
                                 );
                             })}
-
                         </div>
                     </div>
                 </div>
@@ -1073,18 +1165,15 @@ export default function DisplayWorkers() {
                                         type="button"
                                         className={`btn btn-sm rounded-pill ${on ? "btn-danger  text-dark" : "btn-outline-danger "}`}
                                         onClick={() => {
-                                            // Ensure "Nursing" pill is ON when a task is toggled
                                             const nursingOn = selectedHouseSkills.map(x => x.toLowerCase()).includes("nursing");
                                             if (!nursingOn) {
                                                 setSelectedHouseSkills(prev => [...prev, "Nursing"]);
                                                 setShowNursingPanel(true);
                                             }
-                                            // Toggle the task
                                             setSelectedNursingTasks(prev =>
                                                 prev.includes(ns) ? prev.filter(x => x !== ns) : [...prev, ns]
                                             );
                                         }}
-
                                     >
                                         {ns}
                                     </button>
@@ -1103,7 +1192,6 @@ export default function DisplayWorkers() {
                     </div>
                 </div>
             )}
-
 
             {showJobRoles && (
                 <div className="p-3 bg-dark border rounded-3 mb-3">
@@ -1414,15 +1502,16 @@ export default function DisplayWorkers() {
                 </div>
             )}
 
-
-            {/* Filter Checkboxes */}
+            {/* Pagination Controls */}
             <div className="row mb-4">
                 <div className="col-12">
                     <div className="chec-box-card">
                         <div className="card-body py-2 filter-wrapper">
                             <div className="row w-100">
                                 <div className="col-md-3 d-flex align-items-center">
-                                    <p className='text-warning mb-0'> Showing: {indexOfFirstEmployee + 1} - {Math.min(indexOfLastEmployee, filteredEmployees.length)} / {filteredEmployees.length}</p>
+                                    <p className='text-warning mb-0'>
+                                        Showing: {(currentPage - 1) * rowsPerPage + 1} - {Math.min(currentPage * rowsPerPage, totalFiltered)} / {totalFiltered}
+                                    </p>
                                 </div>
 
                                 <div className="col-md-6 d-flex align-items-center justify-content-center">
@@ -1504,7 +1593,6 @@ export default function DisplayWorkers() {
                                             </ul>
                                         </nav>
                                     )}
-
                                 </div>
                                 <div className="col-md-3 d-flex align-items-center justify-content-end">
                                     <span className="me-2">Show</span>
@@ -1521,7 +1609,6 @@ export default function DisplayWorkers() {
                                         <option value={50}>50</option>
                                     </select>
                                     <span className="ms-2">entries</span>
-
                                 </div>
                             </div>
                         </div>
@@ -1529,6 +1616,7 @@ export default function DisplayWorkers() {
                 </div>
             </div>
 
+            {/* Employees Table */}
             <div className="table-responsive mb-3">
                 <table className="table table-dark table-hover">
                     <thead className="table-dark">
@@ -1544,8 +1632,8 @@ export default function DisplayWorkers() {
                         </tr>
                     </thead>
                     <tbody>
-                        {currentEmployees.length > 0 ? (
-                            currentEmployees.map((employee) => (
+                        {currentTabEmployees.length > 0 ? (
+                            currentTabEmployees.map((employee) => (
                                 <tr key={employee.id} onClick={(e) => { e.stopPropagation(); handleView(employee); }} style={{ cursor: 'pointer' }}>
                                     <td>
                                         {employee.employeePhoto ? (
@@ -1573,34 +1661,18 @@ export default function DisplayWorkers() {
                                         <strong>{employee.employeeId || employee.idNo || 'N/A'}</strong>
                                         <small className="small-text d-block mt-1 text-info opacity-75">
                                             By <strong>{employee.createdByName || "System"}</strong>
-                                            {/* Date and Time */}
-                                            {/* {employee.createdAt && (
-                                                <>
-                                                    {" "}
-                                                    on{" "}
-                                                    {new Date(employee.createdAt).toLocaleDateString("en-GB", {
-                                                        day: "2-digit",
-                                                        month: "2-digit",
-                                                        year: "2-digit",
-                                                    })}{" "}
-                                                    {new Date(employee.createdAt).toLocaleTimeString("en-GB", {
-                                                        hour: "2-digit",
-                                                        minute: "2-digit",
-                                                        hour12: true,
-                                                    })}
-                                                </>
-                                            )} */}
                                         </small>
                                     </td>
-                                    <td>{employee.firstName} {employee.lastName}
+                                    <td>
+                                        {employee.firstName} {employee.lastName}
                                         <div className="">
                                             {[1, 2, 3, 4, 5].map((n) => {
                                                 const filled = n <= Number(employee.rating || 0);
                                                 let color = "text-secondary";
                                                 if (filled) {
-                                                    if (employee.rating >= 4) color = "text-success";     // green for 4–5
-                                                    else if (employee.rating === 3) color = "text-warning"; // yellow for 3
-                                                    else color = "text-danger";                             // red for 1–2
+                                                    if (employee.rating >= 4) color = "text-success";
+                                                    else if (employee.rating === 3) color = "text-warning";
+                                                    else color = "text-danger";
                                                 }
                                                 return (
                                                     <i
@@ -1651,7 +1723,6 @@ export default function DisplayWorkers() {
                                             >
                                                 <img src={deleteIcon} alt="delete Icon" style={{ width: '14px', height: '14px' }} />
                                             </button>
-
                                         </div>
                                     </td>
                                 </tr>
@@ -1659,7 +1730,7 @@ export default function DisplayWorkers() {
                         ) : (
                             <tr>
                                 <td colSpan="8" className="text-center py-4">
-                                    No employees found matching your search criteria
+                                    No employees found in {activeTab} matching your search criteria
                                 </td>
                             </tr>
                         )}
@@ -1667,7 +1738,7 @@ export default function DisplayWorkers() {
                 </table>
             </div>
 
-            {/* Pagination controls */}
+            {/* Bottom Pagination */}
             <div className='d-flex align-items-center justify-content-center'>
                 {totalPages > 1 && (
                     <nav aria-label="Employee pagination" className="pagination-wrapper">
@@ -1747,12 +1818,7 @@ export default function DisplayWorkers() {
                         </ul>
                     </nav>
                 )}
-
             </div>
-
-
-
-
 
             {/* Delete Success Modal */}
             {showDeleteSuccessModal && (
@@ -1774,7 +1840,7 @@ export default function DisplayWorkers() {
                 </div>
             )}
 
-            {/* Global delete/server error (keeps showing outside modals) */}
+            {/* Global delete/server error */}
             {deleteError && !showDeleteReasonModal && (
                 <div className="alert alert-danger mt-2">{deleteError}</div>
             )}
@@ -1785,7 +1851,6 @@ export default function DisplayWorkers() {
                     isOpen={isModalOpen}
                     onClose={handleCloseModal}
                     onSave={handleSave}
-                    onDelete={handleDelete}
                     isEditMode={isEditMode}
                 />
             )}
@@ -1803,6 +1868,7 @@ export default function DisplayWorkers() {
                                 <p>Do you want to delete the Worker ?</p>
                                 <p><strong>ID:</strong> {employeeToDelete.employeeId || employeeToDelete.idNo || employeeToDelete.id}</p>
                                 <p><strong>Name:</strong> {employeeToDelete.firstName} {employeeToDelete.lastName}</p>
+                                <p><strong>Department:</strong> {employeeToDelete.department}</p>
                             </div>
                             <div className="modal-footer">
                                 <button type="button" className="btn btn-secondary" onClick={() => setShowDeleteConfirm(false)}>Cancel</button>
@@ -1813,7 +1879,7 @@ export default function DisplayWorkers() {
                 </div>
             )}
 
-            {/* Delete Reason Modal (mandatory comment + dropdown) */}
+            {/* Delete Reason Modal */}
             {showDeleteReasonModal && employeeToDelete && (
                 <div className="modal fade show" style={{ display: 'block', backgroundColor: 'rgba(0,0,0,0.5)' }} tabIndex="-1" role="dialog" aria-modal="true">
                     <div className="modal-dialog modal-dialog-centered">
@@ -1823,7 +1889,6 @@ export default function DisplayWorkers() {
                                 <button type="button" className="btn-close" onClick={() => setShowDeleteReasonModal(false)}></button>
                             </div>
                             <div className="modal-body">
-                                {/* show server/general error at top of modal if exists */}
                                 {deleteError && <div className="alert alert-danger">{deleteError}</div>}
 
                                 <div className="mb-3">
@@ -1867,7 +1932,6 @@ export default function DisplayWorkers() {
                     </div>
                 </div>
             )}
-
         </div>
     );
 }

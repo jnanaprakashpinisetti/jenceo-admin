@@ -1,6 +1,5 @@
 // BasicInformation.js
-import React, { useMemo, useState } from "react";
-import firebaseDB from "../../firebase";
+import React, { useMemo } from "react";
 
 const BasicInformation = ({
   formData,
@@ -8,22 +7,14 @@ const BasicInformation = ({
   handleChange,
   handleBlur,
   handleFileChange,
-  setErrors, // Add setErrors to props
+  setErrors,
   nextStep,
 }) => {
-  const [showIdExistsModal, setShowIdExistsModal] = useState(false);
-  const [existingEmployee, setExistingEmployee] = useState(null);
-
   // Calculate max date for 18 years ago
   const maxDateString = useMemo(() => {
     const maxDate = new Date();
     maxDate.setFullYear(maxDate.getFullYear() - 18);
     return maxDate.toISOString().split("T")[0];
-  }, []);
-
-  // Set current date for date of joining
-  const currentDateString = useMemo(() => {
-    return new Date().toISOString().split("T")[0];
   }, []);
 
   // Auto-calculate years based on date of birth
@@ -102,121 +93,14 @@ const BasicInformation = ({
     });
   };
 
-  // Real ID check using Firebase Realtime Database
-  const checkIdExists = async (idNo) => {
-    if (!idNo) return null;
-    try {
-      const snapshot = await firebaseDB
-        .child("EmployeeBioData")
-        .orderByChild("idNo")
-        .equalTo(idNo)
-        .once("value");
-      if (snapshot.exists()) {
-        const val = snapshot.val();
-        const firstKey = Object.keys(val)[0];
-        const existing = val[firstKey];
-        const name = `${existing.firstName || ""} ${existing.lastName || ""}`.trim() || existing.name || "";
-        return { name, recordId: firstKey, ...existing };
-      }
-      return null;
-    } catch (err) {
-      console.error("Error checking ID existence:", err);
-      return null;
-    }
-  };
-
-  // Handle next step with ID validation
-  const handleNextStep = async () => {
-    if (formData.idNo) {
-      const existingEmployeeData = await checkIdExists(formData.idNo);
-      if (existingEmployeeData) {
-        setExistingEmployee(existingEmployeeData);
-        setShowIdExistsModal(true);
-        return;
-      }
-    }
-    nextStep();
-  };
-
   return (
     <div>
-      {/* ID Exists Modal - unchanged */}
-      {showIdExistsModal && (
-        <div className="id-exists-backdrop">
-          <div className="id-exists-card">
-            <div className="id-exists-head">
-              <div>
-                <div className="id-exists-title">ID Already Exists</div>
-                <div className="id-exists-sub">The provided ID number matches an existing employee</div>
-              </div>
-
-              <button
-                className="id-exists-close"
-                onClick={() => setShowIdExistsModal(false)}
-              >
-                ✕
-              </button>
-            </div>
-
-            <div className="id-exists-body">
-              <div className="id-exists-warning">
-                <div className="id-exists-icon">
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-                    <path
-                      d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"
-                      fill="#fff"
-                      opacity="0.06"
-                    />
-                    <path
-                      d="M12 9v4"
-                      stroke="#ff6b6b"
-                      strokeWidth="1.6"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    />
-                    <path
-                      d="M12 17h.01"
-                      stroke="#ff6b6b"
-                      strokeWidth="1.6"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    />
-                  </svg>
-                </div>
-
-                <div className="id-exists-text">
-                  <p>
-                    This ID number <strong>{existingEmployee?.idNo || "-"}</strong> is
-                    already associated with an existing employee. Please check the
-                    details below.
-                  </p>
-                </div>
-              </div>
-
-              <div className=" text-center">
-                <p className="label mb-0">Employee Name</p>
-                <p className="val"><strong>{existingEmployee?.name || "N/A"}</strong></p>
-              </div>
-            </div>
-
-            <div className="id-exists-footer">
-              <button
-                className="btn-danger"
-                onClick={() => setShowIdExistsModal(false)}
-              >
-                Close
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
       <div className="form-card-header mb-4">
         <h3 className="text-center">Basic Information</h3>
       </div>
       <hr />
       <div className="row g-3">
-        {/* Employee Photo and ID Proof in one row */}
+        {/* Employee Photo */}
         <div className="col-md-6">
           <label htmlFor="employeePhoto" className="form-label">
             Employee Photo <small className="text-muted">(optional)</small>
@@ -244,6 +128,7 @@ const BasicInformation = ({
           {errors.employeePhoto && <div className="invalid-feedback">{errors.employeePhoto}</div>}
         </div>
 
+        {/* ID Proof */}
         <div className="col-md-6">
           <label htmlFor="idProof" className="form-label">
             ID Proof <small className="text-muted">(optional)</small>
@@ -262,41 +147,7 @@ const BasicInformation = ({
           {errors.idProof && <div className="invalid-feedback">{errors.idProof}</div>}
         </div>
 
-        <div className="col-md-6">
-          <label htmlFor="idNo" className="form-label">
-            ID Number <span className="star">*</span>
-          </label>
-          <input
-            type="text"
-            className={`form-control ${errors.idNo ? "is-invalid" : ""}`}
-            id="idNo"
-            name="idNo"
-            value={formData.idNo}
-            onChange={handleChange}
-            onBlur={handleBlur}
-            maxLength={7}
-          />
-          {errors.idNo && <div className="invalid-feedback">{errors.idNo}</div>}
-        </div>
-
-        <div className="col-md-6">
-          <label htmlFor="date" className="form-label">
-            Date Of Joining <span className="star">*</span>
-          </label>
-          <input
-            type="date"
-            className={`form-control ${errors.date ? "is-invalid" : ""}`}
-            id="date"
-            name="date"
-            value={formData.date || currentDateString}
-            onChange={handleChange}
-            onBlur={handleBlur}
-            min={new Date(Date.now() - 20 * 24 * 60 * 60 * 1000).toISOString().split("T")[0]}
-            max={currentDateString}
-          />
-          {errors.date && <div className="invalid-feedback">{errors.date}</div>}
-        </div>
-
+        {/* First Name */}
         <div className="col-md-6">
           <label htmlFor="firstName" className="form-label">
             First Name <span className="star">*</span>
@@ -313,6 +164,7 @@ const BasicInformation = ({
           {errors.firstName && <div className="invalid-feedback">{errors.firstName}</div>}
         </div>
 
+        {/* Last Name */}
         <div className="col-md-6">
           <label htmlFor="lastName" className="form-label">
             Last Name <span className="star">*</span>
@@ -329,6 +181,7 @@ const BasicInformation = ({
           {errors.lastName && <div className="invalid-feedback">{errors.lastName}</div>}
         </div>
 
+        {/* Gender */}
         <div className="col-md-6">
           <label htmlFor="gender" className="form-label">
             Gender <span className="star">*</span>
@@ -349,6 +202,7 @@ const BasicInformation = ({
           {errors.gender && <div className="invalid-feedback">{errors.gender}</div>}
         </div>
 
+        {/* Date of Birth */}
         <div className="col-md-6">
           <label htmlFor="dateOfBirth" className="form-label">
             Date Of Birth <span className="star">*</span>
@@ -366,6 +220,7 @@ const BasicInformation = ({
           {errors.dateOfBirth && <div className="invalid-feedback">{errors.dateOfBirth}</div>}
         </div>
 
+        {/* Years (auto-calculated) */}
         <div className="col-md-6">
           <label htmlFor="years" className="form-label">
             Years <span className="star">*</span>
@@ -386,6 +241,7 @@ const BasicInformation = ({
           {errors.years && <div className="invalid-feedback">{errors.years}</div>}
         </div>
 
+        {/* C/o */}
         <div className="col-md-6">
           <label htmlFor="co" className="form-label">C/o</label>
           <input
@@ -443,6 +299,38 @@ const BasicInformation = ({
             />
           </div>
           {errors.mobileNo2 && <div className="invalid-feedback">{errors.mobileNo2}</div>}
+        </div>
+
+        {/* Aadhar No */}
+        <div className="col-md-6">
+          <label htmlFor="aadharNo" className="form-label">
+            Aadhar No
+          </label>
+          <input
+            type="text"
+            className="form-control"
+            id="aadharNo"
+            name="aadharNo"
+            value={formData.aadharNo}
+            onChange={handleChange}
+            onBlur={handleBlur}
+            maxLength={12}
+          />
+        </div>
+
+        {/* Local ID */}
+        <div className="col-md-6">
+          <label htmlFor="localId" className="form-label">
+            Local ID
+          </label>
+          <input
+            type="text"
+            className="form-control"
+            id="localId"
+            name="localId"
+            value={formData.localId}
+            onChange={handleChange}
+          />
         </div>
       </div>
     </div>

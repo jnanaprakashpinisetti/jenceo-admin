@@ -53,6 +53,8 @@ const WorkerModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode }
     const [returnReasonOpen, setReturnReasonOpen] = useState(false);
     const [reasonForm, setReasonForm] = useState({ reasonType: "", comment: "", for: "" });
     const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+    // Add error state
+    const [errors, setErrors] = useState({});
     // Add setIsSaving state here
     const [isSaving, setIsSaving] = useState(false);
     const iframeRef = useRef(null);
@@ -70,6 +72,27 @@ const WorkerModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode }
     const DOM_MAX = toISO(today);
     const PAY_MIN = toISO(minusYears(1));
     const PAY_MAX = toISO(today);
+
+    // Function to get department save path - ADD THIS FUNCTION
+    const getDepartmentSavePath = (department) => {
+        const pathMap = {
+            "Home Care": "WorkerData/HomeCare/Running",
+            "Housekeeping": "WorkerData/Housekeeping/Running",
+            "Office & Administrative": "WorkerData/Office/Running",
+            "Customer Service": "WorkerData/Customer/Running",
+            "Management & Supervision": "WorkerData/Management/Running",
+            "Security": "WorkerData/Security/Running",
+            "Driving & Logistics": "WorkerData/Driving/Running",
+            "Technical & Maintenance": "WorkerData/Technical/Running",
+            "Retail & Sales": "WorkerData/Retail/Running",
+            "Industrial & Labor": "WorkerData/Industrial/Running",
+            "Others": "WorkerData/Others/Running"
+        };
+        
+        return pathMap[department];
+    };
+
+    
 
     // Modal handlers
     const openAlert = (title, body, variant = "info") => setAlertState({ open: true, title, body, variant });
@@ -117,88 +140,196 @@ const WorkerModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode }
         setHasUnsavedChanges(true);
     };
 
-    // Fixed handleSaveClick with proper state management
-    const handleSaveClick = async () => {
-        try {
-            setIsSaving(true);
-
-            // Validate we have a key before proceeding
-            if (!formData.key && !formData.idNo) {
-                throw new Error("Employee key or ID number is missing. Cannot save.");
-            }
-
-            // Upload employee photo if exists
-            let photoURL = formData.employeePhotoUrl; // Keep existing URL if no new file
-            if (formData.employeePhotoFile instanceof File) {
-                const photoExt = formData.employeePhotoFile.name.split('.').pop();
-                const photoFileName = `employee-photos/${formData.idNo || 'unknown'}-${Date.now()}.${photoExt}`;
-                const photoFileRef = storageRef.child(photoFileName);
-                const photoSnapshot = await uploadFile(photoFileRef, formData.employeePhotoFile);
-                photoURL = await getDownloadURL(photoSnapshot.ref);
-            }
-
-            // Upload ID proof if exists
-            let idProofURL = formData.idProofUrl; // Keep existing URL if no new file
-            if (formData.idProofFile instanceof File) {
-                const idExt = formData.idProofFile.name.split('.').pop();
-                const idFileName = `id-proofs/${formData.idNo || 'unknown'}-${Date.now()}.${idExt}`;
-                const idFileRef = storageRef.child(idFileName);
-                const idSnapshot = await uploadFile(idFileRef, formData.idProofFile);
-                idProofURL = await getDownloadURL(idSnapshot.ref);
-            }
-
-            // Prepare data for saving (remove File objects, add URLs)
-            const dataToSave = {
-                ...formData,
-                employeePhoto: photoURL,
-                employeePhotoUrl: photoURL,
-                idProof: idProofURL,
-                status: status, // Ensure status is saved
-                // Remove file objects as they can't be stored in Firestore
-                employeePhotoFile: undefined,
-                idProofFile: undefined,
-                // Preserve the preview fields
-                employeePhotoPreview: undefined,
-                idProofPreview: undefined,
-                // Add timestamp if needed
-                lastUpdatedAt: new Date().toISOString(),
-                lastUpdatedBy: effectiveUserName
-            };
-
-            // Remove undefined values and the key (which shouldn't be in the data itself)
-            const cleanDataToSave = { ...dataToSave };
-            delete cleanDataToSave.key; // Remove the key from the data payload
-            Object.keys(cleanDataToSave).forEach(key => {
-                if (cleanDataToSave[key] === undefined) {
-                    delete cleanDataToSave[key];
-                }
-            });
-
-            // Determine the path to save to - use idNo as fallback if key doesn't exist
-            const savePath = formData.key || formData.idNo;
-
-            if (!savePath) {
-                throw new Error("Cannot save: No key or ID number available");
-            }
-
-            // Save to Firebase
-            await firebaseDB.child("EmployeeBioData").child(savePath).update(cleanDataToSave);
-
-            setIsSaving(false);
-            setHasUnsavedChanges(false);
-
-            if (onSave) {
-                onSave({ ...cleanDataToSave, key: savePath }); // Notify parent component with the key
-            }
-
-            onClose();
-
-        } catch (error) {
-            console.error("Error saving employee:", error);
-            setIsSaving(false);
-            alert("Failed to save: " + error.message);
+    const handleInputBlur = (e) => {
+        // Add validation logic here if needed
+        const { name, value } = e.target;
+        
+        // Example validation for required fields
+        if (!value && ['department', 'role', 'idNo', 'joiningDate'].includes(name)) {
+            setErrors(prev => ({ ...prev, [name]: `${name} is required` }));
+        } else {
+            setErrors(prev => ({ ...prev, [name]: '' }));
         }
     };
+
+
+// Fixed handleSaveClick with proper state management and department-based paths
+const handleSaveClick = async () => {
+    try {
+        setIsSaving(true);
+
+        // Validate we have a key before proceeding
+        if (!formData.key && !formData.idNo) {
+            throw new Error("Employee key or ID number is missing. Cannot save.");
+        }
+
+        // Validate required fields
+        const requiredFields = ['department', 'role', 'idNo', 'joiningDate'];
+        const missingFields = requiredFields.filter(field => !formData[field]);
+        
+        if (missingFields.length > 0) {
+            const fieldNames = {
+                department: 'Department',
+                role: 'Role',
+                idNo: 'Employee ID',
+                joiningDate: 'Joining Date'
+            };
+            
+            openAlert("Validation Error", 
+                `Please fill in the following required fields:\n${missingFields.map(f => `• ${fieldNames[f]}`).join('\n')}`, 
+                "warning");
+            setIsSaving(false);
+            return;
+        }
+
+        // Get the department-specific save path
+        const department = formData.department;
+        const savePath = getDepartmentSavePath(department);
+
+        if (!savePath || savePath === "EmployeeBioData") {
+            openAlert("Error", "Please select a valid department before saving.", "danger");
+            setIsSaving(false);
+            return;
+        }
+
+        // Upload employee photo if exists
+        let photoURL = formData.employeePhotoUrl;
+        if (formData.employeePhotoFile instanceof File) {
+            const photoExt = formData.employeePhotoFile.name.split('.').pop();
+            const photoFileName = `employee-photos/${formData.idNo || 'unknown'}-${Date.now()}.${photoExt}`;
+            const photoFileRef = storageRef.child(photoFileName);
+            const photoSnapshot = await uploadFile(photoFileRef, formData.employeePhotoFile);
+            photoURL = await getDownloadURL(photoSnapshot.ref);
+        }
+
+        // Upload ID proof if exists
+        let idProofURL = formData.idProofUrl;
+        if (formData.idProofFile instanceof File) {
+            const idExt = formData.idProofFile.name.split('.').pop();
+            const idFileName = `id-proofs/${formData.idNo || 'unknown'}-${Date.now()}.${idExt}`;
+            const idFileRef = storageRef.child(idFileName);
+            const idSnapshot = await uploadFile(idFileRef, formData.idProofFile);
+            idProofURL = await getDownloadURL(idSnapshot.ref);
+        }
+
+        // Prepare data for saving
+        const dataToSave = {
+            ...formData,
+            employeePhoto: photoURL,
+            employeePhotoUrl: photoURL,
+            idProof: idProofURL,
+            status: status,
+            // Remove file objects
+            employeePhotoFile: undefined,
+            idProofFile: undefined,
+            employeePhotoPreview: undefined,
+            idProofPreview: undefined,
+            // Add timestamp
+            lastUpdatedAt: new Date().toISOString(),
+            lastUpdatedBy: effectiveUserName
+        };
+
+        // Clean data
+        const cleanDataToSave = { ...dataToSave };
+        delete cleanDataToSave.key;
+        Object.keys(cleanDataToSave).forEach(key => {
+            if (cleanDataToSave[key] === undefined) {
+                delete cleanDataToSave[key];
+            }
+        });
+
+        // Determine the key to use
+        const employeeKey = formData.key || formData.idNo;
+
+        if (!employeeKey) {
+            throw new Error("Cannot save: No key or ID number available");
+        }
+
+        // Save to department-specific path ONLY - REMOVED EmployeeBioData save
+        await firebaseDB.child(savePath).child(employeeKey).set(cleanDataToSave);
+
+        setIsSaving(false);
+        setHasUnsavedChanges(false);
+
+        if (onSave) {
+            onSave({ ...cleanDataToSave, key: employeeKey });
+        }
+
+        openAlert("Success", "Employee data saved successfully to " + department, "success");
+
+    } catch (error) {
+        console.error("Error saving employee:", error);
+        setIsSaving(false);
+        openAlert("Save Error", "Failed to save: " + error.message, "danger");
+    }
+};
+
+// Also update the handleDepartmentSave function to NOT save to EmployeeBioData
+const handleDepartmentSave = async (departmentData) => {
+    try {
+        setIsSaving(true);
+        
+        const savePath = departmentData.departmentSavePath;
+        const newDepartment = departmentData.department;
+        const oldDepartment = departmentData.oldDepartment;
+        
+        const { departmentSavePath, oldDepartment: oldDept, ...dataToSave } = departmentData;
+        
+        let employeeKey = dataToSave.key || formData.key;
+        
+        if (!employeeKey) {
+            employeeKey = firebaseDB.child(savePath).push().key;
+            dataToSave.key = employeeKey;
+        }
+        
+        // If department changed, remove from old department
+        if (oldDepartment && newDepartment && oldDepartment !== newDepartment) {
+            const oldPath = getDepartmentSavePath(oldDepartment);
+            if (oldPath && oldPath !== savePath) {
+                // Find and remove from old location
+                const oldSnapshot = await firebaseDB.child(oldPath).once("value");
+                const oldData = oldSnapshot.val();
+                
+                if (oldData) {
+                    for (const key in oldData) {
+                        if (oldData[key].idNo === dataToSave.idNo) {
+                            await firebaseDB.child(`${oldPath}/${key}`).remove();
+                            console.log(`Removed from old department: ${oldDepartment}`);
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+        
+        // Save to new location
+        await firebaseDB.child(`${savePath}/${employeeKey}`).set({
+            ...dataToSave,
+            lastUpdated: new Date().toISOString(),
+            updatedBy: effectiveUserId || "system"
+        });
+        
+        console.log(`Saved to new department: ${newDepartment}`);
+        
+        setFormData(prev => ({
+            ...prev,
+            ...dataToSave,
+            key: employeeKey,
+            department: newDepartment
+        }));
+        
+        openAlert("Success", "Department data saved successfully!", "success");
+        setHasUnsavedChanges(false);
+        setIsSaving(false);
+        return true;
+        
+    } catch (error) {
+        console.error("Error saving department data:", error);
+        setIsSaving(false);
+        openAlert("Error", "Failed to save department data. Please try again.", "danger");
+        return false;
+    }
+};
 
     const handleCloseWithConfirmation = () => {
         if (hasUnsavedChanges) {
@@ -280,9 +411,14 @@ const WorkerModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode }
                                 {activeTab === "department" && (
                                     <Department
                                         formData={formData}
-                                        setFormData={setFormData}
+                                        errors={errors}
+                                        handleChange={handleInputChange}
+                                        handleBlur={handleInputBlur}
+                                        nextStep={() => setActiveTab("basic")}
+                                        setErrors={setErrors}
                                         canEdit={canEdit}
-                                        handleInputChange={handleInputChange}
+                                        onSaveComplete={handleDepartmentSave}
+                                        isSaving={isSaving}
                                     />
                                 )}
                                 {activeTab === "basic" && (

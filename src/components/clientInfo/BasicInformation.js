@@ -40,43 +40,57 @@ export default function BasicInformation({ formData, handleChange, errors = {}, 
     <>
       <div className="row">
         <div className="col-md-6">
-          <div className="form-group ">
-            <label>ID No<span className="text-danger">*</span></label>
+          <div className="form-group">
+            <label>First Name<span className="text-danger">*</span></label>
             <input
               type="text"
-              className={`form-control ${errors.idNo ? "is-invalid" : ""}`}
-              name="idNo"
-              value={formData.idNo}
+              className={`form-control ${errors.firstName ? "is-invalid" : ""}`}
+              name="firstName"
+              value={formData.firstName}
               onChange={handleChange}
-              placeholder="JC00001"
-              maxLength={12}
-              readOnly={isViewMode || idDisabled}
-              disabled={idDisabled}
-            />
-            {errors.idNo && <div className="invalid-feedback">{errors.idNo}</div>}
-            {idDisabled && !isViewMode && <small className="text-muted">ID auto-generated — clear to edit.</small>}
-          </div>
-        </div>
-        <div className="col-md-6">
-          <div className="form-group ">
-            <label>Client Name<span className="text-danger">*</span></label>
-            <input
-              type="text"
-              className={`form-control ${errors.clientName ? "is-invalid" : ""}`}
-              name="clientName"
-              value={formData.clientName}
-              onChange={handleChange}
+              // onBlur={handleBlur}
               readOnly={isViewMode}
             />
-            {errors.clientName && <div className="invalid-feedback">{errors.clientName}</div>}
+            {errors.firstName && <div className="invalid-feedback">{errors.firstName}</div>}
+          </div>
+        </div>
+        
+        <div className="col-md-6">
+          <div className="form-group">
+            <label>Last Name<span className="text-danger">*</span></label>
+            <input
+              type="text"
+              className={`form-control ${errors.lastName ? "is-invalid" : ""}`}
+              name="lastName"
+              value={formData.lastName}
+              onChange={handleChange}
+              // onBlur={handleBlur}
+              readOnly={isViewMode}
+            />
+            {errors.lastName && <div className="invalid-feedback">{errors.lastName}</div>}
           </div>
         </div>
       </div>
 
-      {/* rest of your fields unchanged */}
       <div className="row">
         <div className="col-md-6">
-          <div className="form-group ">
+                    <div className="form-group">
+            <label>Location<span className="text-danger">*</span></label>
+            <input
+              type="text"
+              className={`form-control ${errors.location ? "is-invalid" : ""}`}
+              name="location"
+              value={formData.location}
+              onChange={handleChange}
+              readOnly={isViewMode}
+            />
+            {errors.location && <div className="invalid-feedback">{errors.location}</div>}
+          </div>
+
+        </div>
+        
+        <div className="col-md-6">
+          <div className="form-group">
             <label>Gender<span className="text-danger">*</span></label>
             <select
               className={`form-control ${errors.gender ? "is-invalid" : ""}`}
@@ -93,8 +107,11 @@ export default function BasicInformation({ formData, handleChange, errors = {}, 
             {errors.gender && <div className="invalid-feedback">{errors.gender}</div>}
           </div>
         </div>
+      </div>
+
+      <div className="row">
         <div className="col-md-6">
-          <div className="form-group ">
+          <div className="form-group">
             <label>Care Of</label>
             <input
               type="text"
@@ -106,12 +123,9 @@ export default function BasicInformation({ formData, handleChange, errors = {}, 
             />
           </div>
         </div>
-      </div>
-
-      {/* rest of file unchanged (location, mobile, google location etc.) */}
-      <div className="row">
+        
         <div className="col-md-6">
-          <div className="form-group ">
+          <div className="form-group">
             <label>Relation</label>
             <input
               type="text"
@@ -123,26 +137,13 @@ export default function BasicInformation({ formData, handleChange, errors = {}, 
             />
           </div>
         </div>
-        <div className="col-md-6">
-          <div className="form-group ">
-            <label>Location<span className="text-danger">*</span></label>
-            <input
-              type="text"
-              className={`form-control ${errors.location ? "is-invalid" : ""}`}
-              name="location"
-              value={formData.location}
-              onChange={handleChange}
-              readOnly={isViewMode}
-            />
-            {errors.location && <div className="invalid-feedback">{errors.location}</div>}
-          </div>
-        </div>
       </div>
 
-      {/* mobile inputs */}
+ 
+
       <div className="row">
         <div className="col-md-6">
-          <div className="form-group ">
+          <div className="form-group">
             <label>Mobile No 1<span className="text-danger">*</span></label>
             <input
               type="tel"
@@ -158,7 +159,7 @@ export default function BasicInformation({ formData, handleChange, errors = {}, 
         </div>
 
         <div className="col-md-6">
-          <div className="form-group ">
+          <div className="form-group">
             <label>Mobile No 2</label>
             <input
               type="tel"
@@ -177,7 +178,7 @@ export default function BasicInformation({ formData, handleChange, errors = {}, 
       {/* Google Location */}
       <div className="row">
         <div className="col-md-12">
-          <div className="form-group ">
+          <div className="form-group">
             <label>Google Location</label>
             <div className="input-group">
               <input

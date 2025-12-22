@@ -75,9 +75,9 @@ const Department = ({
     
     // Map department to prefix
     const prefixMap = {
-      "Home Care": "JW",
+      "Home Care": "HC",
       "Housekeeping": "HKW-",
-      "Office & Administrative": "OW-",
+      "Office & Administrative": "OFW-",
       "Customer Service": "CW-",
       "Management & Supervision": "MW-",
       "Security": "SW-",
@@ -94,17 +94,17 @@ const Department = ({
       // Determine which database node to check based on department
       let dbNode = "EmployeeBioData"; // Default for Home Care
       const nodeMap = {
-        "Home Care": "EmployeeBioData",
-        "Housekeeping": "WorkerData/Housekeeping",
-        "Office & Administrative": "WorkerData/Office",
-        "Customer Service": "WorkerData/Customer",
-        "Management & Supervision": "WorkerData/Management",
-        "Security": "WorkerData/Security",
-        "Driving & Logistics": "WorkerData/Driving",
-        "Technical & Maintenance": "WorkerData/Technical",
-        "Retail & Sales": "WorkerData/Retail",
-        "Industrial & Labor": "WorkerData/Industrial",
-        "Others": "WorkerData/Others"
+        "Home Care": "WorkerData/HomeCare/Running",
+        "Housekeeping": "WorkerData/Housekeeping/Running",
+        "Office & Administrative": "WorkerData/Office/Running",
+        "Customer Service": "WorkerData/Customer/Running",
+        "Management & Supervision": "WorkerData/Management/Running",
+        "Security": "WorkerData/Security/Running",
+        "Driving & Logistics": "WorkerData/Driving/Running",
+        "Technical & Maintenance": "WorkerData/Technical/Running",
+        "Retail & Sales": "WorkerData/Retail/Running",
+        "Industrial & Labor": "WorkerData/Industrial/Running",
+        "Others": "WorkerData/Others/Running"
       };
       
       dbNode = nodeMap[department] || "EmployeeBioData";

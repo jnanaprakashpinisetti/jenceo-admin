@@ -124,21 +124,21 @@ export default function DisplayExitClient() {
       };
 
       // 1) restore to active ClientData
-      await firebaseDB.child(`ClientData/HomeCare/${id}`).set({
+      await firebaseDB.child(`ClientData/HomeCare/Running/${id}`).set({
         ...payload,
         restoredFromExit: true,
       });
 
       // 2) append to ClientData/{id}/returnHistory
       try {
-        await firebaseDB.child(`ClientData/HomeCare${id}/returnHistory`).push(entry);
+        await firebaseDB.child(`ClientData/HomeCare/Running/History${id}/returnHistory`).push(entry);
       } catch (err) {
         console.warn("push to ClientData returnHistory failed", err);
       }
 
       // 3) append to ClientData/HomeCare/ExitClients/{id}/returnHistory (non-fatal)
       try {
-        await firebaseDB.child(`ClientData/HomeCare/ExitClients/${id}/returnHistory`).push(entry);
+        await firebaseDB.child(`ClientData/HomeCare/ExitClients/History${id}/returnHistory`).push(entry);
       } catch (err) {
         console.warn("push to ExitClients returnHistory failed", err);
       }

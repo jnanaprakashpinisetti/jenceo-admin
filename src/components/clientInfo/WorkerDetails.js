@@ -3,16 +3,16 @@ import React, { useState, useEffect } from "react";
 const WorkerDetails = ({ formData, handleChange, addWorker, removeWorker, errors = {}, setErrors, isViewMode = false }) => {
   const workersErrors = errors.workers || [];
   const [dateErrors, setDateErrors] = useState({});
-  
+
   // Calculate date ranges (1 month previous to 2 months future)
   const getMinMaxDates = () => {
     const today = new Date();
     const oneMonthAgo = new Date();
     oneMonthAgo.setMonth(today.getMonth() - 1);
-    
+
     const twoMonthsLater = new Date();
     twoMonthsLater.setMonth(today.getMonth() + 2);
-    
+
     return {
       minDate: oneMonthAgo.toISOString().split('T')[0],
       maxDate: twoMonthsLater.toISOString().split('T')[0],
@@ -29,32 +29,32 @@ const WorkerDetails = ({ formData, handleChange, addWorker, removeWorker, errors
 
   const validateAllWorkerDates = () => {
     const newDateErrors = {};
-    
+
     formData.workers.forEach((worker, index) => {
       if (worker.startingDate) {
         const startDate = new Date(worker.startingDate);
         const minDateObj = new Date(minDate);
         const maxDateObj = new Date(maxDate);
-        
+
         if (startDate < minDateObj) {
           newDateErrors[`worker-${index}-startingDate`] = `Start date cannot be before ${minDate}`;
         } else if (startDate > maxDateObj) {
           newDateErrors[`worker-${index}-startingDate`] = `Start date cannot be after ${maxDate}`;
         }
       }
-      
+
       if (worker.startingDate && worker.endingDate) {
         const startDate = new Date(worker.startingDate);
         const endDate = new Date(worker.endingDate);
-        
+
         if (endDate <= startDate) {
           newDateErrors[`worker-${index}-endingDate`] = "End date must be after start date";
         }
       }
     });
-    
+
     setDateErrors(newDateErrors);
-    
+
     // Update the main errors object if setErrors function is provided
     if (setErrors) {
       setErrors(prevErrors => ({
@@ -66,7 +66,7 @@ const WorkerDetails = ({ formData, handleChange, addWorker, removeWorker, errors
 
   const handleDateChange = (e, arrayName, index) => {
     handleChange(e, arrayName, index);
-    
+
     // Clear the error for the changed field
     const errorKey = `worker-${index}-${e.target.name}`;
     if (dateErrors[errorKey]) {
@@ -86,6 +86,10 @@ const WorkerDetails = ({ formData, handleChange, addWorker, removeWorker, errors
 
   return (
     <div>
+      <div className="form-card-header mb-4">
+        <h3 className="text-center">Worker Details</h3>
+      </div>
+      <hr />
       {formData.workers.map((worker, index) => (
         <div key={index} className="worker-card">
           <h5>Worker #{index + 1}</h5>
@@ -232,7 +236,7 @@ const WorkerDetails = ({ formData, handleChange, addWorker, removeWorker, errors
                 <input
                   type="tel"
                   id={`basicSalary-${index}`}
-                  className="form-control" 
+                  className="form-control"
                   name="basicSalary"
                   value={worker.basicSalary}
                   onChange={(e) => handleChange(e, "workers", index)}

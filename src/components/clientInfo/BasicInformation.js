@@ -39,9 +39,13 @@ export default function BasicInformation({ formData, handleChange, errors = {}, 
   return (
     <>
       <div className="row">
+              <div className="form-card-header mb-4">
+        <h3 className="text-center">Basic Information</h3>
+      </div>
+      <hr />
         <div className="col-md-6">
           <div className="form-group">
-            <label>First Name<span className="text-danger">*</span></label>
+            <label>Client First Name<span className="text-danger">*</span></label>
             <input
               type="text"
               className={`form-control ${errors.firstName ? "is-invalid" : ""}`}
@@ -57,7 +61,7 @@ export default function BasicInformation({ formData, handleChange, errors = {}, 
         
         <div className="col-md-6">
           <div className="form-group">
-            <label>Last Name<span className="text-danger">*</span></label>
+            <label>ClientLast Name<span className="text-danger">*</span></label>
             <input
               type="text"
               className={`form-control ${errors.lastName ? "is-invalid" : ""}`}

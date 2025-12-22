@@ -30,6 +30,10 @@ const PaymentDetails = ({ formData, handleChange, addPayment, removePayment, err
 
   return (
     <div>
+      <div className="form-card-header mb-4">
+        <h3 className="text-center">Payment Details</h3>
+      </div>
+      <hr />
       {(formData.payments || []).map((payment, index) => (
         <div key={payment.id || index} className="payment-card mb-3 p-3 border rounded">
           <h5>Payment #{index + 1}</h5>

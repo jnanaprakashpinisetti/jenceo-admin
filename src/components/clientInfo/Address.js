@@ -4,6 +4,10 @@ export default function Address({ formData, handleChange, errors = {}, isViewMod
   return (
     <>
       <div className="row">
+             <div className="form-card-header mb-4">
+        <h3 className="text-center">Address</h3>
+      </div>
+      <hr />
         <div className="col-md-6">
           {/* Door No */}
           <div className="form-group">

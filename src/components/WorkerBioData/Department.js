@@ -316,7 +316,7 @@ const Department = ({
           </label>
           <input
             type="text"
-            className={`form-control bg-light ${errors.idNo ? "is-invalid" : ""}`}
+            className={`form-control bg-secondary bg-opacity-50 ${errors.idNo ? "is-invalid" : ""}`}
             id="idNo"
             name="idNo"
             value={formData.idNo || ""}
@@ -378,7 +378,7 @@ const Department = ({
           </label>
           <input
             type="text"
-            className="form-control bg-light"
+            className="form-control bg-secondary bg-opacity-50"
             id="supervisorName"
             name="supervisorName"
             value={formData.supervisorName || ""}

@@ -9,6 +9,7 @@ import { storageRef, uploadFile, getDownloadURL } from "../../../firebase";
 
 // Import tab components
 import BasicInfo from "./BasicInfo";
+import Department from "./Department";
 import Address from "./Address";
 import PersonalInfo from "./PersonalInfo";
 import QualificationSkills from "./QualificationSkills";
@@ -34,7 +35,7 @@ export const LANGUAGE_OPTIONS = [
 ];
 
 export const SKILL_OPTIONS = [
-    "Nursing", "Diaper", "Patent Care", "Baby Care", "Cook", "Supporting", 
+    "Nursing", "Diaper", "Patent Care", "Baby Care", "Cook", "Supporting",
     "Old Age Care", "Any Duty", "Others"
 ];
 
@@ -80,7 +81,7 @@ const WorkerModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode }
         if (employee) {
             // Extract the Firebase key - it might be passed as .key, .id, or might be the object's key itself
             const key = employee.key || employee.id || employee.recordId || (employee.idNo ? employee.idNo : null);
-            
+
             setFormData({
                 ...employee,
                 key: key, // Ensure key is always set
@@ -120,12 +121,12 @@ const WorkerModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode }
     const handleSaveClick = async () => {
         try {
             setIsSaving(true);
-            
+
             // Validate we have a key before proceeding
             if (!formData.key && !formData.idNo) {
                 throw new Error("Employee key or ID number is missing. Cannot save.");
             }
-            
+
             // Upload employee photo if exists
             let photoURL = formData.employeePhotoUrl; // Keep existing URL if no new file
             if (formData.employeePhotoFile instanceof File) {
@@ -135,7 +136,7 @@ const WorkerModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode }
                 const photoSnapshot = await uploadFile(photoFileRef, formData.employeePhotoFile);
                 photoURL = await getDownloadURL(photoSnapshot.ref);
             }
-            
+
             // Upload ID proof if exists
             let idProofURL = formData.idProofUrl; // Keep existing URL if no new file
             if (formData.idProofFile instanceof File) {
@@ -145,7 +146,7 @@ const WorkerModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode }
                 const idSnapshot = await uploadFile(idFileRef, formData.idProofFile);
                 idProofURL = await getDownloadURL(idSnapshot.ref);
             }
-            
+
             // Prepare data for saving (remove File objects, add URLs)
             const dataToSave = {
                 ...formData,
@@ -163,7 +164,7 @@ const WorkerModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode }
                 lastUpdatedAt: new Date().toISOString(),
                 lastUpdatedBy: effectiveUserName
             };
-            
+
             // Remove undefined values and the key (which shouldn't be in the data itself)
             const cleanDataToSave = { ...dataToSave };
             delete cleanDataToSave.key; // Remove the key from the data payload
@@ -172,26 +173,26 @@ const WorkerModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode }
                     delete cleanDataToSave[key];
                 }
             });
-            
+
             // Determine the path to save to - use idNo as fallback if key doesn't exist
             const savePath = formData.key || formData.idNo;
-            
+
             if (!savePath) {
                 throw new Error("Cannot save: No key or ID number available");
             }
-            
+
             // Save to Firebase
             await firebaseDB.child("EmployeeBioData").child(savePath).update(cleanDataToSave);
-            
+
             setIsSaving(false);
             setHasUnsavedChanges(false);
-            
+
             if (onSave) {
                 onSave({ ...cleanDataToSave, key: savePath }); // Notify parent component with the key
             }
-            
+
             onClose();
-            
+
         } catch (error) {
             console.error("Error saving employee:", error);
             setIsSaving(false);
@@ -221,10 +222,10 @@ const WorkerModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode }
 
     return (
         <>
-            <AlertModal 
-                open={alertState.open} 
-                title={alertState.title} 
-                variant={alertState.variant} 
+            <AlertModal
+                open={alertState.open}
+                title={alertState.title}
+                variant={alertState.variant}
                 onClose={closeAlert}
             >
                 {alertState.body}
@@ -253,6 +254,7 @@ const WorkerModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode }
                             {/* Tabs */}
                             <ul className="nav nav-tabs" id="employeeTabs" role="tablist">
                                 {[
+                                    ["department", "Department"],
                                     ["basic", "Basic Info"],
                                     ["address", "Address"],
                                     ["personal", "Personal Info"],
@@ -275,6 +277,14 @@ const WorkerModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode }
                             </ul>
 
                             <div className="tab-content p-3">
+                                {activeTab === "department" && (
+                                    <Department
+                                        formData={formData}
+                                        setFormData={setFormData}
+                                        canEdit={canEdit}
+                                        handleInputChange={handleInputChange}
+                                    />
+                                )}
                                 {activeTab === "basic" && (
                                     <BasicInfo
                                         formData={formData}
@@ -400,9 +410,9 @@ const WorkerModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode }
                                 <button type="button" className="btn btn-secondary" onClick={handleCloseWithConfirmation}>
                                     Close
                                 </button>
-                                <button 
-                                    type="button" 
-                                    className="btn btn-primary" 
+                                <button
+                                    type="button"
+                                    className="btn btn-primary"
                                     onClick={handleSaveClick}
                                     disabled={isSaving}
                                 >

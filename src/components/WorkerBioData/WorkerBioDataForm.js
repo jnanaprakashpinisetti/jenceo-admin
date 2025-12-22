@@ -225,17 +225,17 @@ const WorkerBioDataForm = ({ isOpen = false, onClose = () => { }, onSaved }) => 
     try {
       // Check all departments
       const nodesToCheck = [
-        "EmployeeBioData", 
-        "WorkerData/Housekeeping",
-        "WorkerData/Office",
-        "WorkerData/Customer",
-        "WorkerData/Management",
-        "WorkerData/Security",
-        "WorkerData/Driving",
-        "WorkerData/Technical",
-        "WorkerData/Retail",
-        "WorkerData/Industrial",
-        "WorkerData/Others"
+        "WorkerData/HomeCare/Running",
+        "WorkerData/Housekeeping/Running",
+        "WorkerData/Office/Running",
+        "WorkerData/Customer/Running",
+        "WorkerData/Management/Running",
+        "WorkerData/Security/Running",
+        "WorkerData/Driving/Running",
+        "WorkerData/Technical/Running",
+        "WorkerData/Retail/Running",
+        "WorkerData/Industrial/Running",
+        "WorkerData/Others/Running"
       ];
       
       for (const node of nodesToCheck) {
@@ -703,17 +703,17 @@ const WorkerBioDataForm = ({ isOpen = false, onClose = () => { }, onSaved }) => 
       // Determine database node based on department
       let dbNode = "EmployeeBioData"; // Default for Home Care
       const nodeMap = {
-        "Home Care": "EmployeeBioData",
-        "Housekeeping": "WorkerData/Housekeeping",
-        "Office & Administrative": "WorkerData/Office",
-        "Customer Service": "WorkerData/Customer",
-        "Management & Supervision": "WorkerData/Management",
-        "Security": "WorkerData/Security",
-        "Driving & Logistics": "WorkerData/Driving",
-        "Technical & Maintenance": "WorkerData/Technical",
-        "Retail & Sales": "WorkerData/Retail",
-        "Industrial & Labor": "WorkerData/Industrial",
-        "Others": "WorkerData/Others"
+        "Home Care": "WorkerData/HomeCare/Running",
+        "Housekeeping": "WorkerData/Housekeeping/Running",
+        "Office & Administrative": "WorkerData/Office/Running",
+        "Customer Service": "WorkerData/Customer/Running",
+        "Management & Supervision": "WorkerData/Management/Running",
+        "Security": "WorkerData/Security/Running",
+        "Driving & Logistics": "WorkerData/Driving/Running",
+        "Technical & Maintenance": "WorkerData/Technical/Running",
+        "Retail & Sales": "WorkerData/Retail/Running",
+        "Industrial & Labor": "WorkerData/Industrial/Running",
+        "Others": "WorkerData/Others/Running"
       };
 
       dbNode = nodeMap[formData.department] || "EmployeeBioData";

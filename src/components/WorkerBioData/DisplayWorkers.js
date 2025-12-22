@@ -42,18 +42,33 @@ const NURSING_TASKS = [
 ];
 
 // Department configuration
-const DEPARTMENTS = {
-    "Home Care": "EmployeeBioData",
-    "Housekeeping": "WorkerData/Housekeeping",
-    "Office & Administrative": "WorkerData/Office",
-    "Customer Service": "WorkerData/Customer",
-    "Management & Supervision": "WorkerData/Management",
-    "Security": "WorkerData/Security",
-    "Driving & Logistics": "WorkerData/Driving",
-    "Technical & Maintenance": "WorkerData/Technical",
-    "Retail & Sales": "WorkerData/Retail",
-    "Industrial & Labor": "WorkerData/Industrial",
-    "Others": "WorkerData/Others"
+const ACTIVE_DEPARTMENTS = {
+    "Home Care": "WorkerData/HomeCare/Running",
+    "Housekeeping": "WorkerData/Housekeeping/Running",
+    "Office & Administrative": "WorkerData/Office/Running",
+    "Customer Service": "WorkerData/Customer/Running",
+    "Management & Supervision": "WorkerData/Management/Running",
+    "Security": "WorkerData/Security/Running",
+    "Driving & Logistics": "WorkerData/Driving/Running",
+    "Technical & Maintenance": "WorkerData/Technical/Running",
+    "Retail & Sales": "WorkerData/Retail/Running",
+    "Industrial & Labor": "WorkerData/Industrial/Running",
+    "Others": "WorkerData/Others/Running"
+};
+
+// Existing folders for deleted workers
+const ACTIVE_EXISTING = {
+    "Home Care": "WorkerData/HomeCare/Existing",
+    "Housekeeping": "WorkerData/Housekeeping/Existing",
+    "Office & Administrative": "WorkerData/Office/Existing",
+    "Customer Service": "WorkerData/Customer/Existing",
+    "Management & Supervision": "WorkerData/Management/Existing",
+    "Security": "WorkerData/Security/Existing",
+    "Driving & Logistics": "WorkerData/Driving/Existing",
+    "Technical & Maintenance": "WorkerData/Technical/Existing",
+    "Retail & Sales": "WorkerData/Retail/Existing",
+    "Industrial & Labor": "WorkerData/Industrial/Existing",
+    "Others": "WorkerData/Others/Existing"
 };
 
 const DEPARTMENT_ORDER = [
@@ -177,8 +192,8 @@ export default function DisplayWorkers() {
             try {
                 const employeesByDept = {};
                 const counts = {};
-                
-                for (const [deptName, dbPath] of Object.entries(DEPARTMENTS)) {
+
+                for (const [deptName, dbPath] of Object.entries(ACTIVE_DEPARTMENTS)) {
                     try {
                         const snapshot = await firebaseDB.child(dbPath).once('value');
                         if (snapshot.exists()) {
@@ -191,7 +206,7 @@ export default function DisplayWorkers() {
                                     ...childSnapshot.val()
                                 });
                             });
-                            
+
                             // Sort employees by ID number in descending order
                             const sortedEmployees = sortEmployeesDescending(employeesData);
                             employeesByDept[deptName] = sortedEmployees;
@@ -206,11 +221,11 @@ export default function DisplayWorkers() {
                         counts[deptName] = 0;
                     }
                 }
-                
+
                 setAllEmployees(employeesByDept);
                 setFilteredEmployees(employeesByDept);
                 setEmployeeCounts(counts);
-                
+
                 // Calculate total pages for active tab
                 const activeEmployees = employeesByDept[activeTab] || [];
                 setTotalPages(Math.ceil(activeEmployees.length / rowsPerPage));
@@ -439,9 +454,9 @@ export default function DisplayWorkers() {
         Object.keys(allEmployees).forEach(dept => {
             newFiltered[dept] = applyFilters(allEmployees[dept]);
         });
-        
+
         setFilteredEmployees(newFiltered);
-        
+
         // Calculate total pages for active tab
         const activeEmployees = newFiltered[activeTab] || [];
         setTotalPages(Math.ceil(activeEmployees.length / rowsPerPage));
@@ -530,7 +545,7 @@ export default function DisplayWorkers() {
 
             const numA = extractNumber(idA);
             const numB = extractNumber(idB);
-            
+
             if (numA !== numB) {
                 return numB - numA;
             }
@@ -771,6 +786,7 @@ export default function DisplayWorkers() {
     };
 
     // When user submits reason -> actually perform delete / move
+    // Update the delete function to move to department-specific Existing folder
     const handleDeleteSubmitWithReason = async (e) => {
         if (e && e.preventDefault) e.preventDefault();
 
@@ -785,7 +801,7 @@ export default function DisplayWorkers() {
             return;
         }
 
-        const { id, dbPath } = employeeToDelete;
+        const { id, dbPath, department } = employeeToDelete;
         try {
             // read employee data
             const snapshot = await firebaseDB.child(`${dbPath}/${id}`).once("value");
@@ -795,30 +811,46 @@ export default function DisplayWorkers() {
                 return;
             }
 
-            // attach removal metadata
-            const payloadToExit = { ...employeeData };
+            // Get the corresponding Existing path for this department
+            const existingPath = ACTIVE_EXISTING[department];
+            if (!existingPath) {
+                setDeleteError("Cannot determine destination folder for this department");
+                return;
+            }
 
-            // Save employee record under ExitEmployees
-            await firebaseDB.child(`ExitEmployees/${id}`).set(payloadToExit);
+            // Add removal metadata
+            const payloadToExit = {
+                ...employeeData,
+                removalReason: deleteReasonForm.reasonType || '',
+                removalComment: deleteReasonForm.comment ? deleteReasonForm.comment.trim() : '',
+                removedAt: new Date().toISOString(),
+                removedBy: (deleteReasonForm && deleteReasonForm.by) || 'UI',
+                originalDepartment: department,
+                originalPath: dbPath
+            };
+
+            // Save employee record under department-specific Existing folder
+            await firebaseDB.child(`${existingPath}/${id}`).set(payloadToExit);
 
             // push removal entry into the item's removalHistory array
             const removalEntry = {
                 removedAt: new Date().toISOString(),
                 removedBy: (deleteReasonForm && deleteReasonForm.by) || 'UI',
                 removalReason: deleteReasonForm.reasonType || '',
-                removalComment: deleteReasonForm.comment ? deleteReasonForm.comment.trim() : ''
+                removalComment: deleteReasonForm.comment ? deleteReasonForm.comment.trim() : '',
+                movedTo: existingPath
             };
-            await firebaseDB.child(`ExitEmployees/${id}/removalHistory`).push(removalEntry);
-            
-            // Remove from original location
+            await firebaseDB.child(`${existingPath}/${id}/removalHistory`).push(removalEntry);
+
+            // Remove from original Running location
             await firebaseDB.child(`${dbPath}/${id}`).remove();
-            
+
             // Update local state
             setAllEmployees(prev => ({
                 ...prev,
-                [employeeToDelete.department]: prev[employeeToDelete.department].filter(emp => emp.id !== id)
+                [department]: prev[department].filter(emp => emp.id !== id)
             }));
-            
+
             // success -> close modal, clear states and show success modal
             setShowDeleteReasonModal(false);
             setEmployeeToDelete(null);
@@ -901,7 +933,7 @@ export default function DisplayWorkers() {
                             <div className="col-md-3">
                                 <h4 className="text-warning mb-0">{activeTab}</h4>
                                 <p className="text-info mb-0">
-                                    Total: {employeeCounts[activeTab] || 0} | 
+                                    Total: {employeeCounts[activeTab] || 0} |
                                     Showing: {totalFiltered} {totalFiltered !== (employeeCounts[activeTab] || 0) ? `(Filtered)` : ''}
                                 </p>
                             </div>
@@ -1830,7 +1862,7 @@ export default function DisplayWorkers() {
                                 <button type="button" className="btn-close" onClick={() => setShowDeleteSuccessModal(false)}></button>
                             </div>
                             <div className="modal-body">
-                                Employee moved to ExitEmployees successfully.
+                                Employee moved to department's Existing folder successfully.
                             </div>
                             <div className="modal-footer">
                                 <button type="button" className="btn btn-success" onClick={() => setShowDeleteSuccessModal(false)}>Done</button>

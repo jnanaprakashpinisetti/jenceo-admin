@@ -61,7 +61,7 @@ const ServiceSchedule = ({ formData, editMode, handleChange }) => {
               </div>
               <div className="card-body">
                 <div className="row">
-                  <div className="col-md-4 mb-3">
+                  <div className="col-md-3 mb-3">
                     <div className="card h-100">
                       <div className="card-body">
                         <h6 className="card-subtitle mb-2 text-muted">Service Type</h6>
@@ -69,7 +69,7 @@ const ServiceSchedule = ({ formData, editMode, handleChange }) => {
                       </div>
                     </div>
                   </div>
-                  <div className="col-md-4 mb-3">
+                  <div className="col-md-3 mb-3">
                     <div className="card h-100">
                       <div className="card-body">
                         <h6 className="card-subtitle mb-2 text-muted">Service Frequency</h6>
@@ -77,7 +77,7 @@ const ServiceSchedule = ({ formData, editMode, handleChange }) => {
                       </div>
                     </div>
                   </div>
-                  <div className="col-md-4 mb-3">
+                  <div className="col-md-3 mb-3">
                     <div className="card h-100">
                       <div className="card-body">
                         <h6 className="card-subtitle mb-2 text-muted">Service Hours/Day</h6>
@@ -85,7 +85,7 @@ const ServiceSchedule = ({ formData, editMode, handleChange }) => {
                       </div>
                     </div>
                   </div>
-                  <div className="col-md-12 mb-3">
+                  <div className="col-md-3 mb-3">
                     <div className="card h-100">
                       <div className="card-body">
                         <h6 className="card-subtitle mb-2 text-muted">Preferred Time</h6>

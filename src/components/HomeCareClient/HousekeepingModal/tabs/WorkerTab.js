@@ -575,28 +575,27 @@ const WorkersTab = ({
                             
                             {/* Salary Information */}
                             <div className="row g-2 mb-3">
-                              <div className="col-6">
+                              <div className="col-4">
                                 <small className="text-muted d-block">Basic Salary</small>
-                                <h6 className="text-success mb-0">
+                                <h6 className="text-success mb-0 text-center d-block">
                                   {formatINR(w.basicSalary)}
                                 </h6>
                               </div>
-                              <div className="col-6">
+                              <div className="col-4">
                                 <small className="text-muted d-block">Extra Amount</small>
-                                <h6 className="text-warning mb-0">
+                                <h6 className="text-warning mb-0 text-center d-block">
                                   {formatINR(w.extraAmount)}
                                 </h6>
                               </div>
-                            </div>
-                            
-                            <div className="row g-2 mb-3">
-                              <div className="col-12">
+                                 <div className="col-4">
                                 <small className="text-muted d-block">Total Amount</small>
-                                <h5 className="text-primary mb-0">
+                                <h5 className="text-primary mb-0 text-center d-block">
                                   {formatINR(totalAmount)}
                                 </h5>
                               </div>
                             </div>
+                            
+                           
                             
                             <hr className="my-2" />
                             
@@ -667,7 +666,7 @@ const WorkersTab = ({
                             <hr className="my-2" />
                             
                             {/* Added By Information */}
-                            <div className="mt-2 pt-2">
+                            <div className="mt-2 pt-2 d-flex justify-content-between">
                               <small className="text-muted d-flex align-items-center">
                                 <i className="bi bi-person-circle me-1"></i>
                                 <span>Added by: <strong className="text-dark">{addedByDisplay}</strong></span>

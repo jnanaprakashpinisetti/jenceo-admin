@@ -104,8 +104,8 @@ form {
         &[type=radio] {
 
             &:checked {
-                background-color: #EFF0F4;
-                border-color: transparent;
+                background-color: #444 !important;
+                border-color: #444 !important;
             }
         }
 

@@ -1,0 +1,193 @@
+// _ClientInfoForm.scss
+.client-form-backdrop {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.75);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1050;
+    padding: 1rem;
+    overflow: auto;
+
+
+    .client-form-card {
+        background: white;
+        border-radius: 12px;
+        width: 100%;
+        max-width: 900px;
+        max-height: 90vh;
+        display: flex;
+        flex-direction: column;
+        box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+    }
+
+    form {
+        background-color: #eff4ff;
+        border: 1px solid #dde6f9;
+        color: #444;
+
+
+    }
+
+    .form-control,
+    form .form-select {
+        color: #444 !important;
+    }
+
+    .form-control:focus,
+    form .form-select:focus {
+        border: 1px solid #8e8f93;
+    }
+
+    .client-form-header {
+        padding: 1.5rem 2rem;
+        border-bottom: 1px solid #e5e7eb;
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+    }
+
+    .client-form-title {
+        font-size: 1.5rem;
+        font-weight: 600;
+        color: #1f2937;
+    }
+
+    .client-form-step-counter {
+        font-size: 0.875rem;
+        color: #6b7280;
+        margin-top: 0.25rem;
+    }
+
+    .client-form-close-btn {
+        background: none;
+        border: none;
+        font-size: 1.5rem;
+        color: #6b7280;
+        cursor: pointer;
+        padding: 0.25rem;
+        line-height: 1;
+
+        &:hover {
+            color: #374151;
+        }
+    }
+
+    .client-form-body {
+        flex: 1;
+        overflow: hidden;
+        display: flex;
+    }
+
+    .client-form-sidebar {
+        width: 240px;
+        border-right: 1px solid #e5e7eb;
+        padding: 1.5rem;
+        overflow-y: auto;
+        background: #f9fafb;
+    }
+
+    .client-form-step-btn {
+        display: block;
+        width: 100%;
+        text-align: left;
+        padding: 0.75rem 1rem;
+        margin-bottom: 0.5rem;
+        background: white;
+        border: 1px solid #e5e7eb;
+        border-radius: 8px;
+        color: #4b5563;
+        font-size: 0.875rem;
+        cursor: pointer;
+        transition: all 0.2s;
+
+        &:hover {
+            background: #f3f4f6;
+            border-color: #d1d5db;
+        }
+
+        &.active {
+            background: #3b82f6;
+            border-color: #3b82f6;
+            color: white;
+            font-weight: 500;
+        }
+    }
+
+    .client-form-content {
+        flex: 1;
+        padding: 2rem;
+        overflow-y: auto;
+    }
+
+    .client-form-accordion-item {
+        border: 1px solid #e5e7eb;
+        border-radius: 8px;
+        margin-bottom: 1rem;
+        overflow: hidden;
+    }
+
+    .client-form-accordion-header {
+        width: 100%;
+        padding: 1rem 1.25rem;
+        background: #f9fafb;
+        border: none;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        font-size: 0.95rem;
+        font-weight: 500;
+        color: #374151;
+        cursor: pointer;
+
+        &:hover {
+            background: #f3f4f6;
+        }
+    }
+
+    .client-form-accordion-arrow {
+        transition: transform 0.2s;
+    }
+
+    .client-form-accordion-body {
+        padding: 1.5rem;
+        background: white;
+    }
+
+    .client-form-footer {
+        padding: 1.5rem 2rem;
+        border-top: 1px solid #e5e7eb;
+        display: flex;
+        justify-content: flex-end;
+        gap: 0.75rem;
+    }
+
+    .text-muted {
+        color: #444 !important;
+    }
+
+    // Mobile responsive
+    @media (max-width: 920px) {
+        .client-form-card {
+            max-width: 100%;
+            max-height: 100%;
+            border-radius: 0;
+        }
+
+        .client-form-body {
+            flex-direction: column;
+        }
+
+        .client-form-sidebar {
+            display: none;
+        }
+
+        .client-form-content {
+            padding: 1rem;
+        }
+    }
+}

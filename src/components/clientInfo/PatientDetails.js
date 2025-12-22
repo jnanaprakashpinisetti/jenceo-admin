@@ -4,6 +4,10 @@ export default function PatientDetails({ formData, handleChange, errors = {}, is
   return (
     <>
       <div className="row">
+              <div className="form-card-header mb-4">
+        <h3 className="text-center">Care Recipient Details</h3>
+      </div>
+      <hr />
         <div className="col-md-6">
           {/* Care Recipients Name */}
           <div className="form-group">

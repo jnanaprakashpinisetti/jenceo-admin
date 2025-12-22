@@ -2,16 +2,16 @@ import React, { useState, useEffect } from "react";
 
 export default function ServiceDetails({ formData, handleChange, errors = {}, setErrors, isViewMode = false }) {
   const [dateErrors, setDateErrors] = useState({});
-  
+
   // Calculate date ranges
   const getMinMaxDates = () => {
     const today = new Date();
     const oneMonthAgo = new Date();
     oneMonthAgo.setMonth(today.getMonth() - 1);
-    
+
     const twoMonthsLater = new Date();
     twoMonthsLater.setMonth(today.getMonth() + 2);
-    
+
     return {
       minDate: oneMonthAgo.toISOString().split('T')[0],
       maxDate: twoMonthsLater.toISOString().split('T')[0],
@@ -28,30 +28,30 @@ export default function ServiceDetails({ formData, handleChange, errors = {}, se
 
   const validateDates = () => {
     const newDateErrors = {};
-    
+
     if (formData.startingDate) {
       const startDate = new Date(formData.startingDate);
       const minDateObj = new Date(minDate);
       const maxDateObj = new Date(maxDate);
-      
+
       if (startDate < minDateObj) {
         newDateErrors.startingDate = `Start date cannot be before ${minDate}`;
       } else if (startDate > maxDateObj) {
         newDateErrors.startingDate = `Start date cannot be after ${maxDate}`;
       }
     }
-    
+
     if (formData.startingDate && formData.endingDate) {
       const startDate = new Date(formData.startingDate);
       const endDate = new Date(formData.endingDate);
-      
+
       if (endDate <= startDate) {
         newDateErrors.endingDate = "End date must be after start date";
       }
     }
-    
+
     setDateErrors(newDateErrors);
-    
+
     // Update the main errors object if setErrors function is provided
     if (setErrors) {
       setErrors(prevErrors => ({
@@ -63,7 +63,7 @@ export default function ServiceDetails({ formData, handleChange, errors = {}, se
 
   const handleDateChange = (e) => {
     handleChange(e);
-    
+
     // Clear the error for the changed field
     if (dateErrors[e.target.name]) {
       setDateErrors(prev => {
@@ -77,6 +77,10 @@ export default function ServiceDetails({ formData, handleChange, errors = {}, se
   return (
     <>
       <div className="row">
+        <div className="form-card-header mb-4">
+          <h3 className="text-center"> Service Details</h3>
+        </div>
+        <hr />
         <div className="col-md-6">
           {/* Type of Service */}
           <div className="form-group">

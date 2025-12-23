@@ -1,5 +1,4 @@
-// Department.js - Complete fix
-import React, { useEffect, useState, useRef } from "react";
+import React, { useEffect, useState, useRef, useCallback } from "react";
 import firebaseDB from "../../../firebase";
 
 const Department = ({
@@ -23,28 +22,75 @@ const Department = ({
     const [isProcessing, setIsProcessing] = useState(false);
     const previousFormDataRef = useRef({});
 
+    const [showHistory, setShowHistory] = useState(false);
+    const [departmentHistory, setDepartmentHistory] = useState([]);
+    const [loadingHistory, setLoadingHistory] = useState(false);
+
     const [showDeptChangeModal, setShowDeptChangeModal] = useState(false);
     const [pendingDepartment, setPendingDepartment] = useState("");
     const [deptChangeReason, setDeptChangeReason] = useState("");
-    
+
+    // Get current user info
+    const [currentUser, setCurrentUser] = useState({
+        uid: "system",
+        name: "System User"
+    });
+
     // Track initial department on component mount
     const initialDepartmentRef = useRef("");
 
-    // Initialize local form data
+    // Load current user from Firebase
     useEffect(() => {
-        if (formData && JSON.stringify(formData) !== JSON.stringify(previousFormDataRef.current)) {
+        const uid = localStorage.getItem("uid") || localStorage.getItem("userUid") || "system";
+
+        if (uid !== "system") {
+            firebaseDB.child(`Users/${uid}`).once("value").then(snap => {
+                if (snap.exists()) {
+                    const userData = snap.val();
+                    setCurrentUser({
+                        uid,
+                        name: userData.name ||
+                            userData.displayName ||
+                            userData.email ||
+                            "Unknown User"
+                    });
+                }
+            }).catch(() => {
+                // Use fallback if user not found
+                setCurrentUser({
+                    uid,
+                    name: "Unknown User"
+                });
+            });
+        }
+    }, []);
+
+    // In Department.js, update the useEffect that watches formData:
+    useEffect(() => {
+        // Only update if there are actual changes
+        const shouldUpdate = formData &&
+            JSON.stringify(formData) !== JSON.stringify(previousFormDataRef.current);
+
+        if (shouldUpdate) {
             setLocalFormData(formData || {});
             previousFormDataRef.current = formData || {};
-            
+
             // Set initial department only once
             if (formData.department && !initialDepartmentRef.current) {
                 initialDepartmentRef.current = formData.department;
                 setOldDepartment(formData.department);
             }
-            
+
             // Only reset changes if not processing
             if (!isProcessing) {
                 setHasChanges(false);
+            }
+
+            // Load department history when formData changes
+            const employeeId = formData.idNo || formData.employeeId;
+            const currentDept = formData.department;
+            if (employeeId && currentDept) {
+                loadDepartmentHistory(employeeId, currentDept);
             }
         }
     }, [formData, isProcessing]);
@@ -98,7 +144,7 @@ const Department = ({
     ];
 
     // Function to get department save path
-    const getDepartmentSavePath = (department) => {
+    const getDepartmentSavePath = useCallback((department) => {
         const pathMap = {
             "Home Care": "WorkerData/HomeCare/Running",
             "Housekeeping": "WorkerData/Housekeeping/Running",
@@ -112,9 +158,9 @@ const Department = ({
             "Industrial & Labor": "WorkerData/Industrial/Running",
             "Others": "WorkerData/Others/Running"
         };
-        
+
         return pathMap[department] || null;
-    };
+    }, []);
 
     // Safe handleChange function - DO NOT REGENERATE ID
     const safeHandleChange = (e) => {
@@ -190,11 +236,116 @@ const Department = ({
         }
     };
 
-    // Handle department change - FIXED VERSION
+    // FIXED: loadDepartmentHistory - searches across ALL departments
+    const loadDepartmentHistory = async (employeeId, department) => {
+        if (!employeeId) return;
+
+        setLoadingHistory(true);
+        try {
+            const allDepartments = [
+                "Home Care", "Housekeeping", "Office & Administrative", "Customer Service",
+                "Management & Supervision", "Security", "Driving & Logistics", "Technical & Maintenance",
+                "Retail & Sales", "Industrial & Labor", "Others"
+            ];
+
+            let allHistory = [];
+
+            // Search in ALL departments for history
+            for (const dept of allDepartments) {
+                const path = getDepartmentSavePath(dept);
+                if (!path) continue;
+
+                const historyPath = `${path}/${employeeId}/DepartmentHistory`;
+                const snapshot = await firebaseDB.child(historyPath).once("value");
+
+                if (snapshot.exists()) {
+                    const historyData = snapshot.val();
+
+                    // Convert object to array
+                    if (historyData && typeof historyData === 'object') {
+                        Object.keys(historyData).forEach(key => {
+                            const entry = historyData[key];
+                            if (entry && typeof entry === 'object') {
+                                allHistory.push({
+                                    id: key,
+                                    ...entry,
+                                    sourceDepartment: dept
+                                });
+                            }
+                        });
+                    }
+                }
+            }
+
+            // Sort by timestamp descending (newest first)
+            allHistory.sort((a, b) => {
+                const dateA = new Date(a.timestamp || 0);
+                const dateB = new Date(b.timestamp || 0);
+                return dateB - dateA;
+            });
+
+            setDepartmentHistory(allHistory);
+
+        } catch (error) {
+            console.error("Error loading department history:", error);
+            setDepartmentHistory([]);
+        } finally {
+            setLoadingHistory(false);
+        }
+    };
+
+    // FIXED: Save department change to history - saves to BOTH old and new departments
+    const saveDepartmentChangeToHistory = async (employeeId, oldDept, newDept, reason) => {
+        if (!employeeId || !oldDept || !newDept) return null;
+
+        try {
+            const historyEntry = {
+                oldDepartment: oldDept,
+                newDepartment: newDept,
+                reason: reason.trim(),
+                timestamp: new Date().toISOString(),
+                changedBy: currentUser.name,
+                changedById: currentUser.uid,
+                employeeId: employeeId
+            };
+
+            // Save to OLD department history
+            const oldPath = getDepartmentSavePath(oldDept);
+            if (oldPath) {
+                const historyKey = Date.now().toString();
+                const historyPath = `${oldPath}/${employeeId}/DepartmentHistory/${historyKey}`;
+                await firebaseDB.child(historyPath).set(historyEntry);
+                console.log(`✓ History saved in old department (${oldDept}): ${historyKey}`);
+            }
+
+            // Save to NEW department history
+            const newPath = getDepartmentSavePath(newDept);
+            if (newPath) {
+                const historyKey = (Date.now() + 1).toString();
+                const historyPath = `${newPath}/${employeeId}/DepartmentHistory/${historyKey}`;
+                await firebaseDB.child(historyPath).set(historyEntry);
+                console.log(`✓ History saved in new department (${newDept}): ${historyKey}`);
+            }
+
+            // Update local history state
+            setDepartmentHistory(prev => [historyEntry, ...prev]);
+
+            return historyEntry;
+        } catch (error) {
+            console.error("Error saving to history:", error);
+            throw error;
+        }
+    };
+
+    // Department.js - REMOVED: removeFromOldDepartment function
+    // 🔥 CRITICAL FIX: Department tab should NOT delete old data
+    // Only WorkerModal.js should handle deletion
+
+    // Handle department change
     const handleDepartmentChange = (e) => {
         const newDept = e.target.value;
         const currentDept = localFormData.department || formData.department;
-      
+
         // If there's a current department and it's different, show modal
         if (currentDept && newDept && newDept !== currentDept) {
             setPendingDepartment(newDept);
@@ -217,7 +368,7 @@ const Department = ({
         if (handleBlur) handleBlur(e);
     };
 
-    // Confirm department change - FIXED: KEEP ID CONSISTENT
+    // Confirm department change - Save history before moving
     const confirmDepartmentChange = async () => {
         if (!deptChangeReason.trim()) {
             alert("Please enter reason for department change");
@@ -229,41 +380,62 @@ const Department = ({
         try {
             const currentDept = localFormData.department || formData.department;
             const currentId = localFormData.idNo || formData.idNo;
-            
-            // Update local state - KEEP SAME ID
+            const employeeId = currentId;
+
+            // 1. Save to history in CURRENT (old) department FIRST
+            if (employeeId && currentDept && pendingDepartment) {
+                await saveDepartmentChangeToHistory(
+                    employeeId,
+                    currentDept,
+                    pendingDepartment,
+                    deptChangeReason.trim()
+                );
+            }
+
+            // 2. Update local state
             const updatedData = {
                 ...localFormData,
                 department: pendingDepartment,
-                departmentChangeReason: deptChangeReason,
+                departmentChangeReason: deptChangeReason.trim(),
+                departmentChangedAt: new Date().toISOString(),
+                departmentChangedBy: currentUser.name,
                 idNo: currentId, // Keep same ID
                 role: ""
             };
 
             setLocalFormData(updatedData);
             setOldDepartment(currentDept);
-            
-            // Update parent formData
+
+            // 3. Update parent formData
             if (handleChange) {
                 handleChange({
                     target: { name: "department", value: pendingDepartment }
                 });
-                
+
                 handleChange({
-                    target: { name: "departmentChangeReason", value: deptChangeReason }
+                    target: { name: "departmentChangeReason", value: deptChangeReason.trim() }
                 });
-                
+
+                handleChange({
+                    target: { name: "departmentChangedAt", value: updatedData.departmentChangedAt }
+                });
+
+                handleChange({
+                    target: { name: "departmentChangedBy", value: updatedData.departmentChangedBy }
+                });
+
                 handleChange({
                     target: { name: "role", value: "" }
                 });
             }
-            
+
             setHasChanges(true);
-            
+
             // Close modal and reset
             setShowDeptChangeModal(false);
             setPendingDepartment("");
             setDeptChangeReason("");
-            
+
         } catch (error) {
             console.error("Error changing department:", error);
             alert("Error changing department. Please try again.");
@@ -277,7 +449,7 @@ const Department = ({
         setShowDeptChangeModal(false);
         setPendingDepartment("");
         setDeptChangeReason("");
-        
+
         // Reset select to current department
         const currentDept = localFormData.department || formData.department;
         if (currentDept) {
@@ -292,14 +464,19 @@ const Department = ({
         }
     };
 
-    // Handle save button click - FIXED
-    const handleSaveClick = async () => {
+    // FIXED: Handle save button click - Department tab does NOT delete old data
+    const handleSaveClick = async (e) => {
+        if (e) {
+            e.preventDefault();
+            e.stopPropagation();
+        }
+        
         if (!canEdit || !hasChanges || isSaving || isProcessing) return;
 
         // Validate required fields
         const requiredFields = ['department', 'role', 'idNo', 'joiningDate'];
         const missingFields = requiredFields.filter(field => !localFormData[field]);
-        
+
         if (missingFields.length > 0) {
             const fieldNames = {
                 department: 'Department',
@@ -307,7 +484,7 @@ const Department = ({
                 idNo: 'Employee ID',
                 joiningDate: 'Joining Date'
             };
-            
+
             alert(`Please fill in the following required fields:\n${missingFields.map(f => `• ${fieldNames[f]}`).join('\n')}`);
             return;
         }
@@ -321,29 +498,42 @@ const Department = ({
 
         setSaveStatus('saving');
         setIsProcessing(true);
-        
+
         try {
+            const employeeId = localFormData.idNo;
+            const oldDept = oldDepartment || initialDepartmentRef.current;
+            const newDept = localFormData.department;
+
+            // 🔥 CRITICAL FIX: Department tab should NOT delete old data
+            // Only pass oldDepartment to WorkerModal for handling
+            // WorkerModal.js will handle the deletion
+
             if (onSaveComplete) {
-                // Prepare data for saving - INCLUDE OLD DEPARTMENT
+                // Prepare data for saving
                 const saveData = {
                     ...localFormData,
                     key: localFormData.key || localFormData.idNo,
                     departmentSavePath: departmentPath,
-                    oldDepartment: oldDepartment || initialDepartmentRef.current
+                    oldDepartment: oldDept, // Pass old department to parent
+                    lastUpdatedAt: new Date().toISOString(),
+                    lastUpdatedBy: currentUser.name
                 };
-                
+
                 const success = await onSaveComplete(saveData);
-                
+
                 if (success) {
                     setHasChanges(false);
                     setOldDepartment(localFormData.department);
                     initialDepartmentRef.current = localFormData.department;
                     previousFormDataRef.current = { ...localFormData };
-                    
+
+                    // Reload history from ALL departments
+                    if (employeeId) {
+                        await loadDepartmentHistory(employeeId, localFormData.department);
+                    }
+
                     setSaveStatus('success');
-                    
-                    // DO NOT auto-navigate, stay on same tab
-                    // Reset status after delay
+
                     setTimeout(() => {
                         setSaveStatus(null);
                         setIsProcessing(false);
@@ -357,7 +547,7 @@ const Department = ({
         } catch (error) {
             console.error("Error saving data:", error);
             setSaveStatus('error');
-            
+
             setTimeout(() => {
                 setSaveStatus(null);
                 setIsProcessing(false);
@@ -366,7 +556,12 @@ const Department = ({
     };
 
     // Handle discard changes
-    const handleDiscardChanges = () => {
+    const handleDiscardChanges = (e) => {
+        if (e) {
+            e.preventDefault();
+            e.stopPropagation();
+        }
+        
         if (!canEdit || !hasChanges || isSaving || isProcessing) return;
         setShowDiscardModal(true);
     };
@@ -374,7 +569,7 @@ const Department = ({
     // Confirm discard changes
     const confirmDiscardChanges = () => {
         setLocalFormData({ ...previousFormDataRef.current });
-        
+
         if (handleChange) {
             Object.entries(previousFormDataRef.current).forEach(([name, value]) => {
                 handleChange({
@@ -382,7 +577,7 @@ const Department = ({
                 });
             });
         }
-        
+
         setHasChanges(false);
         setShowDiscardModal(false);
     };
@@ -414,6 +609,29 @@ const Department = ({
     // Use formData from props if available, otherwise use localFormData
     const displayData = canEdit ? localFormData : formData;
 
+    // Format timestamp
+    const formatDateTime = (timestamp) => {
+        if (!timestamp) return "N/A";
+
+        try {
+            const date = new Date(timestamp);
+            if (isNaN(date.getTime())) {
+                return "Invalid Date";
+            }
+            return date.toLocaleString('en-US', {
+                year: 'numeric',
+                month: 'short',
+                day: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit',
+                hour12: true
+            });
+        } catch (error) {
+            console.error("Error formatting date:", error);
+            return timestamp;
+        }
+    };
+
     return (
         <div>
             {/* Header Card */}
@@ -427,7 +645,7 @@ const Department = ({
                                 {canEdit ? "Edit Mode" : "View Mode"}
                             </span>
                         </div>
-                        
+
                         {/* Save/Discard Buttons */}
                         {canEdit && hasChanges && (
                             <div className="d-flex align-items-center">
@@ -438,6 +656,7 @@ const Department = ({
                                     </span>
                                 </div>
                                 <button
+                                    type="button"
                                     className="btn btn-outline-light btn-sm me-2"
                                     onClick={handleDiscardChanges}
                                     disabled={isSaving || isProcessing}
@@ -446,6 +665,7 @@ const Department = ({
                                     Discard
                                 </button>
                                 <button
+                                    type="button"
                                     className="btn btn-light btn-sm"
                                     onClick={handleSaveClick}
                                     disabled={isSaving || isProcessing}
@@ -476,7 +696,7 @@ const Department = ({
                     <button type="button" className="btn-close" onClick={() => setSaveStatus(null)}></button>
                 </div>
             )}
-            
+
             {saveStatus === 'error' && (
                 <div className="alert alert-danger alert-dismissible fade show mb-4" role="alert">
                     <i className="bi bi-exclamation-triangle-fill me-2"></i>
@@ -519,6 +739,12 @@ const Department = ({
                                         </select>
                                         {errors.department && (
                                             <div className="invalid-feedback d-block">{errors.department}</div>
+                                        )}
+                                        {oldDepartment && displayData.department && oldDepartment !== displayData.department && (
+                                            <small className="text-warning mt-1 d-block">
+                                                <i className="bi bi-info-circle me-1"></i>
+                                                Previously in <strong>{oldDepartment}</strong> department
+                                            </small>
                                         )}
                                     </>
                                 ) : (
@@ -668,42 +894,133 @@ const Department = ({
                 </div>
 
                 {/* Department Change History Card */}
-                {(displayData.departmentChangeReason || oldDepartment) && (
-                    <div className="col-12">
-                        <div className="card shadow-sm border-info">
-                            <div className="card-header bg-info text-white">
-                                <div className="d-flex align-items-center">
-                                    <i className="bi bi-clock-history me-2"></i>
-                                    <h5 className="mb-0">Department Change History</h5>
+                {(departmentHistory.length > 0 || displayData.departmentChangeReason || loadingHistory) && (
+                    <div className="col-md-12">
+                        <div className="card shadow-sm border-secondary">
+                            <div className="card-header bg-secondary text-white">
+                                <div className="d-flex align-items-center justify-content-between">
+                                    <div className="d-flex align-items-center">
+                                        <i className="bi bi-clock-history me-2"></i>
+                                        <h5 className="mb-0">Department Change History</h5>
+                                        {loadingHistory && (
+                                            <span className="badge bg-info ms-2">
+                                                <i className="bi bi-arrow-repeat me-1"></i>
+                                                Loading...
+                                            </span>
+                                        )}
+                                    </div>
+                                    <button
+                                        type="button"
+                                        className="btn btn-sm btn-outline-light"
+                                        onClick={() => setShowHistory(!showHistory)}
+                                        disabled={loadingHistory}
+                                    >
+                                        {showHistory ? "Hide" : "Show"} History
+                                    </button>
                                 </div>
                             </div>
+
                             <div className="card-body">
-                                <div className="row">
-                                    <div className="col-md-12">
-                                        <div className="bg-secondary bg-opacity-25 p-3 rounded">
-                                            <div className="d-flex align-items-start">
-                                                <i className="bi bi-info-circle-fill fs-4 me-3"></i>
-                                                <div>
-                                                    <h6 className="alert-heading">
-                                                        <i className="bi bi-building me-1"></i>
-                                                        Department Change Information
-                                                    </h6>
-                                                    {displayData.departmentChangeReason && (
+                                {loadingHistory ? (
+                                    <div className="text-center py-4">
+                                        <div className="spinner-border text-primary" role="status">
+                                            <span className="visually-hidden">Loading...</span>
+                                        </div>
+                                        <p className="mt-2">Loading history...</p>
+                                    </div>
+                                ) : (
+                                    <>
+                                        {/* Current Change Reason */}
+                                        {displayData.departmentChangeReason && (
+                                            <div className="alert alert-warning mb-3">
+                                                <div className="d-flex">
+                                                    <i className="bi bi-info-circle-fill fs-4 me-3"></i>
+                                                    <div>
+                                                        <h6 className="alert-heading mb-1">
+                                                            <i className="bi bi-arrow-right-circle me-1"></i>
+                                                            Current Department Change
+                                                        </h6>
                                                         <p className="mb-1">
                                                             <strong>Reason:</strong> {displayData.departmentChangeReason}
                                                         </p>
-                                                    )}
-                                                    {oldDepartment && displayData.department && (
-                                                        <small className="text-muted mt-2 d-block">
-                                                            <i className="bi bi-arrow-right me-1"></i>
-                                                            Previously in <strong>{oldDepartment}</strong> department
-                                                        </small>
-                                                    )}
+                                                        {displayData.departmentChangedAt && (
+                                                            <p className="mb-1">
+                                                                <strong>Changed On:</strong> {formatDateTime(displayData.departmentChangedAt)}
+                                                            </p>
+                                                        )}
+                                                        {displayData.departmentChangedBy && (
+                                                            <p className="mb-0">
+                                                                <strong>Changed By:</strong> {displayData.departmentChangedBy}
+                                                            </p>
+                                                        )}
+                                                    </div>
                                                 </div>
                                             </div>
-                                        </div>
-                                    </div>
-                                </div>
+                                        )}
+
+                                        {/* History Table */}
+                                        {showHistory && departmentHistory.length > 0 && (
+                                            <div className="table-responsive">
+                                                <table className="table table-sm table-hover">
+                                                    <thead className="table-dark">
+                                                        <tr>
+                                                            <th>#</th>
+                                                            <th>Old Department</th>
+                                                            <th>New Department</th>
+                                                            <th>Reason</th>
+                                                            <th>Changed By</th>
+                                                            <th>User ID</th>
+                                                            <th>Date & Time</th>
+                                                            <th>Source Dept</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody>
+                                                        {departmentHistory.map((entry, index) => (
+                                                            <tr key={entry.id || index}>
+                                                                <td>{index + 1}</td>
+                                                                <td>
+                                                                    <span className="badge bg-secondary">{entry.oldDepartment}</span>
+                                                                </td>
+                                                                <td>
+                                                                    <span className="badge bg-primary">{entry.newDepartment}</span>
+                                                                </td>
+                                                                <td>{entry.reason || "N/A"}</td>
+                                                                <td>
+                                                                    <span className="text-primary">
+                                                                        <i className="bi bi-person-fill me-1"></i>
+                                                                        {entry.changedBy || "System"}
+                                                                    </span>
+                                                                </td>
+                                                                <td>
+                                                                    <small className="text-muted">
+                                                                        {entry.changedById || "system"}
+                                                                    </small>
+                                                                </td>
+                                                                <td>
+                                                                    <small>{formatDateTime(entry.timestamp)}</small>
+                                                                </td>
+                                                                <td>
+                                                                    <small className="text-muted">{entry.sourceDepartment || "Unknown"}</small>
+                                                                </td>
+                                                            </tr>
+                                                        ))}
+                                                    </tbody>
+                                                </table>
+                                                <div className="text-info small mt-2">
+                                                    <i className="bi bi-info-circle me-1"></i>
+                                                    History is collected from all departments where this employee has been.
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        {showHistory && departmentHistory.length === 0 && (
+                                            <div className="text-center py-3">
+                                                <i className="bi bi-clock-history fs-1 text-muted mb-2"></i>
+                                                <p className="text-muted">No department change history found</p>
+                                            </div>
+                                        )}
+                                    </>
+                                )}
                             </div>
                         </div>
                     </div>
@@ -804,7 +1121,7 @@ const Department = ({
                                                                 }
                                                             }}
                                                         />
-                                                       
+
                                                     </div>
                                                     <div>
                                                         <h6 className="text-success mb-1">
@@ -839,9 +1156,9 @@ const Department = ({
                                     <i className="bi bi-exclamation-triangle me-2"></i>
                                     Discard Changes
                                 </h5>
-                                <button 
-                                    type="button" 
-                                    className="btn-close btn-close-white" 
+                                <button
+                                    type="button"
+                                    className="btn-close btn-close-white"
                                     onClick={() => setShowDiscardModal(false)}
                                 ></button>
                             </div>
@@ -853,16 +1170,16 @@ const Department = ({
                                 </div>
                             </div>
                             <div className="modal-footer">
-                                <button 
-                                    type="button" 
-                                    className="btn btn-secondary" 
+                                <button
+                                    type="button"
+                                    className="btn btn-secondary"
                                     onClick={() => setShowDiscardModal(false)}
                                 >
                                     Cancel
                                 </button>
-                                <button 
-                                    type="button" 
-                                    className="btn btn-danger" 
+                                <button
+                                    type="button"
+                                    className="btn btn-danger"
                                     onClick={confirmDiscardChanges}
                                 >
                                     <i className="bi bi-trash me-1"></i>
@@ -884,9 +1201,9 @@ const Department = ({
                                     <i className="bi bi-exclamation-triangle me-2"></i>
                                     Confirm Department Change
                                 </h5>
-                                <button 
-                                    type="button" 
-                                    className="btn-close" 
+                                <button
+                                    type="button"
+                                    className="btn-close"
                                     onClick={cancelDepartmentChange}
                                 ></button>
                             </div>
@@ -894,7 +1211,7 @@ const Department = ({
                                 <div className="alert alert-warning">
                                     <i className="bi bi-info-circle me-2"></i>
                                     You are changing department from
-                                    <strong className="mx-1">{displayData.department}</strong> 
+                                    <strong className="mx-1">{displayData.department}</strong>
                                     <i className="bi bi-arrow-right mx-1"></i>
                                     <strong>{pendingDepartment}</strong>
                                 </div>
@@ -917,13 +1234,25 @@ const Department = ({
                                     </small>
                                 </div>
 
-                                <div className="alert alert-info text-info">
+                                <div className="bg-secondary bg-opacity-25 p-3 rounded">
                                     <i className="bi bi-lightbulb me-2"></i>
-                                    <strong>Note:</strong> Employee ID will remain the same (<strong>{displayData.idNo}</strong>).
+                                    <strong>Note:</strong>
+                                    <div>Employee ID will remain the same (<strong>{displayData.idNo}</strong>).</div>
+                                    {oldDepartment && (
+                                        <div className="mt-1">
+                                            <i className="bi bi-trash me-1"></i>
+                                            Employee will be <strong>removed</strong> from <strong>{oldDepartment}</strong> department.
+                                        </div>
+                                    )}
+                                    <div className="mt-1">
+                                        <i className="bi bi-person me-1"></i>
+                                        Changed by: <strong>{currentUser.name}</strong>
+                                    </div>
                                 </div>
                             </div>
                             <div className="modal-footer">
                                 <button
+                                    type="button"
                                     className="btn btn-secondary"
                                     onClick={cancelDepartmentChange}
                                     disabled={isProcessing}
@@ -932,6 +1261,7 @@ const Department = ({
                                     Cancel
                                 </button>
                                 <button
+                                    type="button"
                                     className="btn btn-warning"
                                     onClick={confirmDepartmentChange}
                                     disabled={!deptChangeReason.trim() || isProcessing}

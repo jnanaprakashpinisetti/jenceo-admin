@@ -1,5 +1,5 @@
-// DisplayWorkers.js
-import React, { useState, useEffect, useRef } from 'react';
+// DisplayWorkers.js - COMPLETE FIXED VERSION
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import firebaseDB from '../../firebase';
 import editIcon from '../../assets/eidt.svg';
 import viewIcon from '../../assets/view.svg';
@@ -95,6 +95,8 @@ export default function DisplayWorkers() {
     const [isEditMode, setIsEditMode] = useState(false);
     const [activeTab, setActiveTab] = useState("Home Care");
 
+    const [isModalLoading, setIsModalLoading] = useState(false);
+
     // New unified filters
     const [skillMode, setSkillMode] = useState("single");
     const [ageRange, setAgeRange] = useState({ min: "", max: "" });
@@ -185,59 +187,104 @@ export default function DisplayWorkers() {
         return foundTasks;
     };
 
-    // Fetch all employees from all departments
+    // Add this function to DisplayWorkers.js to debug duplicate keys:
+
     useEffect(() => {
-        const fetchAllEmployees = async () => {
-            setLoading(true);
-            try {
-                const employeesByDept = {};
-                const counts = {};
+        // Debug: Check for duplicate IDs
+        if (allEmployees[activeTab]) {
+            const ids = {};
+            const duplicates = [];
 
-                for (const [deptName, dbPath] of Object.entries(ACTIVE_DEPARTMENTS)) {
-                    try {
-                        const snapshot = await firebaseDB.child(dbPath).once('value');
-                        if (snapshot.exists()) {
-                            const employeesData = [];
-                            snapshot.forEach((childSnapshot) => {
-                                employeesData.push({
-                                    id: childSnapshot.key,
-                                    department: deptName,
-                                    dbPath: dbPath,
-                                    ...childSnapshot.val()
-                                });
+            allEmployees[activeTab].forEach((emp, index) => {
+                const key = emp.id || emp.idNo || emp.employeeId;
+                if (key) {
+                    if (ids[key]) {
+                        duplicates.push({
+                            id: key,
+                            firstIndex: ids[key],
+                            secondIndex: index,
+                            employee1: allEmployees[activeTab][ids[key]],
+                            employee2: emp
+                        });
+                    } else {
+                        ids[key] = index;
+                    }
+                }
+            });
+
+            if (duplicates.length > 0) {
+                console.warn("Duplicate employee IDs found:", duplicates);
+            }
+        }
+    }, [allEmployees, activeTab]);
+
+    // Fetch all employees from all departments
+    const fetchAllEmployees = useCallback(async () => {
+        setLoading(true);
+        try {
+            const employeesByDept = {};
+            const counts = {};
+
+            for (const [deptName, dbPath] of Object.entries(ACTIVE_DEPARTMENTS)) {
+                try {
+                    const snapshot = await firebaseDB.child(dbPath).once('value');
+                    if (snapshot.exists()) {
+                        const employeesData = [];
+                        snapshot.forEach((childSnapshot) => {
+                            employeesData.push({
+                                id: childSnapshot.key,
+                                department: deptName,
+                                dbPath: dbPath,
+                                ...childSnapshot.val()
                             });
+                        });
 
-                            // Sort employees by ID number in descending order
-                            const sortedEmployees = sortEmployeesDescending(employeesData);
-                            employeesByDept[deptName] = sortedEmployees;
-                            counts[deptName] = sortedEmployees.length;
-                        } else {
-                            employeesByDept[deptName] = [];
-                            counts[deptName] = 0;
-                        }
-                    } catch (err) {
-                        console.error(`Error fetching ${deptName}:`, err);
+                        // Sort employees by ID number in descending order
+                        const sortedEmployees = sortEmployeesDescending(employeesData);
+                        employeesByDept[deptName] = sortedEmployees;
+                        counts[deptName] = sortedEmployees.length;
+                    } else {
                         employeesByDept[deptName] = [];
                         counts[deptName] = 0;
                     }
+                } catch (err) {
+                    console.error(`Error fetching ${deptName}:`, err);
+                    employeesByDept[deptName] = [];
+                    counts[deptName] = 0;
                 }
-
-                setAllEmployees(employeesByDept);
-                setFilteredEmployees(employeesByDept);
-                setEmployeeCounts(counts);
-
-                // Calculate total pages for active tab
-                const activeEmployees = employeesByDept[activeTab] || [];
-                setTotalPages(Math.ceil(activeEmployees.length / rowsPerPage));
-                setLoading(false);
-            } catch (err) {
-                setError(err.message);
-                setLoading(false);
             }
-        };
 
+            setAllEmployees(employeesByDept);
+            setFilteredEmployees(employeesByDept);
+            setEmployeeCounts(counts);
+
+            // Calculate total pages for active tab
+            const activeEmployees = employeesByDept[activeTab] || [];
+            setTotalPages(Math.ceil(activeEmployees.length / rowsPerPage));
+            setLoading(false);
+        } catch (err) {
+            setError(err.message);
+            setLoading(false);
+        }
+    }, []);
+
+    // Memoize the current employees
+    const currentEmployeesMemo = useMemo(() => {
+        const employees = filteredEmployees[activeTab] || [];
+        const indexOfLastEmployee = currentPage * rowsPerPage;
+        const indexOfFirstEmployee = indexOfLastEmployee - rowsPerPage;
+        return employees.slice(indexOfFirstEmployee, indexOfLastEmployee);
+    }, [filteredEmployees, activeTab, currentPage, rowsPerPage])
+
+    // Initial fetch
+    useEffect(() => {
         fetchAllEmployees();
     }, []);
+
+    // Refresh employees function
+    const refreshEmployees = async () => {
+        await fetchAllEmployees();
+    };
 
     // Filter employees based on search term and filters
     useEffect(() => {
@@ -785,8 +832,8 @@ export default function DisplayWorkers() {
         return ok;
     };
 
-    // When user submits reason -> actually perform delete / move
-    // Update the delete function to move to department-specific Existing folder
+    // In DisplayWorkers.js, update the delete function:
+
     const handleDeleteSubmitWithReason = async (e) => {
         if (e && e.preventDefault) e.preventDefault();
 
@@ -801,24 +848,57 @@ export default function DisplayWorkers() {
             return;
         }
 
-        const { id, dbPath, department } = employeeToDelete;
+        const { id, dbPath, department, idNo } = employeeToDelete;
+
+        // Use idNo as primary identifier if available, otherwise use id
+        const employeeIdentifier = idNo || id;
+
         try {
-            // read employee data
-            const snapshot = await firebaseDB.child(`${dbPath}/${id}`).once("value");
-            const employeeData = snapshot.val();
-            if (!employeeData) {
-                setDeleteError("Employee data not found");
+            // Get the current department's running path
+            const runningPath = ACTIVE_DEPARTMENTS[department];
+
+            if (!runningPath) {
+                setDeleteError("Invalid department configuration");
                 return;
             }
 
-            // Get the corresponding Existing path for this department
+            // Get the corresponding Existing path
             const existingPath = ACTIVE_EXISTING[department];
             if (!existingPath) {
                 setDeleteError("Cannot determine destination folder for this department");
                 return;
             }
 
-            // Add removal metadata
+            // Try multiple approaches to find the employee data
+            let employeeData = null;
+            let firebaseKey = null;
+
+            // First try: search by ID in the department
+            const snapshot = await firebaseDB.child(runningPath).once("value");
+            if (snapshot.exists()) {
+                const data = snapshot.val();
+
+                // Find the employee by multiple identifiers
+                Object.keys(data).forEach(key => {
+                    const record = data[key];
+                    if (
+                        (record.id && record.id === employeeIdentifier) ||
+                        (record.idNo && record.idNo === employeeIdentifier) ||
+                        (record.employeeId && record.employeeId === employeeIdentifier) ||
+                        key === employeeIdentifier
+                    ) {
+                        employeeData = record;
+                        firebaseKey = key;
+                    }
+                });
+            }
+
+            if (!employeeData || !firebaseKey) {
+                setDeleteError("Employee data not found in current department");
+                return;
+            }
+
+            // Prepare data for Existing folder
             const payloadToExit = {
                 ...employeeData,
                 removalReason: deleteReasonForm.reasonType || '',
@@ -826,13 +906,17 @@ export default function DisplayWorkers() {
                 removedAt: new Date().toISOString(),
                 removedBy: (deleteReasonForm && deleteReasonForm.by) || 'UI',
                 originalDepartment: department,
-                originalPath: dbPath
+                originalPath: runningPath,
+                // Ensure we keep the original ID
+                idNo: employeeData.idNo || employeeIdentifier,
+                employeeId: employeeData.employeeId || employeeIdentifier
             };
 
-            // Save employee record under department-specific Existing folder
-            await firebaseDB.child(`${existingPath}/${id}`).set(payloadToExit);
+            // Save to Existing folder using employee ID as key
+            const existingKey = employeeData.idNo || employeeData.employeeId || firebaseKey;
+            await firebaseDB.child(`${existingPath}/${existingKey}`).set(payloadToExit);
 
-            // push removal entry into the item's removalHistory array
+            // Add to removal history
             const removalEntry = {
                 removedAt: new Date().toISOString(),
                 removedBy: (deleteReasonForm && deleteReasonForm.by) || 'UI',
@@ -840,16 +924,46 @@ export default function DisplayWorkers() {
                 removalComment: deleteReasonForm.comment ? deleteReasonForm.comment.trim() : '',
                 movedTo: existingPath
             };
-            await firebaseDB.child(`${existingPath}/${id}/removalHistory`).push(removalEntry);
 
-            // Remove from original Running location
-            await firebaseDB.child(`${dbPath}/${id}`).remove();
+            await firebaseDB.child(`${existingPath}/${existingKey}/removalHistory`).push(removalEntry);
 
-            // Update local state
-            setAllEmployees(prev => ({
-                ...prev,
-                [department]: prev[department].filter(emp => emp.id !== id)
-            }));
+            // Remove from Running folder
+            await firebaseDB.child(`${runningPath}/${firebaseKey}`).remove();
+
+            // Update local state - remove from allEmployees
+            setAllEmployees(prev => {
+                const updated = { ...prev };
+                if (updated[department]) {
+                    updated[department] = updated[department].filter(emp => {
+                        // Compare all possible identifiers
+                        const empId = emp.idNo || emp.employeeId || emp.id;
+                        const toDeleteId = employeeData.idNo || employeeData.employeeId || employeeIdentifier;
+                        return empId !== toDeleteId;
+                    });
+                }
+                return updated;
+            });
+
+            console.log("Deleting employee:", {
+                employeeToDelete,
+                employeeIdentifier,
+                department,
+                runningPath,
+                existingPath
+            });
+
+            // Update filteredEmployees
+            setFilteredEmployees(prev => {
+                const updated = { ...prev };
+                if (updated[department]) {
+                    updated[department] = updated[department].filter(emp => {
+                        const empId = emp.idNo || emp.employeeId || emp.id;
+                        const toDeleteId = employeeData.idNo || employeeData.employeeId || employeeIdentifier;
+                        return empId !== toDeleteId;
+                    });
+                }
+                return updated;
+            });
 
             // success -> close modal, clear states and show success modal
             setShowDeleteReasonModal(false);
@@ -858,18 +972,83 @@ export default function DisplayWorkers() {
             setDeleteError(null);
             setReasonError(null);
             setCommentError(null);
+
         } catch (err) {
-            console.error(err);
+            console.error("Error deleting employee:", err);
             setDeleteError('Error deleting employee: ' + (err.message || err));
         }
     };
 
+    // 🔥 CRITICAL FIX: Updated handleSave with immediate state update
     const handleSave = async (updatedEmployee) => {
+        setIsModalLoading(true);
         try {
+            // Save to Firebase
             await firebaseDB.child(`${updatedEmployee.dbPath}/${updatedEmployee.id}`).update(updatedEmployee);
-            setIsModalOpen(false);
+
+            // 🔥 IMMEDIATE STATE UPDATE - NO FETCH NEEDED
+            setAllEmployees(prev => {
+                const copy = { ...prev };
+
+                // Remove employee from ALL departments (prevents duplicates)
+                Object.keys(copy).forEach(dept => {
+                    copy[dept] = copy[dept].filter(
+                        emp => (emp.idNo || emp.id || emp.employeeId) !== (updatedEmployee.idNo || updatedEmployee.id)
+                    );
+                });
+
+                // Add employee to correct department at the beginning
+                const targetDept = updatedEmployee.department;
+                if (!copy[targetDept]) {
+                    copy[targetDept] = [];
+                }
+                
+                // Add to beginning and sort
+                copy[targetDept] = [updatedEmployee, ...copy[targetDept]];
+                copy[targetDept] = sortEmployeesDescending(copy[targetDept]);
+
+                return copy;
+            });
+
+            // Also update filteredEmployees immediately
+            setFilteredEmployees(prev => {
+                const copy = { ...prev };
+
+                // Remove from all filtered departments
+                Object.keys(copy).forEach(dept => {
+                    copy[dept] = copy[dept].filter(
+                        emp => (emp.idNo || emp.id || emp.employeeId) !== (updatedEmployee.idNo || updatedEmployee.id)
+                    );
+                });
+
+                // Add to correct filtered department
+                const targetDept = updatedEmployee.department;
+                if (!copy[targetDept]) {
+                    copy[targetDept] = [];
+                }
+                
+                copy[targetDept] = [updatedEmployee, ...copy[targetDept]];
+                copy[targetDept] = sortEmployeesDescending(copy[targetDept]);
+
+                return copy;
+            });
+
+            // Update the selected employee in modal
+            setSelectedEmployee(updatedEmployee);
+
+            console.log("Employee saved successfully - immediate state update");
+
+            // Close modal after successful save
+            setTimeout(() => {
+                setIsModalOpen(false);
+                setSelectedEmployee(null);
+                setIsEditMode(false);
+            }, 500);
+
         } catch (err) {
             setError('Error updating employee: ' + err.message);
+        } finally {
+            setIsModalLoading(false);
         }
     };
 
@@ -877,6 +1056,8 @@ export default function DisplayWorkers() {
         setIsModalOpen(false);
         setSelectedEmployee(null);
         setIsEditMode(false);
+        // Only refresh if needed (on cancel or close without save)
+        // refreshEmployees(); // 🔥 REMOVED - causing duplicates
     };
 
     if (loading) return <div className="text-center my-5">Loading employees...</div>;
@@ -937,7 +1118,7 @@ export default function DisplayWorkers() {
                                     Showing: {totalFiltered} {totalFiltered !== (employeeCounts[activeTab] || 0) ? `(Filtered)` : ''}
                                 </p>
                             </div>
-                            <div className="col-md-9">
+                            <div className="col-md-7">
                                 <div className="input-group">
                                     <span className="input-group-text">
                                         <i className="bi bi-search"></i>
@@ -950,6 +1131,22 @@ export default function DisplayWorkers() {
                                         onChange={handleSearchChange}
                                     />
                                 </div>
+                            </div>
+                            <div className="col-md-2">
+                                <button
+                                    className="btn btn-outline-warning w-100"
+                                    type="button"
+                                    onClick={refreshEmployees}
+                                    disabled={loading}
+                                    title="Refresh employee data"
+                                >
+                                    {loading ? (
+                                        <span className="spinner-border spinner-border-sm me-1"></span>
+                                    ) : (
+                                        <i className="bi bi-arrow-clockwise me-1"></i>
+                                    )}
+                                    Refresh
+                                </button>
                             </div>
                         </div>
                     </div>
@@ -1663,102 +1860,118 @@ export default function DisplayWorkers() {
                             <th>Actions</th>
                         </tr>
                     </thead>
+
                     <tbody>
                         {currentTabEmployees.length > 0 ? (
-                            currentTabEmployees.map((employee) => (
-                                <tr key={employee.id} onClick={(e) => { e.stopPropagation(); handleView(employee); }} style={{ cursor: 'pointer' }}>
-                                    <td>
-                                        {employee.employeePhoto ? (
-                                            <img
-                                                src={employee.employeePhoto}
-                                                alt="Employee"
-                                                style={{ width: '50px', height: '50px', objectFit: 'cover', borderRadius: '50%' }}
-                                            />
-                                        ) : (
-                                            <div
-                                                style={{
-                                                    width: '50px',
-                                                    height: '50px',
-                                                    backgroundColor: '#4c4b4b',
-                                                    borderRadius: '50%',
-                                                    display: 'flex',
-                                                    alignItems: 'center',
-                                                    justifyContent: 'center'
-                                                }}
-                                            >
+                            currentTabEmployees.map((employee, index) => {
+                                // Create a unique key using multiple properties
+                                const uniqueKey = `${employee.id}-${employee.idNo}-${employee.employeeId}-${index}`;
+
+                                return (
+                                    <tr
+                                        key={uniqueKey}
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            e.preventDefault();
+                                            handleView(employee);
+                                        }}
+                                        style={{ cursor: 'pointer' }}
+                                    >
+                                        <td>
+                                            {employee.employeePhoto ? (
+                                                <img
+                                                    src={employee.employeePhoto}
+                                                    alt="Employee"
+                                                    style={{ width: '50px', height: '50px', objectFit: 'cover', borderRadius: '50%' }}
+                                                />
+                                            ) : (
+                                                <div
+                                                    style={{
+                                                        width: '50px',
+                                                        height: '50px',
+                                                        backgroundColor: '#4c4b4b',
+                                                        borderRadius: '50%',
+                                                        display: 'flex',
+                                                        alignItems: 'center',
+                                                        justifyContent: 'center'
+                                                    }}
+                                                >
+                                                </div>
+                                            )}
+                                        </td>
+                                        <td>
+                                            <strong>{employee.employeeId || employee.idNo || 'N/A'}</strong>
+                                            <small className="small-text d-block mt-1 text-info opacity-75">
+                                                By <strong>{employee.createdByName || "System"}</strong>
+                                            </small>
+                                        </td>
+                                        <td>
+                                            {employee.firstName} {employee.lastName}
+                                            <div className="">
+                                                {[1, 2, 3, 4, 5].map((n) => {
+                                                    const filled = n <= Number(employee.rating || 0);
+                                                    let color = "text-secondary";
+                                                    if (filled) {
+                                                        if (employee.rating >= 4) color = "text-success";
+                                                        else if (employee.rating === 3) color = "text-warning";
+                                                        else color = "text-danger";
+                                                    }
+                                                    return (
+                                                        <i
+                                                            key={n}
+                                                            className={`bi ${filled ? "bi-star-fill" : "bi-star"} ${color}`}
+                                                            style={{ fontSize: "0.7rem", marginRight: 2 }}
+                                                            title={`${employee.rating || 0}/5`}
+                                                        />
+                                                    );
+                                                })}
                                             </div>
-                                        )}
-                                    </td>
-                                    <td>
-                                        <strong>{employee.employeeId || employee.idNo || 'N/A'}</strong>
-                                        <small className="small-text d-block mt-1 text-info opacity-75">
-                                            By <strong>{employee.createdByName || "System"}</strong>
-                                        </small>
-                                    </td>
-                                    <td>
-                                        {employee.firstName} {employee.lastName}
-                                        <div className="">
-                                            {[1, 2, 3, 4, 5].map((n) => {
-                                                const filled = n <= Number(employee.rating || 0);
-                                                let color = "text-secondary";
-                                                if (filled) {
-                                                    if (employee.rating >= 4) color = "text-success";
-                                                    else if (employee.rating === 3) color = "text-warning";
-                                                    else color = "text-danger";
-                                                }
-                                                return (
-                                                    <i
-                                                        key={n}
-                                                        className={`bi ${filled ? "bi-star-fill" : "bi-star"} ${color}`}
-                                                        style={{ fontSize: "0.7rem", marginRight: 2 }}
-                                                        title={`${employee.rating || 0}/5`}
-                                                    />
-                                                );
-                                            })}
-                                        </div>
-                                    </td>
-                                    <td>{employee.gender || 'N/A'}</td>
-                                    <td>{employee.primarySkill || 'N/A'}</td>
-                                    <td>{employee.workExperince ? `${employee.workExperince}` : 'N/A'}</td>
-                                    <td>
-                                        <span className={`badge ${getStatusBadgeClass(employee.status)}`}>
-                                            {employee.status || 'On Duty'}
-                                        </span>
-                                    </td>
-                                    <td>
-                                        <div className="d-flex">
-                                            <button
-                                                type="button"
-                                                className="btn btn-sm me-2"
-                                                title="View"
-                                                onClick={(e) => { e.stopPropagation(); handleView(employee); }}
-                                            >
-                                                <img src={viewIcon} alt="view Icon" style={{ opacity: 0.6, width: '18px', height: '18px' }} />
-                                            </button>
-                                            <button
-                                                type="button"
-                                                className="btn btn-sm me-2"
-                                                title="Edit"
-                                                onClick={(e) => { e.stopPropagation(); handleEdit(employee); }}
-                                            >
-                                                <img src={editIcon} alt="edit Icon" style={{ width: '15px', height: '15px' }} />
-                                            </button>
-                                            <button
-                                                type="button"
-                                                className="btn btn-sm"
-                                                title="Delete"
-                                                onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    setEmployeeToDelete(employee);
-                                                    setShowDeleteConfirm(true);
-                                                }}
-                                            >
-                                                <img src={deleteIcon} alt="delete Icon" style={{ width: '14px', height: '14px' }} />
-                                            </button>
-                                        </div>
-                                    </td>
-                                </tr>
-                            ))
+                                        </td>
+                                        <td>{employee.gender || 'N/A'}</td>
+                                        <td>{employee.primarySkill || 'N/A'}</td>
+                                        <td>{employee.workExperince ? `${employee.workExperince}` : 'N/A'}</td>
+                                        <td>
+                                            <span className={`badge ${getStatusBadgeClass(employee.status)}`}>
+                                                {employee.status || 'On Duty'}
+                                            </span>
+                                        </td>
+                                        <td>
+                                            <div className="d-flex">
+                                                <button
+                                                    type="button"
+                                                    className="btn btn-sm me-2"
+                                                    title="View"
+                                                    onClick={(e) => { e.stopPropagation(); handleView(employee); }}
+                                                >
+                                                    <img src={viewIcon} alt="view Icon" style={{ opacity: 0.6, width: '18px', height: '18px' }} />
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    className="btn btn-sm me-2"
+                                                    title="Edit"
+                                                    onClick={(e) => { e.stopPropagation(); handleEdit(employee); }}
+                                                >
+                                                    <img src={editIcon} alt="edit Icon" style={{ width: '15px', height: '15px' }} />
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    className="btn btn-sm"
+                                                    title="Delete"
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        e.preventDefault();
+                                                        setEmployeeToDelete(employee);
+                                                        setShowDeleteConfirm(true);
+                                                    }}
+                                                // disabled={isProcessingDelete}
+                                                >
+                                                    <img src={deleteIcon} alt="delete Icon" style={{ width: '14px', height: '14px' }} />
+                                                </button>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                );
+                            })
                         ) : (
                             <tr>
                                 <td colSpan="8" className="text-center py-4">
@@ -1884,6 +2097,31 @@ export default function DisplayWorkers() {
                     onClose={handleCloseModal}
                     onSave={handleSave}
                     isEditMode={isEditMode}
+                    onSaveSuccess={(savedEmployee) => {
+                        // Update local state directly
+                        setAllEmployees(prev => {
+                            const copy = { ...prev };
+
+                            // Remove employee from ALL departments (prevents duplicates)
+                            Object.keys(copy).forEach(dept => {
+                                copy[dept] = copy[dept].filter(
+                                    emp => (emp.idNo || emp.id || emp.employeeId) !== (savedEmployee.idNo || savedEmployee.id)
+                                );
+                            });
+
+                            // Add employee to correct department at the beginning
+                            const targetDept = savedEmployee.department;
+                            if (!copy[targetDept]) {
+                                copy[targetDept] = [];
+                            }
+                            
+                            // Add to beginning and sort
+                            copy[targetDept] = [savedEmployee, ...copy[targetDept]];
+                            copy[targetDept] = sortEmployeesDescending(copy[targetDept]);
+
+                            return copy;
+                        });
+                    }}
                 />
             )}
 

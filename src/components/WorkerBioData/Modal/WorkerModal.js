@@ -99,40 +99,17 @@ const WorkerModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode }
     const closeAlert = () => setAlertState((s) => ({ ...s, open: false }));
     const openConfirm = (title, message, onConfirm) => setConfirmState({ open: true, title, message, onConfirm });
     const closeConfirm = () => setConfirmState((s) => ({ ...s, open: false }));
+    const employeeKey = formData.idNo; // 🔥 SINGLE SOURCE OF TRUTH
+
 
     useEffect(() => {
         if (employee) {
-            // Extract the Firebase key - it might be passed as .key, .id, or might be the object's key itself
-            const key = employee.key || employee.id || employee.recordId || (employee.idNo ? employee.idNo : null);
-
-            setFormData({
-                ...employee,
-                key: key, // Ensure key is always set
-                secondarySkills: Array.isArray(employee.secondarySkills) ? employee.secondarySkills : [],
-                workingSkills: Array.isArray(employee.workingSkills) ? employee.workingSkills : [],
-                healthIssues: Array.isArray(employee.healthIssues) ? employee.healthIssues : [],
-                otherIssues: employee.otherIssues ?? "",
-                allowance: employee.allowance ?? "",
-                pageNo: employee.pageNo ?? "",
-                basicSalary: employee.basicSalary ?? "",
-                payments: Array.isArray(employee.payments) ? employee.payments : [],
-                workDetails: Array.isArray(employee.workDetails) ? employee.workDetails : [],
-                employeePhotoUrl: employee.employeePhoto || employee.employeePhotoUrl || null,
-                idProofUrl: employee.idProof || employee.idProofUrl || null,
-            });
-            setStatus(employee.status || "On Duty");
-        } else {
-            setFormData({
-                secondarySkills: [],
-                workingSkills: [],
-                healthIssues: [],
-                otherIssues: "",
-                payments: [],
-                workDetails: [],
-            });
-            setStatus("On Duty");
+          setFormData({
+            ...employee,
+          });
         }
-    }, [employee]);
+      }, [employee]);
+      
 
     const handleInputChange = (e) => {
         const { name, value } = e.target;
@@ -265,6 +242,8 @@ const handleSaveClick = async () => {
 };
 
 // Also update the handleDepartmentSave function to NOT save to EmployeeBioData
+// In WorkerModal.js, update the handleDepartmentSave function:
+
 const handleDepartmentSave = async (departmentData) => {
     try {
         setIsSaving(true);
@@ -275,52 +254,81 @@ const handleDepartmentSave = async (departmentData) => {
         
         const { departmentSavePath, oldDepartment: oldDept, ...dataToSave } = departmentData;
         
-        let employeeKey = dataToSave.key || formData.key;
+        // Use employee ID as key (consistent ID, no regeneration)
+        const employeeKey = formData.idNo || dataToSave.idNo;
         
         if (!employeeKey) {
-            employeeKey = firebaseDB.child(savePath).push().key;
-            dataToSave.key = employeeKey;
+            openAlert("Error", "Employee ID is missing. Cannot save.", "danger");
+            setIsSaving(false);
+            return false;
         }
         
+        // Check if department actually changed
+        const isDepartmentChanged = oldDepartment && newDepartment && oldDepartment !== newDepartment;
+        
         // If department changed, remove from old department
-        if (oldDepartment && newDepartment && oldDepartment !== newDepartment) {
+        if (isDepartmentChanged) {
             const oldPath = getDepartmentSavePath(oldDepartment);
+            
             if (oldPath && oldPath !== savePath) {
-                // Find and remove from old location
-                const oldSnapshot = await firebaseDB.child(oldPath).once("value");
-                const oldData = oldSnapshot.val();
-                
-                if (oldData) {
-                    for (const key in oldData) {
-                        if (oldData[key].idNo === dataToSave.idNo) {
-                            await firebaseDB.child(`${oldPath}/${key}`).remove();
-                            console.log(`Removed from old department: ${oldDepartment}`);
-                            break;
+                try {
+                    // Find the record in old department by employee ID
+                    const oldSnapshot = await firebaseDB.child(oldPath).once("value");
+                    const oldData = oldSnapshot.val();
+                    
+                    if (oldData) {
+                        let oldRecordKey = null;
+                        
+                        // Find the key by employee ID
+                        Object.keys(oldData).forEach(key => {
+                            const record = oldData[key];
+                            if (record.idNo === employeeKey || record.key === employeeKey) {
+                                oldRecordKey = key;
+                            }
+                        });
+                        
+                        // Remove the record from old department
+                        if (oldRecordKey) {
+                            await firebaseDB.child(`${oldPath}/${oldRecordKey}`).remove();
+                            console.log(`Removed from old department (${oldDepartment}): ${employeeKey}`);
                         }
                     }
+                } catch (error) {
+                    console.warn("Error removing from old department:", error);
+                    // Continue anyway, don't fail the save
                 }
             }
         }
         
-        // Save to new location
-        await firebaseDB.child(`${savePath}/${employeeKey}`).set({
-            ...dataToSave,
-            lastUpdated: new Date().toISOString(),
-            updatedBy: effectiveUserId || "system"
-        });
-        
-        console.log(`Saved to new department: ${newDepartment}`);
-        
-        setFormData(prev => ({
-            ...prev,
+        // Save to new department location
+        const saveData = {
             ...dataToSave,
             key: employeeKey,
-            department: newDepartment
+            idNo: employeeKey, // Keep ID consistent
+            department: newDepartment,
+            lastUpdated: new Date().toISOString(),
+            updatedBy: effectiveUserId || "system"
+        };
+        
+        await firebaseDB.child(`${savePath}/${employeeKey}`).set(saveData);
+        
+        console.log(`Saved to new department (${newDepartment}): ${employeeKey}`);
+        
+        // Update the parent formData immediately
+        setFormData(prev => ({
+            ...prev,
+            ...saveData,
+            department: newDepartment,
+            departmentChangeReason: dataToSave.departmentChangeReason || ""
         }));
         
-        openAlert("Success", "Department data saved successfully!", "success");
+        // Force update hasUnsavedChanges to false
         setHasUnsavedChanges(false);
+        
+        openAlert("Success", `Employee data saved to ${newDepartment} department!`, "success");
         setIsSaving(false);
+        
+        // DO NOT close the modal, just return success
         return true;
         
     } catch (error) {

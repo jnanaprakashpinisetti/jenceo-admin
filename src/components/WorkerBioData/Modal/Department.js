@@ -1,4 +1,6 @@
+// Department.js - Updated with useAuth
 import React, { useEffect, useState, useRef, useCallback } from "react";
+import { useAuth } from "../../../context/AuthContext"; // ADD THIS IMPORT
 import firebaseDB from "../../../firebase";
 
 const Department = ({
@@ -30,40 +32,44 @@ const Department = ({
     const [pendingDepartment, setPendingDepartment] = useState("");
     const [deptChangeReason, setDeptChangeReason] = useState("");
 
-    // Get current user info
+    // Get current user info using useAuth hook
+    const { user: authUser } = useAuth?.() || {};
+    
+    // Initialize currentUser with auth data
     const [currentUser, setCurrentUser] = useState({
         uid: "system",
-        name: "System User"
+        name: "System User",
+        email: "system@example.com"
     });
 
     // Track initial department on component mount
     const initialDepartmentRef = useRef("");
 
-    // Load current user from Firebase
+    // Update currentUser when authUser changes
     useEffect(() => {
-        const uid = localStorage.getItem("uid") || localStorage.getItem("userUid") || "system";
-
-        if (uid !== "system") {
-            firebaseDB.child(`Users/${uid}`).once("value").then(snap => {
-                if (snap.exists()) {
-                    const userData = snap.val();
-                    setCurrentUser({
-                        uid,
-                        name: userData.name ||
-                            userData.displayName ||
-                            userData.email ||
-                            "Unknown User"
-                    });
-                }
-            }).catch(() => {
-                // Use fallback if user not found
-                setCurrentUser({
-                    uid,
-                    name: "Unknown User"
-                });
+        if (authUser) {
+            setCurrentUser({
+                uid: authUser.uid || "system",
+                name: authUser.displayName || 
+                     authUser.email?.split('@')[0] || 
+                     authUser.name || 
+                     "Authenticated User",
+                email: authUser.email || "user@example.com"
             });
+        } else {
+            // Fallback to localStorage if authUser not available
+            const storedUid = localStorage.getItem("uid") || localStorage.getItem("userUid");
+            const storedName = localStorage.getItem("userName") || localStorage.getItem("displayName");
+            
+            if (storedUid) {
+                setCurrentUser({
+                    uid: storedUid,
+                    name: storedName || "Unknown User",
+                    email: localStorage.getItem("email") || "unknown@example.com"
+                });
+            }
         }
-    }, []);
+    }, [authUser]);
 
     // In Department.js, update the useEffect that watches formData:
     useEffect(() => {
@@ -306,6 +312,7 @@ const Department = ({
                 timestamp: new Date().toISOString(),
                 changedBy: currentUser.name,
                 changedById: currentUser.uid,
+                changedByEmail: currentUser.email,
                 employeeId: employeeId
             };
 
@@ -336,10 +343,6 @@ const Department = ({
             throw error;
         }
     };
-
-    // Department.js - REMOVED: removeFromOldDepartment function
-    // 🔥 CRITICAL FIX: Department tab should NOT delete old data
-    // Only WorkerModal.js should handle deletion
 
     // Handle department change
     const handleDepartmentChange = (e) => {
@@ -504,10 +507,6 @@ const Department = ({
             const oldDept = oldDepartment || initialDepartmentRef.current;
             const newDept = localFormData.department;
 
-            // 🔥 CRITICAL FIX: Department tab should NOT delete old data
-            // Only pass oldDepartment to WorkerModal for handling
-            // WorkerModal.js will handle the deletion
-
             if (onSaveComplete) {
                 // Prepare data for saving
                 const saveData = {
@@ -516,7 +515,8 @@ const Department = ({
                     departmentSavePath: departmentPath,
                     oldDepartment: oldDept, // Pass old department to parent
                     lastUpdatedAt: new Date().toISOString(),
-                    lastUpdatedBy: currentUser.name
+                    lastUpdatedBy: currentUser.name,
+                    updatedBy: currentUser.uid // Add user ID
                 };
 
                 const success = await onSaveComplete(saveData);
@@ -630,6 +630,17 @@ const Department = ({
             console.error("Error formatting date:", error);
             return timestamp;
         }
+    };
+
+    // Get user display name from history entry
+    const getUserDisplayName = (entry) => {
+        if (entry.changedBy && entry.changedBy !== "System User") {
+            return entry.changedBy;
+        }
+        if (entry.changedByEmail) {
+            return entry.changedByEmail.split('@')[0];
+        }
+        return "System";
     };
 
     return (
@@ -969,9 +980,7 @@ const Department = ({
                                                             <th>New Department</th>
                                                             <th>Reason</th>
                                                             <th>Changed By</th>
-                                                            <th>User ID</th>
                                                             <th>Date & Time</th>
-                                                            <th>Source Dept</th>
                                                         </tr>
                                                     </thead>
                                                     <tbody>
@@ -979,29 +988,23 @@ const Department = ({
                                                             <tr key={entry.id || index}>
                                                                 <td>{index + 1}</td>
                                                                 <td>
-                                                                    <span className="badge bg-secondary">{entry.oldDepartment}</span>
+                                                                    <span className="">{entry.oldDepartment}</span>
                                                                 </td>
                                                                 <td>
-                                                                    <span className="badge bg-primary">{entry.newDepartment}</span>
+                                                                    <span className="">{entry.newDepartment}</span>
                                                                 </td>
                                                                 <td>{entry.reason || "N/A"}</td>
                                                                 <td>
                                                                     <span className="text-primary">
                                                                         <i className="bi bi-person-fill me-1"></i>
-                                                                        {entry.changedBy || "System"}
+                                                                        {getUserDisplayName(entry)}
                                                                     </span>
                                                                 </td>
+                                                                
                                                                 <td>
-                                                                    <small className="text-muted">
-                                                                        {entry.changedById || "system"}
-                                                                    </small>
+                                                                    <small className="small-text">{formatDateTime(entry.timestamp)}</small>
                                                                 </td>
-                                                                <td>
-                                                                    <small>{formatDateTime(entry.timestamp)}</small>
-                                                                </td>
-                                                                <td>
-                                                                    <small className="text-muted">{entry.sourceDepartment || "Unknown"}</small>
-                                                                </td>
+                                                                
                                                             </tr>
                                                         ))}
                                                     </tbody>
@@ -1009,6 +1012,12 @@ const Department = ({
                                                 <div className="text-info small mt-2">
                                                     <i className="bi bi-info-circle me-1"></i>
                                                     History is collected from all departments where this employee has been.
+                                                    {currentUser.name && currentUser.name !== "System User" && (
+                                                        <span className="ms-2">
+                                                            <i className="bi bi-person me-1"></i>
+                                                            Current User: <strong>{currentUser.name}</strong>
+                                                        </span>
+                                                    )}
                                                 </div>
                                             </div>
                                         )}
@@ -1234,7 +1243,7 @@ const Department = ({
                                     </small>
                                 </div>
 
-                                <div className="bg-secondary bg-opacity-25 p-3 rounded">
+                                <div className="bg-secondary bg-opacity-10 p-3 rounded">
                                     <i className="bi bi-lightbulb me-2"></i>
                                     <strong>Note:</strong>
                                     <div>Employee ID will remain the same (<strong>{displayData.idNo}</strong>).</div>

@@ -75,17 +75,17 @@ const Department = ({
     
     // Map department to prefix
     const prefixMap = {
-      "Home Care": "HC",
+      "Home Care": "HCW-",
       "Housekeeping": "HKW-",
       "Office & Administrative": "OFW-",
-      "Customer Service": "CW-",
-      "Management & Supervision": "MW-",
-      "Security": "SW-",
-      "Driving & Logistics": "DW-",
-      "Technical & Maintenance": "TW-",
-      "Retail & Sales": "RW-",
-      "Industrial & Labor": "IW-",
-      "Others": "OW-"
+      "Customer Service": "CUW-",
+      "Management & Supervision": "MAW-",
+      "Security": "SEW-",
+      "Driving & Logistics": "DRW-",
+      "Technical & Maintenance": "TEW-",
+      "Retail & Sales": "REW-",
+      "Industrial & Labor": "INW-",
+      "Others": "OTW-"
     };
     
     const prefix = prefixMap[department] || "JW";

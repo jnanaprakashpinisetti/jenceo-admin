@@ -387,47 +387,115 @@
     ;
 }
 
-.workerBiodata{
+// WorkerModal.scss
+.workerBiodata {
+
+    // Modal container styles
+    &.modal {
+        overflow-y: auto !important;
+    }
+
+    // Modal dialog
+    .modal-dialog {
+        max-height: 90vh;
+        margin-top: 5vh;
+        margin-bottom: 5vh;
+    }
+
+    // Modal content
+    .modal-content {
+        max-height: 90vh;
+    }
+
+    // Modal body with scroll
+    .modal-body {
+        overflow-y: auto;
+        max-height: calc(90vh - 120px);
+    }
+
+    // Sticky header and footer
+    .modal-header,
+    .modal-footer {
+        position: sticky;
+        z-index: 1;
+        background: white;
+    }
+
+    .modal-header {
+        top: 0;
+    }
+
+    .modal-footer {
+        bottom: 0;
+        border-top: 1px solid #dee2e6;
+    }
+
+    // Sticky tabs
+    .nav-tabs {
+        position: sticky;
+        top: 56px;
+        z-index: 1;
+        background: white;
+    }
+
+    // Card styling
     .card {
         background-color: transparent !important;
     }
 
-    .text-muted{
+    .card-body {
         color: #444 !important;
     }
 
-    .form-control  {
+    // Text colors
+    .text-muted {
+        color: #444 !important;
+    }
+
+    // Form controls
+    .form-control {
         align-content: center;
         padding-left: 5px;
+        color: #444 !important;
     }
+
+    .form-select {
+        color: #444 !important;
+    }
+
     .input-group-text {
         background-color: #c9ccd0;
         border: none;
     }
 
+    // Section styling
     .section-divider {
         position: relative;
+
+        +.section-divider {
+            margin-top: 1.5rem;
+        }
     }
-    
+
     .section-title {
         font-weight: 600;
         margin-bottom: 1rem;
         padding-bottom: 0.5rem;
         position: relative;
+
+        &::after {
+            content: '';
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            width: 40px;
+            height: 2px;
+            background-color: currentColor;
+            opacity: 0.5;
+        }
     }
-    
-    .section-title::after {
-        content: '';
-        position: absolute;
-        bottom: 0;
-        left: 0;
-        width: 40px;
-        height: 2px;
-        background-color: currentColor;
-        opacity: 0.5;
-    }
-    
-    .section-divider + .section-divider {
-        margin-top: 1.5rem;
+
+    table tr:nth-child(even) td {
+        background-color: #e7f0ff;
     }
 }

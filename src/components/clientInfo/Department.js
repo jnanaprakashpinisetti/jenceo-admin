@@ -28,7 +28,7 @@ const Department = ({
   // Services based on department
   const services = {
     "Home Care": ["Nurse", "Caregiver", "Nursing Assistant", "Senior Nurse", "Head Nurse"],
-    "Housekeeping": ["Cleaner", "Supervisor", "Manager", "Housekeeping Assistant"],
+    "Housekeeping": ["Cleaner","Cooking", "Cleaning", "Cooking & Cleaning", "Dish Wash", "Cooking & Dishwash", "Cooking & Cleaning & Dishwash", "Housekeeping Assistant"],
     "Office & Administrative": ["Clerk", "Coordinator", "Manager", "Admin Assistant", "Receptionist"],
     "Customer Service": ["CS Representative", "Support Executive", "Team Lead", "Manager"],
     "Management & Supervision": ["Supervisor", "Manager", "Team Lead", "Department Head"],

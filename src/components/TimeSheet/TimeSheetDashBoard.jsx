@@ -173,7 +173,6 @@ export default function TimeSheetDashBoard() {
     }, [usersIndex, authUserCtx]);
 
 
-    // Fetch all timesheets from EmployeeBioData path - ONLY SUBMITTED
     useEffect(() => {
         fetchTimesheets();
     }, []);
@@ -215,7 +214,6 @@ export default function TimeSheetDashBoard() {
 
 
 
-    // Fetch timesheets from EmployeeBioData structure - ONLY SUBMITTED
     const fetchTimesheets = async () => {
         setLoading(true);
         try {
@@ -405,7 +403,6 @@ export default function TimeSheetDashBoard() {
     const handleViewDetails = async (timesheetId, employeeId) => {
         setLoading(true);
         try {
-            // Fetch timesheet data from EmployeeBioData path
            const snapshot = await firebaseDB
   .child(empTsById(employeeId, timesheetId))
   .once('value');
@@ -446,7 +443,6 @@ export default function TimeSheetDashBoard() {
                     console.warn('Global advances fetch failed', e);
                 }
 
-                // 2) Under this timesheet path: EmployeeBioData/{emp}/timesheets/{ts}/advances
                 try {
                  const advSnapTs = await firebaseDB
   .child(empAdvancesNode(employeeId, timesheetId))

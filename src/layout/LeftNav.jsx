@@ -58,8 +58,6 @@ import WorkerCallDelete from "../pages/WorkerCallDelete";
 
 import ClientInfo from "../pages/ClientInfo";
 import ClientExit from "../pages/ClientExit";
-import HomeCareClient from "../pages/HomeCareClient";
-import HomeCareClientExit from "../pages/HomeCareClientExit";
 
 import Enquiry from "../pages/Enquiry";
 import EnquiryExit from "../pages/EnquiryExit";
@@ -79,9 +77,6 @@ import Profile from "../pages/Profile";
 import TimesheetEntryPage from "../pages/TimesheetEntryPage ";
 import TimesheetDashboard from "../pages/TimesheetDashboard ";
 
-// Import new HouseKeeping pages
-import HomeCareWorker from "../pages/HomeCareWorker";
-import HomeCareWorkerExit from "../pages/HomeCareWorkerExit";
 
 // FIXED: Move PermRoute outside the component to prevent re-renders
 const PermRoute = ({ allowed, children }) => {
@@ -584,54 +579,7 @@ export default function LeftNav() {
               </>
             )}
 
-            {/* HouseKeeping - Combined Section */}
-            {(canHomeCareClient || canHomeCareClientExit || canHomeCareWorker || canHomeCareWorkerExit) && (
-              <>
-                <li className="nav-item">
-                  <button className="groupBtn btn btn-sm" onClick={() => toggleGroup("homeCare")} type="button">
-                    <span>HouseKeeping</span>
-                    <span style={{ opacity: 0.7 }}>{open.homeCare ? "▾" : "▸"}</span>
-                  </button>
-                </li>
-                {open.homeCare && <div className="mt-2" />}
-                {open.homeCare && (
-                  <>
-                    {/* HouseKeeping Client Section */}
-                    {canHomeCareClient && (
-                      <li className="nav-item">
-                        <NavLink to="HomeCareClient" className="nav-link" title="HouseKeeping Client" onClick={onNavClick}>
-                          <img src={client} alt="" /> <span className="ms-1">HouseKeeping Client</span>
-                        </NavLink>
-                      </li>
-                    )}
-                    {canHomeCareClientExit && (
-                      <li className="nav-item">
-                        <NavLink to="HomeCareClientExit" className="nav-link" title="HouseKeeping Client Exit" onClick={onNavClick}>
-                          <img src={ClientExitIcon} alt="" /> <span className="ms-1">HouseKeeping Client Exit</span>
-                        </NavLink>
-                      </li>
-                    )}
-                    
-                    {/* HouseKeeping Workers Section */}
-                    {canHomeCareWorker && (
-                      <li className="nav-item">
-                        <NavLink to="HomeCareWorker" className="nav-link" title="HouseKeeping Workers" onClick={onNavClick}>
-                          <img src={workerData} alt="" /> <span className="ms-1">HouseKeeping Workers</span>
-                        </NavLink>
-                      </li>
-                    )}
-                    {canHomeCareWorkerExit && (
-                      <li className="nav-item">
-                        <NavLink to="HomeCareWorkerExit" className="nav-link" title="HouseKeeping Worker Exit" onClick={onNavClick}>
-                          <img src={workerExit} alt="" /> <span className="ms-1">HouseKeeping Worker Exit</span>
-                        </NavLink>
-                      </li>
-                    )}
-                  </>
-                )}
-                <hr className="mt-3" />
-              </>
-            )}
+       
 
             {/* Enquiry */}
             {(canEnquiry || canEnquiryExit) && (
@@ -794,11 +742,6 @@ export default function LeftNav() {
         <Route path="WorkerCallsData" element={<PermRoute allowed={canWorkerCallData}><WorkerCallsData /></PermRoute>} />
         <Route path="WorkerCallDelete" element={<PermRoute allowed={canWorkerCallDelete}><WorkerCallDelete /></PermRoute>} />
 
-        {/* HouseKeeping */}
-        <Route path="HomeCareClient" element={<PermRoute allowed={canHomeCareClient}><HomeCareClient /></PermRoute>} />
-        <Route path="HomeCareClientExit" element={<PermRoute allowed={canHomeCareClientExit}><HomeCareClientExit /></PermRoute>} />
-        <Route path="HomeCareWorker" element={<PermRoute allowed={canHomeCareWorker}><HomeCareWorker /></PermRoute>} />
-        <Route path="HomeCareWorkerExit" element={<PermRoute allowed={canHomeCareWorkerExit}><HomeCareWorkerExit /></PermRoute>} />
 
         {/* Investments */}
         <Route path="Investments" element={<PermRoute allowed={canInvestments}><Investments /></PermRoute>} />

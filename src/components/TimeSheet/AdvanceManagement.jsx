@@ -27,7 +27,15 @@ const AdvanceManagement = ({
 
   const { user: authUser } = useAuth();
 
-  // Load employee data
+  const TS_ROOT = "EmployeeTimesheets";
+
+  const empTsById = (empId, tsId) =>
+    `${TS_ROOT}/${empId}/timesheets/${tsId}`;
+
+  const empAdvancesNode = (empId, tsId) =>
+    `${TS_ROOT}/${empId}/timesheets/${tsId}/advances`;
+
+
   // Load employee data
   useEffect(() => {
     if (!employeeId) {
@@ -37,17 +45,11 @@ const AdvanceManagement = ({
 
     const loadEmployee = async () => {
       try {
-        const snapshot = await firebaseDB.child(`EmployeeBioData/${employeeId}`).once('value');
-        if (snapshot.exists()) {
-          const employeeData = snapshot.val();
-          setEmployee({
-            id: employeeId,
-            ...employeeData,
-            displayName: `${employeeData.firstName || ''} ${employeeData.lastName || ''}`.trim() || employeeData.employeeId || 'Employee',
-            // Make sure we get the actual employee ID, not the Firebase key
-            actualEmployeeId: employeeData.employeeId || employeeData.idNo || employeeData.id || 'N/A'
-          });
-        }
+        setEmployee({
+          id: employeeId,
+          displayName: employeeId,
+          actualEmployeeId: employeeId
+        });
       } catch (error) {
         console.error('Error loading employee:', error);
       }
@@ -116,11 +118,13 @@ const AdvanceManagement = ({
       if (editingAdvance?.id) {
         // UPDATE existing advance
         await firebaseDB
-          .child(`EmployeeBioData/${employeeId}/timesheets/${timesheetId}/advances/${editingAdvance.id}`)
+          .child(`${empAdvancesNode(employeeId, timesheetId)}/${editingAdvance.id}`)
           .update(advanceData);
       } else {
         // CREATE new advance - ensure we're writing to the correct path
-        const advancesRef = firebaseDB.child(`EmployeeBioData/${employeeId}/timesheets/${timesheetId}/advances`);
+        const advancesRef = firebaseDB.child(
+          empAdvancesNode(employeeId, timesheetId)
+        );
         const newAdvanceRef = advancesRef.push();
 
         const newAdvance = {
@@ -174,7 +178,9 @@ const AdvanceManagement = ({
   const deleteAdvance = async () => {
     if (advanceToDelete?.id) {
       try {
-        await firebaseDB.child(`EmployeeBioData/${employeeId}/timesheets/${timesheetId}/advances/${advanceToDelete.id}`).remove();
+        await firebaseDB
+          .child(`${empAdvancesNode(employeeId, timesheetId)}/${advanceToDelete.id}`)
+          .remove();
         setShowDeleteModal(false);
         setAdvanceToDelete(null);
 
@@ -195,7 +201,9 @@ const AdvanceManagement = ({
       return;
     }
 
-    const ref = firebaseDB.child(`EmployeeBioData/${employeeId}/timesheets/${timesheetId}/advances`);
+    const ref = firebaseDB.child(
+      empAdvancesNode(employeeId, timesheetId)
+    );
 
     const handler = ref.on('value', (snap) => {
       const data = snap.val() || {};

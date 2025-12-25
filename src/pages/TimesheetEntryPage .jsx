@@ -1,5 +1,5 @@
 import React from 'react'
-import DisplayTimeSheet from '../components/TimeSheet/DisplayTimeSheet/index'
+import DisplayTimeSheet from '../components/TimeSheet/DisplayTimeSheet'
 
 
 

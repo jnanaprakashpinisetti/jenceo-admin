@@ -26,6 +26,21 @@ export default function TimeSheetDashBoard() {
 
     const PENDING_STATUSES = ['submitted', 'clarification', 'assigned'];
 
+    const TS_ROOT = "EmployeeTimesheets";
+
+    const empTsRoot = (empId) =>
+        `${TS_ROOT}/${empId}/timesheets`;
+
+    const empTsById = (empId, tsId) =>
+        `${TS_ROOT}/${empId}/timesheets/${tsId}`;
+
+    const empEntriesNode = (empId, tsId) =>
+        `${TS_ROOT}/${empId}/timesheets/${tsId}/dailyEntries`;
+
+    const empAdvancesNode = (empId, tsId) =>
+        `${TS_ROOT}/${empId}/timesheets/${tsId}/advances`;
+
+
     // Merge two advance arrays and de-dupe by id or (date+amount+desc) fallback
     const mergeAdvances = (a = [], b = []) => {
         const key = (x) => x.id || `${x.date}|${x.amount}|${x.description || ''}`;
@@ -170,7 +185,7 @@ export default function TimeSheetDashBoard() {
     }, [timesheets, selectedYear, selectedMonth, searchTerm, statusFilter]);
 
     const pushClarifyLog = async (employeeId, tsId, entry) => {
-        const base = `EmployeeBioData/${employeeId}/timesheets/${tsId}/clarificationRequest`;
+        const base = `${empTsById(employeeId, tsId)}/clarificationRequest`;
         const logRef = firebaseDB.child(`${base}/log`).push();
 
         // Robust id—always use the push() key; fall back if any issue.
@@ -204,38 +219,36 @@ export default function TimeSheetDashBoard() {
     const fetchTimesheets = async () => {
         setLoading(true);
         try {
-            const snapshot = await firebaseDB.child("EmployeeBioData").once('value');
-            if (snapshot.exists()) {
-                const employeesData = snapshot.val();
-                const allTimesheets = [];
+            const allTimesheets = [];
 
-                // Iterate through all employees
-                Object.entries(employeesData).forEach(([employeeId, employeeData]) => {
-                    if (employeeData.timesheets) {
-                        // Iterate through timesheets for each employee
-                        Object.entries(employeeData.timesheets).forEach(([timesheetId, timesheetData]) => {
-                            // Only include submitted timesheets and their subsequent statuses
-                            if (timesheetData.status && timesheetData.status !== 'draft') {
-                                allTimesheets.push({
-                                    id: timesheetId,
-                                    employeeId: employeeId,
-                                    employeeData: employeeData,
-                                    employeeName: timesheetData.employeeName || `${employeeData.firstName || ''} ${employeeData.lastName || ''}`.trim(),
-                                    ...timesheetData
-                                });
-                            }
-                        });
-                    }
+            // loop all employees who have timesheets
+            const empSnap = await firebaseDB.child(TS_ROOT).once('value');
+            if (empSnap.exists()) {
+                const empObj = empSnap.val();
+
+                Object.entries(empObj).forEach(([employeeId, empData]) => {
+                    const sheets = empData?.timesheets || {};
+                    Object.entries(sheets).forEach(([timesheetId, ts]) => {
+                        if (ts.status && ts.status !== 'draft') {
+                            allTimesheets.push({
+                                id: timesheetId,
+                                employeeId,
+                                employeeName: ts.employeeName || ts.employeeDisplayName || employeeId,
+                                ...ts
+                            });
+                        }
+                    });
                 });
-
-                setTimesheets(allTimesheets);
             }
-        } catch (error) {
-            console.error('Error fetching timesheets:', error);
+
+            setTimesheets(allTimesheets);
+        } catch (err) {
+            console.error("Error fetching timesheets:", err);
         } finally {
             setLoading(false);
         }
     };
+
 
     const filterTimesheets = () => {
         let filtered = timesheets;
@@ -393,12 +406,16 @@ export default function TimeSheetDashBoard() {
         setLoading(true);
         try {
             // Fetch timesheet data from EmployeeBioData path
-            const snapshot = await firebaseDB.child(`EmployeeBioData/${employeeId}/timesheets/${timesheetId}`).once('value');
+           const snapshot = await firebaseDB
+  .child(empTsById(employeeId, timesheetId))
+  .once('value');
             if (snapshot.exists()) {
                 const timesheetData = snapshot.val();
 
                 // Fetch daily entries from the same path
-                const entriesSnapshot = await firebaseDB.child(`EmployeeBioData/${employeeId}/timesheets/${timesheetId}/dailyEntries`).once('value');
+                const entriesSnapshot = await firebaseDB
+  .child(empEntriesNode(employeeId, timesheetId))
+  .once('value');
 
                 let dailyEntries = [];
                 if (entriesSnapshot.exists()) {
@@ -431,9 +448,9 @@ export default function TimeSheetDashBoard() {
 
                 // 2) Under this timesheet path: EmployeeBioData/{emp}/timesheets/{ts}/advances
                 try {
-                    const advSnapTs = await firebaseDB
-                        .child(`EmployeeBioData/${employeeId}/timesheets/${timesheetId}/advances`)
-                        .once('value');
+                 const advSnapTs = await firebaseDB
+  .child(empAdvancesNode(employeeId, timesheetId))
+  .once('value');
 
                     if (advSnapTs.exists()) {
                         const raw = advSnapTs.val();
@@ -461,8 +478,8 @@ export default function TimeSheetDashBoard() {
 
 
                 // Fetch employee data
-                const employeeSnapshot = await firebaseDB.child(`EmployeeBioData/${employeeId}`).once('value');
-                const employeeData = employeeSnapshot.exists() ? employeeSnapshot.val() : {};
+               
+                const employeeData = timesheetData?.employeeData || {};
 
                 const logObj = timesheetData?.clarificationRequest?.log || {};
                 const clarificationLog = Object.values(logObj)
@@ -517,7 +534,8 @@ export default function TimeSheetDashBoard() {
             };
 
             // Build a single multi-path update to avoid races AND avoid object overwrite
-            const baseHeaderPath = `EmployeeBioData/${selectedTimesheet.employeeId}/timesheets/${selectedTimesheet.id}`;
+            const baseHeaderPath =
+                empTsById(selectedTimesheet.employeeId, selectedTimesheet.id);
             const clarBase = `${baseHeaderPath}/clarificationRequest`;
 
             const updates = {

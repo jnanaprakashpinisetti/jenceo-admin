@@ -6,6 +6,24 @@ import WorkerSearch from './WorkerSearch';
 import { getAuth, onAuthStateChanged, signOut } from 'firebase/auth';
 import { useAuth } from "../../context/AuthContext";
 import TimesheetShare from './TimesheetShare ';
+import { WORKER_PATHS } from "../../utils/dataPaths";
+
+const TS_ROOT = "EmployeeTimesheets";
+
+const empTsNode = (empId) =>
+    `${TS_ROOT}/${empId}/timesheets`;
+
+const empTsById = (empId, tsId) =>
+    `${TS_ROOT}/${empId}/timesheets/${tsId}`;
+
+const empEntriesNode = (empId, tsId) =>
+    `${TS_ROOT}/${empId}/timesheets/${tsId}/dailyEntries`;
+
+const empAdvancesNode = (empId, tsId) =>
+    `${TS_ROOT}/${empId}/timesheets/${tsId}/advances`;
+
+const empEntryById = (empId, tsId, dateStr) =>
+  `${empTsById(empId, tsId)}/dailyEntries/${dateStr}`;
 
 
 // Build human ID like JW1-01-25 or JW1-01-25-2
@@ -24,7 +42,7 @@ const buildTimesheetId = async (emp, periodKey) => {
     const idBase = `${base}-${yy}-${mm}`;
 
     // If this period already has a header under EmployeeBioData -> reuse its id; else suffix
-    const allTsSnap = await firebaseDB.child(`${empPath(emp.id)}/timesheets`).get();
+    const allTsSnap = await firebaseDB.child(empTsNode(emp.id)).get();
     if (!allTsSnap.exists()) return idBase;
 
     const all = Object.values(allTsSnap.val() || {});
@@ -38,9 +56,6 @@ const buildTimesheetId = async (emp, periodKey) => {
 };
 
 // --- PATH HELPERS (Employee-scoped only) ---
-// Single source of truth for timesheet paths
-const empTsNode = (empId, tsId = '') =>
-    `EmployeeBioData/${empId}/timesheets${tsId ? `/${tsId}` : ''}`;
 
 const empTsEntriesNode = (empId, tsId, dateStr = '') =>
     `${empTsNode(empId, tsId)}/dailyEntries${dateStr ? `/${dateStr}` : ''}`;
@@ -63,19 +78,14 @@ const monthParts = (yyyyMm) => {
 
 
 // --- PATH HELPERS (Employee-scoped only) ---
-// Single source of truth for timesheet paths
-const empPath = (empId) => `EmployeeBioData/${empId}`;
 
 
 
-const empTsById = (empId, tsId) =>
-    `EmployeeBioData/${empId}/timesheets/${tsId}`;
 
-const empEntryById = (empId, tsId, dateStr) =>
-    `${empTsById(empId, tsId)}/dailyEntries/${dateStr}`;
+
 
 const entryNodeByDate = (empId, tsId, dateStr) =>
-    `${empTsById(empId, tsId)}/dailyEntries/${dateStr}`;
+  `${empTsById(empId, tsId)}/dailyEntries/${dateStr}`;
 
 const pruneUndefined = (obj = {}) =>
     Object.fromEntries(Object.entries(obj).filter(([_, v]) => v !== undefined));
@@ -593,7 +603,7 @@ const DisplayTimeSheet = () => {
         };
 
         const patch = pruneUndefined({ ...base, ...header });
-        await firebaseDB.child(empTsById(empId, tsId)).update(patch);
+        await firebaseDB.child(empTsById(empId, currentTimesheetId)).update(patch);
         return patch;
     };
 
@@ -623,7 +633,9 @@ const DisplayTimeSheet = () => {
 
     // get the first (earliest) timesheet id for the active period
     const getFirstTimesheetIdForActivePeriod = async (empId) => {
-        const snap = await firebaseDB.child(empTsNode(empId)).get();
+        const snap = await firebaseDB.child(
+            empTsById(empId, currentTimesheetId)
+        ).get();
         if (!snap.exists()) return currentTimesheetId;
 
         const all = snap.val() || {};
@@ -671,7 +683,7 @@ const DisplayTimeSheet = () => {
 
     // Load entries by employee + timesheetId
     const loadDailyEntriesByTimesheetId = async (empId, tsId, tsStatus = 'draft') => {
-        const snap = await firebaseDB.child(`${empTsById(empId, tsId)}/dailyEntries`).get();
+        const snap = await firebaseDB.child(`${empTsById(empId, currentTimesheetId)}/dailyEntries`).get();
         const obj = snap.val() || {};
         const list = Object.keys(obj)
             .sort()
@@ -766,17 +778,6 @@ const DisplayTimeSheet = () => {
     };
 
 
-
-
-    // Build the advances path under a specific employee + timesheet
-    const advancesNode = (empId, tsId) =>
-        `EmployeeBioData/${empId}/timesheets/${tsId}/advances`;
-
-
-
-
-
-
     // NEW: open confirm modal
     const openPrevTsDelete = (ts) => {
         setPrevTsToDelete(ts);
@@ -866,12 +867,12 @@ const DisplayTimeSheet = () => {
 
     // ---- Duplicate guards across ALL timesheets for an employee ----
     const dateExistsInOtherTimesheets = async (empId, date, excludeTsId = null) => {
-        const tsSnap = await firebaseDB.child(empTsNode(empId)).get();
+        const tsSnap = await firebaseDB.child(empTsById(empId, currentTimesheetId)).get();
         if (!tsSnap.exists()) return null;
         const all = tsSnap.val() || {};
         for (const [tsId] of Object.entries(all)) {
             if (excludeTsId && tsId === excludeTsId) continue;
-            const eSnap = await firebaseDB.child(`${empTsById(empId, tsId)}/dailyEntries/${date}`).get();
+            const eSnap = await firebaseDB.child(`${empTsById(empId, currentTimesheetId)}/dailyEntries/${date}`).get();
             if (eSnap.exists()) return { tsId, entry: eSnap.val() };
         }
         return null;
@@ -891,7 +892,7 @@ const DisplayTimeSheet = () => {
 
     // Fast: load all dates that already exist in ANY timesheet for this employee (excluding one tsId if provided)
     const preloadExistingDates = async (empId, excludeTsId = null) => {
-        const tsSnap = await firebaseDB.child(empTsNode(empId)).get();
+        const tsSnap = await firebaseDB.child(empTsById(empId, currentTimesheetId)).get();
         const taken = new Set();
         if (!tsSnap.exists()) return taken;
 
@@ -1060,22 +1061,25 @@ const DisplayTimeSheet = () => {
             fetchUsers();
         }
     }, [showAssignModal]);
-
     const fetchEmployees = async () => {
-        try {
-            const snapshot = await firebaseDB.child("EmployeeBioData").once('value');
-            if (snapshot.exists()) {
-                const employeesData = Object.entries(snapshot.val()).map(([id, data]) => ({
+        const all = [];
+
+        for (const path of Object.values(WORKER_PATHS)) {
+            const snap = await firebaseDB.child(path).once("value");
+            if (!snap.exists()) continue;
+
+            Object.entries(snap.val()).forEach(([id, data]) => {
+                all.push({
                     id,
                     ...data,
-                    displayName: `${data.firstName} ${data.lastName} (${data.employeeId || data.idNo})`
-                }));
-                setEmployees(employeesData);
-            }
-        } catch (error) {
-            showModal('EError fetching employees:', error);
+                    displayName: `${data.firstName || ""} ${data.lastName || ""} (${data.employeeId || data.idNo || id})`
+                });
+            });
         }
+
+        setEmployees(all);
     };
+
 
 
     // Fetch employees and clients
@@ -1176,10 +1180,10 @@ const DisplayTimeSheet = () => {
             setAdvances([]);
             return;
         }
-        const ref = firebaseDB.child(
-            `EmployeeBioData/${selectedEmployee}/timesheets/${timesheet.timesheetId}/advances`
-        );
-        const handler = ref.on('value', (snap) => {
+const ref = firebaseDB.child(
+  empAdvancesNode(selectedEmployee, timesheet.timesheetId)
+);
+       const handler = ref.on('value', (snap) => {
             const obj = snap.val() || {};
             const list = Object.entries(obj).map(([id, v]) => ({ id, ...v }));
             setAdvances(list);
@@ -1447,7 +1451,7 @@ const DisplayTimeSheet = () => {
             }
 
             // 1) Check if timesheet exists for CURRENT period only
-            const allTsSnap = await firebaseDB.child(`EmployeeBioData/${selectedEmployee}/timesheets`).get();
+            const allTsSnap = await firebaseDB.child(empTsNode(selectedEmployee)).get();
             let foundHeader = null;
             let foundTsId = null;
 
@@ -1512,7 +1516,7 @@ const DisplayTimeSheet = () => {
         const { uid, name } = whoSafe();
 
         const reply = { text: text.trim(), by: uid, byName: name, at: now };
-        const basePath = `${empTsById(empId, tsId)}/clarifications/${commentId}`;
+        const basePath = `${empTsById(empId, currentTimesheetId)}/clarifications/${commentId}`;
         const key = firebaseDB.child(`${basePath}/replies`).push().key;
 
         await firebaseDB.update({
@@ -1932,7 +1936,7 @@ const DisplayTimeSheet = () => {
 
     const checkDuplicateTimesheet = async (empId, periodKey) => {
         try {
-            const allTsSnap = await firebaseDB.child(`EmployeeBioData/${empId}/timesheets`).get();
+            const allTsSnap = await firebaseDB.child(`empTsById(empId, currentTimesheetId)`).get();
             if (allTsSnap.exists()) {
                 const all = allTsSnap.val() || {};
                 for (const [tsId, header] of Object.entries(all)) {
@@ -1963,12 +1967,12 @@ const DisplayTimeSheet = () => {
     // Add helper function to check existing entries
     const checkExistingEntries = async (empId, periodKey) => {
         try {
-            const allEntriesSnap = await firebaseDB.child(`EmployeeBioData/${empId}/timesheets`).get();
+            const allEntriesSnap = await firebaseDB.child(`empTsById(empId, currentTimesheetId)`).get();
             if (allEntriesSnap.exists()) {
                 const all = allEntriesSnap.val() || {};
                 for (const [tsId, header] of Object.entries(all)) {
                     if (header?.periodKey === periodKey) {
-                        const entriesSnap = await firebaseDB.child(`${empTsById(empId, tsId)}/dailyEntries`).get();
+                        const entriesSnap = await firebaseDB.child(`${empTsById(empId, currentTimesheetId)}/dailyEntries`).get();
                         if (entriesSnap.exists() && Object.keys(entriesSnap.val()).length > 0) {
                             return { exists: true, timesheet: header };
                         }

@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import firebaseDB from "../../firebase";
+import { CLIENT_PATHS } from "../../utils/dataPaths";
 
 const JOB_ROLE_OPTIONS = [
   "Nursing",
@@ -136,34 +137,47 @@ const DailyEntryModal = ({ entry, isEditing, employee, onSave, onAutoFill, onClo
   };
 
   // Load all clients from multiple paths and deduplicate
-  const loadClients = async () => {
-    const sources = [
-      "JenCeo-DataBase/ClientData",
-      "ClientData",
-      "JenCeo-DataBase/Clients",
-      "Clients",
-    ];
 
-    const allClients = [];
-    for (const path of sources) {
-      const clientsFromPath = await loadFromPath(path);
-      allClients.push(...clientsFromPath);
-    }
 
-    // Deduplicate clients
-    const dedupedClients = [];
-    const seenClients = new Set();
+// ===== LOAD CLIENTS (NEW PATHS) =====
+const loadClients = async () => {
+  const allClients = [];
 
-    allClients.forEach((client) => {
-      const clientKey = `${client._idC}|${client._nmC}`;
-      if (!seenClients.has(clientKey) && (client.clientId || client.clientName)) {
-        seenClients.add(clientKey);
-        dedupedClients.push(client);
+  for (const path of Object.values(CLIENT_PATHS)) {
+    try {
+      const snap = await firebaseDB.child(path).get();
+      if (snap.exists()) {
+        Object.entries(snap.val()).forEach(([key, data]) => {
+          allClients.push({
+            key,
+            clientId: data.idNo || data.clientId || "",
+            clientName: data.clientName || data.name || "",
+            location: data.location || "",
+            _idC: String(data.idNo || "").toLowerCase(),
+            _nmC: String(data.clientName || "").toLowerCase(),
+          });
+        });
       }
-    });
+    } catch (e) {
+      console.error("Client load error:", path, e);
+    }
+  }
 
-    setClients(dedupedClients);
-  };
+  // 🔥 DEDUP
+  const unique = [];
+  const seen = new Set();
+
+  allClients.forEach(c => {
+    const k = `${c.clientId}|${c.clientName}`;
+    if (!seen.has(k)) {
+      seen.add(k);
+      unique.push(c);
+    }
+  });
+
+  setClients(unique);
+};
+
 
   // ========= EFFECTS =========
 

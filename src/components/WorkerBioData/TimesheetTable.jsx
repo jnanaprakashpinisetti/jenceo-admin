@@ -16,6 +16,24 @@ const TimesheetTable = ({ employee }) => {
   const [paidInputs, setPaidInputs] = useState({});   // { [timesheetId]: "1234" }
   const [savingPaid, setSavingPaid] = useState({});   // { [timesheetId]: true }
 
+  const TS_ROOT = "EmployeeTimesheets";
+
+const empTsRoot = (empId) =>
+  `${TS_ROOT}/${empId}/timesheets`;
+
+const empTsById = (empId, tsId) =>
+  `${TS_ROOT}/${empId}/timesheets/${tsId}`;
+
+const empEntriesNode = (empId, tsId) =>
+  `${TS_ROOT}/${empId}/timesheets/${tsId}/dailyEntries`;
+
+const empAdvancesNode = (empId, tsId) =>
+  `${TS_ROOT}/${empId}/timesheets/${tsId}/advances`;
+
+const empPaidNode = (empId, tsId) =>
+  `${TS_ROOT}/${empId}/timesheets/${tsId}/payedStatus`;
+
+
   // Months array with colors
   const months = [
     { number: '01', name: 'Jan', color: 'btn-outline-warning' },
@@ -58,86 +76,55 @@ const TimesheetTable = ({ employee }) => {
     try {
       setLoading(true);
 
-      if (!employee) {
+      if (!employee?.id) {
         setAllTimesheets([]);
-        setDebugInfo('No employee data provided');
+        setDebugInfo("No employee provided");
         return;
       }
 
       const employeeKey = employee.id;
+      const rootPath = empTsRoot(employeeKey);
 
-      if (!employeeKey) {
+      const snapshot = await firebaseDB.child(rootPath).once("value");
+
+      if (!snapshot.exists()) {
         setAllTimesheets([]);
-        setDebugInfo('No employee key found');
+        setDebugInfo("No timesheets found");
         return;
       }
 
-      setDebugInfo(`Searching for employee: ${employeeKey}`);
+      const data = snapshot.val();
 
-      const paths = [
-        `JenCeo-DataBase/EmployeeBioData/${employeeKey}/timesheets`,
-        `EmployeeBioData/${employeeKey}/timesheets`
-      ];
+      const timesheetPromises = Object.entries(data).map(async ([id, tsData]) => {
+        const timesheet = {
+          id,
+          timesheetId: id,
+          ...tsData,
+        };
 
-      let foundTimesheets = [];
-      let successfulPath = '';
-
-      for (const path of paths) {
+        // Load advances (per timesheet)
         try {
-          const snapshot = await firebaseDB.child(path).once('value');
+          const advSnap = await firebaseDB
+            .child(empAdvancesNode(employeeKey, id))
+            .once("value");
 
-          if (snapshot.exists()) {
-            const data = snapshot.val();
-            successfulPath = path;
-
-            // Convert to array and fetch advances for each timesheet
-            if (typeof data === 'object') {
-              const timesheetPromises = Object.entries(data).map(async ([id, tsData]) => {
-                const timesheet = {
-                  id,
-                  timesheetId: id,
-                  ...tsData
-                };
-
-                // Fetch advances for this timesheet
-                try {
-                  const advancesPath = `EmployeeBioData/${employeeKey}/timesheets/${id}/advances`;
-                  const advancesSnapshot = await firebaseDB.child(advancesPath).once('value');
-
-                  if (advancesSnapshot.exists()) {
-                    const advancesData = advancesSnapshot.val();
-                    const advancesList = Object.entries(advancesData).map(([advId, advanceData]) => ({
-                      id: advId,
-                      ...advanceData
-                    }));
-                    timesheet.detailedAdvances = advancesList;
-                  } else {
-                    timesheet.detailedAdvances = [];
-                  }
-                } catch (advanceError) {
-                  timesheet.detailedAdvances = [];
-                }
-
-                return timesheet;
-              });
-
-              foundTimesheets = await Promise.all(timesheetPromises);
-            }
-            break;
+          if (advSnap.exists()) {
+            timesheet.detailedAdvances = Object.entries(advSnap.val()).map(
+              ([advId, adv]) => ({ id: advId, ...adv })
+            );
+          } else {
+            timesheet.detailedAdvances = [];
           }
-        } catch (pathError) {
-          // Silently continue to next path
+        } catch {
+          timesheet.detailedAdvances = [];
         }
-      }
 
-      if (foundTimesheets.length > 0) {
-        setAllTimesheets(foundTimesheets);
-        setDebugInfo(`Found ${foundTimesheets.length} timesheets with advances data`);
-      } else {
-        setAllTimesheets([]);
-        setDebugInfo('No timesheets found');
-      }
+        return timesheet;
+      });
 
+      const results = await Promise.all(timesheetPromises);
+      setAllTimesheets(results);
+      setDebugInfo(`Loaded ${results.length} timesheets`);
     } catch (error) {
       setAllTimesheets([]);
       setDebugInfo(`Error: ${error.message}`);
@@ -145,6 +132,7 @@ const TimesheetTable = ({ employee }) => {
       setLoading(false);
     }
   };
+
 
   const getLocalUser = () => {
     try {
@@ -171,7 +159,7 @@ const TimesheetTable = ({ employee }) => {
     }
 
     const { uid, name } = getLocalUser();
-    const path = `EmployeeBioData/${employee.id}/timesheets/${tsId}/payedStatus`;
+    const path = empPaidNode(employee.id, tsId);
 
     try {
       setSavingPaid(p => ({ ...p, [tsId]: true }));
@@ -208,7 +196,7 @@ const TimesheetTable = ({ employee }) => {
 
       // Load daily entries
       const entriesSnapshot = await firebaseDB
-        .child(`EmployeeBioData/${employee.id}/timesheets/${timesheet.timesheetId}/dailyEntries`)
+        .child(empEntriesNode(employee.id, timesheet.timesheetId))
         .once('value');
 
       if (entriesSnapshot.exists()) {
@@ -225,7 +213,7 @@ const TimesheetTable = ({ employee }) => {
 
       // Load advances
       const advancesSnapshot = await firebaseDB
-        .child(`EmployeeBioData/${employee.id}/timesheets/${timesheet.timesheetId}/advances`)
+        .child(empAdvancesNode(employee.id, timesheet.timesheetId))
         .once('value');
 
       if (advancesSnapshot.exists()) {

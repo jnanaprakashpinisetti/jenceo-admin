@@ -559,7 +559,6 @@ const WorkerModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode }
                                         />
                                     )}
 
-                                   // In WorkerModal.js, update the SlotBook tab:
                                     {activeTab === "SlotBook" && (
                                         <SlotBook
                                             // Pass the current employee as a single worker

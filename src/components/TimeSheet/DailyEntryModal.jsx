@@ -26,6 +26,12 @@ const DailyEntryModal = ({ entry, isEditing, employee, onSave, onAutoFill, onClo
   const [tsStart, setTsStart] = useState('');      // no default
   const [tsEnd, setTsEnd] = useState('');          // no default
 
+  const TS_ROOT = "EmployeeTimesheets";
+
+  const empTsRoot = (empId) =>
+    `${TS_ROOT}/${empId}/timesheets`;
+
+
   const shortEmpCode = (emp) => {
     const raw = emp?.employeeId || emp?.idNo || emp?.id || '';
     const m = String(raw).match(/^([A-Za-z]+)0*([0-9]+)$/);
@@ -298,44 +304,46 @@ const loadClients = async () => {
   // ========= DUPLICATE CHECK =========
 
   const checkDuplicate = async (employeeId, date, excludeTsId = null) => {
-  if (!employeeId || !date) return false;
+    if (!employeeId || !date) return false;
 
-  try {
-    // Check across ALL timesheets for this employee
-    const allTsSnap = await firebaseDB.child(`EmployeeBioData/${employeeId}/timesheets`).get();
-    if (!allTsSnap.exists()) return false;
+    try {
+      const allTsSnap = await firebaseDB
+        .child(empTsRoot(employeeId))
+        .get();
 
-    const allTimesheets = allTsSnap.val() || {};
-    const duplicates = [];
+      if (!allTsSnap.exists()) return false;
 
-    // Check every timesheet for this employee
-    for (const [tsId, timesheet] of Object.entries(allTimesheets)) {
-      if (!timesheet.dailyEntries) continue;
+      const allTimesheets = allTsSnap.val() || {};
+      const duplicates = [];
 
-      // Skip the current timesheet so editing doesn't flag itself
-     if (excludeTsId && tsId === excludeTsId) continue;
-      
-     const entry = timesheet.dailyEntries[date];
-         if (entry) {
-        duplicates.push({
-          id: `${tsId}_${date}`,
-          ...entry,
-          timesheetId: tsId
-        });
+      for (const [tsId, timesheet] of Object.entries(allTimesheets)) {
+        if (!timesheet.dailyEntries) continue;
+
+        // Skip current timesheet while editing
+        if (excludeTsId && tsId === excludeTsId) continue;
+
+        const entry = timesheet.dailyEntries[date];
+        if (entry) {
+          duplicates.push({
+            id: `${tsId}_${date}`,
+            ...entry,
+            timesheetId: tsId,
+          });
+        }
       }
+
+      if (duplicates.length > 0) {
+        setDupList(duplicates);
+        setDupModalOpen(true);
+        return true;
+      }
+    } catch (error) {
+      console.error("Duplicate check error:", error);
     }
 
-    if (duplicates.length > 0) {
-      setDupList(duplicates);
-      setDupModalOpen(true);
-      return true;
-    }
-  } catch (error) {
-    console.error("Duplicate check error:", error);
-  }
+    return false;
+  };
 
-  return false;
-};
   // ========= SALARY CALCULATION - FIXED =========
 
   const calculateFinalDailySalary = () => {

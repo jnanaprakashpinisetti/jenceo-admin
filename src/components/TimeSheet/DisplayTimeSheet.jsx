@@ -40,8 +40,6 @@ const buildTimesheetId = async (emp, periodKey) => {
         ({ mm, yy } = monthParts(start.slice(0, 7)));
     }
     const idBase = `${base}-${yy}-${mm}`;
-
-    // If this period already has a header under EmployeeBioData -> reuse its id; else suffix
     const allTsSnap = await firebaseDB.child(empTsNode(emp.id)).get();
     if (!allTsSnap.exists()) return idBase;
 
@@ -964,7 +962,7 @@ const DisplayTimeSheet = () => {
     // Update fetchUsers function to filter by role
     const fetchUsers = async () => {
         setUsersLoading(true);
-        const paths = ['Users', 'EmployeeBioData',];
+        const paths = ['Users'];
         const tmp = [];
 
         for (const p of paths) {
@@ -1871,7 +1869,7 @@ const ref = firebaseDB.child(
 
         try {
             const snap = await firebaseDB
-                .child(`EmployeeBioData/${selectedEmployee}/timesheets/${timesheet.timesheetId}/advances`)
+                .child(empAdvancesNode(selectedEmployee, timesheet.timesheetId))
                 .once('value');
 
             const data = snap.val();
@@ -2473,7 +2471,7 @@ const ref = firebaseDB.child(
             const updates = {};
             for (const d of selectedDates) {
                 updates[
-                    `EmployeeBioData/${selectedEmployee}/timesheets/${currentTimesheetId}/dailyEntries/${d}`
+                    `${empTsById(selectedEmployee, currentTimesheetId)}/dailyEntries/${d}`
                 ] = null;
             }
 

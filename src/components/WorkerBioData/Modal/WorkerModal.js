@@ -4,8 +4,8 @@ import BaseModal, { AlertModal, ConfirmModal } from "./Common/BaseModal";
 import MultiSelectDropdown from "./Common/MultiSelectDropdown";
 import SkillAccordion from "./Common/SkillAccordion";
 import Chip from "./Common/Chip";
-// Add these imports at the top of WorkerModal.js
 import { storageRef, uploadFile, getDownloadURL } from "../../../firebase";
+ 
 
 // Import tab components
 import BasicInfo from "./BasicInfo";
@@ -21,6 +21,7 @@ import Working from "./Working";
 import PayInfo from "./PayInfo";
 import Timesheet from "../TimesheetTable";
 import Biodata from "./Biodata";
+import SlotBook from "./SlotBook";
 
 import { getEffectiveUserId, getEffectiveUserName, toISO, formatDDMMYY, formatTime12h, blankPayment, blankWork, stampAuthorOnRow } from "./utils/helpers";
 import { validateBasic, validateAddress, validatePersonal, validatePayments, validateWork } from "./utils/validation";
@@ -440,7 +441,7 @@ const WorkerModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode }
                             maxHeight: "calc(90vh - 120px)" // Adjust based on header/footer height
                         }}>
                             {/* Tabs - Make tabs sticky too */}
-                            <div className="sticky-top bg-white" style={{ top: "-16px", zIndex: 10 }}>
+                            <div className="sticky-top bg-white" style={{ top: "-16px", zIndex: 1 }}>
                                 <ul className="nav nav-tabs" id="employeeTabs" role="tablist">
                                     {[
                                         ["department", "Department"],
@@ -456,6 +457,7 @@ const WorkerModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode }
                                         ["pay-info", "Pay Info"],
                                         ["timesheet", "Timesheet"],
                                         ["biodata", "Biodata"],
+                                        ["SlotBook", "SlotBook"],
                                     ].map(([key, label]) => (
                                         <li className="nav-item" role="presentation" key={key}>
                                             <button 
@@ -554,6 +556,50 @@ const WorkerModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode }
                                             formData={formData}
                                             canEdit={canEdit}
                                             handleInputChange={handleInputChange}
+                                        />
+                                    )}
+
+                                   // In WorkerModal.js, update the SlotBook tab:
+                                    {activeTab === "SlotBook" && (
+                                        <SlotBook
+                                            // Pass the current employee as a single worker
+                                            workers={formData.idNo ? [{
+                                                id: formData.idNo || "unknown",
+                                                key: formData.idNo,
+                                                name: `${formData.firstName || ""} ${formData.lastName || ""}`,
+                                                idNo: formData.idNo,
+                                                employeeId: formData.idNo,
+                                                department: formData.department || "Others",
+                                                schedule: formData.schedule || {}
+                                            }] : []}
+                                            onAllocationUpdate={async (allocation) => {
+                                                try {
+                                                    // Update formData with the new allocation
+                                                    const dateKey = allocation.date;
+                                                    const slotHour = allocation.slotHour;
+
+                                                    const updatedFormData = {
+                                                        ...formData,
+                                                        schedule: {
+                                                            ...formData.schedule,
+                                                            [dateKey]: {
+                                                                ...formData.schedule?.[dateKey],
+                                                                [slotHour]: allocation
+                                                            }
+                                                        },
+                                                        lastUpdated: new Date().toISOString()
+                                                    };
+
+                                                    setFormData(updatedFormData);
+                                                    setHasUnsavedChanges(true);
+
+                                                    // Optional: Auto-save to Firebase
+                                                    // await handleSaveClick();
+
+                                                } catch (error) {
+                                                    console.error("Error updating allocation:", error);
+                                                }
+                                            }}
                                         />
                                     )}
 

@@ -608,6 +608,11 @@
         .client-indicator {
             text-align: center;
 
+            p{
+                font-size: 12px;
+                margin-bottom: 5px;
+            }
+
             .client-initial {
                 display: block;
                 width: 24px;
@@ -677,8 +682,9 @@
         }
 
         .time-text {
-            font-size: 9px;
+            font-size: 16px;
             display: block;
+            font-weight: bold;
         }
     }
 

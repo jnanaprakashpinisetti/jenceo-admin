@@ -560,6 +560,7 @@ const WorkerModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode }
                                     )}
 
                                     {activeTab === "SlotBook" && (
+                                        <div className="SlotBook">
                                         <SlotBook
                                             // Pass the current employee as a single worker
                                             workers={formData.idNo ? [{
@@ -600,6 +601,7 @@ const WorkerModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode }
                                                 }
                                             }}
                                         />
+                                        </div>
                                     )}
 
                                     {activeTab === "payment" && (

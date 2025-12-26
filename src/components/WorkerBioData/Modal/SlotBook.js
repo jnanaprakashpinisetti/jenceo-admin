@@ -3,9 +3,11 @@ import firebaseDB from "../../../firebase";
 import { WORKER_PATHS, CLIENT_PATHS } from "../../../utils/dataPaths";
 import Calendar from 'react-calendar';
 import 'react-calendar/dist/Calendar.css';
-import { format, parseISO, addDays } from 'date-fns';
+import { format, parseISO, addDays, subDays, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay } from 'date-fns';
+import { useAuth } from "../../../context/AuthContext";
 
 const SlotBook = ({ workers, onAllocationUpdate }) => {
+  const { user } = useAuth();
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [allocations, setAllocations] = useState({});
   const [searchQuery, setSearchQuery] = useState("");
@@ -30,11 +32,17 @@ const SlotBook = ({ workers, onAllocationUpdate }) => {
   });
   const [activeWorker, setActiveWorker] = useState(null);
   const [selectedClientId, setSelectedClientId] = useState(null);
-  const [slotType, setSlotType] = useState("working"); // New state for slot type
+  const [slotType, setSlotType] = useState("working");
+  const [alertModal, setAlertModal] = useState({ show: false, message: "", title: "", onConfirm: null });
+  const [summaryStartDate, setSummaryStartDate] = useState(subDays(new Date(), 7));
+  const [summaryEndDate, setSummaryEndDate] = useState(new Date());
+  const [viewMode, setViewMode] = useState(false);
+  const [modalProcessing, setModalProcessing] = useState(false);
   
   const searchInputRef = useRef(null);
   const calendarRef = useRef(null);
   const endTimeRef = useRef(null);
+  const modalLockRef = useRef(false);
 
   // Enhanced time slots with 30-minute intervals
   const generateTimeSlots = React.useMemo(() => {
@@ -71,6 +79,7 @@ const SlotBook = ({ workers, onAllocationUpdate }) => {
 
   // Convert 24-hour time to 12-hour format
   function convertTo12Hour(time24) {
+    if (!time24) return "";
     const [hour, minute] = time24.split(':').map(Number);
     const period = hour >= 12 ? 'PM' : 'AM';
     const hour12 = hour % 12 || 12;
@@ -92,6 +101,30 @@ const SlotBook = ({ workers, onAllocationUpdate }) => {
     return format(date, 'yyyy-MM-dd');
   }
 
+  // FIX 1: Safe modal close function
+  const closeAllocationModal = () => {
+    if (modalProcessing) return;
+    
+    modalLockRef.current = false;
+    setShowAllocationModal(false);
+    setSelectedSlot(null);
+    setActiveWorker(null);
+    setSelectedClientId(null);
+    setEditingEndTime(false);
+    setTempEndTime("");
+    setTempRemarks("");
+    setViewMode(false);
+    setSlotStatus("allocating");
+    setSlotType("working");
+    setSearchQuery("");
+    setModalProcessing(false);
+  };
+
+  // Show alert modal
+  const showAlert = (title, message, onConfirm = null) => {
+    setAlertModal({ show: true, title, message, onConfirm });
+  };
+
   // Close calendar when clicking outside
   useEffect(() => {
     const handleClickOutside = (event) => {
@@ -110,9 +143,9 @@ const SlotBook = ({ workers, onAllocationUpdate }) => {
     };
   }, [showCalendar]);
 
-  // Filter clients based on search query
+  // Filter clients based on search query (only for allocation modal)
   useEffect(() => {
-    if (!searchQuery.trim()) {
+    if (!searchQuery.trim() || !showAllocationModal) {
       setFilteredClients([]);
       return;
     }
@@ -127,7 +160,7 @@ const SlotBook = ({ workers, onAllocationUpdate }) => {
     );
     
     setFilteredClients(filtered);
-  }, [searchQuery, clients]);
+  }, [searchQuery, clients, showAllocationModal]);
 
   // Fetch ALL clients from ALL departments
   useEffect(() => {
@@ -173,7 +206,9 @@ const SlotBook = ({ workers, onAllocationUpdate }) => {
               location: value.address || value.location || "Unknown Location",
               department: department,
               phone: value.phone || value.mobile || value.contactNumber || "N/A",
-              email: value.email || "N/A"
+              email: value.email || "N/A",
+              // Store mobile number specifically
+              mobile: value.mobile || value.phone || value.contactNumber || "N/A"
             }));
             allClients = [...allClients, ...departmentClients];
           }
@@ -192,39 +227,68 @@ const SlotBook = ({ workers, onAllocationUpdate }) => {
     }
   };
 
-  // FIX: Load allocations when date changes
+  // Load allocations when date changes (with modal lock protection)
   useEffect(() => {
-    loadAllocationsForDate(selectedDate);
+    if (modalLockRef.current) return;
+    
+    if (workers && workers.length > 0) {
+      loadAllocationsForDate(selectedDate);
+    }
   }, [selectedDate, workers]);
 
   // Load allocations for specific date
   const loadAllocationsForDate = async (date) => {
+    if (!workers || workers.length === 0) return;
+    
     const dateKey = getDateKey(date);
+    console.log(`Loading allocations for date: ${dateKey}`);
     
-    setAllocations(prev => {
-      const updated = { ...prev };
-
-      (workers || []).forEach(worker => {
-        if (!updated[worker.id]) {
-          updated[worker.id] = {};
+    const newAllocations = {};
+    
+    try {
+      // Clear previous allocations for this date
+      workers.forEach(worker => {
+        if (!newAllocations[worker.id]) {
+          newAllocations[worker.id] = {};
         }
-
-        const scheduleForDate = worker.schedule?.[dateKey] || {};
-        Object.entries(scheduleForDate).forEach(([slotId, allocation]) => {
-          updated[worker.id][slotId] = allocation;
-        });
       });
-
-      return updated;
-    });
+      
+      // Load from each worker's schedule for this specific date
+      for (const worker of workers) {
+        if (worker.schedule && worker.schedule[dateKey]) {
+          // Only load allocations for the selected date
+          Object.entries(worker.schedule[dateKey]).forEach(([slotId, allocation]) => {
+            if (allocation && allocation.date === dateKey) {
+              newAllocations[worker.id][slotId] = allocation;
+            }
+          });
+        }
+      }
+      
+      setAllocations(newAllocations);
+      console.log(`Loaded ${Object.values(newAllocations).reduce((sum, workerAllocs) => sum + Object.keys(workerAllocs).length, 0)} allocations for ${dateKey}`);
+      
+    } catch (error) {
+      console.error("Error loading allocations:", error);
+      // Still set empty allocations to clear previous date's data
+      workers.forEach(worker => {
+        if (!newAllocations[worker.id]) {
+          newAllocations[worker.id] = {};
+        }
+      });
+      setAllocations(newAllocations);
+    }
     
-    calculateDailySummary();
+    // Calculate summary after loading allocations
+    setTimeout(() => {
+      calculateDailySummary();
+    }, 100);
   };
 
   // Calculate monthly statistics
   useEffect(() => {
     calculateMonthlyStats();
-  }, [workers, allocations, selectedDate]);
+  }, [workers, selectedDate]);
 
   const calculateMonthlyStats = () => {
     const currentMonth = selectedDate.getMonth();
@@ -247,8 +311,7 @@ const SlotBook = ({ workers, onAllocationUpdate }) => {
           let hasWork = false;
           
           Object.values(daySchedule).forEach(allocation => {
-            if (allocation.status === "completed" && allocation.duration) {
-              // FIX: Ensure duration is a number
+            if (allocation && allocation.status === "completed" && allocation.duration) {
               const duration = parseFloat(allocation.duration);
               if (!isNaN(duration)) {
                 dayHours += duration;
@@ -271,65 +334,140 @@ const SlotBook = ({ workers, onAllocationUpdate }) => {
 
     setMonthlyStats({
       workingDays: workingDays.size,
-      totalHours: parseFloat(totalHours.toFixed(2)), // Ensure it's a number
+      totalHours: parseFloat(totalHours.toFixed(2)),
       leavesTaken,
       utilizationRate: `${utilizationRate}%`
     });
   };
 
-  // Calculate daily summary - UPDATED with new columns
+  // Calculate daily summary
   const calculateDailySummary = () => {
-    const summary = [];
-    const dateKey = getDateKey(selectedDate);
+    if (!workers || workers.length === 0) {
+      setDailySummary([]);
+      return;
+    }
+
+    const summaryMap = {};
     
-    (workers || []).forEach(worker => {
-      const workerAllocations = allocations[worker.id] || {};
-      let totalHours = 0;
-      let clientNames = [];
-      let remarksList = [];
+    // Get all dates in range
+    const datesInRange = eachDayOfInterval({ start: summaryStartDate, end: summaryEndDate });
+    
+    datesInRange.forEach(date => {
+      const dateKey = getDateKey(date);
       
-      Object.values(workerAllocations).forEach(allocation => {
-        if (allocation.status === "completed" && allocation.duration) {
-          const duration = parseFloat(allocation.duration);
-          if (!isNaN(duration)) {
-            totalHours += duration;
-            clientNames.push(allocation.clientName || "No Client");
-            if (allocation.remarks) {
-              remarksList.push(allocation.remarks);
+      workers.forEach(worker => {
+        const workerSchedule = worker.schedule || {};
+        const daySchedule = workerSchedule[dateKey] || {};
+        
+        let dayHours = 0;
+        let clientNames = [];
+        let remarksList = [];
+        
+        Object.values(daySchedule).forEach(allocation => {
+          if (allocation && allocation.status === "completed" && allocation.duration) {
+            const duration = parseFloat(allocation.duration);
+            if (!isNaN(duration)) {
+              dayHours += duration;
+              if (allocation.clientName && allocation.clientName !== "No Client") {
+                clientNames.push(allocation.clientName);
+              }
+              if (allocation.remarks) {
+                remarksList.push(allocation.remarks);
+              }
             }
           }
+        });
+        
+        if (dayHours > 0) {
+          const workerKey = `${worker.id}-${dateKey}`;
+          summaryMap[workerKey] = {
+            workerId: worker.id,
+            workerName: worker.name,
+            department: worker.department,
+            totalHours: parseFloat(dayHours.toFixed(2)),
+            totalClients: [...new Set(clientNames.filter(name => name))].length,
+            clientNames: [...new Set(clientNames.filter(name => name))],
+            date: dateKey,
+            formattedDate: formatDateForSummary(date),
+            remarks: remarksList.length > 0 ? remarksList.join(", ") : "No remarks"
+          };
         }
-      });
-      
-      const uniqueClients = [...new Set(clientNames.filter(name => name))];
-      
-      summary.push({
-        workerId: worker.id,
-        workerName: worker.name,
-        department: worker.department,
-        totalHours: parseFloat(totalHours.toFixed(2)),
-        totalClients: uniqueClients.length,
-        clientNames: uniqueClients,
-        date: dateKey,
-        remarks: remarksList.length > 0 ? remarksList.join(", ") : "No remarks"
       });
     });
     
-    setDailySummary(summary);
+    setDailySummary(Object.values(summaryMap));
   };
 
-  // Check if slot should be disabled (when there's a booked slot covering it)
+  // Calculate unique clients served today
+  const calculateTodayClients = () => {
+    const dateKey = getDateKey(selectedDate);
+    const clientSet = new Set();
+    
+    Object.values(allocations).forEach(workerAllocations => {
+      Object.values(workerAllocations).forEach(allocation => {
+        if (allocation && allocation.date === dateKey && allocation.clientName && allocation.clientName !== "No Client") {
+          clientSet.add(allocation.clientName);
+        }
+      });
+    });
+    
+    return clientSet.size;
+  };
+
+  // Calculate average hours per worker
+  const calculateAverageHours = () => {
+    const dateKey = getDateKey(selectedDate);
+    let totalHours = 0;
+    let workersWithHours = 0;
+    
+    Object.entries(allocations).forEach(([workerId, workerAllocations]) => {
+      let workerTotal = 0;
+      Object.values(workerAllocations).forEach(allocation => {
+        if (allocation && allocation.date === dateKey && allocation.status === "completed" && allocation.duration) {
+          workerTotal += parseFloat(allocation.duration) || 0;
+        }
+      });
+      if (workerTotal > 0) {
+        totalHours += workerTotal;
+        workersWithHours++;
+      }
+    });
+    
+    return workersWithHours > 0 ? (totalHours / workersWithHours).toFixed(2) : "0.00";
+  };
+
+  // Calculate productivity score (percentage of available slots used)
+  const calculateProductivityScore = () => {
+    const dateKey = getDateKey(selectedDate);
+    let usedSlots = 0;
+    let totalAvailableSlots = 0;
+    
+    workers?.forEach(worker => {
+      const workerAllocations = allocations[worker.id] || {};
+      const slotsUsed = Object.values(workerAllocations).filter(a => 
+        a && a.date === dateKey && a.status === "completed"
+      ).length;
+      usedSlots += slotsUsed;
+      totalAvailableSlots += generateTimeSlots.filter(s => !s.isLunchBreak).length;
+    });
+    
+    const score = totalAvailableSlots > 0 ? (usedSlots / totalAvailableSlots * 100).toFixed(1) : 0;
+    return `${score}%`;
+  };
+
+  // Check if slot should be disabled
   const isSlotDisabled = (workerId, slot) => {
     const workerAllocations = allocations[workerId] || {};
+    const dateKey = getDateKey(selectedDate);
     
-    // Check if this slot is already allocated
+    // Check if this slot is already allocated for today
     if (workerAllocations[slot.id]) {
       return true;
     }
     
-    // Check for continuous bookings that might cover this slot
+    // Check for continuous bookings
     for (const [slotId, allocation] of Object.entries(workerAllocations)) {
-      if (allocation.slotType === "continuous") {
+      if (allocation && allocation.slotType === "continuous" && allocation.date === dateKey) {
         const startSlot = generateTimeSlots.find(s => 
           s.hour24 === allocation.startHour && s.minute === allocation.startMinute
         );
@@ -352,40 +490,43 @@ const SlotBook = ({ workers, onAllocationUpdate }) => {
     return false;
   };
 
-  // Handle slot click - UPDATED with slot type selection
+  // Handle slot click
   const handleSlotClick = (workerId, slot) => {
     if (slot.isLunchBreak) return;
-    
-    // Check if slot is disabled
-    if (isSlotDisabled(workerId, slot)) {
-      alert("This slot is already booked or within a booked time range.");
-      return;
-    }
     
     const currentAllocation = allocations[workerId]?.[slot.id];
     const worker = workers?.find(w => w.id === workerId);
     setActiveWorker(worker);
-    setSelectedClientId(null);
-    setTempRemarks("");
-    setTempStatus("completed");
     
-    if (currentAllocation?.status === "completed" || currentAllocation?.status === "not-completed") {
-      setSlotStatus("completed");
-      setSelectedSlot({ workerId, slot, allocation: currentAllocation });
-      setTempRemarks(currentAllocation.remarks || "");
-      setTempStatus(currentAllocation.status || "completed");
-      setShowAllocationModal(true);
-    } else if (currentAllocation?.status === "allocated" || currentAllocation?.status === "in-progress") {
-      setSlotStatus("in-progress");
-      setSelectedSlot({ workerId, slot, allocation: currentAllocation });
+    if (currentAllocation) {
+      // Existing allocation - open in view/edit mode
       setTempEndTime(currentAllocation.endTime || "");
       setTempRemarks(currentAllocation.remarks || "");
+      setTempStatus(currentAllocation.status || "completed");
+      
+      // Set view mode based on user role and allocation status
+      const isAdmin = user?.role === "admin";
+      const isCompleted = currentAllocation.status === "completed";
+      setViewMode(!isAdmin && isCompleted); // Non-admins can only view completed allocations
+      
+      setSlotStatus(currentAllocation.status || "completed");
+      setSelectedSlot({ workerId, slot, allocation: currentAllocation });
+      
+      modalLockRef.current = true;
       setShowAllocationModal(true);
     } else {
+      // New slot allocation
+      setViewMode(false);
       setSlotStatus("allocating");
       setSelectedSlot({ workerId, slot });
       setSearchQuery("");
-      setSlotType("working"); // Default slot type
+      setSlotType("working");
+      setTempEndTime("");
+      setTempRemarks("");
+      setTempStatus("completed");
+      setSelectedClientId(null);
+      
+      modalLockRef.current = true;
       setShowAllocationModal(true);
       
       setTimeout(() => {
@@ -396,10 +537,11 @@ const SlotBook = ({ workers, onAllocationUpdate }) => {
     }
   };
 
-  // Handle slot type selection (for new allocations)
+  // Handle slot type selection
   const handleSlotTypeSelect = async (type) => {
     if (!selectedSlot || !selectedSlot.workerId || !selectedSlot.slot) return;
     
+    setModalProcessing(true);
     const { workerId, slot } = selectedSlot;
     const dateKey = getDateKey(selectedDate);
     const worker = workers?.find(w => w.id === workerId);
@@ -407,7 +549,6 @@ const SlotBook = ({ workers, onAllocationUpdate }) => {
     let newAllocation = {
       workerId: workerId,
       workerName: worker?.name || "Unknown Worker",
-      // Slot details
       date: dateKey,
       slotId: slot.id,
       slotHour: slot.hour24,
@@ -421,7 +562,13 @@ const SlotBook = ({ workers, onAllocationUpdate }) => {
       duration: null,
       department: worker?.department,
       workerDepartment: worker?.department,
-      remarks: ""
+      remarks: type !== "working" ? `Marked as ${type}` : "",
+      createdBy: user?.name || user?.username || "System",
+      createdById: user?.dbId || "system",
+      createdAt: new Date().toISOString(),
+      lastUpdatedBy: user?.name || user?.username || "System",
+      lastUpdatedById: user?.dbId || "system",
+      lastUpdatedAt: new Date().toISOString()
     };
 
     // For non-working slots, mark as completed immediately
@@ -431,54 +578,50 @@ const SlotBook = ({ workers, onAllocationUpdate }) => {
         status: "completed",
         endTime: slot.time24,
         duration: 0,
-        completedAt: new Date().toISOString(),
-        remarks: `Marked as ${type}`
+        completedAt: new Date().toISOString()
       };
     }
 
-    // Update local state
-    setAllocations(prev => ({
-      ...prev,
-      [workerId]: {
-        ...prev[workerId],
-        [slot.id]: newAllocation
-      }
-    }));
-
     try {
-      // Save to Worker's schedule
+      // Update local state first
+      setAllocations(prev => ({
+        ...prev,
+        [workerId]: {
+          ...prev[workerId],
+          [slot.id]: newAllocation
+        }
+      }));
+
+      // Save to Firebase
       await saveAllocationToWorker(workerId, newAllocation);
       
       console.log(`✅ Slot marked as ${type}`);
+      
+      // Update slot status
+      if (type === "working") {
+        setSlotStatus("allocated");
+      } else {
+        setSlotStatus("completed");
+        setSelectedSlot({ workerId, slot, allocation: newAllocation });
+      }
+      
+      if (onAllocationUpdate) {
+        onAllocationUpdate(newAllocation);
+      }
+      
     } catch (error) {
       console.error("❌ Error saving slot:", error);
-      alert("Failed to save slot. Please try again.");
-      return;
-    }
-
-    if (onAllocationUpdate) {
-      onAllocationUpdate(newAllocation);
-    }
-
-    // Set appropriate status and close modal
-    if (type === "working") {
-      setSlotStatus("allocated");
-      // Keep modal open for client selection
-    } else {
-      setSlotStatus("completed");
-      setSelectedSlot({ workerId, slot, allocation: newAllocation });
-      setTimeout(() => {
-        setShowAllocationModal(false);
-        setActiveWorker(null);
-      }, 1500);
+      showAlert("Save Failed", "Failed to save slot. Please try again.");
+    } finally {
+      setModalProcessing(false);
     }
   };
 
-  // Handle client selection - FIXED: Use correct phone field
+  // Handle client selection
   const handleClientSelect = async (client) => {
     if (!selectedSlot || !selectedSlot.workerId || !selectedSlot.slot) return;
-
-    // Highlight the selected client
+    
+    setModalProcessing(true);
     setSelectedClientId(client.clientKey);
 
     const { workerId, slot } = selectedSlot;
@@ -494,15 +637,13 @@ const SlotBook = ({ workers, onAllocationUpdate }) => {
     const newAllocation = {
       workerId: workerId,
       workerName: worker?.name || "Unknown Worker",
-      // Client identifiers
       clientKey: client.clientKey,
       clientPath: client.clientPath,
       clientId: client.clientId,
       clientName: client.name,
       clientLocation: client.location,
-      clientPhone: client.phone || client.mobile || client.contactNumber || "N/A", // FIX: Use correct phone field
+      clientPhone: client.mobile || client.phone || "N/A",
       clientEmail: client.email,
-      // Slot details
       date: dateKey,
       slotId: slot.id,
       slotHour: slot.hour24,
@@ -516,44 +657,55 @@ const SlotBook = ({ workers, onAllocationUpdate }) => {
       duration: null,
       department: client.department,
       workerDepartment: worker?.department,
-      remarks: ""
+      remarks: "",
+      createdBy: user?.name || user?.username || "System",
+      createdById: user?.dbId || "system",
+      createdAt: new Date().toISOString(),
+      lastUpdatedBy: user?.name || user?.username || "System",
+      lastUpdatedById: user?.dbId || "system",
+      lastUpdatedAt: new Date().toISOString()
     };
 
-    // Update local state
-    setAllocations(prev => ({
-      ...prev,
-      [workerId]: {
-        ...prev[workerId],
-        [slot.id]: newAllocation
-      }
-    }));
-
     try {
-      // Save to Worker's schedule
+      // Update local state
+      setAllocations(prev => ({
+        ...prev,
+        [workerId]: {
+          ...prev[workerId],
+          [slot.id]: newAllocation
+        }
+      }));
+
+      // Save to Firebase
       await saveAllocationToWorker(workerId, newAllocation);
       
-      // Save to Client's schedule
-      await saveAllocationToClient(client, newAllocation);
+      // Save to client if not walk-in
+      if (!client.clientKey.startsWith("WALKIN-")) {
+        await saveAllocationToClient(client, newAllocation);
+      }
       
-      console.log("✅ Allocation saved to both worker and client");
+      console.log("✅ Allocation saved");
+      
+      // Update UI state - DON'T close modal!
+      if (currentTime >= slotTime) {
+        setSlotStatus("in-progress");
+        setSelectedSlot({ workerId, slot, allocation: newAllocation });
+        setEditingEndTime(true);
+      } else {
+        setSlotStatus("allocated");
+        // Reset search but keep modal open
+        setSearchQuery("");
+      }
+      
+      if (onAllocationUpdate) {
+        onAllocationUpdate(newAllocation);
+      }
+      
     } catch (error) {
       console.error("❌ Error saving allocation:", error);
-      alert("Failed to save allocation. Please try again.");
-      return;
-    }
-
-    if (onAllocationUpdate) {
-      onAllocationUpdate(newAllocation);
-    }
-
-    // Don't auto-close modal. Just update status
-    if (currentTime >= slotTime) {
-      setSlotStatus("in-progress");
-      setSelectedSlot({ workerId, slot, allocation: newAllocation });
-      setEditingEndTime(true);
-    } else {
-      // Keep modal open with success message
-      setSlotStatus("allocated");
+      showAlert("Save Failed", "Failed to save allocation. Please try again.");
+    } finally {
+      setModalProcessing(false);
     }
   };
 
@@ -563,7 +715,7 @@ const SlotBook = ({ workers, onAllocationUpdate }) => {
       const worker = workers?.find(w => w.id === workerId);
       if (!worker) {
         console.error("Worker not found:", workerId);
-        return;
+        throw new Error("Worker not found");
       }
 
       const workerPath = WORKER_PATHS[worker.department] || WORKER_PATHS["Others"];
@@ -574,7 +726,7 @@ const SlotBook = ({ workers, onAllocationUpdate }) => {
       const snapshot = await firebaseDB.child(`${workerPath}/${workerId}`).once('value');
       const workerData = snapshot.val() || {};
 
-      // Initialize schedule if it doesn't exist
+      // Initialize schedule
       const currentSchedule = workerData.schedule || {};
       const currentDateSchedule = currentSchedule[dateKey] || {};
 
@@ -595,13 +747,14 @@ const SlotBook = ({ workers, onAllocationUpdate }) => {
       });
 
       console.log("✅ Worker schedule updated");
+      return true;
     } catch (error) {
       console.error("Error saving to worker schedule:", error);
       throw error;
     }
   };
 
-  // Save allocation to Client's Firebase path - CREATE IF NOT EXISTS
+  // Save allocation to Client's Firebase path
   const saveAllocationToClient = async (client, allocation) => {
     try {
       const clientRef = firebaseDB.child(`${client.clientPath}/${client.clientKey}`);
@@ -609,12 +762,12 @@ const SlotBook = ({ workers, onAllocationUpdate }) => {
 
       let clientData = snapshot.val();
 
-      // 🔥 CREATE CLIENT IF NOT EXISTS (Walk-in support)
       if (!clientData) {
         clientData = {
           clientId: client.clientId,
           name: client.name,
           phone: client.phone,
+          mobile: client.mobile,
           email: client.email,
           location: client.location,
           department: client.department,
@@ -645,22 +798,24 @@ const SlotBook = ({ workers, onAllocationUpdate }) => {
       });
 
       console.log("✅ Client schedule saved");
+      return true;
     } catch (error) {
       console.error("❌ Client save failed:", error);
       throw error;
     }
   };
 
-  // Handle end time update - FIXED: Ensure duration is calculated properly
+  // Handle end time update
   const handleEndTimeUpdate = async () => {
     if (!selectedSlot || !tempEndTime) return;
-
+    
+    setModalProcessing(true);
     const { workerId, slot } = selectedSlot;
     const allocation = allocations[workerId]?.[slot.id];
     
     if (!allocation) return;
 
-    // Calculate duration - FIXED: Better calculation
+    // Calculate duration
     const startParts = allocation.startTime.split(':');
     const endParts = tempEndTime.split(':');
     
@@ -675,66 +830,73 @@ const SlotBook = ({ workers, onAllocationUpdate }) => {
     let durationMinutes = endTotalMinutes - startTotalMinutes;
     
     if (durationMinutes <= 0) {
-      alert("End time must be after start time");
+      showAlert("Invalid Time", "End time must be after start time");
+      setModalProcessing(false);
       return;
     }
     
-    const duration = durationMinutes / 60; // Convert to hours
+    const duration = durationMinutes / 60;
 
     const updatedAllocation = {
       ...allocation,
       endTime: tempEndTime,
       endTime12: convertTo12Hour(tempEndTime),
       status: tempStatus,
-      duration: parseFloat(duration.toFixed(2)), // Ensure it's a number
+      duration: parseFloat(duration.toFixed(2)),
       completedAt: new Date().toISOString(),
-      remarks: tempRemarks
+      remarks: tempRemarks,
+      lastUpdatedBy: user?.name || user?.username || "System",
+      lastUpdatedById: user?.dbId || "system",
+      lastUpdatedAt: new Date().toISOString()
     };
 
-    // Update local state
-    setAllocations(prev => ({
-      ...prev,
-      [workerId]: {
-        ...prev[workerId],
-        [slot.id]: updatedAllocation
-      }
-    }));
-
     try {
+      // Update local state
+      setAllocations(prev => ({
+        ...prev,
+        [workerId]: {
+          ...prev[workerId],
+          [slot.id]: updatedAllocation
+        }
+      }));
+
       // Find the client
       const client = clients?.find(c => c.clientKey === allocation.clientKey);
       
       // Update worker schedule
       await saveAllocationToWorker(workerId, updatedAllocation);
       
-      // Update client schedule if client exists
-      if (client && allocation.clientKey && allocation.clientKey !== "WALKIN") {
+      // Update client schedule if client exists and not walk-in
+      if (client && allocation.clientKey && !allocation.clientKey.startsWith("WALKIN-")) {
         await saveAllocationToClient(client, updatedAllocation);
       }
       
       console.log("✅ Allocation completed and saved");
+      
+      // Update UI state
+      setSlotStatus("completed");
+      setSelectedSlot({ workerId, slot, allocation: updatedAllocation });
+      setEditingEndTime(false);
+      setTempEndTime("");
+      setTempRemarks("");
+      
+      if (onAllocationUpdate) {
+        onAllocationUpdate(updatedAllocation);
+      }
+      
     } catch (error) {
       console.error("❌ Error completing allocation:", error);
-      alert("Failed to save completion. Please try again.");
-      return;
+      showAlert("Save Failed", "Failed to save completion. Please try again.");
+    } finally {
+      setModalProcessing(false);
     }
-
-    if (onAllocationUpdate) {
-      onAllocationUpdate(updatedAllocation);
-    }
-
-    // Update slot status
-    setSlotStatus("completed");
-    setSelectedSlot({ workerId, slot, allocation: updatedAllocation });
-    setEditingEndTime(false);
-    setTempEndTime("");
-    setTempRemarks("");
   };
 
-  // Handle status update without end time (for non-working slots)
+  // Handle status update
   const handleStatusUpdate = async () => {
     if (!selectedSlot) return;
-
+    
+    setModalProcessing(true);
     const { workerId, slot } = selectedSlot;
     const allocation = allocations[workerId]?.[slot.id];
     
@@ -744,41 +906,56 @@ const SlotBook = ({ workers, onAllocationUpdate }) => {
       ...allocation,
       status: tempStatus,
       remarks: tempRemarks,
-      completedAt: new Date().toISOString()
+      completedAt: new Date().toISOString(),
+      lastUpdatedBy: user?.name || user?.username || "System",
+      lastUpdatedById: user?.dbId || "system",
+      lastUpdatedAt: new Date().toISOString()
     };
 
-    // Update local state
-    setAllocations(prev => ({
-      ...prev,
-      [workerId]: {
-        ...prev[workerId],
-        [slot.id]: updatedAllocation
-      }
-    }));
-
     try {
+      // Update local state
+      setAllocations(prev => ({
+        ...prev,
+        [workerId]: {
+          ...prev[workerId],
+          [slot.id]: updatedAllocation
+        }
+      }));
+
       // Update worker schedule
       await saveAllocationToWorker(workerId, updatedAllocation);
+      
       console.log("✅ Status updated and saved");
+      
+      // Update UI
+      setSlotStatus("completed");
+      setSelectedSlot({ workerId, slot, allocation: updatedAllocation });
+      setTempRemarks("");
+      
+      if (onAllocationUpdate) {
+        onAllocationUpdate(updatedAllocation);
+      }
+      
     } catch (error) {
       console.error("❌ Error updating status:", error);
-      alert("Failed to update status. Please try again.");
-      return;
+      showAlert("Update Failed", "Failed to update status. Please try again.");
+    } finally {
+      setModalProcessing(false);
     }
-
-    if (onAllocationUpdate) {
-      onAllocationUpdate(updatedAllocation);
-    }
-
-    // Update slot status
-    setSlotStatus("completed");
-    setSelectedSlot({ workerId, slot, allocation: updatedAllocation });
-    setTempRemarks("");
   };
 
   // Get slot status and styling
   const getSlotStatus = (workerId, slot) => {
     const allocation = allocations[workerId]?.[slot.id];
+    const dateKey = getDateKey(selectedDate);
+    
+    if (allocation && allocation.date !== dateKey) {
+      return {
+        status: "available",
+        className: "slot-available",
+        tooltip: "Available - Click to allocate"
+      };
+    }
     
     if (slot.isLunchBreak) {
       return {
@@ -788,7 +965,7 @@ const SlotBook = ({ workers, onAllocationUpdate }) => {
       };
     }
     
-    if (!allocation) {
+    if (!allocation || allocation.date !== dateKey) {
       return {
         status: "available",
         className: "slot-available",
@@ -808,7 +985,7 @@ const SlotBook = ({ workers, onAllocationUpdate }) => {
       return {
         status: allocation.slotType,
         className: typeColors[allocation.slotType] || "slot-other",
-        tooltip: `${allocation.slotType.replace(/-/g, ' ').toUpperCase()}${allocation.remarks ? `\nRemarks: ${allocation.remarks}` : ''}`
+        tooltip: `${allocation.slotType.replace(/-/g, ' ').toUpperCase()}${allocation.remarks ? `\nRemarks: ${allocation.remarks}` : ''}\nCreated by: ${allocation.createdBy || 'System'}\nAt: ${allocation.createdAt ? new Date(allocation.createdAt).toLocaleString() : 'N/A'}`
       };
     }
     
@@ -817,25 +994,25 @@ const SlotBook = ({ workers, onAllocationUpdate }) => {
         return {
           status: "allocated",
           className: "slot-allocated",
-          tooltip: `Allocated to ${allocation.clientName || 'No client'}\nStart: ${allocation.startTime12}`
+          tooltip: `Allocated to ${allocation.clientName || 'No client'}\nStart: ${allocation.startTime12}\nMobile: ${allocation.clientPhone || 'N/A'}\nCreated by: ${allocation.createdBy || 'System'}\nAt: ${allocation.createdAt ? new Date(allocation.createdAt).toLocaleString() : 'N/A'}`
         };
       case "in-progress":
         return {
           status: "in-progress",
           className: "slot-in-progress",
-          tooltip: `In Progress: ${allocation.clientName || 'No client'}\nStart: ${allocation.startTime12}`
+          tooltip: `In Progress: ${allocation.clientName || 'No client'}\nStart: ${allocation.startTime12}\nMobile: ${allocation.clientPhone || 'N/A'}\nCreated by: ${allocation.createdBy || 'System'}\nAt: ${allocation.createdAt ? new Date(allocation.createdAt).toLocaleString() : 'N/A'}`
         };
       case "completed":
         return {
           status: "completed",
           className: "slot-completed",
-          tooltip: `Completed: ${allocation.clientName || 'No client'}\nDuration: ${allocation.duration} hours${allocation.remarks ? `\nRemarks: ${allocation.remarks}` : ''}`
+          tooltip: `Completed: ${allocation.clientName || 'No client'}\nDuration: ${allocation.duration} hours\nMobile: ${allocation.clientPhone || 'N/A'}${allocation.remarks ? `\nRemarks: ${allocation.remarks}` : ''}\nCreated by: ${allocation.createdBy || 'System'}\nAt: ${allocation.createdAt ? new Date(allocation.createdAt).toLocaleString() : 'N/A'}\nLast updated by: ${allocation.lastUpdatedBy || 'System'}\nAt: ${allocation.lastUpdatedAt ? new Date(allocation.lastUpdatedAt).toLocaleString() : 'N/A'}`
         };
       case "not-completed":
         return {
           status: "not-completed",
           className: "slot-not-completed",
-          tooltip: `Not Completed: ${allocation.clientName || 'No client'}${allocation.remarks ? `\nRemarks: ${allocation.remarks}` : ''}`
+          tooltip: `Not Completed: ${allocation.clientName || 'No client'}\nMobile: ${allocation.clientPhone || 'N/A'}${allocation.remarks ? `\nRemarks: ${allocation.remarks}` : ''}\nCreated by: ${allocation.createdBy || 'System'}\nAt: ${allocation.createdAt ? new Date(allocation.createdAt).toLocaleString() : 'N/A'}`
         };
       default:
         return {
@@ -846,13 +1023,14 @@ const SlotBook = ({ workers, onAllocationUpdate }) => {
     }
   };
 
-  // Calculate worker's total hours for the day - FIXED: Ensure it returns a number
+  // Calculate worker's total hours for the day
   const calculateTotalHours = (workerId) => {
     const workerAllocations = allocations[workerId] || {};
+    const dateKey = getDateKey(selectedDate);
     let totalHours = 0;
     
     Object.values(workerAllocations).forEach(allocation => {
-      if (allocation.status === "completed" && allocation.duration) {
+      if (allocation && allocation.date === dateKey && allocation.status === "completed" && allocation.duration) {
         const duration = parseFloat(allocation.duration);
         if (!isNaN(duration)) {
           totalHours += duration;
@@ -863,33 +1041,39 @@ const SlotBook = ({ workers, onAllocationUpdate }) => {
     return totalHours.toFixed(2);
   };
 
-  // Calculate total working hours for the day - FIXED: Ensure it returns a number
+  // Calculate total working hours for the day
   const calculateTotalWorkingHours = () => {
     let total = 0;
+    const dateKey = getDateKey(selectedDate);
+    
     (workers || []).forEach(worker => {
-      const hours = parseFloat(calculateTotalHours(worker.id) || 0);
-      if (!isNaN(hours)) {
-        total += hours;
-      }
+      const workerAllocations = allocations[worker.id] || {};
+      Object.values(workerAllocations).forEach(allocation => {
+        if (allocation && allocation.date === dateKey && allocation.status === "completed" && allocation.duration) {
+          const duration = parseFloat(allocation.duration);
+          if (!isNaN(duration)) {
+            total += duration;
+          }
+        }
+      });
     });
+    
     return total.toFixed(2);
   };
 
   // Clear slot allocation
   const handleClearSlot = async (workerId, slotId) => {
-    if (!window.confirm("Are you sure you want to clear this allocation?")) return;
-    
+    showAlert(
+      "Confirm Clear",
+      "Are you sure you want to clear this allocation?",
+      () => proceedWithClearSlot(workerId, slotId)
+    );
+  };
+
+  const proceedWithClearSlot = async (workerId, slotId) => {
+    setModalProcessing(true);
     const allocation = allocations[workerId]?.[slotId];
     if (!allocation) return;
-
-    // Remove from local state
-    setAllocations(prev => {
-      const updated = { ...prev };
-      if (updated[workerId]) {
-        delete updated[workerId][slotId];
-      }
-      return updated;
-    });
 
     try {
       // Remove from worker schedule
@@ -917,9 +1101,9 @@ const SlotBook = ({ workers, onAllocationUpdate }) => {
         }
       }
 
-      // Remove from client schedule
+      // Remove from client schedule if client exists
       const client = clients?.find(c => c.clientKey === allocation.clientKey);
-      if (client && client.clientPath && allocation.clientKey && allocation.clientKey !== "WALKIN") {
+      if (client && client.clientPath && allocation.clientKey && !allocation.clientKey.startsWith("WALKIN-")) {
         const snapshot = await firebaseDB.child(`${client.clientPath}/${client.clientKey}`).once('value');
         const clientData = snapshot.val() || {};
         
@@ -927,7 +1111,6 @@ const SlotBook = ({ workers, onAllocationUpdate }) => {
           const updatedClientSchedule = { ...clientData.schedule };
           delete updatedClientSchedule[allocation.date][slotId];
           
-          // Clean up empty date entries
           if (Object.keys(updatedClientSchedule[allocation.date]).length === 0) {
             delete updatedClientSchedule[allocation.date];
           }
@@ -939,16 +1122,24 @@ const SlotBook = ({ workers, onAllocationUpdate }) => {
         }
       }
 
-      console.log("✅ Slot cleared successfully");
+      // Update local state
+      setAllocations(prev => {
+        const updated = { ...prev };
+        if (updated[workerId]) {
+          delete updated[workerId][slotId];
+        }
+        return updated;
+      });
+
+      closeAllocationModal();
+      showAlert("Success", "Slot cleared successfully");
+      
     } catch (error) {
       console.error("Error clearing slot:", error);
-      alert("Failed to clear slot. Please try again.");
+      showAlert("Error", "Failed to clear slot. Please try again.");
+    } finally {
+      setModalProcessing(false);
     }
-    
-    setShowAllocationModal(false);
-    setSelectedSlot(null);
-    setActiveWorker(null);
-    setSelectedClientId(null);
   };
 
   // Generate time options for end time dropdown
@@ -960,7 +1151,6 @@ const SlotBook = ({ workers, onAllocationUpdate }) => {
     // Generate times up to 21:00 (9 PM)
     for (let hour = startHour; hour <= 21; hour++) {
       for (let minute = 0; minute < 60; minute += 30) {
-        // Skip times before start time
         const totalMinutes = hour * 60 + minute;
         if (totalMinutes <= startTotalMinutes && hour === startHour && minute === startMinute) {
           continue;
@@ -974,7 +1164,6 @@ const SlotBook = ({ workers, onAllocationUpdate }) => {
           });
         }
         
-        // Break if we've reached 21:00
         if (hour === 21 && minute === 0) break;
       }
     }
@@ -982,7 +1171,51 @@ const SlotBook = ({ workers, onAllocationUpdate }) => {
     return options;
   };
 
-  // Render allocation modal - UPDATED with new features
+  // Render alert modal
+  const renderAlertModal = () => {
+    if (!alertModal.show) return null;
+
+    const handleConfirm = () => {
+      if (alertModal.onConfirm) {
+        alertModal.onConfirm();
+      }
+      setAlertModal({ show: false, message: "", title: "", onConfirm: null });
+    };
+
+    const handleCancel = () => {
+      setAlertModal({ show: false, message: "", title: "", onConfirm: null });
+    };
+
+    return (
+      <div className="modal-overlay alert-overlay">
+        <div className="modal-container alert-modal" onClick={(e) => e.stopPropagation()}>
+          <div className="modal-header">
+            <h3>{alertModal.title}</h3>
+            <button className="modal-close" onClick={handleCancel}>×</button>
+          </div>
+          
+          <div className="modal-body">
+            <div className="alert-message">
+              <p>{alertModal.message}</p>
+            </div>
+          </div>
+          
+          <div className="modal-footer">
+            {alertModal.onConfirm ? (
+              <>
+                <button className="btn btn-confirm" onClick={handleConfirm}>Confirm</button>
+                <button className="btn btn-cancel" onClick={handleCancel}>Cancel</button>
+              </>
+            ) : (
+              <button className="btn btn-close" onClick={handleCancel}>OK</button>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  // Render allocation modal
   const renderAllocationModal = () => {
     if (!showAllocationModal || !selectedSlot) return null;
 
@@ -990,24 +1223,20 @@ const SlotBook = ({ workers, onAllocationUpdate }) => {
     const worker = workers?.find(w => w.id === workerId);
     const allocation = allocations[workerId]?.[slot.id];
     const endTimeOptions = allocation ? generateEndTimeOptions(allocation.startTime) : [];
+    const isAdmin = user?.role === "admin";
+    const canEdit = isAdmin || !viewMode;
 
     return (
       <div className="modal-overlay">
         <div className="modal-container" onClick={(e) => e.stopPropagation()}>
           <div className="modal-header">
             <h3>
-              {slotStatus === "allocating" && "📅 Allocate Time Slot"}
-              {slotStatus === "allocated" && "✅ Successfully Allocated"}
-              {(slotStatus === "in-progress" || slotStatus === "completed") && "⚙️ Update Work Status"}
+              {viewMode ? "👁️ View Slot Details" : 
+               slotStatus === "allocating" ? "📅 Allocate Time Slot" :
+               slotStatus === "allocated" ? "✅ Successfully Allocated" :
+               "⚙️ Update Work Status"}
             </h3>
-            <button className="modal-close" onClick={() => {
-              setShowAllocationModal(false);
-              setActiveWorker(null);
-              setSelectedClientId(null);
-              setEditingEndTime(false);
-              setTempEndTime("");
-              setTempRemarks("");
-            }}>
+            <button className="modal-close" onClick={closeAllocationModal} disabled={modalProcessing}>
               ×
             </button>
           </div>
@@ -1028,23 +1257,52 @@ const SlotBook = ({ workers, onAllocationUpdate }) => {
               </div>
             </div>
 
-            {slotStatus === "allocating" && !allocation && (
+            {/* Audit trail */}
+            {allocation && (
+              <div className="audit-trail-section">
+                <h4>📋 Audit Trail</h4>
+                <div className="audit-grid">
+                  <div className="audit-item">
+                    <span className="audit-label">Created by: </span>
+                    <span className="audit-value">{allocation.createdBy || "System"}</span>
+                  </div>
+                  <div className="audit-item">
+                    <span className="audit-label">Created at: </span>
+                    <span className="audit-value">
+                      {allocation.createdAt ? new Date(allocation.createdAt).toLocaleString() : "N/A"}
+                    </span>
+                  </div>
+                  <div className="audit-item">
+                    <span className="audit-label">Last updated by: </span>
+                    <span className="audit-value">{allocation.lastUpdatedBy || "System"}</span>
+                  </div>
+                  <div className="audit-item">
+                    <span className="audit-label">Last updated at: </span>
+                    <span className="audit-value">
+                      {allocation.lastUpdatedAt ? new Date(allocation.lastUpdatedAt).toLocaleString() : "N/A"}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {slotStatus === "allocating" && !allocation && !viewMode && (
               <div className="slot-type-section">
                 <h4>📋 Select Slot Type</h4>
                 <div className="slot-type-buttons">
-                  <button className="btn-slot-type working" onClick={() => setSlotType("working")}>
+                  <button className="slot-btn slot-btn-working" onClick={() => setSlotType("working")}>
                     🏢 Working
                   </button>
-                  <button className="btn-slot-type leave" onClick={() => handleSlotTypeSelect("leave")}>
+                  <button className="slot-btn slot-btn-leave" onClick={() => handleSlotTypeSelect("leave")}>
                     🏖️ Leave
                   </button>
-                  <button className="btn-slot-type sick-leave" onClick={() => handleSlotTypeSelect("sick-leave")}>
+                  <button className="slot-btn slot-btn-sick" onClick={() => handleSlotTypeSelect("sick-leave")}>
                     🤒 Sick Leave
                   </button>
-                  <button className="btn-slot-type holiday" onClick={() => handleSlotTypeSelect("holiday")}>
+                  <button className="slot-btn slot-btn-holiday" onClick={() => handleSlotTypeSelect("holiday")}>
                     🎉 Holiday
                   </button>
-                  <button className="btn-slot-type client-not-available" onClick={() => handleSlotTypeSelect("client-not-available")}>
+                  <button className="slot-btn slot-btn-client-na" onClick={() => handleSlotTypeSelect("client-not-available")}>
                     👥 Client Not Available
                   </button>
                 </div>
@@ -1064,11 +1322,7 @@ const SlotBook = ({ workers, onAllocationUpdate }) => {
                         placeholder="Search by name, ID, phone, location..."
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter' && filteredClients.length > 0) {
-                            handleClientSelect(filteredClients[0]);
-                          }
-                        }}
+                        disabled={modalProcessing}
                       />
                       <span className="search-icon">🔍</span>
                     </div>
@@ -1085,11 +1339,11 @@ const SlotBook = ({ workers, onAllocationUpdate }) => {
                                 <div
                                   key={client.clientKey}
                                   className={`client-card ${selectedClientId === client.clientKey ? 'selected' : ''}`}
-                                  onClick={() => handleClientSelect(client)}
+                                  onClick={() => !modalProcessing && handleClientSelect(client)}
                                 >
                                   <div className="client-header">
                                     <div className="client-id">ID: {client.clientId}</div>
-                                    <div className="client-phone">📱 {client.phone}</div>
+                                    <div className="client-phone">📱 {client.mobile || client.phone || "N/A"}</div>
                                   </div>
                                   <div className="client-name">👤 {client.name}</div>
                                   <div className="client-details">
@@ -1107,7 +1361,7 @@ const SlotBook = ({ workers, onAllocationUpdate }) => {
                           <div className="no-results">
                             <p>No clients found matching "{searchQuery}"</p>
                             <button
-                              className="btn-walkin"
+                              className="slot-btn slot-btn-walkin"
                               onClick={() => {
                                 const dummyClient = {
                                   clientKey: "WALKIN-" + Date.now(),
@@ -1116,11 +1370,13 @@ const SlotBook = ({ workers, onAllocationUpdate }) => {
                                   name: "Walk-in Client",
                                   location: "On-site",
                                   phone: "N/A",
+                                  mobile: "N/A",
                                   email: "N/A",
                                   department: worker?.department || "Others"
                                 };
                                 handleClientSelect(dummyClient);
                               }}
+                              disabled={modalProcessing}
                             >
                               ➕ Create Walk-in Client
                             </button>
@@ -1133,34 +1389,32 @@ const SlotBook = ({ workers, onAllocationUpdate }) => {
               </div>
             )}
 
-            {slotStatus === "allocated" && allocation && (
+            {slotStatus === "allocated" && allocation && !viewMode && (
               <div className="success-message">
                 <div className="success-icon">✅</div>
                 <h4>Allocation Successful!</h4>
                 <div className="success-details">
                   <p><strong>Worker:</strong> {allocation.workerName}</p>
                   <p><strong>Client:</strong> {allocation.clientName || "No client"}</p>
+                  <p><strong>Mobile:</strong> {allocation.clientPhone || "N/A"}</p>
                   <p><strong>Time:</strong> {allocation.startTime12}</p>
                   <p><strong>Status:</strong> Scheduled</p>
                 </div>
                 <div className="success-actions">
                   <button
-                    className="btn-close-success"
-                    onClick={() => {
-                      setShowAllocationModal(false);
-                      setSelectedSlot(null);
-                      setActiveWorker(null);
-                      setSelectedClientId(null);
-                    }}
+                    className="slot-btn slot-btn-close"
+                    onClick={closeAllocationModal}
+                    disabled={modalProcessing}
                   >
                     Close
                   </button>
                   <button
-                    className="btn-view-details"
+                    className="slot-btn slot-btn-primary"
                     onClick={() => {
                       setSlotStatus("in-progress");
                       setEditingEndTime(true);
                     }}
+                    disabled={modalProcessing}
                   >
                     Set End Time
                   </button>
@@ -1168,7 +1422,7 @@ const SlotBook = ({ workers, onAllocationUpdate }) => {
               </div>
             )}
 
-            {(slotStatus === "in-progress" || slotStatus === "completed") && allocation && (
+            {(slotStatus === "in-progress" || slotStatus === "completed" || viewMode) && allocation && (
               <div className="allocation-details">
                 <div className="client-info">
                   <h4>👤 Client Information</h4>
@@ -1186,7 +1440,7 @@ const SlotBook = ({ workers, onAllocationUpdate }) => {
                       <span className="value">{allocation.clientLocation || "N/A"}</span>
                     </div>
                     <div className="info-item">
-                      <span className="label">Phone:</span>
+                      <span className="label">Mobile:</span>
                       <span className="value">{allocation.clientPhone || "N/A"}</span>
                     </div>
                   </div>
@@ -1202,59 +1456,76 @@ const SlotBook = ({ workers, onAllocationUpdate }) => {
                     
                     <div className="info-item">
                       <span className="label">Status:</span>
-                      <select 
-                        className="status-select"
-                        value={tempStatus}
-                        onChange={(e) => setTempStatus(e.target.value)}
-                      >
-                        <option value="completed">✅ Completed</option>
-                        <option value="not-completed">❌ Not Completed</option>
-                        <option value="leave">🏖️ Leave</option>
-                        <option value="sick-leave">🤒 Sick Leave</option>
-                        <option value="holiday">🎉 Holiday</option>
-                        <option value="client-not-available">👥 Client Not Available</option>
-                      </select>
+                      {canEdit ? (
+                        <select 
+                          className="status-select"
+                          value={tempStatus}
+                          onChange={(e) => setTempStatus(e.target.value)}
+                          disabled={viewMode || modalProcessing}
+                        >
+                          <option value="completed">✅ Completed</option>
+                          <option value="not-completed">❌ Not Completed</option>
+                          <option value="leave">🏖️ Leave</option>
+                          <option value="sick-leave">🤒 Sick Leave</option>
+                          <option value="holiday">🎉 Holiday</option>
+                          <option value="client-not-available">👥 Client Not Available</option>
+                        </select>
+                      ) : (
+                        <span className="value">
+                          {allocation.status === "completed" ? "✅ Completed" :
+                           allocation.status === "not-completed" ? "❌ Not Completed" :
+                           allocation.status === "leave" ? "🏖️ Leave" :
+                           allocation.status === "sick-leave" ? "🤒 Sick Leave" :
+                           allocation.status === "holiday" ? "🎉 Holiday" :
+                           allocation.status === "client-not-available" ? "👥 Client Not Available" :
+                           allocation.status}
+                        </span>
+                      )}
                     </div>
                     
-                    {tempStatus === "completed" && allocation.slotType === "working" && (
-                      <div className="info-item full-width">
-                        <span className="label">End Time:</span>
-                        {editingEndTime ? (
-                          <div className="time-input-group">
-                            <select
-                              ref={endTimeRef}
-                              value={tempEndTime}
-                              onChange={(e) => setTempEndTime(e.target.value)}
-                              className="time-select"
-                            >
-                              <option value="">Select end time</option>
-                              {endTimeOptions.map(option => (
-                                <option key={option.value} value={option.value}>
-                                  {option.label}
-                                </option>
-                              ))}
-                            </select>
-                            <div className="button-group">
-                              <button
-                                className="btn-save"
-                                onClick={handleEndTimeUpdate}
-                                disabled={!tempEndTime}
-                              >
-                                ✅ Save
-                              </button>
-                              <button
-                                className="btn-cancel"
-                                onClick={() => setEditingEndTime(false)}
-                              >
-                                ❌ Cancel
-                              </button>
-                            </div>
-                          </div>
-                        ) : (
-                          <div className="end-time-actions">
-                            <span className="value">{allocation.endTime12 || "Not set"}</span>
+                    <div className="info-item full-width">
+                      <span className="label">End Time:</span>
+                      {editingEndTime && canEdit ? (
+                        <div className="time-input-group">
+                          <select
+                            ref={endTimeRef}
+                            value={tempEndTime}
+                            onChange={(e) => setTempEndTime(e.target.value)}
+                            className="time-select"
+                            disabled={viewMode || modalProcessing}
+                          >
+                            <option value="">Select end time</option>
+                            {endTimeOptions.map(option => (
+                              <option key={option.value} value={option.value}>
+                                {option.label}
+                              </option>
+                            ))}
+                          </select>
+                          <div className="button-group">
                             <button
-                              className="btn-set"
+                              className="slot-btn slot-btn-primary"
+                              onClick={handleEndTimeUpdate}
+                              disabled={!tempEndTime || modalProcessing}
+                            >
+                              ✅ Save
+                            </button>
+                            <button
+                              className="slot-btn slot-btn-secondary"
+                              onClick={() => setEditingEndTime(false)}
+                              disabled={modalProcessing}
+                            >
+                              ❌ Cancel
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="end-time-actions">
+                          <span className="value">
+                            {allocation.endTime12 || convertTo12Hour(allocation.endTime) || "Not set"}
+                          </span>
+                          {canEdit && !viewMode && (
+                            <button
+                              className="slot-btn slot-btn-primary"
                               onClick={() => {
                                 setEditingEndTime(true);
                                 setTimeout(() => {
@@ -1263,30 +1534,40 @@ const SlotBook = ({ workers, onAllocationUpdate }) => {
                                   }
                                 }, 100);
                               }}
+                              disabled={modalProcessing}
                             >
                               ⏰ {allocation.endTime ? "Change End Time" : "Set End Time"}
                             </button>
-                          </div>
-                        )}
-                      </div>
-                    )}
+                          )}
+                        </div>
+                      )}
+                    </div>
                     
                     <div className="info-item full-width">
                       <span className="label">Remarks:</span>
-                      <textarea
-                        className="remarks-input"
-                        value={tempRemarks}
-                        onChange={(e) => setTempRemarks(e.target.value)}
-                        placeholder="Add remarks here..."
-                        rows="3"
-                      />
+                      {canEdit ? (
+                        <textarea
+                          className="remarks-input"
+                          value={tempRemarks}
+                          onChange={(e) => setTempRemarks(e.target.value)}
+                          placeholder="Add remarks here..."
+                          rows="3"
+                          disabled={viewMode || modalProcessing}
+                        />
+                      ) : (
+                        <div className="remarks-display">
+                          {allocation.remarks || "No remarks"}
+                        </div>
+                      )}
                     </div>
                     
                     {allocation.status === "completed" && (
                       <>
                         <div className="info-item">
                           <span className="label">End Time:</span>
-                          <span className="value">{allocation.endTime12 || "N/A"}</span>
+                          <span className="value">
+                            {allocation.endTime12 || convertTo12Hour(allocation.endTime) || "N/A"}
+                          </span>
                         </div>
                         <div className="info-item">
                           <span className="label">Duration:</span>
@@ -1295,7 +1576,7 @@ const SlotBook = ({ workers, onAllocationUpdate }) => {
                           </span>
                         </div>
                         <div className="info-item">
-                          <span className="label">Completed:</span>
+                          <span className="label">Entered at :</span>
                           <span className="value">
                             {allocation.completedAt ? new Date(allocation.completedAt).toLocaleTimeString() : "N/A"}
                           </span>
@@ -1306,18 +1587,37 @@ const SlotBook = ({ workers, onAllocationUpdate }) => {
                 </div>
                 
                 <div className="action-buttons">
-                  <button
-                    className="btn-save-status"
-                    onClick={handleStatusUpdate}
-                  >
-                    💾 Save Status & Remarks
-                  </button>
-                  <button
-                    className="btn-clear"
-                    onClick={() => handleClearSlot(workerId, slot.id)}
-                  >
-                    🗑️ Clear Allocation
-                  </button>
+                  {!viewMode && canEdit && (
+                    <>
+                      <button
+                        className="slot-btn slot-btn-primary"
+                        onClick={handleStatusUpdate}
+                        disabled={modalProcessing}
+                      >
+                        💾 Save Status & Remarks
+                      </button>
+                      <button
+                        className="slot-btn slot-btn-danger"
+                        onClick={() => handleClearSlot(workerId, slot.id)}
+                        disabled={modalProcessing}
+                      >
+                        🗑️ Clear Allocation
+                      </button>
+                    </>
+                  )}
+                  
+                  {viewMode && isAdmin && (
+                    <button
+                      className="slot-btn slot-btn-primary"
+                      onClick={() => {
+                        setViewMode(false);
+                        setEditingEndTime(false);
+                      }}
+                      disabled={modalProcessing}
+                    >
+                      ✏️ Edit Allocation
+                    </button>
+                  )}
                 </div>
               </div>
             )}
@@ -1325,15 +1625,9 @@ const SlotBook = ({ workers, onAllocationUpdate }) => {
           
           <div className="modal-footer">
             <button
-              className="btn-close"
-              onClick={() => {
-                setShowAllocationModal(false);
-                setActiveWorker(null);
-                setSelectedClientId(null);
-                setEditingEndTime(false);
-                setTempEndTime("");
-                setTempRemarks("");
-              }}
+              className="slot-btn slot-btn-secondary"
+              onClick={closeAllocationModal}
+              disabled={modalProcessing}
             >
               Close
             </button>
@@ -1343,12 +1637,16 @@ const SlotBook = ({ workers, onAllocationUpdate }) => {
     );
   };
 
-  // Render worker card - UPDATED with disabled slots
+  // Render worker card
   const renderWorkerCard = (worker) => {
     const totalHours = calculateTotalHours(worker.id);
     const timeSlots = generateTimeSlots;
-    const completedSlots = Object.values(allocations[worker.id] || {}).filter(a => a.status === "completed").length;
-    const inProgressSlots = Object.values(allocations[worker.id] || {}).filter(a => a.status === "in-progress").length;
+    const completedSlots = Object.values(allocations[worker.id] || {}).filter(a => 
+      a && a.date === getDateKey(selectedDate) && a.status === "completed"
+    ).length;
+    const inProgressSlots = Object.values(allocations[worker.id] || {}).filter(a => 
+      a && a.date === getDateKey(selectedDate) && a.status === "in-progress"
+    ).length;
     
     return (
       <div className={`worker-card ${activeWorker?.id === worker.id ? 'active' : ''}`} key={worker.id}>
@@ -1388,16 +1686,17 @@ const SlotBook = ({ workers, onAllocationUpdate }) => {
             {timeSlots.map((slot) => {
               const slotStatus = getSlotStatus(worker.id, slot);
               const allocation = allocations[worker.id]?.[slot.id];
-              const isDisabled = isSlotDisabled(worker.id, slot) && !allocation;
+              const dateKey = getDateKey(selectedDate);
+              const isDisabled = isSlotDisabled(worker.id, slot) && (!allocation || allocation.date !== dateKey);
               
               return (
                 <div key={slot.id} className="slot-wrapper">
                   <div
-                    className={`slot ${slotStatus.className} ${allocation ? 'allocated' : ''} ${slot.isLunchBreak ? 'lunch' : ''} ${isDisabled ? 'disabled' : ''}`}
-                    onClick={() => !slot.isLunchBreak && !isDisabled && handleSlotClick(worker.id, slot)}
+                    className={`slot ${slotStatus.className} ${allocation && allocation.date === dateKey ? 'allocated' : ''} ${slot.isLunchBreak ? 'lunch' : ''} ${isDisabled ? 'disabled' : ''}`}
+                    onClick={() => !slot.isLunchBreak && handleSlotClick(worker.id, slot)}
                     title={isDisabled ? "Slot is within a booked time range" : slotStatus.tooltip}
                   >
-                    {allocation ? (
+                    {allocation && allocation.date === dateKey ? (
                       <div className="allocation-indicator">
                         <div className="client-indicator">
                           <p className="client-name-small">
@@ -1407,7 +1706,7 @@ const SlotBook = ({ workers, onAllocationUpdate }) => {
                             {allocation.clientId?.substring(0, 8) || allocation.slotType?.substring(0, 8) || "NA"}
                           </p>
                           <p className="client-location-small">
-                            {allocation.clientLocation?.substring(0, 10) || allocation.startTime12 || "NA"}
+                            {allocation.clientLocation|| "NA"}
                           </p>
                           <div className="allocation-status">
                             <span className={`status-dot ${allocation.status}`}></span>
@@ -1466,7 +1765,7 @@ const SlotBook = ({ workers, onAllocationUpdate }) => {
               <span className="stat-label">Other:</span>
               <span className="stat-value">
                 {Object.values(allocations[worker.id] || {}).filter(a => 
-                  a.slotType && a.slotType !== "working"
+                  a && a.date === getDateKey(selectedDate) && a.slotType && a.slotType !== "working"
                 ).length}
               </span>
             </div>
@@ -1476,10 +1775,12 @@ const SlotBook = ({ workers, onAllocationUpdate }) => {
         <div className="card-footer">
           <div className="footer-actions">
             <button 
-              className="action-btn view-details"
+              className="slot-btn slot-btn-secondary"
               onClick={() => {
-                const workerAllocs = allocations[worker.id];
-                alert(`Worker: ${worker.name}\nTotal Hours Today: ${totalHours}\nCompleted Jobs: ${completedSlots}`);
+                showAlert(
+                  "Worker Details",
+                  `Worker: ${worker.name}\nTotal Hours Today: ${totalHours}\nCompleted Jobs: ${completedSlots}\nDepartment: ${worker.department || "N/A"}`
+                );
               }}
             >
               👁️ View Details
@@ -1490,63 +1791,132 @@ const SlotBook = ({ workers, onAllocationUpdate }) => {
     );
   };
 
-  // Render daily summary - UPDATED with new columns
-  const renderDailySummary = () => (
-    <div className="summary-card">
-      <h3>📊 Daily Summary - {formatDateForSummary(selectedDate)}</h3>
-      <div className="summary-table-container">
-        <table className="summary-table">
-          <thead>
-            <tr>
-              <th>📅 Date</th>
-              <th>🏢 Department</th>
-              <th>⏱️ Total Hours</th>
-              <th>👥 Total Clients</th>
-              <th>📝 Remarks</th>
-            </tr>
-          </thead>
-          <tbody>
-            {dailySummary.length > 0 ? (
-              dailySummary.map(summary => (
-                <tr key={summary.workerId}>
-                  <td className="date-cell">{formatDateForSummary(selectedDate)}</td>
-                  <td><span className="badge bg-secondary">{summary.department}</span></td>
-                  <td className="hours-cell">{summary.totalHours}h</td>
-                  <td className="clients-cell">{summary.totalClients}</td>
-                  <td className="remarks-cell">
-                    {summary.remarks || "No remarks"}
-                    {summary.clientNames.length > 0 && (
-                      <div className="clients-tooltip">
-                        Clients: {summary.clientNames.join(", ")}
-                      </div>
-                    )}
-                  </td>
+  // Render daily summary
+  const renderDailySummary = () => {
+    const handleDateRangeChange = (start, end) => {
+      setSummaryStartDate(start);
+      setSummaryEndDate(end);
+      calculateDailySummary();
+    };
+
+    return (
+      <div className="summary-card">
+        <div className="summary-header">
+          <h3>📊 Daily Summary</h3>
+          <div className="date-range-selector">
+            <div className="date-range-inputs">
+              <div className="date-input-group">
+                <label>From:</label>
+                <input
+                  type="date"
+                  value={format(summaryStartDate, 'yyyy-MM-dd')}
+                  onChange={(e) => {
+                    const newStart = new Date(e.target.value);
+                    handleDateRangeChange(newStart, summaryEndDate);
+                  }}
+                  className="date-input"
+                />
+              </div>
+              <div className="date-input-group">
+                <label>To:</label>
+                <input
+                  type="date"
+                  value={format(summaryEndDate, 'yyyy-MM-dd')}
+                  onChange={(e) => {
+                    const newEnd = new Date(e.target.value);
+                    handleDateRangeChange(summaryStartDate, newEnd);
+                  }}
+                  className="date-input"
+                />
+              </div>
+              <div className="quick-range-buttons">
+                <button className="slot-btn slot-btn-secondary" onClick={() => {
+                  const today = new Date();
+                  const weekAgo = subDays(today, 7);
+                  handleDateRangeChange(weekAgo, today);
+                }}>
+                  Last 7 Days
+                </button>
+                <button className="slot-btn slot-btn-secondary" onClick={() => {
+                  const today = new Date();
+                  const monthStart = startOfMonth(today);
+                  handleDateRangeChange(monthStart, today);
+                }}>
+                  This Month
+                </button>
+                <button className="slot-btn slot-btn-secondary" onClick={() => {
+                  const today = new Date();
+                  handleDateRangeChange(today, today);
+                }}>
+                  Today
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        {loading ? (
+          <div className="loading-summary">Loading summary data...</div>
+        ) : (
+          <div className="summary-table-container">
+            <table className="summary-table">
+              <thead>
+                <tr>
+                  <th>📅 Date</th>
+                  <th>🏢 Department</th>
+                  <th>⏱️ Total Hours</th>
+                  <th>👥 Clients</th>
+                  <th>📝 Remarks</th>
                 </tr>
-              ))
-            ) : (
-              <tr>
-                <td colSpan="5" className="no-data">📭 No work recorded for today</td>
-              </tr>
-            )}
-          </tbody>
-          <tfoot>
-            <tr>
-              <td colSpan="2" className="text-end"><strong>Total:</strong></td>
-              <td className="hours-cell"><strong>{dailySummary.reduce((sum, s) => sum + s.totalHours, 0).toFixed(2)}h</strong></td>
-              <td className="clients-cell"><strong>{dailySummary.reduce((sum, s) => sum + s.totalClients, 0)}</strong></td>
-              <td></td>
-            </tr>
-          </tfoot>
-        </table>
+              </thead>
+              <tbody>
+                {dailySummary.length > 0 ? (
+                  dailySummary.map(summary => (
+                    <tr key={`${summary.workerId}-${summary.date}`}>
+                      <td className="date-cell">{summary.formattedDate}</td>
+                      <td><span className="badge bg-secondary">{summary.department}</span></td>
+                      <td className="hours-cell">{summary.totalHours}h</td>
+                      <td className="clients-cell">
+                        {summary.clientNames.length > 0 ? (
+                          <div className="clients-list">
+                            {summary.clientNames.map((name, index) => (
+                                <span className="client-name">{name} ,</span>
+                            ))}
+                          </div>
+                        ) : (
+                          "No clients"
+                        )}
+                      </td>
+                      <td className="remarks-cell">
+                        {summary.remarks || "No remarks"}
+                      </td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td colSpan="6" className="no-data">📭 No work recorded for selected period</td>
+                  </tr>
+                )}
+              </tbody>
+              <tfoot>
+                <tr>
+                  <td colSpan="2" className="text-end"><strong>Total:</strong></td>
+                  <td className="hours-cell"><strong>{dailySummary.reduce((sum, s) => sum + s.totalHours, 0).toFixed(2)}h</strong></td>
+                  <td className="clients-cell"><strong>{dailySummary.reduce((sum, s) => sum + s.totalClients, 0)} clients</strong></td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        )}
       </div>
-    </div>
-  );
+    );
+  };
 
   // Date picker
   const renderDatePicker = () => (
     <div className="date-picker-container">
       <button 
-        className="date-picker-btn"
+        className="slot-btn slot-btn-primary"
         onClick={() => setShowCalendar(!showCalendar)}
       >
         <span className="picker-icon">📅</span>
@@ -1563,21 +1933,20 @@ const SlotBook = ({ workers, onAllocationUpdate }) => {
             onChange={(date) => {
               setSelectedDate(date);
               setShowCalendar(false);
-              // Load allocations for new date
               loadAllocationsForDate(date);
             }}
             value={selectedDate}
             className="custom-calendar"
           />
           <div className="quick-dates">
-            <button className="quick-btn today" onClick={() => {
+            <button className="slot-btn slot-btn-secondary" onClick={() => {
               const today = new Date();
               setSelectedDate(today);
               loadAllocationsForDate(today);
             }}>
               Today
             </button>
-            <button className="quick-btn" onClick={() => {
+            <button className="slot-btn slot-btn-secondary" onClick={() => {
               const yesterday = new Date();
               yesterday.setDate(yesterday.getDate() - 1);
               setSelectedDate(yesterday);
@@ -1585,7 +1954,7 @@ const SlotBook = ({ workers, onAllocationUpdate }) => {
             }}>
               Yesterday
             </button>
-            <button className="quick-btn" onClick={() => {
+            <button className="slot-btn slot-btn-secondary" onClick={() => {
               const tomorrow = new Date();
               tomorrow.setDate(tomorrow.getDate() + 1);
               setSelectedDate(tomorrow);
@@ -1599,7 +1968,7 @@ const SlotBook = ({ workers, onAllocationUpdate }) => {
     </div>
   );
 
-  // Monthly tracker - FIXED: Ensure totalHours is displayed correctly
+  // Monthly tracker
   const renderMonthlyTracker = () => (
     <div className="monthly-tracker">
       <h4>📈 Monthly Overview - {format(selectedDate, 'MMMM yyyy')}</h4>
@@ -1637,64 +2006,77 @@ const SlotBook = ({ workers, onAllocationUpdate }) => {
   );
 
   return (
-    <div className="slot-book-container SlotBook">
+    <div className="slot-book-container">
       {/* Header */}
       <header className="dashboard-header">
-        <div className="header-content">
-          <div className="header-left">
+        <div className="header-top-row">
+          <div className="header-brand">
             <h1 className="dashboard-title">
-              <span className="title-icon">📊</span>
+              <span className="title-icon">🗓️</span>
               Worker Allocation Dashboard
             </h1>
-            <div className="view-tabs">
-              <button 
-                className={`tab-btn ${activeView === 'dashboard' ? 'active' : ''}`}
-                onClick={() => setActiveView('dashboard')}
-              >
-                📅 Dashboard
-              </button>
-              <button 
-                className={`tab-btn ${activeView === 'summary' ? 'active' : ''}`}
-                onClick={() => setActiveView('summary')}
-              >
-                📈 Summary
-              </button>
-              <button 
-                className={`tab-btn ${activeView === 'analytics' ? 'active' : ''}`}
-                onClick={() => setActiveView('analytics')}
-              >
-                📊 Analytics
-              </button>
+            <div className="user-info">
+              <span className="user-role-badge">{user?.role || "Guest"}</span>
+              <span className="user-name">Welcome, {user?.name || user?.username || "User"}</span>
             </div>
           </div>
           
-          <div className="header-right">
+          <div className="header-actions">
             <div className="controls">
               {renderDatePicker()}
-              <div className="search-container-header">
-                <input
-                  type="text"
-                  className="search-input-header"
-                  placeholder="Search clients..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                />
-                <span className="search-icon-header">🔍</span>
+              <div className="view-tabs">
+                <button 
+                  className={`slot-btn ${activeView === 'dashboard' ? 'slot-btn-primary' : 'slot-btn-secondary'}`}
+                  onClick={() => setActiveView('dashboard')}
+                >
+                  📅 Dashboard
+                </button>
+                <button 
+                  className={`slot-btn ${activeView === 'summary' ? 'slot-btn-primary' : 'slot-btn-secondary'}`}
+                  onClick={() => setActiveView('summary')}
+                >
+                  📈 Summary
+                </button>
+                <button 
+                  className={`slot-btn ${activeView === 'analytics' ? 'slot-btn-primary' : 'slot-btn-secondary'}`}
+                  onClick={() => setActiveView('analytics')}
+                >
+                  📊 Analytics
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        <div className="header-bottom-row">
+          <div className="header-stats">
+            <div className="stat-box">
+              <div className="stat-icon-header">⏱️</div>
+              <div className="stat-content-header">
+                <div className="stat-value-header">{calculateTotalWorkingHours()}</div>
+                <div className="stat-label-header">Total Hours Today</div>
+              </div>
+            </div>
+            <div className="stat-box">
+              <div className="stat-icon-header">👥</div>
+              <div className="stat-content-header">
+                <div className="stat-value-header">{calculateTodayClients()}</div>
+                <div className="stat-label-header">Clients Today</div>
+              </div>
+            </div>
+            <div className="stat-box">
+              <div className="stat-icon-header">📊</div>
+              <div className="stat-content-header">
+                <div className="stat-value-header">{calculateProductivityScore()}</div>
+                <div className="stat-label-header">Productivity Score</div>
               </div>
             </div>
             
-            <div className="header-stats">
-              <div className="stat-box">
-                <div className="stat-value-header">{calculateTotalWorkingHours()}</div>
-                <div className="stat-label-header">Total Hours</div>
-              </div>
-              <div className="stat-box">
-                <div className="stat-value-header">{workers?.length || 0}</div>
-                <div className="stat-label-header">Workers</div>
-              </div>
-              <div className="stat-box">
-                <div className="stat-value-header">{clients.length}</div>
-                <div className="stat-label-header">Clients</div>
+            <div className="stat-box">
+              <div className="stat-icon-header">📅</div>
+              <div className="stat-content-header">
+                <div className="stat-value-header">{format(selectedDate, 'dd-MMM')}</div>
+                <div className="stat-label-header">Selected Date</div>
               </div>
             </div>
           </div>
@@ -1777,7 +2159,8 @@ const SlotBook = ({ workers, onAllocationUpdate }) => {
                   <div className="metric">
                     <span className="metric-label">Active Today:</span>
                     <span className="metric-value">
-                      {workers?.filter(w => Object.values(allocations[w.id] || {}).length > 0).length || 0}
+                      {workers?.filter(w => Object.values(allocations[w.id] || {}).filter(a => 
+                        a && a.date === getDateKey(selectedDate)).length > 0).length || 0}
                     </span>
                   </div>
                 </div>
@@ -1808,7 +2191,8 @@ const SlotBook = ({ workers, onAllocationUpdate }) => {
             <span className="footer-label">Active Allocations:</span>
             <span className="footer-value">
               {Object.values(allocations).reduce((total, workerAllocs) => 
-                total + Object.values(workerAllocs).length, 0)}
+                total + Object.values(workerAllocs).filter(a => 
+                  a && a.date === getDateKey(selectedDate)).length, 0)}
             </span>
           </div>
         </div>
@@ -1827,6 +2211,9 @@ const SlotBook = ({ workers, onAllocationUpdate }) => {
 
       {/* Allocation Modal */}
       {renderAllocationModal()}
+
+      {/* Alert Modal */}
+      {renderAlertModal()}
     </div>
   );
 };

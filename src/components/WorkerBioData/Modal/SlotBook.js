@@ -1,14 +1,12 @@
 import React, { useState, useEffect, useRef } from "react";
 import firebaseDB from "../../../firebase";
-import { WORKER_PATHS, CLIENT_PATHS, getClientPathByDepartment } from "../../../utils/dataPaths";
+import { WORKER_PATHS, CLIENT_PATHS } from "../../../utils/dataPaths";
 import Calendar from 'react-calendar';
-import SimpleCalendar from './SimpleCalendar';
-import { format, addDays, isSameDay, parseISO, startOfWeek, endOfWeek, eachDayOfInterval, startOfMonth, endOfMonth, eachMonthOfInterval, differenceInHours, parse } from 'date-fns';
+import 'react-calendar/dist/Calendar.css';
+import { format, parseISO } from 'date-fns';
 
 const SlotBook = ({ workers, onAllocationUpdate }) => {
-  const [selectedWorker, setSelectedWorker] = useState(null);
   const [selectedDate, setSelectedDate] = useState(new Date());
-  const [viewMode, setViewMode] = useState("day"); // day, week, month
   const [allocations, setAllocations] = useState({});
   const [searchQuery, setSearchQuery] = useState("");
   const [filteredClients, setFilteredClients] = useState([]);
@@ -20,9 +18,7 @@ const SlotBook = ({ workers, onAllocationUpdate }) => {
   const [clients, setClients] = useState([]);
   const [loading, setLoading] = useState(false);
   const [showCalendar, setShowCalendar] = useState(false);
-  const [selectedDepartment, setSelectedDepartment] = useState("All");
-  const [activeView, setActiveView] = useState("dashboard"); // dashboard, summary, analytics
-  const [weeklyHours, setWeeklyHours] = useState({});
+  const [activeView, setActiveView] = useState("dashboard");
   const [dailySummary, setDailySummary] = useState([]);
   const [monthlyStats, setMonthlyStats] = useState({
     workingDays: 0,
@@ -30,6 +26,8 @@ const SlotBook = ({ workers, onAllocationUpdate }) => {
     leavesTaken: 0,
     utilizationRate: "0%"
   });
+  const [activeWorker, setActiveWorker] = useState(null);
+  
   const searchInputRef = useRef(null);
   const calendarRef = useRef(null);
 
@@ -88,7 +86,7 @@ const SlotBook = ({ workers, onAllocationUpdate }) => {
   useEffect(() => {
     const handleClickOutside = (event) => {
       if (calendarRef.current && !calendarRef.current.contains(event.target) && 
-          !event.target.closest('.btn-calendar')) {
+          !event.target.closest('.btn-date-picker')) {
         setShowCalendar(false);
       }
     };
@@ -102,7 +100,7 @@ const SlotBook = ({ workers, onAllocationUpdate }) => {
     };
   }, [showCalendar]);
 
-  // Filter clients based on search query
+  // Filter clients based on search query - FIXED
   useEffect(() => {
     if (!searchQuery.trim()) {
       setFilteredClients([]);
@@ -121,27 +119,16 @@ const SlotBook = ({ workers, onAllocationUpdate }) => {
     setFilteredClients(filtered);
   }, [searchQuery, clients]);
 
-  // Fetch clients based on worker's department
+  // Fetch ALL clients from ALL departments
   useEffect(() => {
-    if (selectedSlot && selectedSlot.workerId) {
-      const worker = workers?.find(w => w.id === selectedSlot.workerId);
-      if (worker?.department) {
-        fetchClientsByDepartment(worker.department);
-      }
-    } else if (workers?.length > 0) {
-      const firstWorker = workers[0];
-      if (firstWorker?.department) {
-        fetchClientsByDepartment(firstWorker.department);
-      }
-    }
-  }, [selectedSlot, workers]);
+    fetchAllClients();
+  }, []);
 
-  // Fetch clients from Firebase with correct paths
-  const fetchClientsByDepartment = async (department) => {
+  // ✅ FIXED: Fetch clients from ALL departments
+  const fetchAllClients = async () => {
     try {
       setLoading(true);
       
-      // Define client paths based on your provided structure
       const clientPaths = {
         "Home Care": "ClientData/HomeCare/Running",
         "Housekeeping": "ClientData/Housekeeping/Running",
@@ -156,33 +143,39 @@ const SlotBook = ({ workers, onAllocationUpdate }) => {
         "Others": "ClientData/Others/Running"
       };
 
-      const clientPath = clientPaths[department] || clientPaths["Others"];
-      if (!clientPath) {
-        console.error("No client path found for department:", department);
-        setClients([]);
-        return;
-      }
-
-      const snapshot = await firebaseDB.child(clientPath).once('value');
-      const clientsData = snapshot.val();
+      let allClients = [];
       
-      if (clientsData) {
-        const clientsArray = Object.entries(clientsData).map(([key, value]) => ({
-          id: key,
-          clientId: value.clientId || value.idNo || value.employeeId || key,
-          name: `${value.firstName || ""} ${value.lastName || ""}`.trim() || value.clientName || value.name || "Unknown Client",
-          location: value.address || value.location || "Unknown Location",
-          department: department,
-          phone: value.phone || value.mobile || value.contactNumber || "N/A",
-          email: value.email || "N/A",
-          ...value
-        }));
-        setClients(clientsArray);
-      } else {
-        setClients([]);
+      for (const [department, path] of Object.entries(clientPaths)) {
+        try {
+          const snapshot = await firebaseDB.child(path).once('value');
+          const clientsData = snapshot.val();
+          
+          if (clientsData) {
+            const departmentClients = Object.entries(clientsData).map(([key, value]) => ({
+              // PRIMARY IDENTITY
+              clientKey: key,
+              clientPath: path,
+              // Display ID
+              clientId: value.clientId || value.idNo || value.employeeId || key,
+              // Client information
+              name: `${value.firstName || ""} ${value.lastName || ""}`.trim() || 
+                    value.clientName || value.name || "Unknown Client",
+              location: value.address || value.location || "Unknown Location",
+              department: department,
+              phone: value.phone || value.mobile || value.contactNumber || "N/A",
+              email: value.email || "N/A"
+            }));
+            allClients = [...allClients, ...departmentClients];
+          }
+        } catch (error) {
+          console.error(`Error fetching clients from ${department}:`, error);
+        }
       }
+      
+      setClients(allClients);
+      console.log(`Fetched ${allClients.length} clients from all departments`);
     } catch (error) {
-      console.error("Error fetching clients:", error);
+      console.error("Error fetching all clients:", error);
       setClients([]);
     } finally {
       setLoading(false);
@@ -222,14 +215,12 @@ const SlotBook = ({ workers, onAllocationUpdate }) => {
     let workingDays = new Set();
     let leavesTaken = 0;
 
-    // Check all workers' allocations for the current month
     workers?.forEach(worker => {
       const workerSchedule = worker.schedule || {};
       
       Object.entries(workerSchedule).forEach(([dateKey, daySchedule]) => {
         const date = parseISO(dateKey);
         
-        // Only consider dates in current month
         if (date.getMonth() === currentMonth && date.getFullYear() === currentYear) {
           workingDays.add(dateKey);
           
@@ -245,7 +236,6 @@ const SlotBook = ({ workers, onAllocationUpdate }) => {
           
           totalHours += dayHours;
           
-          // If no work done on a weekday, count as leave
           if (!hasWork && date.getDay() !== 0 && date.getDay() !== 6) {
             leavesTaken++;
           }
@@ -301,6 +291,8 @@ const SlotBook = ({ workers, onAllocationUpdate }) => {
     if (slot.isLunchBreak) return;
     
     const currentAllocation = allocations[workerId]?.[slot.id];
+    const worker = workers?.find(w => w.id === workerId);
+    setActiveWorker(worker);
     
     if (currentAllocation?.status === "completed") {
       setSlotStatus("completed");
@@ -325,7 +317,7 @@ const SlotBook = ({ workers, onAllocationUpdate }) => {
     }
   };
 
-  // Handle client selection
+  // ✅ FIXED: Handle client selection with proper saving
   const handleClientSelect = async (client) => {
     if (!selectedSlot || !selectedSlot.workerId || !selectedSlot.slot) return;
 
@@ -336,14 +328,21 @@ const SlotBook = ({ workers, onAllocationUpdate }) => {
     const currentMinute = now.getMinutes();
     const currentTime = currentHour + (currentMinute / 60);
     const slotTime = slot.hour24 + (slot.minute / 60);
+    const worker = workers?.find(w => w.id === workerId);
 
+    // Create allocation object
     const newAllocation = {
       workerId: workerId,
-      clientId: client.clientId || client.id,
+      workerName: worker?.name || "Unknown Worker",
+      // Client identifiers
+      clientKey: client.clientKey,
+      clientPath: client.clientPath,
+      clientId: client.clientId,
       clientName: client.name,
       clientLocation: client.location,
       clientPhone: client.phone,
       clientEmail: client.email,
+      // Slot details
       date: dateKey,
       slotId: slot.id,
       slotHour: slot.hour24,
@@ -353,10 +352,11 @@ const SlotBook = ({ workers, onAllocationUpdate }) => {
       status: currentTime >= slotTime ? "in-progress" : "allocated",
       allocatedAt: new Date().toISOString(),
       duration: null,
-      department: client.department
+      department: client.department,
+      workerDepartment: worker?.department
     };
 
-    // Update local allocations
+    // Update local state
     setAllocations(prev => ({
       ...prev,
       [workerId]: {
@@ -365,9 +365,19 @@ const SlotBook = ({ workers, onAllocationUpdate }) => {
       }
     }));
 
-    // Save to Firebase - both worker and client schedules
-    await saveAllocationToFirebase(workerId, newAllocation);
-    await saveToClientSchedule(client, newAllocation);
+    try {
+      // ✅ Save to Worker's schedule
+      await saveAllocationToWorker(workerId, newAllocation);
+      
+      // ✅ Save to Client's schedule
+      await saveAllocationToClient(client, newAllocation);
+      
+      console.log("✅ Allocation saved to both worker and client");
+    } catch (error) {
+      console.error("❌ Error saving allocation:", error);
+      alert("Failed to save allocation. Please try again.");
+      return;
+    }
 
     if (onAllocationUpdate) {
       onAllocationUpdate(newAllocation);
@@ -379,11 +389,12 @@ const SlotBook = ({ workers, onAllocationUpdate }) => {
     } else {
       setShowAllocationModal(false);
       setSelectedSlot(null);
+      setActiveWorker(null);
     }
   };
 
-  // Save allocation to Firebase - Worker schedule
-  const saveAllocationToFirebase = async (workerId, allocation) => {
+  // ✅ Save allocation to Worker's Firebase path
+  const saveAllocationToWorker = async (workerId, allocation) => {
     try {
       const worker = workers?.find(w => w.id === workerId);
       if (!worker) {
@@ -408,44 +419,28 @@ const SlotBook = ({ workers, onAllocationUpdate }) => {
         }
       };
 
-      // Update worker data in Firebase
+      // Update worker in Firebase
       await firebaseDB.child(`${workerPath}/${workerId}`).update({
         schedule: updatedSchedule,
         lastUpdated: new Date().toISOString(),
-        lastActivity: "Slot allocation updated"
+        lastActivity: `Allocated to ${allocation.clientName}`
       });
 
-      console.log("Allocation saved to worker schedule:", allocation);
+      console.log("✅ Worker schedule updated");
     } catch (error) {
-      console.error("Error saving allocation to Firebase:", error);
+      console.error("Error saving to worker schedule:", error);
       throw error;
     }
   };
 
-  // Save to client schedule
-  const saveToClientSchedule = async (client, allocation) => {
+  // ✅ Save allocation to Client's Firebase path
+  const saveAllocationToClient = async (client, allocation) => {
     try {
-      // Define client paths based on your provided structure
-      const clientPaths = {
-        "Home Care": "ClientData/HomeCare/Running",
-        "Housekeeping": "ClientData/Housekeeping/Running",
-        "Office & Administrative": "ClientData/Office/Running",
-        "Customer Service": "ClientData/Customer/Running",
-        "Management & Supervision": "ClientData/Management/Running",
-        "Security": "ClientData/Security/Running",
-        "Driving & Logistics": "ClientData/Driving/Running",
-        "Technical & Maintenance": "ClientData/Technical/Running",
-        "Retail & Sales": "ClientData/Retail/Running",
-        "Industrial & Labor": "ClientData/Industrial/Running",
-        "Others": "ClientData/Others/Running"
-      };
-
-      const clientPath = clientPaths[client.department] || clientPaths["Others"];
       const dateKey = allocation.date;
       const slotId = allocation.slotId;
 
       // Get current client data
-      const snapshot = await firebaseDB.child(`${clientPath}/${client.id}`).once('value');
+      const snapshot = await firebaseDB.child(`${client.clientPath}/${client.clientKey}`).once('value');
       const clientData = snapshot.val() || {};
 
       // Update client schedule
@@ -456,19 +451,22 @@ const SlotBook = ({ workers, onAllocationUpdate }) => {
           [slotId]: {
             ...allocation,
             workerId: allocation.workerId,
-            workerName: workers?.find(w => w.id === allocation.workerId)?.name || "Unknown"
+            workerName: allocation.workerName,
+            clientKey: client.clientKey,
+            clientId: client.clientId
           }
         }
       };
 
-      // Update client data in Firebase
-      await firebaseDB.child(`${clientPath}/${client.id}`).update({
+      // Update client in Firebase
+      await firebaseDB.child(`${client.clientPath}/${client.clientKey}`).update({
         schedule: clientSchedule,
         lastUpdated: new Date().toISOString(),
-        lastService: new Date().toISOString()
+        lastService: new Date().toISOString(),
+        lastWorker: allocation.workerName
       });
 
-      console.log("Allocation saved to client schedule:", allocation);
+      console.log("✅ Client schedule updated");
     } catch (error) {
       console.error("Error saving to client schedule:", error);
       throw error;
@@ -498,7 +496,7 @@ const SlotBook = ({ workers, onAllocationUpdate }) => {
       completedAt: new Date().toISOString()
     };
 
-    // Update local allocations
+    // Update local state
     setAllocations(prev => ({
       ...prev,
       [workerId]: {
@@ -507,13 +505,25 @@ const SlotBook = ({ workers, onAllocationUpdate }) => {
       }
     }));
 
-    // Save to Firebase
-    await saveAllocationToFirebase(workerId, updatedAllocation);
-    
-    // Also update client schedule
-    const client = clients?.find(c => c.clientId === allocation.clientId);
-    if (client) {
-      await saveToClientSchedule(client, updatedAllocation);
+    try {
+      // Find the client
+      const client = clients?.find(c => c.clientKey === allocation.clientKey);
+      if (!client) {
+        console.error("Client not found for update:", allocation);
+        throw new Error("Client not found");
+      }
+
+      // Update worker schedule
+      await saveAllocationToWorker(workerId, updatedAllocation);
+      
+      // Update client schedule
+      await saveAllocationToClient(client, updatedAllocation);
+      
+      console.log("✅ Allocation completed and saved");
+    } catch (error) {
+      console.error("❌ Error completing allocation:", error);
+      alert("Failed to save completion. Please try again.");
+      return;
     }
 
     if (onAllocationUpdate) {
@@ -524,6 +534,7 @@ const SlotBook = ({ workers, onAllocationUpdate }) => {
     setSelectedSlot(null);
     setEditingEndTime(false);
     setTempEndTime("");
+    setActiveWorker(null);
   };
 
   // Get slot status and styling
@@ -588,35 +599,77 @@ const SlotBook = ({ workers, onAllocationUpdate }) => {
     return totalHours.toFixed(2);
   };
 
-  // Filter workers based on search and department
-  const filteredWorkers = React.useMemo(() => {
-    let filtered = workers || [];
-    
-    if (selectedDepartment !== "All") {
-      filtered = filtered.filter(worker => worker.department === selectedDepartment);
-    }
-    
-    if (searchQuery.trim()) {
-      filtered = filtered.filter(worker =>
-        worker.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        worker.idNo?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        worker.department?.toLowerCase().includes(searchQuery.toLowerCase())
-      );
-    }
-    
-    return filtered;
-  }, [workers, selectedDepartment, searchQuery]);
-
   // Calculate total working hours for the day
   const calculateTotalWorkingHours = () => {
     let total = 0;
-    filteredWorkers.forEach(worker => {
+    (workers || []).forEach(worker => {
       total += parseFloat(calculateTotalHours(worker.id) || 0);
     });
     return total.toFixed(2);
   };
 
-  // Render allocation modal
+  // NEW: Quick allocate multiple slots
+  const handleQuickAllocate = (worker, client, startSlot, endSlot) => {
+    // Implementation for bulk allocation
+    console.log("Quick allocate:", worker, client, startSlot, endSlot);
+  };
+
+  // NEW: Clear slot allocation
+  const handleClearSlot = async (workerId, slotId) => {
+    if (!window.confirm("Are you sure you want to clear this allocation?")) return;
+    
+    const allocation = allocations[workerId]?.[slotId];
+    if (!allocation) return;
+
+    // Remove from local state
+    setAllocations(prev => {
+      const updated = { ...prev };
+      delete updated[workerId]?.[slotId];
+      return updated;
+    });
+
+    try {
+      // Remove from worker schedule
+      const worker = workers?.find(w => w.id === workerId);
+      if (worker) {
+        const workerPath = WORKER_PATHS[worker.department] || WORKER_PATHS["Others"];
+        const dateKey = allocation.date;
+        
+        const snapshot = await firebaseDB.child(`${workerPath}/${workerId}`).once('value');
+        const workerData = snapshot.val() || {};
+        
+        if (workerData.schedule?.[dateKey]?.[slotId]) {
+          delete workerData.schedule[dateKey][slotId];
+          await firebaseDB.child(`${workerPath}/${workerId}`).update({
+            schedule: workerData.schedule,
+            lastUpdated: new Date().toISOString()
+          });
+        }
+      }
+
+      // Remove from client schedule
+      const client = clients?.find(c => c.clientKey === allocation.clientKey);
+      if (client && client.clientPath) {
+        const snapshot = await firebaseDB.child(`${client.clientPath}/${client.clientKey}`).once('value');
+        const clientData = snapshot.val() || {};
+        
+        if (clientData.schedule?.[allocation.date]?.[slotId]) {
+          delete clientData.schedule[allocation.date][slotId];
+          await firebaseDB.child(`${client.clientPath}/${client.clientKey}`).update({
+            schedule: clientData.schedule,
+            lastUpdated: new Date().toISOString()
+          });
+        }
+      }
+
+      console.log("✅ Slot cleared successfully");
+    } catch (error) {
+      console.error("Error clearing slot:", error);
+      alert("Failed to clear slot. Please try again.");
+    }
+  };
+
+  // Render allocation modal - IMPROVED
   const renderAllocationModal = () => {
     if (!showAllocationModal || !selectedSlot) return null;
 
@@ -625,33 +678,34 @@ const SlotBook = ({ workers, onAllocationUpdate }) => {
     const allocation = allocations[workerId]?.[slot.id];
 
     return (
-      <div className="slotBook slot-allocation-modal-overlay" onClick={() => setShowAllocationModal(false)}>
-        <div className="slot-allocation-modal" onClick={(e) => e.stopPropagation()}>
+      <div className="modal-overlay" onClick={() => setShowAllocationModal(false)}>
+        <div className="modal-container" onClick={(e) => e.stopPropagation()}>
           <div className="modal-header">
-            <h3 className="modal-title">
-              {slotStatus === "allocating" && "Allocate Time Slot"}
-              {slotStatus === "in-progress" && "Update Work Status"}
-              {slotStatus === "completed" && "Work Details"}
+            <h3>
+              {slotStatus === "allocating" && "📅 Allocate Time Slot"}
+              {slotStatus === "in-progress" && "⏳ Update Work Status"}
+              {slotStatus === "completed" && "✅ Work Details"}
             </h3>
-            <button className="modal-close" onClick={() => setShowAllocationModal(false)}>
+            <button className="modal-close" onClick={() => {
+              setShowAllocationModal(false);
+              setActiveWorker(null);
+            }}>
               ×
             </button>
           </div>
           
           <div className="modal-body">
-            <div className="worker-info-section">
+            <div className="info-card">
               <div className="info-row">
-                <span className="label">Worker:</span>
-                <span className="value">
-                  {worker?.name || workerId} ({worker?.idNo || "N/A"})
-                </span>
+                <span className="label">👨‍💼 Worker:</span>
+                <span className="value">{worker?.name || workerId}</span>
               </div>
               <div className="info-row">
-                <span className="label">Time Slot:</span>
+                <span className="label">🕒 Time Slot:</span>
                 <span className="value">{slot.time12}</span>
               </div>
               <div className="info-row">
-                <span className="label">Date:</span>
+                <span className="label">📅 Date:</span>
                 <span className="value">{formatDate(selectedDate)}</span>
               </div>
             </div>
@@ -659,16 +713,16 @@ const SlotBook = ({ workers, onAllocationUpdate }) => {
             {slotStatus === "allocating" && (
               <div className="client-search-section">
                 <div className="section-header">
-                  <h4>Select Client</h4>
-                  {loading && <span className="loading-indicator">Loading clients...</span>}
+                  <h4>🔍 Select Client</h4>
+                  {loading && <div className="loading-spinner">Loading clients...</div>}
                 </div>
                 
-                <div className="search-input-wrapper">
+                <div className="search-container">
                   <input
                     ref={searchInputRef}
                     type="text"
-                    className="client-search-input"
-                    placeholder="Search client by name, ID, phone, or location..."
+                    className="search-input"
+                    placeholder="Search by name, ID, phone, location..."
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                     onKeyDown={(e) => {
@@ -678,7 +732,7 @@ const SlotBook = ({ workers, onAllocationUpdate }) => {
                       }
                     }}
                   />
-                  <span className="search-icon" style={{ pointerEvents: 'none' }}>🔍</span>
+                  <span className="search-icon">🔍</span>
                 </div>
                 
                 {searchQuery && (
@@ -686,33 +740,37 @@ const SlotBook = ({ workers, onAllocationUpdate }) => {
                     {filteredClients.length > 0 ? (
                       <>
                         <div className="results-header">
-                          <span>Found {filteredClients.length} clients</span>
+                          <span>Found {filteredClients.length} client(s)</span>
                         </div>
-                        <ul className="client-list">
-                          {filteredClients.slice(0, 10).map(client => (
-                            <li
-                              key={client.id}
-                              className="client-item"
+                        <div className="client-list">
+                          {filteredClients.slice(0, 8).map(client => (
+                            <div
+                              key={client.clientKey}
+                              className="client-card"
                               onClick={() => handleClientSelect(client)}
                             >
                               <div className="client-header">
-                                <div className="client-id">{client.clientId}</div>
-                                <div className="client-phone">{client.phone}</div>
+                                <div className="client-id">ID: {client.clientId}</div>
+                                <div className="client-phone">📱 {client.phone}</div>
                               </div>
-                              <div className="client-name">{client.name}</div>
-                              <div className="client-location">{client.location}</div>
-                            </li>
+                              <div className="client-name">👤 {client.name}</div>
+                              <div className="client-details">
+                                <span className="location">📍 {client.location}</span>
+                                <span className="department">🏢 {client.department}</span>
+                              </div>
+                            </div>
                           ))}
-                        </ul>
+                        </div>
                       </>
                     ) : (
                       <div className="no-results">
-                        <p>No clients found</p>
+                        <p>No clients found matching "{searchQuery}"</p>
                         <button
-                          className="btn-quick-client"
+                          className="btn-walkin"
                           onClick={() => {
                             const dummyClient = {
-                              id: "WALKIN-" + Date.now(),
+                              clientKey: "WALKIN-" + Date.now(),
+                              clientPath: "ClientData/Others/Running",
                               clientId: "WALKIN-" + Date.now(),
                               name: "Walk-in Client",
                               location: "On-site",
@@ -723,7 +781,7 @@ const SlotBook = ({ workers, onAllocationUpdate }) => {
                             handleClientSelect(dummyClient);
                           }}
                         >
-                          Create Walk-in Client
+                          ➕ Create Walk-in Client
                         </button>
                       </div>
                     )}
@@ -733,96 +791,110 @@ const SlotBook = ({ workers, onAllocationUpdate }) => {
             )}
 
             {(slotStatus === "in-progress" || slotStatus === "completed") && allocation && (
-              <div className="allocation-details-section">
-                <div className="client-details">
-                  <h4>Client Information</h4>
-                  <div className="info-row">
-                    <span className="label">Client ID:</span>
-                    <span className="value">{allocation.clientId}</span>
-                  </div>
-                  <div className="info-row">
-                    <span className="label">Client Name:</span>
-                    <span className="value">{allocation.clientName}</span>
-                  </div>
-                  <div className="info-row">
-                    <span className="label">Location:</span>
-                    <span className="value">{allocation.clientLocation}</span>
-                  </div>
-                  <div className="info-row">
-                    <span className="label">Phone:</span>
-                    <span className="value">{allocation.clientPhone}</span>
+              <div className="allocation-details">
+                <div className="client-info">
+                  <h4>👤 Client Information</h4>
+                  <div className="info-grid">
+                    <div className="info-item">
+                      <span className="label">Client ID:</span>
+                      <span className="value">{allocation.clientId}</span>
+                    </div>
+                    <div className="info-item">
+                      <span className="label">Name:</span>
+                      <span className="value">{allocation.clientName}</span>
+                    </div>
+                    <div className="info-item">
+                      <span className="label">Location:</span>
+                      <span className="value">{allocation.clientLocation}</span>
+                    </div>
+                    <div className="info-item">
+                      <span className="label">Phone:</span>
+                      <span className="value">{allocation.clientPhone}</span>
+                    </div>
                   </div>
                 </div>
                 
-                <div className="work-details">
-                  <h4>Work Details</h4>
-                  <div className="info-row">
-                    <span className="label">Start Time:</span>
-                    <span className="value">{allocation.startTime}</span>
-                  </div>
-                  
-                  {slotStatus === "in-progress" && (
-                    <div className="end-time-section">
-                      <div className="info-row">
+                <div className="work-info">
+                  <h4>⚙️ Work Details</h4>
+                  <div className="info-grid">
+                    <div className="info-item">
+                      <span className="label">Start Time:</span>
+                      <span className="value">{allocation.startTime}</span>
+                    </div>
+                    
+                    {slotStatus === "in-progress" && (
+                      <div className="info-item full-width">
                         <span className="label">End Time:</span>
                         {editingEndTime ? (
-                          <div className="end-time-input">
+                          <div className="time-input-group">
                             <input
                               type="time"
                               value={tempEndTime}
                               onChange={(e) => setTempEndTime(e.target.value)}
                               min={allocation.startTime}
                               max="21:00"
+                              className="time-input"
                             />
-                            <button
-                              className="btn-save"
-                              onClick={handleEndTimeUpdate}
-                              disabled={!tempEndTime}
-                            >
-                              Save
-                            </button>
-                            <button
-                              className="btn-cancel"
-                              onClick={() => setEditingEndTime(false)}
-                            >
-                              Cancel
-                            </button>
+                            <div className="button-group">
+                              <button
+                                className="btn-save"
+                                onClick={handleEndTimeUpdate}
+                                disabled={!tempEndTime}
+                              >
+                                ✅ Save
+                              </button>
+                              <button
+                                className="btn-cancel"
+                                onClick={() => setEditingEndTime(false)}
+                              >
+                                ❌ Cancel
+                              </button>
+                            </div>
                           </div>
                         ) : (
                           <div className="end-time-actions">
                             <span className="value">Not set</span>
                             <button
-                              className="btn-edit"
+                              className="btn-set"
                               onClick={() => setEditingEndTime(true)}
                             >
-                              Set End Time
+                              ⏰ Set End Time
                             </button>
                           </div>
                         )}
                       </div>
-                    </div>
-                  )}
-                  
-                  {slotStatus === "completed" && (
-                    <>
-                      <div className="info-row">
-                        <span className="label">End Time:</span>
-                        <span className="value">{allocation.endTime}</span>
-                      </div>
-                      <div className="info-row">
-                        <span className="label">Duration:</span>
-                        <span className="value highlight">
-                          {allocation.duration} hours
-                        </span>
-                      </div>
-                      <div className="info-row">
-                        <span className="label">Completed At:</span>
-                        <span className="value">
-                          {new Date(allocation.completedAt).toLocaleTimeString()}
-                        </span>
-                      </div>
-                    </>
-                  )}
+                    )}
+                    
+                    {slotStatus === "completed" && (
+                      <>
+                        <div className="info-item">
+                          <span className="label">End Time:</span>
+                          <span className="value">{allocation.endTime}</span>
+                        </div>
+                        <div className="info-item">
+                          <span className="label">Duration:</span>
+                          <span className="value highlight">
+                            {allocation.duration} hours
+                          </span>
+                        </div>
+                        <div className="info-item">
+                          <span className="label">Completed:</span>
+                          <span className="value">
+                            {new Date(allocation.completedAt).toLocaleTimeString()}
+                          </span>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                </div>
+                
+                <div className="action-buttons">
+                  <button
+                    className="btn-clear"
+                    onClick={() => handleClearSlot(workerId, slot.id)}
+                  >
+                    🗑️ Clear Allocation
+                  </button>
                 </div>
               </div>
             )}
@@ -830,8 +902,11 @@ const SlotBook = ({ workers, onAllocationUpdate }) => {
           
           <div className="modal-footer">
             <button
-              className="btn-secondary"
-              onClick={() => setShowAllocationModal(false)}
+              className="btn-close"
+              onClick={() => {
+                setShowAllocationModal(false);
+                setActiveWorker(null);
+              }}
             >
               Close
             </button>
@@ -841,174 +916,132 @@ const SlotBook = ({ workers, onAllocationUpdate }) => {
     );
   };
 
-  // Render worker card
-const renderWorkerCard = (worker) => {
+  // Render worker card - IMPROVED
+  const renderWorkerCard = (worker) => {
     const totalHours = calculateTotalHours(worker.id);
     const timeSlots = generateTimeSlots;
+    const completedSlots = Object.values(allocations[worker.id] || {}).filter(a => a.status === "completed").length;
+    const inProgressSlots = Object.values(allocations[worker.id] || {}).filter(a => a.status === "in-progress").length;
     
     return (
-      <div className="worker-card-modern" key={worker.id}>
-        {/* Modern Header */}
-        <div className="worker-card-header-modern">
-          <div className="worker-header-left">
-            <div className="worker-avatar">
-              <div className="avatar-circle">
-                {worker.name?.charAt(0) || worker.id?.charAt(0) || "W"}
-              </div>
-            </div>
-            <div className="worker-info-modern">
-              <h4 className="worker-name-modern">{worker.name || worker.id}</h4>
-              <div className="worker-meta-modern">
-                <div className="meta-item">
-                  <span className="meta-label">ID:</span>
-                  <span className="meta-value">{worker.idNo || "N/A"}</span>
-                </div>
-                <div className="meta-item">
-                  <span className="meta-label">Dept:</span>
-                  <span className={`department-tag ${worker.department?.toLowerCase().replace(/[^a-z]/g, "-") || "general"}`}>
-                    {worker.department || "General"}
-                  </span>
-                </div>
-              </div>
+      <div className={`worker-card ${activeWorker?.id === worker.id ? 'active' : ''}`} key={worker.id}>
+        <div className="card-header">
+          <div className="worker-avatar">
+            <div className="avatar">
+              {worker.name?.charAt(0) || worker.id?.charAt(0) || "W"}
             </div>
           </div>
-          
-          <div className="worker-header-right">
-            <div className="stats-card">
-              <div className="stat-icon">⏱️</div>
-              <div className="stat-content">
-                <div className="stat-value-modern">{totalHours}h</div>
-                <div className="stat-label-modern">Today's Hours</div>
-              </div>
+          <div className="worker-info">
+            <h4 className="worker-name">{worker.name || worker.id}</h4>
+            <div className="worker-details">
+              <span className="badge badge-id">ID: {worker.idNo || "N/A"}</span>
+              <span className={`badge badge-dept ${worker.department?.toLowerCase().replace(/[^a-z]/g, "-")}`}>
+                {worker.department || "General"}
+              </span>
+            </div>
+          </div>
+          <div className="worker-stats">
+            <div className="stat">
+              <div className="stat-value">{totalHours}h</div>
+              <div className="stat-label">Today</div>
             </div>
           </div>
         </div>
 
-        {/* Integrated Time Slots */}
-        <div className="integrated-slots-section">
-          <div className="slots-header-modern">
-            <div className="slots-title">
-              <span className="slots-icon">🕒</span>
-              <h5>Time Slots</h5>
-            </div>
-            <div className="slots-info">
-              <span className="info-badge">
-                {Object.values(allocations[worker.id] || {}).filter(a => a.status === "completed").length} completed
-              </span>
+        <div className="slots-section">
+          <div className="slots-header">
+            <h5>🕒 Time Slots</h5>
+            <div className="slot-stats">
+              <span className="slot-stat completed">{completedSlots} ✅</span>
+              <span className="slot-stat in-progress">{inProgressSlots} ⏳</span>
             </div>
           </div>
 
-          <div className="integrated-slots-grid">
-            <div className="time-indicators">
-              {['Morning', 'Noon', 'Afternoon', 'Evening'].map((period) => (
-                <div key={period} className="time-period">{period}</div>
-              ))}
-            </div>
-
-            <div className="slots-container-modern">
-              {timeSlots.map((slot, index) => {
-                const slotStatus = getSlotStatus(worker.id, slot);
-                const allocation = allocations[worker.id]?.[slot.id];
-                const isHourMark = slot.minute === 0;
-                
-                return (
-                  <div key={slot.id} className="slot-item-wrapper">
+          <div className="time-slots-grid">
+            {timeSlots.map((slot) => {
+              const slotStatus = getSlotStatus(worker.id, slot);
+              const allocation = allocations[worker.id]?.[slot.id];
               
-                    
-                    <div
-                      className={`slot-item ${slotStatus.className} ${allocation ? 'has-allocation' : ''} ${slot.isLunchBreak ? 'lunch-slot' : ''}`}
-                      onClick={() => !slot.isLunchBreak && handleSlotClick(worker.id, slot)}
-                      title={slotStatus.tooltip}
-                    >
-                      {allocation ? (
-                        <div className="allocation-badge">
-                          <div className="client-badge">
-                            <span className="client-initial">
-                              {allocation.clientName?.charAt(0) || "C"}
+              return (
+                <div key={slot.id} className="slot-wrapper">
+                  <div
+                    className={`slot ${slotStatus.className} ${allocation ? 'allocated' : ''} ${slot.isLunchBreak ? 'lunch' : ''}`}
+                    onClick={() => !slot.isLunchBreak && handleSlotClick(worker.id, slot)}
+                    title={slotStatus.tooltip}
+                  >
+                    {allocation ? (
+                      <div className="allocation-indicator">
+                        <div className="client-indicator">
+                          <span className="client-initial">
+                            {allocation.clientName?.charAt(0) || "C"}
+                          </span>
+                          <div className="allocation-status">
+                            <span className={`status-dot ${allocation.status}`}></span>
+                            <span className="status-text">
+                              {allocation.status === "completed" 
+                                ? `${allocation.duration}h` 
+                                : allocation.status === "in-progress"
+                                ? "⏳"
+                                : "📅"}
                             </span>
-                            <div className="allocation-status">
-                              <span className={`status-dot ${allocation.status}`}></span>
-                              <span className="status-text">
-                                {allocation.status === "completed" 
-                                  ? `${allocation.duration}h` 
-                                  : allocation.status}
-                              </span>
-                            </div>
                           </div>
                         </div>
-                      ) : slot.isLunchBreak ? (
-                        <div className="lunch-badge">
-                          <span className="lunch-icon">🍽️</span>
-                          <span className="lunch-text">Lunch</span>
-                        </div>
-                      ) : (
-                        <div className="available-slot">
-                          <span className="available-icon">+</span>
-                          <span className="time-label">{slot.time12}</span>
-                        </div>
-                      )}
-                    </div>
-                    
-                    {/* Half-hour indicator */}
-                    {slot.minute === 30 && (
-                      <div className="half-hour-indicator"></div>
+                      </div>
+                    ) : slot.isLunchBreak ? (
+                      <div className="lunch-indicator">
+                        <span className="lunch-icon">🍽️</span>
+                        <span className="lunch-text">Lunch</span>
+                      </div>
+                    ) : (
+                      <div className="available-indicator">
+                        <span className="available-icon">+</span>
+                        <span className="time-text">{slot.time12}</span>
+                      </div>
                     )}
                   </div>
-                );
-              })}
-            </div>
+                </div>
+              );
+            })}
           </div>
 
-          {/* Quick Stats */}
-          <div className="slot-quick-stats">
-            <div className="stat-pill">
-              <span className="stat-pill-label">Available:</span>
-              <span className="stat-pill-value">
+          <div className="quick-stats">
+            <div className="stat-item">
+              <span className="stat-label">Available:</span>
+              <span className="stat-value">
                 {timeSlots.filter(s => !s.isLunchBreak && !allocations[worker.id]?.[s.id]).length}
               </span>
             </div>
-            <div className="stat-pill">
-              <span className="stat-pill-label">Allocated:</span>
-              <span className="stat-pill-value">
-                {Object.values(allocations[worker.id] || {}).filter(a => a.status === "allocated").length}
-              </span>
+            <div className="stat-item">
+              <span className="stat-label">In Progress:</span>
+              <span className="stat-value">{inProgressSlots}</span>
             </div>
-            <div className="stat-pill">
-              <span className="stat-pill-label">In Progress:</span>
-              <span className="stat-pill-value">
-                {Object.values(allocations[worker.id] || {}).filter(a => a.status === "in-progress").length}
-              </span>
+            <div className="stat-item">
+              <span className="stat-label">Completed:</span>
+              <span className="stat-value">{completedSlots}</span>
             </div>
           </div>
         </div>
 
-        {/* Footer Actions */}
-        <div className="card-footer-modern">
+        <div className="card-footer">
           <div className="footer-actions">
             <button 
-              className="action-btn quick-view"
+              className="action-btn view-details"
               onClick={() => {
-                // Quick view all allocations
                 const workerAllocs = allocations[worker.id];
-                if (workerAllocs) {
-                  console.log("Worker allocations:", workerAllocs);
-                  // You could implement a modal here
-                }
+                alert(`Worker: ${worker.name}\nTotal Hours Today: ${totalHours}\nCompleted Jobs: ${completedSlots}`);
               }}
             >
-              <span className="action-icon">👁️</span>
-              Quick View
+              👁️ View Details
             </button>
             <button 
-              className="action-btn allocate-multiple"
+              className="action-btn quick-allocate"
               onClick={() => {
-                // Implement bulk allocation
-                setSelectedWorker(worker);
-                setShowAllocationModal(true);
+                setActiveWorker(worker);
+                // Quick allocate logic can be implemented here
+                alert(`Quick allocate for ${worker.name}`);
               }}
             >
-              <span className="action-icon">⏰</span>
-              Bulk Allocate
+              ⚡ Quick Allocate
             </button>
           </div>
         </div>
@@ -1018,38 +1051,38 @@ const renderWorkerCard = (worker) => {
 
   // Render daily summary
   const renderDailySummary = () => (
-    <div className="daily-summary">
-      <h3>Daily Summary - {formatDate(selectedDate)}</h3>
-      <div className="summary-table">
-        <table>
+    <div className="summary-card">
+      <h3>📊 Daily Summary - {formatDate(selectedDate)}</h3>
+      <div className="summary-table-container">
+        <table className="summary-table">
           <thead>
             <tr>
-              <th>Worker</th>
-              <th>Department</th>
-              <th>Total Hours</th>
-              <th>Clients</th>
+              <th>👨‍💼 Worker</th>
+              <th>🏢 Department</th>
+              <th>⏱️ Total Hours</th>
+              <th>👥 Clients</th>
             </tr>
           </thead>
           <tbody>
             {dailySummary.length > 0 ? (
               dailySummary.map(summary => (
                 <tr key={summary.workerId}>
-                  <td>{summary.workerName}</td>
+                  <td className="worker-cell">{summary.workerName}</td>
                   <td><span className="badge">{summary.department}</span></td>
                   <td className="hours-cell">{summary.totalHours}h</td>
                   <td className="clients-cell">
-                    {summary.clientNames.slice(0, 3).map((name, idx) => (
+                    {summary.clientNames.slice(0, 2).map((name, idx) => (
                       <span key={idx} className="client-tag">{name}</span>
                     ))}
-                    {summary.clientNames.length > 3 && (
-                      <span className="more-clients">+{summary.clientNames.length - 3} more</span>
+                    {summary.clientNames.length > 2 && (
+                      <span className="more-clients">+{summary.clientNames.length - 2}</span>
                     )}
                   </td>
                 </tr>
               ))
             ) : (
               <tr>
-                <td colSpan="4" className="no-data">No completed work for today</td>
+                <td colSpan="4" className="no-data">📭 No completed work for today</td>
               </tr>
             )}
           </tbody>
@@ -1058,84 +1091,85 @@ const renderWorkerCard = (worker) => {
     </div>
   );
 
-  // Combined date and time button
+  // Date picker
   const renderDatePicker = () => (
-    <div className="date-time-picker">
+    <div className="date-picker-container">
       <button 
-        className="btn-date-picker"
+        className="date-picker-btn"
         onClick={() => setShowCalendar(!showCalendar)}
       >
         <span className="picker-icon">📅</span>
-        <div className="picker-content">
+        <div className="picker-details">
           <div className="picker-date">{format(selectedDate, 'MMM d, yyyy')}</div>
-          <div className="picker-time">{format(selectedDate, 'h:mm a')}</div>
+          <div className="picker-day">{format(selectedDate, 'EEEE')}</div>
         </div>
         <span className="picker-arrow">{showCalendar ? '▲' : '▼'}</span>
       </button>
       
       {showCalendar && (
-        <div className="calendar-popup" ref={calendarRef}>
+        <div className="calendar-container" ref={calendarRef}>
           <Calendar
             onChange={(date) => {
               setSelectedDate(date);
               setShowCalendar(false);
             }}
             value={selectedDate}
-            className="react-calendar"
+            className="custom-calendar"
           />
-          <div className="calendar-quick-actions">
-            <button className="btn-quick-today" onClick={() => {
-              setSelectedDate(new Date());
-              setShowCalendar(false);
-            }}>Today</button>
-            <button className="btn-quick-yesterday" onClick={() => {
+          <div className="quick-dates">
+            <button className="quick-btn today" onClick={() => setSelectedDate(new Date())}>
+              Today
+            </button>
+            <button className="quick-btn" onClick={() => {
               const yesterday = new Date();
               yesterday.setDate(yesterday.getDate() - 1);
               setSelectedDate(yesterday);
-              setShowCalendar(false);
-            }}>Yesterday</button>
-            <button className="btn-quick-tomorrow" onClick={() => {
+            }}>
+              Yesterday
+            </button>
+            <button className="quick-btn" onClick={() => {
               const tomorrow = new Date();
               tomorrow.setDate(tomorrow.getDate() + 1);
               setSelectedDate(tomorrow);
-              setShowCalendar(false);
-            }}>Tomorrow</button>
+            }}>
+              Tomorrow
+            </button>
           </div>
         </div>
       )}
     </div>
   );
 
-  // Render monthly tracker
+  // Monthly tracker
   const renderMonthlyTracker = () => (
     <div className="monthly-tracker">
-      <h4>Monthly Overview - {format(selectedDate, 'MMMM yyyy')}</h4>
-      <div className="monthly-stats-grid">
-        <div className="monthly-stat">
+      <h4>📈 Monthly Overview - {format(selectedDate, 'MMMM yyyy')}</h4>
+      <div className="stats-grid">
+        <div className="stat-card">
           <div className="stat-icon">📅</div>
           <div className="stat-content">
-            <div className="stat-value">{monthlyStats.workingDays}</div>
+            <div className="stat-number">{monthlyStats.workingDays}</div>
             <div className="stat-label">Working Days</div>
           </div>
         </div>
-        <div className="monthly-stat">
+        <div className="stat-card">
           <div className="stat-icon">⏱️</div>
           <div className="stat-content">
-            <div className="stat-value">{monthlyStats.totalHours}h</div>
+            <div className="stat-number">{monthlyStats.totalHours}h</div>
             <div className="stat-label">Total Hours</div>
           </div>
         </div>
-        <div className="monthly-stat">
+        <div className="stat-card">
           <div className="stat-icon">🏖️</div>
           <div className="stat-content">
-            <div className="stat-value">{monthlyStats.leavesTaken}</div>
+            <div className="stat-number">{monthlyStats.leavesTaken}</div>
             <div className="stat-label">Leaves Taken</div>
           </div>
         </div>
-        <div className="monthly-stat">
+        <div className="stat-card">
           <div className="stat-icon">📊</div>
           <div className="stat-content">
-            <div className="stat-value">{monthlyStats.utilizationRate}</div>
+            <div className="stat-number">{monthlyStats.utilizationRate}</div>
             <div className="stat-label">Utilization Rate</div>
           </div>
         </div>
@@ -1144,104 +1178,84 @@ const renderWorkerCard = (worker) => {
   );
 
   return (
-    <div className="slotBook slot-book-container">
-      <div className="slot-book-header">
-        <div className="header-left">
-          <h2 className="page-title">
-            <span className="title-icon">📊</span>
-            Worker Allocation Dashboard
-          </h2>
-          <div className="view-switcher">
-            <button 
-              className={`view-btn ${activeView === 'dashboard' ? 'active' : ''}`}
-              onClick={() => setActiveView('dashboard')}
-            >
-              <span className="btn-icon">📅</span> Dashboard
-            </button>
-            <button 
-              className={`view-btn ${activeView === 'summary' ? 'active' : ''}`}
-              onClick={() => setActiveView('summary')}
-            >
-              <span className="btn-icon">📈</span> Summary
-            </button>
-            <button 
-              className={`view-btn ${activeView === 'analytics' ? 'active' : ''}`}
-              onClick={() => setActiveView('analytics')}
-            >
-              <span className="btn-icon">📊</span> Analytics
-            </button>
-          </div>
-        </div>
-        
-        <div className="header-right">
-          <div className="filters">
-            <div className="search-box">
-              <input
-                type="text"
-                className="filter-input"
-                placeholder="Search workers..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-              />
-              <span className="search-icon" style={{ pointerEvents: 'none' }}>🔍</span>
+    <div className="slot-book-container">
+      {/* Header */}
+      <header className="dashboard-header">
+        <div className="header-content">
+          <div className="header-left">
+            <h1 className="dashboard-title">
+              <span className="title-icon">📊</span>
+              Worker Allocation Dashboard
+            </h1>
+            <div className="view-tabs">
+              <button 
+                className={`tab-btn ${activeView === 'dashboard' ? 'active' : ''}`}
+                onClick={() => setActiveView('dashboard')}
+              >
+                📅 Dashboard
+              </button>
+              <button 
+                className={`tab-btn ${activeView === 'summary' ? 'active' : ''}`}
+                onClick={() => setActiveView('summary')}
+              >
+                📈 Summary
+              </button>
+              <button 
+                className={`tab-btn ${activeView === 'analytics' ? 'active' : ''}`}
+                onClick={() => setActiveView('analytics')}
+              >
+                📊 Analytics
+              </button>
             </div>
-            <select 
-              className="filter-select"
-              value={selectedDepartment}
-              onChange={(e) => setSelectedDepartment(e.target.value)}
-            >
-              <option value="All">All Departments</option>
-              <option value="Home Care">Home Care</option>
-              <option value="Housekeeping">Housekeeping</option>
-              <option value="Office & Administrative">Office & Administrative</option>
-              <option value="Customer Service">Customer Service</option>
-              <option value="Management & Supervision">Management & Supervision</option>
-              <option value="Security">Security</option>
-              <option value="Driving & Logistics">Driving & Logistics</option>
-              <option value="Technical & Maintenance">Technical & Maintenance</option>
-              <option value="Retail & Sales">Retail & Sales</option>
-              <option value="Industrial & Labor">Industrial & Labor</option>
-              <option value="Others">Others</option>
-            </select>
-            {renderDatePicker()}
           </div>
           
-          <div className="stats-summary">
-            <div className="stat-box">
-              <div className="stat-number">{calculateTotalWorkingHours()}</div>
-              <div className="stat-label">Total Hours Today</div>
-            </div>
-            <div className="stat-box">
-              <div className="stat-number">{filteredWorkers.length}</div>
-              <div className="stat-label">Active Workers</div>
-            </div>
-            <div className="stat-box">
-              <div className="stat-number">
-                {Object.values(allocations).reduce((total, workerAllocs) => {
-                  return total + Object.values(workerAllocs).filter(a => a.status === "completed").length;
-                }, 0)}
+          <div className="header-right">
+            <div className="controls">
+              {renderDatePicker()}
+              <div className="search-container-header">
+                <input
+                  type="text"
+                  className="search-input-header"
+                  placeholder="Search clients..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                />
+                <span className="search-icon-header">🔍</span>
               </div>
-              <div className="stat-label">Completed Jobs</div>
+            </div>
+            
+            <div className="header-stats">
+              <div className="stat-box">
+                <div className="stat-value-header">{calculateTotalWorkingHours()}</div>
+                <div className="stat-label-header">Total Hours</div>
+              </div>
+              <div className="stat-box">
+                <div className="stat-value-header">{workers?.length || 0}</div>
+                <div className="stat-label-header">Workers</div>
+              </div>
+              <div className="stat-box">
+                <div className="stat-value-header">{clients.length}</div>
+                <div className="stat-label-header">Clients</div>
+              </div>
             </div>
           </div>
         </div>
-      </div>
+      </header>
 
-      <div className="main-content">
+      {/* Main Content */}
+      <main className="dashboard-content">
         {activeView === 'dashboard' ? (
           <>
             {renderMonthlyTracker()}
             
-            <div className="worker-cards-grid">
-              {filteredWorkers.length > 0 ? (
-                filteredWorkers.map(renderWorkerCard)
+            <div className="workers-grid">
+              {workers?.length > 0 ? (
+                workers.map(renderWorkerCard)
               ) : (
-                <div className="no-workers-message">
-                  <div className="empty-state">
-                    <div className="empty-icon">👥</div>
-                    <h3>No Workers Found</h3>
-                    <p>Try adjusting your filters or add workers to start allocating time slots</p>
-                  </div>
+                <div className="empty-state">
+                  <div className="empty-icon">👥</div>
+                  <h3>No Workers Available</h3>
+                  <p>Add workers to start allocating time slots</p>
                 </div>
               )}
             </div>
@@ -1255,52 +1269,94 @@ const renderWorkerCard = (worker) => {
           </>
         ) : (
           <div className="analytics-view">
-            <h3>Analytics Dashboard - {format(selectedDate, 'MMMM yyyy')}</h3>
+            <h2>📊 Analytics Dashboard - {format(selectedDate, 'MMMM yyyy')}</h2>
             {renderMonthlyTracker()}
-            <div className="analytics-cards">
+            <div className="analytics-grid">
               <div className="analytics-card">
-                <h4>Productivity Overview</h4>
-                <div className="metric">Total Hours: {monthlyStats.totalHours}h</div>
-                <div className="metric">Working Days: {monthlyStats.workingDays}</div>
-                <div className="metric">Average Daily Hours: {(monthlyStats.workingDays > 0 ? monthlyStats.totalHours / monthlyStats.workingDays : 0).toFixed(2)}h</div>
-                <div className="metric">Utilization Rate: {monthlyStats.utilizationRate}</div>
+                <h4>📈 Productivity Overview</h4>
+                <div className="analytics-metrics">
+                  <div className="metric">
+                    <span className="metric-label">Total Hours:</span>
+                    <span className="metric-value">{monthlyStats.totalHours}h</span>
+                  </div>
+                  <div className="metric">
+                    <span className="metric-label">Working Days:</span>
+                    <span className="metric-value">{monthlyStats.workingDays}</span>
+                  </div>
+                  <div className="metric">
+                    <span className="metric-label">Avg Daily Hours:</span>
+                    <span className="metric-value">
+                      {(monthlyStats.workingDays > 0 ? 
+                        (parseFloat(monthlyStats.totalHours) / monthlyStats.workingDays).toFixed(2) : 0)}h
+                    </span>
+                  </div>
+                  <div className="metric">
+                    <span className="metric-label">Utilization Rate:</span>
+                    <span className="metric-value">{monthlyStats.utilizationRate}</span>
+                  </div>
+                </div>
               </div>
               <div className="analytics-card">
-                <h4>Attendance & Leaves</h4>
-                <div className="metric">Leaves Taken: {monthlyStats.leavesTaken}</div>
-                <div className="metric">Working Rate: {monthlyStats.workingDays > 0 ? ((monthlyStats.workingDays / (new Date(selectedDate.getFullYear(), selectedDate.getMonth() + 1, 0).getDate())) * 100).toFixed(1) : 0}%</div>
-                <div className="metric">Available Workers: {workers?.length || 0}</div>
-                <div className="metric">Active Today: {filteredWorkers.length}</div>
+                <h4>📅 Attendance & Leaves</h4>
+                <div className="analytics-metrics">
+                  <div className="metric">
+                    <span className="metric-label">Leaves Taken:</span>
+                    <span className="metric-value">{monthlyStats.leavesTaken}</span>
+                  </div>
+                  <div className="metric">
+                    <span className="metric-label">Working Rate:</span>
+                    <span className="metric-value">
+                      {monthlyStats.workingDays > 0 ? 
+                        ((monthlyStats.workingDays / (new Date(selectedDate.getFullYear(), selectedDate.getMonth() + 1, 0).getDate())) * 100).toFixed(1) 
+                        : 0}%
+                    </span>
+                  </div>
+                  <div className="metric">
+                    <span className="metric-label">Available Workers:</span>
+                    <span className="metric-value">{workers?.length || 0}</span>
+                  </div>
+                  <div className="metric">
+                    <span className="metric-label">Active Today:</span>
+                    <span className="metric-value">
+                      {workers?.filter(w => Object.values(allocations[w.id] || {}).length > 0).length || 0}
+                    </span>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
         )}
-      </div>
-      
-      {renderAllocationModal()}
-      
-      <div className="quick-stats-bar">
-        <div className="stats-container">
-          <div className="stat-item">
-            <span className="stat-label">Available Slots:</span>
-            <span className="stat-value">
+      </main>
+
+      {/* Footer Stats */}
+      <footer className="dashboard-footer">
+        <div className="footer-stats">
+          <div className="footer-stat">
+            <span className="footer-label">Available Slots:</span>
+            <span className="footer-value">
               {generateTimeSlots.filter(s => !s.isLunchBreak).length * (workers?.length || 0)}
             </span>
           </div>
-          <div className="stat-item">
-            <span className="stat-label">Lunch Break:</span>
-            <span className="stat-value">12:00 PM - 2:00 PM</span>
+          <div className="footer-stat">
+            <span className="footer-label">Lunch Break:</span>
+            <span className="footer-value">12:00 PM - 2:00 PM</span>
           </div>
-          <div className="stat-item">
-            <span className="stat-label">Working Hours:</span>
-            <span className="stat-value">5:00 AM - 9:00 PM</span>
+          <div className="footer-stat">
+            <span className="footer-label">Working Hours:</span>
+            <span className="footer-value">5:00 AM - 9:00 PM</span>
           </div>
-          <div className="stat-item">
-            <span className="stat-label">Total Clients:</span>
-            <span className="stat-value">{clients.length}</span>
+          <div className="footer-stat">
+            <span className="footer-label">Active Allocations:</span>
+            <span className="footer-value">
+              {Object.values(allocations).reduce((total, workerAllocs) => 
+                total + Object.values(workerAllocs).length, 0)}
+            </span>
           </div>
         </div>
-      </div>
+      </footer>
+
+      {/* Allocation Modal */}
+      {renderAllocationModal()}
     </div>
   );
 };

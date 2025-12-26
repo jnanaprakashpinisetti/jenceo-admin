@@ -3,7 +3,7 @@ import firebaseDB from "../../../firebase";
 import { WORKER_PATHS, CLIENT_PATHS } from "../../../utils/dataPaths";
 import Calendar from 'react-calendar';
 import 'react-calendar/dist/Calendar.css';
-import { format, parseISO } from 'date-fns';
+import { format, parseISO, addDays } from 'date-fns';
 
 const SlotBook = ({ workers, onAllocationUpdate }) => {
   const [selectedDate, setSelectedDate] = useState(new Date());
@@ -15,6 +15,8 @@ const SlotBook = ({ workers, onAllocationUpdate }) => {
   const [slotStatus, setSlotStatus] = useState("allocating");
   const [editingEndTime, setEditingEndTime] = useState(false);
   const [tempEndTime, setTempEndTime] = useState("");
+  const [tempRemarks, setTempRemarks] = useState("");
+  const [tempStatus, setTempStatus] = useState("completed");
   const [clients, setClients] = useState([]);
   const [loading, setLoading] = useState(false);
   const [showCalendar, setShowCalendar] = useState(false);
@@ -28,9 +30,11 @@ const SlotBook = ({ workers, onAllocationUpdate }) => {
   });
   const [activeWorker, setActiveWorker] = useState(null);
   const [selectedClientId, setSelectedClientId] = useState(null);
+  const [slotType, setSlotType] = useState("working"); // New state for slot type
   
   const searchInputRef = useRef(null);
   const calendarRef = useRef(null);
+  const endTimeRef = useRef(null);
 
   // Enhanced time slots with 30-minute intervals
   const generateTimeSlots = React.useMemo(() => {
@@ -76,6 +80,11 @@ const SlotBook = ({ workers, onAllocationUpdate }) => {
   // Format date for display
   function formatDate(date) {
     return format(date, 'EEEE, MMMM do, yyyy');
+  }
+
+  // Format date for summary table
+  function formatDateForSummary(date) {
+    return format(date, 'dd-MMM-yy');
   }
 
   // Get date key for Firebase
@@ -183,10 +192,15 @@ const SlotBook = ({ workers, onAllocationUpdate }) => {
     }
   };
 
-  // FIX 3: Initialize allocations from workers data - DON'T OVERRIDE LOCAL CHANGES
+  // FIX: Load allocations when date changes
   useEffect(() => {
-    const dateKey = getDateKey(selectedDate);
+    loadAllocationsForDate(selectedDate);
+  }, [selectedDate, workers]);
 
+  // Load allocations for specific date
+  const loadAllocationsForDate = async (date) => {
+    const dateKey = getDateKey(date);
+    
     setAllocations(prev => {
       const updated = { ...prev };
 
@@ -197,9 +211,7 @@ const SlotBook = ({ workers, onAllocationUpdate }) => {
 
         const scheduleForDate = worker.schedule?.[dateKey] || {};
         Object.entries(scheduleForDate).forEach(([slotId, allocation]) => {
-          if (!updated[worker.id][slotId]) {
-            updated[worker.id][slotId] = allocation;
-          }
+          updated[worker.id][slotId] = allocation;
         });
       });
 
@@ -207,7 +219,7 @@ const SlotBook = ({ workers, onAllocationUpdate }) => {
     });
     
     calculateDailySummary();
-  }, [workers, selectedDate]);
+  };
 
   // Calculate monthly statistics
   useEffect(() => {
@@ -265,7 +277,7 @@ const SlotBook = ({ workers, onAllocationUpdate }) => {
     });
   };
 
-  // Calculate daily summary - FIXED: Ensure totalHours is a number
+  // Calculate daily summary - UPDATED with new columns
   const calculateDailySummary = () => {
     const summary = [];
     const dateKey = getDateKey(selectedDate);
@@ -274,55 +286,106 @@ const SlotBook = ({ workers, onAllocationUpdate }) => {
       const workerAllocations = allocations[worker.id] || {};
       let totalHours = 0;
       let clientNames = [];
+      let remarksList = [];
       
       Object.values(workerAllocations).forEach(allocation => {
         if (allocation.status === "completed" && allocation.duration) {
-          // FIX: Ensure duration is a number before adding
           const duration = parseFloat(allocation.duration);
           if (!isNaN(duration)) {
             totalHours += duration;
-            clientNames.push(allocation.clientName);
+            clientNames.push(allocation.clientName || "No Client");
+            if (allocation.remarks) {
+              remarksList.push(allocation.remarks);
+            }
           }
         }
       });
       
-      if (totalHours > 0) {
-        summary.push({
-          workerId: worker.id,
-          workerName: worker.name,
-          department: worker.department,
-          totalHours: parseFloat(totalHours.toFixed(2)), // Ensure it's a number
-          clientNames: [...new Set(clientNames)],
-          date: dateKey
-        });
-      }
+      const uniqueClients = [...new Set(clientNames.filter(name => name))];
+      
+      summary.push({
+        workerId: worker.id,
+        workerName: worker.name,
+        department: worker.department,
+        totalHours: parseFloat(totalHours.toFixed(2)),
+        totalClients: uniqueClients.length,
+        clientNames: uniqueClients,
+        date: dateKey,
+        remarks: remarksList.length > 0 ? remarksList.join(", ") : "No remarks"
+      });
     });
     
     setDailySummary(summary);
   };
 
-  // Handle slot click - IMPROVED: Don't auto-close modal
+  // Check if slot should be disabled (when there's a booked slot covering it)
+  const isSlotDisabled = (workerId, slot) => {
+    const workerAllocations = allocations[workerId] || {};
+    
+    // Check if this slot is already allocated
+    if (workerAllocations[slot.id]) {
+      return true;
+    }
+    
+    // Check for continuous bookings that might cover this slot
+    for (const [slotId, allocation] of Object.entries(workerAllocations)) {
+      if (allocation.slotType === "continuous") {
+        const startSlot = generateTimeSlots.find(s => 
+          s.hour24 === allocation.startHour && s.minute === allocation.startMinute
+        );
+        const endSlot = generateTimeSlots.find(s => 
+          s.hour24 === allocation.endHour && s.minute === allocation.endMinute
+        );
+        
+        if (startSlot && endSlot) {
+          const startIndex = generateTimeSlots.findIndex(s => s.id === startSlot.id);
+          const endIndex = generateTimeSlots.findIndex(s => s.id === endSlot.id);
+          const currentIndex = generateTimeSlots.findIndex(s => s.id === slot.id);
+          
+          if (startIndex <= currentIndex && currentIndex <= endIndex) {
+            return true;
+          }
+        }
+      }
+    }
+    
+    return false;
+  };
+
+  // Handle slot click - UPDATED with slot type selection
   const handleSlotClick = (workerId, slot) => {
     if (slot.isLunchBreak) return;
+    
+    // Check if slot is disabled
+    if (isSlotDisabled(workerId, slot)) {
+      alert("This slot is already booked or within a booked time range.");
+      return;
+    }
     
     const currentAllocation = allocations[workerId]?.[slot.id];
     const worker = workers?.find(w => w.id === workerId);
     setActiveWorker(worker);
     setSelectedClientId(null);
+    setTempRemarks("");
+    setTempStatus("completed");
     
-    if (currentAllocation?.status === "completed") {
+    if (currentAllocation?.status === "completed" || currentAllocation?.status === "not-completed") {
       setSlotStatus("completed");
       setSelectedSlot({ workerId, slot, allocation: currentAllocation });
+      setTempRemarks(currentAllocation.remarks || "");
+      setTempStatus(currentAllocation.status || "completed");
       setShowAllocationModal(true);
     } else if (currentAllocation?.status === "allocated" || currentAllocation?.status === "in-progress") {
       setSlotStatus("in-progress");
       setSelectedSlot({ workerId, slot, allocation: currentAllocation });
       setTempEndTime(currentAllocation.endTime || "");
+      setTempRemarks(currentAllocation.remarks || "");
       setShowAllocationModal(true);
     } else {
       setSlotStatus("allocating");
       setSelectedSlot({ workerId, slot });
       setSearchQuery("");
+      setSlotType("working"); // Default slot type
       setShowAllocationModal(true);
       
       setTimeout(() => {
@@ -333,7 +396,85 @@ const SlotBook = ({ workers, onAllocationUpdate }) => {
     }
   };
 
-  // Handle client selection - FIXED: Don't auto-close modal
+  // Handle slot type selection (for new allocations)
+  const handleSlotTypeSelect = async (type) => {
+    if (!selectedSlot || !selectedSlot.workerId || !selectedSlot.slot) return;
+    
+    const { workerId, slot } = selectedSlot;
+    const dateKey = getDateKey(selectedDate);
+    const worker = workers?.find(w => w.id === workerId);
+    
+    let newAllocation = {
+      workerId: workerId,
+      workerName: worker?.name || "Unknown Worker",
+      // Slot details
+      date: dateKey,
+      slotId: slot.id,
+      slotHour: slot.hour24,
+      slotMinute: slot.minute,
+      startTime: slot.time24,
+      startTime12: slot.time12,
+      endTime: null,
+      status: type === "working" ? "allocated" : type,
+      slotType: type,
+      allocatedAt: new Date().toISOString(),
+      duration: null,
+      department: worker?.department,
+      workerDepartment: worker?.department,
+      remarks: ""
+    };
+
+    // For non-working slots, mark as completed immediately
+    if (type !== "working") {
+      newAllocation = {
+        ...newAllocation,
+        status: "completed",
+        endTime: slot.time24,
+        duration: 0,
+        completedAt: new Date().toISOString(),
+        remarks: `Marked as ${type}`
+      };
+    }
+
+    // Update local state
+    setAllocations(prev => ({
+      ...prev,
+      [workerId]: {
+        ...prev[workerId],
+        [slot.id]: newAllocation
+      }
+    }));
+
+    try {
+      // Save to Worker's schedule
+      await saveAllocationToWorker(workerId, newAllocation);
+      
+      console.log(`✅ Slot marked as ${type}`);
+    } catch (error) {
+      console.error("❌ Error saving slot:", error);
+      alert("Failed to save slot. Please try again.");
+      return;
+    }
+
+    if (onAllocationUpdate) {
+      onAllocationUpdate(newAllocation);
+    }
+
+    // Set appropriate status and close modal
+    if (type === "working") {
+      setSlotStatus("allocated");
+      // Keep modal open for client selection
+    } else {
+      setSlotStatus("completed");
+      setSelectedSlot({ workerId, slot, allocation: newAllocation });
+      setTimeout(() => {
+        setShowAllocationModal(false);
+        setActiveWorker(null);
+      }, 1500);
+    }
+  };
+
+  // Handle client selection - FIXED: Use correct phone field
   const handleClientSelect = async (client) => {
     if (!selectedSlot || !selectedSlot.workerId || !selectedSlot.slot) return;
 
@@ -359,7 +500,7 @@ const SlotBook = ({ workers, onAllocationUpdate }) => {
       clientId: client.clientId,
       clientName: client.name,
       clientLocation: client.location,
-      clientPhone: client.mobileNo1,
+      clientPhone: client.phone || client.mobile || client.contactNumber || "N/A", // FIX: Use correct phone field
       clientEmail: client.email,
       // Slot details
       date: dateKey,
@@ -367,12 +508,15 @@ const SlotBook = ({ workers, onAllocationUpdate }) => {
       slotHour: slot.hour24,
       slotMinute: slot.minute,
       startTime: slot.time24,
+      startTime12: slot.time12,
       endTime: null,
       status: currentTime >= slotTime ? "in-progress" : "allocated",
+      slotType: "working",
       allocatedAt: new Date().toISOString(),
       duration: null,
       department: client.department,
-      workerDepartment: worker?.department
+      workerDepartment: worker?.department,
+      remarks: ""
     };
 
     // Update local state
@@ -402,7 +546,7 @@ const SlotBook = ({ workers, onAllocationUpdate }) => {
       onAllocationUpdate(newAllocation);
     }
 
-    // FIX 1: Don't auto-close modal. Just update status
+    // Don't auto-close modal. Just update status
     if (currentTime >= slotTime) {
       setSlotStatus("in-progress");
       setSelectedSlot({ workerId, slot, allocation: newAllocation });
@@ -410,9 +554,6 @@ const SlotBook = ({ workers, onAllocationUpdate }) => {
     } else {
       // Keep modal open with success message
       setSlotStatus("allocated");
-      // DO NOT auto-close - let user decide when to close
-      // Show success message but keep modal open
-      console.log("Allocation successful, modal remains open");
     }
   };
 
@@ -450,7 +591,7 @@ const SlotBook = ({ workers, onAllocationUpdate }) => {
       await firebaseDB.child(`${workerPath}/${workerId}`).update({
         schedule: updatedSchedule,
         lastUpdated: new Date().toISOString(),
-        lastActivity: `Allocated to ${allocation.clientName}`
+        lastActivity: allocation.clientName ? `Allocated to ${allocation.clientName}` : `Marked as ${allocation.slotType}`
       });
 
       console.log("✅ Worker schedule updated");
@@ -460,7 +601,7 @@ const SlotBook = ({ workers, onAllocationUpdate }) => {
     }
   };
 
-  // FIX 2: Save allocation to Client's Firebase path - CREATE IF NOT EXISTS
+  // Save allocation to Client's Firebase path - CREATE IF NOT EXISTS
   const saveAllocationToClient = async (client, allocation) => {
     try {
       const clientRef = firebaseDB.child(`${client.clientPath}/${client.clientKey}`);
@@ -543,9 +684,11 @@ const SlotBook = ({ workers, onAllocationUpdate }) => {
     const updatedAllocation = {
       ...allocation,
       endTime: tempEndTime,
-      status: "completed",
+      endTime12: convertTo12Hour(tempEndTime),
+      status: tempStatus,
       duration: parseFloat(duration.toFixed(2)), // Ensure it's a number
-      completedAt: new Date().toISOString()
+      completedAt: new Date().toISOString(),
+      remarks: tempRemarks
     };
 
     // Update local state
@@ -560,16 +703,14 @@ const SlotBook = ({ workers, onAllocationUpdate }) => {
     try {
       // Find the client
       const client = clients?.find(c => c.clientKey === allocation.clientKey);
-      if (!client) {
-        console.error("Client not found for update:", allocation);
-        throw new Error("Client not found");
-      }
-
+      
       // Update worker schedule
       await saveAllocationToWorker(workerId, updatedAllocation);
       
-      // Update client schedule
-      await saveAllocationToClient(client, updatedAllocation);
+      // Update client schedule if client exists
+      if (client && allocation.clientKey && allocation.clientKey !== "WALKIN") {
+        await saveAllocationToClient(client, updatedAllocation);
+      }
       
       console.log("✅ Allocation completed and saved");
     } catch (error) {
@@ -582,14 +723,57 @@ const SlotBook = ({ workers, onAllocationUpdate }) => {
       onAllocationUpdate(updatedAllocation);
     }
 
-    // Update slot status to completed
+    // Update slot status
     setSlotStatus("completed");
     setSelectedSlot({ workerId, slot, allocation: updatedAllocation });
     setEditingEndTime(false);
     setTempEndTime("");
+    setTempRemarks("");
+  };
+
+  // Handle status update without end time (for non-working slots)
+  const handleStatusUpdate = async () => {
+    if (!selectedSlot) return;
+
+    const { workerId, slot } = selectedSlot;
+    const allocation = allocations[workerId]?.[slot.id];
     
-    // Don't close modal - keep showing completed details
-    // User will close manually via Close button
+    if (!allocation) return;
+
+    const updatedAllocation = {
+      ...allocation,
+      status: tempStatus,
+      remarks: tempRemarks,
+      completedAt: new Date().toISOString()
+    };
+
+    // Update local state
+    setAllocations(prev => ({
+      ...prev,
+      [workerId]: {
+        ...prev[workerId],
+        [slot.id]: updatedAllocation
+      }
+    }));
+
+    try {
+      // Update worker schedule
+      await saveAllocationToWorker(workerId, updatedAllocation);
+      console.log("✅ Status updated and saved");
+    } catch (error) {
+      console.error("❌ Error updating status:", error);
+      alert("Failed to update status. Please try again.");
+      return;
+    }
+
+    if (onAllocationUpdate) {
+      onAllocationUpdate(updatedAllocation);
+    }
+
+    // Update slot status
+    setSlotStatus("completed");
+    setSelectedSlot({ workerId, slot, allocation: updatedAllocation });
+    setTempRemarks("");
   };
 
   // Get slot status and styling
@@ -612,24 +796,46 @@ const SlotBook = ({ workers, onAllocationUpdate }) => {
       };
     }
     
+    // Check slot type for styling
+    if (allocation.slotType && allocation.slotType !== "working") {
+      const typeColors = {
+        "leave": "slot-leave",
+        "sick-leave": "slot-sick-leave",
+        "holiday": "slot-holiday",
+        "client-not-available": "slot-client-not-available"
+      };
+      
+      return {
+        status: allocation.slotType,
+        className: typeColors[allocation.slotType] || "slot-other",
+        tooltip: `${allocation.slotType.replace(/-/g, ' ').toUpperCase()}${allocation.remarks ? `\nRemarks: ${allocation.remarks}` : ''}`
+      };
+    }
+    
     switch (allocation.status) {
       case "allocated":
         return {
           status: "allocated",
           className: "slot-allocated",
-          tooltip: `Allocated to ${allocation.clientName}\nStart: ${allocation.startTime}`
+          tooltip: `Allocated to ${allocation.clientName || 'No client'}\nStart: ${allocation.startTime12}`
         };
       case "in-progress":
         return {
           status: "in-progress",
           className: "slot-in-progress",
-          tooltip: `In Progress: ${allocation.clientName}\nStart: ${allocation.startTime}`
+          tooltip: `In Progress: ${allocation.clientName || 'No client'}\nStart: ${allocation.startTime12}`
         };
       case "completed":
         return {
           status: "completed",
           className: "slot-completed",
-          tooltip: `Completed: ${allocation.clientName}\nDuration: ${allocation.duration} hours`
+          tooltip: `Completed: ${allocation.clientName || 'No client'}\nDuration: ${allocation.duration} hours${allocation.remarks ? `\nRemarks: ${allocation.remarks}` : ''}`
+        };
+      case "not-completed":
+        return {
+          status: "not-completed",
+          className: "slot-not-completed",
+          tooltip: `Not Completed: ${allocation.clientName || 'No client'}${allocation.remarks ? `\nRemarks: ${allocation.remarks}` : ''}`
         };
       default:
         return {
@@ -713,7 +919,7 @@ const SlotBook = ({ workers, onAllocationUpdate }) => {
 
       // Remove from client schedule
       const client = clients?.find(c => c.clientKey === allocation.clientKey);
-      if (client && client.clientPath) {
+      if (client && client.clientPath && allocation.clientKey && allocation.clientKey !== "WALKIN") {
         const snapshot = await firebaseDB.child(`${client.clientPath}/${client.clientKey}`).once('value');
         const clientData = snapshot.val() || {};
         
@@ -745,28 +951,62 @@ const SlotBook = ({ workers, onAllocationUpdate }) => {
     setSelectedClientId(null);
   };
 
-  // Render allocation modal - FIX 1: Modal doesn't auto-close on overlay click
+  // Generate time options for end time dropdown
+  const generateEndTimeOptions = (startTime) => {
+    const options = [];
+    const [startHour, startMinute] = startTime.split(':').map(Number);
+    const startTotalMinutes = startHour * 60 + startMinute;
+    
+    // Generate times up to 21:00 (9 PM)
+    for (let hour = startHour; hour <= 21; hour++) {
+      for (let minute = 0; minute < 60; minute += 30) {
+        // Skip times before start time
+        const totalMinutes = hour * 60 + minute;
+        if (totalMinutes <= startTotalMinutes && hour === startHour && minute === startMinute) {
+          continue;
+        }
+        
+        if (totalMinutes > startTotalMinutes) {
+          const time24 = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
+          options.push({
+            value: time24,
+            label: convertTo12Hour(time24)
+          });
+        }
+        
+        // Break if we've reached 21:00
+        if (hour === 21 && minute === 0) break;
+      }
+    }
+    
+    return options;
+  };
+
+  // Render allocation modal - UPDATED with new features
   const renderAllocationModal = () => {
     if (!showAllocationModal || !selectedSlot) return null;
 
     const { workerId, slot } = selectedSlot;
     const worker = workers?.find(w => w.id === workerId);
     const allocation = allocations[workerId]?.[slot.id];
+    const endTimeOptions = allocation ? generateEndTimeOptions(allocation.startTime) : [];
 
     return (
-      <div className="modal-overlay"> {/* FIX 1: Removed onClick handler */}
+      <div className="modal-overlay">
         <div className="modal-container" onClick={(e) => e.stopPropagation()}>
           <div className="modal-header">
             <h3>
               {slotStatus === "allocating" && "📅 Allocate Time Slot"}
               {slotStatus === "allocated" && "✅ Successfully Allocated"}
-              {slotStatus === "in-progress" && "⏳ Update Work Status"}
-              {slotStatus === "completed" && "✅ Work Details"}
+              {(slotStatus === "in-progress" || slotStatus === "completed") && "⚙️ Update Work Status"}
             </h3>
             <button className="modal-close" onClick={() => {
               setShowAllocationModal(false);
               setActiveWorker(null);
               setSelectedClientId(null);
+              setEditingEndTime(false);
+              setTempEndTime("");
+              setTempRemarks("");
             }}>
               ×
             </button>
@@ -788,82 +1028,104 @@ const SlotBook = ({ workers, onAllocationUpdate }) => {
               </div>
             </div>
 
-            {slotStatus === "allocating" && (
-              <div className="client-search-section">
-                <div className="section-header">
-                  <h4>🔍 Select Client</h4>
-                  {loading && <div className="loading-spinner">Loading clients...</div>}
+            {slotStatus === "allocating" && !allocation && (
+              <div className="slot-type-section">
+                <h4>📋 Select Slot Type</h4>
+                <div className="slot-type-buttons">
+                  <button className="btn-slot-type working" onClick={() => setSlotType("working")}>
+                    🏢 Working
+                  </button>
+                  <button className="btn-slot-type leave" onClick={() => handleSlotTypeSelect("leave")}>
+                    🏖️ Leave
+                  </button>
+                  <button className="btn-slot-type sick-leave" onClick={() => handleSlotTypeSelect("sick-leave")}>
+                    🤒 Sick Leave
+                  </button>
+                  <button className="btn-slot-type holiday" onClick={() => handleSlotTypeSelect("holiday")}>
+                    🎉 Holiday
+                  </button>
+                  <button className="btn-slot-type client-not-available" onClick={() => handleSlotTypeSelect("client-not-available")}>
+                    👥 Client Not Available
+                  </button>
                 </div>
                 
-                <div className="search-container">
-                  <input
-                    ref={searchInputRef}
-                    type="text"
-                    className="search-input"
-                    placeholder="Search by name, ID, phone, location..."
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    onKeyDown={(e) => {
-                      // FIX 1: Removed Escape key auto-close
-                      if (e.key === 'Enter' && filteredClients.length > 0) {
-                        handleClientSelect(filteredClients[0]);
-                      }
-                    }}
-                  />
-                  <span className="search-icon">🔍</span>
-                </div>
-                
-                {searchQuery && (
-                  <div className="client-results">
-                    {filteredClients.length > 0 ? (
-                      <>
-                        <div className="results-header">
-                          <span>Found {filteredClients.length} client(s)</span>
-                        </div>
-                        <div className="client-list">
-                          {filteredClients.slice(0, 8).map(client => (
-                            <div
-                              key={client.clientKey}
-                              className={`client-card ${selectedClientId === client.clientKey ? 'selected' : ''}`}
-                              onClick={() => handleClientSelect(client)}
-                            >
-                              <div className="client-header">
-                                <div className="client-id">ID: {client.clientId}</div>
-                                <div className="client-phone">📱 {client.phone}</div>
-                              </div>
-                              <div className="client-name">👤 {client.name}</div>
-                              <div className="client-details">
-                                <span className="location">📍 {client.location}</span>
-                                <span className="department">🏢 {client.department}</span>
-                              </div>
-                              {selectedClientId === client.clientKey && (
-                                <div className="selection-indicator">✓ Selected</div>
-                              )}
+                {slotType === "working" && (
+                  <div className="client-search-section">
+                    <div className="section-header">
+                      <h4>🔍 Select Client</h4>
+                      {loading && <div className="loading-spinner">Loading clients...</div>}
+                    </div>
+                    
+                    <div className="search-container">
+                      <input
+                        ref={searchInputRef}
+                        type="text"
+                        className="search-input"
+                        placeholder="Search by name, ID, phone, location..."
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' && filteredClients.length > 0) {
+                            handleClientSelect(filteredClients[0]);
+                          }
+                        }}
+                      />
+                      <span className="search-icon">🔍</span>
+                    </div>
+                    
+                    {searchQuery && (
+                      <div className="client-results">
+                        {filteredClients.length > 0 ? (
+                          <>
+                            <div className="results-header">
+                              <span>Found {filteredClients.length} client(s)</span>
                             </div>
-                          ))}
-                        </div>
-                      </>
-                    ) : (
-                      <div className="no-results">
-                        <p>No clients found matching "{searchQuery}"</p>
-                        <button
-                          className="btn-walkin"
-                          onClick={() => {
-                            const dummyClient = {
-                              clientKey: "WALKIN-" + Date.now(),
-                              clientPath: "ClientData/Others/Running",
-                              clientId: "WALKIN-" + Date.now(),
-                              name: "Walk-in Client",
-                              location: "On-site",
-                              phone: "N/A",
-                              email: "N/A",
-                              department: worker?.department || "Others"
-                            };
-                            handleClientSelect(dummyClient);
-                          }}
-                        >
-                          ➕ Create Walk-in Client
-                        </button>
+                            <div className="client-list">
+                              {filteredClients.slice(0, 8).map(client => (
+                                <div
+                                  key={client.clientKey}
+                                  className={`client-card ${selectedClientId === client.clientKey ? 'selected' : ''}`}
+                                  onClick={() => handleClientSelect(client)}
+                                >
+                                  <div className="client-header">
+                                    <div className="client-id">ID: {client.clientId}</div>
+                                    <div className="client-phone">📱 {client.phone}</div>
+                                  </div>
+                                  <div className="client-name">👤 {client.name}</div>
+                                  <div className="client-details">
+                                    <span className="location">📍 {client.location}</span>
+                                    <span className="department">🏢 {client.department}</span>
+                                  </div>
+                                  {selectedClientId === client.clientKey && (
+                                    <div className="selection-indicator">✓ Selected</div>
+                                  )}
+                                </div>
+                              ))}
+                            </div>
+                          </>
+                        ) : (
+                          <div className="no-results">
+                            <p>No clients found matching "{searchQuery}"</p>
+                            <button
+                              className="btn-walkin"
+                              onClick={() => {
+                                const dummyClient = {
+                                  clientKey: "WALKIN-" + Date.now(),
+                                  clientPath: "ClientData/Others/Running",
+                                  clientId: "WALKIN-" + Date.now(),
+                                  name: "Walk-in Client",
+                                  location: "On-site",
+                                  phone: "N/A",
+                                  email: "N/A",
+                                  department: worker?.department || "Others"
+                                };
+                                handleClientSelect(dummyClient);
+                              }}
+                            >
+                              ➕ Create Walk-in Client
+                            </button>
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>
@@ -877,8 +1139,8 @@ const SlotBook = ({ workers, onAllocationUpdate }) => {
                 <h4>Allocation Successful!</h4>
                 <div className="success-details">
                   <p><strong>Worker:</strong> {allocation.workerName}</p>
-                  <p><strong>Client:</strong> {allocation.clientName}</p>
-                  <p><strong>Time:</strong> {allocation.startTime}</p>
+                  <p><strong>Client:</strong> {allocation.clientName || "No client"}</p>
+                  <p><strong>Time:</strong> {allocation.startTime12}</p>
                   <p><strong>Status:</strong> Scheduled</p>
                 </div>
                 <div className="success-actions">
@@ -913,19 +1175,19 @@ const SlotBook = ({ workers, onAllocationUpdate }) => {
                   <div className="info-grid">
                     <div className="info-item">
                       <span className="label">Client ID:</span>
-                      <span className="value">{allocation.clientId}</span>
+                      <span className="value">{allocation.clientId || "N/A"}</span>
                     </div>
                     <div className="info-item">
                       <span className="label">Name:</span>
-                      <span className="value">{allocation.clientName}</span>
+                      <span className="value">{allocation.clientName || "N/A"}</span>
                     </div>
                     <div className="info-item">
                       <span className="label">Location:</span>
-                      <span className="value">{allocation.clientLocation}</span>
+                      <span className="value">{allocation.clientLocation || "N/A"}</span>
                     </div>
                     <div className="info-item">
                       <span className="label">Phone:</span>
-                      <span className="value">{allocation.clientPhone}</span>
+                      <span className="value">{allocation.clientPhone || "N/A"}</span>
                     </div>
                   </div>
                 </div>
@@ -935,22 +1197,43 @@ const SlotBook = ({ workers, onAllocationUpdate }) => {
                   <div className="info-grid">
                     <div className="info-item">
                       <span className="label">Start Time:</span>
-                      <span className="value">{allocation.startTime}</span>
+                      <span className="value">{allocation.startTime12}</span>
                     </div>
                     
-                    {slotStatus === "in-progress" && (
+                    <div className="info-item">
+                      <span className="label">Status:</span>
+                      <select 
+                        className="status-select"
+                        value={tempStatus}
+                        onChange={(e) => setTempStatus(e.target.value)}
+                      >
+                        <option value="completed">✅ Completed</option>
+                        <option value="not-completed">❌ Not Completed</option>
+                        <option value="leave">🏖️ Leave</option>
+                        <option value="sick-leave">🤒 Sick Leave</option>
+                        <option value="holiday">🎉 Holiday</option>
+                        <option value="client-not-available">👥 Client Not Available</option>
+                      </select>
+                    </div>
+                    
+                    {tempStatus === "completed" && allocation.slotType === "working" && (
                       <div className="info-item full-width">
                         <span className="label">End Time:</span>
                         {editingEndTime ? (
                           <div className="time-input-group">
-                            <input
-                              type="time"
+                            <select
+                              ref={endTimeRef}
                               value={tempEndTime}
                               onChange={(e) => setTempEndTime(e.target.value)}
-                              min={allocation.startTime}
-                              max="21:00"
-                              className="time-input"
-                            />
+                              className="time-select"
+                            >
+                              <option value="">Select end time</option>
+                              {endTimeOptions.map(option => (
+                                <option key={option.value} value={option.value}>
+                                  {option.label}
+                                </option>
+                              ))}
+                            </select>
                             <div className="button-group">
                               <button
                                 className="btn-save"
@@ -969,34 +1252,52 @@ const SlotBook = ({ workers, onAllocationUpdate }) => {
                           </div>
                         ) : (
                           <div className="end-time-actions">
-                            <span className="value">Not set</span>
+                            <span className="value">{allocation.endTime12 || "Not set"}</span>
                             <button
                               className="btn-set"
-                              onClick={() => setEditingEndTime(true)}
+                              onClick={() => {
+                                setEditingEndTime(true);
+                                setTimeout(() => {
+                                  if (endTimeRef.current) {
+                                    endTimeRef.current.focus();
+                                  }
+                                }, 100);
+                              }}
                             >
-                              ⏰ Set End Time
+                              ⏰ {allocation.endTime ? "Change End Time" : "Set End Time"}
                             </button>
                           </div>
                         )}
                       </div>
                     )}
                     
-                    {slotStatus === "completed" && (
+                    <div className="info-item full-width">
+                      <span className="label">Remarks:</span>
+                      <textarea
+                        className="remarks-input"
+                        value={tempRemarks}
+                        onChange={(e) => setTempRemarks(e.target.value)}
+                        placeholder="Add remarks here..."
+                        rows="3"
+                      />
+                    </div>
+                    
+                    {allocation.status === "completed" && (
                       <>
                         <div className="info-item">
                           <span className="label">End Time:</span>
-                          <span className="value">{allocation.endTime}</span>
+                          <span className="value">{allocation.endTime12 || "N/A"}</span>
                         </div>
                         <div className="info-item">
                           <span className="label">Duration:</span>
                           <span className="value highlight">
-                            {allocation.duration} hours
+                            {allocation.duration || 0} hours
                           </span>
                         </div>
                         <div className="info-item">
                           <span className="label">Completed:</span>
                           <span className="value">
-                            {new Date(allocation.completedAt).toLocaleTimeString()}
+                            {allocation.completedAt ? new Date(allocation.completedAt).toLocaleTimeString() : "N/A"}
                           </span>
                         </div>
                       </>
@@ -1005,6 +1306,12 @@ const SlotBook = ({ workers, onAllocationUpdate }) => {
                 </div>
                 
                 <div className="action-buttons">
+                  <button
+                    className="btn-save-status"
+                    onClick={handleStatusUpdate}
+                  >
+                    💾 Save Status & Remarks
+                  </button>
                   <button
                     className="btn-clear"
                     onClick={() => handleClearSlot(workerId, slot.id)}
@@ -1023,6 +1330,9 @@ const SlotBook = ({ workers, onAllocationUpdate }) => {
                 setShowAllocationModal(false);
                 setActiveWorker(null);
                 setSelectedClientId(null);
+                setEditingEndTime(false);
+                setTempEndTime("");
+                setTempRemarks("");
               }}
             >
               Close
@@ -1033,7 +1343,7 @@ const SlotBook = ({ workers, onAllocationUpdate }) => {
     );
   };
 
-  // Render worker card - FIXED: Ensure totalHours is displayed correctly
+  // Render worker card - UPDATED with disabled slots
   const renderWorkerCard = (worker) => {
     const totalHours = calculateTotalHours(worker.id);
     const timeSlots = generateTimeSlots;
@@ -1067,7 +1377,7 @@ const SlotBook = ({ workers, onAllocationUpdate }) => {
 
         <div className="slots-section">
           <div className="slots-header">
-            <h5>🕒 Time Slots</h5>
+            <h5>🕒 Time Slots - {format(selectedDate, 'dd-MMM-yy')}</h5>
             <div className="slot-stats">
               <span className="slot-stat completed">{completedSlots} ✅</span>
               <span className="slot-stat in-progress">{inProgressSlots} ⏳</span>
@@ -1078,33 +1388,38 @@ const SlotBook = ({ workers, onAllocationUpdate }) => {
             {timeSlots.map((slot) => {
               const slotStatus = getSlotStatus(worker.id, slot);
               const allocation = allocations[worker.id]?.[slot.id];
+              const isDisabled = isSlotDisabled(worker.id, slot) && !allocation;
               
               return (
                 <div key={slot.id} className="slot-wrapper">
                   <div
-                    className={`slot ${slotStatus.className} ${allocation ? 'allocated' : ''} ${slot.isLunchBreak ? 'lunch' : ''}`}
-                    onClick={() => !slot.isLunchBreak && handleSlotClick(worker.id, slot)}
-                    title={slotStatus.tooltip}
+                    className={`slot ${slotStatus.className} ${allocation ? 'allocated' : ''} ${slot.isLunchBreak ? 'lunch' : ''} ${isDisabled ? 'disabled' : ''}`}
+                    onClick={() => !slot.isLunchBreak && !isDisabled && handleSlotClick(worker.id, slot)}
+                    title={isDisabled ? "Slot is within a booked time range" : slotStatus.tooltip}
                   >
                     {allocation ? (
                       <div className="allocation-indicator">
                         <div className="client-indicator">
-                          <p className="">
-                           <strong> {allocation.clientName || "C"}</strong>
+                          <p className="client-name-small">
+                           <strong> {allocation.clientName?.substring(0, 10) || (allocation.slotType || "Booked")}</strong>
                           </p>
-                          <p className="">
-                            {allocation.clientId || "NA"}
+                          <p className="client-id-small">
+                            {allocation.clientId?.substring(0, 8) || allocation.slotType?.substring(0, 8) || "NA"}
                           </p>
-                          <p className="">
-                            {allocation.clientLocation || "NA"}
+                          <p className="client-location-small">
+                            {allocation.clientLocation?.substring(0, 10) || allocation.startTime12 || "NA"}
                           </p>
                           <div className="allocation-status">
                             <span className={`status-dot ${allocation.status}`}></span>
                             <span className="status-text">
                               {allocation.status === "completed" 
-                                ? `${allocation.duration}h` 
+                                ? `${allocation.duration || 0}h` 
                                 : allocation.status === "in-progress"
                                 ? "⏳"
+                                : allocation.slotType === "leave" ? "🏖️"
+                                : allocation.slotType === "sick-leave" ? "🤒"
+                                : allocation.slotType === "holiday" ? "🎉"
+                                : allocation.slotType === "client-not-available" ? "👥"
                                 : "📅"}
                             </span>
                           </div>
@@ -1114,6 +1429,11 @@ const SlotBook = ({ workers, onAllocationUpdate }) => {
                       <div className="lunch-indicator">
                         <span className="lunch-icon">🍽️</span>
                         <span className="lunch-text">Lunch</span>
+                      </div>
+                    ) : isDisabled ? (
+                      <div className="disabled-indicator">
+                        <span className="disabled-icon">⛔</span>
+                        <span className="time-text">{slot.time12}</span>
                       </div>
                     ) : (
                       <div className="available-indicator">
@@ -1131,7 +1451,7 @@ const SlotBook = ({ workers, onAllocationUpdate }) => {
             <div className="stat-item">
               <span className="stat-label">Available:</span>
               <span className="stat-value">
-                {timeSlots.filter(s => !s.isLunchBreak && !allocations[worker.id]?.[s.id]).length}
+                {timeSlots.filter(s => !s.isLunchBreak && !allocations[worker.id]?.[s.id] && !isSlotDisabled(worker.id, s)).length}
               </span>
             </div>
             <div className="stat-item">
@@ -1141,6 +1461,14 @@ const SlotBook = ({ workers, onAllocationUpdate }) => {
             <div className="stat-item">
               <span className="stat-label">Completed:</span>
               <span className="stat-value">{completedSlots}</span>
+            </div>
+            <div className="stat-item">
+              <span className="stat-label">Other:</span>
+              <span className="stat-value">
+                {Object.values(allocations[worker.id] || {}).filter(a => 
+                  a.slotType && a.slotType !== "working"
+                ).length}
+              </span>
             </div>
           </div>
         </div>
@@ -1162,43 +1490,53 @@ const SlotBook = ({ workers, onAllocationUpdate }) => {
     );
   };
 
-  // Render daily summary - FIXED: Ensure totalHours is displayed correctly
+  // Render daily summary - UPDATED with new columns
   const renderDailySummary = () => (
     <div className="summary-card">
-      <h3>📊 Daily Summary - {formatDate(selectedDate)}</h3>
+      <h3>📊 Daily Summary - {formatDateForSummary(selectedDate)}</h3>
       <div className="summary-table-container">
         <table className="summary-table">
           <thead>
             <tr>
-              <th>👨‍💼 Worker</th>
+              <th>📅 Date</th>
               <th>🏢 Department</th>
               <th>⏱️ Total Hours</th>
-              <th>👥 Clients</th>
+              <th>👥 Total Clients</th>
+              <th>📝 Remarks</th>
             </tr>
           </thead>
           <tbody>
             {dailySummary.length > 0 ? (
               dailySummary.map(summary => (
                 <tr key={summary.workerId}>
-                  <td className="worker-cell">{summary.workerName}</td>
+                  <td className="date-cell">{formatDateForSummary(selectedDate)}</td>
                   <td><span className="badge bg-secondary">{summary.department}</span></td>
                   <td className="hours-cell">{summary.totalHours}h</td>
-                  <td className="clients-cell">
-                    {summary.clientNames.slice(0, 2).map((name, idx) => (
-                      <span key={idx} className="client-tag">{name}</span>
-                    ))}
-                    {summary.clientNames.length > 2 && (
-                      <span className="more-clients">+{summary.clientNames.length - 2}</span>
+                  <td className="clients-cell">{summary.totalClients}</td>
+                  <td className="remarks-cell">
+                    {summary.remarks || "No remarks"}
+                    {summary.clientNames.length > 0 && (
+                      <div className="clients-tooltip">
+                        Clients: {summary.clientNames.join(", ")}
+                      </div>
                     )}
                   </td>
                 </tr>
               ))
             ) : (
               <tr>
-                <td colSpan="4" className="no-data">📭 No completed work for today</td>
+                <td colSpan="5" className="no-data">📭 No work recorded for today</td>
               </tr>
             )}
           </tbody>
+          <tfoot>
+            <tr>
+              <td colSpan="2" className="text-end"><strong>Total:</strong></td>
+              <td className="hours-cell"><strong>{dailySummary.reduce((sum, s) => sum + s.totalHours, 0).toFixed(2)}h</strong></td>
+              <td className="clients-cell"><strong>{dailySummary.reduce((sum, s) => sum + s.totalClients, 0)}</strong></td>
+              <td></td>
+            </tr>
+          </tfoot>
         </table>
       </div>
     </div>
@@ -1213,7 +1551,7 @@ const SlotBook = ({ workers, onAllocationUpdate }) => {
       >
         <span className="picker-icon">📅</span>
         <div className="picker-details">
-          <div className="picker-date">{format(selectedDate, 'MMM d, yyyy')}</div>
+          <div className="picker-date">{format(selectedDate, 'dd-MMM-yy')}</div>
           <div className="picker-day">{format(selectedDate, 'EEEE')}</div>
         </div>
         <span className="picker-arrow">{showCalendar ? '▲' : '▼'}</span>
@@ -1225,18 +1563,25 @@ const SlotBook = ({ workers, onAllocationUpdate }) => {
             onChange={(date) => {
               setSelectedDate(date);
               setShowCalendar(false);
+              // Load allocations for new date
+              loadAllocationsForDate(date);
             }}
             value={selectedDate}
             className="custom-calendar"
           />
           <div className="quick-dates">
-            <button className="quick-btn today" onClick={() => setSelectedDate(new Date())}>
+            <button className="quick-btn today" onClick={() => {
+              const today = new Date();
+              setSelectedDate(today);
+              loadAllocationsForDate(today);
+            }}>
               Today
             </button>
             <button className="quick-btn" onClick={() => {
               const yesterday = new Date();
               yesterday.setDate(yesterday.getDate() - 1);
               setSelectedDate(yesterday);
+              loadAllocationsForDate(yesterday);
             }}>
               Yesterday
             </button>
@@ -1244,6 +1589,7 @@ const SlotBook = ({ workers, onAllocationUpdate }) => {
               const tomorrow = new Date();
               tomorrow.setDate(tomorrow.getDate() + 1);
               setSelectedDate(tomorrow);
+              loadAllocationsForDate(tomorrow);
             }}>
               Tomorrow
             </button>
@@ -1465,6 +1811,17 @@ const SlotBook = ({ workers, onAllocationUpdate }) => {
                 total + Object.values(workerAllocs).length, 0)}
             </span>
           </div>
+        </div>
+        <div className="footer-legend">
+          <span className="legend-item"><span className="legend-dot available"></span> Available</span>
+          <span className="legend-item"><span className="legend-dot allocated"></span> Allocated</span>
+          <span className="legend-item"><span className="legend-dot in-progress"></span> In Progress</span>
+          <span className="legend-item"><span className="legend-dot completed"></span> Completed</span>
+          <span className="legend-item"><span className="legend-dot leave"></span> Leave</span>
+          <span className="legend-item"><span className="legend-dot sick-leave"></span> Sick Leave</span>
+          <span className="legend-item"><span className="legend-dot holiday"></span> Holiday</span>
+          <span className="legend-item"><span className="legend-dot client-not-available"></span> Client Not Available</span>
+          <span className="legend-item"><span className="legend-dot disabled"></span> Disabled (Booked Range)</span>
         </div>
       </footer>
 

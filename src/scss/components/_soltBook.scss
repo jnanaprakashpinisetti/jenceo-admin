@@ -817,7 +817,6 @@
                     }
 
                     &.clients-cell {
-                        display: flex;
                         gap: 8px;
                         align-items: center;
                         flex-wrap: wrap;
@@ -1479,4 +1478,136 @@
             margin: 0 auto;
         }
     }
+
+    /* Slot Type Colors */
+.slot-leave { background-color: #ffd700; }
+.slot-sick-leave { background-color: #ff6b6b; }
+.slot-holiday { background-color: #4ecdc4; }
+.slot-client-not-available { background-color: #95a5a6; }
+.slot-other { background-color: #7f8c8d; }
+.slot-not-completed { background-color: #e74c3c; }
+
+/* Disabled slot */
+.slot.disabled { 
+  background-color: #ecf0f1; 
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.slot.disabled:hover { background-color: #ecf0f1; }
+
+/* Slot type buttons */
+.slot-type-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 20px;
+}
+
+.btn-slot-type {
+  flex: 1;
+  min-width: 150px;
+  padding: 10px;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 600;
+  transition: all 0.3s;
+}
+
+.btn-slot-type.working { background-color: #3498db; color: white; }
+.btn-slot-type.leave { background-color: #ffd700; color: #333; }
+.btn-slot-type.sick-leave { background-color: #ff6b6b; color: white; }
+.btn-slot-type.holiday { background-color: #4ecdc4; color: white; }
+.btn-slot-type.client-not-available { background-color: #95a5a6; color: white; }
+
+.btn-slot-type:hover { opacity: 0.9; transform: translateY(-2px); }
+
+/* Time select dropdown */
+.time-select {
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  font-size: 14px;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+/* Status select */
+.status-select {
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  font-size: 14px;
+}
+
+/* Remarks input */
+.remarks-input {
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  font-size: 14px;
+  resize: vertical;
+  min-height: 60px;
+}
+
+/* Save status button */
+.btn-save-status {
+  background-color: #2ecc71;
+  color: white;
+  border: none;
+  padding: 10px 20px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 600;
+  margin-right: 10px;
+}
+
+.btn-save-status:hover {
+  background-color: #27ae60;
+}
+
+/* Legend styles */
+.footer-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 15px;
+  margin-top: 10px;
+  justify-content: center;
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  font-size: 12px;
+  color: #666;
+}
+
+.legend-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  margin-right: 5px;
+}
+
+.legend-dot.available { background-color: #2ecc71; }
+.legend-dot.allocated { background-color: #3498db; }
+.legend-dot.in-progress { background-color: #f39c12; }
+.legend-dot.completed { background-color: #27ae60; }
+.legend-dot.leave { background-color: #ffd700; }
+.legend-dot.sick-leave { background-color: #ff6b6b; }
+.legend-dot.holiday { background-color: #4ecdc4; }
+.legend-dot.client-not-available { background-color: #95a5a6; }
+.legend-dot.disabled { background-color: #ecf0f1; border: 1px solid #bdc3c7; }
+
+/* Tooltip for clients */
+.clients-tooltip {
+  font-size: 11px;
+  color: #666;
+  margin-top: 5px;
+  font-style: italic;
+}
 }

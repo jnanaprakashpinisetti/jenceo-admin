@@ -27,6 +27,7 @@ const SlotBook = ({ workers, onAllocationUpdate }) => {
     utilizationRate: "0%"
   });
   const [activeWorker, setActiveWorker] = useState(null);
+  const [selectedClientId, setSelectedClientId] = useState(null); // NEW: Track selected client
   
   const searchInputRef = useRef(null);
   const calendarRef = useRef(null);
@@ -286,13 +287,14 @@ const SlotBook = ({ workers, onAllocationUpdate }) => {
     setDailySummary(summary);
   };
 
-  // Handle slot click
+  // Handle slot click - FIXED: Clear selectedClientId when opening modal
   const handleSlotClick = (workerId, slot) => {
     if (slot.isLunchBreak) return;
     
     const currentAllocation = allocations[workerId]?.[slot.id];
     const worker = workers?.find(w => w.id === workerId);
     setActiveWorker(worker);
+    setSelectedClientId(null); // Clear previous selection
     
     if (currentAllocation?.status === "completed") {
       setSlotStatus("completed");
@@ -317,9 +319,12 @@ const SlotBook = ({ workers, onAllocationUpdate }) => {
     }
   };
 
-  // ✅ FIXED: Handle client selection with proper saving
+  // ✅ FIXED: Handle client selection with proper saving and highlighting
   const handleClientSelect = async (client) => {
     if (!selectedSlot || !selectedSlot.workerId || !selectedSlot.slot) return;
+
+    // Highlight the selected client
+    setSelectedClientId(client.clientKey);
 
     const { workerId, slot } = selectedSlot;
     const dateKey = getDateKey(selectedDate);
@@ -387,9 +392,13 @@ const SlotBook = ({ workers, onAllocationUpdate }) => {
       setSlotStatus("in-progress");
       setEditingEndTime(true);
     } else {
-      setShowAllocationModal(false);
-      setSelectedSlot(null);
-      setActiveWorker(null);
+      // Wait a moment to show the selection, then close modal
+      setTimeout(() => {
+        setShowAllocationModal(false);
+        setSelectedSlot(null);
+        setActiveWorker(null);
+        setSelectedClientId(null);
+      }, 500);
     }
   };
 
@@ -410,11 +419,15 @@ const SlotBook = ({ workers, onAllocationUpdate }) => {
       const snapshot = await firebaseDB.child(`${workerPath}/${workerId}`).once('value');
       const workerData = snapshot.val() || {};
 
+      // Initialize schedule if it doesn't exist
+      const currentSchedule = workerData.schedule || {};
+      const currentDateSchedule = currentSchedule[dateKey] || {};
+
       // Update schedule
       const updatedSchedule = {
-        ...workerData.schedule,
+        ...currentSchedule,
         [dateKey]: {
-          ...workerData.schedule?.[dateKey],
+          ...currentDateSchedule,
           [slotId]: allocation
         }
       };
@@ -443,11 +456,15 @@ const SlotBook = ({ workers, onAllocationUpdate }) => {
       const snapshot = await firebaseDB.child(`${client.clientPath}/${client.clientKey}`).once('value');
       const clientData = snapshot.val() || {};
 
+      // Initialize schedule if it doesn't exist
+      const currentSchedule = clientData.schedule || {};
+      const currentDateSchedule = currentSchedule[dateKey] || {};
+
       // Update client schedule
       const clientSchedule = {
-        ...clientData.schedule,
+        ...currentSchedule,
         [dateKey]: {
-          ...clientData.schedule?.[dateKey],
+          ...currentDateSchedule,
           [slotId]: {
             ...allocation,
             workerId: allocation.workerId,
@@ -487,6 +504,11 @@ const SlotBook = ({ workers, onAllocationUpdate }) => {
     const [endHour, endMinute] = tempEndTime.split(':').map(Number);
     const endTime = endHour + (endMinute / 60);
     const duration = endTime - startTime;
+
+    if (duration <= 0) {
+      alert("End time must be after start time");
+      return;
+    }
 
     const updatedAllocation = {
       ...allocation,
@@ -537,7 +559,7 @@ const SlotBook = ({ workers, onAllocationUpdate }) => {
     setActiveWorker(null);
   };
 
-  // Get slot status and styling
+  // Get slot status and styling - FIXED
   const getSlotStatus = (workerId, slot) => {
     const allocation = allocations[workerId]?.[slot.id];
     
@@ -608,13 +630,7 @@ const SlotBook = ({ workers, onAllocationUpdate }) => {
     return total.toFixed(2);
   };
 
-  // NEW: Quick allocate multiple slots
-  const handleQuickAllocate = (worker, client, startSlot, endSlot) => {
-    // Implementation for bulk allocation
-    console.log("Quick allocate:", worker, client, startSlot, endSlot);
-  };
-
-  // NEW: Clear slot allocation
+  // Clear slot allocation - FIXED
   const handleClearSlot = async (workerId, slotId) => {
     if (!window.confirm("Are you sure you want to clear this allocation?")) return;
     
@@ -624,7 +640,9 @@ const SlotBook = ({ workers, onAllocationUpdate }) => {
     // Remove from local state
     setAllocations(prev => {
       const updated = { ...prev };
-      delete updated[workerId]?.[slotId];
+      if (updated[workerId]) {
+        delete updated[workerId][slotId];
+      }
       return updated;
     });
 
@@ -639,9 +657,16 @@ const SlotBook = ({ workers, onAllocationUpdate }) => {
         const workerData = snapshot.val() || {};
         
         if (workerData.schedule?.[dateKey]?.[slotId]) {
-          delete workerData.schedule[dateKey][slotId];
+          const updatedSchedule = { ...workerData.schedule };
+          delete updatedSchedule[dateKey][slotId];
+          
+          // Clean up empty date entries
+          if (Object.keys(updatedSchedule[dateKey]).length === 0) {
+            delete updatedSchedule[dateKey];
+          }
+          
           await firebaseDB.child(`${workerPath}/${workerId}`).update({
-            schedule: workerData.schedule,
+            schedule: updatedSchedule,
             lastUpdated: new Date().toISOString()
           });
         }
@@ -654,9 +679,16 @@ const SlotBook = ({ workers, onAllocationUpdate }) => {
         const clientData = snapshot.val() || {};
         
         if (clientData.schedule?.[allocation.date]?.[slotId]) {
-          delete clientData.schedule[allocation.date][slotId];
+          const updatedClientSchedule = { ...clientData.schedule };
+          delete updatedClientSchedule[allocation.date][slotId];
+          
+          // Clean up empty date entries
+          if (Object.keys(updatedClientSchedule[allocation.date]).length === 0) {
+            delete updatedClientSchedule[allocation.date];
+          }
+          
           await firebaseDB.child(`${client.clientPath}/${client.clientKey}`).update({
-            schedule: clientData.schedule,
+            schedule: updatedClientSchedule,
             lastUpdated: new Date().toISOString()
           });
         }
@@ -667,9 +699,13 @@ const SlotBook = ({ workers, onAllocationUpdate }) => {
       console.error("Error clearing slot:", error);
       alert("Failed to clear slot. Please try again.");
     }
+    
+    setShowAllocationModal(false);
+    setSelectedSlot(null);
+    setActiveWorker(null);
   };
 
-  // Render allocation modal - IMPROVED
+  // Render allocation modal - IMPROVED with client highlighting
   const renderAllocationModal = () => {
     if (!showAllocationModal || !selectedSlot) return null;
 
@@ -689,6 +725,7 @@ const SlotBook = ({ workers, onAllocationUpdate }) => {
             <button className="modal-close" onClick={() => {
               setShowAllocationModal(false);
               setActiveWorker(null);
+              setSelectedClientId(null);
             }}>
               ×
             </button>
@@ -726,7 +763,10 @@ const SlotBook = ({ workers, onAllocationUpdate }) => {
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                     onKeyDown={(e) => {
-                      if (e.key === 'Escape') setShowAllocationModal(false);
+                      if (e.key === 'Escape') {
+                        setShowAllocationModal(false);
+                        setSelectedClientId(null);
+                      }
                       if (e.key === 'Enter' && filteredClients.length > 0) {
                         handleClientSelect(filteredClients[0]);
                       }
@@ -746,7 +786,7 @@ const SlotBook = ({ workers, onAllocationUpdate }) => {
                           {filteredClients.slice(0, 8).map(client => (
                             <div
                               key={client.clientKey}
-                              className="client-card"
+                              className={`client-card ${selectedClientId === client.clientKey ? 'selected' : ''}`}
                               onClick={() => handleClientSelect(client)}
                             >
                               <div className="client-header">
@@ -758,6 +798,9 @@ const SlotBook = ({ workers, onAllocationUpdate }) => {
                                 <span className="location">📍 {client.location}</span>
                                 <span className="department">🏢 {client.department}</span>
                               </div>
+                              {selectedClientId === client.clientKey && (
+                                <div className="selection-indicator">✓ Selected</div>
+                              )}
                             </div>
                           ))}
                         </div>
@@ -906,6 +949,7 @@ const SlotBook = ({ workers, onAllocationUpdate }) => {
               onClick={() => {
                 setShowAllocationModal(false);
                 setActiveWorker(null);
+                setSelectedClientId(null);
               }}
             >
               Close
@@ -1037,7 +1081,6 @@ const SlotBook = ({ workers, onAllocationUpdate }) => {
               className="action-btn quick-allocate"
               onClick={() => {
                 setActiveWorker(worker);
-                // Quick allocate logic can be implemented here
                 alert(`Quick allocate for ${worker.name}`);
               }}
             >
@@ -1178,7 +1221,7 @@ const SlotBook = ({ workers, onAllocationUpdate }) => {
   );
 
   return (
-    <div className="slot-book-container">
+    <div className="slot-book-container SlotBook">
       {/* Header */}
       <header className="dashboard-header">
         <div className="header-content">

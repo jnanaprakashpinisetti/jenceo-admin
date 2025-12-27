@@ -2,6 +2,7 @@
 import React, { useEffect, useMemo, useState, useRef } from "react";
 import PropTypes from "prop-types";
 import { useNavigate } from "react-router-dom";
+import { CLIENT_PATHS } from "../../utils/dataPaths"; // Assuming dataPaths.js is in same folder
 
 /* ---------------------- Helpers ---------------------- */
 async function importFirebaseDB() {
@@ -163,7 +164,7 @@ function DonutChart({ segments = [], size = 150, stroke = 18, title = "Distribut
 }
 
 /* Normalize client record into payment rows */
-function extractPaymentsFromClient(clientRecord = {}, collectionName = "") {
+function extractPaymentsFromClient(clientRecord = {}, collectionName = "", department = "") {
   const clientId = clientRecord.idNo ?? clientRecord.id ?? clientRecord.clientId ?? clientRecord.key ?? "";
   const clientName = clientRecord.clientName ?? clientRecord.cName ?? clientRecord.name ?? clientRecord.client_name ?? "Unknown";
 
@@ -189,6 +190,7 @@ function extractPaymentsFromClient(clientRecord = {}, collectionName = "") {
 
       results.push({
         sourceCollection: collectionName,
+        department: department || "",
         clientId: String(clientId || ""),
         clientName: String(clientName || ""),
         paidAmount,
@@ -213,6 +215,7 @@ function extractPaymentsFromClient(clientRecord = {}, collectionName = "") {
       const date = clientRecord.date ?? clientRecord.paymentDate ?? "";
       results.push({
         sourceCollection: collectionName,
+        department: department || "",
         clientId: String(clientId || ""),
         clientName: String(clientName || ""),
         paidAmount: singleAmount,
@@ -247,6 +250,7 @@ function extractPaymentsFromClient(clientRecord = {}, collectionName = "") {
 
       results.push({
         sourceCollection: collectionName,
+        department: department || "",
         clientId: String(clientId || ""),
         clientName: String(clientName || ""),
         paidAmount: 0,
@@ -268,8 +272,6 @@ function extractPaymentsFromClient(clientRecord = {}, collectionName = "") {
   return results;
 }
 
-/* Group payments into */
-
 function isBalancePayRow(p) {
   try {
     if (p && p.raw && (p.raw.__type === "balance" || p.raw.__adjustment)) {
@@ -283,6 +285,7 @@ function isBalancePayRow(p) {
   } catch (e) { }
   return false;
 }
+
 //  { years: { [year]: { months: { [monthKey]: { rows, totals } }, totals } }, yearKeys: [] } 
 function groupPaymentsByYearMonth(payments) {
   const years = {};
@@ -391,7 +394,6 @@ function getDisplayBalance(r) {
   return rowBal;
 }
 
-
 export default function ClientPaymentCard({
   clientCollections = { active: "ClientData", exit: "ExitClients" },
   openClientModal = null,
@@ -409,7 +411,23 @@ export default function ClientPaymentCard({
   const [paymentDetailModal, setPaymentDetailModal] = useState(false);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
+  const [activeDepartment, setActiveDepartment] = useState("All Departments");
   const modalRef = useRef(null);
+
+  const departments = [
+    "All Departments",
+    "Home Care",
+    "Housekeeping", 
+    "Office & Administrative",
+    "Customer Service",
+    "Management & Supervision",
+    "Security",
+    "Driving & Logistics",
+    "Technical & Maintenance",
+    "Retail & Sales",
+    "Industrial & Labor",
+    "Others"
+  ];
 
   // listen Firebase nodes and build payments
   useEffect(() => {
@@ -427,6 +445,13 @@ export default function ClientPaymentCard({
 
       const snapshots = {};
       const paths = [clientCollections.active, clientCollections.exit];
+      
+      // Add department-based paths
+      Object.values(CLIENT_PATHS).forEach(path => {
+        if (!paths.includes(path)) {
+          paths.push(path);
+        }
+      });
 
       const attach = (path) => {
         try {
@@ -442,13 +467,22 @@ export default function ClientPaymentCard({
         }
       };
 
+      const getDepartmentFromPath = (path) => {
+        // Find department from CLIENT_PATHS
+        for (const [dept, deptPath] of Object.entries(CLIENT_PATHS)) {
+          if (path === deptPath) return dept;
+        }
+        return "";
+      };
+
       const rebuild = () => {
         const combined = [];
         paths.forEach((p) => {
           const node = snapshots[p] || {};
+          const department = getDepartmentFromPath(p);
           Object.keys(node).forEach((k) => {
             const client = node[k] || {};
-            const payments = extractPaymentsFromClient(client, p);
+            const payments = extractPaymentsFromClient(client, p, department);
             payments.forEach((pm) => {
               pm._clientDbKey = `${p}/${k}`;
               pm.sourceCollection = p;
@@ -483,14 +517,22 @@ export default function ClientPaymentCard({
     };
   }, [clientCollections.active, clientCollections.exit]);
 
+  // Filter payments by active department
+  const filteredPayments = useMemo(() => {
+    if (activeDepartment === "All Departments") {
+      return allPayments;
+    }
+    return allPayments.filter(payment => payment.department === activeDepartment);
+  }, [allPayments, activeDepartment]);
+
   // grouped structure
-  const grouped = useMemo(() => groupPaymentsByYearMonth(allPayments), [allPayments]);
+  const grouped = useMemo(() => groupPaymentsByYearMonth(filteredPayments), [filteredPayments]);
   const yearKeys = useMemo(() => grouped.yearKeys || [], [grouped]);
 
   // client summaries & overall totals
   const clientSummaries = useMemo(() => {
     const map = {};
-    allPayments.forEach((p) => {
+    filteredPayments.forEach((p) => {
       const id = p.clientId || "Unknown";
       const name = p.clientName || "Unknown";
       if (!map[id]) map[id] = { clientId: id, clientName: name, paid: 0, balance: 0, refunds: 0, count: 0 };
@@ -500,10 +542,10 @@ export default function ClientPaymentCard({
       map[id].count += 1;
     });
     return Object.values(map).sort((a, b) => b.paid - a.paid);
-  }, [allPayments]);
+  }, [filteredPayments]);
 
-
-  const overallTotals = useMemo(() => {
+  // Calculate totals for ALL departments (not just filtered)
+  const overallTotalsAllDepartments = useMemo(() => {
     const acc = allPayments.reduce(
       (acc2, p) => {
         acc2.paid += Number(p.paidAmount || 0);
@@ -534,6 +576,37 @@ export default function ClientPaymentCard({
     return acc;
   }, [allPayments]);
 
+  // Calculate totals for current department
+  const overallTotalsCurrentDepartment = useMemo(() => {
+    const acc = filteredPayments.reduce(
+      (acc2, p) => {
+        acc2.paid += Number(p.paidAmount || 0);
+        acc2.paidIncludingTravel += Number(p.totalForTotals || p.paidAmount || 0);
+        acc2.balanceSumAllRows += Number(p.balance || 0);
+        acc2.refunds += Number(p.refundAmount || 0);
+        acc2.count += 1;
+        const isBal = p?.raw?.__type === "balance";
+        if (Number(p.paidAmount || 0) === 0 && Number(p.refundAmount || 0) === 0 && !isBal) acc2.pendingCount += 1;
+        return acc2;
+      },
+      { paid: 0, paidIncludingTravel: 0, balanceSumAllRows: 0, refunds: 0, count: 0, pendingCount: 0 }
+    );
+
+    // Payment (net) across all rows
+    acc.netPaid = (filteredPayments || []).reduce((s, r) => s + getDisplayPayment(r), 0);
+
+    // Outstanding balance = sum of latest balance per client (using sorted filteredPayments desc)
+    const latestByClient = {};
+    (filteredPayments || []).forEach((row) => {
+      const cid = (row.clientId || "Unknown").toString();
+      if (latestByClient[cid] === undefined) {
+        latestByClient[cid] = Number(row.balance || 0);
+      }
+    });
+    acc.netBalance = Object.values(latestByClient).reduce((s, n) => s + Number(n || 0), 0);
+
+    return acc;
+  }, [filteredPayments]);
 
   // default active year/month when modal opens
   useEffect(() => {
@@ -744,20 +817,20 @@ export default function ClientPaymentCard({
       .join("\n");
 
   const exportCSV = (scope = "month") => {
-    const rows = [["#", "Client ID", "Client Name", "Method", "Date", "Receipt No", "Payment", "Balance"]];
+    const rows = [["#", "Department", "Client ID", "Client Name", "Method", "Date", "Receipt No", "Payment", "Balance"]];
     if (scope === "month") {
       currentMonthRows.forEach((r, i) =>
-        rows.push([i + 1, r.clientId || "-", r.clientName || "-", r.method || "-", r.date || "-", r.receipt || "-", getDisplayPayment(r), getDisplayBalance(r)])
+        rows.push([i + 1, r.department || "-", r.clientId || "-", r.clientName || "-", r.method || "-", r.date || "-", r.receipt || "-", getDisplayPayment(r), getDisplayBalance(r)])
       );
     } else if (scope === "year") {
       let idx = 0;
       currentYearRows.forEach((r) =>
-        rows.push([++idx, r.clientId || "-", r.clientName || "-", r.method || "-", r.date || "-", r.receipt || "-", getDisplayPayment(r), getDisplayBalance(r)])
+        rows.push([++idx, r.department || "-", r.clientId || "-", r.clientName || "-", r.method || "-", r.date || "-", r.receipt || "-", getDisplayPayment(r), getDisplayBalance(r)])
       );
     } else {
       let idx = 0;
-      allPayments.forEach((r) =>
-        rows.push([++idx, r.clientId || "-", r.clientName || "-", r.method || "-", r.date || "-", r.receipt || "-", getDisplayPayment(r), getDisplayBalance(r)])
+      filteredPayments.forEach((r) =>
+        rows.push([++idx, r.department || "-", r.clientId || "-", r.clientName || "-", r.method || "-", r.date || "-", r.receipt || "-", getDisplayPayment(r), getDisplayBalance(r)])
       );
     }
     const csv = arrayToCSV(rows);
@@ -798,13 +871,13 @@ export default function ClientPaymentCard({
   .invest-table .text-danger { font-weight: 600; }
 </style>
 </head><body>`;
-    html += `<h3>Client Payments - ${scope}</h3><table><thead><tr><th>#</th><th>Client ID</th><th>Client Name</th><th>Method</th><th>Date</th><th>Receipt</th><th>Payment</th><th>Balance</th></tr></thead><tbody>`;
+    html += `<h3>Client Payments - ${scope} (${activeDepartment})</h3><table><thead><tr><th>#</th><th>Department</th><th>Client ID</th><th>Client Name</th><th>Method</th><th>Date</th><th>Receipt</th><th>Payment</th><th>Balance</th></tr></thead><tbody>`;
     if (scope === "month") {
-      currentMonthRows.forEach((r, i) => (html += `<tr><td>${i + 1}</td><td>${r.clientId || ""}</td><td>${r.clientName || ""}</td><td>${r.method || ""}</td><td>${r.date || ""}</td><td>${r.receipt || ""}</td><td>${getDisplayPayment(r)}</td><td>${getDisplayBalance(r)}</td></tr>`));
+      currentMonthRows.forEach((r, i) => (html += `<tr><td>${i + 1}</td><td>${r.department || ""}</td><td>${r.clientId || ""}</td><td>${r.clientName || ""}</td><td>${r.method || ""}</td><td>${r.date || ""}</td><td>${r.receipt || ""}</td><td>${getDisplayPayment(r)}</td><td>${getDisplayBalance(r)}</td></tr>`));
     } else if (scope === "year") {
-      currentYearRows.forEach((r, i) => (html += `<tr><td>${i + 1}</td><td>${r.clientId || ""}</td><td>${r.clientName || ""}</td><td>${r.method || ""}</td><td>${r.date || ""}</td><td>${r.receipt || ""}</td><td>${getDisplayPayment(r)}</td><td>${getDisplayBalance(r)}</td></tr>`));
+      currentYearRows.forEach((r, i) => (html += `<tr><td>${i + 1}</td><td>${r.department || ""}</td><td>${r.clientId || ""}</td><td>${r.clientName || ""}</td><td>${r.method || ""}</td><td>${r.date || ""}</td><td>${r.receipt || ""}</td><td>${getDisplayPayment(r)}</td><td>${getDisplayBalance(r)}</td></tr>`));
     } else {
-      allPayments.forEach((r, i) => (html += `<tr><td>${i + 1}</td><td>${r.clientId || ""}</td><td>${r.clientName || ""}</td><td>${r.method || ""}</td><td>${r.date || ""}</td><td>${r.receipt || ""}</td><td>${getDisplayPayment(r)}</td><td>${getDisplayBalance(r)}</td></tr>`));
+      filteredPayments.forEach((r, i) => (html += `<tr><td>${i + 1}</td><td>${r.department || ""}</td><td>${r.clientId || ""}</td><td>${r.clientName || ""}</td><td>${r.method || ""}</td><td>${r.date || ""}</td><td>${r.receipt || ""}</td><td>${getDisplayPayment(r)}</td><td>${getDisplayBalance(r)}</td></tr>`));
     }
     html += `</tbody></table></body></html>`;
     const w = window.open("", "_blank");
@@ -835,6 +908,7 @@ export default function ClientPaymentCard({
   const getPaymentDetails = (payment) => {
     const details = [];
 
+    details.push({ label: "Department", value: payment.department || "-" });
     details.push({ label: "Client ID", value: payment.clientId || "-" });
     details.push({ label: "Client Name", value: payment.clientName || "-" });
     details.push({ label: "Payment Method", value: payment.method || "-" });
@@ -847,7 +921,6 @@ export default function ClientPaymentCard({
     details.push({ label: "Balance", value: formatINR(payment.balance) });
     details.push({ label: "Net Payment", value: formatINR(getDisplayPayment(payment)) });
     details.push({ label: "Payment Type", value: payment.isRefund ? "Refund" : "Payment" });
-    // details.push({ label: "Source Collection", value: payment.sourceCollection || "-" });
 
     // Additional client details from full client data
     const clientData = payment._fullClientData || {};
@@ -877,12 +950,11 @@ export default function ClientPaymentCard({
             <div>💳</div>
             <div className="invest-card__meta">
               <div className="invest-card__label">Client Payments</div>
-              <div className="invest-card__total">{loading ? "Loading..." : formatINR(overallTotals.netPaid ?? overallTotals.paidIncludingTravel ?? overallTotals.paid)}</div>
-
+              <div className="invest-card__total">{loading ? "Loading..." : formatINR(overallTotalsAllDepartments.netPaid ?? overallTotalsAllDepartments.paidIncludingTravel ?? overallTotalsAllDepartments.paid)}</div>
             </div>
           </div>
           <div className="invest-card__divider" />
-          <div className="invest-card__small" style={{ paddingLeft: "20px" }}>{loading ? "" : `Payments: ${overallTotals.count}`}</div>
+          <div className="invest-card__small" style={{ paddingLeft: "20px" }}>{loading ? "" : `Payments: ${overallTotalsAllDepartments.count}`}</div>
         </div>
       </div>
 
@@ -896,24 +968,51 @@ export default function ClientPaymentCard({
               </div>
 
               <div className="invest-modal-body">
+                {/* Department Tabs */}
+                <ul className="nav nav-tabs mb-3">
+                  {departments.map((dept) => (
+                    <li key={dept} className="nav-item">
+                      <button
+                        className={`nav-link ${activeDepartment === dept ? "active" : ""}`}
+                        onClick={() => {
+                          setActiveDepartment(dept);
+                          setPage(1);
+                          // Reset year/month selection when changing department
+                          if (dept !== activeDepartment) {
+                            setActiveYear(null);
+                            setActiveMonth(null);
+                          }
+                        }}
+                      >
+                        {dept}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
 
                 <div className="overall-cards">
                   <div className="header-gradient grad-paid">
-                    <div className="header-label">Overall Paid (net)</div>
-                    <div className="header-value">{formatINR(overallTotals.netPaid ?? overallTotals.paidIncludingTravel ?? overallTotals.paid)}</div>
-                    <div className="header-sub">{overallTotals.count ?? 0} payments</div>
+                    <div className="header-label">Overall Paid (All Departments)</div>
+                    <div className="header-value">{formatINR(overallTotalsAllDepartments.netPaid ?? overallTotalsAllDepartments.paidIncludingTravel ?? overallTotalsAllDepartments.paid)}</div>
+                    <div className="header-sub">{overallTotalsAllDepartments.count ?? 0} payments</div>
                   </div>
 
                   <div className="header-gradient grad-balance">
-                    <div className="header-label">Overall Balance (net)</div>
-                    <div className="header-value">{renderAmount(overallTotals.netBalance)}</div>
-                    <div className="header-sub">across all years</div>
+                    <div className="header-label">{activeDepartment} Total</div>
+                    <div className="header-value">{formatINR(overallTotalsCurrentDepartment.netPaid ?? overallTotalsCurrentDepartment.paidIncludingTravel ?? overallTotalsCurrentDepartment.paid)}</div>
+                    <div className="header-sub">{overallTotalsCurrentDepartment.count ?? 0} payments</div>
                   </div>
 
                   <div className="header-gradient grad-refund">
-                    <div className="header-label">Overall Refunds</div>
-                    <div className="header-value">{formatINR(overallTotals.refunds)}</div>
+                    <div className="header-label">Refunds (All Departments)</div>
+                    <div className="header-value">{formatINR(overallTotalsAllDepartments.refunds)}</div>
                     <div className="header-sub">across all years</div>
+                  </div>
+
+                  <div className="header-gradient grad-info">
+                    <div className="header-label">Balance ({activeDepartment})</div>
+                    <div className="header-value">{renderAmount(overallTotalsCurrentDepartment.netBalance)}</div>
+                    <div className="header-sub">net outstanding</div>
                   </div>
                 </div>
 
@@ -922,7 +1021,7 @@ export default function ClientPaymentCard({
                   <div className="row g-3 mb-4">
                     <div className="col-lg-8">
                       <div className="glass-card p-3">
-                        <h6 className="mb-2">Monthly Payment Trend - {activeYear}</h6>
+                        <h6 className="mb-2">Monthly Payment Trend - {activeYear} ({activeDepartment})</h6>
                         <BarChart data={monthlyChartData} width={520} height={200} color="url(#gradClient)" />
                       </div>
                     </div>
@@ -1046,7 +1145,7 @@ export default function ClientPaymentCard({
                       <div className="small text-center">
                         {activeMonth !== null && activeMonth !== undefined ? (
                           <>
-                            {new Date(Number(activeYear), Number(activeMonth), 1).toLocaleString("default", { month: "long" })} {activeYear}
+                            {new Date(Number(activeYear), Number(activeMonth), 1).toLocaleString("default", { month: "long" })} {activeYear} ({activeDepartment})
                           </>
                         ) : (
                           "Select a month"
@@ -1076,14 +1175,13 @@ export default function ClientPaymentCard({
                       </div>
                     </div>
 
-
-
                     {viewMode === "month" && (
                       <div className="table-responsive">
                         <table className="table table-sm table-hover invest-table">
                           <thead>
                             <tr>
                               <th className="th-narrow">#</th>
+                              <th>Department</th>
                               <th>Client ID</th>
                               <th>Client Name</th>
                               <th>Method</th>
@@ -1096,7 +1194,7 @@ export default function ClientPaymentCard({
                           <tbody>
                             {(!activeMonth || paginatedRows.length === 0) && (
                               <tr>
-                                <td colSpan={8} className="text-center small text-muted">
+                                <td colSpan={9} className="text-center small text-muted">
                                   No payments for selected month/year
                                 </td>
                               </tr>
@@ -1104,6 +1202,7 @@ export default function ClientPaymentCard({
                             {paginatedRows.map((r, i) => (
                               <tr key={`${r._clientDbKey}_${i}`} className="invest-table-row clickable-row" onClick={() => handleRowClick(r)}>
                                 <td>{pageStart + i + 1}</td>
+                                <td>{r.department || "-"}</td>
                                 <td>
                                   <div className="d-flex align-items-center gap-2">
                                     {r.clientId || "-"}
@@ -1131,7 +1230,7 @@ export default function ClientPaymentCard({
                           </tbody>
                           <tfoot>
                             <tr className="table-secondary">
-                              <td colSpan={6} className="text-end">
+                              <td colSpan={7} className="text-end">
                                 <strong>Monthly Subtotal (net)</strong>
                               </td>
                               <td className="text-end">
@@ -1142,7 +1241,7 @@ export default function ClientPaymentCard({
                               </td>
                             </tr>
                             <tr className="table-secondary">
-                              <td colSpan={6} className="text-end">
+                              <td colSpan={7} className="text-end">
                                 <strong>Yearly Grand Total (net)</strong>
                               </td>
                               <td className="text-end">
@@ -1160,7 +1259,6 @@ export default function ClientPaymentCard({
                     {/* Pagination Navigation */}
                     {totalPages > 1 && (
                       <nav className="d-flex justify-content-between align-items-center mt-3 w-100" style={{ borderRadius: "10px", padding: "10px 20px", marginBottom: "15px", backgroundColor: "#63707c" }}>
-
                         <div className="small text-white ">
                           Page {pageSafe} of {totalPages}
                         </div>
@@ -1205,7 +1303,6 @@ export default function ClientPaymentCard({
                               <option value={100}>100</option>
                             </select>
                           </div>
-
                         </div>
                       </nav>
                     )}
@@ -1218,6 +1315,7 @@ export default function ClientPaymentCard({
                             <thead>
                               <tr>
                                 <th>#</th>
+                                <th>Department</th>
                                 <th>Client ID</th>
                                 <th>Client Name</th>
                                 <th>Date</th>
@@ -1232,6 +1330,7 @@ export default function ClientPaymentCard({
                                 .map((r, i) => (
                                   <tr key={`refund-${i}`}>
                                     <td>{i + 1}</td>
+                                    <td>{r.department || "-"}</td>
                                     <td>{r.clientId || "-"}</td>
                                     <td>{r.clientName || "-"}</td>
                                     <td>{r.parsedDate ? r.parsedDate.toLocaleDateString() : r.date || "-"}</td>
@@ -1243,7 +1342,7 @@ export default function ClientPaymentCard({
                             </tbody>
                             <tfoot>
                               <tr>
-                                <th colSpan={4} className="text-end">
+                                <th colSpan={5} className="text-end">
                                   Monthly Refund Total
                                 </th>
                                 <th className="text-end">
@@ -1252,7 +1351,7 @@ export default function ClientPaymentCard({
                                 <th colSpan={2}></th>
                               </tr>
                               <tr>
-                                <th colSpan={4} className="text-end">
+                                <th colSpan={5} className="text-end">
                                   Yearly Refund Total
                                 </th>
                                 <th className="text-end">{formatINR(yearlyRefundTotal)}</th>
@@ -1262,7 +1361,6 @@ export default function ClientPaymentCard({
                           </table>
                         </div>
                       </div>
-
                     )}
 
                     {viewMode === "year" && (
@@ -1271,6 +1369,7 @@ export default function ClientPaymentCard({
                           <thead>
                             <tr>
                               <th className="th-narrow">#</th>
+                              <th>Department</th>
                               <th>Client ID</th>
                               <th>Client Name</th>
                               <th>Method</th>
@@ -1283,7 +1382,7 @@ export default function ClientPaymentCard({
                           <tbody>
                             {(paginatedRows.length === 0) && (
                               <tr>
-                                <td colSpan={8} className="text-center small text-muted">
+                                <td colSpan={9} className="text-center small text-muted">
                                   No payments for selected year
                                 </td>
                               </tr>
@@ -1292,6 +1391,7 @@ export default function ClientPaymentCard({
                               .map((r, i) => (
                                 <tr key={`${r._clientDbKey}_yr_${i}`} className="invest-table-row clickable-row" onClick={() => handleRowClick(r)}>
                                   <td>{pageStart + i + 1}</td>
+                                  <td>{r.department || "-"}</td>
                                   <td>
                                     <div className="d-flex align-items-center gap-2">
                                       {r.clientId || "-"}
@@ -1318,7 +1418,7 @@ export default function ClientPaymentCard({
                           </tbody>
                           <tfoot>
                             <tr className="table-secondary">
-                              <td colSpan={6} className="text-end">
+                              <td colSpan={7} className="text-end">
                                 <strong>Yearly Subtotal (net)</strong>
                               </td>
                               <td className="text-end">
@@ -1355,7 +1455,10 @@ export default function ClientPaymentCard({
               </div>
 
               <div className="invest-modal-footer">
-                <div className="me-auto small text-muted">Overall Grand Total (net): {formatINR(overallTotals.netPaid ?? overallTotals.paidIncludingTravel ?? overallTotals.paid)}</div>
+                <div className="me-auto small text-muted">
+                  <strong>All Departments Total:</strong> {formatINR(overallTotalsAllDepartments.netPaid ?? overallTotalsAllDepartments.paidIncludingTravel ?? overallTotalsAllDepartments.paid)} | 
+                  <strong> {activeDepartment} Total:</strong> {formatINR(overallTotalsCurrentDepartment.netPaid ?? overallTotalsCurrentDepartment.paidIncludingTravel ?? overallTotalsCurrentDepartment.paid)}
+                </div>
                 <button className="btn btn-secondary btn-sm" onClick={() => setModalOpen(false)}>
                   Close
                 </button>

@@ -1,5 +1,6 @@
 // src/components/DashBoard/WorkerSalaryCard.jsx
 import React, { useEffect, useMemo, useState, useRef } from "react";
+import { WORKER_PATHS, CLIENT_PATHS } from "../../utils/dataPaths"; // Assuming dataPaths.js is in same folder
 
 /* ---------------- Helpers ---------------- */
 async function importFirebaseDB() {
@@ -147,7 +148,7 @@ function DonutChart({ segments = [], size = 150, stroke = 18, title = "Distribut
 }
 
 /* normalize employee record -> payment rows */
-function extractPaymentsFromEmployeeRecord(employeeRecord = {}, collectionPrefix = "") {
+function extractPaymentsFromEmployeeRecord(employeeRecord = {}, collectionPrefix = "", department = "") {
     const empId = employeeRecord.employeeId ?? employeeRecord.idNo ?? employeeRecord.id ?? employeeRecord.uid ?? "";
     const name =
         (employeeRecord.firstName && employeeRecord.lastName)
@@ -186,6 +187,7 @@ function extractPaymentsFromEmployeeRecord(employeeRecord = {}, collectionPrefix
 
             results.push({
                 sourceCollection: collectionPrefix || "",
+                department: department || "",
                 employeeId: String(empId || ""),
                 employeeName: String(name || "Unknown"),
                 employeePhoto: photo,
@@ -211,6 +213,7 @@ function extractPaymentsFromEmployeeRecord(employeeRecord = {}, collectionPrefix
         const dateRaw = employeeRecord.pay_date ?? employeeRecord.paymentDate ?? employeeRecord.date ?? "";
         results.push({
             sourceCollection: collectionPrefix || "",
+            department: department || "",
             employeeId: String(empId || ""),
             employeeName: String(name || "Unknown"),
             employeePhoto: photo,
@@ -292,7 +295,23 @@ export default function WorkerSalaryCard() {
     const [page, setPage] = useState(1);
     const [pageSize, setPageSize] = useState(10);
     const [showZeroRows, setShowZeroRows] = useState(false);
+    const [activeDepartment, setActiveDepartment] = useState("All Departments");
     const modalRef = useRef(null);
+
+    const departments = [
+        "All Departments",
+        "Home Care",
+        "Housekeeping", 
+        "Office & Administrative",
+        "Customer Service",
+        "Management & Supervision",
+        "Security",
+        "Driving & Logistics",
+        "Technical & Maintenance",
+        "Retail & Sales",
+        "Industrial & Labor",
+        "Others"
+    ];
 
     useEffect(() => {
         let listeners = [];
@@ -309,6 +328,13 @@ export default function WorkerSalaryCard() {
 
             const snapshots = {};
             const paths = ["EmployeeBioData", "ExitEmployees"];
+            
+            // Add department-based paths
+            Object.values(WORKER_PATHS).forEach(path => {
+                if (!paths.includes(path)) {
+                    paths.push(path);
+                }
+            });
 
             const attach = (path) => {
                 try {
@@ -324,13 +350,22 @@ export default function WorkerSalaryCard() {
                 }
             };
 
+            const getDepartmentFromPath = (path) => {
+                // Find department from WORKER_PATHS
+                for (const [dept, deptPath] of Object.entries(WORKER_PATHS)) {
+                    if (path === deptPath) return dept;
+                }
+                return "";
+            };
+
             const rebuild = () => {
                 const combined = [];
                 paths.forEach(p => {
                     const node = snapshots[p] || {};
+                    const department = getDepartmentFromPath(p);
                     Object.keys(node).forEach(k => {
                         const emp = node[k] || {};
-                        const payments = extractPaymentsFromEmployeeRecord(emp, p);
+                        const payments = extractPaymentsFromEmployeeRecord(emp, p, department);
                         payments.forEach(pm => {
                             pm._employeeDbKey = `${p}/${k}`;
                             combined.push(pm);
@@ -356,8 +391,30 @@ export default function WorkerSalaryCard() {
         };
     }, []);
 
-    const grouped = useMemo(() => groupPaymentsByYearMonth(allPayments), [allPayments]);
+    // Filter payments by active department
+    const filteredPayments = useMemo(() => {
+        if (activeDepartment === "All Departments") {
+            return allPayments;
+        }
+        return allPayments.filter(payment => payment.department === activeDepartment);
+    }, [allPayments, activeDepartment]);
+
+    const grouped = useMemo(() => groupPaymentsByYearMonth(filteredPayments), [filteredPayments]);
     const yearKeys = useMemo(() => grouped.yearKeys || [], [grouped]);
+
+    // Calculate totals for ALL departments (not just filtered)
+    const overallTotalsAllDepartments = useMemo(() => {
+        const paid = allPayments.reduce((s, r) => s + Number(r.paidAmount || 0), 0);
+        const count = allPayments.length;
+        return { paid, count };
+    }, [allPayments]);
+
+    // Calculate totals for current department
+    const overallTotalsCurrentDepartment = useMemo(() => {
+        const paid = filteredPayments.reduce((s, r) => s + Number(r.paidAmount || 0), 0);
+        const count = filteredPayments.length;
+        return { paid, count };
+    }, [filteredPayments]);
 
     // when modal opens pick defaults (most recent year/month)
     useEffect(() => {
@@ -391,15 +448,15 @@ export default function WorkerSalaryCard() {
         const mObj = grouped.years?.[activeYear]?.months?.[String(activeMonth)];
         if (!mObj) return [];
         return mObj.rows.slice().sort((a, b) => (b.parsedDate?.getTime() || 0) - (a.parsedDate?.getTime() || 0));
-
-
     }, [activeYear, activeMonth, grouped]);
+    
     // rows actually displayed in table (amount > 0 unless toggled)
     const displayRows = React.useMemo(() => {
         if (!currentMonthRows) return [];
         if (showZeroRows) return currentMonthRows;
         return currentMonthRows.filter(r => Number(r.paidAmount || 0) > 0);
     }, [currentMonthRows, showZeroRows]);
+    
     // Pagination derived values for the month table
     const totalEntries = displayRows.length;
     const totalPages = Math.max(1, Math.ceil(totalEntries / pageSize));
@@ -411,7 +468,6 @@ export default function WorkerSalaryCard() {
     useEffect(() => {
         if (page > totalPages) setPage(totalPages);
     }, [totalPages]);
-
 
     const currentYearRows = useMemo(() => {
         if (!activeYear) return [];
@@ -431,12 +487,6 @@ export default function WorkerSalaryCard() {
         const count = currentYearRows.length;
         return { paid, count };
     }, [currentYearRows]);
-
-    const overallTotals = useMemo(() => {
-        const paid = allPayments.reduce((s, r) => s + Number(r.paidAmount || 0), 0);
-        const count = allPayments.length;
-        return { paid, count };
-    }, [allPayments]);
 
     // Chart data for monthly payments
     const monthlyChartData = useMemo(() => {
@@ -505,6 +555,7 @@ export default function WorkerSalaryCard() {
 
         details.push({ label: "Employee ID", value: worker.employeeId || "-" });
         details.push({ label: "Employee Name", value: worker.employeeName || "-" });
+        details.push({ label: "Department", value: worker.department || "-" });
         details.push({ label: "Client Name", value: worker.clientName || "-" });
         details.push({ label: "Client ID", value: worker.clientId || "-" });
         details.push({ label: "Payment Type", value: worker.typeOfPayment || "-" });
@@ -512,7 +563,7 @@ export default function WorkerSalaryCard() {
         details.push({ label: "Receipt No", value: worker.receiptNo || "-" });
         details.push({ label: "Paid Amount", value: formatINR(worker.paidAmount) });
         details.push({ label: "Service", value: worker.service || "-" });
-        details.push({ label: "Location", value: worker.days || "-" });
+        details.push({ label: "Location", value: worker.location || "-" });
         details.push({ label: "Payment For", value: worker.paymentFor || "-" });
         details.push({ label: "Source", value: worker.sourceCollection || "-" });
 
@@ -537,13 +588,12 @@ export default function WorkerSalaryCard() {
                     <div className="invest-card__icon">👷</div>
                     <div className="invest-card__meta">
                         <div className="invest-card__label">Worker Salaries</div>
-                        <div className="invest-card__total">{loading ? "Loading..." : formatINR(overallTotals.paid)}</div>
-
+                        <div className="invest-card__total">{loading ? "Loading..." : formatINR(overallTotalsAllDepartments.paid)}</div>
                     </div>
                 </div>
 
                 <div className="invest-card__divider" />
-                <div className="invest-card__small" style={{ paddingLeft: "20px" }}>{loading ? "" : `Payments: ${overallTotals.count}`}</div>
+                <div className="invest-card__small" style={{ paddingLeft: "20px" }}>{loading ? "" : `Payments: ${overallTotalsAllDepartments.count}`}</div>
             </div>
 
             {modalOpen && (
@@ -556,20 +606,48 @@ export default function WorkerSalaryCard() {
                             </div>
 
                             <div className="invest-modal-body">
+                                {/* Department Tabs */}
+                                <ul className="nav nav-tabs mb-3">
+                                    {departments.map((dept) => (
+                                        <li key={dept} className="nav-item">
+                                            <button
+                                                className={`nav-link ${activeDepartment === dept ? "active" : ""}`}
+                                                onClick={() => {
+                                                    setActiveDepartment(dept);
+                                                    setPage(1);
+                                                    // Reset year/month selection when changing department
+                                                    if (dept !== activeDepartment) {
+                                                        setActiveYear(null);
+                                                        setActiveMonth(null);
+                                                    }
+                                                }}
+                                            >
+                                                {dept}
+                                            </button>
+                                        </li>
+                                    ))}
+                                </ul>
+
                                 <div className="category-cards">
                                     <div className="header-gradient grad-paid">
-                                        <div className="header-label">Overall (All Years)</div>
-                                        <div className="header-value">{formatINR(overallTotals.paid)}</div>
-                                        <div className="header-sub">{overallTotals.count} payments</div>
+                                        <div className="header-label">Overall (All Departments)</div>
+                                        <div className="header-value">{formatINR(overallTotalsAllDepartments.paid)}</div>
+                                        <div className="header-sub">{overallTotalsAllDepartments.count} payments</div>
                                     </div>
 
                                     <div className="header-gradient grad-balance">
+                                        <div className="header-label">{activeDepartment} Total</div>
+                                        <div className="header-value">{formatINR(overallTotalsCurrentDepartment.paid)}</div>
+                                        <div className="header-sub">{overallTotalsCurrentDepartment.count} payments</div>
+                                    </div>
+
+                                    <div className="header-gradient grad-pending">
                                         <div className="header-label">Year-wise {activeYear ? `(${activeYear})` : ""}</div>
                                         <div className="header-value">{formatINR((yearlyTotals && activeYear) ? yearlyTotals.paid : 0)}</div>
                                         <div className="header-sub">{activeYear ? `${yearlyTotals.count} payments` : "select year"}</div>
                                     </div>
 
-                                    <div className="header-gradient grad-pending">
+                                    <div className="header-gradient grad-info">
                                         <div className="header-label">Month-wise {activeMonth !== null && activeMonth !== undefined ? `(${safeMonthLabel(activeYear, activeMonth)})` : ""}</div>
                                         <div className="header-value">{formatINR((monthlyTotals && activeMonth !== null && activeMonth !== undefined) ? monthlyTotals.paid : 0)}</div>
                                         <div className="header-sub">{(activeMonth !== null && activeMonth !== undefined) ? `${monthlyTotals.count} payments` : "select month"}</div>
@@ -581,7 +659,7 @@ export default function WorkerSalaryCard() {
                                     <div className="row g-3 mb-4">
                                         <div className="col-lg-8">
                                             <div className="glass-card p-3">
-                                                <h6 className="mb-2">Monthly Salary Trend - {activeYear}</h6>
+                                                <h6 className="mb-2">Monthly Salary Trend - {activeYear} ({activeDepartment})</h6>
                                                 <BarChart data={monthlyChartData} width={520} height={200} color="url(#gradWorker)" />
                                             </div>
                                         </div>
@@ -632,8 +710,6 @@ export default function WorkerSalaryCard() {
                                             ))}
                                         </ul>
 
-
-
                                         <div className="table-responsive">
                                             <table className="table table-sm table-hover invest-table">
                                                 <thead>
@@ -642,6 +718,7 @@ export default function WorkerSalaryCard() {
                                                         <th style={{ width: 56 }}>Photo</th>
                                                         <th>Employee ID</th>
                                                         <th>Employee Name</th>
+                                                        <th>Department</th>
                                                         <th>Client Name</th>
                                                         <th>Payment Type</th>
                                                         <th>Date</th>
@@ -651,7 +728,7 @@ export default function WorkerSalaryCard() {
                                                 </thead>
                                                 <tbody>
                                                     {(!activeMonth || currentMonthRows.length === 0) && (
-                                                        <tr><td colSpan={9} className="text-center small text-muted">No payments for selected month/year</td></tr>
+                                                        <tr><td colSpan={10} className="text-center small text-muted">No payments for selected month/year</td></tr>
                                                     )}
                                                     {currentMonthRowsPage.map((r, i) => (
                                                         <tr
@@ -659,7 +736,7 @@ export default function WorkerSalaryCard() {
                                                             style={{ cursor: 'pointer' }}
                                                             onClick={() => handleRowClick(r)}
                                                         >
-                                                            <td>{i + 1}</td>
+                                                            <td>{pageStart + i + 1}</td>
                                                             <td>
                                                                 {r.employeePhoto ? (
                                                                     <img src={r.employeePhoto} alt="photo" className="invest-photo" />
@@ -669,6 +746,7 @@ export default function WorkerSalaryCard() {
                                                             </td>
                                                             <td>{r.employeeId || "-"}</td>
                                                             <td>{r.employeeName || "-"}</td>
+                                                            <td>{r.department || "-"}</td>
                                                             <td>{r.clientName || "-"}</td>
                                                             <td>{r.typeOfPayment || "-"}</td>
                                                             <td>{formatDateCell(r)}</td>
@@ -679,11 +757,11 @@ export default function WorkerSalaryCard() {
                                                 </tbody>
                                                 <tfoot>
                                                     <tr className="table-secondary">
-                                                        <td colSpan={8} className="text-end"><strong>Monthly Subtotal</strong></td>
+                                                        <td colSpan={9} className="text-end"><strong>Monthly Subtotal</strong></td>
                                                         <td className="text-end"><strong>{formatINR(monthlyTotals.paid)}</strong></td>
                                                     </tr>
                                                     <tr className="table-secondary">
-                                                        <td colSpan={8} className="text-end"><strong>Yearly Grand Total</strong></td>
+                                                        <td colSpan={9} className="text-end"><strong>Yearly Grand Total</strong></td>
                                                         <td className="text-end"><strong>{formatINR(yearlyTotals.paid)}</strong></td>
                                                     </tr>
                                                 </tfoot>
@@ -692,7 +770,6 @@ export default function WorkerSalaryCard() {
 
                                         <div className="d-flex justify-content-between align-items-center p-2 border-top">
                                             <div className="invest-month-toolbar d-flex justify-content-between align-items-center mb-3">
-
                                                 <div className="d-flex align-items-center gap-3">
                                                     <div className="form-check form-switch ms-3">
                                                         <input className="form-check-input" type="checkbox" id="toggleZeroRows" checked={showZeroRows} onChange={(e) => { setShowZeroRows(e.target.checked); setPage(1); }} />
@@ -736,17 +813,17 @@ export default function WorkerSalaryCard() {
                                                 </ul>
                                             </nav>
                                         </div>
-
                                     </div>
                                 )}
-
                             </div>
 
                             <div className="invest-modal-footer">
-                                <div className="me-auto small text-muted">Overall Grand Total: {formatINR(overallTotals.paid)}</div>
+                                <div className="me-auto small text-muted">
+                                    <strong>All Departments Total:</strong> {formatINR(overallTotalsAllDepartments.paid)} | 
+                                    <strong> {activeDepartment} Total:</strong> {formatINR(overallTotalsCurrentDepartment.paid)}
+                                </div>
                                 <button className="btn btn-secondary btn-sm" onClick={() => setModalOpen(false)}>Close</button>
                             </div>
-
                         </div>
                     </div>
                 </div>
@@ -766,10 +843,6 @@ export default function WorkerSalaryCard() {
                                     {/* Worker Photo and Basic Info */}
                                     <div className="col-12 mb-3">
                                         <div className="d-flex align-items-center gap-3">
-                                            <div className="form-check form-switch ms-3">
-                                                <input className="form-check-input" type="checkbox" id="toggleZeroRows" checked={showZeroRows} onChange={(e) => { setShowZeroRows(e.target.checked); setPage(1); }} />
-                                                <label className="form-check-label tiny" htmlFor="toggleZeroRows">Show zero-amount rows</label>
-                                            </div>
                                             {selectedWorker.employeePhoto ? (
                                                 <img src={selectedWorker.employeePhoto} alt="Worker" className="rounded-circle" style={{ width: 80, height: 80, objectFit: 'cover' }} />
                                             ) : (
@@ -779,7 +852,7 @@ export default function WorkerSalaryCard() {
                                             )}
                                             <div>
                                                 <h5 className="mb-1">{selectedWorker.employeeName}</h5>
-                                                <p className="text-muted mb-0">ID: {selectedWorker.employeeId}</p>
+                                                <p className="text-muted mb-0">ID: {selectedWorker.employeeId} | Department: {selectedWorker.department || "-"}</p>
                                             </div>
                                             <div className="ms-auto">
                                                 <div className="fw-bold fs-4 text-success">

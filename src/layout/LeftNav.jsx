@@ -58,6 +58,7 @@ import WorkerCallDelete from "../pages/WorkerCallDelete";
 
 import ClientInfo from "../pages/ClientInfo";
 import ClientExit from "../pages/ClientExit";
+import Companyes from "../pages/Companyes";
 
 import Enquiry from "../pages/Enquiry";
 import EnquiryExit from "../pages/EnquiryExit";
@@ -137,6 +138,7 @@ export default function LeftNav() {
   // Client
   const canClientData = hasPerm("Client Data");
   const canClientExit = hasPerm("Client Data"); // Client exit typically part of Client Data
+  const canCompanyes = hasPerm("Companyes"); // Client exit typically part of Companyes Data
 
   // Enquiry
   const canEnquiry = hasPerm("Enquiries");
@@ -548,7 +550,7 @@ export default function LeftNav() {
             )}
 
             {/* Client */}
-            {(canClientData || canClientExit) && (
+            {(canClientData || canClientExit || canCompanyes) && (
               <>
                 <li className="nav-item">
                   <button className="groupBtn btn btn-sm" onClick={() => toggleGroup("client")} type="button">
@@ -570,6 +572,13 @@ export default function LeftNav() {
                       <li className="nav-item">
                         <NavLink to="ClientExit" className="nav-link" title="Client Exit" onClick={onNavClick}>
                           <img src={ClientExitIcon} alt="" /> <span className="ms-1">Client Exit</span>
+                        </NavLink>
+                      </li>
+                    )}
+                    {canCompanyes && (
+                      <li className="nav-item">
+                        <NavLink to="Companyes" className="nav-link" title="Companyes" onClick={onNavClick}>
+                          <img src={ClientExitIcon} alt="" /> <span className="ms-1">Companyes</span>
                         </NavLink>
                       </li>
                     )}
@@ -749,6 +758,7 @@ export default function LeftNav() {
         {/* Client */}
         <Route path="ClientInfo" element={<PermRoute allowed={canClientData}><ClientInfo /></PermRoute>} />
         <Route path="ClientExit" element={<PermRoute allowed={canClientExit}><ClientExit /></PermRoute>} />
+        <Route path="Companyes" element={<PermRoute allowed={canCompanyes}><Companyes /></PermRoute>} />
 
         {/* Enquiry */}
         <Route path="Enquiry" element={<PermRoute allowed={canEnquiry}><Enquiry /></PermRoute>} />

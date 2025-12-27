@@ -3,7 +3,7 @@ import React from "react";
 
 const companyTypeOptions = [
   "Home Care",
-  "Housekeeping / Facility Management",
+  "Housekeeping",
   "Office / Corporate",
   "Factory / Manufacturing",
   "Industrial",
@@ -165,7 +165,7 @@ const BasicDetails = ({ formData, errors, handleChange, handleBlur }) => {
         </div>
 
         {/* Branch Type */}
-        <div className="col-md-4">
+        <div className="col-md-6">
           <label htmlFor="branchType" className="form-label">
             Branch Type
           </label>
@@ -187,7 +187,7 @@ const BasicDetails = ({ formData, errors, handleChange, handleBlur }) => {
         </div>
 
         {/* Branch Name */}
-        <div className="col-md-8">
+        <div className="col-md-6">
           <label htmlFor="branchName" className="form-label">
             Branch Name (if applicable)
           </label>

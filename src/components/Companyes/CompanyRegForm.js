@@ -260,7 +260,7 @@ const CompanyRegForm = ({ isOpen = false, onClose = () => { }, onSaved }) => {
       
       const prefixMap = {
         "Home Care": "HC",
-        "Housekeeping / Facility Management": "HK",
+        "Housekeeping": "HK",
         "Office / Corporate": "OF",
         "Factory / Manufacturing": "FM",
         "Industrial": "IN",
@@ -275,7 +275,7 @@ const CompanyRegForm = ({ isOpen = false, onClose = () => { }, onSaved }) => {
         "Customer Service / BPO": "CS",
         "Management / Administration": "MA",
         "Government / Public Sector": "GV",
-        "Education Institutions": "ED",
+        "Education / Institutions": "ED",
         "Others": "OT"
       };
       

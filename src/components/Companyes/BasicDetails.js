@@ -1,5 +1,5 @@
 // BasicDetails.js
-import React from "react";
+import React, { useEffect, useRef } from "react";
 
 const companyTypeOptions = [
   "Home Care",
@@ -70,7 +70,103 @@ const ownershipTypeOptions = [
   "Others"
 ];
 
-const BasicDetails = ({ formData, errors, handleChange, handleBlur }) => {
+// Company Type to Department Code Mapping
+const departmentCodes = {
+  "Home Care": "HC",
+  "Housekeeping": "HK", 
+  "Office / Corporate": "OC",
+  "Factory / Manufacturing": "FM",
+  "Industrial": "ID",
+  "Construction": "CN",
+  "Retail / Shop": "RS",
+  "Hospital / Healthcare": "HH",
+  "Hotel / Hospitality": "HT",
+  "Warehouse / Logistics": "WL",
+  "Security Services": "SS",
+  "Driving / Transport": "DT",
+  "Technical / Maintenance": "TM",
+  "Customer Service / BPO": "CS",
+  "Management / Administration": "MA",
+  "Government / Public Sector": "GS",
+  "Education Institutions": "ED",
+  "Others": "OT"
+};
+
+// Custom hook to manage company ID generation
+const useCompanyIdGenerator = () => {
+  const idCounterRef = useRef({});
+  
+  // Initialize or get next ID for a department
+  const getNextIdForDepartment = (departmentCode) => {
+    if (!departmentCode) return "01";
+    
+    // Initialize counter for this department if not exists
+    if (!idCounterRef.current[departmentCode]) {
+      idCounterRef.current[departmentCode] = 1;
+    } else {
+      idCounterRef.current[departmentCode] += 1;
+    }
+    
+    // Format as 2-digit number (01, 02, etc.)
+    return idCounterRef.current[departmentCode].toString().padStart(2, '0');
+  };
+  
+  // Generate company ID
+  const generateCompanyId = (companyType, existingId = null) => {
+    if (existingId) return existingId; // Preserve existing ID in edit mode
+    
+    if (!companyType) return "";
+    
+    // Get department code
+    const deptCode = departmentCodes[companyType] || "OT";
+    
+    // Get next sequence number for this department
+    const sequenceNumber = getNextIdForDepartment(deptCode);
+    
+    // Format: CO-{DeptCode}-{SequenceNumber}
+    return `CO-${deptCode}-${sequenceNumber}`;
+  };
+  
+  return generateCompanyId;
+};
+
+const BasicDetails = ({ formData, errors, handleChange, handleBlur, isEditMode = false }) => {
+  const generateCompanyId = useCompanyIdGenerator();
+  const lastCompanyTypeRef = useRef(formData.companyType || "");
+  
+  // Generate company ID when company type changes (only for new companies)
+  useEffect(() => {
+    // Don't generate ID in edit mode
+    if (isEditMode) return;
+    
+    // Only generate when company type is selected and has changed
+    if (formData.companyType && formData.companyType !== lastCompanyTypeRef.current) {
+      const newId = generateCompanyId(formData.companyType);
+      
+      if (newId && newId !== formData.companyId) {
+        handleChange({
+          target: {
+            name: "companyId",
+            value: newId
+          }
+        });
+        
+        lastCompanyTypeRef.current = formData.companyType;
+      }
+    }
+    
+    // Clear ID when company type is cleared
+    if (!formData.companyType && formData.companyId) {
+      handleChange({
+        target: {
+          name: "companyId",
+          value: ""
+        }
+      });
+      lastCompanyTypeRef.current = "";
+    }
+  }, [formData.companyType, formData.companyId, isEditMode, generateCompanyId, handleChange]);
+
   return (
     <div className="step-container">
       <h4 className="step-title mb-4">Basic Details</h4>
@@ -131,12 +227,14 @@ const BasicDetails = ({ formData, errors, handleChange, handleBlur }) => {
             id="companyId"
             name="companyId"
             value={formData.companyId || ""}
-            onChange={handleChange}
-            onBlur={handleBlur}
-            placeholder="Auto-generated"
             readOnly
+            placeholder="Auto-generated"
           />
-          <small className="text-muted">Auto-generated based on company type</small>
+          <small className="text-muted">
+            {isEditMode 
+              ? "Company ID cannot be changed in edit mode"
+              : `Format: CO-{DeptCode}-{Sequence} (e.g., CO-HC-01)`}
+          </small>
           {errors.companyId && (
             <div className="invalid-feedback">{errors.companyId}</div>
           )}

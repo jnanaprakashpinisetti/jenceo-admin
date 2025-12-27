@@ -306,6 +306,7 @@ const CompanyRegForm = ({ isOpen = false, onClose = () => { }, onSaved }) => {
 
   // central change handler
   const handleChange = (e) => {
+    e?.preventDefault?.();
     if (!e || !e.target) return;
     const { name, value, type, checked, files } = e.target;
 

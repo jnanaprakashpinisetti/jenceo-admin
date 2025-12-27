@@ -1,57 +1,67 @@
+// SecondaryContact.js
 import React from "react";
 
-const PrimaryContact = ({ formData, errors, handleChange }) => {
+const SecondaryContact = ({ formData, errors, handleChange }) => {
   return (
     <div className="form-section">
-      <h5>Point of Contact – Primary</h5>
+      <h5>Point of Contact – Secondary</h5>
       <div className="row">
-        <Input name="primaryContactName" label="Contact Person Name *" />
-        <Input name="primaryDesignation" label="Designation *" />
-        <Input name="primaryDepartment" label="Department" />
-        <Input name="primaryMobile" label="Mobile No *" />
-        <Input name="primaryAlternateMobile" label="Alternate Mobile No" />
-        <Input name="primaryEmail" label="Official Email ID" />
+        <Input name="secondaryContactName" label="Contact Person Name *" 
+               formData={formData} errors={errors} handleChange={handleChange} />
+        <Input name="secondaryDesignation" label="Designation *" 
+               formData={formData} errors={errors} handleChange={handleChange} />
+        <Input name="secondaryDepartment" label="Department" 
+               formData={formData} errors={errors} handleChange={handleChange} />
+        <Input name="secondaryMobile" label="Mobile No *" 
+               formData={formData} errors={errors} handleChange={handleChange} />
+        <Input name="secondaryAlternateMobile" label="Alternate Mobile No" 
+               formData={formData} errors={errors} handleChange={handleChange} />
+        <Input name="secondaryEmail" label="Official Email ID" 
+               formData={formData} errors={errors} handleChange={handleChange} />
         <Select
-          name="primaryPreferredMethod"
+          name="secondaryPreferredMethod"
           label="Preferred Contact Method *"
           options={["Call", "WhatsApp", "Email"]}
+          formData={formData}
+          errors={errors}
+          handleChange={handleChange}
         />
       </div>
     </div>
   );
-
-  function Input({ name, label }) {
-    return (
-      <div className="col-md-6 mb-3">
-        <label>{label}</label>
-        <input
-          className={`form-control ${errors[name] ? "is-invalid" : ""}`}
-          name={name}
-          value={formData[name] || ""}
-          onChange={handleChange}
-        />
-        {errors[name] && <div className="invalid-feedback">{errors[name]}</div>}
-      </div>
-    );
-  }
-
-  function Select({ name, label, options }) {
-    return (
-      <div className="col-md-6 mb-3">
-        <label>{label}</label>
-        <select
-          className={`form-control ${errors[name] ? "is-invalid" : ""}`}
-          name={name}
-          value={formData[name] || ""}
-          onChange={handleChange}
-        >
-          <option value="">Select</option>
-          {options.map(o => <option key={o}>{o}</option>)}
-        </select>
-        {errors[name] && <div className="invalid-feedback">{errors[name]}</div>}
-      </div>
-    );
-  }
 };
 
-export default PrimaryContact;
+function Input({ name, label, formData, errors, handleChange }) {
+  return (
+    <div className="col-md-6 mb-3">
+      <label>{label}</label>
+      <input
+        className={`form-control ${errors[name] ? "is-invalid" : ""}`}
+        name={name}
+        value={formData[name] || ""}
+        onChange={handleChange}
+      />
+      {errors[name] && <div className="invalid-feedback">{errors[name]}</div>}
+    </div>
+  );
+}
+
+function Select({ name, label, options, formData, errors, handleChange }) {
+  return (
+    <div className="col-md-6 mb-3">
+      <label>{label}</label>
+      <select
+        className={`form-control ${errors[name] ? "is-invalid" : ""}`}
+        name={name}
+        value={formData[name] || ""}
+        onChange={handleChange}
+      >
+        <option value="">Select</option>
+        {options.map(o => <option key={o} value={o}>{o}</option>)}
+      </select>
+      {errors[name] && <div className="invalid-feedback">{errors[name]}</div>}
+    </div>
+  );
+}
+
+export default SecondaryContact;

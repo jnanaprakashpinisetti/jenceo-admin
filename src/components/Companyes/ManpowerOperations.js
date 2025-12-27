@@ -1,3 +1,4 @@
+// ManpowerOperations.js
 import React from "react";
 
 const ManpowerOperations = ({ formData, errors, handleChange }) => {
@@ -6,15 +7,76 @@ const ManpowerOperations = ({ formData, errors, handleChange }) => {
       <h5>Manpower & Operations</h5>
 
       <div className="row">
-        <Input name="manpowerTypes" label="Types of Manpower" />
-        <Select name="shiftCoverage" label="Shift Coverage" options={["Day", "Night", "Both"]} />
-        <Input name="deploymentAreas" label="Deployment Areas (Cities / States)" />
-        <Input type="date" name="contractStartDate" label="Contract Start Date *" />
-        <Input type="date" name="contractEndDate" label="Contract End Date *" />
-        <Select name="billingCycle" label="Billing Cycle *" options={["Weekly", "Fortnight", "Monthly"]} />
-        <Select name="paymentTerms" label="Payment Terms *" options={["Advance", "Net 15", "Net 30", "Net 45"]} />
-        <Select name="gstApplicable" label="GST Applicable *" options={["Yes", "No"]} />
-        <Select name="tdsApplicable" label="TDS Applicable *" options={["Yes", "No"]} />
+        <Input 
+          name="manpowerTypes" 
+          label="Types of Manpower" 
+          formData={formData}
+          errors={errors}
+          handleChange={handleChange}
+        />
+        <Select 
+          name="shiftCoverage" 
+          label="Shift Coverage" 
+          options={["Day", "Night", "Both"]}
+          formData={formData}
+          errors={errors}
+          handleChange={handleChange}
+        />
+        <Input 
+          name="deploymentAreas" 
+          label="Deployment Areas (Cities / States)" 
+          formData={formData}
+          errors={errors}
+          handleChange={handleChange}
+        />
+        <Input 
+          type="date" 
+          name="contractStartDate" 
+          label="Contract Start Date *" 
+          formData={formData}
+          errors={errors}
+          handleChange={handleChange}
+        />
+        <Input 
+          type="date" 
+          name="contractEndDate" 
+          label="Contract End Date *" 
+          formData={formData}
+          errors={errors}
+          handleChange={handleChange}
+        />
+        <Select 
+          name="billingCycle" 
+          label="Billing Cycle *" 
+          options={["Weekly", "Fortnight", "Monthly"]}
+          formData={formData}
+          errors={errors}
+          handleChange={handleChange}
+        />
+        <Select 
+          name="paymentTerms" 
+          label="Payment Terms *" 
+          options={["Advance", "Net 15", "Net 30", "Net 45"]}
+          formData={formData}
+          errors={errors}
+          handleChange={handleChange}
+        />
+        <Select 
+          name="gstApplicable" 
+          label="GST Applicable *" 
+          options={["Yes", "No"]}
+          formData={formData}
+          errors={errors}
+          handleChange={handleChange}
+        />
+        <Select 
+          name="tdsApplicable" 
+          label="TDS Applicable *" 
+          options={["Yes", "No"]}
+          formData={formData}
+          errors={errors}
+          handleChange={handleChange}
+        />
       </div>
     </div>
   );
@@ -44,7 +106,7 @@ const Select = ({ name, label, options, formData, errors, handleChange }) => (
       className={`form-control ${errors[name] ? "is-invalid" : ""}`}
     >
       <option value="">Select</option>
-      {options.map(o => <option key={o}>{o}</option>)}
+      {options.map(o => <option key={o} value={o}>{o}</option>)}
     </select>
     {errors[name] && <div className="invalid-feedback">{errors[name]}</div>}
   </div>

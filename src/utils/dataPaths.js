@@ -28,6 +28,27 @@ export const WORKER_PATHS = {
   "Others": "WorkerData/Others/Running",
 };
 
+export const COMPANY_PATHS = {
+  "Home Care": "CompanyData/HomeCare/Running",
+  "Housekeeping / Facility Management": "CompanyData/Housekeeping/Running",
+  "Office / Corporate": "CompanyData/Office/Running",
+  "Factory / Manufacturing": "CompanyData/Factorys/Running",
+  "Industrial": "CompanyData/Industrial/Running",
+  "Construction": "CompanyData/Construction/Running",
+  "Retail / Shop": "CompanyData/Retail/Running",
+  "Hospital / Healthcare": "CompanyData/Hospital/Running",
+  "Hotel / Hospitality": "CompanyData/Hotel/Running",
+  "Warehouse / Logistics": "CompanyData/Warehouse/Running",
+  "Security Services": "CompanyData/Security/Running",
+  "Driving / Transport": "CompanyData/Driving/Running",
+  "Technical / Maintenance": "CompanyData/Technical/Running",
+  "Customer Service / BPO": "CompanyData/CustomerService/Running",
+  "Management / Administration": "CompanyData/Management/Running",
+  "Government / Public Sector": "CompanyData/Government/Running",
+  "Education Institutions": "CompanyData/Education/Running",
+  "Others": "CompanyData/Others/Running",
+};
+
 // ===== SAFE HELPERS =====
 
 export const getClientPathByDepartment = (dept) =>
@@ -35,3 +56,6 @@ export const getClientPathByDepartment = (dept) =>
 
 export const getWorkerPathByDepartment = (dept) =>
   WORKER_PATHS[dept] || WORKER_PATHS["Others"];
+
+export const getCompanyPathByCategory = (category) =>
+  COMPANY_PATHS[category] || COMPANY_PATHS["Others"];

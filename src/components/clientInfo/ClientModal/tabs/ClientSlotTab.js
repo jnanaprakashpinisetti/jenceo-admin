@@ -73,19 +73,45 @@ const ClientSlotTab = ({ client }) => {
     if (slotData.length > 0 && viewMode === "monthly") {
       prepareMonthlyReport();
     }
-  }, [slotData, selectedMonth, viewMode]);
+  }, [slotData, selectedMonth, viewMode, workerPhotos]);
 
-  // Fetch worker photos from Firebase
+  // Fetch worker photos from Firebase Storage
   const fetchWorkerPhoto = async (workerId) => {
     if (!workerId) return null;
     
     try {
-      const photoRef = firebaseDB.child(`workerPhotos/${workerId}`);
-      const snapshot = await photoRef.once('value');
-      return snapshot.val()?.photoUrl || null;
+      // Try different paths for worker photos
+      const pathsToTry = [
+        `WorkerPhotos/${workerId}/photoUrl`,
+        `WorkerPhotos/${workerId}`,
+        `workerPhotos/${workerId}`,
+        `workers/${workerId}/photoUrl`
+      ];
+      
+      for (const path of pathsToTry) {
+        try {
+          const photoRef = firebaseDB.child(path);
+          const snapshot = await photoRef.once('value');
+          const photoData = snapshot.val();
+          
+          if (photoData) {
+            // Check if photoData is a string (URL) or object with photoUrl property
+            const photoUrl = typeof photoData === 'string' ? photoData : photoData.photoUrl || photoData.url;
+            if (photoUrl) {
+              console.log(`Found worker photo for ${workerId}:`, photoUrl);
+              return photoUrl;
+            }
+          }
+        } catch (error) {
+          console.log(`No photo at path ${path} for worker ${workerId}`);
+        }
+      }
+      
+      // If no photo found, return default avatar
+      return `https://ui-avatars.com/api/?name=Worker+${workerId}&background=random&color=fff&size=100`;
     } catch (error) {
       console.error("Error fetching worker photo:", error);
-      return null;
+      return `https://ui-avatars.com/api/?name=Worker+${workerId}&background=random&color=fff&size=100`;
     }
   };
 
@@ -104,15 +130,15 @@ const ClientSlotTab = ({ client }) => {
 
     monthSlots.forEach((slot, index) => {
       // Get worker photo URL
-      const workerPhotoUrl = workerPhotos[slot.workerId] || null;
+      const workerPhotoUrl = workerPhotos[slot.workerId] || 
+                           slot.workerPhotoUrl || 
+                           `https://ui-avatars.com/api/?name=${encodeURIComponent(slot.workerName || 'Worker')}&background=random&color=fff&size=100`;
       
       groupedData.push({
         sNo: serialNo++,
         date: slot.formattedDate,
         dayOfWeek: slot.dayOfWeek,
-        empPhoto: workerPhotoUrl 
-          ? <img src={workerPhotoUrl} alt={slot.workerName} className="employee-photo-img" />
-          : <div className="employee-photo-placeholder">{slot.workerName?.charAt(0) || 'W'}</div>,
+        empPhoto: workerPhotoUrl,
         empName: slot.workerName,
         empId: slot.workerId,
         slot: slot.slotType || 'working',
@@ -123,14 +149,16 @@ const ClientSlotTab = ({ client }) => {
         remarks: slot.remarks || '',
         slotId: slot.slotId,
         workerPhotoUrl,
-        originalIndex: index
+        originalIndex: index,
+        dateKey: slot.date, // Store the original date key for Firebase updates
+        scheduleDate: slot.scheduleDate
       });
     });
 
     // Sort by date and time
     groupedData.sort((a, b) => {
-      const dateA = new Date(a.date.split('-').reverse().join('-'));
-      const dateB = new Date(b.date.split('-').reverse().join('-'));
+      const dateA = new Date(a.scheduleDate);
+      const dateB = new Date(b.scheduleDate);
       if (dateA.getTime() !== dateB.getTime()) {
         return dateA.getTime() - dateB.getTime();
       }
@@ -173,139 +201,140 @@ const ClientSlotTab = ({ client }) => {
 
       console.log("Fetching slot data for client:", clientKey);
 
-      // Only fetch from Home Care since that's where data is found according to logs
-      const department = "Home Care";
-      const path = clientPaths[department];
+      // Try all departments
+      const departments = Object.keys(clientPaths);
       
-      try {
-        // Try the exact path from logs
-        const clientPath = `${path}/${clientKey}/schedule`;
-        
-        const snapshot = await firebaseDB.child(clientPath).once('value');
-        const clientData = snapshot.val();
-
-        if (clientData) {
-          console.log(`Found data in ${clientPath} for ${department}:`, clientData);
+      for (const department of departments) {
+        try {
+          const path = clientPaths[department];
+          const clientPath = `${path}/${clientKey}/schedule`;
           
-          // Process schedule data
-          Object.entries(clientData).forEach(([dateKey, daySchedule]) => {
-            try {
-              // Try to parse the date key
-              let scheduleDate;
+          const snapshot = await firebaseDB.child(clientPath).once('value');
+          const clientData = snapshot.val();
+
+          if (clientData) {
+            console.log(`Found data in ${clientPath} for ${department}:`, Object.keys(clientData).length, "dates");
+            
+            // Process schedule data
+            Object.entries(clientData).forEach(([dateKey, daySchedule]) => {
               try {
-                scheduleDate = parseISO(dateKey);
-              } catch {
-                scheduleDate = new Date(dateKey);
-              }
-              
-              if (!isValid(scheduleDate)) {
-                console.warn(`Invalid date format: ${dateKey}`);
-                return;
-              }
-
-              // Apply filtering based on view mode
-              if (viewMode === "dashboard") {
-                // For dashboard, show all data
-              } else if (viewMode === "monthly") {
-                // Filter by selected month
-                const monthStart = startOfMonth(selectedMonth);
-                const monthEnd = endOfMonth(selectedMonth);
-                if (scheduleDate < monthStart || scheduleDate > monthEnd) {
+                // Try to parse the date key
+                let scheduleDate;
+                try {
+                  scheduleDate = parseISO(dateKey);
+                } catch {
+                  scheduleDate = new Date(dateKey);
+                }
+                
+                if (!isValid(scheduleDate)) {
+                  console.warn(`Invalid date format: ${dateKey}`);
                   return;
                 }
-              } else if (viewMode === "daily") {
-                // Filter by selected date
-                if (!isSameDay(scheduleDate, selectedDate)) {
-                  return;
+
+                // Apply filtering based on view mode
+                if (viewMode === "dashboard") {
+                  // For dashboard, show all data
+                } else if (viewMode === "monthly") {
+                  // Filter by selected month
+                  const monthStart = startOfMonth(selectedMonth);
+                  const monthEnd = endOfMonth(selectedMonth);
+                  if (scheduleDate < monthStart || scheduleDate > monthEnd) {
+                    return;
+                  }
+                } else if (viewMode === "daily") {
+                  // Filter by selected date
+                  if (!isSameDay(scheduleDate, selectedDate)) {
+                    return;
+                  }
                 }
-              }
 
-              // Process the slots for this day
-              if (daySchedule && typeof daySchedule === 'object') {
-                Object.entries(daySchedule).forEach(([slotId, allocation]) => {
-                  if (allocation && allocation.status) {
-                    const slotInfo = {
-                      ...allocation,
-                      date: dateKey,
-                      formattedDate: format(scheduleDate, 'dd-MMM-yyyy'),
-                      dayOfWeek: format(scheduleDate, 'EEE'),
-                      department: department,
-                      slotId: slotId,
-                      scheduleDate: scheduleDate,
-                      // Ensure duration is a number
-                      duration: parseFloat(allocation.duration) || 0,
-                      // Ensure worker info
-                      workerId: allocation.workerId || allocation.workerID || '',
-                      workerName: allocation.workerName || allocation.worker || `Worker ${allocation.workerId || ''}`,
-                      // Time fields
-                      startTime: allocation.startTime || allocation.start || '',
-                      endTime: allocation.endTime || allocation.end || '',
-                      // Convert to 12-hour format
-                      startTime12: convertTo12Hour(allocation.startTime || allocation.start || ''),
-                      endTime12: convertTo12Hour(allocation.endTime || allocation.end || ''),
-                      // Status
-                      status: allocation.status || 'unknown',
-                      // Slot type
-                      slotType: allocation.slotType || allocation.type || 'working',
-                      // Remarks
-                      remarks: allocation.remarks || allocation.note || '',
-                      // Worker photo
-                      workerPhotoUrl: allocation.workerPhotoUrl || null
-                    };
+                // Process the slots for this day
+                if (daySchedule && typeof daySchedule === 'object') {
+                  Object.entries(daySchedule).forEach(([slotId, allocation]) => {
+                    if (allocation && allocation.status) {
+                      const slotInfo = {
+                        ...allocation,
+                        date: dateKey,
+                        formattedDate: format(scheduleDate, 'dd-MMM-yyyy'),
+                        dayOfWeek: format(scheduleDate, 'EEE'),
+                        department: department,
+                        slotId: slotId,
+                        scheduleDate: scheduleDate,
+                        // Ensure duration is a number
+                        duration: parseFloat(allocation.duration) || 0,
+                        // Ensure worker info
+                        workerId: allocation.workerId || allocation.workerID || '',
+                        workerName: allocation.workerName || allocation.worker || `Worker ${allocation.workerId || ''}`,
+                        // Time fields
+                        startTime: allocation.startTime || allocation.start || '',
+                        endTime: allocation.endTime || allocation.end || '',
+                        // Convert to 12-hour format
+                        startTime12: convertTo12Hour(allocation.startTime || allocation.start || ''),
+                        endTime12: convertTo12Hour(allocation.endTime || allocation.end || ''),
+                        // Status
+                        status: allocation.status || 'unknown',
+                        // Slot type
+                        slotType: allocation.slotType || allocation.type || 'working',
+                        // Remarks
+                        remarks: allocation.remarks || allocation.note || '',
+                        // Worker photo
+                        workerPhotoUrl: allocation.workerPhotoUrl || null
+                      };
 
-                    allSlots.push(slotInfo);
+                      allSlots.push(slotInfo);
 
-                    // Track worker details with unique key
-                    const workerKey = `${slotInfo.workerId}-${slotInfo.workerName}`;
-                    if (slotInfo.workerId) {
-                      if (!workerMap[workerKey]) {
-                        workerMap[workerKey] = {
-                          workerId: slotInfo.workerId,
-                          workerName: slotInfo.workerName,
-                          totalHours: 0,
-                          totalSlots: 0,
-                          dates: new Set(),
-                          departments: new Set(),
-                          allocations: [],
-                          photoUrl: slotInfo.workerPhotoUrl
-                        };
+                      // Track worker details with unique key
+                      const workerKey = `${slotInfo.workerId}-${slotInfo.workerName}`;
+                      if (slotInfo.workerId) {
+                        if (!workerMap[workerKey]) {
+                          workerMap[workerKey] = {
+                            workerId: slotInfo.workerId,
+                            workerName: slotInfo.workerName,
+                            totalHours: 0,
+                            totalSlots: 0,
+                            dates: new Set(),
+                            departments: new Set(),
+                            allocations: [],
+                            photoUrl: slotInfo.workerPhotoUrl
+                          };
+                          
+                          // Fetch worker photo if not already fetched
+                          if (slotInfo.workerId && !workerPhotos[slotInfo.workerId]) {
+                            photoPromises.push(
+                              fetchWorkerPhoto(slotInfo.workerId).then(photoUrl => {
+                                if (photoUrl) {
+                                  setWorkerPhotos(prev => ({
+                                    ...prev,
+                                    [slotInfo.workerId]: photoUrl
+                                  }));
+                                }
+                              })
+                            );
+                          }
+                        }
                         
-                        // Fetch worker photo if not already fetched
-                        if (slotInfo.workerId && !workerPhotos[slotInfo.workerId]) {
-                          photoPromises.push(
-                            fetchWorkerPhoto(slotInfo.workerId).then(photoUrl => {
-                              if (photoUrl) {
-                                setWorkerPhotos(prev => ({
-                                  ...prev,
-                                  [slotInfo.workerId]: photoUrl
-                                }));
-                              }
-                            })
-                          );
+                        workerMap[workerKey].totalHours += slotInfo.duration;
+                        workerMap[workerKey].totalSlots++;
+                        workerMap[workerKey].dates.add(dateKey);
+                        workerMap[workerKey].departments.add(department);
+                        workerMap[workerKey].allocations.push(slotInfo);
+                        
+                        // Update photo URL if available
+                        if (slotInfo.workerPhotoUrl) {
+                          workerMap[workerKey].photoUrl = slotInfo.workerPhotoUrl;
                         }
                       }
-                      
-                      workerMap[workerKey].totalHours += slotInfo.duration;
-                      workerMap[workerKey].totalSlots++;
-                      workerMap[workerKey].dates.add(dateKey);
-                      workerMap[workerKey].departments.add(department);
-                      workerMap[workerKey].allocations.push(slotInfo);
-                      
-                      // Update photo URL if available
-                      if (slotInfo.workerPhotoUrl) {
-                        workerMap[workerKey].photoUrl = slotInfo.workerPhotoUrl;
-                      }
                     }
-                  }
-                });
+                  });
+                }
+              } catch (error) {
+                console.error(`Error processing date ${dateKey}:`, error);
               }
-            } catch (error) {
-              console.error(`Error processing date ${dateKey}:`, error);
-            }
-          });
+            });
+          }
+        } catch (error) {
+          console.log(`No data found in ${department} or error:`, error.message);
         }
-      } catch (error) {
-        console.error(`Error fetching from ${department}:`, error);
       }
 
       // Wait for all photo fetches to complete
@@ -362,7 +391,7 @@ const ClientSlotTab = ({ client }) => {
               id: slot.workerId,
               name: slot.workerName,
               hours: 0,
-              photoUrl: slot.workerPhotoUrl
+              photoUrl: workerPhotos[slot.workerId] || slot.workerPhotoUrl
             };
           }
           dayWorkersMap[workerKey].hours += slot.duration || 0;
@@ -389,7 +418,8 @@ const ClientSlotTab = ({ client }) => {
       .slice(0, 5)
       .map(worker => ({
         ...worker,
-        photoUrl: worker.photoUrl || workerPhotos[worker.workerId]
+        photoUrl: worker.photoUrl || workerPhotos[worker.workerId] || 
+                 `https://ui-avatars.com/api/?name=${encodeURIComponent(worker.workerName || 'Worker')}&background=random&color=fff&size=100`
       }));
 
     // Slot distribution by status/type
@@ -442,7 +472,8 @@ const ClientSlotTab = ({ client }) => {
         hours: dailySlots
           .filter(s => s.workerId === slot.workerId)
           .reduce((sum, s) => sum + (s.duration || 0), 0),
-        photoUrl: slot.workerPhotoUrl || workerPhotos[slot.workerId]
+        photoUrl: workerPhotos[slot.workerId] || slot.workerPhotoUrl || 
+                 `https://ui-avatars.com/api/?name=${encodeURIComponent(slot.workerName || 'Worker')}&background=random&color=fff&size=100`
       })))].filter(w => w.id),
       slotDetails: dailySlots.map(slot => ({
         ...slot,
@@ -951,30 +982,77 @@ const ClientSlotTab = ({ client }) => {
     }));
   };
 
-  const saveRemarks = async (slotId, remarks) => {
+  // FIXED: Save remarks function
+  const saveRemarks = async (slotId, remarks, dateKey, originalSlot) => {
     try {
-      // Find the slot to update
-      const slotToUpdate = monthlyReportData.find(item => item.slotId === slotId);
-      if (!slotToUpdate) {
-        alert("Slot not found!");
+      if (!slotId || !dateKey || !originalSlot) {
+        console.error("Missing required data for saving remarks");
+        alert("❌ Failed to save remarks: Missing data");
         return;
       }
 
-      // Update in Firebase
-      const department = "Home Care";
+      console.log("Saving remarks for slot:", slotId, "date:", dateKey, "remarks:", remarks);
+
+      // Try to find the department from the original slot
+      const department = originalSlot.department || "Home Care";
       const path = clientPaths[department];
-      const dateKey = format(parseISO(slotToUpdate.date), 'yyyy-MM-dd');
-      const clientPath = `${path}/${clientKey}/schedule/${dateKey}/${slotId}/remarks`;
       
-      await firebaseDB.child(clientPath).set(remarks);
+      if (!path) {
+        console.error("Department path not found:", department);
+        alert("❌ Department not found");
+        return;
+      }
+
+      // Construct the Firebase path
+      const clientPath = `${path}/${clientKey}/schedule/${dateKey}/${slotId}`;
+      console.log("Firebase path:", clientPath);
       
+      // Update the remarks field in Firebase
+      await firebaseDB.child(`${clientPath}/remarks`).set(remarks);
+      
+      console.log("Remarks saved successfully!");
+      
+      // Update local state
+      setMonthlyReportData(prev => 
+        prev.map(item => 
+          item.slotId === slotId 
+            ? { ...item, remarks: remarks }
+            : item
+        )
+      );
+
+      // Update slotData
+      setSlotData(prev => 
+        prev.map(slot => 
+          slot.slotId === slotId && slot.date === dateKey
+            ? { ...slot, remarks: remarks }
+            : slot
+        )
+      );
+
+      // Clear editing state
+      setEditingRemarks(prev => {
+        const newState = { ...prev };
+        delete newState[slotId];
+        return newState;
+      });
+
+      // Show success message
       alert("✅ Remarks saved successfully!");
       
       // Refresh data
       await fetchClientSlotData();
+      
     } catch (error) {
       console.error("Error saving remarks:", error);
-      alert("❌ Failed to save remarks");
+      console.error("Error details:", {
+        slotId,
+        dateKey,
+        clientKey,
+        department,
+        remarks
+      });
+      alert("❌ Failed to save remarks: " + error.message);
     }
   };
 
@@ -1002,28 +1080,50 @@ const ClientSlotTab = ({ client }) => {
         <h3>👥 Worker Performance Details</h3>
         <div className="performance-cards-grid">
           {workerArray.map((worker, index) => {
-            const photoUrl = worker.photoUrl || workerPhotos[worker.workerId];
+            const photoUrl = worker.photoUrl || workerPhotos[worker.workerId] || 
+                            `https://ui-avatars.com/api/?name=${encodeURIComponent(worker.workerName || 'Worker')}&background=random&color=fff&size=100`;
             
             return (
               <div className="performance-card" key={`${worker.workerId}-${index}`}>
                 <div className="performance-card-header">
                   <div className="worker-avatar-large">
-                    {photoUrl ? (
-                      <img 
-                        src={photoUrl} 
-                        alt={worker.workerName}
-                        className="worker-avatar-img"
-                        onError={(e) => {
-                          e.target.style.display = 'none';
-                          e.target.nextElementSibling.style.display = 'flex';
-                        }}
-                      />
-                    ) : null}
-                    <div className="worker-avatar-fallback">
+                    <img 
+                      src={photoUrl} 
+                      alt={worker.workerName}
+                      className="worker-avatar-img"
+                      style={{ width: '60px', height: '60px', borderRadius: '50%', objectFit: 'cover' }}
+                      onError={(e) => {
+                        e.target.style.display = 'none';
+                        const fallback = e.target.nextElementSibling;
+                        if (fallback) fallback.style.display = 'flex';
+                      }}
+                    />
+                    <div className="worker-avatar-fallback" style={{
+                      width: '60px',
+                      height: '60px',
+                      borderRadius: '50%',
+                      background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      color: 'white',
+                      fontWeight: '600',
+                      fontSize: '20px'
+                    }}>
                       {worker.workerName?.charAt(0) || worker.workerId?.charAt(0) || "W"}
                     </div>
                   </div>
-                  <div className="worker-rank-badge">#{index + 1}</div>
+                  <div className="worker-rank-badge" style={{
+                    position: 'absolute',
+                    top: '10px',
+                    right: '10px',
+                    background: '#3b82f6',
+                    color: 'white',
+                    padding: '2px 8px',
+                    borderRadius: '12px',
+                    fontSize: '12px',
+                    fontWeight: 'bold'
+                  }}>#{index + 1}</div>
                 </div>
                 
                 <div className="performance-card-body">
@@ -1065,34 +1165,347 @@ const ClientSlotTab = ({ client }) => {
 
   // Render Monthly Report Table with proper styling
   const renderMonthlyReportTable = () => {
+    // Header image URL
+    const headerImage = "https://firebasestorage.googleapis.com/v0/b/jenceo-admin.firebasestorage.app/o/Shop-Images%2FJenCeo-Trades.svg?alt=media&token=da7ab6ec-826f-41b2-ba2a-0a7d0f405997";
+
+    const buildTableHTML = () => {
+      const currentDate = format(new Date(), 'dd-MMM-yyyy HH:mm:ss');
+      const clientName = client?.name || client?.clientName || "Client";
+      const clientId = client?.clientId || client?.idNo || "N/A";
+      
+      return `
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <meta charset="utf-8" />
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <title>Monthly Slot Report - ${format(selectedMonth, 'MMMM yyyy')}</title>
+          <style>
+            *{box-sizing:border-box}
+            html,body{margin:0;padding:0;font-family:Arial,Helvetica,sans-serif;color:#111}
+            .page{ max-width:100%; margin:auto;background:#fff;border:1px solid #e5e5e5;padding:15px}
+            .header{text-align:center;border-bottom:2px solid #b7b4b4; padding:15px 0; margin-bottom:20px}
+            .header-img{width:100%;object-fit:contain;margin-bottom:6px}
+            .title{font-size:32px;font-weight:700;letter-spacing:.4px;margin:10px 0;background:linear-gradient(135deg, #02acf2 0%, #0266f2 100%);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+            .subtitle{font-size:14px;color:#444;margin-top:2px;}
+            .meta{font-size:12px;color:#555;margin-top:10px;}
+            
+            table {
+              width: 100%;
+              border-collapse: collapse;
+              margin: 20px 0;
+              font-size: 12px;
+            }
+            
+            table th {
+              background: #663dae !important;
+              padding: 12px;
+              text-align: left;
+              font-weight: 600;
+              color: #fff;
+              border-bottom: 2px solid #cbd5e1;
+            }
+            
+            table td {
+              padding: 12px;
+              border-bottom: 1px solid #e2e8f0;
+            }
+            
+            table tr:hover {
+              background: #f8fafc;
+            }
+            
+            .employee-photo-img {
+              width: 50px;
+              height: 50px;
+              border-radius: 50%;
+              object-fit: cover;
+              border: 2px solid #e2e8f0;
+            }
+            
+            .employee-photo-placeholder {
+              width: 50px;
+              height: 50px;
+              border-radius: 50%;
+              background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              color: white;
+              font-weight: 600;
+              font-size: 18px;
+            }
+            
+            .hours-badge {
+              background: #d1fae5;
+              color: #065f46;
+              padding: 4px 8px;
+              border-radius: 12px;
+              font-size: 11px;
+              font-weight: 500;
+              display: inline-block;
+            }
+            
+            .status-badge {
+              padding: 4px 8px;
+              border-radius: 12px;
+              font-size: 11px;
+              font-weight: 500;
+              display: inline-block;
+            }
+            
+            .status-completed {
+              background: #d1fae5;
+              color: #065f46;
+            }
+            
+            .status-in-progress {
+              background: #fef3c7;
+              color: #92400e;
+            }
+            
+            .status-cancelled {
+              background: #fee2e2;
+              color: #991b1b;
+            }
+            
+            .footer{
+              margin-top:30px;
+              font-size:10px; 
+              color:#fff;
+              display:flex;
+              justify-content:space-between; 
+              background:linear-gradient(135deg, #02acf2 0%, #0266f2 100%); 
+              padding:8px 15px;
+              border-radius: 5px;
+            }
+            
+            .text-center { text-align: center; }
+            .text-end { text-align: right; }
+            
+            @media print{
+              .page{border:none;margin:0;width:100%}
+              .no-print { display: none !important; }
+            }
+            
+            @media only screen and (max-width: 767px) {
+              .page { padding: 10px; }
+              .title { font-size: 22px; }
+              table th, table td { padding: 8px; font-size: 11px; }
+              .footer { 
+                flex-direction: column;
+                text-align: center;
+                gap: 4px;
+                font-size: 9px;
+              }
+            }
+          </style>
+        </head>
+        <body>
+        <div class="page">
+          <div class="header">
+            <img src="${headerImage}" alt="JenCeo Trades" class="header-img" />
+            <h1 class="title">MONTHLY SLOT REPORT</h1>
+            <div class="subtitle">JenCeo Home Care Services & Traders</div>
+            <div class="meta">
+              <div><strong>Month:</strong> ${format(selectedMonth, 'MMMM yyyy')}</div>
+              <div><strong>Client:</strong> ${clientName} Garu</div>
+              <div><strong>Client ID:</strong> ${clientId}</div>
+              <div><strong>Generated On:</strong> ${currentDate}</div>
+            </div>
+          </div>
+          
+          <div class="table-responsive">
+            <table>
+              <thead>
+                <tr>
+                  <th>S.No</th>
+                  <th>Date</th>
+                  <th>Emp Name</th>
+                  <th>Hours</th>
+                  <th>Status</th>
+                  <th>Remarks</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${monthlyReportData.length > 0 ? monthlyReportData.map((item) => `
+                  <tr>
+                    <td class="text-center">${item.sNo}</td>
+                    <td>
+                      <div style="font-weight: bold;">${item.date}</div>
+                      <div style="font-size: 11px; color: #666;">${item.dayOfWeek}</div>
+                      <div style="font-size: 11px; color: #888;">${item.startTime} - ${item.endTime}</div>
+                    </td>
+                    <td>
+                      <div style="font-weight: bold;">${item.empName}</div>
+                      <div style="font-size: 11px; color: #666;">ID: ${item.empId}</div>
+                    </td>
+                    <td>
+                      <span class="hours-badge">${item.hours}h</span>
+                    </td>
+                    <td>
+                      <span class="status-badge status-${item.status}">
+                        ${item.status === 'completed' ? '✅' : 
+                         item.status === 'in-progress' ? '⏳' : 
+                         item.status === 'cancelled' ? '❌' : '📅'} 
+                        ${item.status}
+                      </span>
+                    </td>
+                    <td>${item.remarks || ''}</td>
+                  </tr>
+                `).join('') : `
+                  <tr>
+                    <td colspan="7" style="text-align: center; padding: 40px; color: #666;">
+                      📭 No data available for selected month
+                    </td>
+                  </tr>
+                `}
+              </tbody>
+              ${monthlyReportData.length > 0 ? `
+                <tfoot>
+                  <tr style="background: #f8fafc; font-weight: bold;">
+                    <td colspan="3" class="text-end">Monthly Totals:</td>
+                    <td>${monthlyReportData.reduce((sum, item) => sum + parseFloat(item.hours || 0), 0).toFixed(2)}h</td>
+                    <td>${monthlyReportData.length} slots</td>
+                    <td>${new Set(monthlyReportData.map(item => item.empId)).size} employees</td>
+                  </tr>
+                </tfoot>
+              ` : ''}
+            </table>
+          </div>
+          
+          <div class="footer">
+            <div>Report Ref: ${format(selectedMonth, 'MMM-yy')}-${clientId}</div>
+            <div>Generated On: ${currentDate}</div>
+            <div>Page 1 of 1</div>
+          </div>
+        </div>
+        </body>
+        </html>
+      `;
+    };
+
+    const handleDownloadTable = () => {
+      const html = buildTableHTML();
+      const blob = new Blob([html], { type: 'text/html' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `slot-report-${format(selectedMonth, 'MMMM-yyyy')}-${client?.clientId || 'client'}.html`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(url), 100);
+    };
+
+    const handlePrintTable = () => {
+      const html = buildTableHTML();
+      const printWindow = window.open('', '_blank');
+      printWindow.document.write(html);
+      printWindow.document.close();
+      printWindow.focus();
+      printWindow.onload = () => {
+        printWindow.print();
+        setTimeout(() => printWindow.close(), 100);
+      };
+    };
+
+    const handleShareTable = async () => {
+      try {
+        const html = buildTableHTML();
+        const blob = new Blob([html], { type: 'text/html' });
+        
+        if (navigator.share && navigator.canShare) {
+          const file = new File(
+            [blob],
+            `slot-report-${format(selectedMonth, 'MMMM-yyyy')}.html`,
+            { type: 'text/html' }
+          );
+          
+          if (navigator.canShare({ files: [file] })) {
+            await navigator.share({
+              title: `Slot Report - ${format(selectedMonth, 'MMMM yyyy')}`,
+              files: [file]
+            });
+            return;
+          }
+        }
+        
+        handleDownloadTable();
+      } catch (e) {
+        handleDownloadTable();
+      }
+    };
+
     return (
       <div className="monthly-report-table">
+        {/* Header with image like ShareInvoice */}
+        <div className="monthly-header">
+          <div style={{ textAlign: 'center', marginBottom: '20px' }}>
+            <img 
+              src="https://firebasestorage.googleapis.com/v0/b/jenceo-admin.firebasestorage.app/o/Shop-Images%2FJenCeo-Trades.svg?alt=media&token=da7ab6ec-826f-41b2-ba2a-0a7d0f405997" 
+              alt="JenCeo Trades" 
+              style={{ width: '100%', objectFit: 'contain', marginBottom: '10px' }}
+            />
+            <h2 style={{ color: '#1e293b', marginBottom: '10px' }}>
+              Monthly Slot Report - {format(selectedMonth, 'MMMM yyyy')}
+            </h2>
+            <p style={{ color: '#64748b' }}>
+              Client: <span className="text-primary">{client?.name || client?.clientName || "Client"} Garu</span>
+            </p>
+          </div>
+          
+          <div className="month-nav">
+            <button 
+              className="btn-nav"
+              onClick={() => setSelectedMonth(prev => {
+                const newDate = new Date(prev);
+                newDate.setMonth(newDate.getMonth() - 1);
+                return newDate;
+              })}
+            >
+              ◀ Previous Month
+            </button>
+            <button 
+              className="btn-today"
+              onClick={() => setSelectedMonth(new Date())}
+            >
+              Current Month
+            </button>
+            <button 
+              className="btn-nav"
+              onClick={() => setSelectedMonth(prev => {
+                const newDate = new Date(prev);
+                newDate.setMonth(newDate.getMonth() + 1);
+                return newDate;
+              })}
+            >
+              Next Month ▶
+            </button>
+          </div>
+        </div>
          
         <div className="report-header">
           <div className="report-actions">
-            <button className="btn-action btn-download" onClick={exportToPDF}>
-              📥 PDF
+            <button className="btn-action btn-download" onClick={handleDownloadTable}>
+              📥 HTML
             </button>
-            <button className="btn-action btn-html" onClick={exportToHTML}>
-              🌐 HTML
-            </button>
-            <button className="btn-action btn-print" onClick={printReport}>
+            <button className="btn-action btn-print" onClick={handlePrintTable}>
               🖨️ Print
             </button>
-            <button className="btn-action btn-share" onClick={shareReport}>
+            <button className="btn-action btn-share" onClick={handleShareTable}>
               🔗 Share
             </button>
           </div>
         </div>
         
         <div className="table-responsive">
-        <h3 className="p-2">📋 Monthly Report - {format(selectedMonth, 'MMMM yyyy')} -  <span className="text-primary">{client?.name || client?.clientName || "Client"} Garu</span></h3>
+          <h3 className="p-2">📋 Monthly Slot Details - {format(selectedMonth, 'MMMM yyyy')}</h3>
           <table className="monthly-table w-100">
             <thead>
               <tr>
                 <th>S.No</th>
                 <th>Date</th>
-                <th>Emp Photo</th>
                 <th>Emp Name</th>
                 <th>Hours</th>
                 <th>Status</th>
@@ -1102,107 +1515,95 @@ const ClientSlotTab = ({ client }) => {
             </thead>
             <tbody>
               {monthlyReportData.length > 0 ? (
-                monthlyReportData.map((item, index) => (
-                  <tr key={`${item.slotId}-${index}`}>
-                    <td className="text-center">{item.sNo}</td>
-                    <td className="date-cell">
-                      <div className="date-display">
-                        <div className="date">{item.date}</div>
-                        <div className="day">{item.dayOfWeek}</div>
-                      </div>
-                      <div className="time-range">
-                        {item.startTime} - {item.endTime}
-                      </div>
-                    </td>
-                    <td className="photo-cell">
-                      {typeof item.empPhoto === 'object' ? (
-                        item.empPhoto
-                      ) : (
-                        <div className="employee-photo">
-                          {item.workerPhotoUrl ? (
-                            <img 
-                              src={item.workerPhotoUrl} 
-                              alt={item.empName}
-                              className="employee-photo-img"
+                monthlyReportData.map((item) => {
+                  // Get the original slot data for saving remarks
+                  const originalSlot = slotData.find(slot => 
+                    slot.slotId === item.slotId && slot.date === item.dateKey
+                  );
+
+                  return (
+                    <tr key={`${item.slotId}-${item.sNo}`}>
+                      <td className="text-center">{item.sNo}</td>
+                      <td className="date-cell">
+                        <div className="date-display">
+                          <div className="date">{item.date}</div>
+                          <div className="day">{item.dayOfWeek}</div>
+                        </div>
+                        <div className="time-range">
+                          {item.startTime} - {item.endTime}
+                        </div>
+                      </td>
+                      
+                      <td className="employee-cell">
+                        <div className="employee-name">{item.empName}</div>
+                        <div className="employee-id">ID: {item.empId}</div>
+                      </td>
+                      
+                      <td className="hours-cell">
+                        <span className="hours-badge">{item.hours}h</span>
+                      </td>
+                      <td>
+                        <span className={`status-badge status-${item.status}`}>
+                          {item.status === 'completed' ? '✅' : 
+                           item.status === 'in-progress' ? '⏳' : 
+                           item.status === 'cancelled' ? '❌' : '📅'} 
+                          {item.status}
+                        </span>
+                      </td>
+                      <td className="remarks-cell">
+                        {editingRemarks[item.slotId] !== undefined ? (
+                          <div className="remarks-edit">
+                            <input
+                              type="text"
+                              value={editingRemarks[item.slotId]}
+                              onChange={(e) => handleRemarksEdit(item.slotId, e.target.value)}
+                              className="remarks-input"
+                              placeholder="Enter remarks..."
+                              autoFocus
                             />
-                          ) : (
-                            <div className="employee-photo-placeholder">
-                              {item.empName?.charAt(0) || 'W'}
-                            </div>
-                          )}
-                        </div>
-                      )}
-                    </td>
-                    <td className="employee-cell">
-                      <div className="employee-name">{item.empName}</div>
-                      <div className="employee-id">ID: {item.empId}</div>
-                    </td>
-                    
-                    <td className="hours-cell">
-                      <span className="hours-badge">{item.hours}h</span>
-                    </td>
-                    <td>
-                      <span className={`status-badge status-${item.status}`}>
-                        {item.status === 'completed' ? '✅' : 
-                         item.status === 'in-progress' ? '⏳' : 
-                         item.status === 'cancelled' ? '❌' : '📅'} 
-                        {item.status}
-                      </span>
-                    </td>
-                    <td className="remarks-cell">
-                      {editingRemarks[index] !== undefined ? (
-                        <div className="remarks-edit">
-                          <input
-                            type="text"
-                            value={editingRemarks[index]}
-                            onChange={(e) => handleRemarksEdit(index, e.target.value)}
-                            className="remarks-input"
-                            placeholder="Enter remarks..."
-                            autoFocus
-                          />
-                        </div>
-                      ) : (
-                        <div className="remarks-display" onClick={() => handleRemarksEdit(index, item.remarks)}>
-                          {item.remarks || <span className="text-muted">Click to add remarks</span>}
-                        </div>
-                      )}
-                    </td>
-                    <td className="actions-cell">
-                      {editingRemarks[index] !== undefined ? (
-                        <>
+                          </div>
+                        ) : (
+                          <div className="remarks-display" onClick={() => handleRemarksEdit(item.slotId, item.remarks)}>
+                            {item.remarks || <span className="text-muted">Click to add remarks</span>}
+                          </div>
+                        )}
+                      </td>
+                      <td className="actions-cell">
+                        {editingRemarks[item.slotId] !== undefined ? (
+                          <>
+                            <button 
+                              className="btn-save btn-sm"
+                              onClick={() => {
+                                saveRemarks(item.slotId, editingRemarks[item.slotId], item.dateKey, originalSlot);
+                              }}
+                              title="Save remarks"
+                            >
+                              💾 Save
+                            </button>
+                            <button 
+                              className="btn-cancel btn-sm"
+                              onClick={() => handleRemarksEdit(item.slotId, undefined)}
+                              title="Cancel"
+                            >
+                              ❌ Cancel
+                            </button>
+                          </>
+                        ) : (
                           <button 
-                            className="btn-save btn-sm"
-                            onClick={() => {
-                              saveRemarks(item.slotId, editingRemarks[index]);
-                              handleRemarksEdit(index, undefined);
-                            }}
-                            title="Save remarks"
+                            className="btn-edit btn-sm"
+                            onClick={() => handleRemarksEdit(item.slotId, item.remarks)}
+                            title="Edit remarks"
                           >
-                            💾 Save
+                            ✏️ Edit
                           </button>
-                          <button 
-                            className="btn-cancel btn-sm"
-                            onClick={() => handleRemarksEdit(index, undefined)}
-                            title="Cancel"
-                          >
-                            ❌ Cancel
-                          </button>
-                        </>
-                      ) : (
-                        <button 
-                          className="btn-edit btn-sm"
-                          onClick={() => handleRemarksEdit(index, item.remarks)}
-                          title="Edit remarks"
-                        >
-                          ✏️ Edit
-                        </button>
-                      )}
-                    </td>
-                  </tr>
-                ))
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })
               ) : (
                 <tr>
-                  <td colSpan="9" className="no-data">
+                  <td colSpan="9" className="no-data" style={{ textAlign: 'center', padding: '40px', color: '#666' }}>
                     📭 No data available for selected month
                   </td>
                 </tr>
@@ -1210,19 +1611,19 @@ const ClientSlotTab = ({ client }) => {
             </tbody>
             {monthlyReportData.length > 0 && (
               <tfoot>
-                <tr>
+                <tr style={{ background: '#f8fafc', fontWeight: 'bold' }}>
                   <td colSpan="4" className="text-end"><strong>Monthly Totals:</strong></td>
                   <td>
-                    <strong>{monthlyReportData.length} slots</strong>
-                  </td>
-                  <td className="total-hours">
                     <strong>
                       {monthlyReportData.reduce((sum, item) => sum + parseFloat(item.hours || 0), 0).toFixed(2)}h
                     </strong>
                   </td>
-                  <td colSpan="3">
+                  <td>
+                    <strong>{monthlyReportData.length} slots</strong>
+                  </td>
+                  <td colSpan="2">
                     <strong>
-                      {new Set(monthlyReportData.map(item => item.empName)).size} employees
+                      {new Set(monthlyReportData.map(item => item.empId)).size} employees
                     </strong>
                   </td>
                 </tr>
@@ -1231,7 +1632,21 @@ const ClientSlotTab = ({ client }) => {
           </table>
         </div>
         
-       
+        {/* Footer */}
+        <div className="footer" style={{
+          marginTop: '30px',
+          fontSize: '10px',
+          color: '#fff',
+          display: 'flex',
+          justifyContent: 'space-between',
+          background: 'linear-gradient(135deg, #02acf2 0%, #0266f2 100%)',
+          padding: '8px 15px',
+          borderRadius: '5px'
+        }}>
+          <div>Report Ref: {format(selectedMonth, 'MMM-yy')}-{client?.clientId || 'N/A'}</div>
+          <div>Generated On: {format(new Date(), 'dd-MMM-yyyy HH:mm:ss')}</div>
+          <div>Page 1 of 1</div>
+        </div>
       </div>
     );
   };
@@ -1431,7 +1846,9 @@ const ClientSlotTab = ({ client }) => {
               <tbody>
                 {slotsToShow.length > 0 ? (
                   slotsToShow.map((slot, index) => {
-                    const workerPhoto = workerPhotos[slot.workerId];
+                    const workerPhoto = workerPhotos[slot.workerId] || 
+                                      slot.workerPhotoUrl || 
+                                      `https://ui-avatars.com/api/?name=${encodeURIComponent(slot.workerName || 'Worker')}&background=random&color=fff&size=100`;
                     
                     return (
                       <tr key={`${slot.slotId}-${index}`}>
@@ -1444,17 +1861,31 @@ const ClientSlotTab = ({ client }) => {
                         </td>
                         <td className="worker-cell">
                           <div className="worker-info-with-photo">
-                            {workerPhoto ? (
-                              <img 
-                                src={workerPhoto} 
-                                alt={slot.workerName}
-                                className="worker-photo-small"
-                              />
-                            ) : (
-                              <div className="worker-photo-placeholder-small">
-                                {slot.workerName?.charAt(0) || 'W'}
-                              </div>
-                            )}
+                            <img 
+                              src={workerPhoto} 
+                              alt={slot.workerName}
+                              className="worker-photo-small"
+                              style={{ width: '40px', height: '40px', borderRadius: '50%', objectFit: 'cover' }}
+                              onError={(e) => {
+                                e.target.style.display = 'none';
+                                const fallback = e.target.nextElementSibling;
+                                if (fallback) fallback.style.display = 'flex';
+                              }}
+                            />
+                            <div className="worker-photo-placeholder-small" style={{
+                              width: '40px',
+                              height: '40px',
+                              borderRadius: '50%',
+                              background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                              display: 'none',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              color: 'white',
+                              fontWeight: '600',
+                              fontSize: '16px'
+                            }}>
+                              {slot.workerName?.charAt(0) || 'W'}
+                            </div>
                             <div className="worker-details-small">
                               <div className="worker-name-small">{slot.workerName}</div>
                               <div className="worker-id-small">ID: {slot.workerId}</div>
@@ -1567,7 +1998,6 @@ const ClientSlotTab = ({ client }) => {
             <span className="title-icon">📊</span>
             Client Slot Analytics
           </h1>
-      
         </div>
 
         {/* View Tabs */}
@@ -1619,22 +2049,37 @@ const ClientSlotTab = ({ client }) => {
                   <div className="workers-list">
                     {monthlyStats.topWorkers.length > 0 ? (
                       monthlyStats.topWorkers.map((worker, index) => {
-                        const photoUrl = worker.photoUrl || workerPhotos[worker.workerId];
+                        const photoUrl = worker.photoUrl || workerPhotos[worker.workerId] || 
+                                       `https://ui-avatars.com/api/?name=${encodeURIComponent(worker.workerName || 'Worker')}&background=random&color=fff&size=100`;
                         
                         return (
                           <div key={`${worker.workerId}-${index}`} className="top-worker">
                             <div className="worker-rank">{index + 1}</div>
-                            {photoUrl ? (
-                              <img 
-                                src={photoUrl} 
-                                alt={worker.workerName}
-                                className="worker-avatar-small-img"
-                              />
-                            ) : (
-                              <div className="worker-avatar-small">
-                                {worker.workerName?.charAt(0) || worker.workerId?.charAt(0) || "W"}
-                              </div>
-                            )}
+                            <img 
+                              src={photoUrl} 
+                              alt={worker.workerName}
+                              className="worker-avatar-small-img"
+                              style={{ width: '40px', height: '40px', borderRadius: '50%', objectFit: 'cover' }}
+                              onError={(e) => {
+                                e.target.style.display = 'none';
+                                const fallback = e.target.nextElementSibling;
+                                if (fallback) fallback.style.display = 'flex';
+                              }}
+                            />
+                            <div className="worker-avatar-small" style={{
+                              width: '40px',
+                              height: '40px',
+                              borderRadius: '50%',
+                              background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                              display: 'none',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              color: 'white',
+                              fontWeight: '600',
+                              fontSize: '16px'
+                            }}>
+                              {worker.workerName?.charAt(0) || worker.workerId?.charAt(0) || "W"}
+                            </div>
                             <div className="worker-details-small">
                               <div className="worker-name-small">{worker.workerName}</div>
                               <div className="worker-stats-small">
@@ -1755,17 +2200,31 @@ const ClientSlotTab = ({ client }) => {
                       dailyStats.workers.map((worker, index) => (
                         <div key={`${worker.id}-${index}`} className="worker-card-small">
                           <div className="worker-info-with-photo-small">
-                            {worker.photoUrl ? (
-                              <img 
-                                src={worker.photoUrl} 
-                                alt={worker.name}
-                                className="worker-photo-tiny"
-                              />
-                            ) : (
-                              <div className="worker-photo-placeholder-tiny">
-                                {worker.name?.charAt(0) || 'W'}
-                              </div>
-                            )}
+                            <img 
+                              src={worker.photoUrl} 
+                              alt={worker.name}
+                              className="worker-photo-tiny"
+                              style={{ width: '35px', height: '35px', borderRadius: '50%', objectFit: 'cover' }}
+                              onError={(e) => {
+                                e.target.style.display = 'none';
+                                const fallback = e.target.nextElementSibling;
+                                if (fallback) fallback.style.display = 'flex';
+                              }}
+                            />
+                            <div className="worker-photo-placeholder-tiny" style={{
+                              width: '35px',
+                              height: '35px',
+                              borderRadius: '50%',
+                              background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                              display: 'none',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              color: 'white',
+                              fontWeight: '600',
+                              fontSize: '14px'
+                            }}>
+                              {worker.name?.charAt(0) || 'W'}
+                            </div>
                             <div className="worker-info-small">
                               <div className="worker-name-small">
                                 {worker.name} 
@@ -1823,42 +2282,6 @@ const ClientSlotTab = ({ client }) => {
         ) : (
           // Monthly Analytics View
           <div className="monthly-analytics-report">
-            <div className="monthly-header">
-              <div className="month-nav">
-                <button 
-                  className="btn-nav"
-                  onClick={() => setSelectedMonth(prev => {
-                    const newDate = new Date(prev);
-                    newDate.setMonth(newDate.getMonth() - 1);
-                    return newDate;
-                  })}
-                >
-                  ◀ Previous Month
-                </button>
-                <button 
-                  className="btn-today"
-                  onClick={() => setSelectedMonth(new Date())}
-                >
-                  Current Month
-                </button>
-                <button 
-                  className="btn-nav"
-                  onClick={() => setSelectedMonth(prev => {
-                    const newDate = new Date(prev);
-                    newDate.setMonth(newDate.getMonth() + 1);
-                    return newDate;
-                  })}
-                >
-                  Next Month ▶
-                </button>
-              </div>
-            </div>
-
-           
-
-            
-
-            {/* Monthly Detailed Report */}
             {renderMonthlyReportTable()}
           </div>
         )}
@@ -1866,7 +2289,6 @@ const ClientSlotTab = ({ client }) => {
 
       {/* Footer Summary */}
       <div className="dashboard-footer">
-        
         <div className="footer-actions">
           <button className="btn-export" onClick={handleDownloadCSV}>
             📥 Export as CSV

@@ -3,6 +3,8 @@ import React, { useState, useEffect, useMemo, useRef } from "react";
 import firebaseDB from "../../../../firebase";
 import { format, parseISO, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, differenceInHours, differenceInMinutes, isValid, isToday, isThisMonth } from 'date-fns';
 import { PieChart, Pie, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Cell } from 'recharts';
+import html2canvas from 'html2canvas';
+import jsPDF from 'jspdf';
 
 const ClientSlotTab = ({ client }) => {
   const [loading, setLoading] = useState(true);
@@ -30,6 +32,9 @@ const ClientSlotTab = ({ client }) => {
   });
   const [workerDetails, setWorkerDetails] = useState({});
   const [activeTab, setActiveTab] = useState("overview");
+  const [editingRemarks, setEditingRemarks] = useState({});
+  const [monthlyReportData, setMonthlyReportData] = useState([]);
+  const [workerPhotos, setWorkerPhotos] = useState({}); // Store worker photos
 
   // Define client paths (same as SlotBook.js)
   const clientPaths = {
@@ -64,6 +69,82 @@ const ClientSlotTab = ({ client }) => {
     }
   }, [clientKey, selectedMonth, selectedDate, viewMode]);
 
+  useEffect(() => {
+    if (slotData.length > 0 && viewMode === "monthly") {
+      prepareMonthlyReport();
+    }
+  }, [slotData, selectedMonth, viewMode]);
+
+  // Fetch worker photos from Firebase
+  const fetchWorkerPhoto = async (workerId) => {
+    if (!workerId) return null;
+    
+    try {
+      const photoRef = firebaseDB.child(`workerPhotos/${workerId}`);
+      const snapshot = await photoRef.once('value');
+      return snapshot.val()?.photoUrl || null;
+    } catch (error) {
+      console.error("Error fetching worker photo:", error);
+      return null;
+    }
+  };
+
+  const prepareMonthlyReport = () => {
+    const monthStart = startOfMonth(selectedMonth);
+    const monthEnd = endOfMonth(selectedMonth);
+    
+    // Filter slots for the selected month
+    const monthSlots = slotData.filter(slot => 
+      slot.scheduleDate >= monthStart && slot.scheduleDate <= monthEnd
+    );
+
+    // Group by date and worker
+    const groupedData = [];
+    let serialNo = 1;
+
+    monthSlots.forEach((slot, index) => {
+      // Get worker photo URL
+      const workerPhotoUrl = workerPhotos[slot.workerId] || null;
+      
+      groupedData.push({
+        sNo: serialNo++,
+        date: slot.formattedDate,
+        dayOfWeek: slot.dayOfWeek,
+        empPhoto: workerPhotoUrl 
+          ? <img src={workerPhotoUrl} alt={slot.workerName} className="employee-photo-img" />
+          : <div className="employee-photo-placeholder">{slot.workerName?.charAt(0) || 'W'}</div>,
+        empName: slot.workerName,
+        empId: slot.workerId,
+        slot: slot.slotType || 'working',
+        startTime: slot.startTime12 || convertTo12Hour(slot.startTime),
+        endTime: slot.endTime12 || convertTo12Hour(slot.endTime),
+        hours: parseFloat(slot.duration || 0).toFixed(2),
+        status: slot.status,
+        remarks: slot.remarks || '',
+        slotId: slot.slotId,
+        workerPhotoUrl,
+        originalIndex: index
+      });
+    });
+
+    // Sort by date and time
+    groupedData.sort((a, b) => {
+      const dateA = new Date(a.date.split('-').reverse().join('-'));
+      const dateB = new Date(b.date.split('-').reverse().join('-'));
+      if (dateA.getTime() !== dateB.getTime()) {
+        return dateA.getTime() - dateB.getTime();
+      }
+      return a.startTime.localeCompare(b.startTime);
+    });
+
+    // Update serial numbers after sorting
+    groupedData.forEach((item, index) => {
+      item.sNo = index + 1;
+    });
+
+    setMonthlyReportData(groupedData);
+  };
+
   // Optimize data fetching with caching
   const fetchClientSlotData = async () => {
     try {
@@ -82,6 +163,7 @@ const ClientSlotTab = ({ client }) => {
 
       let allSlots = [];
       const workerMap = {};
+      const photoPromises = [];
       
       if (!clientKey) {
         console.error("No client key found");
@@ -158,12 +240,17 @@ const ClientSlotTab = ({ client }) => {
                       // Time fields
                       startTime: allocation.startTime || allocation.start || '',
                       endTime: allocation.endTime || allocation.end || '',
+                      // Convert to 12-hour format
+                      startTime12: convertTo12Hour(allocation.startTime || allocation.start || ''),
+                      endTime12: convertTo12Hour(allocation.endTime || allocation.end || ''),
                       // Status
                       status: allocation.status || 'unknown',
                       // Slot type
                       slotType: allocation.slotType || allocation.type || 'working',
                       // Remarks
-                      remarks: allocation.remarks || allocation.note || ''
+                      remarks: allocation.remarks || allocation.note || '',
+                      // Worker photo
+                      workerPhotoUrl: allocation.workerPhotoUrl || null
                     };
 
                     allSlots.push(slotInfo);
@@ -179,8 +266,23 @@ const ClientSlotTab = ({ client }) => {
                           totalSlots: 0,
                           dates: new Set(),
                           departments: new Set(),
-                          allocations: []
+                          allocations: [],
+                          photoUrl: slotInfo.workerPhotoUrl
                         };
+                        
+                        // Fetch worker photo if not already fetched
+                        if (slotInfo.workerId && !workerPhotos[slotInfo.workerId]) {
+                          photoPromises.push(
+                            fetchWorkerPhoto(slotInfo.workerId).then(photoUrl => {
+                              if (photoUrl) {
+                                setWorkerPhotos(prev => ({
+                                  ...prev,
+                                  [slotInfo.workerId]: photoUrl
+                                }));
+                              }
+                            })
+                          );
+                        }
                       }
                       
                       workerMap[workerKey].totalHours += slotInfo.duration;
@@ -188,6 +290,11 @@ const ClientSlotTab = ({ client }) => {
                       workerMap[workerKey].dates.add(dateKey);
                       workerMap[workerKey].departments.add(department);
                       workerMap[workerKey].allocations.push(slotInfo);
+                      
+                      // Update photo URL if available
+                      if (slotInfo.workerPhotoUrl) {
+                        workerMap[workerKey].photoUrl = slotInfo.workerPhotoUrl;
+                      }
                     }
                   }
                 });
@@ -201,6 +308,9 @@ const ClientSlotTab = ({ client }) => {
         console.error(`Error fetching from ${department}:`, error);
       }
 
+      // Wait for all photo fetches to complete
+      await Promise.all(photoPromises);
+      
       console.log("Total slots found:", allSlots.length);
       console.log("Worker map:", Object.keys(workerMap).length);
       
@@ -251,7 +361,8 @@ const ClientSlotTab = ({ client }) => {
             dayWorkersMap[workerKey] = {
               id: slot.workerId,
               name: slot.workerName,
-              hours: 0
+              hours: 0,
+              photoUrl: slot.workerPhotoUrl
             };
           }
           dayWorkersMap[workerKey].hours += slot.duration || 0;
@@ -271,11 +382,15 @@ const ClientSlotTab = ({ client }) => {
       };
     });
 
-    // Get top workers
+    // Get top workers with photos
     const workerArray = Object.values(workers);
     const topWorkers = workerArray
       .sort((a, b) => b.totalHours - a.totalHours)
-      .slice(0, 5);
+      .slice(0, 5)
+      .map(worker => ({
+        ...worker,
+        photoUrl: worker.photoUrl || workerPhotos[worker.workerId]
+      }));
 
     // Slot distribution by status/type
     const slotDistribution = monthSlots.reduce((acc, slot) => {
@@ -326,7 +441,8 @@ const ClientSlotTab = ({ client }) => {
         name: slot.workerName,
         hours: dailySlots
           .filter(s => s.workerId === slot.workerId)
-          .reduce((sum, s) => sum + (s.duration || 0), 0)
+          .reduce((sum, s) => sum + (s.duration || 0), 0),
+        photoUrl: slot.workerPhotoUrl || workerPhotos[slot.workerId]
       })))].filter(w => w.id),
       slotDetails: dailySlots.map(slot => ({
         ...slot,
@@ -334,6 +450,532 @@ const ClientSlotTab = ({ client }) => {
       })),
       timeDistribution
     });
+  };
+
+  // Export functions - Improved PDF generation
+  const exportToPDF = async () => {
+    try {
+      // Create a temporary container for the entire report
+      const tempContainer = document.createElement('div');
+      tempContainer.style.cssText = `
+        position: fixed;
+        left: -9999px;
+        top: 0;
+        width: 1000px;
+        background: white;
+        padding: 20px;
+      `;
+      
+      // Clone the report content
+      const reportElement = document.querySelector('.monthly-analytics-report');
+      if (!reportElement) {
+        alert('Report content not found!');
+        return;
+      }
+      
+      const clonedReport = reportElement.cloneNode(true);
+      
+      // Apply print styles
+      clonedReport.style.cssText = `
+        width: 100%;
+        margin: 0;
+        padding: 0;
+        background: white;
+        color: black;
+        font-family: Arial, sans-serif;
+      `;
+      
+      // Fix images for PDF
+      const images = clonedReport.querySelectorAll('img');
+      images.forEach(img => {
+        img.style.maxWidth = '50px';
+        img.style.height = 'auto';
+      });
+      
+      tempContainer.appendChild(clonedReport);
+      document.body.appendChild(tempContainer);
+      
+      const canvas = await html2canvas(tempContainer, {
+        scale: 2,
+        useCORS: true,
+        logging: false,
+        backgroundColor: '#ffffff',
+        width: tempContainer.offsetWidth,
+        height: tempContainer.offsetHeight
+      });
+      
+      // Clean up
+      document.body.removeChild(tempContainer);
+      
+      const imgData = canvas.toDataURL('image/png');
+      const pdf = new jsPDF('landscape', 'mm', 'a4');
+      const imgWidth = 280;
+      const imgHeight = (canvas.height * imgWidth) / canvas.width;
+      
+      pdf.addImage(imgData, 'PNG', 10, 10, imgWidth, imgHeight);
+      
+      // Add metadata
+      pdf.setProperties({
+        title: `Monthly Report - ${format(selectedMonth, 'MMMM yyyy')}`,
+        subject: `Client Slot Analytics for ${client?.name || 'Client'}`,
+        author: 'Client Management System',
+        keywords: 'report, analytics, slots, workers'
+      });
+      
+      pdf.save(`monthly-report-${format(selectedMonth, 'MMMM-yyyy')}.pdf`);
+    } catch (error) {
+      console.error("Error generating PDF:", error);
+      alert("Failed to generate PDF. Please try again.");
+    }
+  };
+
+  const exportToHTML = () => {
+    const element = document.querySelector('.monthly-analytics-report');
+    if (!element) return;
+    
+    // Clone the element to avoid modifying the original
+    const clone = element.cloneNode(true);
+    
+    // Add inline styles for HTML export
+    const style = document.createElement('style');
+    style.textContent = `
+      @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+      
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+      
+      body {
+        font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        margin: 20px;
+        background: #f8fafc;
+        color: #334155;
+      }
+      
+      .monthly-analytics-report {
+        background: white;
+        border-radius: 16px;
+        padding: 30px;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+        max-width: 1200px;
+        margin: 0 auto;
+      }
+      
+      .monthly-header {
+        text-align: center;
+        margin-bottom: 30px;
+        padding-bottom: 20px;
+        border-bottom: 2px solid #e2e8f0;
+      }
+      
+      .monthly-header h2 {
+        color: #1e293b;
+        font-size: 28px;
+        margin-bottom: 15px;
+      }
+      
+      .month-nav {
+        display: flex;
+        justify-content: center;
+        gap: 15px;
+        margin-top: 20px;
+      }
+      
+      .btn-nav, .btn-today {
+        padding: 10px 20px;
+        border: none;
+        border-radius: 8px;
+        cursor: pointer;
+        font-weight: 500;
+        font-size: 14px;
+        transition: all 0.3s ease;
+      }
+      
+      .btn-nav {
+        background: #f1f5f9;
+        color: #64748b;
+        border: 1px solid #cbd5e1;
+      }
+      
+      .btn-today {
+        background: #3b82f6;
+        color: white;
+      }
+      
+      .monthly-stats-grid {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 20px;
+        margin-bottom: 30px;
+      }
+      
+      .stat-card {
+        background: white;
+        border-radius: 12px;
+        padding: 20px;
+        border: 1px solid #e2e8f0;
+        border-left: 4px solid;
+      }
+      
+      .stat-card-primary { border-left-color: #3b82f6; }
+      .stat-card-success { border-left-color: #10b981; }
+      .stat-card-info { border-left-color: #0ea5e9; }
+      .stat-card-warning { border-left-color: #f59e0b; }
+      
+      .stat-value {
+        font-size: 32px;
+        font-weight: 700;
+        color: #1e293b;
+        margin: 10px 0 5px;
+      }
+      
+      .stat-title {
+        color: #64748b;
+        font-weight: 500;
+        margin: 0;
+      }
+      
+      .worker-performance-cards {
+        margin: 30px 0;
+      }
+      
+      .performance-cards-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+        gap: 20px;
+      }
+      
+      .performance-card {
+        background: white;
+        border-radius: 12px;
+        padding: 20px;
+        border: 1px solid #e2e8f0;
+        transition: all 0.3s ease;
+      }
+      
+      .performance-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 8px 16px rgba(0, 0, 0, 0.1);
+      }
+      
+      .monthly-report-table {
+        margin-top: 30px;
+      }
+      
+      .report-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 20px;
+      }
+      
+      .report-actions {
+        display: flex;
+        gap: 10px;
+      }
+      
+      .btn-action {
+        padding: 10px 20px;
+        border: none;
+        border-radius: 8px;
+        cursor: pointer;
+        font-weight: 500;
+        font-size: 14px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        transition: all 0.3s ease;
+      }
+      
+      .btn-download { background: #3b82f6; color: white; }
+      .btn-html { background: #10b981; color: white; }
+      .btn-print { background: #f59e0b; color: white; }
+      .btn-share { background: #8b5cf6; color: white; }
+      
+      table.monthly-table {
+        width: 100%;
+        border-collapse: collapse;
+        margin: 20px 0;
+      }
+      
+      table.monthly-table th {
+        background: #f1f5f9;
+        padding: 15px;
+        text-align: left;
+        font-weight: 600;
+        color: #475569;
+        border-bottom: 2px solid #cbd5e1;
+      }
+      
+      table.monthly-table td {
+        padding: 15px;
+        border-bottom: 1px solid #e2e8f0;
+      }
+      
+      table.monthly-table tr:hover {
+        background: #f8fafc;
+      }
+      
+      .employee-photo-img {
+        width: 50px;
+        height: 50px;
+        border-radius: 50%;
+        object-fit: cover;
+        border: 2px solid #e2e8f0;
+      }
+      
+      .employee-photo-placeholder {
+        width: 50px;
+        height: 50px;
+        border-radius: 50%;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: white;
+        font-weight: 600;
+        font-size: 18px;
+      }
+      
+      .slot-badge {
+        background: #dbeafe;
+        color: #1d4ed8;
+        padding: 6px 12px;
+        border-radius: 20px;
+        font-size: 12px;
+        font-weight: 500;
+      }
+      
+      .hours-badge {
+        background: #d1fae5;
+        color: #065f46;
+        padding: 6px 12px;
+        border-radius: 20px;
+        font-size: 12px;
+        font-weight: 500;
+      }
+      
+      .status-badge {
+        padding: 6px 12px;
+        border-radius: 20px;
+        font-size: 12px;
+        font-weight: 500;
+      }
+      
+      .status-completed {
+        background: #d1fae5;
+        color: #065f46;
+      }
+      
+      .status-in-progress {
+        background: #fef3c7;
+        color: #92400e;
+      }
+      
+      .status-cancelled {
+        background: #fee2e2;
+        color: #991b1b;
+      }
+      
+      .remarks-input {
+        width: 100%;
+        padding: 8px;
+        border: 1px solid #cbd5e1;
+        border-radius: 6px;
+        font-size: 14px;
+      }
+      
+      .btn-sm {
+        padding: 6px 12px;
+        border: none;
+        border-radius: 6px;
+        cursor: pointer;
+        font-size: 12px;
+        margin: 0 2px;
+      }
+      
+      .btn-save { background: #10b981; color: white; }
+      .btn-cancel { background: #ef4444; color: white; }
+      .btn-edit { background: #f59e0b; color: white; }
+      
+      .report-summary {
+        margin-top: 30px;
+        padding: 20px;
+        background: #f8fafc;
+        border-radius: 12px;
+        border: 1px solid #e2e8f0;
+      }
+      
+      .summary-items {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 20px;
+      }
+      
+      @media print {
+        body { margin: 0; padding: 10px; }
+        .no-print { display: none !important; }
+        .btn-action { display: none; }
+      }
+    `;
+    
+    // Create the full HTML document
+    const htmlContent = `
+      <!DOCTYPE html>
+      <html lang="en">
+      <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Monthly Report - ${format(selectedMonth, 'MMMM yyyy')}</title>
+        ${style.outerHTML}
+      </head>
+      <body>
+        <div class="no-print" style="text-align: center; margin-bottom: 20px; padding: 20px; background: #f1f5f9; border-radius: 10px;">
+          <h3 style="margin: 0; color: #334155;">📊 Client Slot Analytics Report</h3>
+          <p style="margin: 10px 0; color: #64748b;">Generated on ${format(new Date(), 'dd MMM yyyy HH:mm:ss')}</p>
+        </div>
+        ${clone.outerHTML}
+        <div class="no-print" style="margin-top: 40px; padding: 20px; background: #f8fafc; border-radius: 12px; text-align: center;">
+          <p style="color: #64748b; margin-bottom: 10px;">
+            Report generated for <strong>${client?.name || 'Client'}</strong> | 
+            Client ID: <strong>${client?.clientId || 'N/A'}</strong>
+          </p>
+          <p style="color: #94a3b8; font-size: 14px;">
+            This report contains confidential information. Please do not share without authorization.
+          </p>
+        </div>
+      </body>
+      </html>
+    `;
+    
+    const blob = new Blob([htmlContent], { type: 'text/html' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `monthly-report-${format(selectedMonth, 'MMMM-yyyy')}.html`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 100);
+  };
+
+  const printReport = () => {
+    const printContent = document.querySelector('.monthly-analytics-report');
+    if (!printContent) return;
+    
+    const printWindow = window.open('', '_blank', 'width=1200,height=800');
+    const styles = Array.from(document.styleSheets)
+      .map(sheet => {
+        try {
+          return Array.from(sheet.cssRules).map(rule => rule.cssText).join('');
+        } catch {
+          return '';
+        }
+      })
+      .join('');
+    
+    printWindow.document.write(`
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>Monthly Report - ${format(selectedMonth, 'MMMM yyyy')}</title>
+        <style>
+          ${styles}
+          @media print {
+            @page {
+              size: landscape;
+              margin: 15mm;
+            }
+            body {
+              margin: 0;
+              padding: 0;
+              background: white;
+            }
+            .btn-action, .no-print {
+              display: none !important;
+            }
+            .monthly-analytics-report {
+              box-shadow: none !important;
+              border: 1px solid #ddd !important;
+            }
+          }
+          .monthly-analytics-report {
+            transform: scale(0.95);
+            transform-origin: top left;
+          }
+        </style>
+      </head>
+      <body onload="window.print(); setTimeout(() => window.close(), 1000);">
+        ${printContent.outerHTML}
+      </body>
+      </html>
+    `);
+    printWindow.document.close();
+  };
+
+  const shareReport = () => {
+    if (navigator.share) {
+      navigator.share({
+        title: `Monthly Report - ${format(selectedMonth, 'MMMM yyyy')}`,
+        text: `Monthly analytics report for ${client?.name || 'Client'}`,
+        url: window.location.href
+      });
+    } else {
+      // Fallback: Show modal with options
+      const shareModal = document.createElement('div');
+      shareModal.innerHTML = `
+        <div style="position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; z-index: 9999;">
+          <div style="background: white; padding: 20px; border-radius: 10px; max-width: 400px; width: 90%;">
+            <h3 style="margin-top: 0;">Share Report</h3>
+            <p>Select an export option:</p>
+            <div style="display: flex; gap: 10px; margin-top: 20px;">
+              <button onclick="exportToPDF()" style="padding: 10px; background: #dc2626; color: white; border: none; border-radius: 5px; cursor: pointer;">PDF</button>
+              <button onclick="exportToHTML()" style="padding: 10px; background: #059669; color: white; border: none; border-radius: 5px; cursor: pointer;">HTML</button>
+              <button onclick="window.print()" style="padding: 10px; background: #d97706; color: white; border: none; border-radius: 5px; cursor: pointer;">Print</button>
+              <button onclick="this.parentElement.parentElement.parentElement.remove()" style="padding: 10px; background: #6b7280; color: white; border: none; border-radius: 5px; cursor: pointer;">Cancel</button>
+            </div>
+          </div>
+        </div>
+      `;
+      document.body.appendChild(shareModal);
+    }
+  };
+
+  // Handle remarks editing
+  const handleRemarksEdit = (index, value) => {
+    setEditingRemarks(prev => ({
+      ...prev,
+      [index]: value
+    }));
+  };
+
+  const saveRemarks = async (slotId, remarks) => {
+    try {
+      // Find the slot to update
+      const slotToUpdate = monthlyReportData.find(item => item.slotId === slotId);
+      if (!slotToUpdate) {
+        alert("Slot not found!");
+        return;
+      }
+
+      // Update in Firebase
+      const department = "Home Care";
+      const path = clientPaths[department];
+      const dateKey = format(parseISO(slotToUpdate.date), 'yyyy-MM-dd');
+      const clientPath = `${path}/${clientKey}/schedule/${dateKey}/${slotId}/remarks`;
+      
+      await firebaseDB.child(clientPath).set(remarks);
+      
+      alert("✅ Remarks saved successfully!");
+      
+      // Refresh data
+      await fetchClientSlotData();
+    } catch (error) {
+      console.error("Error saving remarks:", error);
+      alert("❌ Failed to save remarks");
+    }
   };
 
   // Render Stats Cards
@@ -350,39 +992,246 @@ const ClientSlotTab = ({ client }) => {
     );
   };
 
-  // Render Worker Cards
-  const renderWorkerCard = (worker, index) => {
+  // Render Worker Cards for Monthly Analytics
+  const renderWorkerPerformanceCards = () => {
+    const workerArray = Object.values(workerDetails)
+      .sort((a, b) => b.totalHours - a.totalHours);
+
     return (
-      <div className="worker-card" key={`${worker.workerId}-${index}`}>
-        <div className="worker-header">
-          <div className="worker-avatar">
-            {worker.workerName?.charAt(0) || worker.workerId?.charAt(0) || "W"}
-          </div>
-          <div className="worker-info">
-            <h4 className="worker-name">{worker.workerName}</h4>
-            <div className="worker-id">ID: {worker.workerId}</div>
-          </div>
-          <div className="worker-stats">
-            <span className="worker-hours">{worker.totalHours.toFixed(2)}h</span>
-            <span className="worker-slots">{worker.totalSlots} slots</span>
+      <div className="worker-performance-cards">
+        <h3>👥 Worker Performance Details</h3>
+        <div className="performance-cards-grid">
+          {workerArray.map((worker, index) => {
+            const photoUrl = worker.photoUrl || workerPhotos[worker.workerId];
+            
+            return (
+              <div className="performance-card" key={`${worker.workerId}-${index}`}>
+                <div className="performance-card-header">
+                  <div className="worker-avatar-large">
+                    {photoUrl ? (
+                      <img 
+                        src={photoUrl} 
+                        alt={worker.workerName}
+                        className="worker-avatar-img"
+                        onError={(e) => {
+                          e.target.style.display = 'none';
+                          e.target.nextElementSibling.style.display = 'flex';
+                        }}
+                      />
+                    ) : null}
+                    <div className="worker-avatar-fallback">
+                      {worker.workerName?.charAt(0) || worker.workerId?.charAt(0) || "W"}
+                    </div>
+                  </div>
+                  <div className="worker-rank-badge">#{index + 1}</div>
+                </div>
+                
+                <div className="performance-card-body">
+                  <h4 className="worker-fullname">{worker.workerName}</h4>
+                  <div className="worker-id-small">ID: {worker.workerId}</div>
+                  
+                  <div className="performance-stats">
+                    <div className="performance-stat">
+                      <span className="stat-label">Total Hours:</span>
+                      <span className="stat-value">{worker.totalHours.toFixed(2)}h</span>
+                    </div>
+                    <div className="performance-stat">
+                      <span className="stat-label">Working Days:</span>
+                      <span className="stat-value">{worker.dates.size} days</span>
+                    </div>
+                    
+                    <div className="performance-stat">
+                      <span className="stat-label">Total Slots:</span>
+                      <span className="stat-value">{worker.totalSlots}</span>
+                    </div>
+                  </div>
+                  
+                  <div className="performance-footer">
+                    <div className="departments">
+                      <span className="dept-label">Departments:</span>
+                      <span className="dept-value">
+                        {Array.from(worker.departments).join(', ')}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    );
+  };
+
+  // Render Monthly Report Table with proper styling
+  const renderMonthlyReportTable = () => {
+    return (
+      <div className="monthly-report-table">
+         
+        <div className="report-header">
+          <div className="report-actions">
+            <button className="btn-action btn-download" onClick={exportToPDF}>
+              📥 PDF
+            </button>
+            <button className="btn-action btn-html" onClick={exportToHTML}>
+              🌐 HTML
+            </button>
+            <button className="btn-action btn-print" onClick={printReport}>
+              🖨️ Print
+            </button>
+            <button className="btn-action btn-share" onClick={shareReport}>
+              🔗 Share
+            </button>
           </div>
         </div>
-        <div className="worker-details">
-          <div className="detail-row">
-            <span className="detail-label">Worked Days:</span>
-            <span className="detail-value">{worker.dates.size}</span>
-          </div>
-          <div className="detail-row">
-            <span className="detail-label">Departments:</span>
-            <span className="detail-value">{Array.from(worker.departments).join(', ')}</span>
-          </div>
-          <div className="detail-row">
-            <span className="detail-label">Avg Hours/Day:</span>
-            <span className="detail-value">
-              {(worker.totalHours / worker.dates.size || 0).toFixed(2)}h
-            </span>
-          </div>
+        
+        <div className="table-responsive">
+        <h3 className="p-2">📋 Monthly Report - {format(selectedMonth, 'MMMM yyyy')} -  <span className="text-primary">{client?.name || client?.clientName || "Client"} Garu</span></h3>
+          <table className="monthly-table w-100">
+            <thead>
+              <tr>
+                <th>S.No</th>
+                <th>Date</th>
+                <th>Emp Photo</th>
+                <th>Emp Name</th>
+                <th>Hours</th>
+                <th>Status</th>
+                <th>Remarks</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {monthlyReportData.length > 0 ? (
+                monthlyReportData.map((item, index) => (
+                  <tr key={`${item.slotId}-${index}`}>
+                    <td className="text-center">{item.sNo}</td>
+                    <td className="date-cell">
+                      <div className="date-display">
+                        <div className="date">{item.date}</div>
+                        <div className="day">{item.dayOfWeek}</div>
+                      </div>
+                      <div className="time-range">
+                        {item.startTime} - {item.endTime}
+                      </div>
+                    </td>
+                    <td className="photo-cell">
+                      {typeof item.empPhoto === 'object' ? (
+                        item.empPhoto
+                      ) : (
+                        <div className="employee-photo">
+                          {item.workerPhotoUrl ? (
+                            <img 
+                              src={item.workerPhotoUrl} 
+                              alt={item.empName}
+                              className="employee-photo-img"
+                            />
+                          ) : (
+                            <div className="employee-photo-placeholder">
+                              {item.empName?.charAt(0) || 'W'}
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </td>
+                    <td className="employee-cell">
+                      <div className="employee-name">{item.empName}</div>
+                      <div className="employee-id">ID: {item.empId}</div>
+                    </td>
+                    
+                    <td className="hours-cell">
+                      <span className="hours-badge">{item.hours}h</span>
+                    </td>
+                    <td>
+                      <span className={`status-badge status-${item.status}`}>
+                        {item.status === 'completed' ? '✅' : 
+                         item.status === 'in-progress' ? '⏳' : 
+                         item.status === 'cancelled' ? '❌' : '📅'} 
+                        {item.status}
+                      </span>
+                    </td>
+                    <td className="remarks-cell">
+                      {editingRemarks[index] !== undefined ? (
+                        <div className="remarks-edit">
+                          <input
+                            type="text"
+                            value={editingRemarks[index]}
+                            onChange={(e) => handleRemarksEdit(index, e.target.value)}
+                            className="remarks-input"
+                            placeholder="Enter remarks..."
+                            autoFocus
+                          />
+                        </div>
+                      ) : (
+                        <div className="remarks-display" onClick={() => handleRemarksEdit(index, item.remarks)}>
+                          {item.remarks || <span className="text-muted">Click to add remarks</span>}
+                        </div>
+                      )}
+                    </td>
+                    <td className="actions-cell">
+                      {editingRemarks[index] !== undefined ? (
+                        <>
+                          <button 
+                            className="btn-save btn-sm"
+                            onClick={() => {
+                              saveRemarks(item.slotId, editingRemarks[index]);
+                              handleRemarksEdit(index, undefined);
+                            }}
+                            title="Save remarks"
+                          >
+                            💾 Save
+                          </button>
+                          <button 
+                            className="btn-cancel btn-sm"
+                            onClick={() => handleRemarksEdit(index, undefined)}
+                            title="Cancel"
+                          >
+                            ❌ Cancel
+                          </button>
+                        </>
+                      ) : (
+                        <button 
+                          className="btn-edit btn-sm"
+                          onClick={() => handleRemarksEdit(index, item.remarks)}
+                          title="Edit remarks"
+                        >
+                          ✏️ Edit
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                ))
+              ) : (
+                <tr>
+                  <td colSpan="9" className="no-data">
+                    📭 No data available for selected month
+                  </td>
+                </tr>
+              )}
+            </tbody>
+            {monthlyReportData.length > 0 && (
+              <tfoot>
+                <tr>
+                  <td colSpan="4" className="text-end"><strong>Monthly Totals:</strong></td>
+                  <td>
+                    <strong>{monthlyReportData.length} slots</strong>
+                  </td>
+                  <td className="total-hours">
+                    <strong>
+                      {monthlyReportData.reduce((sum, item) => sum + parseFloat(item.hours || 0), 0).toFixed(2)}h
+                    </strong>
+                  </td>
+                  <td colSpan="3">
+                    <strong>
+                      {new Set(monthlyReportData.map(item => item.empName)).size} employees
+                    </strong>
+                  </td>
+                </tr>
+              </tfoot>
+            )}
+          </table>
         </div>
+        
+       
       </div>
     );
   };
@@ -420,7 +1269,7 @@ const ClientSlotTab = ({ client }) => {
     );
   };
 
-  // Render Monthly Calendar View with worker full name and ID
+  // Render Monthly Calendar View
   const renderMonthlyCalendar = () => {
     return (
       <div className="calendar-container">
@@ -489,114 +1338,6 @@ const ClientSlotTab = ({ client }) => {
               )}
             </div>
           ))}
-        </div>
-      </div>
-    );
-  };
-
-  // Render Worker Performance Table for Monthly Analytics
-  const renderWorkerPerformanceTable = () => {
-    const workerArray = Object.values(workerDetails)
-      .sort((a, b) => b.totalHours - a.totalHours);
-
-    return (
-      <div className="worker-performance-table">
-        <h3>📊 Worker Performance Details</h3>
-        <div className="table-responsive">
-          <table className="worker-table">
-            <thead>
-              <tr>
-                <th>S.No</th>
-                <th>Worker Name</th>
-                <th>Worker ID</th>
-                <th>Working Hours</th>
-                <th>Working Days</th>
-                <th>Total Slots</th>
-                <th>Avg Hours/Day</th>
-                <th>Departments</th>
-                <th>Remarks</th>
-              </tr>
-            </thead>
-            <tbody>
-              {workerArray.length > 0 ? (
-                workerArray.map((worker, index) => {
-                  // Calculate average hours per day
-                  const avgHoursPerDay = worker.dates.size > 0 
-                    ? (worker.totalHours / worker.dates.size).toFixed(2)
-                    : "0.00";
-                  
-                  // Get departments
-                  const departments = Array.from(worker.departments).join(', ');
-                  
-                  // Get remarks from allocations
-                  const recentRemarks = worker.allocations
-                    .slice(0, 3)
-                    .map(a => a.remarks)
-                    .filter(r => r && r.trim())
-                    .join('; ');
-                  
-                  return (
-                    <tr key={`${worker.workerId}-${index}`}>
-                      <td className="text-center">{index + 1}</td>
-                      <td>
-                        <div className="worker-name-cell">
-                          <div className="worker-avatar-small">
-                            {worker.workerName?.charAt(0) || worker.workerId?.charAt(0)}
-                          </div>
-                          <span className="worker-fullname">{worker.workerName}</span>
-                        </div>
-                      </td>
-                      <td className="worker-id-cell">{worker.workerId}</td>
-                      <td className="hours-cell">
-                        <span className="hours-badge">{worker.totalHours.toFixed(2)}h</span>
-                      </td>
-                      <td className="days-cell">
-                        <span className="days-badge">{worker.dates.size} days</span>
-                      </td>
-                      <td className="slots-cell">
-                        <span className="slots-badge">{worker.totalSlots}</span>
-                      </td>
-                      <td className="avg-hours-cell">
-                        <span className="avg-hours">{avgHoursPerDay}h/day</span>
-                      </td>
-                      <td className="departments-cell">
-                        <span className="dept-tag">{departments || "N/A"}</span>
-                      </td>
-                      <td className="remarks-cell">
-                        <div className="remarks-text" title={recentRemarks}>
-                          {recentRemarks || "No remarks"}
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })
-              ) : (
-                <tr>
-                  <td colSpan="9" className="no-data">
-                    No worker data available
-                  </td>
-                </tr>
-              )}
-            </tbody>
-            {workerArray.length > 0 && (
-              <tfoot>
-                <tr>
-                  <td colSpan="2" className="text-end"><strong>Total:</strong></td>
-                  <td><strong>{workerArray.length} workers</strong></td>
-                  <td className="total-hours">
-                    <strong>{workerArray.reduce((sum, w) => sum + w.totalHours, 0).toFixed(2)}h</strong>
-                  </td>
-                  <td>
-                    <strong>{workerArray.reduce((sum, w) => sum + w.dates.size, 0)} days</strong>
-                  </td>
-                  <td>
-                    <strong>{workerArray.reduce((sum, w) => sum + w.totalSlots, 0)} slots</strong>
-                  </td>
-                  <td colSpan="3"></td>
-                </tr>
-              </tfoot>
-            )}
-          </table>
         </div>
       </div>
     );
@@ -689,44 +1430,61 @@ const ClientSlotTab = ({ client }) => {
               </thead>
               <tbody>
                 {slotsToShow.length > 0 ? (
-                  slotsToShow.map((slot, index) => (
-                    <tr key={`${slot.slotId}-${index}`}>
-                      <td className="text-center">{index + 1}</td>
-                      <td className="date-cell">
-                        <div className="date-display">
-                          <div className="date">{slot.formattedDate}</div>
-                          <div className="day">{slot.dayOfWeek}</div>
-                        </div>
-                      </td>
-                      <td className="worker-cell">
-                        <div className="worker-info-small">
-                          <div className="worker-name-small">{slot.workerName}</div>
-                          <div className="worker-id-small">ID: {slot.workerId}</div>
-                        </div>
-                      </td>
-                      <td>{slot.startTime12 || convertTo12Hour(slot.startTime)}</td>
-                      <td>{slot.endTime12 || convertTo12Hour(slot.endTime)}</td>
-                      <td className="duration-cell">
-                        <span className="duration-badge">{slot.duration}h</span>
-                      </td>
-                      <td>
-                        <span className="dept-badge">{slot.department}</span>
-                      </td>
-                      <td>
-                        <span className={`status-badge status-${slot.status}`}>
-                          {slot.status === 'completed' ? '✅' : slot.status === 'in-progress' ? '⏳' : '📅'} 
-                          {slot.status}
-                        </span>
-                      </td>
-                      <td className="remarks-cell">
-                        {slot.remarks || '-'}
-                      </td>
-                    </tr>
-                  ))
+                  slotsToShow.map((slot, index) => {
+                    const workerPhoto = workerPhotos[slot.workerId];
+                    
+                    return (
+                      <tr key={`${slot.slotId}-${index}`}>
+                        <td className="text-center">{index + 1}</td>
+                        <td className="date-cell">
+                          <div className="date-display">
+                            <div className="date">{slot.formattedDate}</div>
+                            <div className="day">{slot.dayOfWeek}</div>
+                          </div>
+                        </td>
+                        <td className="worker-cell">
+                          <div className="worker-info-with-photo">
+                            {workerPhoto ? (
+                              <img 
+                                src={workerPhoto} 
+                                alt={slot.workerName}
+                                className="worker-photo-small"
+                              />
+                            ) : (
+                              <div className="worker-photo-placeholder-small">
+                                {slot.workerName?.charAt(0) || 'W'}
+                              </div>
+                            )}
+                            <div className="worker-details-small">
+                              <div className="worker-name-small">{slot.workerName}</div>
+                              <div className="worker-id-small">ID: {slot.workerId}</div>
+                            </div>
+                          </div>
+                        </td>
+                        <td>{slot.startTime12 || convertTo12Hour(slot.startTime)}</td>
+                        <td>{slot.endTime12 || convertTo12Hour(slot.endTime)}</td>
+                        <td className="duration-cell">
+                          <span className="duration-badge">{slot.duration}h</span>
+                        </td>
+                        <td>
+                          <span className="dept-badge">{slot.department}</span>
+                        </td>
+                        <td>
+                          <span className={`status-badge status-${slot.status}`}>
+                            {slot.status === 'completed' ? '✅' : slot.status === 'in-progress' ? '⏳' : '📅'} 
+                            {slot.status}
+                          </span>
+                        </td>
+                        <td className="remarks-cell">
+                          {slot.remarks || '-'}
+                        </td>
+                      </tr>
+                    );
+                  })
                 ) : (
                   <tr>
                     <td colSpan="9" className="no-data">
-                      No slot data found for selected period
+                      📭 No slot data found for selected period
                     </td>
                   </tr>
                 )}
@@ -760,6 +1518,37 @@ const ClientSlotTab = ({ client }) => {
     return `${hour12}:${minute.toString().padStart(2, '0')} ${period}`;
   };
 
+  // New Features
+  const handleDownloadCSV = () => {
+    const headers = ['S.No', 'Date', 'Employee Name', 'Employee ID', 'Slot Type', 'Start Time', 'End Time', 'Hours', 'Status', 'Remarks'];
+    const csvData = monthlyReportData.map(item => [
+      item.sNo,
+      item.date,
+      item.empName,
+      item.empId,
+      item.slot,
+      item.startTime,
+      item.endTime,
+      item.hours,
+      item.status,
+      item.remarks || ''
+    ]);
+    
+    const csvContent = [headers, ...csvData]
+      .map(row => row.map(cell => `"${cell}"`).join(','))
+      .join('\n');
+    
+    const blob = new Blob([csvContent], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `monthly-report-${format(selectedMonth, 'MMMM-yyyy')}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
   if (loading) {
     return (
       <div className="loading-container">
@@ -778,13 +1567,7 @@ const ClientSlotTab = ({ client }) => {
             <span className="title-icon">📊</span>
             Client Slot Analytics
           </h1>
-          <div className="client-info">
-            <h2>{client?.name || client?.clientName || "Client"}</h2>
-            <div className="client-meta">
-              <span className="client-id">ID: {client?.clientId}</span>
-              <span className="client-location">📍 {client?.location || "N/A"}</span>
-            </div>
-          </div>
+      
         </div>
 
         {/* View Tabs */}
@@ -820,13 +1603,6 @@ const ClientSlotTab = ({ client }) => {
               {renderStatCard("📅", "Work Days", monthlyStats.totalDays, "Days with slots", "success")}
               {renderStatCard("👥", "Total Workers", monthlyStats.totalWorkers, "Unique workers", "info")}
               {renderStatCard("📊", "Avg Daily Hours", monthlyStats.avgDailyHours + "h/day", "Per work day", "warning")}
-              {renderStatCard("⚡", "Utilization Rate", (monthlyStats.utilizationRate * 100).toFixed(1) + "%", "Based on 8h/day", "danger")}
-              {renderStatCard("🎯", "Current Streak", 
-                monthlyStats.dailyBreakdown
-                  .reverse()
-                  .findIndex(day => day.isEmpty) || monthlyStats.dailyBreakdown.length, 
-                "Consecutive work days", "secondary"
-              )}
             </div>
 
             {/* Charts and Tables */}
@@ -842,24 +1618,36 @@ const ClientSlotTab = ({ client }) => {
                   <h3>👥 Top Workers This Month</h3>
                   <div className="workers-list">
                     {monthlyStats.topWorkers.length > 0 ? (
-                      monthlyStats.topWorkers.map((worker, index) => (
-                        <div key={`${worker.workerId}-${index}`} className="top-worker">
-                          <div className="worker-rank">{index + 1}</div>
-                          <div className="worker-avatar-small">
-                            {worker.workerName?.charAt(0) || worker.workerId?.charAt(0)}
-                          </div>
-                          <div className="worker-details-small">
-                            <div className="worker-name-small">{worker.workerName}</div>
-                            <div className="worker-stats-small">
-                              <span className="hours-small">{worker.totalHours.toFixed(1)}h</span>
-                              <span className="slots-small">{worker.totalSlots} slots</span>
+                      monthlyStats.topWorkers.map((worker, index) => {
+                        const photoUrl = worker.photoUrl || workerPhotos[worker.workerId];
+                        
+                        return (
+                          <div key={`${worker.workerId}-${index}`} className="top-worker">
+                            <div className="worker-rank">{index + 1}</div>
+                            {photoUrl ? (
+                              <img 
+                                src={photoUrl} 
+                                alt={worker.workerName}
+                                className="worker-avatar-small-img"
+                              />
+                            ) : (
+                              <div className="worker-avatar-small">
+                                {worker.workerName?.charAt(0) || worker.workerId?.charAt(0) || "W"}
+                              </div>
+                            )}
+                            <div className="worker-details-small">
+                              <div className="worker-name-small">{worker.workerName}</div>
+                              <div className="worker-stats-small">
+                                <span className="hours-small">{worker.totalHours.toFixed(1)}h</span>
+                                <span className="slots-small">{worker.totalSlots} slots</span>
+                              </div>
+                            </div>
+                            <div className="worker-percentage">
+                              {((worker.totalHours / monthlyStats.totalHours) * 100).toFixed(1)}%
                             </div>
                           </div>
-                          <div className="worker-percentage">
-                            {((worker.totalHours / monthlyStats.totalHours) * 100).toFixed(1)}%
-                          </div>
-                        </div>
-                      ))
+                        );
+                      })
                     ) : (
                       <div className="no-data">No worker data available</div>
                     )}
@@ -894,6 +1682,12 @@ const ClientSlotTab = ({ client }) => {
                         {slotData.length > 0 
                           ? (slotData.reduce((sum, slot) => sum + parseFloat(slot.duration || 0), 0) / slotData.length).toFixed(2) 
                           : "0"}h
+                      </span>
+                    </div>
+                    <div className="quick-stat">
+                      <span className="stat-label">Utilization Rate:</span>
+                      <span className="stat-value">
+                        {(monthlyStats.utilizationRate * 100).toFixed(1)}%
                       </span>
                     </div>
                   </div>
@@ -938,10 +1732,11 @@ const ClientSlotTab = ({ client }) => {
               {renderStatCard("⏱️", "Total Hours", dailyStats.totalHours + "h", "Today", "primary")}
               {renderStatCard("📋", "Total Slots", dailyStats.totalSlots, "Bookings", "success")}
               {renderStatCard("👥", "Workers", dailyStats.workers.length, "Assigned", "info")}
-              {renderStatCard("📊", "Avg Duration", 
-                dailyStats.totalSlots > 0 ? (dailyStats.totalHours / dailyStats.totalSlots).toFixed(2) + "h" : "0h", 
-                "Per slot", "warning"
-              )}
+              {renderStatCard("⏰", "Avg. Duration", 
+                dailyStats.totalSlots > 0 
+                  ? (dailyStats.totalHours / dailyStats.totalSlots).toFixed(2) + "h" 
+                  : "0h", 
+                "Per slot", "warning")}
             </div>
 
             {/* Daily Content */}
@@ -959,13 +1754,24 @@ const ClientSlotTab = ({ client }) => {
                     {dailyStats.workers.length > 0 ? (
                       dailyStats.workers.map((worker, index) => (
                         <div key={`${worker.id}-${index}`} className="worker-card-small">
-                          <div className="worker-avatar-small">
-                            {worker.name?.charAt(0) || worker.id?.charAt(0)}
-                          </div>
-                          <div className="worker-info-small">
-                            <div className="worker-name-small">{worker.name}</div>
-                            <div className="worker-hours-small">
-                              <span className="hours-badge">{worker.hours.toFixed(1)}h</span>
+                          <div className="worker-info-with-photo-small">
+                            {worker.photoUrl ? (
+                              <img 
+                                src={worker.photoUrl} 
+                                alt={worker.name}
+                                className="worker-photo-tiny"
+                              />
+                            ) : (
+                              <div className="worker-photo-placeholder-tiny">
+                                {worker.name?.charAt(0) || 'W'}
+                              </div>
+                            )}
+                            <div className="worker-info-small">
+                              <div className="worker-name-small">
+                                {worker.name} 
+                                <span className="hours-badge-small">{worker.hours.toFixed(1)}h</span>
+                              </div>
+                              <div className="worker-id-small">ID: {worker.id}</div>
                             </div>
                           </div>
                         </div>
@@ -975,14 +1781,49 @@ const ClientSlotTab = ({ client }) => {
                     )}
                   </div>
                 </div>
+
+                {/* Daily Summary */}
+                <div className="sidebar-card">
+                  <h3>📊 Daily Summary</h3>
+                  <div className="quick-stats">
+                    <div className="quick-stat">
+                      <span className="stat-label">First Slot:</span>
+                      <span className="stat-value">
+                        {dailyStats.slotDetails.length > 0 
+                          ? dailyStats.slotDetails.reduce((earliest, slot) => 
+                              slot.startTime12 < earliest.startTime12 ? slot : earliest
+                            ).startTime12 
+                          : "N/A"}
+                      </span>
+                    </div>
+                    <div className="quick-stat">
+                      <span className="stat-label">Last Slot:</span>
+                      <span className="stat-value">
+                        {dailyStats.slotDetails.length > 0 
+                          ? dailyStats.slotDetails.reduce((latest, slot) => 
+                              slot.endTime12 > latest.endTime12 ? slot : latest
+                            ).endTime12 
+                          : "N/A"}
+                      </span>
+                    </div>
+                    <div className="quick-stat">
+                      <span className="stat-label">Busiest Hour:</span>
+                      <span className="stat-value">
+                        {dailyStats.timeDistribution.reduce((max, hour) => 
+                          hour.totalHours > max.totalHours ? hour : max, 
+                          { totalHours: 0, hour12: "N/A" }
+                        ).hour12}
+                      </span>
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
           </>
         ) : (
           // Monthly Analytics View
-          <>
+          <div className="monthly-analytics-report">
             <div className="monthly-header">
-              <h2>📈 Monthly Analytics - {format(selectedMonth, 'MMMM yyyy')}</h2>
               <div className="month-nav">
                 <button 
                   className="btn-nav"
@@ -1013,106 +1854,28 @@ const ClientSlotTab = ({ client }) => {
               </div>
             </div>
 
-            {/* Monthly Insights */}
-            <div className="insights-grid">
-              <div className="insight-card">
-                <h4>📊 Hour Distribution</h4>
-                <div className="hour-distribution">
-                  {Object.entries(monthlyStats.slotDistribution).map(([type, count]) => (
-                    <div key={type} className="distribution-item">
-                      <span className="dist-type">{type.replace(/-/g, ' ')}:</span>
-                      <span className="dist-count">{count} slots</span>
-                      <div className="dist-bar">
-                        <div 
-                          className="dist-progress"
-                          style={{ 
-                            width: `${(count / slotData.length) * 100}%` 
-                          }}
-                        ></div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
+           
 
-              <div className="insight-card">
-                <h4>📅 Weekly Pattern</h4>
-                <div className="weekly-pattern">
-                  {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => {
-                    const daySlots = monthlyStats.dailyBreakdown.filter(d => 
-                      format(parseISO(d.date), 'EEE') === day
-                    );
-                    const dayHours = daySlots.reduce((sum, d) => sum + d.totalHours, 0);
-                    const avgHours = daySlots.length > 0 ? dayHours / daySlots.length : 0;
-                    
-                    return (
-                      <div key={day} className="day-pattern">
-                        <div className="day-label">{day}</div>
-                        <div className="day-bar">
-                          <div 
-                            className="day-progress"
-                            style={{ 
-                              height: `${Math.min(avgHours * 20, 100)}%` 
-                            }}
-                            title={`Avg: ${avgHours.toFixed(1)}h`}
-                          ></div>
-                        </div>
-                        <div className="day-total">{dayHours.toFixed(1)}h</div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            </div>
+            
 
-            {/* Worker Performance - Cards View */}
-            <div className="worker-performance">
-              <h3>👥 Worker Performance</h3>
-              <div className="performance-grid">
-                {Object.values(workerDetails)
-                  .sort((a, b) => b.totalHours - a.totalHours)
-                  .slice(0, 8)
-                  .map((worker, index) => renderWorkerCard(worker, index))}
-              </div>
-            </div>
-
-            {/* Worker Performance - Table View */}
-            {renderWorkerPerformanceTable()}
-          </>
+            {/* Monthly Detailed Report */}
+            {renderMonthlyReportTable()}
+          </div>
         )}
       </div>
 
       {/* Footer Summary */}
       <div className="dashboard-footer">
-        <div className="footer-summary">
-          <div className="summary-item">
-            <span className="summary-label">Total Hours Tracked:</span>
-            <span className="summary-value">{slotData.reduce((sum, slot) => sum + parseFloat(slot.duration || 0), 0).toFixed(2)} hours</span>
-          </div>
-          <div className="summary-item">
-            <span className="summary-label">Total Slots:</span>
-            <span className="summary-value">{slotData.length} bookings</span>
-          </div>
-          <div className="summary-item">
-            <span className="summary-label">Unique Workers:</span>
-            <span className="summary-value">{Object.keys(workerDetails).length} workers</span>
-          </div>
-          <div className="summary-item">
-            <span className="summary-label">Time Period:</span>
-            <span className="summary-value">
-              {slotData.length > 0 
-                ? `${format(new Date(Math.min(...slotData.map(s => new Date(s.date).getTime()))), 'dd MMM')} - ${format(new Date(Math.max(...slotData.map(s => new Date(s.date).getTime()))), 'dd MMM yyyy')}`
-                : 'No data'
-              }
-            </span>
-          </div>
-        </div>
+        
         <div className="footer-actions">
-          <button className="btn-export" onClick={() => alert('Export feature coming soon!')}>
-            📥 Export Data
+          <button className="btn-export" onClick={handleDownloadCSV}>
+            📥 Export as CSV
+          </button>
+          <button className="btn-export" onClick={exportToPDF}>
+            📄 Export as PDF
           </button>
           <button className="btn-refresh" onClick={fetchClientSlotData}>
-            🔄 Refresh
+            🔄 Refresh Data
           </button>
         </div>
       </div>

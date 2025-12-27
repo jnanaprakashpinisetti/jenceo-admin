@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useMemo } from "react";
+// ClientSlotTab.js
+import React, { useState, useEffect, useMemo, useRef } from "react";
 import firebaseDB from "../../../../firebase";
 import { format, parseISO, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, differenceInHours, differenceInMinutes, isValid, isToday, isThisMonth } from 'date-fns';
 import { PieChart, Pie, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Cell } from 'recharts';
@@ -48,21 +49,39 @@ const ClientSlotTab = ({ client }) => {
   // Color palette for charts
   const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8', '#82ca9d', '#ffc658', '#8dd1e1', '#a4de6c', '#d0ed57'];
 
+  // Memoize the client key to prevent unnecessary re-renders
+  const clientKey = useMemo(() => 
+    client?.clientKey || client?.id || client?.clientId, 
+    [client]
+  );
+
+  // Cache for fetched data
+  const dataCache = useRef({});
+
   useEffect(() => {
-    if (client?.clientKey || client?.id || client?.clientId) {
+    if (clientKey) {
       fetchClientSlotData();
     }
-  }, [client, selectedMonth, selectedDate, viewMode]);
+  }, [clientKey, selectedMonth, selectedDate, viewMode]);
 
+  // Optimize data fetching with caching
   const fetchClientSlotData = async () => {
     try {
       setLoading(true);
       
+      // Check cache first
+      const cacheKey = `${clientKey}-${format(selectedMonth, 'yyyy-MM')}-${viewMode}`;
+      if (dataCache.current[cacheKey] && viewMode === 'dashboard') {
+        const cached = dataCache.current[cacheKey];
+        setSlotData(cached.allSlots);
+        setWorkerDetails(cached.workerMap);
+        calculateStats(cached.allSlots, cached.workerMap);
+        setLoading(false);
+        return;
+      }
+
       let allSlots = [];
       const workerMap = {};
-      
-      // Get client key from different possible fields
-      const clientKey = client?.clientKey || client?.id || client?.clientId;
       
       if (!clientKey) {
         console.error("No client key found");
@@ -72,135 +91,123 @@ const ClientSlotTab = ({ client }) => {
 
       console.log("Fetching slot data for client:", clientKey);
 
-      // Check all departments for this client's slot data
-      for (const [department, path] of Object.entries(clientPaths)) {
-        try {
-          // Try different path structures
-          const possiblePaths = [
-            `${path}/${clientKey}/schedule`,
-            `${path}/${clientKey}`,
-            `ScheduleData/${department}/${clientKey}`,
-            `ScheduleData/${clientKey}`
-          ];
+      // Only fetch from Home Care since that's where data is found according to logs
+      const department = "Home Care";
+      const path = clientPaths[department];
+      
+      try {
+        // Try the exact path from logs
+        const clientPath = `${path}/${clientKey}/schedule`;
+        
+        const snapshot = await firebaseDB.child(clientPath).once('value');
+        const clientData = snapshot.val();
 
-          for (const clientPath of possiblePaths) {
+        if (clientData) {
+          console.log(`Found data in ${clientPath} for ${department}:`, clientData);
+          
+          // Process schedule data
+          Object.entries(clientData).forEach(([dateKey, daySchedule]) => {
             try {
-              const snapshot = await firebaseDB.child(clientPath).once('value');
-              const clientData = snapshot.val();
+              // Try to parse the date key
+              let scheduleDate;
+              try {
+                scheduleDate = parseISO(dateKey);
+              } catch {
+                scheduleDate = new Date(dateKey);
+              }
+              
+              if (!isValid(scheduleDate)) {
+                console.warn(`Invalid date format: ${dateKey}`);
+                return;
+              }
 
-              if (clientData) {
-                console.log(`Found data in ${clientPath} for ${department}:`, clientData);
-                
-                // Handle different data structures
-                const scheduleData = clientData.schedule || clientData;
-                
-                if (scheduleData && typeof scheduleData === 'object') {
-                  Object.entries(scheduleData).forEach(([dateKey, daySchedule]) => {
-                    try {
-                      // Try to parse the date key
-                      let scheduleDate;
-                      try {
-                        scheduleDate = parseISO(dateKey);
-                      } catch {
-                        scheduleDate = new Date(dateKey);
+              // Apply filtering based on view mode
+              if (viewMode === "dashboard") {
+                // For dashboard, show all data
+              } else if (viewMode === "monthly") {
+                // Filter by selected month
+                const monthStart = startOfMonth(selectedMonth);
+                const monthEnd = endOfMonth(selectedMonth);
+                if (scheduleDate < monthStart || scheduleDate > monthEnd) {
+                  return;
+                }
+              } else if (viewMode === "daily") {
+                // Filter by selected date
+                if (!isSameDay(scheduleDate, selectedDate)) {
+                  return;
+                }
+              }
+
+              // Process the slots for this day
+              if (daySchedule && typeof daySchedule === 'object') {
+                Object.entries(daySchedule).forEach(([slotId, allocation]) => {
+                  if (allocation && allocation.status) {
+                    const slotInfo = {
+                      ...allocation,
+                      date: dateKey,
+                      formattedDate: format(scheduleDate, 'dd-MMM-yyyy'),
+                      dayOfWeek: format(scheduleDate, 'EEE'),
+                      department: department,
+                      slotId: slotId,
+                      scheduleDate: scheduleDate,
+                      // Ensure duration is a number
+                      duration: parseFloat(allocation.duration) || 0,
+                      // Ensure worker info
+                      workerId: allocation.workerId || allocation.workerID || '',
+                      workerName: allocation.workerName || allocation.worker || `Worker ${allocation.workerId || ''}`,
+                      // Time fields
+                      startTime: allocation.startTime || allocation.start || '',
+                      endTime: allocation.endTime || allocation.end || '',
+                      // Status
+                      status: allocation.status || 'unknown',
+                      // Slot type
+                      slotType: allocation.slotType || allocation.type || 'working',
+                      // Remarks
+                      remarks: allocation.remarks || allocation.note || ''
+                    };
+
+                    allSlots.push(slotInfo);
+
+                    // Track worker details with unique key
+                    const workerKey = `${slotInfo.workerId}-${slotInfo.workerName}`;
+                    if (slotInfo.workerId) {
+                      if (!workerMap[workerKey]) {
+                        workerMap[workerKey] = {
+                          workerId: slotInfo.workerId,
+                          workerName: slotInfo.workerName,
+                          totalHours: 0,
+                          totalSlots: 0,
+                          dates: new Set(),
+                          departments: new Set(),
+                          allocations: []
+                        };
                       }
                       
-                      if (!isValid(scheduleDate)) {
-                        console.warn(`Invalid date format: ${dateKey}`);
-                        return;
-                      }
-
-                      // Apply filtering based on view mode
-                      if (viewMode === "dashboard") {
-                        // For dashboard, show all data
-                      } else if (viewMode === "monthly") {
-                        // Filter by selected month
-                        const monthStart = startOfMonth(selectedMonth);
-                        const monthEnd = endOfMonth(selectedMonth);
-                        if (scheduleDate < monthStart || scheduleDate > monthEnd) {
-                          return;
-                        }
-                      } else if (viewMode === "daily") {
-                        // Filter by selected date
-                        if (!isSameDay(scheduleDate, selectedDate)) {
-                          return;
-                        }
-                      }
-
-                      // Process the slots for this day
-                      if (daySchedule && typeof daySchedule === 'object') {
-                        Object.entries(daySchedule).forEach(([slotId, allocation]) => {
-                          if (allocation && allocation.status) {
-                            const slotInfo = {
-                              ...allocation,
-                              date: dateKey,
-                              formattedDate: format(scheduleDate, 'dd-MMM-yyyy'),
-                              dayOfWeek: format(scheduleDate, 'EEE'),
-                              department: department,
-                              slotId: slotId,
-                              scheduleDate: scheduleDate,
-                              // Ensure duration is a number
-                              duration: parseFloat(allocation.duration) || 0,
-                              // Ensure worker info
-                              workerId: allocation.workerId || allocation.workerID || '',
-                              workerName: allocation.workerName || allocation.worker || `Worker ${allocation.workerId || ''}`,
-                              // Time fields
-                              startTime: allocation.startTime || allocation.start || '',
-                              endTime: allocation.endTime || allocation.end || '',
-                              // Status
-                              status: allocation.status || 'unknown',
-                              // Slot type
-                              slotType: allocation.slotType || allocation.type || 'working',
-                              // Remarks
-                              remarks: allocation.remarks || allocation.note || ''
-                            };
-
-                            allSlots.push(slotInfo);
-
-                            // Track worker details
-                            if (slotInfo.workerId) {
-                              if (!workerMap[slotInfo.workerId]) {
-                                workerMap[slotInfo.workerId] = {
-                                  workerId: slotInfo.workerId,
-                                  workerName: slotInfo.workerName,
-                                  totalHours: 0,
-                                  totalSlots: 0,
-                                  dates: new Set(),
-                                  departments: new Set(),
-                                  allocations: []
-                                };
-                              }
-                              
-                              workerMap[slotInfo.workerId].totalHours += slotInfo.duration;
-                              workerMap[slotInfo.workerId].totalSlots++;
-                              workerMap[slotInfo.workerId].dates.add(dateKey);
-                              workerMap[slotInfo.workerId].departments.add(department);
-                              workerMap[slotInfo.workerId].allocations.push(slotInfo);
-                            }
-                          }
-                        });
-                      }
-                    } catch (error) {
-                      console.error(`Error processing date ${dateKey}:`, error);
+                      workerMap[workerKey].totalHours += slotInfo.duration;
+                      workerMap[workerKey].totalSlots++;
+                      workerMap[workerKey].dates.add(dateKey);
+                      workerMap[workerKey].departments.add(department);
+                      workerMap[workerKey].allocations.push(slotInfo);
                     }
-                  });
-                }
-                
-                // Break if we found data in this path
-                break;
+                  }
+                });
               }
             } catch (error) {
-              // Continue to next path if this one fails
-              continue;
+              console.error(`Error processing date ${dateKey}:`, error);
             }
-          }
-        } catch (error) {
-          console.error(`Error fetching from ${department}:`, error);
+          });
         }
+      } catch (error) {
+        console.error(`Error fetching from ${department}:`, error);
       }
 
       console.log("Total slots found:", allSlots.length);
       console.log("Worker map:", Object.keys(workerMap).length);
+      
+      // Cache the results for dashboard view
+      if (viewMode === 'dashboard') {
+        dataCache.current[cacheKey] = { allSlots, workerMap };
+      }
       
       setSlotData(allSlots);
       setWorkerDetails(workerMap);
@@ -235,13 +242,30 @@ const ClientSlotTab = ({ client }) => {
       const daySlots = monthSlots.filter(slot => slot.date === dayKey);
       const dayHours = daySlots.reduce((sum, slot) => sum + (slot.duration || 0), 0);
       
+      // Get unique workers for this day with their details
+      const dayWorkersMap = {};
+      daySlots.forEach(slot => {
+        if (slot.workerId) {
+          const workerKey = `${slot.workerId}-${slot.workerName}`;
+          if (!dayWorkersMap[workerKey]) {
+            dayWorkersMap[workerKey] = {
+              id: slot.workerId,
+              name: slot.workerName,
+              hours: 0
+            };
+          }
+          dayWorkersMap[workerKey].hours += slot.duration || 0;
+        }
+      });
+      
       return {
         date: dayKey,
         formattedDate: format(day, 'dd-MMM'),
         dayOfWeek: format(day, 'EEE'),
         totalHours: dayHours,
         totalSlots: daySlots.length,
-        workers: [...new Set(daySlots.map(slot => slot.workerName))].filter(Boolean),
+        workers: Object.values(dayWorkersMap),
+        workersDetails: dayWorkersMap, // Keep detailed worker info
         isToday: isToday(day),
         isEmpty: daySlots.length === 0
       };
@@ -311,6 +335,7 @@ const ClientSlotTab = ({ client }) => {
       timeDistribution
     });
   };
+
   // Render Stats Cards
   const renderStatCard = (icon, title, value, subtitle, color = "primary") => {
     return (
@@ -328,7 +353,7 @@ const ClientSlotTab = ({ client }) => {
   // Render Worker Cards
   const renderWorkerCard = (worker, index) => {
     return (
-      <div className="worker-card" key={worker.workerId}>
+      <div className="worker-card" key={`${worker.workerId}-${index}`}>
         <div className="worker-header">
           <div className="worker-avatar">
             {worker.workerName?.charAt(0) || worker.workerId?.charAt(0) || "W"}
@@ -395,7 +420,7 @@ const ClientSlotTab = ({ client }) => {
     );
   };
 
-  // Render Monthly Calendar View
+  // Render Monthly Calendar View with worker full name and ID
   const renderMonthlyCalendar = () => {
     return (
       <div className="calendar-container">
@@ -436,7 +461,7 @@ const ClientSlotTab = ({ client }) => {
           ))}
           {monthlyStats.dailyBreakdown.map((day, index) => (
             <div 
-              key={day.date} 
+              key={`${day.date}-${index}`} 
               className={`calendar-day ${day.isEmpty ? 'empty' : ''} ${day.isToday ? 'today' : ''}`}
               onClick={() => {
                 setSelectedDate(parseISO(day.date));
@@ -450,16 +475,128 @@ const ClientSlotTab = ({ client }) => {
                   <div className="day-slots">{day.totalSlots} slots</div>
                   <div className="day-workers">
                     {day.workers.slice(0, 2).map((worker, i) => (
-                      <span key={i} className="worker-tag">{worker.split(' ')[0]}</span>
+                      <div key={`${worker.id}-${i}`} className="worker-tag" title={`${worker.name} (ID: ${worker.id}) - ${worker.hours.toFixed(1)}h`}>
+                        {worker.name.split(' ')[0]}
+                      </div>
                     ))}
                     {day.workers.length > 2 && (
-                      <span className="more-tag">+{day.workers.length - 2}</span>
+                      <div className="more-tag" title={`${day.workers.slice(2).map(w => `${w.name} (${w.id})`).join(', ')}`}>
+                        +{day.workers.length - 2}
+                      </div>
                     )}
                   </div>
                 </>
               )}
             </div>
           ))}
+        </div>
+      </div>
+    );
+  };
+
+  // Render Worker Performance Table for Monthly Analytics
+  const renderWorkerPerformanceTable = () => {
+    const workerArray = Object.values(workerDetails)
+      .sort((a, b) => b.totalHours - a.totalHours);
+
+    return (
+      <div className="worker-performance-table">
+        <h3>📊 Worker Performance Details</h3>
+        <div className="table-responsive">
+          <table className="worker-table">
+            <thead>
+              <tr>
+                <th>S.No</th>
+                <th>Worker Name</th>
+                <th>Worker ID</th>
+                <th>Working Hours</th>
+                <th>Working Days</th>
+                <th>Total Slots</th>
+                <th>Avg Hours/Day</th>
+                <th>Departments</th>
+                <th>Remarks</th>
+              </tr>
+            </thead>
+            <tbody>
+              {workerArray.length > 0 ? (
+                workerArray.map((worker, index) => {
+                  // Calculate average hours per day
+                  const avgHoursPerDay = worker.dates.size > 0 
+                    ? (worker.totalHours / worker.dates.size).toFixed(2)
+                    : "0.00";
+                  
+                  // Get departments
+                  const departments = Array.from(worker.departments).join(', ');
+                  
+                  // Get remarks from allocations
+                  const recentRemarks = worker.allocations
+                    .slice(0, 3)
+                    .map(a => a.remarks)
+                    .filter(r => r && r.trim())
+                    .join('; ');
+                  
+                  return (
+                    <tr key={`${worker.workerId}-${index}`}>
+                      <td className="text-center">{index + 1}</td>
+                      <td>
+                        <div className="worker-name-cell">
+                          <div className="worker-avatar-small">
+                            {worker.workerName?.charAt(0) || worker.workerId?.charAt(0)}
+                          </div>
+                          <span className="worker-fullname">{worker.workerName}</span>
+                        </div>
+                      </td>
+                      <td className="worker-id-cell">{worker.workerId}</td>
+                      <td className="hours-cell">
+                        <span className="hours-badge">{worker.totalHours.toFixed(2)}h</span>
+                      </td>
+                      <td className="days-cell">
+                        <span className="days-badge">{worker.dates.size} days</span>
+                      </td>
+                      <td className="slots-cell">
+                        <span className="slots-badge">{worker.totalSlots}</span>
+                      </td>
+                      <td className="avg-hours-cell">
+                        <span className="avg-hours">{avgHoursPerDay}h/day</span>
+                      </td>
+                      <td className="departments-cell">
+                        <span className="dept-tag">{departments || "N/A"}</span>
+                      </td>
+                      <td className="remarks-cell">
+                        <div className="remarks-text" title={recentRemarks}>
+                          {recentRemarks || "No remarks"}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })
+              ) : (
+                <tr>
+                  <td colSpan="9" className="no-data">
+                    No worker data available
+                  </td>
+                </tr>
+              )}
+            </tbody>
+            {workerArray.length > 0 && (
+              <tfoot>
+                <tr>
+                  <td colSpan="2" className="text-end"><strong>Total:</strong></td>
+                  <td><strong>{workerArray.length} workers</strong></td>
+                  <td className="total-hours">
+                    <strong>{workerArray.reduce((sum, w) => sum + w.totalHours, 0).toFixed(2)}h</strong>
+                  </td>
+                  <td>
+                    <strong>{workerArray.reduce((sum, w) => sum + w.dates.size, 0)} days</strong>
+                  </td>
+                  <td>
+                    <strong>{workerArray.reduce((sum, w) => sum + w.totalSlots, 0)} slots</strong>
+                  </td>
+                  <td colSpan="3"></td>
+                </tr>
+              </tfoot>
+            )}
+          </table>
         </div>
       </div>
     );
@@ -539,6 +676,7 @@ const ClientSlotTab = ({ client }) => {
             <table className="slot-table">
               <thead>
                 <tr>
+                  <th>S.No</th>
                   <th>Date</th>
                   <th>Worker</th>
                   <th>Start Time</th>
@@ -552,7 +690,8 @@ const ClientSlotTab = ({ client }) => {
               <tbody>
                 {slotsToShow.length > 0 ? (
                   slotsToShow.map((slot, index) => (
-                    <tr key={index}>
+                    <tr key={`${slot.slotId}-${index}`}>
+                      <td className="text-center">{index + 1}</td>
                       <td className="date-cell">
                         <div className="date-display">
                           <div className="date">{slot.formattedDate}</div>
@@ -586,7 +725,7 @@ const ClientSlotTab = ({ client }) => {
                   ))
                 ) : (
                   <tr>
-                    <td colSpan="8" className="no-data">
+                    <td colSpan="9" className="no-data">
                       No slot data found for selected period
                     </td>
                   </tr>
@@ -595,11 +734,11 @@ const ClientSlotTab = ({ client }) => {
               {slotsToShow.length > 0 && (
                 <tfoot>
                   <tr>
-                    <td colSpan="4" className="text-end"><strong>Total:</strong></td>
+                    <td colSpan="5" className="text-end"><strong>Total:</strong></td>
                     <td className="total-hours">
                       <strong>{slotsToShow.reduce((sum, slot) => sum + parseFloat(slot.duration || 0), 0).toFixed(2)} hours</strong>
                     </td>
-                    <td colSpan="3">
+                    <td colSpan="4">
                       <strong>{slotsToShow.length} slots</strong>
                     </td>
                   </tr>
@@ -704,7 +843,7 @@ const ClientSlotTab = ({ client }) => {
                   <div className="workers-list">
                     {monthlyStats.topWorkers.length > 0 ? (
                       monthlyStats.topWorkers.map((worker, index) => (
-                        <div key={worker.workerId} className="top-worker">
+                        <div key={`${worker.workerId}-${index}`} className="top-worker">
                           <div className="worker-rank">{index + 1}</div>
                           <div className="worker-avatar-small">
                             {worker.workerName?.charAt(0) || worker.workerId?.charAt(0)}
@@ -819,7 +958,7 @@ const ClientSlotTab = ({ client }) => {
                   <div className="workers-list">
                     {dailyStats.workers.length > 0 ? (
                       dailyStats.workers.map((worker, index) => (
-                        <div key={worker.id} className="worker-card-small">
+                        <div key={`${worker.id}-${index}`} className="worker-card-small">
                           <div className="worker-avatar-small">
                             {worker.name?.charAt(0) || worker.id?.charAt(0)}
                           </div>
@@ -926,16 +1065,19 @@ const ClientSlotTab = ({ client }) => {
               </div>
             </div>
 
-            {/* Worker Performance */}
+            {/* Worker Performance - Cards View */}
             <div className="worker-performance">
               <h3>👥 Worker Performance</h3>
               <div className="performance-grid">
                 {Object.values(workerDetails)
                   .sort((a, b) => b.totalHours - a.totalHours)
                   .slice(0, 8)
-                  .map(renderWorkerCard)}
+                  .map((worker, index) => renderWorkerCard(worker, index))}
               </div>
             </div>
+
+            {/* Worker Performance - Table View */}
+            {renderWorkerPerformanceTable()}
           </>
         )}
       </div>

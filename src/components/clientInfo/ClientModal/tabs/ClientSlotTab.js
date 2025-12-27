@@ -1049,7 +1049,6 @@ const ClientSlotTab = ({ client }) => {
         slotId,
         dateKey,
         clientKey,
-        department,
         remarks
       });
       alert("❌ Failed to save remarks: " + error.message);
@@ -2099,44 +2098,6 @@ const ClientSlotTab = ({ client }) => {
                   </div>
                 </div>
 
-                {/* Quick Stats */}
-                <div className="sidebar-card">
-                  <h3>📈 Quick Statistics</h3>
-                  <div className="quick-stats">
-                    <div className="quick-stat">
-                      <span className="stat-label">Peak Day:</span>
-                      <span className="stat-value">
-                        {monthlyStats.dailyBreakdown.reduce((max, day) => 
-                          day.totalHours > max.totalHours ? day : max, 
-                          { totalHours: 0 }
-                        ).formattedDate || "N/A"}
-                      </span>
-                    </div>
-                    <div className="quick-stat">
-                      <span className="stat-label">Most Active Hour:</span>
-                      <span className="stat-value">
-                        {dailyStats.timeDistribution.reduce((max, hour) => 
-                          hour.totalHours > max.totalHours ? hour : max, 
-                          { totalHours: 0, hour12: "N/A" }
-                        ).hour12}
-                      </span>
-                    </div>
-                    <div className="quick-stat">
-                      <span className="stat-label">Avg Slot Duration:</span>
-                      <span className="stat-value">
-                        {slotData.length > 0 
-                          ? (slotData.reduce((sum, slot) => sum + parseFloat(slot.duration || 0), 0) / slotData.length).toFixed(2) 
-                          : "0"}h
-                      </span>
-                    </div>
-                    <div className="quick-stat">
-                      <span className="stat-label">Utilization Rate:</span>
-                      <span className="stat-value">
-                        {(monthlyStats.utilizationRate * 100).toFixed(1)}%
-                      </span>
-                    </div>
-                  </div>
-                </div>
               </div>
             </div>
           </>
@@ -2189,93 +2150,6 @@ const ClientSlotTab = ({ client }) => {
               <div className="main-column">
                 {renderDailyTimeline()}
                 {renderSlotTable()}
-              </div>
-              
-              <div className="sidebar-column">
-                {/* Today's Workers */}
-                <div className="sidebar-card">
-                  <h3>👥 Today's Workers</h3>
-                  <div className="workers-list">
-                    {dailyStats.workers.length > 0 ? (
-                      dailyStats.workers.map((worker, index) => (
-                        <div key={`${worker.id}-${index}`} className="worker-card-small">
-                          <div className="worker-info-with-photo-small">
-                            <img 
-                              src={worker.photoUrl} 
-                              alt={worker.name}
-                              className="worker-photo-tiny"
-                              style={{ width: '35px', height: '35px', borderRadius: '50%', objectFit: 'cover' }}
-                              onError={(e) => {
-                                e.target.style.display = 'none';
-                                const fallback = e.target.nextElementSibling;
-                                if (fallback) fallback.style.display = 'flex';
-                              }}
-                            />
-                            <div className="worker-photo-placeholder-tiny" style={{
-                              width: '35px',
-                              height: '35px',
-                              borderRadius: '50%',
-                              background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-                              display: 'none',
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                              color: 'white',
-                              fontWeight: '600',
-                              fontSize: '14px'
-                            }}>
-                              {worker.name?.charAt(0) || 'W'}
-                            </div>
-                            <div className="worker-info-small">
-                              <div className="worker-name-small">
-                                {worker.name} 
-                                <span className="hours-badge-small">{worker.hours.toFixed(1)}h</span>
-                              </div>
-                              <div className="worker-id-small">ID: {worker.id}</div>
-                            </div>
-                          </div>
-                        </div>
-                      ))
-                    ) : (
-                      <div className="no-data">No workers assigned today</div>
-                    )}
-                  </div>
-                </div>
-
-                {/* Daily Summary */}
-                <div className="sidebar-card">
-                  <h3>📊 Daily Summary</h3>
-                  <div className="quick-stats">
-                    <div className="quick-stat">
-                      <span className="stat-label">First Slot:</span>
-                      <span className="stat-value">
-                        {dailyStats.slotDetails.length > 0 
-                          ? dailyStats.slotDetails.reduce((earliest, slot) => 
-                              slot.startTime12 < earliest.startTime12 ? slot : earliest
-                            ).startTime12 
-                          : "N/A"}
-                      </span>
-                    </div>
-                    <div className="quick-stat">
-                      <span className="stat-label">Last Slot:</span>
-                      <span className="stat-value">
-                        {dailyStats.slotDetails.length > 0 
-                          ? dailyStats.slotDetails.reduce((latest, slot) => 
-                              slot.endTime12 > latest.endTime12 ? slot : latest
-                            ).endTime12 
-                          : "N/A"}
-                      </span>
-                    </div>
-                    <div className="quick-stat">
-                      <span className="stat-label">Busiest Hour:</span>
-                      <span className="stat-value">
-                        {dailyStats.timeDistribution.reduce((max, hour) => 
-                          hour.totalHours > max.totalHours ? hour : max, 
-                          { totalHours: 0, hour12: "N/A" }
-                        ).hour12}
-                      </span>
-                    </div>
-                  </div>
-                </div>
               </div>
             </div>
           </>

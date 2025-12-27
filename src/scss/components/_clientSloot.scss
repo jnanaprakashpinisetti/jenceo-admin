@@ -527,8 +527,11 @@
         background: #f7fafc;
     }
 
-    table tr:nth-child(even) td {
+    table  {
+        width: 100%;
+        tr:nth-child(even) td {
          background-color: #e7f1fd;
+    }
     }
 
     .date-cell {

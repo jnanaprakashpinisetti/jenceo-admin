@@ -4,6 +4,17 @@
         min-height: 100vh;
         padding: 20px;
         color: #333;
+        @include mobile {
+            padding: 10px;
+            margin-top: 15px;
+            border-radius: 10px;
+        }
+    }
+
+    .main-column {
+        @include mobile {
+            overflow: auto;
+        }
     }
 
     .dashboard-header {
@@ -309,11 +320,18 @@
         justify-content: space-between;
         align-items: center;
         margin-bottom: 20px;
+        @include mobile {
+            display: block;
+        }
     }
 
     .calendar-header h3 {
         margin: 0;
         color: #2d3748;
+
+        @include mobile {
+            margin-bottom: 10px;
+        }
     }
 
     .calendar-nav {
@@ -352,6 +370,9 @@
         display: grid;
         grid-template-columns: repeat(7, 1fr);
         gap: 8px;
+        @include mobile {
+            grid-template-columns: repeat(3, 1fr);
+        }
     }
 
     .calendar-day-header {
@@ -452,6 +473,9 @@
         justify-content: space-between;
         align-items: center;
         margin-bottom: 20px;
+        @include mobile {
+            display: block;
+        }
     }
 
     .table-actions {
@@ -1099,5 +1123,11 @@
         .calendar-day {
             min-height: 80px;
         }
+    }
+}
+
+.tab-content.p-3 {
+    @include mobile {
+        padding: 0 !important;
     }
 }

@@ -14,6 +14,8 @@ import PaymentsTab from "./tabs/PaymentsTab";
 import DetailInfoTab from "./tabs/DetailInfoTab";
 import BiodataTab from "./tabs/BiodataTab";
 import InvoiceTab from "./tabs/InvoiceTab";
+import ClientSlotTab from "./tabs/ClientSlotTab";
+
 
 // Import utility functions
 import {
@@ -34,6 +36,7 @@ import {
   getInitialFormData,
   resolveAddedByFromUsers
 } from "./utils";
+import ClientSlotInfo from "./tabs/ClientSlotTab";
 
 const removalReasonOptions = [
   "Contract Closed",
@@ -719,6 +722,7 @@ const ClientModal = ({
                   ["payments", `Payments (${(formData.payments || []).length})`],
                   ["detailinfo", "Detail-Info"],
                   ["biodata", "Biodata"],
+                  ["clientSlotTab", "Client Slots"],
                   ["invoice", "Invoice"],
                 ].map(([key, label]) => (
                   <li key={key} className="nav-item" role="presentation">
@@ -826,6 +830,13 @@ const ClientModal = ({
                     bioIframeRef={bioIframeRef}
                     buildClientBiodataHTML={() => {}}
                   />
+                )}
+                {activeTab === "clientSlotTab" && (
+                  <div className="clientSlot">
+                  <ClientSlotTab
+                     client={client || formData}
+                  />
+                  </div>
                 )}
 
                 {activeTab === "invoice" && (

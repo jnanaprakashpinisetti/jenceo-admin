@@ -1,6 +1,7 @@
 import React, {useState} from 'react'
 
 import CompanyRegForm from '../components/Companyes/CompanyRegForm'
+import DisplayCompany from '../components/Companyes/DisplayCompany'
 export default function Companyes() {
     const [showFormModal, setShowFormModal] = useState(false);
   return (
@@ -25,6 +26,7 @@ export default function Companyes() {
           )}
         </div>
         <hr></hr>
+        <DisplayCompany/>
       </div>
     </div>
 

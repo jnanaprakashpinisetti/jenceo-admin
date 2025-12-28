@@ -1,7 +1,9 @@
 import React, { useEffect, useState, useRef } from "react";
 import firebaseDB from "../../../firebase";
 import { useAuth } from "../../../context/AuthContext";
-
+import { storage } from "../../../firebase";
+import { firebaseStorage } from "../../../firebase";
+import { storageRef } from "../../../firebase";
 // Import tab components
 import BasicInfoTab from "./tabs/BasicDetailsTab";
 import RegistrationComplianceTab from "./tabs/RegistrationComplianceTab";
@@ -355,6 +357,58 @@ const CompanyModal = ({
     }
   };
 
+  // Add this function in CompanyModal component
+  const handleFileUpload = async (fieldName, file) => {
+    try {
+      console.log(`Uploading ${file.name} for ${fieldName}`, file);
+      
+      // Validation based on file type
+      const allowedTypes = ["image/jpeg", "image/jpg", "image/png", "image/gif", "application/pdf"];
+      const isImage = file.type.startsWith('image/');
+      
+      if (!allowedTypes.includes(file.type)) {
+        throw new Error(`File type not allowed. Allowed: ${allowedTypes.join(', ')}`);
+      }
+      
+      // Set file size limits
+      let maxSize = 5 * 1024 * 1024; // 5MB default
+      if (fieldName === "companyLogoUrl") {
+        maxSize = 100 * 1024; // 100KB for logo
+      } else if (fieldName === "cancelledChequeUrl") {
+        maxSize = 2 * 1024 * 1024; // 2MB for cheque
+      }
+      
+      if (file.size > maxSize) {
+        const sizeMB = (maxSize / (1024 * 1024)).toFixed(1);
+        throw new Error(`File must be less than ${sizeMB}MB`);
+      }
+      
+      // Get company ID for folder structure
+      const companyId = formData.companyId || 'unknown';
+      
+      // Create file name and path
+      const timestamp = Date.now();
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${fieldName.replace('Url', '')}-${timestamp}.${fileExt}`;
+      const filePath = `companies/${companyId}/${fileName}`;
+      
+      // Option 1: If you have a direct storage reference
+      const storageRef = firebaseStorage.ref(filePath);
+      const snapshot = await storageRef.put(file);
+      const downloadURL = await snapshot.ref.getDownloadURL();
+      
+      // Option 2: If you have an uploadFile utility function (check your firebase.js exports)
+      // const downloadURL = await uploadFile(filePath, file);
+      
+      console.log(`File uploaded successfully: ${downloadURL}`);
+      return downloadURL;
+      
+    } catch (error) {
+      console.error("File upload error:", error);
+      throw error;
+    }
+  };
+
   const handleSubmit = async (ev) => {
     ev && ev.preventDefault && ev.preventDefault();
 
@@ -519,6 +573,7 @@ const CompanyModal = ({
                     formData={formData}
                     editMode={editMode}
                     handleChange={handleChange}
+                    handleFileUpload={handleFileUpload}
                   />
                 )}
 

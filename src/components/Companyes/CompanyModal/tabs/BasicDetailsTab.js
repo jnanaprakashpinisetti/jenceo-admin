@@ -1,29 +1,64 @@
 import React from "react";
 
-const BasicInfoTab = ({ formData, editMode, errors, handleChange, setField }) => {
+const BasicInfoTab = ({
+  formData,
+  editMode,
+  errors,
+  handleChange,
+  setField,
+}) => {
   const businessCategories = [
-    "Home Care", "Housekeeping", "Office / Corporate", "Factory / Manufacturing",
-    "Industrial", "Construction", "Retail / Shop", "Hospital / Healthcare",
-    "Hotel / Hospitality", "Warehouse / Logistics", "Security Services",
-    "Driving / Transport", "Technical / Maintenance", "Customer Service / BPO",
-    "Management / Administration", "Government / Public Sector",
-    "Education / Institutions", "Others"
+    "Home Care",
+    "Housekeeping",
+    "Office / Corporate",
+    "Factory / Manufacturing",
+    "Industrial",
+    "Construction",
+    "Retail / Shop",
+    "Hospital / Healthcare",
+    "Hotel / Hospitality",
+    "Warehouse / Logistics",
+    "Security Services",
+    "Driving / Transport",
+    "Technical / Maintenance",
+    "Customer Service / BPO",
+    "Management / Administration",
+    "Government / Public Sector",
+    "Education / Institutions",
+    "Others",
   ];
 
   const ownershipTypes = [
-    "Sole Proprietorship", "Partnership", "Private Limited", "Public Limited",
-    "LLP", "Government", "Non-Profit", "Other"
+    "Sole Proprietorship",
+    "Partnership",
+    "Private Limited",
+    "Public Limited",
+    "LLP",
+    "Government",
+    "Non-Profit",
+    "Other",
   ];
 
-  const branchTypes = ["Head Office", "Branch", "Subsidiary", "Regional Office", "Other"];
+  const branchTypes = [
+    "Head Office",
+    "Branch",
+    "Subsidiary",
+    "Regional Office",
+    "Other",
+  ];
 
-  const years = Array.from({ length: 100 }, (_, i) => new Date().getFullYear() - i);
+  const years = Array.from(
+    { length: 100 },
+    (_, i) => new Date().getFullYear() - i
+  );
 
   return (
     <div className="row">
       <div className="col-md-6">
         <div className="mb-3">
-          <label className="form-label"><strong>Company ID</strong></label>
+          <label className="form-label">
+            <strong>Company ID</strong>
+          </label>
           <input
             type="text"
             className={`form-control ${errors.companyId ? "is-invalid" : ""}`}
@@ -31,13 +66,17 @@ const BasicInfoTab = ({ formData, editMode, errors, handleChange, setField }) =>
             value={formData.companyId || ""}
             onChange={handleChange}
             readOnly={!editMode}
-            disabled
+            disabled={!editMode}
           />
-          {errors.companyId && <div className="invalid-feedback">{errors.companyId}</div>}
+          {errors.companyId && (
+            <div className="invalid-feedback">{errors.companyId}</div>
+          )}
         </div>
 
         <div className="mb-3">
-          <label className="form-label"><strong>Company Name *</strong></label>
+          <label className="form-label">
+            <strong>Company Name *</strong>
+          </label>
           <input
             type="text"
             className={`form-control ${errors.companyName ? "is-invalid" : ""}`}
@@ -47,11 +86,15 @@ const BasicInfoTab = ({ formData, editMode, errors, handleChange, setField }) =>
             readOnly={!editMode}
             disabled={!editMode}
           />
-          {errors.companyName && <div className="invalid-feedback">{errors.companyName}</div>}
+          {errors.companyName && (
+            <div className="invalid-feedback">{errors.companyName}</div>
+          )}
         </div>
 
         <div className="mb-3">
-          <label className="form-label"><strong>Business Category *</strong></label>
+          <label className="form-label">
+            <strong>Business Category *</strong>
+          </label>
           <select
             className={`form-control ${errors.companyType ? "is-invalid" : ""}`}
             name="companyType"
@@ -60,15 +103,21 @@ const BasicInfoTab = ({ formData, editMode, errors, handleChange, setField }) =>
             disabled={!editMode}
           >
             <option value="">Select Category</option>
-            {businessCategories.map(cat => (
-              <option key={cat} value={cat}>{cat}</option>
+            {businessCategories.map((cat) => (
+              <option key={cat} value={cat}>
+                {cat}
+              </option>
             ))}
           </select>
-          {errors.companyType && <div className="invalid-feedback">{errors.companyType}</div>}
+          {errors.companyType && (
+            <div className="invalid-feedback">{errors.companyType}</div>
+          )}
         </div>
 
         <div className="mb-3">
-          <label className="form-label"><strong>Ownership Type</strong></label>
+          <label className="form-label">
+            <strong>Ownership Type</strong>
+          </label>
           <select
             className="form-control"
             name="ownershipType"
@@ -77,16 +126,36 @@ const BasicInfoTab = ({ formData, editMode, errors, handleChange, setField }) =>
             disabled={!editMode}
           >
             <option value="">Select Ownership</option>
-            {ownershipTypes.map(type => (
-              <option key={type} value={type}>{type}</option>
+            {ownershipTypes.map((type) => (
+              <option key={type} value={type}>
+                {type}
+              </option>
             ))}
           </select>
+        </div>
+
+        <div className="mb-3">
+          <label className="form-label">
+            <strong>Website</strong>
+          </label>
+          <input
+            type="url"
+            className="form-control"
+            name="websiteUrl"
+            value={formData.websiteUrl || ""}
+            onChange={handleChange}
+            readOnly={!editMode}
+            disabled={!editMode}
+            placeholder="https://example.com"
+          />
         </div>
       </div>
 
       <div className="col-md-6">
         <div className="mb-3">
-          <label className="form-label"><strong>Branch Type</strong></label>
+          <label className="form-label">
+            <strong>Branch Type</strong>
+          </label>
           <select
             className="form-control"
             name="branchType"
@@ -95,14 +164,18 @@ const BasicInfoTab = ({ formData, editMode, errors, handleChange, setField }) =>
             disabled={!editMode}
           >
             <option value="">Select Branch Type</option>
-            {branchTypes.map(type => (
-              <option key={type} value={type}>{type}</option>
+            {branchTypes.map((type) => (
+              <option key={type} value={type}>
+                {type}
+              </option>
             ))}
           </select>
         </div>
 
         <div className="mb-3">
-          <label className="form-label"><strong>Branch Name</strong></label>
+          <label className="form-label">
+            <strong>Branch Name</strong>
+          </label>
           <input
             type="text"
             className="form-control"
@@ -115,7 +188,9 @@ const BasicInfoTab = ({ formData, editMode, errors, handleChange, setField }) =>
         </div>
 
         <div className="mb-3">
-          <label className="form-label"><strong>Year Established</strong></label>
+          <label className="form-label">
+            <strong>Year Established</strong>
+          </label>
           <select
             className="form-control"
             name="yearOfEstablishment"
@@ -124,31 +199,37 @@ const BasicInfoTab = ({ formData, editMode, errors, handleChange, setField }) =>
             disabled={!editMode}
           >
             <option value="">Select Year</option>
-            {years.map(year => (
-              <option key={year} value={year}>{year}</option>
+            {years.map((year) => (
+              <option key={year} value={year}>
+                {year}
+              </option>
             ))}
           </select>
         </div>
 
-        <div className="row">
-          <div className="col-md-6">
             <div className="mb-3">
-              <label className="form-label"><strong>Official Email *</strong></label>
+              <label className="form-label">
+                <strong>Official Email *</strong>
+              </label>
               <input
                 type="email"
-                className={`form-control ${errors.officialEmail ? "is-invalid" : ""}`}
+                className={`form-control ${
+                  errors.officialEmail ? "is-invalid" : ""
+                }`}
                 name="officialEmail"
                 value={formData.officialEmail || ""}
                 onChange={handleChange}
                 readOnly={!editMode}
                 disabled={!editMode}
               />
-              {errors.officialEmail && <div className="invalid-feedback">{errors.officialEmail}</div>}
-            </div>
+              {errors.officialEmail && (
+                <div className="invalid-feedback">{errors.officialEmail}</div>
+              )}
           </div>
-          <div className="col-md-6">
             <div className="mb-3">
-              <label className="form-label"><strong>Official Phone</strong></label>
+              <label className="form-label">
+                <strong>Official Phone</strong>
+              </label>
               <input
                 type="tel"
                 className="form-control"
@@ -160,22 +241,8 @@ const BasicInfoTab = ({ formData, editMode, errors, handleChange, setField }) =>
                 maxLength="10"
               />
             </div>
-          </div>
-        </div>
 
-        <div className="mb-3">
-          <label className="form-label"><strong>Website</strong></label>
-          <input
-            type="url"
-            className="form-control"
-            name="websiteUrl"
-            value={formData.websiteUrl || ""}
-            onChange={handleChange}
-            readOnly={!editMode}
-            disabled={!editMode}
-            placeholder="https://example.com"
-          />
-        </div>
+        
       </div>
     </div>
   );

@@ -4,6 +4,7 @@ import "firebase/compat/auth";
 import "firebase/compat/firestore";
 import "firebase/compat/database";
 import "firebase/compat/storage";
+import { getStorage } from "firebase/storage";
 
 /* ------------------------- Firebase Config ------------------------- */
 const firebaseConfig = {

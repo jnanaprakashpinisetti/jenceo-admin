@@ -17,7 +17,7 @@ const RatingApproval = ({ formData, handleChange, handleSubmit, isSubmitting }) 
       />
     </div>
 
-    <div className="alert alert-info">
+    <div className="alert alert-info text-info">
       Approval Status: <b>{formData.approvalStatus}</b>
     </div>
 

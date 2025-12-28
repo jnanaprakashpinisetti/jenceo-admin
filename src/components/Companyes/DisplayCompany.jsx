@@ -4,60 +4,8 @@ import firebaseDB from '../../firebase';
 import editIcon from '../../assets/eidt.svg';
 import viewIcon from '../../assets/view.svg';
 import deleteIcon from '../../assets/delete.svg';
+import CompanyModal from './CompanyModal/CompanyModal'
 
-// CompanyModal is not created yet, so we'll use a placeholder or create it later
-// import CompanyModal from './CompanyModal/CompanyModal';
-
-// Temporary placeholder for CompanyModal until you create it
-const CompanyModal = ({ company, isOpen, onClose, onSave, isEditMode }) => {
-  if (!isOpen) return null;
-  
-  return (
-    <div className="modal fade show" style={{ display: 'block', backgroundColor: 'rgba(0,0,0,0.5)' }} tabIndex="-1" role="dialog" aria-modal="true">
-      <div className="modal-dialog modal-dialog-centered modal-lg">
-        <div className="modal-content">
-          <div className="modal-header bg-dark text-white">
-            <h5 className="modal-title">
-              {isEditMode ? 'Edit Company' : 'View Company'} - {company.companyName}
-            </h5>
-            <button type="button" className="btn-close btn-close-white" onClick={onClose}></button>
-          </div>
-          <div className="modal-body bg-dark text-white">
-            <div className="row">
-              <div className="col-md-6">
-                <p><strong>Company ID:</strong> {company.companyId}</p>
-                <p><strong>Name:</strong> {company.companyName}</p>
-                <p><strong>Type:</strong> {company.companyType}</p>
-                <p><strong>Ownership:</strong> {company.ownershipType}</p>
-                <p><strong>Year Established:</strong> {company.yearOfEstablishment}</p>
-              </div>
-              <div className="col-md-6">
-                <p><strong>Primary Contact:</strong> {company.primaryContactName}</p>
-                <p><strong>Mobile:</strong> {company.primaryMobile}</p>
-                <p><strong>Email:</strong> {company.officialEmail}</p>
-                <p><strong>Location:</strong> {company.registeredDistrict}, {company.registeredState}</p>
-                <p><strong>Status:</strong> <span className={`badge ${company.approvalStatus === 'Approved' ? 'bg-success' : company.approvalStatus === 'Pending' ? 'bg-warning' : 'bg-danger'}`}>
-                  {company.approvalStatus}
-                </span></p>
-              </div>
-            </div>
-            {isEditMode && (
-              <div className="mt-3">
-                <p className="text-warning">Edit functionality will be implemented in the full CompanyModal component</p>
-              </div>
-            )}
-          </div>
-          <div className="modal-footer bg-dark">
-            <button type="button" className="btn btn-secondary" onClick={onClose}>Close</button>
-            {isEditMode && (
-              <button type="button" className="btn btn-primary" onClick={() => onSave(company)}>Save Changes</button>
-            )}
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-};
 
 // Default logo image
 const DEFAULT_COMPANY_LOGO = "https://firebasestorage.googleapis.com/v0/b/jenceo-admin.firebasestorage.app/o/OfficeFiles%2FSample-Photo.jpg?alt=media&token=01855b47-c9c2-490e-b400-05851192dde7";

@@ -43,7 +43,7 @@ const AuditLogsTab = ({ formData, expandedLogIndex, setExpandedLogIndex, formatD
 
       {sortedLogs.length === 0 ? (
         <div className="alert alert-info text-center text-info">
-          <i className="fas fa-info-circle me-2"></i>
+          <i className="bi bi-info-circle me-2"></i>
           No audit logs available for this company.
         </div>
       ) : (
@@ -138,7 +138,7 @@ const AuditLogsTab = ({ formData, expandedLogIndex, setExpandedLogIndex, formatD
       )}
 
       <div className="alert alert-secondary mt-3">
-        <h6 className="alert-heading"><i className="fas fa-history me-2"></i>About Audit Logs</h6>
+        <h6 className="alert-heading"><i className="bi bi-history me-2"></i>About Audit Logs</h6>
         <p className="mb-0 small">
           Audit logs track all changes made to this company record. Each entry includes the date, time,
           user who made the change, and details of what was modified. This helps maintain transparency

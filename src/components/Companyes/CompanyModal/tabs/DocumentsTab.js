@@ -244,7 +244,7 @@ const DocumentsTab = ({ formData, editMode, handleChange, handleFileUpload }) =>
                         style={{ width: `${uploadProgress}%` }}
                       ></div>
                     </div>
-                    <small className="text-muted d-block text-center mt-1">
+                    <small className="small-text d-block text-center mt-1">
                       {uploadProgress}% uploaded
                     </small>
                   </div>
@@ -269,7 +269,7 @@ const DocumentsTab = ({ formData, editMode, handleChange, handleFileUpload }) =>
                   download
                   className="btn btn-sm btn-outline-secondary"
                 >
-                  <i className="fas fa-download"></i>
+                  <i className="bi bi-download"></i>
                 </a>
               </div>
             )}
@@ -277,7 +277,7 @@ const DocumentsTab = ({ formData, editMode, handleChange, handleFileUpload }) =>
             {/* File Info */}
             {hasDocument(formData[doc.name]) && (
               <div className="mt-2">
-                <small className="text-muted">
+                <small className="small-text">
                   <i className="fas fa-link me-1"></i>
                   <a 
                     href={formData[doc.name]} 
@@ -294,7 +294,7 @@ const DocumentsTab = ({ formData, editMode, handleChange, handleFileUpload }) =>
           
           {/* Card Footer */}
           <div className="card-footer bg-transparent border-top-0 pt-0">
-            <small className="text-muted d-flex justify-content-between align-items-center">
+            <small className="small-text d-flex justify-content-between align-items-center">
               <span>
                 <i className={`fas fa-${doc.preview ? 'image' : 'file'} me-1`}></i>
                 {doc.accept.includes('image') ? 'Image' : 'Document'}
@@ -323,7 +323,7 @@ const DocumentsTab = ({ formData, editMode, handleChange, handleFileUpload }) =>
               </div>
               <div>
                 <h5 className="mb-0 text-dark">Company Documents</h5>
-                <small className="text-muted">Upload and manage all company documents</small>
+                <small className="small-text">Upload and manage all company documents</small>
               </div>
             </div>
           </div>
@@ -332,7 +332,7 @@ const DocumentsTab = ({ formData, editMode, handleChange, handleFileUpload }) =>
             <div className="row">
               {/* Company Logo Preview (Special Card) */}
               <div className="col-md-6 mb-4">
-                <div className="card border-primary">
+                <div className="card border-primary h-100">
                   <div className="card-header bg-primary bg-opacity-10 border-primary">
                     <h6 className="mb-0 d-flex align-items-center">
                       <i className="bi bi-image me-2"></i>
@@ -398,7 +398,7 @@ const DocumentsTab = ({ formData, editMode, handleChange, handleFileUpload }) =>
 
               {/* Document Status Summary Card */}
               <div className="col-md-6 mb-4">
-                <div className="card border-info">
+                <div className="card border-info h-100">
                   <div className="card-header bg-info bg-opacity-10 border-info">
                     <h6 className="mb-0 d-flex align-items-center">
                       <i className="bi bi-graph-up me-2"></i>
@@ -409,13 +409,13 @@ const DocumentsTab = ({ formData, editMode, handleChange, handleFileUpload }) =>
                     <div className="row">
                       <div className="col-6 mb-3">
                         <div className="border rounded p-3 text-center">
-                          <div className="text-muted small">Total Documents</div>
+                          <div className="small-text small">Total Documents</div>
                           <div className="fw-bold fs-4">{documents.length}</div>
                         </div>
                       </div>
                       <div className="col-6 mb-3">
                         <div className="border rounded p-3 text-center">
-                          <div className="text-muted small">Uploaded</div>
+                          <div className="small-text small">Uploaded</div>
                           <div className="fw-bold fs-4 text-success">
                             {documents.filter(d => hasDocument(formData[d.name])).length}
                           </div>
@@ -423,7 +423,7 @@ const DocumentsTab = ({ formData, editMode, handleChange, handleFileUpload }) =>
                       </div>
                       <div className="col-12">
                         <div className="border rounded p-3">
-                          <div className="text-muted small mb-2">Compliance Score</div>
+                          <div className="small-text small mb-2">Compliance Score</div>
                           <div className="d-flex align-items-center justify-content-between mb-2">
                             <span className="fw-semibold">
                               {Math.round((documents.filter(d => hasDocument(formData[d.name])).length / documents.length) * 100)}%
@@ -466,38 +466,6 @@ const DocumentsTab = ({ formData, editMode, handleChange, handleFileUpload }) =>
             </div>
           </div>
 
-          {/* Card Footer */}
-          <div className="card-footer bg-light border-top">
-            <div className="d-flex justify-content-between align-items-center w-100">
-              <div className="d-flex align-items-center">
-                {editMode ? (
-                  <>
-                    <div className="bg-warning bg-opacity-10 p-2 rounded-circle me-3">
-                      <i className="bi bi-cloud-upload text-warning"></i>
-                    </div>
-                    <div>
-                      <div className="text-dark fw-medium">Upload Mode Active</div>
-                      <small className="text-muted">You can upload or replace documents</small>
-                    </div>
-                  </>
-                ) : (
-                  <>
-                    <div className="bg-success bg-opacity-10 p-2 rounded-circle me-3">
-                      <i className="bi bi-eye text-success"></i>
-                    </div>
-                    <div>
-                      <div className="text-dark fw-medium">View Mode Active</div>
-                      <small className="text-muted">Documents are read-only</small>
-                    </div>
-                  </>
-                )}
-              </div>
-              <div className="text-muted small d-flex align-items-center">
-                <i className="bi bi-files me-1"></i>
-                <span>Document Management</span>
-              </div>
-            </div>
-          </div>
         </div>
       </div>
     </div>

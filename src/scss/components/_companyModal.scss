@@ -2,4 +2,43 @@
     .card {
         background-color: transparent;
     }
+
+    /* Add to your CSS file */
+.table th {
+    vertical-align: middle;
+  }
+.table tr {
+    vertical-align: middle;
+    &:nth-child(even) {
+        td {
+        background-color: #fcfcff;
+    }
+    }
+  }
+  
+  .btn-group-sm > .btn {
+    padding: 0.25rem 0.5rem;
+  }
+  
+  /* Modal styling */
+  .modal-content {
+    border-radius: 0.5rem;
+    background-color: #191c1e;
+  }
+  
+  .form-label {
+    font-weight: 500;
+    margin-bottom: 0.25rem;
+  }
+  
+  /* Responsive table */
+  @media (max-width: 768px) {
+    .table-responsive {
+      font-size: 0.875rem;
+    }
+    
+    .btn-group {
+      flex-wrap: wrap;
+    }
+  }
 }

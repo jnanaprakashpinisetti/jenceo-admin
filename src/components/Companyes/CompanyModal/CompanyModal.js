@@ -1,9 +1,7 @@
 import React, { useEffect, useState, useRef } from "react";
 import firebaseDB from "../../../firebase";
 import { useAuth } from "../../../context/AuthContext";
-import { storage } from "../../../firebase";
 import { firebaseStorage } from "../../../firebase";
-import { storageRef } from "../../../firebase";
 // Import tab components
 import BasicInfoTab from "./tabs/BasicDetailsTab";
 import RegistrationComplianceTab from "./tabs/RegistrationComplianceTab";
@@ -14,6 +12,7 @@ import BankDetailsTab from "./tabs/BankDetailsTab";
 import DocumentsTab from "./tabs/DocumentsTab";
 import RatingApprovalTab from "./tabs/RatingApprovalTab";
 import AuditLogsTab from "./tabs/AuditLogsTab";
+import WorkerTab from "./tabs/WorkerTab";
 
 // Import utility functions
 import {
@@ -506,6 +505,7 @@ const CompanyModal = ({
                   ["documents", "Documents"],
                   ["rating", "Rating & Approval"],
                   ["audit", "Audit Logs"],
+                  ["worker", "Worker Info"],
                 ].map(([key, label]) => (
                   <li key={key} className="nav-item" role="presentation">
                     <button className={`nav-link ${activeTab === key ? "active" : ""}`} onClick={() => setActiveTab(key)}>
@@ -583,6 +583,11 @@ const CompanyModal = ({
                     editMode={editMode}
                     handleChange={handleChange}
                     formatDateForInput={formatDateForInput}
+                  />
+                )}
+                {activeTab === "worker" && (
+                  <WorkerTab
+                  companyData={formData}
                   />
                 )}
 

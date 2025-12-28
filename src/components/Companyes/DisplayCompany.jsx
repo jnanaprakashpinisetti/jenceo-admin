@@ -150,8 +150,6 @@ export default function DisplayCompany() {
 
   // Simplified filters - removed unnecessary ones
   const [searchTerm, setSearchTerm] = useState('');
-  const [selectedBusinessTypes, setSelectedBusinessTypes] = useState([]);
-  const [selectedStates, setSelectedStates] = useState([]);
   const [selectedApprovalStatus, setSelectedApprovalStatus] = useState("All");
   const [reminderFilter, setReminderFilter] = useState("all"); // New reminder filter
   
@@ -160,6 +158,14 @@ export default function DisplayCompany() {
   const [rowsPerPage, setRowsPerPage] = useState(10);
   const [totalPages, setTotalPages] = useState(1);
   const [companyCounts, setCompanyCounts] = useState({});
+
+  // Reminder counts state
+  const [reminderCounts, setReminderCounts] = useState({
+    overdue: 0,
+    today: 0,
+    tomorrow: 0,
+    upcoming: 0
+  });
 
   // Delete states
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -229,6 +235,36 @@ export default function DisplayCompany() {
     );
   };
 
+  // Calculate reminder counts for active tab
+  const calculateReminderCounts = (companies) => {
+    const counts = {
+      overdue: 0,
+      today: 0,
+      tomorrow: 0,
+      upcoming: 0
+    };
+
+    companies.forEach((company) => {
+      const endDate = company.contractEndDate;
+      if (!endDate) return;
+
+      const du = daysUntil(endDate);
+      if (!isFinite(du)) return;
+
+      if (du < 0) {
+        counts.overdue++;
+      } else if (du === 0) {
+        counts.today++;
+      } else if (du === 1) {
+        counts.tomorrow++;
+      } else if (du > 1 && du <= 30) {
+        counts.upcoming++;
+      }
+    });
+
+    return counts;
+  };
+
   // Fetch all companies from all categories
   useEffect(() => {
     const fetchAllCompanies = async () => {
@@ -274,6 +310,11 @@ export default function DisplayCompany() {
         // Calculate total pages for active tab
         const activeCompanies = companiesByCategory[activeTab] || [];
         setTotalPages(Math.ceil(activeCompanies.length / rowsPerPage));
+        
+        // Calculate reminder counts for active tab
+        const reminderCounts = calculateReminderCounts(activeCompanies);
+        setReminderCounts(reminderCounts);
+        
         setLoading(false);
       } catch (err) {
         setError(err.message);
@@ -304,21 +345,6 @@ export default function DisplayCompany() {
         );
       }
 
-      // — Business Type —
-      if (selectedBusinessTypes.length > 0) {
-        filtered = filtered.filter((company) => 
-          company.companyType && selectedBusinessTypes.includes(company.companyType)
-        );
-      }
-
-      // — State Filter —
-      if (selectedStates.length > 0) {
-        filtered = filtered.filter((company) => 
-          (company.registeredState && selectedStates.includes(company.registeredState)) ||
-          (company.branchState && selectedStates.includes(company.branchState))
-        );
-      }
-
       // — Approval Status —
       if (selectedApprovalStatus !== "All") {
         filtered = filtered.filter((company) => 
@@ -328,29 +354,30 @@ export default function DisplayCompany() {
 
       // — Reminder Filter — (new)
       if (reminderFilter !== "all") {
-        const contractEndDate = companies.contractEndDate || companies.contractEndDate;
-        const du = daysUntil(contractEndDate);
-        
         switch (reminderFilter) {
           case "overdue":
-            filtered = filtered.filter((company) => 
-              isFinite(du) && du < 0
-            );
+            filtered = filtered.filter((company) => {
+              const du = daysUntil(company.contractEndDate);
+              return isFinite(du) && du < 0;
+            });
             break;
           case "today":
-            filtered = filtered.filter((company) => 
-              isFinite(du) && du === 0
-            );
+            filtered = filtered.filter((company) => {
+              const du = daysUntil(company.contractEndDate);
+              return isFinite(du) && du === 0;
+            });
             break;
           case "tomorrow":
-            filtered = filtered.filter((company) => 
-              isFinite(du) && du === 1
-            );
+            filtered = filtered.filter((company) => {
+              const du = daysUntil(company.contractEndDate);
+              return isFinite(du) && du === 1;
+            });
             break;
           case "upcoming":
-            filtered = filtered.filter((company) => 
-              isFinite(du) && du > 1 && du <= 30
-            );
+            filtered = filtered.filter((company) => {
+              const du = daysUntil(company.contractEndDate);
+              return isFinite(du) && du > 1 && du <= 30;
+            });
             break;
           case "none":
             filtered = filtered.filter((company) => 
@@ -376,22 +403,30 @@ export default function DisplayCompany() {
     // Calculate total pages for active tab
     const activeCompanies = newFiltered[activeTab] || [];
     setTotalPages(Math.ceil(activeCompanies.length / rowsPerPage));
+    
+    // Calculate reminder counts for active tab
+    const reminderCounts = calculateReminderCounts(activeCompanies);
+    setReminderCounts(reminderCounts);
+    
     setCurrentPage(1);
   }, [
     allCompanies,
     searchTerm,
-    selectedBusinessTypes,
-    selectedStates,
     selectedApprovalStatus,
     reminderFilter,
     activeTab,
     rowsPerPage
   ]);
 
-  // Update total pages when active tab or rowsPerPage changes
+  // Update total pages and reminder counts when active tab or rowsPerPage changes
   useEffect(() => {
     const activeCompanies = filteredCompanies[activeTab] || [];
     setTotalPages(Math.ceil(activeCompanies.length / rowsPerPage));
+    
+    // Calculate reminder counts for active tab
+    const reminderCounts = calculateReminderCounts(activeCompanies);
+    setReminderCounts(reminderCounts);
+    
     setCurrentPage(1);
   }, [filteredCompanies, activeTab, rowsPerPage]);
 
@@ -484,8 +519,6 @@ export default function DisplayCompany() {
 
   // Check if any filter is active
   const hasActiveFilters = Boolean(
-    selectedBusinessTypes.length ||
-    selectedStates.length ||
     selectedApprovalStatus !== "All" ||
     searchTerm ||
     reminderFilter !== "all"
@@ -493,8 +526,6 @@ export default function DisplayCompany() {
 
   // Reset all filters
   const resetFilters = () => {
-    setSelectedBusinessTypes([]);
-    setSelectedStates([]);
     setSelectedApprovalStatus("All");
     setSearchTerm("");
     setReminderFilter("all");
@@ -716,6 +747,11 @@ export default function DisplayCompany() {
     return DEFAULT_COMPANY_LOGO;
   };
 
+  // Handle reminder badge click
+  const handleReminderBadgeClick = (type) => {
+    setReminderFilter(type);
+  };
+
   if (loading) return <div className="text-center my-5">Loading companies...</div>;
   if (error) return <div className="alert alert-danger">Error: {error}</div>;
 
@@ -793,15 +829,49 @@ export default function DisplayCompany() {
         </div>
       </div>
 
-      {/* Filters Row - Updated with Reminder Filter */}
+      {/* Reminder Badges - Added as requested */}
+      <div className="row mb-4">
+        <div className="col-12">
+          <div className="alert alert-info text-info d-flex justify-content-around flex-wrap reminder-badges mb-4">
+            <span 
+              role="button" 
+              className={`reminder-badge overdue ${reminderFilter === 'overdue' ? 'active' : ''}`}
+              onClick={() => handleReminderBadgeClick('overdue')}
+            >
+              Overdue: <strong>{reminderCounts.overdue}</strong>
+            </span>
+            <span 
+              role="button" 
+              className={`reminder-badge today ${reminderFilter === 'today' ? 'active' : ''}`}
+              onClick={() => handleReminderBadgeClick('today')}
+            >
+              Today: <strong>{reminderCounts.today}</strong>
+            </span>
+            <span 
+              role="button" 
+              className={`reminder-badge tomorrow ${reminderFilter === 'tomorrow' ? 'active' : ''}`}
+              onClick={() => handleReminderBadgeClick('tomorrow')}
+            >
+              Tomorrow: <strong>{reminderCounts.tomorrow}</strong>
+            </span>
+            <span 
+              role="button" 
+              className={`reminder-badge upcoming ${reminderFilter === 'upcoming' ? 'active' : ''}`}
+              onClick={() => handleReminderBadgeClick('upcoming')}
+            >
+              Upcoming: <strong>{reminderCounts.upcoming}</strong>
+            </span>
+          </div>
+        </div>
+      </div>
+
+      {/* Filters Row - Simplified with only Approval Status and Reminder Filter */}
       <div className="row mb-4">
         <div className="col-12">
           <div className="p-3 bg-dark border border-secondary rounded-3 border-opacity-25 companyFilter">
             <div className="row g-3 align-items-center">
-             
-
               {/* Approval Status Filter */}
-              <div className="col-lg-2 col-md-4">
+              <div className="col-lg-3 col-md-4">
                 <label className="form-label small mb-2 text-info">Approval Status</label>
                 <select
                   className="form-select form-select-sm"
@@ -815,8 +885,8 @@ export default function DisplayCompany() {
                 </select>
               </div>
 
-              {/* Reminder Filter - NEW */}
-              <div className="col-lg-3 col-md-6">
+              {/* Reminder Filter */}
+              <div className="col-lg-3 col-md-4">
                 <label className="form-label small mb-2 text-warning">Contract Reminder</label>
                 <select
                   className="form-select form-select-sm"

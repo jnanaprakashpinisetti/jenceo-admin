@@ -30,7 +30,7 @@ export const WORKER_PATHS = {
 
 export const COMPANY_PATHS = {
   "Home Care": "CompanyData/HomeCare/Running",
-  "Housekeeping / Facility Management": "CompanyData/Housekeeping/Running",
+  "Housekeeping": "CompanyData/Housekeeping/Running",
   "Office / Corporate": "CompanyData/Office/Running",
   "Factory / Manufacturing": "CompanyData/Factorys/Running",
   "Industrial": "CompanyData/Industrial/Running",
@@ -45,7 +45,7 @@ export const COMPANY_PATHS = {
   "Customer Service / BPO": "CompanyData/CustomerService/Running",
   "Management / Administration": "CompanyData/Management/Running",
   "Government / Public Sector": "CompanyData/Government/Running",
-  "Education Institutions": "CompanyData/Education/Running",
+  "Education / Institutions": "CompanyData/Education/Running",
   "Others": "CompanyData/Others/Running",
 };
 

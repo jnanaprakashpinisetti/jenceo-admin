@@ -45,6 +45,7 @@ const COLORS = {
   wagentcharges: "#be185d", // pink-700 for worker agent charges
   cagent: "#06b6d4", // cyan-500
   cagentref: "#84cc16", // lime-500
+  company: "#8b5cf6", // violet-500 (matching CompanyPaymentCard)
 };
 const PIE_COLORS = ["#10b981", "#f43f5e", "#22c55e", "#fb7185", "#60a5fa", "#f59e0b", "#8b5cf6", "#0ea5e9", "#14b8a6", "#ec4899", "#06b6d4", "#84cc16"];
 
@@ -477,6 +478,86 @@ function extractCAgentRef(node = {}) {
   return out;
 }
 
+// Company Payments from CompanyData
+function extractCompanyPayments(node = {}) {
+  const out = [];
+  const isPlain = (x) => x && typeof x === "object" && !Array.isArray(x);
+
+  if (!isPlain(node)) return out;
+
+  // First level: departments (HomeCare, Housekeeping, etc.)
+  Object.values(node).forEach((department) => {
+    if (!isPlain(department)) return;
+    
+    // Second level: Running/Archive
+    Object.values(department).forEach((statusGroup) => {
+      if (!isPlain(statusGroup)) return;
+      
+      // Third level: individual company records
+      Object.values(statusGroup).forEach((company) => {
+        if (!isPlain(company)) return;
+
+        // Get payments from company record
+        const payments = Array.isArray(company.payments)
+          ? company.payments
+          : (isPlain(company.payments) ? Object.values(company.payments) : []);
+
+        // If there are payments in the array, process them and skip single payment fields
+        if (payments.length > 0) {
+          payments.forEach((p) => {
+            if (!p) return;
+            const paidAmount = safeNumber(p.paidAmount ?? p.amount ?? p.payment ?? p.paymentAmount ?? 0);
+            const refundAmount = safeNumber(p.refundAmount ?? p.refund ?? 0);
+            const date = p.date ?? p.paymentDate ?? p.createdAt ?? "";
+            const parsedDate = parseDateRobust(date);
+            
+            // Net payment: paidAmount - refundAmount
+            const netPayment = paidAmount - refundAmount;
+            
+            if (netPayment !== 0) {
+              out.push({
+                type: "company",
+                date,
+                parsedDate,
+                amount: netPayment,
+                raw: p,
+                companyData: company,
+                companyName: company.companyName ?? company.name ?? "Unknown",
+                department: Object.keys(node).find(key => node[key] === department) || "Unknown",
+                isRefund: refundAmount > 0,
+                method: p.paymentMethod ?? p.type ?? p.mode ?? p.method ?? ""
+              });
+            }
+          });
+        } else {
+          // Only process single payment fields if there are no payments in the array
+          const singlePaidAmount = safeNumber(company.paidAmount ?? company.amount ?? company.payment ?? 0);
+          const singleRefundAmount = safeNumber(company.refundAmount ?? 0);
+          const netSingle = singlePaidAmount - singleRefundAmount;
+          
+          if (netSingle !== 0) {
+            const date = company.date ?? company.paymentDate ?? "";
+            out.push({
+              type: "company",
+              date,
+              parsedDate: parseDateRobust(date),
+              amount: netSingle,
+              raw: company,
+              companyData: company,
+              companyName: company.companyName ?? company.name ?? "Unknown",
+              department: Object.keys(node).find(key => node[key] === department) || "Unknown",
+              isRefund: singleRefundAmount > 0,
+              method: company.paymentMethod ?? ""
+            });
+          }
+        }
+      });
+    });
+  });
+
+  return out;
+}
+
 // Asset classification inside petty
 function isAssetish(rec) {
   if (!rec) return false;
@@ -609,7 +690,7 @@ const Card = ({ title, action, children }) => (
 
 /* ---------------------- Component ---------------------- */
 export default function ResultsGrafCard({
-  title = "Results Graphs",
+  title = "All Graphs",
   clientCollections = { active: "ClientData", exit: "ExitClients" },
   pettyCollection = "PettyCash",
   assetsCollection = "Assets",
@@ -617,11 +698,12 @@ export default function ResultsGrafCard({
   staffCollections = { active: "StaffBioData", exit: "ExitStaffs" },
   workerCollections = { active: "EmployeeBioData", exit: "ExitEmployees" },
   hospitalCollection = "HospitalData",
+  companyCollections = { active: "CompanyData", exit: "ExitCompanies" },
 }) {
   const [loading, setLoading] = useState(true);
   const [rows, setRows] = useState({ 
     client: [], petty: [], assets: [], investments: [], staff: [], worker: [], commission: [], hospitalref: [],
-    wagent: [], wagentcharges: [], cagent: [], cagentref: [] 
+    wagent: [], wagentcharges: [], cagent: [], cagentref: [], company: [] 
   });
   const [mode, setMode] = useState("monthly");
   const [activeRange, setActiveRange] = useState("ALL");
@@ -692,6 +774,17 @@ export default function ResultsGrafCard({
       // Agent Data - FIXED PATHS
       attach("AgentData/WorkerAgent", "wagentData");
       attach("AgentData/ClientAgent", "cagentData");
+
+      // Company Data - FIXED PATHS (same as CompanyPaymentCard)
+      attach("CompanyData/HomeCare/Running", "companyHomeCareRunning");
+      attach("CompanyData/HomeCare/Archive", "companyHomeCareArchive");
+      attach("CompanyData/Housekeeping/Running", "companyHousekeepingRunning");
+      attach("CompanyData/Housekeeping/Archive", "companyHousekeepingArchive");
+      // Add other departments as needed based on your COMPANY_PATHS
+
+      // For backward compatibility, also attach old paths
+      attach(companyCollections.active, "companiesActive");
+      attach(companyCollections.exit, "companiesExit");
 
       function rebuild() {
         try {
@@ -770,6 +863,17 @@ export default function ResultsGrafCard({
           const wagentPayments = wagentRows.filter(r => r.type === "wagent");
           const wagentCharges = wagentRows.filter(r => r.type === "wagentcharges");
 
+          // Company Payments
+          const companyRows = [];
+          // Extract from department paths
+          extractCompanyPayments(snapshots.companyHomeCareRunning || {}).forEach(r => companyRows.push(r));
+          extractCompanyPayments(snapshots.companyHomeCareArchive || {}).forEach(r => companyRows.push(r));
+          extractCompanyPayments(snapshots.companyHousekeepingRunning || {}).forEach(r => companyRows.push(r));
+          extractCompanyPayments(snapshots.companyHousekeepingArchive || {}).forEach(r => companyRows.push(r));
+          
+          // Also extract from old paths for backward compatibility
+          extractCompanyPayments(snapshots.companiesActive || {}).forEach(r => companyRows.push(r));
+          extractCompanyPayments(snapshots.companiesExit || {}).forEach(r => companyRows.push(r));
 
           // Sort by date desc
           const byDateDesc = (a, b) => (b.parsedDate?.getTime?.() || 0) - (a.parsedDate?.getTime?.() || 0);
@@ -785,6 +889,7 @@ export default function ResultsGrafCard({
           wagentCharges.sort(byDateDesc);
           cagentRows.sort(byDateDesc);
           cagentRefRows.sort(byDateDesc);
+          companyRows.sort(byDateDesc);
 
           if (mounted) {
             setRows({
@@ -799,7 +904,8 @@ export default function ResultsGrafCard({
               wagent: wagentPayments,
               wagentcharges: wagentCharges,
               cagent: cagentRows,
-              cagentref: cagentRefRows
+              cagentref: cagentRefRows,
+              company: companyRows
             });
             setLoading(false);
           }
@@ -830,7 +936,8 @@ export default function ResultsGrafCard({
     pettyCollection, assetsCollection, investmentsCollection, 
     staffCollections.active, staffCollections.exit, 
     workerCollections.active, workerCollections.exit, 
-    hospitalCollection
+    hospitalCollection,
+    companyCollections.active, companyCollections.exit
   ]);
 
   // Date range filter
@@ -882,6 +989,7 @@ export default function ResultsGrafCard({
     wagentcharges: { title: "Worker Agent Charges", data: toPie(filteredRows.wagentcharges, "category") },
     cagent: { title: "Client Agent Payments", data: toPie(filteredRows.cagent, "category") },
     cagentref: { title: "Client Agent Charges", data: toPie(filteredRows.cagentref, "category") },
+    company: { title: "Company Payments by Department", data: toPie(filteredRows.company, "department") },
   }), [filteredRows]);
 
   // totals
@@ -900,6 +1008,7 @@ export default function ResultsGrafCard({
       wagentcharges: sum(filteredRows.wagentcharges),
       cagent: sum(filteredRows.cagent),
       cagentref: sum(filteredRows.cagentref),
+      company: sum(filteredRows.company),
     };
   }, [filteredRows]);
 
@@ -931,6 +1040,7 @@ export default function ResultsGrafCard({
               <div>Client: {fmtINR(totals.client)}</div>
               <div>Petty: {fmtINR(totals.petty)} · Assets: {fmtINR(totals.assets)}</div>
               <div>W-Agent: {fmtINR(totals.wagent)} · C-Agent: {fmtINR(totals.cagent)}</div>
+              <div>Company: {fmtINR(totals.company)}</div>
             </div>
           </div>
         </div>
@@ -985,6 +1095,7 @@ export default function ResultsGrafCard({
                       ["wagent", "W-Agnt"],
                       ["cagent", "C-Agnt"],
                       ["cagentref", "C-Agnt Chrg"],
+                      ["company", "Company"],
                     ].map(([key, label]) => (
                       <button
                         key={key}
@@ -1080,6 +1191,7 @@ export default function ResultsGrafCard({
                         { k: "wagent", label: "W-Agnt", color: COLORS.wagent, val: totals.wagent },
                         { k: "cagent", label: "C-Agnt", color: COLORS.cagent, val: totals.cagent },
                         { k: "cagentref", label: "C-Agnt Chrg", color: COLORS.cagentref, val: totals.cagentref },
+                        { k: "company", label: "Company", color: COLORS.company, val: totals.company },
                       ].map((t) => (
                         <div
                           key={t.k}

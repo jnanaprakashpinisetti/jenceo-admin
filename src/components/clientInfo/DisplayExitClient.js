@@ -739,100 +739,10 @@ export default function DisplayExitClient() {
       <div className="row mb-4">
         <div className="col-12">
           <div className="p-3 bg-dark border border-secondary rounded-3 border-opacity-25 clientFilter">
-            <div className="row g-3 align-items-center">
-              {/* Gender */}
-              <div className="col-lg-1 col-md-3 text-center">
-                <label className="form-label text-warning small mb-2">Gender</label>
-                <div className="d-flex gap-2 justify-content-center">
-                  {["Male", "Female"].map(g => {
-                    const on = !!genderFilters[g];
-                    return (
-                      <button
-                        key={g}
-                        type="button"
-                        className={`btn ${on ? "btn-warning" : "btn-outline-warning"} btn-sm`}
-                        onClick={() => handleGenderFilterChange(g)}
-                      >
-                        {g}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-
-              {/* Skill Match Mode */}
-              <div className="col-lg-2 col-md-3 text-center">
-                <label className="form-label text-info small mb-2">Skill Match</label>
-                <div className="d-flex gap-2 justify-content-center">
-                  <button
-                    type="button"
-                    className={`btn ${skillMode === "single" ? "btn-info" : "btn-outline-info"} btn-sm`}
-                    onClick={() => setSkillMode("single")}
-                  >
-                    One Skill
-                  </button>
-                  <button
-                    type="button"
-                    className={`btn ${skillMode === "multi" ? "btn-info" : "btn-outline-info"} btn-sm`}
-                    onClick={() => setSkillMode("multi")}
-                  >
-                    Multi Skills
-                  </button>
-                </div>
-              </div>
-
-              {/* Age filter */}
-              <div className="col-lg-2 col-md-6 text-center">
-                <label className="form-label text-info small mb-1">Age (18 - 55)</label>
-                <div className="d-flex gap-2">
-                  <input
-                    type="number"
-                    min={18} max={60}
-                    className="form-control form-control-sm"
-                    placeholder="Min-18"
-                    value={ageRange.min}
-                    onChange={(e) => setAgeRange(r => ({ ...r, min: e.target.value }))}
-                    style={{ backgroundColor: '#2d3748', color: '#a0aec0' }}
-                  />
-                  <input
-                    type="number"
-                    min={18} max={55}
-                    className="form-control form-control-sm"
-                    placeholder="Max-55"
-                    value={ageRange.max}
-                    onChange={(e) => setAgeRange(r => ({ ...r, max: e.target.value }))}
-                    style={{ backgroundColor: '#2d3748', color: '#a0aec0' }}
-                  />
-                </div>
-              </div>
-
-              {/* Experience filter */}
-              <div className="col-lg-2 col-md-6 text-center">
-                <label className="form-label text-info small mb-1">Experience (Yrs)</label>
-                <div className="d-flex gap-2">
-                  <input
-                    type="number"
-                    min={0} step="0.5"
-                    className="form-control form-control-sm"
-                    placeholder="Min"
-                    value={experienceRange.min}
-                    onChange={(e) => setExperienceRange(r => ({ ...r, min: e.target.value }))}
-                    style={{ backgroundColor: '#2d3748', color: '#a0aec0' }}
-                  />
-                  <input
-                    type="number"
-                    min={0} step="0.5"
-                    className="form-control form-control-sm"
-                    placeholder="Max"
-                    value={experienceRange.max}
-                    onChange={(e) => setExperienceRange(r => ({ ...r, max: e.target.value }))}
-                    style={{ backgroundColor: '#2d3748', color: '#a0aec0' }}
-                  />
-                </div>
-              </div>
-
+            <div className="row g-3 align-items-center justify-content-center">
+              
               {/* Status filter */}
-              <div className="col-lg-2 col-md-4 text-center">
+              <div className="col-lg-3 col-md-4 text-center">
                 <label className="form-label text-info small mb-2">Status</label>
                 <div className="d-flex gap-2 justify-content-center">
                   {[
@@ -853,30 +763,7 @@ export default function DisplayExitClient() {
                 </div>
               </div>
 
-              <div className="col-lg-1 col-md-2 text-center">
-                <label className="form-label text-warning small mb-2">
-                  Other Skills
-                </label>
-                <div className="d-flex justify-content-center align-items-center gap-2 toggle-pill">
-                  <input
-                    type="checkbox"
-                    className="form-check-input"
-                    id="showJobRoles"
-                    checked={showJobRoles}
-                    onChange={(e) => {
-                      const val = e.target.checked;
-                      setShowJobRoles(val);
-                      if (!val) setSelectedRoles([]);
-                    }}
-                  />
-                  <label
-                    className="form-check-label text-white small fw-bold"
-                    htmlFor="showJobRoles"
-                  >
-                    {showJobRoles ? "ON" : "OFF"}
-                  </label>
-                </div>
-              </div>
+              
 
               {/* Reset filter */}
               <div className="col-lg-2 col-md-4 text-center">
@@ -896,49 +783,7 @@ export default function DisplayExitClient() {
         </div>
       </div>
 
-      {/* Languages & Services Row */}
-      <div className="row g-3 mb-4">
-        <div className="col-md-6">
-          <div className="p-3 bg-dark border border-secondary rounded-3 border-opacity-25 h-100">
-            <h6 className="mb-2 text-info">Languages</h6>
-            <div className="d-flex flex-wrap gap-2">
-              {LANG_OPTIONS.map(l => {
-                const on = selectedLanguages.includes(l);
-                return (
-                  <button
-                    key={l}
-                    type="button"
-                    className={`btn btn-sm ${on ? "btn-info text-dark" : "btn-outline-info"} rounded-pill`}
-                    onClick={() => setSelectedLanguages(prev => on ? prev.filter(x => x !== l) : [...prev, l])}
-                  >
-                    {l}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        </div>
-        <div className="col-md-6">
-          <div className="p-3 bg-dark border border-secondary rounded-3 border-opacity-25 h-100">
-            <h6 className="mb-2 text-warning">Services</h6>
-            <div className="d-flex flex-wrap gap-2">
-              {SERVICE_OPTIONS.map(s => {
-                const on = selectedServices.includes(s);
-                return (
-                  <button
-                    key={s}
-                    type="button"
-                    className={`btn btn-sm ${on ? "btn-warning text-black" : "btn-outline-warning"} rounded-pill`}
-                    onClick={() => setSelectedServices(prev => on ? prev.filter(x => x !== s) : [...prev, s])}
-                  >
-                    {s}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        </div>
-      </div>
+     
 
       {/* Pagination Controls */}
       <div className="row mb-4">
@@ -1301,7 +1146,7 @@ export default function DisplayExitClient() {
         <div className="modal fade show" style={{ display: 'block', backgroundColor: 'rgba(0,0,0,0.5)' }} tabIndex="-1" role="dialog" aria-modal="true">
           <div className="modal-dialog modal-dialog-centered">
             <div className="modal-content">
-              <div className="modal-header">
+              <div className="modal-header bg-warning">
                 <h5 className="modal-title">Restore Details</h5>
                 <button type="button" className="btn-close" onClick={closeActionDetails}></button>
               </div>
@@ -1318,7 +1163,6 @@ export default function DisplayExitClient() {
                       setActionForm(prev => ({ ...prev, reason: e.target.value }));
                       setReasonError(null);
                     }}
-                    style={{ backgroundColor: '#2d3748', color: 'white' }}
                   >
                     <option value="">Select Reason</option>
                     <option value="Re-open">Re-open</option>
@@ -1339,7 +1183,6 @@ export default function DisplayExitClient() {
                       setActionForm(prev => ({ ...prev, comment: e.target.value }));
                       setCommentError(null);
                     }}
-                    style={{ backgroundColor: '#2d3748', color: 'white' }}
                   />
                   {commentError && <div className="invalid-feedback" style={{ display: 'block' }}>{commentError}</div>}
                 </div>

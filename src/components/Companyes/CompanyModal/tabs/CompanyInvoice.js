@@ -1,6 +1,6 @@
 import React, { useRef, useState, useMemo, useEffect } from 'react';
-import firebaseDB from '../../../../firebase'; // Import Firebase
-import { COMPANY_PATHS } from '../../../../utils/dataPaths'; // Add this import
+import firebaseDB from '../../../../firebase';
+import { COMPANY_PATHS } from '../../../../utils/dataPaths';
 
 const CompanyInvoice = ({
     company,
@@ -17,18 +17,15 @@ const CompanyInvoice = ({
     const [selectedThankYouType, setSelectedThankYouType] = useState('default');
     const [customThankYouMessage, setCustomThankYouMessage] = useState('');
     const [invoiceHistory, setInvoiceHistory] = useState(() => {
-        // Load from localStorage to persist history
         const savedHistory = localStorage.getItem(`companyInvoiceHistory_${company?.companyId}`);
         return savedHistory ? JSON.parse(savedHistory) : [];
     });
     const [deletedInvoices, setDeletedInvoices] = useState(() => {
-        // Load deleted invoices from localStorage
         const savedDeleted = localStorage.getItem(`deletedCompanyInvoices_${company?.companyId}`);
         return savedDeleted ? JSON.parse(savedDeleted) : [];
     });
-    const [activeTab, setActiveTab] = useState('preview'); // 'preview', 'history', or 'deleted'
+    const [activeTab, setActiveTab] = useState('preview');
     const [invoiceCounter, setInvoiceCounter] = useState(() => {
-        // Load counter from localStorage
         const savedCounter = localStorage.getItem(`companyInvoiceCounter_${company?.companyId}`);
         return savedCounter ? parseInt(savedCounter) : 0;
     });
@@ -37,8 +34,8 @@ const CompanyInvoice = ({
     const [invoiceToDelete, setInvoiceToDelete] = useState(null);
     const [showRestoreConfirm, setShowRestoreConfirm] = useState(false);
     const [invoiceToRestore, setInvoiceToRestore] = useState(null);
-    const [workers, setWorkers] = useState([]); // Add state for workers
-    const [selectedWorkerId, setSelectedWorkerId] = useState(''); // Add state for selected worker
+    const [workers, setWorkers] = useState([]);
+    const [selectedWorkerId, setSelectedWorkerId] = useState('');
 
     const [invoiceData, setInvoiceData] = useState({
         serviceDate: '',
@@ -57,7 +54,7 @@ const CompanyInvoice = ({
         workerName: '',
         workerDepartment: '',
         workerPhone: '',
-        invoiceNumber: '' // Add invoiceNumber to state for consistency
+        invoiceNumber: ''
     });
 
     const [isEditingExisting, setIsEditingExisting] = useState(false);
@@ -66,16 +63,13 @@ const CompanyInvoice = ({
     const headerImage = "https://firebasestorage.googleapis.com/v0/b/jenceo-admin.firebasestorage.app/o/Shop-Images%2FJenCeo-Trades.svg?alt=media&token=da7ab6ec-826f-41b2-ba2a-0a7d0f405997";
     const defaultCompanyPhoto = "https://firebasestorage.googleapis.com/v0/b/jenceo-admin.firebasestorage.app/o/OfficeFiles%2FSample-Photo.jpg?alt=media&token=01855b47-c9c2-490e-b400-05851192dde7";
 
-    // ✅ FIX #1 — Find company key by companyId
     const findCompanyKey = async (companyId) => {
         if (!companyId) return null;
         
-        console.log("🔍 Searching for company with ID:", companyId);
         const categories = Object.keys(COMPANY_PATHS);
         
         for (const category of categories) {
             const basePath = COMPANY_PATHS[category];
-            console.log(`Checking category: ${category}, path: ${basePath}`);
             
             try {
                 const companiesRef = firebaseDB.child(basePath);
@@ -85,11 +79,9 @@ const CompanyInvoice = ({
                     .once('value');
                 
                 const data = snapshot.val();
-                console.log(`Found data for ${companyId} in ${category}:`, data);
                 
                 if (data) {
                     const key = Object.keys(data)[0];
-                    console.log(`✅ Company found! Key: ${key}, Category: ${category}, Path: ${basePath}`);
                     return { 
                         key: key, 
                         category: category,
@@ -97,16 +89,13 @@ const CompanyInvoice = ({
                     };
                 }
             } catch (error) {
-                console.error(`Error searching in ${category}:`, error);
                 continue;
             }
         }
         
-        console.warn(`❌ Company with ID ${companyId} not found in any category`);
         return null;
     };
 
-    // ✅ FIX #2 — Normalize Worker Object
     const normalizeWorker = (w = {}) => ({
         workerId: w.workerId || w.idNo || "",
         workerName: w.workerName || 
@@ -116,41 +105,25 @@ const CompanyInvoice = ({
         phone: w.workerCell1 || w.mobileNo1 || "",
     });
 
-    // ✅ FIX #3 — Load workers from correct Firebase path
     const loadWorkers = async () => {
         if (!company?.companyId) {
-            console.warn("⚠️ No company ID provided");
             return;
         }
 
         try {
-            console.log("🔄 Loading workers for company:", company.companyId);
-            
-            // Find company info first
             const companyInfo = await findCompanyKey(company.companyId);
             
             if (!companyInfo) {
-                console.warn("❌ Company not found in database");
+                setWorkers([]);
                 return;
             }
             
-            // 🔧 FIXED: Correct worker path based on dataPaths.js structure
-            // We need to search for workers in WorkerData/{category}/Running
-            const workerCategory = companyInfo.category;
-            const workerPath = `WorkerData/${workerCategory}/Running`;
+            const workersPath = `${companyInfo.path}/${companyInfo.key}/WorkerData`;
             
-            console.log(`🔍 Searching workers in path: ${workerPath}`);
-            console.log(`Company category: ${workerCategory}`);
-            
-            // Search for workers assigned to this company
-            const workersRef = firebaseDB.child(workerPath);
-            const snapshot = await workersRef
-                .orderByChild("companyId") // Workers should have companyId field
-                .equalTo(company.companyId)
-                .once('value');
+            const workersRef = firebaseDB.child(workersPath);
+            const snapshot = await workersRef.once('value');
             
             const workersData = snapshot.val();
-            console.log("📊 Raw workers data found:", workersData);
             
             if (workersData) {
                 const workersArray = Object.entries(workersData).map(([key, value]) => ({
@@ -158,26 +131,20 @@ const CompanyInvoice = ({
                     ...value
                 }));
                 
-                console.log(`✅ Found ${workersArray.length} workers:`, workersArray);
                 setWorkers(workersArray);
                 
-                // If worker is passed as prop, select it
                 if (worker?.idNo || worker?.workerId) {
                     const workerIdToMatch = worker.idNo || worker.workerId;
-                    console.log(`🔍 Looking for specific worker ID: ${workerIdToMatch}`);
-                    
                     const foundWorker = workersArray.find(w => 
                         w.idNo === workerIdToMatch || 
                         w.workerId === workerIdToMatch
                     );
                     
                     if (foundWorker) {
-                        console.log("✅ Found worker from prop:", foundWorker);
                         const normalized = normalizeWorker(foundWorker);
                         const workerId = normalized.workerId;
                         setSelectedWorkerId(workerId);
                         
-                        // Update invoiceData with normalized worker details
                         setInvoiceData(prev => ({
                             ...prev,
                             workerId: workerId,
@@ -185,21 +152,16 @@ const CompanyInvoice = ({
                             workerDepartment: normalized.department,
                             workerPhone: normalized.phone
                         }));
-                    } else {
-                        console.warn("⚠️ Worker from prop not found in loaded workers");
                     }
                 }
             } else {
-                console.log("📭 No workers found for this company");
                 setWorkers([]);
             }
         } catch (error) {
-            console.error("❌ Error loading workers:", error);
             setWorkers([]);
         }
     };
 
-    // Format worker name (kept for backward compatibility)
     const formatWorkerName = (worker) => {
         if (worker.workerName) return worker.workerName;
         if (worker.firstName || worker.lastName) {
@@ -209,7 +171,6 @@ const CompanyInvoice = ({
         return "";
     };
 
-    // Thank You Messages for different service types
     const thankYouMessages = {
         default: {
             title: "Thank You for Your Partnership!",
@@ -257,7 +218,6 @@ const CompanyInvoice = ({
         }
     };
 
-    // Determine service type from company data
     const determineServiceType = () => {
         const serviceType = company?.companyType?.toLowerCase() || '';
 
@@ -272,7 +232,6 @@ const CompanyInvoice = ({
         }
     };
 
-    // Get current thank you message based on selection
     const getCurrentThankYouMessage = () => {
         if (invoiceData.thankYouType === 'custom' && invoiceData.customThankYou) {
             return {
@@ -283,23 +242,19 @@ const CompanyInvoice = ({
         return thankYouMessages[invoiceData.thankYouType] || thankYouMessages.default;
     };
 
-    // Load workers when company changes
     useEffect(() => {
-        console.log("🔄 useEffect triggered, company:", company?.companyId);
         if (company?.companyId) {
             loadWorkers();
             
-            // Reset invoice data with company details
             setInvoiceData(prev => ({
                 ...prev,
                 invoiceAmount: company?.serviceCharges || '',
                 thankYouType: determineServiceType(),
-                invoiceNumber: '' // Reset invoice number
+                invoiceNumber: ''
             }));
         }
     }, [company]);
 
-    // Save history to localStorage whenever it changes
     useEffect(() => {
         if (company?.companyId) {
             localStorage.setItem(`companyInvoiceHistory_${company.companyId}`, JSON.stringify(invoiceHistory));
@@ -307,7 +262,6 @@ const CompanyInvoice = ({
         }
     }, [invoiceHistory, deletedInvoices, company]);
 
-    // Save counter to localStorage whenever it changes
     useEffect(() => {
         if (company?.companyId) {
             localStorage.setItem(`companyInvoiceCounter_${company.companyId}`, invoiceCounter.toString());
@@ -315,7 +269,6 @@ const CompanyInvoice = ({
     }, [invoiceCounter, company]);
 
     const handleOpenInvoice = () => {
-        console.log("📄 Opening invoice modal, company:", company);
         setShowInvoiceModal(true);
     };
 
@@ -354,7 +307,6 @@ const CompanyInvoice = ({
     const saveInvoiceToHistory = async () => {
         const totalAmount = calculateTotalAmount(invoiceData);
     
-        // Check if we're editing an existing invoice
         if (isEditingExisting && editingInvoiceId) {
             const existingInvoice = invoiceHistory.find(inv => inv.id === editingInvoiceId);
             setInvoiceHistory(prev => prev.map(invoice => {
@@ -447,7 +399,7 @@ const CompanyInvoice = ({
                 workerName: existingInvoice.data.workerName || invoiceData.workerName,
                 workerDepartment: existingInvoice.data.workerDepartment || invoiceData.workerDepartment,
                 workerPhone: existingInvoice.data.workerPhone || invoiceData.workerPhone,
-                invoiceNumber: existingInvoice.invoiceNumber // Preserve invoice number when editing
+                invoiceNumber: existingInvoice.invoiceNumber
             });
         } else {
             setIsEditingExisting(false);
@@ -460,7 +412,7 @@ const CompanyInvoice = ({
                 workerName: invoiceData.workerName,
                 workerDepartment: invoiceData.workerDepartment,
                 workerPhone: invoiceData.workerPhone,
-                invoiceNumber: '' // Clear invoice number for new invoice
+                invoiceNumber: ''
             });
         }
 
@@ -508,7 +460,6 @@ const CompanyInvoice = ({
                 lastDate.setDate(lastDate.getDate() + 29);
                 nextPaymentDate = lastDate;
             } catch (e) {
-                console.warn("Invalid last payment date:", lastPayment.date);
             }
         } else if (company?.contractStartDate) {
             try {
@@ -516,7 +467,6 @@ const CompanyInvoice = ({
                 startDate.setDate(startDate.getDate() + 29);
                 nextPaymentDate = startDate;
             } catch (e) {
-                console.warn("Invalid contract start date:", company.contractStartDate);
             }
         }
 
@@ -536,22 +486,18 @@ const CompanyInvoice = ({
 
     const paymentDetails = getPaymentDetails();
 
-    // Keep invoice number consistent when editing
     const generatedInvoiceNumber = useMemo(() => {
         if (billNumber) return billNumber;
         
-        // When editing existing invoice, use its original invoice number
         if (editingInvoiceId) {
             const existingInvoice = invoiceHistory.find(inv => inv.id === editingInvoiceId);
             if (existingInvoice) return existingInvoice.invoiceNumber;
         }
         
-        // If we have an existing invoice in invoiceData (draft), use its number
         if (invoiceData.invoiceNumber && invoiceData.invoiceNumber.trim() !== '') {
             return invoiceData.invoiceNumber;
         }
         
-        // Generate new invoice number for new invoices
         const now = new Date();
         const year = now.getFullYear().toString().slice(-2);
         const month = now.toLocaleString('en-US', { month: 'short' });
@@ -602,7 +548,6 @@ const CompanyInvoice = ({
     };
 
     const buildCompanyDetailsTable = () => {
-        console.log("🏢 Building company details table for:", company);
         const safe = (v, d = "—") => (v == null || v === "" ? d : String(v));
         const formatINR = (value) => {
             const n = Number(value || 0);
@@ -614,7 +559,6 @@ const CompanyInvoice = ({
             }
         };
 
-        // ✅ FIX #4 — Company field fallbacks
         const companyPhone = safe(
             company?.officialPhone || 
             company?.primaryMobile || 
@@ -652,7 +596,6 @@ const CompanyInvoice = ({
                 <h4 style="background: linear-gradient(135deg, #02acf2 0%, #0266f2 100%); color: white; padding: 12px 15px; margin: 0; font-size: 16px; border-radius: 5px 5px 0 0;">Company Details</h4>
                 <div style="background: #f8f9fa; border: 1px solid #dee2e6; border-top: none; border-radius: 0 0 5px 5px; padding: 15px;">
                     
-                    <!-- Basic Information Section -->
                     <div class="section-header" style="background: #e9ecef; padding: 8px 12px; margin: -15px -15px 12px -15px; font-weight: bold; color: #0266f2; border-bottom: 1px solid #dee2e6;">
                         Basic Information
                     </div>
@@ -660,32 +603,31 @@ const CompanyInvoice = ({
                     <div class="grid-layout" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 12px; margin-bottom: 20px;">
                         <div class="info-item" style="background: white; padding: 10px; border-radius: 6px; border: 1px solid #e5e5e5;">
                             <div style="font-size: 11px; color: #666; margin-bottom: 4px;">Company ID</div>
-                            <div style="font-weight: bold; color: #333;">${safe(company?.companyId)}</div>
+                            <div style="font-size: 12px; font-weight: bold; color: #333;">${safe(company?.companyId)}</div>
                         </div>
                         <div class="info-item" style="background: white; padding: 10px; border-radius: 6px; border: 1px solid #e5e5e5;">
                             <div style="font-size: 11px; color: #666; margin-bottom: 4px;">Company Name</div>
-                            <div style="font-weight: bold; color: #333;">${safe(company?.companyName)}</div>
+                            <div style="font-size: 12px; font-weight: bold; color: #333;">${safe(company?.companyName)}</div>
                         </div>
                         <div class="info-item" style="background: white; padding: 10px; border-radius: 6px; border: 1px solid #e5e5e5;">
                             <div style="font-size: 11px; color: #666; margin-bottom: 4px;">Company Type</div>
-                            <div style="font-weight: bold; color: #333;">${safe(company?.companyType)}</div>
+                            <div style="font-size: 12px; font-weight: bold; color: #333;">${safe(company?.companyType)}</div>
                         </div>
 
                         <div class="info-item" style="background: white; padding: 10px; border-radius: 6px; border: 1px solid #e5e5e5;">
                             <div style="font-size: 11px; color: #666; margin-bottom: 4px;">Official Phone</div>
-                            <div style="font-weight: bold; color: #333;">${companyPhone}</div>
+                            <div style="font-size: 12px; font-weight: bold; color: #333;">${companyPhone}</div>
                         </div>
                         <div class="info-item" style="background: white; padding: 10px; border-radius: 6px; border: 1px solid #e5e5e5;">
                             <div style="font-size: 11px; color: #666; margin-bottom: 4px;">Official Email</div>
-                            <div style="font-weight: bold; color: #333;">${safe(company?.officialEmail)}</div>
+                            <div style="font-size: 12px; font-weight: bold; color: #333;">${safe(company?.officialEmail)}</div>
                         </div>
                         <div class="info-item" style="background: white; padding: 10px; border-radius: 6px; border: 1px solid #e5e5e5;">
                             <div style="font-size: 11px; color: #666; margin-bottom: 4px;">Website</div>
-                            <div style="font-weight: bold; color: #333;">${safe(company?.websiteUrl)}</div>
+                            <div style="font-size: 12px; font-weight: bold; color: #333;">${safe(company?.websiteUrl)}</div>
                         </div>
                     </div>
                     
-                    <!-- Address & Contact Details Section -->
                     <div class="section-header" style="background: #e9ecef; padding: 8px 12px; margin: 0 -15px 12px -15px; font-weight: bold; color: #0266f2; border-bottom: 1px solid #dee2e6;">
                         Address & Contact Details
                     </div>
@@ -693,25 +635,25 @@ const CompanyInvoice = ({
                     <div class="grid-layout" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 12px;">
                         <div class="info-item" style="background: white; padding: 10px; border-radius: 6px; border: 1px solid #e5e5e5;">
                             <div style="font-size: 11px; color: #666; margin-bottom: 4px;">Registered Address</div>
-                            <div style="font-weight: bold; color: #333;">
+                            <div style="font-size: 12px; font-weight: bold; color: #333;">
                                 ${safe(company?.registeredBuilding)} ${safe(company?.registeredStreet)}, 
                                 ${safe(company?.registeredVillage)}, ${companyLocation}
                             </div>
                         </div>
                         <div class="info-item" style="background: white; padding: 10px; border-radius: 6px; border: 1px solid #e5e5e5; background: linear-gradient(135deg, #f0f8ff 0%, #e6f2ff 100%);">
                             <div style="font-size: 11px; color: #666; margin-bottom: 4px;">Primary Contact</div>
-                            <div style="font-weight: bold; color: #0266f2; font-size: 14px;">${primaryContact}</div>
+                            <div style="font-size: 12px; font-weight: bold; color: #0266f2; font-size: 14px;">${primaryContact}</div>
                             <div style="font-size: 11px; color: #666;">${primaryMobile}</div>
                         </div>
                         <div class="info-item" style="background: white; padding: 10px; border-radius: 6px; border: 1px solid #e5e5e5;">
                             <div style="font-size: 11px; color: #666; margin-bottom: 4px;">Finance Contact</div>
-                            <div style="font-weight: bold; color: #333;">${financeContact}</div>
+                            <div style="font-size: 12px; font-weight: bold; color: #333;">${financeContact}</div>
                             <div style="font-size: 11px; color: #666;">${financeMobile}</div>
                         </div>
                         ${invoiceData.workerName ? `
                         <div class="info-item" style="background: white; padding: 10px; border-radius: 6px; border: 1px solid #e5e5e5; background: linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 100%);">
                             <div style="font-size: 11px; color: #666; margin-bottom: 4px;">Assigned Worker</div>
-                            <div style="font-weight: bold; color: #2e7d32;">${safe(invoiceData.workerName)}</div>
+                            <div style="font-size: 12px; font-weight: bold; color: #2e7d32;">${safe(invoiceData.workerName)}</div>
                             <div style="font-size: 11px; color: #666;">
                                 ID: ${safe(invoiceData.workerId)} | 
                                 Dept: ${safe(invoiceData.workerDepartment)} |
@@ -765,19 +707,11 @@ const CompanyInvoice = ({
         }
     };
 
-    // ✅ FIX #5 — Defensive Invoice Rendering
     const buildInvoiceHTML = () => {
-        console.log("📄 Building invoice HTML with data:", {
-            company: company?.companyName,
-            workers: workers.length,
-            invoiceData: invoiceData
-        });
-        
         const currentDate = formatDate(new Date());
         const companyName = company?.companyName || 'Company';
         const companyId = company?.companyId || 'N/A';
         
-        // ✅ Use safe fallbacks for company fields
         const companyLocation = company?.registeredDistrict || 
                                company?.registeredVillage || 
                                company?.registeredState || 
@@ -827,66 +761,60 @@ const CompanyInvoice = ({
             </div>
         `;
 
-        // Get company logo or use default
         const companyLogo = (company?.companyLogo && company.companyLogo.trim() !== '') 
             ? company.companyLogo 
             : defaultCompanyPhoto;
 
-        // ✅ FIX #6 — Worker photo and details
         const workerDetailsHTML = invoiceData.workerName ? `
-            <div class="worker-details">
-                <div class="worker-details-header">
-                    <i class="bi bi-person-circle" style="margin-right: 5px;"></i>
-                    Assigned Worker Details
-                </div>
-                <div class="worker-details-grid">
-                    <!-- Worker Photo and Name -->
-                    <div class="worker-item" style="grid-column: span 2; text-align: center;">
-                        ${(() => {
-                            // Try to get worker photo from workers list
-                            const foundWorker = workers.find(w => 
-                                w.workerId === invoiceData.workerId || 
-                                w.idNo === invoiceData.workerId
-                            );
-                            const workerPhoto = foundWorker?.profilePhoto || foundWorker?.photo || '';
-                            
-                            if (workerPhoto && workerPhoto.trim() !== '') {
-                                return `
-                                    <img src="${workerPhoto}" alt="${invoiceData.workerName}" 
-                                         style="width: 80px; height: 80px; object-fit: cover; border-radius: 50%; border: 3px solid #2e7d32; margin-bottom: 8px;">
-                                    <div style="font-weight: bold; color: #2e7d32; font-size: 14px;">${invoiceData.workerName}</div>
-                                `;
-                            } else {
-                                return `
-                                    <div style="width: 80px; height: 80px; background: #e8f5e9; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 8px auto; border: 3px solid #c8e6c9;">
-                                        <i class="bi bi-person" style="font-size: 32px; color: #2e7d32;"></i>
+            <div class="sec">
+                <div class="sec-title"><h3><i class="bi bi-person-badge me-2"></i>Assigned Worker Details</h3></div>
+                <div class="sec-body">
+                    <div class="worker-details-card" style="background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%); border-radius: 8px; padding: 15px; border-left: 4px solid #0266f2;">
+                        <div class="row align-items-center">
+                            <div class="col-md-2 text-center">
+                                ${(() => {
+                                    const foundWorker = workers.find(w => 
+                                        w.workerId === invoiceData.workerId || 
+                                        w.idNo === invoiceData.workerId
+                                    );
+                                    const workerPhoto = foundWorker?.profilePhoto || foundWorker?.photo || '';
+                                    
+                                    if (workerPhoto && workerPhoto.trim() !== '') {
+                                        return `
+                                            <img src="${workerPhoto}" alt="${invoiceData.workerName}" 
+                                                 style="width: 80px; height: 80px; object-fit: cover; border-radius: 50%; border: 3px solid #0266f2;">
+                                        `;
+                                    } else {
+                                        return `
+                                            <div style="width: 80px; height: 80px; background: #0266f2; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto;">
+                                                <i class="bi bi-person" style="font-size: 32px; color: white;"></i>
+                                            </div>
+                                        `;
+                                    }
+                                })()}
+                            </div>
+                            <div class="col-md-10">
+                                <div class="row">
+                                    <div class="col-md-3 mb-2">
+                                        <div style="font-size: 12px; color: #666;">Employee ID</div>
+                                        <div style="font-weight: bold; font-size: 14px;">${invoiceData.workerId || 'N/A'}</div>
                                     </div>
-                                    <div style="font-weight: bold; color: #2e7d32; font-size: 14px;">${invoiceData.workerName}</div>
-                                `;
-                            }
-                        })()}
+                                    <div class="col-md-3 mb-2">
+                                        <div style="font-size: 12px; color: #666;">Employee Name</div>
+                                        <div style="font-weight: bold; font-size: 14px;">${invoiceData.workerName || 'N/A'}</div>
+                                    </div>
+                                    <div class="col-md-3 mb-2">
+                                        <div style="font-size: 12px; color: #666;">Department</div>
+                                        <div style="font-weight: bold; font-size: 14px;">${invoiceData.workerDepartment || 'N/A'}</div>
+                                    </div>
+                                    <div class="col-md-3 mb-2">
+                                        <div style="font-size: 12px; color: #666;">Contact No</div>
+                                        <div style="font-weight: bold; font-size: 14px;">${invoiceData.workerPhone || 'N/A'}</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
-                    
-                    ${invoiceData.workerId ? `
-                    <div class="worker-item">
-                        <div class="worker-label">ID Number</div>
-                        <div class="worker-value">${invoiceData.workerId}</div>
-                    </div>
-                    ` : ''}
-                    
-                    ${invoiceData.workerDepartment ? `
-                    <div class="worker-item">
-                        <div class="worker-label">Department</div>
-                        <div class="worker-value">${invoiceData.workerDepartment}</div>
-                    </div>
-                    ` : ''}
-                    
-                    ${invoiceData.workerPhone ? `
-                    <div class="worker-item">
-                        <div class="worker-label">Contact Number</div>
-                        <div class="worker-value">${invoiceData.workerPhone}</div>
-                    </div>
-                    ` : ''}
                 </div>
             </div>
         ` : '';
@@ -1034,7 +962,6 @@ const CompanyInvoice = ({
             color: #555
         }
         
-        /* Total amount section */
         .total-amount-section {
             margin-top: 15px;
             padding: 15px;
@@ -1073,50 +1000,6 @@ const CompanyInvoice = ({
             color: #ff6b6b;
         }
         
-        /* Worker details section */
-        .worker-details {
-            background: linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 100%);
-            border: 1px solid #c5e1a5;
-            border-radius: 8px;
-            padding: 12px;
-            margin-bottom: 15px;
-        }
-        
-        .worker-details-header {
-            font-weight: bold; 
-            color: #2e7d32; 
-            margin-bottom: 10px; 
-            font-size: 13px;
-            display: flex;
-            align-items: center;
-        }
-        
-        .worker-details-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-            gap: 10px;
-        }
-        
-        .worker-item {
-            background: white;
-            padding: 8px;
-            border-radius: 6px;
-            border: 1px solid #e5e5e5;
-        }
-        
-        .worker-label {
-            font-size: 10px;
-            color: #666;
-            margin-bottom: 2px;
-        }
-        
-        .worker-value {
-            font-weight: bold;
-            font-size: 12px;
-            color: #2e7d32;
-        }
-        
-        /* Save button styles */
         .save-section {
             margin: 20px 0;
             text-align: center;
@@ -1161,7 +1044,6 @@ const CompanyInvoice = ({
             color: #155724;
         }
         
-        /* Thank you message type indicator */
         .thank-you-type-indicator {
             display: inline-block;
             padding: 2px 8px;
@@ -1175,6 +1057,7 @@ const CompanyInvoice = ({
         .type-homeCare {
             background: #d4edda;
             color: #155724;
+            max-width:max-content;
         }
         
         .type-housekeeping {
@@ -1197,7 +1080,6 @@ const CompanyInvoice = ({
             color: #383d41;
         }
         
-        /* Mobile Responsive */
         @media only screen and (max-width: 767px) {
             .page { padding: 10px; }
             .header { 
@@ -1217,7 +1099,6 @@ const CompanyInvoice = ({
             }
             .payment-summary { grid-template-columns: 1fr; }
             .custom-invoice-grid { grid-template-columns: 1fr; }
-            .worker-details-grid { grid-template-columns: 1fr; }
             .meta div { margin: 4px 0; }
             .sec { margin-top: 10px; }
             .sec-body { padding: 10px; }
@@ -1244,9 +1125,6 @@ const CompanyInvoice = ({
                 height: 70px; 
             }
             .custom-invoice-item {
-                padding: 6px;
-            }
-            .worker-item {
                 padding: 6px;
             }
             .thank-you {
@@ -1290,6 +1168,8 @@ const CompanyInvoice = ({
     
     ${buildCompanyDetailsTable()}
     
+    ${workerDetailsHTML}
+    
     <div class="sec">
         <div class="sec-title"><h3>Payment Summary</h3></div>
         <div class="sec-body">
@@ -1308,9 +1188,6 @@ const CompanyInvoice = ({
     <div class="sec">
         <div class="sec-title"><h3>Current Invoice Details <strong>from ${serviceDate} to ${autoFillDate}</strong></h3></div>
         <div class="sec-body">
-            <!-- Worker Details Section -->
-            ${workerDetailsHTML}
-            
             <div class="custom-invoice-section">
                 <div class="custom-invoice-grid">
                     <div class="custom-invoice-item">
@@ -1534,7 +1411,6 @@ const CompanyInvoice = ({
         setInvoiceToRestore(null);
     };
 
-    // Thank You Message Form Component
     const ThankYouMessageForm = ({ onClose }) => {
         const [tempThankYouType, setTempThankYouType] = useState(invoiceData.thankYouType || 'default');
         const [tempCustomMessage, setTempCustomMessage] = useState(invoiceData.customThankYou || '');
@@ -1761,7 +1637,6 @@ const CompanyInvoice = ({
         );
     };
 
-    // Custom Invoice Form Component - FIXED VERSION
     const CustomInvoiceForm = ({ invoiceData, onApply, onClose }) => {
         const [formData, setFormData] = useState(invoiceData);
         const [existingInvoice, setExistingInvoice] = useState(null);
@@ -1783,7 +1658,6 @@ const CompanyInvoice = ({
             setSearchValue(value);
             
             if (!value.trim()) {
-                // Clear worker details if search is empty
                 setFormData(prev => ({
                     ...prev,
                     workerId: '',
@@ -1805,7 +1679,7 @@ const CompanyInvoice = ({
                     );
                     
                     if (foundWorker) {
-                        const normalized = normalizeWorker(foundWorker); // ✅ Use normalizeWorker
+                        const normalized = normalizeWorker(foundWorker);
                         
                         setFormData(prev => ({
                             ...prev,
@@ -1822,7 +1696,7 @@ const CompanyInvoice = ({
         };
 
         const handleWorkerSelect = (workerItem) => {
-            const normalized = normalizeWorker(workerItem); // ✅ Use normalizeWorker
+            const normalized = normalizeWorker(workerItem);
             
             setFormData(prev => ({
                 ...prev,
@@ -1858,7 +1732,6 @@ const CompanyInvoice = ({
                 customThankYou: existing ? (existing.data.customThankYou || formData.customThankYou) : formData.customThankYou,
             };
         
-            // Preserve worker details if they exist in existing invoice
             if (existing && existing.data.workerId) {
                 updatedData.workerId = existing.data.workerId || formData.workerId;
                 updatedData.workerName = existing.data.workerName || formData.workerName;
@@ -1898,7 +1771,6 @@ const CompanyInvoice = ({
             return '';
         };
 
-        // Filter workers based on search
         const filteredWorkers = searchValue ? workers.filter(w => 
             (w.idNo && w.idNo.toLowerCase().includes(searchValue.toLowerCase())) ||
             (w.workerId && w.workerId.toLowerCase().includes(searchValue.toLowerCase())) ||
@@ -1934,11 +1806,10 @@ const CompanyInvoice = ({
                             )}
 
                             <div className="row g-3">
-                                {/* Worker Search Section - FIXED VERSION */}
                                 <div className="col-md-12">
                                     <div className="card mb-3">
                                         <div className="card-header bg-light">
-                                            <strong><i className="bi bi-person-badge me-2"></i>Worker Details</strong>
+                                            <strong><i className="bi bi-person-badge me-2"></i>Select Assigned Worker</strong>
                                         </div>
                                         <div className="card-body">
                                             <div className="row g-3">
@@ -1951,7 +1822,7 @@ const CompanyInvoice = ({
                                                             value={searchValue}
                                                             onChange={handleSearchChange}
                                                             onKeyPress={handleSearchKeyPress}
-                                                            placeholder="Enter Worker ID or Name, then press Enter..."
+                                                            placeholder="Search by ID or Name..."
                                                         />
                                                         <button
                                                             className="btn btn-outline-secondary"
@@ -1971,10 +1842,9 @@ const CompanyInvoice = ({
                                                         </button>
                                                     </div>
                                                     
-                                                    {/* Suggestions dropdown */}
                                                     {searchValue && filteredWorkers.length > 0 && (
                                                         <div className="mt-2">
-                                                            <small className="text-muted">Suggestions:</small>
+                                                            <small className="text-muted">Available Workers:</small>
                                                             <div className="list-group mt-1" style={{ maxHeight: '150px', overflowY: 'auto' }}>
                                                                 {filteredWorkers.map((workerItem) => (
                                                                     <button
@@ -1987,8 +1857,8 @@ const CompanyInvoice = ({
                                                                             <div>
                                                                                 <strong>{formatWorkerName(workerItem)}</strong>
                                                                                 <small className="d-block text-muted">
-                                                                                    ID: {workerItem.idNo || workerItem.workerId} | 
-                                                                                    Dept: {workerItem.department || 'No Dept'}
+                                                                                    ID: {workerItem.workerId || workerItem.idNo || 'N/A'} | 
+                                                                                    Dept: {workerItem.department || 'N/A'}
                                                                                 </small>
                                                                             </div>
                                                                             <i className="bi bi-chevron-right"></i>
@@ -1998,63 +1868,44 @@ const CompanyInvoice = ({
                                                             </div>
                                                         </div>
                                                     )}
-                                                    
-                                                    <small className="form-text text-muted">
-                                                        Enter Worker ID or Name, then press Enter or click a suggestion.
-                                                    </small>
                                                 </div>
                                                 
-                                                {/* Worker details display - Auto-filled fields */}
                                                 <div className="col-md-6">
                                                     <div className="card bg-light">
                                                         <div className="card-body">
                                                             <h6 className="card-title">
                                                                 <i className="bi bi-person-check me-2"></i>
-                                                                Selected Worker Details
+                                                                Selected Worker
                                                             </h6>
                                                             {formData.workerName ? (
                                                                 <div className="row g-2">
                                                                     <div className="col-12">
-                                                                        <label className="form-label"><strong>Worker Name</strong></label>
-                                                                        <input
-                                                                            type="text"
-                                                                            className="form-control bg-white"
-                                                                            value={formData.workerName || ''}
-                                                                            readOnly
-                                                                        />
+                                                                        <div className="d-flex align-items-center mb-2">
+                                                                            <div className="me-2">
+                                                                                <i className="bi bi-person-circle" style={{ fontSize: '24px', color: '#0266f2' }}></i>
+                                                                            </div>
+                                                                            <div>
+                                                                                <strong>{formData.workerName}</strong>
+                                                                            </div>
+                                                                        </div>
                                                                     </div>
                                                                     <div className="col-md-6">
-                                                                        <label className="form-label"><strong>Worker ID</strong></label>
-                                                                        <input
-                                                                            type="text"
-                                                                            className="form-control bg-white"
-                                                                            value={formData.workerId || ''}
-                                                                            readOnly
-                                                                        />
+                                                                        <small className="text-muted d-block">Worker ID</small>
+                                                                        <div className="fw-bold">{formData.workerId || 'N/A'}</div>
                                                                     </div>
                                                                     <div className="col-md-6">
-                                                                        <label className="form-label"><strong>Department</strong></label>
-                                                                            <input
-                                                                                type="text"
-                                                                                className="form-control bg-white"
-                                                                                value={formData.workerDepartment || ''}
-                                                                                readOnly
-                                                                            />
+                                                                        <small className="text-muted d-block">Department</small>
+                                                                        <div className="fw-bold">{formData.workerDepartment || 'N/A'}</div>
                                                                     </div>
                                                                     <div className="col-12">
-                                                                        <label className="form-label"><strong>Contact Number</strong></label>
-                                                                        <input
-                                                                            type="text"
-                                                                            className="form-control bg-white"
-                                                                            value={formData.workerPhone || ''}
-                                                                            readOnly
-                                                                        />
+                                                                        <small className="text-muted d-block">Contact Number</small>
+                                                                        <div className="fw-bold">{formData.workerPhone || 'N/A'}</div>
                                                                     </div>
                                                                 </div>
                                                             ) : (
-                                                                <div className="text-center  text-warning py-3">
-                                                                    <i className="bi bi-person-x display-6"></i>
-                                                                    <p className="mt-2 ">No worker selected. Search for a worker above.</p>
+                                                                <div className="text-center py-3">
+                                                                    <i className="bi bi-person-x display-6 text-muted"></i>
+                                                                    <p className="mt-2 small text-muted">No worker selected</p>
                                                                 </div>
                                                             )}
                                                         </div>
@@ -2213,7 +2064,6 @@ const CompanyInvoice = ({
         );
     };
 
-    // Invoice History Table Component
     const InvoiceHistoryTable = () => (
         <div className="invoice-history-table p-3">
             <div className="table-responsive" style={{ maxHeight: '500px', overflowY: 'auto' }}>
@@ -2320,7 +2170,6 @@ const CompanyInvoice = ({
             </div>
         );
 
-        // Deleted Invoices Table Component
         const DeletedInvoicesTable = () => (
             <div className="deleted-invoices-table p-3">
                 <div className="alert alert-warning mb-3">
@@ -2654,7 +2503,6 @@ const CompanyInvoice = ({
                         </div>
                     </div>
 
-                    {/* Tabs for Preview, History, and Deleted */}
                     <div className="border-bottom">
                         <ul className="nav nav-tabs">
                             <li className="nav-item">

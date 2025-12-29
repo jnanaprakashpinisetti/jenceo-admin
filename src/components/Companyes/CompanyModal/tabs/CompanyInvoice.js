@@ -1114,7 +1114,7 @@ const CompanyInvoice = ({
             .total-amount-grid { grid-template-columns: 1fr; }
             .thank-you-type-indicator {
                 display: block;
-                margin: 5px 0 0 0;
+                margin: 5px auto 0 auto  !important;
             }
         }
         

@@ -3,6 +3,7 @@ import React from 'react'
 import InvestmentCard from '../components/DashBoard/InvestmentCard';
 import WorkerSalaryCard from '../components/DashBoard/WorkerSalaryCard';
 import ClientPaymentCard from '../components/DashBoard/ClientPaymentCard';
+import CompanyPaymentCard from '../components/DashBoard/CompanyPaymentCard';
 import PettyCashCard from '../components/DashBoard/PettyCashCard';
 import StaffSalaryCard from '../components/DashBoard/StaffSalaryCard';
 import AssetsCard from '../components/DashBoard/AssetsCard';
@@ -49,6 +50,9 @@ export default function Dashboard() {
           </div>
           <div className="col-md-4">
             <EnquiryCard />
+          </div>
+          <div className="col-md-4">
+            <CompanyPaymentCard />
           </div>
           <div className="col-md-4">
             <LoginTrackerCard />

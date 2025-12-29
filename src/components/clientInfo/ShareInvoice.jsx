@@ -831,7 +831,7 @@ const ShareInvoice = ({
         
         .header-img{width:100%;max-height:100px;object-fit:contain;margin-bottom:6px}
         .photo-box{display:block;align-items:center;text-align:center}
-        .photo-box .rating{background: #f5f5f5; padding: 3px; border-radius: 5px; font-size:12px}
+        .photo-box .rating{ font-size:12px}
         .photo-box img{width:100px;height:100px;object-fit:cover;border-radius:6px;border:1px solid #ccc}
         
         .payment-summary {

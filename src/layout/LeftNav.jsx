@@ -578,7 +578,7 @@ export default function LeftNav() {
                     {canCompanyes && (
                       <li className="nav-item">
                         <NavLink to="Companyes" className="nav-link" title="Companyes" onClick={onNavClick}>
-                          <img src={ClientExitIcon} alt="" /> <span className="ms-1">Companyes</span>
+                          <img src={ClientExitIcon} alt="" /> <span className="ms-1">Company Data</span>
                         </NavLink>
                       </li>
                     )}

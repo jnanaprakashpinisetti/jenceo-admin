@@ -13,6 +13,7 @@ import DocumentsTab from "./tabs/DocumentsTab";
 import RatingApprovalTab from "./tabs/RatingApprovalTab";
 import AuditLogsTab from "./tabs/AuditLogsTab";
 import WorkerTab from "./tabs/WorkerTab";
+import CompanyInvoice from "./tabs/CompanyInvoice";
 
 // Import utility functions
 import {
@@ -506,6 +507,7 @@ const CompanyModal = ({
                   ["rating", "Rating & Approval"],
                   ["audit", "Audit Logs"],
                   ["worker", "Worker Info"],
+                  ["invoice", "Invoice"],
                 ].map(([key, label]) => (
                   <li key={key} className="nav-item" role="presentation">
                     <button className={`nav-link ${activeTab === key ? "active" : ""}`} onClick={() => setActiveTab(key)}>
@@ -598,6 +600,12 @@ const CompanyModal = ({
                     setExpandedLogIndex={setExpandedLogIndex}
                     formatDDMMYY={formatDDMMYY}
                     formatTime12h={formatTime12h}
+                  />
+                )}
+                {activeTab === "invoice" && (
+                  <CompanyInvoice
+                  company={company}
+                    
                   />
                 )}
               </div>

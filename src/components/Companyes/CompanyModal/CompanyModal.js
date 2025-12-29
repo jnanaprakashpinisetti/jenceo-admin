@@ -14,6 +14,7 @@ import RatingApprovalTab from "./tabs/RatingApprovalTab";
 import AuditLogsTab from "./tabs/AuditLogsTab";
 import WorkerTab from "./tabs/WorkerTab";
 import CompanyInvoice from "./tabs/CompanyInvoice";
+import PaymentTab from "./tabs/PaymentTab";
 
 // Import utility functions
 import {
@@ -161,6 +162,9 @@ const getInitialCompanyFormData = () => ({
   updatedByName: "",
   updatedAt: "",
   
+  // Payment data
+  payments: [],
+  
   // Audit logs
   fullAuditLogs: [],
 });
@@ -195,13 +199,12 @@ const CompanyModal = ({
   const [showRemovalModal, setShowRemovalModal] = useState(false);
   const [removalForm, setRemovalForm] = useState({ reason: "", comment: "" });
   const [removalErrors, setRemovalErrors] = useState({});
+  const [bulkReminderDate, setBulkReminderDate] = useState("");
 
   // Save success state
   const [showSaveSuccess, setShowSaveSuccess] = useState(false);
 
   const { user: authUser } = useAuth?.() || {};
-
-  
 
   useEffect(() => {
     const ref = firebaseDB.child("Users");
@@ -223,6 +226,8 @@ const CompanyModal = ({
     const snapshot = {
       ...company,
       fullAuditLogs: fullLogs || [],
+      // Ensure payments array exists
+      payments: company.payments || [],
     };
 
     setFormData(snapshot);
@@ -508,6 +513,7 @@ const CompanyModal = ({
                   ["audit", "Audit Logs"],
                   ["worker", "Worker Info"],
                   ["invoice", "Invoice"],
+                  ["payment", "Payment Info"],
                 ].map(([key, label]) => (
                   <li key={key} className="nav-item" role="presentation">
                     <button className={`nav-link ${activeTab === key ? "active" : ""}`} onClick={() => setActiveTab(key)}>
@@ -590,6 +596,21 @@ const CompanyModal = ({
                 {activeTab === "worker" && (
                   <WorkerTab
                   companyData={formData}
+                  />
+                )}
+                {activeTab === "payment" && (
+                  <PaymentTab
+                    formData={formData}
+                    editMode={editMode}
+                    setFormData={setFormData}
+                    markDirty={markDirty}
+                    usersMap={usersMap}
+                    effectiveUserName={effectiveUserName}
+                    formatDDMMYY={formatDDMMYY}
+                    formatTime12h={formatTime12h}
+                    formatINR={formatINR}
+                    bulkReminderDate={bulkReminderDate}
+                    setBulkReminderDate={setBulkReminderDate}
                   />
                 )}
 

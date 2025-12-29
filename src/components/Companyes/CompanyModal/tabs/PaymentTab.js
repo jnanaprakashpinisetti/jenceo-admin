@@ -350,7 +350,7 @@ const PaymentTab = ({
               </button>
 
               <div className="d-flex align-items-center gap-2">
-                <span className="text-muted">Set Reminder:</span>
+                <span className="small-text">Set Reminder:</span>
                 <input
                   type="date"
                   className="form-control form-control-sm"
@@ -420,9 +420,9 @@ const PaymentTab = ({
         <div className="card-body">
           {payments.length === 0 ? (
             <div className="text-center py-5">
-              <i className="bi bi-wallet2 text-muted" style={{ fontSize: '3rem' }}></i>
-              <h5 className="mt-3 text-muted">No Payments Yet</h5>
-              <p className="text-muted">Start by adding your first payment</p>
+              <i className="bi bi-wallet2 small-text" style={{ fontSize: '3rem' }}></i>
+              <h5 className="mt-3 small-text">No Payments Yet</h5>
+              <p className="small-text">Start by adding your first payment</p>
               {editMode && (
                 <button
                   className="btn btn-primary mt-2"
@@ -481,7 +481,7 @@ const PaymentTab = ({
                           <div className="row g-2 mb-3">
                             {p.jenceoInvoiceNo && (
                               <div className="col-6">
-                                <small className="text-muted d-block">JenCeo Invoice</small>
+                                <small className="small-text d-block ">JenCeo Invoice</small>
                                 <div className="fw-semibold text-primary">
                                   {p.jenceoInvoiceNo}
                                 </div>
@@ -489,7 +489,7 @@ const PaymentTab = ({
                             )}
                             {p.companyInvoiceNo && (
                               <div className="col-6">
-                                <small className="text-muted d-block">Company Invoice</small>
+                                <small className="small-text d-block ">Company Invoice</small>
                                 <div className="fw-semibold text-info">
                                   {p.companyInvoiceNo}
                                 </div>
@@ -503,7 +503,7 @@ const PaymentTab = ({
                           <div className="row g-2 mb-3">
                             {p.employeeId && (
                               <div className="col-6">
-                                <small className="text-muted d-block">Employee ID</small>
+                                <small className="small-text d-block ">Employee ID</small>
                                 <div className="fw-semibold">
                                   {p.employeeId}
                                 </div>
@@ -511,7 +511,7 @@ const PaymentTab = ({
                             )}
                             {p.employeeName && (
                               <div className="col-6">
-                                <small className="text-muted d-block">Employee Name</small>
+                                <small className="small-text d-block ">Employee Name</small>
                                 <div className="fw-semibold">
                                   {p.employeeName}
                                 </div>
@@ -522,13 +522,13 @@ const PaymentTab = ({
 
                         <div className="row g-2 mb-3">
                           <div className="col-6">
-                            <small className="text-muted d-block">Method</small>
+                            <small className="small-text d-block ">Method</small>
                             <span className={`badge ${p.paymentMethod === 'online' ? 'bg-primary' : p.paymentMethod === 'check' ? 'bg-info' : 'bg-success'}`}>
                               {p.paymentMethod || "Cash"}
                             </span>
                           </div>
                           <div className="col-6">
-                            <small className="text-muted d-block">Date</small>
+                            <small className="small-text d-block ">Date</small>
                             <div className="fw-semibold">
                               {p.date ? formatDDMMYY(p.date) : "—"}
                             </div>
@@ -537,13 +537,13 @@ const PaymentTab = ({
 
                         <div className="row g-2 mb-3">
                           <div className="col-6">
-                            <small className="text-muted d-block">Paid Amount</small>
+                            <small className="small-text d-block ">Paid Amount</small>
                             <h5 className="text-success mb-0">
                               {formatINR(p.paidAmount)}
                             </h5>
                           </div>
                           <div className="col-6">
-                            <small className="text-muted d-block">Balance</small>
+                            <small className="small-text d-block ">Balance</small>
                             <h5 className={`mb-0 ${Number(p.balance || 0) > 0 ? 'text-danger fw-bold' : 'text-success'}`}>
                               {formatINR(p.balance)}
                             </h5>
@@ -552,13 +552,13 @@ const PaymentTab = ({
 
                         <div className="row g-2">
                           <div className="col-6">
-                            <small className="text-muted d-block">Receipt No</small>
+                            <small className="small-text d-block ">Receipt No</small>
                             <div className="fw-semibold">
                               {p.receptNo || "—"}
                             </div>
                           </div>
                           <div className="col-6">
-                            <small className="text-muted d-block">
+                            <small className="small-text d-block ">
                               <i className="bi bi-bell me-1"></i>
                               Reminder
                             </small>
@@ -570,13 +570,13 @@ const PaymentTab = ({
 
                         {p.remarks && (
                           <div className="mt-3 pt-2 border-top">
-                            <small className="text-muted d-block">Remarks</small>
-                            <div className="small text-muted">{p.remarks}</div>
+                            <small className="small-text d-block ">Remarks</small>
+                            <div className="small small-text">{p.remarks}</div>
                           </div>
                         )}
 
                         <div className="mt-3 pt-2 border-top">
-                          <small className="text-muted d-flex justify-content-between">
+                          <small className="small-text d-flex justify-content-between">
                             <span>
                               <i className="bi bi-person-circle me-1"></i>
                               {addedByDisplay}

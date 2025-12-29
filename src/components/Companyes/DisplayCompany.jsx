@@ -76,13 +76,13 @@ const STATE_OPTIONS = [
 
 const APPROVAL_STATUS_OPTIONS = ["Pending", "Approved", "Rejected", "On Hold"];
 
-// Reminder filter options
+// Reminder filter options - updated to reflect payment reminders
 const REMINDER_FILTER_OPTIONS = [
   { value: "all", label: "All Reminders" },
   { value: "overdue", label: "Overdue" },
   { value: "today", label: "Today" },
   { value: "tomorrow", label: "Tomorrow" },
-  { value: "upcoming", label: "Upcoming" },
+  { value: "upcoming", label: "Upcoming (7 days)" },
   { value: "none", label: "No Reminder" }
 ];
 
@@ -107,8 +107,8 @@ export default function DisplayCompany() {
   const [totalPages, setTotalPages] = useState(1);
   const [companyCounts, setCompanyCounts] = useState({});
 
-  // Reminder counts state
-  const [reminderCounts, setReminderCounts] = useState({
+  // Payment reminder counts state
+  const [paymentReminderCounts, setPaymentReminderCounts] = useState({
     overdue: 0,
     today: 0,
     tomorrow: 0,
@@ -129,62 +129,52 @@ export default function DisplayCompany() {
   const reasonSelectRef = useRef(null);
   const commentRef = useRef(null);
 
-  // Date helper functions from WorkerCalleDisplay
-  const parseDate = (v) => {
-    if (!v) return null;
-    if (typeof v === "object" && v && "seconds" in v)
-      return new Date(v.seconds * 1000);
-    if (v instanceof Date && !isNaN(v.getTime())) return v;
-    if (typeof v === "number") {
-      const n = new Date(v);
-      return isNaN(n.getTime()) ? null : n;
-    }
-    if (typeof v === "string") {
-      const s = v.trim();
-      if (!s) return null;
-      const iso = new Date(s);
-      if (!isNaN(iso.getTime())) return iso;
-      const parts = s.split(/[\/-]/);
-      if (parts.length === 3) {
-        let y, m, d;
-        if (parts[0].length === 4) {
-          y = +parts[0];
-          m = +parts[1] - 1;
-          d = +parts[2];
-        } else if (+parts[0] > 12) {
-          d = +parts[0];
-          m = +parts[1] - 1;
-          y = +parts[2];
-        } else {
-          m = +parts[0] - 1;
-          d = +parts[1];
-          y = +parts[2];
-        }
-        const dt = new Date(y, m, d);
-        if (!isNaN(dt.getTime())) return dt;
-      }
-    }
-    const dt = new Date(v);
-    return isNaN(dt.getTime()) ? null : dt;
+  // Helper function to calculate days difference
+  const daysUntil = (dateString) => {
+    if (!dateString) return Number.POSITIVE_INFINITY;
+    
+    const targetDate = new Date(dateString);
+    if (isNaN(targetDate.getTime())) return Number.POSITIVE_INFINITY;
+    
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    targetDate.setHours(0, 0, 0, 0);
+    
+    const diffTime = targetDate.getTime() - today.getTime();
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    
+    return diffDays;
   };
 
-  const isValidDate = (d) => d instanceof Date && !isNaN(d.getTime());
-
-  const daysUntil = (v) => {
-    const d = parseDate(v);
-    if (!isValidDate(d)) return Number.POSITIVE_INFINITY;
-    const startOfDay = (date) => {
-      const x = new Date(date);
-      x.setHours(0, 0, 0, 0);
-      return x;
-    };
-    return Math.ceil(
-      (startOfDay(d) - startOfDay(new Date())) / (1000 * 60 * 60 * 24)
-    );
+  // Helper function to get payment reminders for a company
+  const getPaymentReminders = (company) => {
+    if (!company || !company.payments || !Array.isArray(company.payments)) {
+      return [];
+    }
+    
+    return company.payments
+      .filter(payment => payment.reminderDate)
+      .map(payment => ({
+        date: payment.reminderDate,
+        amount: payment.paidAmount || 0,
+        balance: payment.balance || 0,
+        method: payment.paymentMethod || 'cash'
+      }))
+      .sort((a, b) => {
+        const dateA = a.date ? new Date(a.date) : new Date('9999-12-31');
+        const dateB = b.date ? new Date(b.date) : new Date('9999-12-31');
+        return dateA - dateB; // Nearest first
+      });
   };
 
-  // Calculate reminder counts for active tab
-  const calculateReminderCounts = (companies) => {
+  // Get the nearest payment reminder for a company
+  const getNearestPaymentReminder = (company) => {
+    const reminders = getPaymentReminders(company);
+    return reminders.length > 0 ? reminders[0] : null;
+  };
+
+  // Calculate payment reminder counts for active tab
+  const calculatePaymentReminderCounts = (companies) => {
     const counts = {
       overdue: 0,
       today: 0,
@@ -193,10 +183,10 @@ export default function DisplayCompany() {
     };
 
     companies.forEach((company) => {
-      const endDate = company.contractEndDate;
-      if (!endDate) return;
+      const nearestReminder = getNearestPaymentReminder(company);
+      if (!nearestReminder) return;
 
-      const du = daysUntil(endDate);
+      const du = daysUntil(nearestReminder.date);
       if (!isFinite(du)) return;
 
       if (du < 0) {
@@ -205,7 +195,7 @@ export default function DisplayCompany() {
         counts.today++;
       } else if (du === 1) {
         counts.tomorrow++;
-      } else if (du > 1 && du <= 30) {
+      } else if (du > 1 && du <= 7) { // Upcoming defined as within 7 days
         counts.upcoming++;
       }
     });
@@ -259,9 +249,9 @@ export default function DisplayCompany() {
         const activeCompanies = companiesByCategory[activeTab] || [];
         setTotalPages(Math.ceil(activeCompanies.length / rowsPerPage));
         
-        // Calculate reminder counts for active tab
-        const reminderCounts = calculateReminderCounts(activeCompanies);
-        setReminderCounts(reminderCounts);
+        // Calculate payment reminder counts for active tab
+        const reminderCounts = calculatePaymentReminderCounts(activeCompanies);
+        setPaymentReminderCounts(reminderCounts);
         
         setLoading(false);
       } catch (err) {
@@ -300,36 +290,44 @@ export default function DisplayCompany() {
         );
       }
 
-      // — Reminder Filter — (new)
+      // — Payment Reminder Filter —
       if (reminderFilter !== "all") {
         switch (reminderFilter) {
           case "overdue":
             filtered = filtered.filter((company) => {
-              const du = daysUntil(company.contractEndDate);
+              const nearestReminder = getNearestPaymentReminder(company);
+              if (!nearestReminder) return false;
+              const du = daysUntil(nearestReminder.date);
               return isFinite(du) && du < 0;
             });
             break;
           case "today":
             filtered = filtered.filter((company) => {
-              const du = daysUntil(company.contractEndDate);
+              const nearestReminder = getNearestPaymentReminder(company);
+              if (!nearestReminder) return false;
+              const du = daysUntil(nearestReminder.date);
               return isFinite(du) && du === 0;
             });
             break;
           case "tomorrow":
             filtered = filtered.filter((company) => {
-              const du = daysUntil(company.contractEndDate);
+              const nearestReminder = getNearestPaymentReminder(company);
+              if (!nearestReminder) return false;
+              const du = daysUntil(nearestReminder.date);
               return isFinite(du) && du === 1;
             });
             break;
           case "upcoming":
             filtered = filtered.filter((company) => {
-              const du = daysUntil(company.contractEndDate);
-              return isFinite(du) && du > 1 && du <= 30;
+              const nearestReminder = getNearestPaymentReminder(company);
+              if (!nearestReminder) return false;
+              const du = daysUntil(nearestReminder.date);
+              return isFinite(du) && du > 1 && du <= 7;
             });
             break;
           case "none":
             filtered = filtered.filter((company) => 
-              !company.contractEndDate
+              getPaymentReminders(company).length === 0
             );
             break;
           default:
@@ -352,9 +350,9 @@ export default function DisplayCompany() {
     const activeCompanies = newFiltered[activeTab] || [];
     setTotalPages(Math.ceil(activeCompanies.length / rowsPerPage));
     
-    // Calculate reminder counts for active tab
-    const reminderCounts = calculateReminderCounts(activeCompanies);
-    setReminderCounts(reminderCounts);
+    // Calculate payment reminder counts for active tab
+    const reminderCounts = calculatePaymentReminderCounts(activeCompanies);
+    setPaymentReminderCounts(reminderCounts);
     
     setCurrentPage(1);
   }, [
@@ -371,9 +369,9 @@ export default function DisplayCompany() {
     const activeCompanies = filteredCompanies[activeTab] || [];
     setTotalPages(Math.ceil(activeCompanies.length / rowsPerPage));
     
-    // Calculate reminder counts for active tab
-    const reminderCounts = calculateReminderCounts(activeCompanies);
-    setReminderCounts(reminderCounts);
+    // Calculate payment reminder counts for active tab
+    const reminderCounts = calculatePaymentReminderCounts(activeCompanies);
+    setPaymentReminderCounts(reminderCounts);
     
     setCurrentPage(1);
   }, [filteredCompanies, activeTab, rowsPerPage]);
@@ -490,20 +488,24 @@ export default function DisplayCompany() {
     });
   };
 
-  // Format reminder text
-  const getReminderText = (company) => {
-    const endDate = company.contractEndDate;
-    if (!endDate) return { text: 'No Contract', class: 'text-secondary' };
+  // Format payment reminder text
+  const getPaymentReminderText = (company) => {
+    const nearestReminder = getNearestPaymentReminder(company);
+    if (!nearestReminder) return { text: 'No Payment Reminder', class: 'text-secondary' };
     
-    const du = daysUntil(endDate);
-    if (!isFinite(du)) return { text: 'N/A', class: 'text-secondary' };
+    const du = daysUntil(nearestReminder.date);
+    if (!isFinite(du)) return { text: 'Invalid Date', class: 'text-secondary' };
     
-    if (du < 0) return { text: `${Math.abs(du)} days overdue`, class: 'text-danger' };
-    if (du === 0) return { text: 'Ends today', class: 'text-warning' };
-    if (du === 1) return { text: 'Ends tomorrow', class: 'text-info' };
-    if (du <= 7) return { text: `Ends in ${du} days`, class: 'text-warning' };
-    if (du <= 30) return { text: `Ends in ${du} days`, class: 'text-success' };
-    return { text: `Ends in ${du} days`, class: 'text-success' };
+    const amount = nearestReminder.amount ? `₹${parseFloat(nearestReminder.amount).toFixed(0)}` : '';
+    const balance = nearestReminder.balance && parseFloat(nearestReminder.balance) > 0 
+      ? `, Bal: ₹${parseFloat(nearestReminder.balance).toFixed(0)}` 
+      : '';
+    
+    if (du < 0) return { text: `${Math.abs(du)} days overdue ${amount}${balance}`, class: 'text-danger fw-bold' };
+    if (du === 0) return { text: `Today ${amount}${balance}`, class: 'text-warning fw-bold' };
+    if (du === 1) return { text: `Tomorrow ${amount}${balance}`, class: 'text-info' };
+    if (du <= 7) return { text: `In ${du} days ${amount}${balance}`, class: 'text-warning' };
+    return { text: `${du} days ${amount}${balance}`, class: 'text-success' };
   };
 
   // When user confirms on the first confirm -> open reason modal
@@ -576,7 +578,7 @@ export default function DisplayCompany() {
       return;
     }
 
-    const { id, dbPath } = companyToDelete;
+    const { id, dbPath, category } = companyToDelete;
     try {
       // read company data
       const snapshot = await firebaseDB.child(`${dbPath}/${id}`).once("value");
@@ -586,33 +588,43 @@ export default function DisplayCompany() {
         return;
       }
 
-      // Create archive path - Updated to match new structure
-      const archivePath = dbPath.replace("CompanyData/", "CompanyArchive/").replace("/Running", "");
+      // Get category path from COMPANY_CATEGORIES
+      const categoryPath = COMPANY_CATEGORIES[category];
+      if (!categoryPath) {
+        setDeleteError("Category not found");
+        return;
+      }
+
+      // Create Existing path (not Archive)
+      // Convert: CompanyData/HomeCare/Running -> CompanyData/HomeCare/Existing
+      const existingPath = categoryPath.replace("/Running", "/Existing");
       
       // Create exit path if it doesn't exist
-      const archiveRef = firebaseDB.child(archivePath);
+      const existingRef = firebaseDB.child(existingPath);
       
       // attach removal metadata
-      const payloadToArchive = { 
+      const payloadToExisting = { 
         ...companyData,
         originalId: id,
         movedAt: new Date().toISOString(),
         removalReason: deleteReasonForm.reasonType,
         removalComment: deleteReasonForm.comment,
         removedBy: 'UI',
-        removedAt: new Date().toISOString()
+        removedAt: new Date().toISOString(),
+        originalCategory: category,
+        originalPath: dbPath
       };
 
-      // Save company record under Archive
-      await firebaseDB.child(`${archivePath}/${id}`).set(payloadToArchive);
+      // Save company record under Existing
+      await firebaseDB.child(`${existingPath}/${id}`).set(payloadToExisting);
       
-      // Remove from original location
+      // Remove from original location (Running)
       await firebaseDB.child(`${dbPath}/${id}`).remove();
       
       // Update local state
       setAllCompanies(prev => ({
         ...prev,
-        [companyToDelete.category]: prev[companyToDelete.category].filter(company => company.id !== id)
+        [category]: prev[category].filter(company => company.id !== id)
       }));
       
       // success -> close modal, clear states and show success modal
@@ -624,7 +636,7 @@ export default function DisplayCompany() {
       setCommentError(null);
     } catch (err) {
       console.error(err);
-      setDeleteError('Error deleting company: ' + (err.message || err));
+      setDeleteError('Error moving company: ' + (err.message || err));
     }
   };
 
@@ -777,7 +789,7 @@ export default function DisplayCompany() {
         </div>
       </div>
 
-      {/* Reminder Badges - Added as requested */}
+      {/* Payment Reminder Badges */}
       <div className="row mb-4">
         <div className="col-12">
           <div className="alert alert-info text-info d-flex justify-content-around flex-wrap reminder-badges mb-4">
@@ -786,28 +798,28 @@ export default function DisplayCompany() {
               className={`reminder-badge overdue ${reminderFilter === 'overdue' ? 'active' : ''}`}
               onClick={() => handleReminderBadgeClick('overdue')}
             >
-              Overdue: <strong>{reminderCounts.overdue}</strong>
+              Overdue: <strong>{paymentReminderCounts.overdue}</strong>
             </span>
             <span 
               role="button" 
               className={`reminder-badge today ${reminderFilter === 'today' ? 'active' : ''}`}
               onClick={() => handleReminderBadgeClick('today')}
             >
-              Today: <strong>{reminderCounts.today}</strong>
+              Today: <strong>{paymentReminderCounts.today}</strong>
             </span>
             <span 
               role="button" 
               className={`reminder-badge tomorrow ${reminderFilter === 'tomorrow' ? 'active' : ''}`}
               onClick={() => handleReminderBadgeClick('tomorrow')}
             >
-              Tomorrow: <strong>{reminderCounts.tomorrow}</strong>
+              Tomorrow: <strong>{paymentReminderCounts.tomorrow}</strong>
             </span>
             <span 
               role="button" 
               className={`reminder-badge upcoming ${reminderFilter === 'upcoming' ? 'active' : ''}`}
               onClick={() => handleReminderBadgeClick('upcoming')}
             >
-              Upcoming: <strong>{reminderCounts.upcoming}</strong>
+              Upcoming (7d): <strong>{paymentReminderCounts.upcoming}</strong>
             </span>
           </div>
         </div>
@@ -833,9 +845,9 @@ export default function DisplayCompany() {
                 </select>
               </div>
 
-              {/* Reminder Filter */}
+              {/* Payment Reminder Filter */}
               <div className="col-lg-3 col-md-4">
-                <label className="form-label small mb-2 text-warning">Contract Reminder</label>
+                <label className="form-label small mb-2 text-warning">Payment Reminder</label>
                 <select
                   className="form-select form-select-sm"
                   value={reminderFilter}
@@ -981,7 +993,7 @@ export default function DisplayCompany() {
         </div>
       </div>
 
-      {/* Companies Table with Logo Column - Updated with Reminder */}
+      {/* Companies Table with Logo Column - Updated with Payment Reminder */}
       <div className="table-responsive mb-3">
         <table className="table table-dark table-hover">
           <thead className="table-dark">
@@ -994,14 +1006,17 @@ export default function DisplayCompany() {
               <th>Business Type</th>
               <th>Rating</th>
               <th>Status</th>
-              <th>Reminder</th>
+              <th>Payment Reminder</th>
               <th>Actions</th>
             </tr>
           </thead>
           <tbody>
             {currentTabCompanies.length > 0 ? (
               currentTabCompanies.map((company) => {
-                const reminderInfo = getReminderText(company);
+                const reminderInfo = getPaymentReminderText(company);
+                const totalPayments = company.payments ? company.payments.length : 0;
+                const remindersCount = getPaymentReminders(company).length;
+                
                 return (
                   <tr key={company.id} onClick={(e) => { e.stopPropagation(); handleView(company); }} style={{ cursor: 'pointer' }}>
                     {/* Company Logo */}
@@ -1077,10 +1092,11 @@ export default function DisplayCompany() {
                       </span>
                     </td>
                     <td className={reminderInfo.class}>
-                      {reminderInfo.text}
-                      {company.contractEndDate && (
+                      <div>{reminderInfo.text}</div>
+                      {totalPayments > 0 && (
                         <small className="d-block text-muted">
-                          {formatDate(company.contractEndDate)}
+                          {totalPayments} payment{totalPayments !== 1 ? 's' : ''}, 
+                          {remindersCount > 0 ? ` ${remindersCount} reminder${remindersCount !== 1 ? 's' : ''}` : ' no reminders'}
                         </small>
                       )}
                     </td>
@@ -1212,7 +1228,7 @@ export default function DisplayCompany() {
         )}
       </div>
 
-      {/* Delete Success Modal */}
+      {/* Delete Success Modal - Updated text */}
       {showDeleteSuccessModal && (
         <div className="modal fade show" style={{ display: 'block', backgroundColor: 'rgba(0,0,0,0.5)' }} tabIndex="-1" role="dialog" aria-modal="true">
           <div className="modal-dialog modal-dialog-centered">
@@ -1222,7 +1238,7 @@ export default function DisplayCompany() {
                 <button type="button" className="btn-close" onClick={() => setShowDeleteSuccessModal(false)}></button>
               </div>
               <div className="modal-body">
-                Company moved to Archive successfully.
+                Company moved to Existing category successfully.
               </div>
               <div className="modal-footer">
                 <button type="button" className="btn btn-success" onClick={() => setShowDeleteSuccessModal(false)}>Done</button>
@@ -1247,37 +1263,37 @@ export default function DisplayCompany() {
         />
       )}
 
-      {/* Delete Confirm Modal */}
+      {/* Delete Confirm Modal - Updated text */}
       {showDeleteConfirm && companyToDelete && (
         <div className="modal fade show" style={{ display: 'block', backgroundColor: 'rgba(0,0,0,0.5)' }} tabIndex="-1" role="dialog" aria-modal="true">
           <div className="modal-dialog modal-dialog-centered">
             <div className="modal-content">
               <div className="modal-header">
-                <h5 className="modal-title">Confirm Delete</h5>
+                <h5 className="modal-title">Confirm Move</h5>
                 <button type="button" className="btn-close" onClick={() => setShowDeleteConfirm(false)}></button>
               </div>
               <div className="modal-body">
-                <p>Do you want to move the Company to Archive?</p>
+                <p>Do you want to move the Company from <strong>Running</strong> to <strong>Existing</strong>?</p>
                 <p><strong>ID:</strong> {companyToDelete.companyId || companyToDelete.id}</p>
                 <p><strong>Name:</strong> {companyToDelete.companyName}</p>
                 <p><strong>Category:</strong> {companyToDelete.category}</p>
               </div>
               <div className="modal-footer">
                 <button type="button" className="btn btn-secondary" onClick={() => setShowDeleteConfirm(false)}>Cancel</button>
-                <button type="button" className="btn btn-danger" onClick={handleDeleteConfirmProceed}>Move to Archive</button>
+                <button type="button" className="btn btn-danger" onClick={handleDeleteConfirmProceed}>Move to Existing</button>
               </div>
             </div>
           </div>
         </div>
       )}
 
-      {/* Delete Reason Modal */}
+      {/* Delete Reason Modal - Updated text */}
       {showDeleteReasonModal && companyToDelete && (
         <div className="modal fade show" style={{ display: 'block', backgroundColor: 'rgba(0,0,0,0.5)' }} tabIndex="-1" role="dialog" aria-modal="true">
           <div className="modal-dialog modal-dialog-centered">
             <div className="modal-content">
               <div className="modal-header">
-                <h5 className="modal-title">Reason for Archiving Company</h5>
+                <h5 className="modal-title">Reason for Moving Company</h5>
                 <button type="button" className="btn-close" onClick={() => setShowDeleteReasonModal(false)}></button>
               </div>
               <div className="modal-body">
@@ -1295,10 +1311,10 @@ export default function DisplayCompany() {
                     }}
                   >
                     <option value="">Select Reason</option>
-                    <option value="Contract Expired">Contract Expired</option>
-                    <option value="Contract Terminated">Contract Terminated</option>
-                    <option value="Company Closed">Company Closed</option>
-                    <option value="Merged with Another">Merged with Another</option>
+                    <option value="Contract Completed">Contract Completed</option>
+                    <option value="Services No Longer Required">Services No Longer Required</option>
+                    <option value="Company Moved Locations">Company Moved Locations</option>
+                    <option value="Financial Issues">Financial Issues</option>
                     <option value="Poor Performance">Poor Performance</option>
                     <option value="Other">Other</option>
                   </select>
@@ -1321,7 +1337,7 @@ export default function DisplayCompany() {
               </div>
               <div className="modal-footer">
                 <button type="button" className="btn btn-secondary" onClick={() => setShowDeleteReasonModal(false)}>Cancel</button>
-                <button type="button" className="btn btn-danger" onClick={handleDeleteSubmitWithReason}>Archive Company</button>
+                <button type="button" className="btn btn-danger" onClick={handleDeleteSubmitWithReason}>Move Company</button>
               </div>
             </div>
           </div>

@@ -121,6 +121,84 @@ function extractClientPayments(clientRecord = {}) {
   return out;
 }
 
+// Extract Company Payments from CompanyData - FIXED VERSION
+function extractCompanyPayments(companyNode = {}) {
+  const out = [];
+  const isPlain = (x) => x && typeof x === "object" && !Array.isArray(x);
+
+  if (!isPlain(companyNode)) return out;
+
+  // First level: departments (HomeCare, Housekeeping, etc.)
+  Object.values(companyNode).forEach((department) => {
+    if (!isPlain(department)) return;
+    
+    // Second level: Running/Archive
+    Object.values(department).forEach((statusGroup) => {
+      if (!isPlain(statusGroup)) return;
+      
+      // Third level: individual company records
+      Object.values(statusGroup).forEach((company) => {
+        if (!isPlain(company)) return;
+
+        // Get payments from company record
+        const payments = Array.isArray(company.payments)
+          ? company.payments
+          : (isPlain(company.payments) ? Object.values(company.payments) : []);
+
+        // If there are payments in the array, process them and skip single payment fields
+        if (payments.length > 0) {
+          payments.forEach((p) => {
+            if (!p) return;
+            const paidAmount = safeNumber(p.paidAmount ?? p.amount ?? p.payment ?? p.paymentAmount ?? 0);
+            const refundAmount = safeNumber(p.refundAmount ?? p.refund ?? 0);
+            const date = p.date ?? p.paymentDate ?? p.createdAt ?? "";
+            const parsedDate = parseDateRobust(date);
+            
+            // Net payment: paidAmount - refundAmount
+            const netPayment = paidAmount - refundAmount;
+            
+            if (netPayment > 0) {
+              out.push({
+                type: "company",
+                date,
+                parsedDate,
+                payment: netPayment,
+                raw: p,
+                companyData: company,
+                companyName: company.companyName ?? company.name ?? "Unknown",
+                department: Object.keys(companyNode).find(key => companyNode[key] === department) || "Unknown",
+                isRefund: refundAmount > 0
+              });
+            }
+          });
+        } else {
+          // Only process single payment fields if there are no payments in the array
+          const singlePaidAmount = safeNumber(company.paidAmount ?? company.amount ?? company.payment ?? 0);
+          const singleRefundAmount = safeNumber(company.refundAmount ?? 0);
+          const netSingle = singlePaidAmount - singleRefundAmount;
+          
+          if (netSingle > 0) {
+            const date = company.date ?? company.paymentDate ?? "";
+            out.push({
+              type: "company",
+              date,
+              parsedDate: parseDateRobust(date),
+              payment: netSingle,
+              raw: company,
+              companyData: company,
+              companyName: company.companyName ?? company.name ?? "Unknown",
+              department: Object.keys(companyNode).find(key => companyNode[key] === department) || "Unknown",
+              isRefund: singleRefundAmount > 0
+            });
+          }
+        }
+      });
+    });
+  });
+
+  return out;
+}
+
 function extractInvestments(raw = {}) {
   const arr = Array.isArray(raw) ? raw : (raw && typeof raw === "object" ? Object.values(raw) : []);
   return (arr || []).map((it) => {
@@ -435,6 +513,10 @@ function DonutChart({ segments = [], size = 150, stroke = 18, title = "Expenses"
           <stop offset="0%" stopColor="#ec4899" />
           <stop offset="100%" stopColor="#be185d" />
         </linearGradient>
+        <linearGradient id="gradCompany" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0%" stopColor="#8b5cf6" />
+          <stop offset="100%" stopColor="#7c3aed" />
+        </linearGradient>
       </defs>
       <circle cx={size / 2} cy={size / 2} r={r} stroke="#e2e8f0" strokeWidth={stroke} fill="none" />
       {segments.map((s, i) => {
@@ -472,6 +554,7 @@ export default function ResultsCard({
   staffCollections = { active: "StaffBioData", exit: "ExitStaffs" },
   workerCollections = { active: "EmployeeBioData", exit: "ExitEmployees" },
   hospitalCollection = "HospitalData",
+  companyCollections = { active: "CompanyData", exit: "ExitCompanies" },
 }) {
   const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
@@ -510,6 +593,7 @@ export default function ResultsCard({
         }
       };
 
+      // Attach existing collections
       attach(clientCollections.active, "clientsActive");
       attach(clientCollections.exit, "clientsExit");
       attach(investmentsCollection, "investments");
@@ -524,6 +608,25 @@ export default function ResultsCard({
       attach("AgentData/WorkerAgent", "agentWorker");
       attach("AgentData/ClientAgent", "agentClient");
 
+      // FIX: Attach company department paths individually (same as CompanyPaymentCard)
+      // List of company departments/paths (you can make this configurable if needed)
+      const COMPANY_PATHS = [
+        "CompanyData/HomeCare/Running",
+        "CompanyData/HomeCare/Archive",
+        "CompanyData/Housekeeping/Running",
+        "CompanyData/Housekeeping/Archive",
+        // Add other departments as needed
+      ];
+
+      // Attach each company path
+      COMPANY_PATHS.forEach((path, index) => {
+        attach(path, `companyPath${index}`);
+      });
+
+      // Also attach the old way for backward compatibility
+      attach(companyCollections.active, "companiesActive");
+      attach(companyCollections.exit, "companiesExit");
+
       const rebuild = () => {
         const rows = [];
      
@@ -535,6 +638,29 @@ export default function ResultsCard({
         };
         pushClients(snapshots.clientsActive || {});
         pushClients(snapshots.clientsExit || {});
+      
+        // NEW: Add company payments - collect from all company paths
+        const companyData = {};
+        
+        // Collect from individual department paths
+        Object.keys(snapshots).forEach(key => {
+          if (key.startsWith('companyPath')) {
+            const pathData = snapshots[key] || {};
+            // Merge data into companyData structure
+            Object.keys(pathData).forEach(deptKey => {
+              if (!companyData[deptKey]) companyData[deptKey] = {};
+              Object.keys(pathData[deptKey]).forEach(statusKey => {
+                if (!companyData[deptKey][statusKey]) companyData[deptKey][statusKey] = {};
+                Object.assign(companyData[deptKey][statusKey], pathData[deptKey][statusKey]);
+              });
+            });
+          }
+        });
+        
+       
+        
+        // Extract payments from the combined company data
+        extractCompanyPayments(companyData).forEach((r) => rows.push(r));
       
         extractInvestments(snapshots.investments || {}).forEach((r) => rows.push(r));
       
@@ -548,7 +674,6 @@ export default function ResultsCard({
           // Add agent payouts ONLY (no charges)
           extractAgentPayouts(snapshots.agentWorker || {}).forEach((r) => rows.push(r));
           extractAgentPayouts(snapshots.agentClient || {}).forEach((r) => rows.push(r));
-          // REMOVED: extractAgentCharges calls
           
           const seen = new Set();
           pettyCollected.forEach((r) => {
@@ -588,7 +713,14 @@ export default function ResultsCard({
       mounted = false;
       try { listeners.forEach(({ ref, cb }) => ref.off("value", cb)); } catch { }
     };
-  }, [clientCollections.active, clientCollections.exit, investmentsCollection, pettyCollection, staffCollections.active, staffCollections.exit, workerCollections.active, workerCollections.exit, hospitalCollection]);
+  }, [
+    clientCollections.active, clientCollections.exit, 
+    investmentsCollection, pettyCollection, 
+    staffCollections.active, staffCollections.exit, 
+    workerCollections.active, workerCollections.exit, 
+    hospitalCollection,
+    companyCollections.active, companyCollections.exit
+  ]);
 
   /* ------------- Grouping ------------- */
   const yearMap = useMemo(() => {
@@ -625,6 +757,7 @@ export default function ResultsCard({
   function splitSums(rows) {
     const s = { 
       income: 0, 
+      company: 0, // Company income
       investment: 0, 
       petty: 0, 
       staff: 0, 
@@ -636,6 +769,7 @@ export default function ResultsCard({
     };
     (rows || []).forEach((r) => {
       if (r.type === "client") s.income += Number(r.payment || 0);
+      else if (r.type === "company") s.company += Number(r.payment || 0); // Add company income
       else if (r.type === "investment") s.investment += Number(r.amount || 0);
       else if (r.type === "petty") s.petty += Number(r.amount || 0);
       else if (r.type === "staff") s.staff += Number(r.amount || 0);
@@ -645,9 +779,11 @@ export default function ResultsCard({
       else if (r.type === "agent") s.agent += Number(r.amount || 0);
       else if (r.type === "agentcharges") s.agentcharges += Number(r.amount || 0);
     });
-    // Profit calculation: Client Amount - (Investment + Worker Salary + Staff Salary + Petty Cash + Agent Commission + Agent Payouts)
+    // Total income = Client + Company income
+    s.totalIncome = s.income + s.company;
+    // Profit calculation: Total Income - (Investment + Worker Salary + Staff Salary + Petty Cash + Agent Commission + Agent Payouts)
     s.expense = s.investment + s.petty + s.staff + s.worker + s.commission + s.agent;
-    s.profit = s.income - s.expense;
+    s.profit = s.totalIncome - s.expense;
     return s;
   }
 
@@ -742,7 +878,7 @@ export default function ResultsCard({
     const body = rows.map((r) => {
       const d = r.parsedDate || parseDateRobust(r.date);
       const dateStr = d ? d.toISOString().slice(0, 10) : (r.date || "");
-      const amt = r.type === "client" ? Number(r.payment || 0) : Number(r.amount || 0);
+      const amt = r.type === "client" || r.type === "company" ? Number(r.payment || 0) : Number(r.amount || 0);
       const note = r.raw?.remarks || r.raw?.description || r.raw?.invest_purpose || r.raw?.paymentFor || "";
       return [dateStr, r.type, amt, `"${String(note).replace(/"/g, '""')}"`].join(",");
     });
@@ -790,6 +926,16 @@ export default function ResultsCard({
         details.push({ label: "Service", value: tx.clientData?.service || tx.raw?.service || "-" });
         details.push({ label: "Package", value: tx.clientData?.package || tx.raw?.package || "-" });
         details.push({ label: "Recept No", value: tx.raw?.receptNo || tx.raw?.receptNo || tx.raw?.receptNo || "-" });
+        break;
+
+      case "company":
+        // Company related data
+        details.push({ label: "Company ID", value: tx.companyData?.idNo || tx.companyData?.id || tx.raw?.idNo || "-" });
+        details.push({ label: "Company Name", value: tx.companyName || tx.companyData?.companyName || tx.companyData?.name || "-" });
+        details.push({ label: "Department", value: tx.department || tx.companyData?.department || "-" });
+        details.push({ label: "Payment Type", value: tx.isRefund ? "Refund" : "Payment" });
+        details.push({ label: "Receipt No", value: tx.raw?.receptNo || tx.raw?.receiptNo || "-" });
+        details.push({ label: "Invoice No", value: tx.raw?.jenceoInvoiceNo || tx.raw?.companyInvoiceNo || "-" });
         break;
 
       case "commission":
@@ -918,7 +1064,7 @@ export default function ResultsCard({
 
     // Common fields for all types
     if (tx.type !== "worker") {
-      details.push({ label: "Amount", value: formatINR(tx.type === "client" ? (tx.payment || 0) : (tx.amount || 0)) });
+      details.push({ label: "Amount", value: formatINR(tx.type === "client" || tx.type === "company" ? (tx.payment || 0) : (tx.amount || 0)) });
       details.push({ label: "Date", value: (tx.parsedDate || new Date(tx.date || "")).toLocaleDateString() });
       details.push({ label: "Payment Method", value: tx.raw?.paymentMethod || tx.raw?.method || "-" });
       details.push({ label: "Remarks", value: tx.raw?.remarks || tx.raw?.note || tx.raw?.description || "-" });
@@ -953,7 +1099,7 @@ export default function ResultsCard({
               <div className="h3 fw-bold mb-0">{formatINR(overall.profit)}</div>
             </div>
             <div className="text-end">
-              <div className="tiny text-white-80">Income: {formatINR(overall.income)}</div>
+              <div className="tiny text-white-80">Income: {formatINR(overall.totalIncome)}</div>
               <div className="tiny text-white-80">Expense: {formatINR(overall.expense)}</div>
             </div>
           </div>
@@ -972,7 +1118,9 @@ export default function ResultsCard({
               <div className="modal-body bg-surface">
                 {/* Quick stats */}
                 <div className="row g-3">
-                  {topStat("Income (Overall)", overall.income, currentYearTotals.income, "grad-sky", "₹")}
+                  {topStat("Client Income (Overall)", overall.income, currentYearTotals.income, "grad-sky", "👤")}
+                  {topStat("Company Income (Overall)", overall.company, currentYearTotals.company, "grad-violet", "🏢")}
+                  {topStat("Total Income (Overall)", overall.totalIncome, currentYearTotals.totalIncome, "grad-emerald", "₹")}
                   {topStat("Expenses (Overall)", overall.expense, currentYearTotals.expense, "grad-rose", "∑")}
                   {topStat("Profit (Overall)", overall.profit, currentYearTotals.profit, "grad-emerald", "π")}
                   {topStat("Year Profit", currentYearTotals.profit, currentMonthTotals.profit, "grad-amber", "ɣ")}
@@ -1059,7 +1207,7 @@ export default function ResultsCard({
                     <div className="glass-card p-3 text-center">
                       <div className="small text-muted">Profit Margin</div>
                       <div className="h4 fw-bold text-success">
-                        {overall.income > 0 ? `${((overall.profit / overall.income) * 100).toFixed(1)}%` : "0%"}
+                        {overall.totalIncome > 0 ? `${((overall.profit / overall.totalIncome) * 100).toFixed(1)}%` : "0%"}
                       </div>
                       <div className="tiny text-muted">Overall Efficiency</div>
                     </div>
@@ -1068,7 +1216,7 @@ export default function ResultsCard({
                     <div className="glass-card p-3 text-center">
                       <div className="small text-muted">Expense Ratio</div>
                       <div className="h4 fw-bold text-warning">
-                        {overall.income > 0 ? `${((overall.expense / overall.income) * 100).toFixed(1)}%` : "0%"}
+                        {overall.totalIncome > 0 ? `${((overall.expense / overall.totalIncome) * 100).toFixed(1)}%` : "0%"}
                       </div>
                       <div className="tiny text-muted">Cost to Income</div>
                     </div>
@@ -1089,6 +1237,8 @@ export default function ResultsCard({
                       <tr>
                         <th>Scope</th>
                         <th className="text-end">Client Payment</th>
+                        <th className="text-end">Company Payment</th>
+                        <th className="text-end">Total Income</th>
                         <th className="text-end">Investments</th>
                         <th className="text-end">Worker Salaries</th>
                         <th className="text-end">Staff Salaries</th>
@@ -1103,6 +1253,8 @@ export default function ResultsCard({
                       <tr style={{ background: "linear-gradient(90deg,#0b1220,#1e293b)", color: "#e2e8f0" }}>
                         <td>Overall</td>
                         <td className="text-end">{formatINR(overall.income)}</td>
+                        <td className="text-end">{formatINR(overall.company)}</td>
+                        <td className="text-end fw-bold">{formatINR(overall.totalIncome)}</td>
                         <td className="text-end">{formatINR(overall.investment)}</td>
                         <td className="text-end">{formatINR(overall.worker)}</td>
                         <td className="text-end">{formatINR(overall.staff)}</td>
@@ -1115,6 +1267,8 @@ export default function ResultsCard({
                       <tr style={{ background: "linear-gradient(90deg,#0b1328,#1e293b)", color: "#e2e8f0" }}>
                         <td>Year ({activeYear || "-"})</td>
                         <td className="text-end">{formatINR(currentYearTotals.income)}</td>
+                        <td className="text-end">{formatINR(currentYearTotals.company)}</td>
+                        <td className="text-end fw-bold">{formatINR(currentYearTotals.totalIncome)}</td>
                         <td className="text-end">{formatINR(currentYearTotals.investment)}</td>
                         <td className="text-end">{formatINR(currentYearTotals.worker)}</td>
                         <td className="text-end">{formatINR(currentYearTotals.staff)}</td>
@@ -1127,6 +1281,8 @@ export default function ResultsCard({
                       <tr style={{ background: "linear-gradient(90deg,#111827,#1e293b)", color: "#e2e8f0" }}>
                         <td>Month ({activeMonthLabel})</td>
                         <td className="text-end">{formatINR(currentMonthTotals.income)}</td>
+                        <td className="text-end">{formatINR(currentMonthTotals.company)}</td>
+                        <td className="text-end fw-bold">{formatINR(currentMonthTotals.totalIncome)}</td>
                         <td className="text-end">{formatINR(currentMonthTotals.investment)}</td>
                         <td className="text-end">{formatINR(currentMonthTotals.worker)}</td>
                         <td className="text-end">{formatINR(currentMonthTotals.staff)}</td>
@@ -1161,14 +1317,15 @@ export default function ResultsCard({
                         {scopedRowsPage.filter(r => r.type !== "hospital").map((r, i) => {
                           const d = r.parsedDate || parseDateRobust(r.date);
                           const dateStr = d ? d.toLocaleDateString() : (r.date || "-");
-                          const amt = r.type === "client" ? Number(r.payment || 0) : Number(r.amount || 0);
-                          const isOut = r.type !== "client";
+                          const amt = r.type === "client" || r.type === "company" ? Number(r.payment || 0) : Number(r.amount || 0);
+                          const isOut = r.type !== "client" && r.type !== "company";
                           return (
                             <tr key={i} role="button" style={{ cursor: "pointer" }} onClick={() => { setSelectedTx(r); setTxModalOpen(true); }}>
                               <td>{pageStart + i + 1}</td>
                               <td>{dateStr}</td>
                               <td>
                                 {r.type === "client" ? <span className="badge bg-success-subtle text-success fw-semibold">Client</span> : null}
+                                {r.type === "company" ? <span className="badge bg-violet-subtle text-violet fw-semibold">Company</span> : null}
                                 {r.type === "investment" ? <span className="badge bg-danger-subtle text-danger fw-semibold">Investment</span> : null}
                                 {r.type === "petty" ? <span className="badge bg-violet-subtle text-violet fw-semibold">Petty</span> : null}
                                 {r.type === "staff" ? <span className="badge bg-sky-subtle text-sky fw-semibold">Staff</span> : null}
@@ -1234,6 +1391,7 @@ export default function ResultsCard({
                             <div className="col-12 mb-3">
                               <div className="d-flex justify-content-between align-items-center">
                                 <span className={`badge ${selectedTx.type === "client" ? "bg-success" :
+                                  selectedTx.type === "company" ? "bg-violet" :
                                   selectedTx.type === "investment" ? "bg-danger" :
                                     selectedTx.type === "petty" ? "bg-info" :
                                       selectedTx.type === "staff" ? "bg-sky" :
@@ -1244,9 +1402,9 @@ export default function ResultsCard({
                                   } text-uppercase fs-6`}>
                                   {selectedTx.type} Transaction
                                 </span>
-                                <div className={`fw-bold fs-5 ${selectedTx.type === "client" ? "text-success" : "text-danger"
+                                <div className={`fw-bold fs-5 ${selectedTx.type === "client" || selectedTx.type === "company" ? "text-success" : "text-danger"
                                   }`}>
-                                  {formatINR(selectedTx.type === "client" ? (selectedTx.payment || 0) : (selectedTx.amount || 0))}
+                                  {formatINR(selectedTx.type === "client" || selectedTx.type === "company" ? (selectedTx.payment || 0) : (selectedTx.amount || 0))}
                                 </div>
                               </div>
                             </div>
